@@ -25,10 +25,8 @@ enum class TokenKind : char {
 };
 
 const std::unordered_map<std::string_view, TokenKind> keywords = {
-    {"void", TokenKind::KwVoid},
-    {"export", TokenKind::KwExport},
-    {"module", TokenKind::KwModule},
-    {"defer", TokenKind::KwDefer},
+    {"void", TokenKind::KwVoid},     {"export", TokenKind::KwExport},
+    {"module", TokenKind::KwModule}, {"defer", TokenKind::KwDefer},
     {"return", TokenKind::KwReturn},
 };
 
