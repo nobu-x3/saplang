@@ -26,6 +26,8 @@ int main(int argc, const char **argv) {
         std::cout << "identifier(" << *tok.value << ")";
       } else if (tok.kind == saplang::TokenKind::KwVoid) {
         std::cout << "void";
+      } else if (tok.kind == saplang::TokenKind::KwFn) {
+        std::cout << "fn";
       } else if (tok.kind == saplang::TokenKind::KwDefer) {
         std::cout << "defer";
       } else if (tok.kind == saplang::TokenKind::KwExport) {

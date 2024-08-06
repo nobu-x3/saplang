@@ -8,9 +8,14 @@ Parser::Parser(Lexer *lexer)
     : m_Lexer(lexer), m_NextToken(lexer->get_next_token()) {}
 
 // <funcDecl>
-// ::= <type> <identifier> '(' ')' <block>
+// ::= 'fn' <type> <identifier> '(' ')' <block>
 std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
   SourceLocation location = m_NextToken.location;
+  if (m_NextToken.kind != TokenKind::KwFn) {
+    return report(m_NextToken.location,
+                  "function declarations must start with 'fn'");
+  }
+  eat_next_token();
   auto return_type = parse_type(); // eats the function identifier
   if (!return_type) {
     return report(m_NextToken.location,
@@ -59,6 +64,34 @@ std::optional<Type> Parser::parse_type() {
   }
   if (kind == TokenKind::Identifier) {
     assert(m_NextToken.value.has_value());
+    if (*m_NextToken.value == "i8") {
+      eat_next_token();
+      return Type::builtin_i8();
+    } else if (*m_NextToken.value == "i16") {
+      eat_next_token();
+      return Type::builtin_i16();
+    } else if (*m_NextToken.value == "i32") {
+      eat_next_token();
+      return Type::builtin_i32();
+    } else if (*m_NextToken.value == "i64") {
+      eat_next_token();
+      return Type::builtin_i64();
+    } else if (*m_NextToken.value == "u8") {
+      eat_next_token();
+      return Type::builtin_u8();
+    } else if (*m_NextToken.value == "u16") {
+      eat_next_token();
+      return Type::builtin_u16();
+    } else if (*m_NextToken.value == "u32") {
+      eat_next_token();
+      return Type::builtin_u32();
+    } else if (*m_NextToken.value == "u64") {
+      eat_next_token();
+      return Type::builtin_u64();
+    } else if (*m_NextToken.value == "bool") {
+      eat_next_token();
+      return Type::builtin_bool();
+    }
     Type type = Type::custom(*m_NextToken.value);
     eat_next_token();
     return type;
@@ -73,17 +106,17 @@ FuncParsingResult Parser::parse_source_file() {
   std::vector<std::unique_ptr<FunctionDecl>> functions;
   bool is_complete_ast = true;
   while (m_NextToken.kind != TokenKind::Eof) {
-    if (m_NextToken.kind != TokenKind::KwVoid) {
+    if (m_NextToken.kind != TokenKind::KwFn) {
       report(m_NextToken.location,
              "only function definitions are allowed in global scope.");
       is_complete_ast = false;
-      sync_on(TokenKind::KwVoid);
+      sync_on(TokenKind::KwFn);
       continue;
     }
     auto fn = parse_function_decl();
     if (!fn) {
       is_complete_ast = false;
-      sync_on(TokenKind::KwVoid);
+      sync_on(TokenKind::KwFn);
       continue;
     }
     functions.emplace_back(std::move(fn));

@@ -11,10 +11,20 @@ enum class TokenKind : char {
   Unknown = -128,
   Identifier,
   KwExport,
+  KwFn,
   KwVoid,
   KwReturn,
   KwModule,
   KwDefer,
+  // KwI8,
+  // KwI16,
+  // KwI32,
+  // KwI64,
+  // KwU8,
+  // KwU16,
+  // KwU32,
+  // KwU64,
+  // KwBool,
   Eof = single_char_tokens[0],
   Lparent = single_char_tokens[1],
   Rparent = single_char_tokens[2],
@@ -27,7 +37,8 @@ enum class TokenKind : char {
 const std::unordered_map<std::string_view, TokenKind> keywords = {
     {"void", TokenKind::KwVoid},     {"export", TokenKind::KwExport},
     {"module", TokenKind::KwModule}, {"defer", TokenKind::KwDefer},
-    {"return", TokenKind::KwReturn},
+    {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},
+    // {"i8", TokenKind::KwI8}, {"i16", TokenKind::}
 };
 
 struct Token {

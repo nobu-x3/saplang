@@ -21,12 +21,34 @@ struct Block : public IDumpable {
 };
 
 struct Type {
-  enum class Kind { Void, Pointer, Custom };
+  enum class Kind {
+    Void,
+    Pointer,
+    i8,
+    i16,
+    i32,
+    i64,
+    u8,
+    u16,
+    u32,
+    u64,
+    Bool,
+    Custom
+  };
   Kind kind;
   std::string name;
 
   static Type builtin_void() { return {Kind::Void, "void"}; }
   static Type builtin_pointer() { return {Kind::Pointer, "*"}; }
+  static Type builtin_i8() { return {Kind::i8, "i8"}; }
+  static Type builtin_i16() { return {Kind::i16, "i16"}; }
+  static Type builtin_i32() { return {Kind::i32, "i32"}; }
+  static Type builtin_i64() { return {Kind::i64, "i64"}; }
+  static Type builtin_u8() { return {Kind::u8, "u8"}; }
+  static Type builtin_u16() { return {Kind::u16, "u16"}; }
+  static Type builtin_u32() { return {Kind::u32, "u32"}; }
+  static Type builtin_u64() { return {Kind::u64, "u64"}; }
+  static Type builtin_bool() { return {Kind::Bool, "bool"}; }
   static Type custom(std::string_view name) { return {Kind::Custom, name}; }
 
 private:

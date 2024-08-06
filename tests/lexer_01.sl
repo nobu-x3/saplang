@@ -1,7 +1,7 @@
 
 module main;
 
-export int main() {
+export fn int main() {
     defer { print(); }
     return 1;
 }
