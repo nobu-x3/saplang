@@ -24,6 +24,10 @@ int main(int argc, const char **argv) {
     while (tok.kind != saplang::TokenKind::Eof) {
       if (tok.kind == saplang::TokenKind::Identifier) {
         std::cout << "identifier(" << *tok.value << ")";
+      } else if (tok.kind == saplang::TokenKind::Integer) {
+        std::cout << "integer("<<*tok.value<<")";
+      } else if (tok.kind == saplang::TokenKind::Real) {
+        std::cout << "real("<<*tok.value<<")";
       } else if (tok.kind == saplang::TokenKind::KwVoid) {
         std::cout << "void";
       } else if (tok.kind == saplang::TokenKind::KwFn) {

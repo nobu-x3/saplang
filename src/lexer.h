@@ -5,11 +5,13 @@
 #include <unordered_map>
 
 namespace saplang {
-constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':', ';'};
+constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':', ';', ','};
 
 enum class TokenKind : char {
   Unknown = -128,
   Identifier,
+  Integer,
+  Real,
   KwExport,
   KwFn,
   KwVoid,
@@ -32,6 +34,7 @@ enum class TokenKind : char {
   Rbrace = single_char_tokens[4],
   Colon = single_char_tokens[5],
   Semicolon = single_char_tokens[6],
+  Comma = single_char_tokens[7],
 };
 
 const std::unordered_map<std::string_view, TokenKind> keywords = {

@@ -36,14 +36,29 @@ Token Lexer::get_next_token() {
   }
   if (is_alpha(curr_char)) {
     std::string value{curr_char};
-    while (is_alphanum(peek_next_char()))
+    while (is_alphanum(peek_next_char())) {
       value += eat_next_char();
+    }
     // TIL unordered_map::count return 1 if found and 0 if not aka C++17
     // .contains
     if (keywords.count(value)) {
       return Token{token_start_location, keywords.at(value), std::move(value)};
     }
     return Token{token_start_location, TokenKind::Identifier, std::move(value)};
+  }
+  if (is_num(curr_char)) {
+    std::string value{curr_char};
+    while (is_num(peek_next_char()))
+      value += eat_next_char();
+    if (peek_next_char() != '.') {
+      return Token{token_start_location, TokenKind::Integer, std::move(value)};
+    }
+    value += eat_next_char();
+    if (!is_num(peek_next_char()))
+      return Token{token_start_location, TokenKind::Unknown};
+    while (is_num(peek_next_char()))
+      value += eat_next_char();
+    return Token{token_start_location, TokenKind::Real, std::move(value)};
   }
   return Token{token_start_location, TokenKind::Unknown};
 }
