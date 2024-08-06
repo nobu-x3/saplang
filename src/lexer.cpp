@@ -28,6 +28,12 @@ Token Lexer::get_next_token() {
       return Token{token_start_location, static_cast<TokenKind>(c)};
     }
   }
+  if (curr_char == '/' && peek_next_char() == '/') {
+    char c = eat_next_char();
+    while (c != '\n' && c != '\0')
+      c = eat_next_char();
+    return get_next_token();
+  }
   if (is_alpha(curr_char)) {
     std::string value{curr_char};
     while (is_alphanum(peek_next_char()))
