@@ -28,14 +28,15 @@ std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
   if (m_NextToken.kind != TokenKind::Lparent)
     return report(m_NextToken.location, "expected '('.");
   auto param_list = parse_parameter_list();
-  if(!param_list)
+  if (!param_list)
     return nullptr;
   std::unique_ptr<Block> block = parse_block();
   if (!block) {
     return report(m_NextToken.location, "failed to parse function block.");
   }
   return std::make_unique<FunctionDecl>(location, function_identifier,
-                                        *return_type, std::move(*param_list), std::move(block));
+                                        *return_type, std::move(*param_list),
+                                        std::move(block));
 }
 
 // <block>
@@ -56,8 +57,10 @@ std::unique_ptr<Block> Parser::parse_block() {
                     "expected '}' at the end of a block.");
     }
     auto stmt = parse_stmt();
-    if (!stmt)
-      return nullptr;
+    if (!stmt) {
+      synchronize();
+      continue;
+    }
     statements.emplace_back(std::move(stmt));
   }
   eat_next_token(); // eats '}'
@@ -310,4 +313,30 @@ FuncParsingResult Parser::parse_source_file() {
   assert(m_NextToken.kind == TokenKind::Eof);
   return {is_complete_ast, std::move(functions)};
 }
+
+void Parser::synchronize() {
+  m_IsCompleteAst = false;
+  int braces = 0;
+  while (true) {
+    TokenKind kind = m_NextToken.kind;
+    if (kind == TokenKind::Lbrace)
+      ++braces;
+    else if (kind == TokenKind::Rbrace) {
+      if (braces == 0)
+        break;
+      // syncs to next Rbrace
+      if (braces == 1) {
+        eat_next_token(); // eat '}'
+        break;
+      }
+      --braces;
+    } else if (kind == TokenKind::Semicolon && braces == 0) {
+      eat_next_token(); // eat ';'
+      break;
+    } else if (kind == TokenKind::KwFn || kind == TokenKind::Eof)
+      break;
+    eat_next_token();
+  }
+}
+
 } // namespace saplang

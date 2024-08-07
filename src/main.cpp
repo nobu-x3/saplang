@@ -25,9 +25,9 @@ int main(int argc, const char **argv) {
       if (tok.kind == saplang::TokenKind::Identifier) {
         std::cout << "identifier(" << *tok.value << ")";
       } else if (tok.kind == saplang::TokenKind::Integer) {
-        std::cout << "integer("<<*tok.value<<")";
+        std::cout << "integer(" << *tok.value << ")";
       } else if (tok.kind == saplang::TokenKind::Real) {
-        std::cout << "real("<<*tok.value<<")";
+        std::cout << "real(" << *tok.value << ")";
       } else if (tok.kind == saplang::TokenKind::KwVoid) {
         std::cout << "void";
       } else if (tok.kind == saplang::TokenKind::KwFn) {
@@ -63,8 +63,7 @@ int main(int argc, const char **argv) {
     for (auto &&fn : parse_result.functions) {
       fn->dump(0);
     }
-    std::cout << "Is ast complete? " << parse_result.is_complete_ast
-              << std::endl;
+    std::cout << "Is ast complete? " << parser.is_complete_ast() << std::endl;
   }
   { // Parser test 2
     std::ifstream file{"../tests/parser_02.sl"};
@@ -77,8 +76,7 @@ int main(int argc, const char **argv) {
     for (auto &&fn : parse_result.functions) {
       fn->dump(0);
     }
-    std::cout << "Is ast complete? " << parse_result.is_complete_ast
-              << std::endl;
+    std::cout << "Is ast complete? " << parser.is_complete_ast() << std::endl;
   }
   return 0;
 }
