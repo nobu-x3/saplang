@@ -27,7 +27,18 @@ private:
 
   std::unique_ptr<FunctionDecl> parse_function_decl();
   std::unique_ptr<Block> parse_block();
+  std::unique_ptr<Stmt> parse_stmt();
+  std::unique_ptr<ReturnStmt> parse_return_stmt();
+  std::unique_ptr<Expr> parse_primary_expr();
+  std::unique_ptr<Expr> parse_expr();
+  std::unique_ptr<ParamDecl> parse_param_decl();
   std::optional<Type> parse_type();
+
+  using ArgumentList = std::vector<std::unique_ptr<Expr>>;
+  std::optional<ArgumentList> parse_argument_list();
+
+  using ParameterList = std::vector<std::unique_ptr<ParamDecl>>;
+  std::optional<ParameterList> parse_parameter_list();
 
 private:
   Lexer *m_Lexer;

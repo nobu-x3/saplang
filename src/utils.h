@@ -15,12 +15,14 @@ struct SourceLocation {
 };
 
 class IDumpable {
+public:
+  virtual ~IDumpable() = default;
   virtual void dump(size_t indent = 0) const = 0;
 };
 
 inline std::string indent(size_t level) { return std::string(level * 2, ' '); }
 
 std::nullptr_t report(SourceLocation location, std::string_view msg,
-            bool is_warning = false);
+                      bool is_warning = false);
 
 } // namespace saplang
