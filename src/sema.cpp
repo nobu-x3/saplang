@@ -44,13 +44,13 @@ std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast() {
   }
   if (error)
     return {};
-  for (int i = 0; i < resolved_functions.size(); ++i) {
+  for (int i = 1; i < resolved_functions.size(); ++i) {
     Scope fn_scope{this};
     m_CurrFunction = resolved_functions[i].get();
     for (auto &&param : m_CurrFunction->params) {
       insert_decl_to_current_scope(*param);
     }
-    auto resolved_body = resolve_block(*m_AST[i - i]->body);
+    auto resolved_body = resolve_block(*m_AST[i - 1]->body);
     if (!resolved_body) {
       error = true;
       continue;
@@ -152,18 +152,24 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
 }
 
 std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr) {
-  if(const auto* number = dynamic_cast<const NumberLiteral*>(&expr))
-    return std::make_unique<ResolvedNumberLiteral>(number->location, number->type, number->value);
-  if (const auto *decl_ref_expr = dynamic_cast<const DeclRefExpr *>(&expr))
+  if (const auto *number = dynamic_cast<const NumberLiteral *>(&expr))
+    return std::make_unique<ResolvedNumberLiteral>(number->location,
+                                                   number->type, number->value);
+  if (const auto *decl_ref_expr = dynamic_cast<const DeclRefExpr *>(&expr)) {
     return resolve_decl_ref_expr(*decl_ref_expr);
-  if(const auto* call_expr = dynamic_cast<const CallExpr*>(&expr))
+  }
+  if (const auto *call_expr = dynamic_cast<const CallExpr *>(&expr))
     return resolve_call_expr(*call_expr);
   assert(false && "unexpected expression.");
 }
 
 std::unique_ptr<ResolvedDeclRefExpr>
 Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
-  const ResolvedDecl *decl = lookup_decl(decl_ref_expr.id)->decl;
+  auto &&maybe_decl = lookup_decl(decl_ref_expr.id);
+  if (!maybe_decl)
+    return report(decl_ref_expr.location,
+                  "symbol '" + decl_ref_expr.id + "' undefined.");
+  const ResolvedDecl *decl = maybe_decl->decl;
   if (!decl)
     return report(decl_ref_expr.location,
                   "symbol '" + decl_ref_expr.id + "' undefined.");
@@ -190,6 +196,8 @@ Sema::resolve_call_expr(const CallExpr &call) {
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
   for (int i = 0; i < call.args.size(); ++i) {
     auto &&resolved_arg = resolve_expr(*call.args[i]);
+    if (!resolved_arg)
+      return nullptr;
     if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind)
       return report(resolved_arg->location,
                     "unexpected type '" + resolved_arg->type.name +

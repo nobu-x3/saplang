@@ -51,7 +51,7 @@ private:
 struct Decl : public IDumpable {
   SourceLocation location;
   std::string id;
-  inline Decl(SourceLocation location, std::string_view id)
+  inline Decl(SourceLocation location, std::string id)
       : location(location), id(std::move(id)) {}
   virtual ~Decl() = default;
   void dump(size_t indent) const = 0;
@@ -72,16 +72,16 @@ struct NumberLiteral : public Expr {
   NumberType type;
   std::string value;
   inline NumberLiteral(SourceLocation loc, NumberType type,
-                       std::string_view value)
-      : Expr(loc), type(type), value(value) {}
+                       std::string value)
+      : Expr(loc), type(type), value(std::move(value)) {}
 
   void dump(size_t indent_level) const override;
 };
 
 struct DeclRefExpr : public Expr {
   std::string id;
-  inline DeclRefExpr(SourceLocation loc, std::string_view id)
-      : Expr(loc), id(id) {}
+  inline DeclRefExpr(SourceLocation loc, std::string id)
+      : Expr(loc), id(std::move(id)) {}
 
   void dump(size_t indent_level) const override;
 };
@@ -116,7 +116,7 @@ struct Block : public IDumpable {
 
 struct ParamDecl : public Decl {
   Type type;
-  inline ParamDecl(SourceLocation loc, std::string_view id, Type type)
+  inline ParamDecl(SourceLocation loc, std::string id, Type type)
       : Decl(loc, id), type(std::move(type)) {}
 
   void dump(size_t indent_level) const override;
@@ -127,10 +127,10 @@ struct FunctionDecl : public Decl {
   std::vector<std::unique_ptr<ParamDecl>> params;
   std::unique_ptr<Block> body;
 
-  inline FunctionDecl(SourceLocation location, std::string_view id, Type type,
+  inline FunctionDecl(SourceLocation location, std::string id, Type type,
                       std::vector<std::unique_ptr<ParamDecl>> &&params,
                       std::unique_ptr<Block> &&body)
-      : Decl(location, id), type(std::move(type)), params(std::move(params)),
+      : Decl(location, std::move(id)), type(std::move(type)), params(std::move(params)),
         body(std::move(body)) {}
 
   void dump(size_t indent) const override;
@@ -139,12 +139,14 @@ struct FunctionDecl : public Decl {
 struct ResolvedStmt : public IDumpable {
   SourceLocation location;
   inline ResolvedStmt(SourceLocation location) : location(location) {}
+  virtual ~ResolvedStmt() = default;
 };
 
 struct ResolvedExpr : public ResolvedStmt {
   Type type;
   inline ResolvedExpr(SourceLocation loc, Type type)
       : ResolvedStmt(loc), type(std::move(type)) {}
+  virtual ~ResolvedExpr() = default;
 };
 
 struct ResolvedBlock : public IDumpable {
@@ -155,6 +157,8 @@ struct ResolvedBlock : public IDumpable {
                        std::vector<std::unique_ptr<ResolvedStmt>> &&statements)
       : location(loc), statements(std::move(statements)) {}
 
+  virtual ~ResolvedBlock() = default;
+
   void dump(size_t indent_level) const override;
 };
 
@@ -162,8 +166,9 @@ struct ResolvedDecl : public IDumpable {
   SourceLocation location;
   std::string id;
   Type type;
-  inline ResolvedDecl(SourceLocation loc, std::string_view id, Type &&type)
-      : location(loc), id(id), type(std::move(type)) {}
+  inline ResolvedDecl(SourceLocation loc, std::string id, Type &&type)
+      : location(loc), id(std::move(id)), type(std::move(type)) {}
+  virtual ~ResolvedDecl() = default;
 };
 
 struct ResolvedNumberLiteral : public ResolvedExpr {
@@ -181,14 +186,15 @@ struct ResolvedNumberLiteral : public ResolvedExpr {
   };
   Value value;
 
-  explicit ResolvedNumberLiteral(SourceLocation loc, NumberLiteral::NumberType type,
+  explicit ResolvedNumberLiteral(SourceLocation loc,
+                                 NumberLiteral::NumberType type,
                                  const std::string &value);
   void dump(size_t indent_level) const override;
 };
 
 struct ResolvedParamDecl : public ResolvedDecl {
-  inline ResolvedParamDecl(SourceLocation loc, std::string_view id, Type &&type)
-      : ResolvedDecl(loc, id, std::move(type)) {}
+  inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type)
+      : ResolvedDecl(loc, std::move(id), std::move(type)) {}
 
   void dump(size_t indent_level) const override;
 };
@@ -198,10 +204,10 @@ struct ResolvedFuncDecl : public ResolvedDecl {
   std::unique_ptr<ResolvedBlock> body;
 
   inline ResolvedFuncDecl(
-      SourceLocation loc, std::string_view id, Type type,
+      SourceLocation loc, std::string id, Type type,
       std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
       std::unique_ptr<ResolvedBlock> body)
-      : ResolvedDecl(loc, id, std::move(type)), params(std::move(params)),
+      : ResolvedDecl(loc, std::move(id), std::move(type)), params(std::move(params)),
         body(std::move(body)) {}
 
   void dump(size_t indent_level) const override;
