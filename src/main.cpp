@@ -7,6 +7,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "utils.h"
+#include "sema.h"
 
 int main(int argc, const char **argv) {
   // if (argc < 2)

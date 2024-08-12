@@ -265,12 +265,6 @@ std::optional<Type> Parser::parse_type() {
     } else if (*m_NextToken.value == "u64") {
       eat_next_token();
       return Type::builtin_u64();
-    } else if (*m_NextToken.value == "f8") {
-      eat_next_token();
-      return Type::builtin_f8();
-    } else if (*m_NextToken.value == "f16") {
-      eat_next_token();
-      return Type::builtin_f16();
     } else if (*m_NextToken.value == "f32") {
       eat_next_token();
       return Type::builtin_f32();
