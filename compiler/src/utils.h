@@ -1,10 +1,16 @@
 #pragma once
 
+#include <iostream>
 #include <sstream>
 #include <string>
-#include <iostream>
 
 namespace saplang {
+
+#if defined(BUILD_TESTS)
+const std::stringstream &get_error_stream();
+void clear_error_stream();
+#endif
+
 struct SourceFile {
   std::string_view path;
   std::string buffer;
