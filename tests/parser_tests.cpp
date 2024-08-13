@@ -8,6 +8,7 @@
 #include <utils.h>
 
 #define TEST_SETUP(file_contents)                                              \
+  saplang::clear_error_stream();                                               \
   std::stringstream buffer{file_contents};                                     \
   std::stringstream output_buffer{};                                           \
   saplang::SourceFile src_file{"test", buffer.str()};                          \
@@ -16,92 +17,75 @@
   auto parse_result = parser.parse_source_file();                              \
   for (auto &&fn : parse_result.functions) {                                   \
     fn->dump_to_stream(output_buffer);                                         \
-  }
+  }                                                                            \
+  const auto &error_stream = saplang::get_error_stream();
 
 TEST_CASE("Function declarations", "[parser]") {
-  saplang::clear_error_stream();
   SECTION("Undeclared function name") {
     TEST_SETUP(R"(fn{}))");
     REQUIRE(output_buffer.str().empty());
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() == "test:1:3 error: expected type specifier.\n");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("expected function identifier") {
     TEST_SETUP(R"(fn int{}))");
     REQUIRE(output_buffer.str().empty());
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() ==
             "test:1:7 error: expected function identifier.\n");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("expected '('") {
     TEST_SETUP(R"(fn int f{}))");
     REQUIRE(output_buffer.str().empty());
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() == "test:1:9 error: expected '('.\n");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("expected parameter declaration") {
     TEST_SETUP(R"(fn int f({})");
     REQUIRE(output_buffer.str().empty());
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() ==
             "test:1:10 error: expected parameter declaration.\n");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("expected parameter identifier") {
     TEST_SETUP(R"(fn int f(int{})");
     REQUIRE(output_buffer.str().empty());
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() == "test:1:10 error: expected identifier.\n");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("Expected '{'") {
     TEST_SETUP(R"(fn int f(int a)})");
     REQUIRE(output_buffer.str().empty());
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() ==
             R"(test:1:16 error: expected '{' at the beginning of a block.
 test:1:16 error: failed to parse function block.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("Expected '}'") {
     TEST_SETUP(R"(fn int f(int a){)");
     REQUIRE(output_buffer.str().empty());
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() ==
             R"(test:1:17 error: expected '}' at the end of a block.
 test:1:17 error: failed to parse function block.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("Forward decl attempt") {
     TEST_SETUP(R"(fn int f(int a);)");
     REQUIRE(output_buffer.str().empty());
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() ==
             R"(test:1:16 error: expected '{' at the beginning of a block.
 test:1:16 error: failed to parse function block.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("Correct function declaration") {
     TEST_SETUP(R"(fn int f(int a){})");
     REQUIRE(output_buffer.str() == R"(FunctionDecl: f:int
   ParamDecl: a:int
   Block
 )");
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str().empty());
     REQUIRE(parser.is_complete_ast());
   }
@@ -120,14 +104,12 @@ FunctionDecl: foo:void
 FunctionDecl: bar:void
   Block
 )");
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str().empty());
     REQUIRE(parser.is_complete_ast());
   }
 }
 
 TEST_CASE("Primary", "[parser]") {
-  saplang::clear_error_stream();
   SECTION("Incorrect number literals") {
     TEST_SETUP(
         R"(
@@ -140,14 +122,12 @@ fn void main() {
             R"(FunctionDecl: main:void
   Block
 )");
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() ==
             R"(test:3:5 error: expected expression.
 test:4:5 error: expected expression.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("Correct number literals") {
     TEST_SETUP(R"(
 fn void main(){
@@ -160,11 +140,9 @@ fn void main(){
     NumberLiteral: integer(1)
     NumberLiteral: real(1.0)
 )");
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str().empty());
     REQUIRE(parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("Incorrect function calls") {
     TEST_SETUP(
         R"(
@@ -177,14 +155,12 @@ fn void main() {
     REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
   Block
 )");
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str() == R"(test:3:7 error: expected expression.
 test:4:8 error: expected ')'.
 test:5:9 error: expected expression.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
-  saplang::clear_error_stream();
   SECTION("Correct function calls") {
     TEST_SETUP(R"(
 fn void main() {
@@ -203,8 +179,22 @@ fn void main() {
       NumberLiteral: real(1.0)
       NumberLiteral: integer(2)
 )");
-    const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str().empty());
     REQUIRE(parser.is_complete_ast());
   }
+}
+
+TEST_CASE("Missing semicolon", "[parser]") {
+  TEST_SETUP(R"(
+fn void main() {
+    a(1.0, 2)
+}
+)");
+  REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+)");
+  REQUIRE(error_stream.str() ==
+          R"(test:4:1 error: expected ';' at the end of a statement.
+)");
+  REQUIRE(!parser.is_complete_ast());
 }
