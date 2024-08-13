@@ -19,6 +19,7 @@
   }
 
 TEST_CASE("Function declarations", "[parser]") {
+  saplang::clear_error_stream();
   SECTION("Undeclared function name") {
     TEST_SETUP(R"(fn{}))");
     REQUIRE(output_buffer.str().empty());
@@ -118,6 +119,89 @@ FunctionDecl: foo:void
   Block
 FunctionDecl: bar:void
   Block
+)");
+    const auto &error_stream = saplang::get_error_stream();
+    REQUIRE(error_stream.str().empty());
+    REQUIRE(parser.is_complete_ast());
+  }
+}
+
+TEST_CASE("Primary", "[parser]") {
+  saplang::clear_error_stream();
+  SECTION("Incorrect number literals") {
+    TEST_SETUP(
+        R"(
+fn void main() {
+    .0;
+    0.;
+}
+)");
+    REQUIRE(output_buffer.str() ==
+            R"(FunctionDecl: main:void
+  Block
+)");
+    const auto &error_stream = saplang::get_error_stream();
+    REQUIRE(error_stream.str() ==
+            R"(test:3:5 error: expected expression.
+test:4:5 error: expected expression.
+)");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  saplang::clear_error_stream();
+  SECTION("Correct number literals") {
+    TEST_SETUP(R"(
+fn void main(){
+    1;
+    1.0;
+}
+)");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    NumberLiteral: integer(1)
+    NumberLiteral: real(1.0)
+)");
+    const auto &error_stream = saplang::get_error_stream();
+    REQUIRE(error_stream.str().empty());
+    REQUIRE(parser.is_complete_ast());
+  }
+  saplang::clear_error_stream();
+  SECTION("Incorrect function calls") {
+    TEST_SETUP(
+        R"(
+fn void main() {
+    a(;
+    a(x;
+    a(x,;
+}
+)");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+)");
+    const auto &error_stream = saplang::get_error_stream();
+    REQUIRE(error_stream.str() == R"(test:3:7 error: expected expression.
+test:4:8 error: expected ')'.
+test:5:9 error: expected expression.
+)");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  saplang::clear_error_stream();
+  SECTION("Correct function calls") {
+    TEST_SETUP(R"(
+fn void main() {
+    a;
+    a();
+    a(1.0, 2);
+}
+)");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    DeclRefExpr: a
+    CallExpr:
+      DeclRefExpr: a
+    CallExpr:
+      DeclRefExpr: a
+      NumberLiteral: real(1.0)
+      NumberLiteral: integer(2)
 )");
     const auto &error_stream = saplang::get_error_stream();
     REQUIRE(error_stream.str().empty());
