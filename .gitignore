@@ -5,3 +5,5 @@ obj
 lib
 build
 .cache
+.vs
+CMakeSettings.json
