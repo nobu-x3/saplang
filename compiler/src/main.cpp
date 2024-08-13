@@ -53,45 +53,5 @@ int main(int argc, const char **argv) {
     assert(tok.kind == saplang::TokenKind::Eof);
     std::cout << "eof\n";
   }
-  { // Parser test 1
-    std::ifstream file{"../tests/parser_01.sl"};
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    saplang::SourceFile src_file{"../tests/parser_01.sl", buffer.str()};
-    saplang::Lexer lexer{src_file};
-    saplang::Parser parser(&lexer);
-    auto parse_result = parser.parse_source_file();
-    for (auto &&fn : parse_result.functions) {
-      fn->dump(0);
-    }
-    std::cout << "Is ast complete? " << parser.is_complete_ast() << std::endl;
-  }
-  { // Parser test 2
-    std::ifstream file{"../tests/parser_02.sl"};
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    saplang::SourceFile src_file{"../tests/parser_02.sl", buffer.str()};
-    saplang::Lexer lexer{src_file};
-    saplang::Parser parser(&lexer);
-    auto parse_result = parser.parse_source_file();
-    for (auto &&fn : parse_result.functions) {
-      fn->dump(0);
-    }
-    std::cout << "Is ast complete? " << parser.is_complete_ast() << std::endl;
-  }
-  { // Sema test 2
-    std::ifstream file{"../tests/parser_02.sl"};
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    saplang::SourceFile src_file{"../tests/parser_02.sl", buffer.str()};
-    saplang::Lexer lexer{src_file};
-    saplang::Parser parser(&lexer);
-    auto parse_result = parser.parse_source_file();
-    saplang::Sema sema{std::move(parse_result.functions)};
-    auto res = sema.resolve_ast();
-    for (auto &&fn : res) {
-      fn->dump(0);
-    }
-  }
   return 0;
 }
