@@ -6,90 +6,90 @@
 
 namespace saplang {
 
-void Block::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "Block\n";
+void Block::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "Block\n";
   for (auto &&stmt : statements) {
-    stmt->dump(indent_level + 1);
+    stmt->dump_to_stream(stream, indent_level + 1);
   }
 }
 
-void FunctionDecl::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "FunctionDecl: " << id << ":"
+void FunctionDecl::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "FunctionDecl: " << id << ":"
             << type.name << '\n';
   for (auto &&param : params) {
-    param->dump(indent_level + 1);
+    param->dump_to_stream(stream, indent_level + 1);
   }
-  body->dump(indent_level + 1);
+  body->dump_to_stream(stream, indent_level + 1);
 }
 
-void ReturnStmt::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "ReturnStmt\n";
+void ReturnStmt::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ReturnStmt\n";
   if (expr) {
-    expr->dump(indent_level + 1);
+    expr->dump_to_stream(stream, indent_level + 1);
   }
 }
 
-void NumberLiteral::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "NumberLiteral: "
+void NumberLiteral::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "NumberLiteral: "
             << (type == NumberType::Integer ? "integer(" : "real(") << value
             << ")" << "\n";
 }
 
-void DeclRefExpr::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "DeclRefExpr: " << id << "\n";
+void DeclRefExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "DeclRefExpr: " << id << "\n";
 }
 
-void CallExpr::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "CallExpr:\n";
-  id->dump(indent_level + 1);
+void CallExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "CallExpr:\n";
+  id->dump_to_stream(stream, indent_level + 1);
   for (auto &&arg : args) {
-    arg->dump(indent_level + 1);
+    arg->dump_to_stream(stream, indent_level + 1);
   }
 }
 
-void ParamDecl::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "ParamDecl: " << id << ":" << type.name
+void ParamDecl::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ParamDecl: " << id << ":" << type.name
             << "\n";
 }
 
-void ResolvedBlock::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "ResolvedBlock:\n";
+void ResolvedBlock::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedBlock:\n";
   for (auto &&statement : statements) {
-    statement->dump(indent_level + 1);
+    statement->dump_to_stream(stream, indent_level + 1);
   }
 }
 
-void ResolvedParamDecl::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "ResolvedParamDecl: @(" << this << ") "
+void ResolvedParamDecl::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedParamDecl: @(" << this << ") "
             << id << ":\n";
 }
 
-void ResolvedFuncDecl::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "ResolvedFuncDecl: @(" << this << ") "
+void ResolvedFuncDecl::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedFuncDecl: @(" << this << ") "
             << id << ":\n";
   for (auto &&param : params) {
-    param->dump(indent_level + 1);
+    param->dump_to_stream(stream, indent_level + 1);
   }
-  body->dump(indent_level + 1);
+  body->dump_to_stream(stream, indent_level + 1);
 }
 
-void ResolvedDeclRefExpr::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "ResolvedDeclRefExpr: @(" << decl << ") "
+void ResolvedDeclRefExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedDeclRefExpr: @(" << decl << ") "
             << decl->id << ":\n";
 }
 
-void ResolvedCallExpr::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "ResolvedCallExpr: @(" << func_decl
+void ResolvedCallExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedCallExpr: @(" << func_decl
             << ") " << func_decl->id << ":\n";
   for (auto &&arg : args) {
-    arg->dump(indent_level + 1);
+    arg->dump_to_stream(stream, indent_level + 1);
   }
 }
 
-void ResolvedReturnStmt::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "ResolvedReturnStmt:\n";
+void ResolvedReturnStmt::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedReturnStmt:\n";
   if (expr)
-    expr->dump(indent_level + 1);
+    expr->dump_to_stream(stream, indent_level + 1);
 }
 
 ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc,
@@ -162,38 +162,38 @@ ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc,
   }
 }
 
-void ResolvedNumberLiteral::dump(size_t indent_level) const {
-  std::cerr << indent(indent_level) << "ResolvedNumberLiteral:\n";
+void ResolvedNumberLiteral::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedNumberLiteral:\n";
   switch (type.kind) {
   case Type::Kind::i8:
-    std::cerr << indent(indent_level + 1) << "i8(" << value.i8 << ")";
+    stream << indent(indent_level + 1) << "i8(" << value.i8 << ")";
     break;
   case Type::Kind::i16:
-    std::cerr << indent(indent_level + 1) << "i16(" << value.i16 << ")";
+    stream << indent(indent_level + 1) << "i16(" << value.i16 << ")";
     break;
   case Type::Kind::i32:
-    std::cerr << indent(indent_level + 1) << "i32(" << value.i32 << ")";
+    stream << indent(indent_level + 1) << "i32(" << value.i32 << ")";
     break;
   case Type::Kind::i64:
-    std::cerr << indent(indent_level + 1) << "i64(" << value.i64 << ")";
+    stream << indent(indent_level + 1) << "i64(" << value.i64 << ")";
     break;
   case Type::Kind::u8:
-    std::cerr << indent(indent_level + 1) << "u8(" << value.u8 << ")";
+    stream << indent(indent_level + 1) << "u8(" << value.u8 << ")";
     break;
   case Type::Kind::u16:
-    std::cerr << indent(indent_level + 1) << "u16(" << value.u16 << ")";
+    stream << indent(indent_level + 1) << "u16(" << value.u16 << ")";
     break;
   case Type::Kind::u32:
-    std::cerr << indent(indent_level + 1) << "u32(" << value.u32 << ")";
+    stream << indent(indent_level + 1) << "u32(" << value.u32 << ")";
     break;
   case Type::Kind::u64:
-    std::cerr << indent(indent_level + 1) << "u64(" << value.u64 << ")";
+    stream << indent(indent_level + 1) << "u64(" << value.u64 << ")";
     break;
   case Type::Kind::f32:
-    std::cerr << indent(indent_level + 1) << "f32(" << value.f32 << ")";
+    stream << indent(indent_level + 1) << "f32(" << value.f32 << ")";
     break;
   case Type::Kind::f64:
-    std::cerr << indent(indent_level + 1) << "f64(" << value.f64 << ")";
+    stream << indent(indent_level + 1) << "f64(" << value.f64 << ")";
     break;
   default:
     // @TODO: implement rest

@@ -45,8 +45,18 @@ struct Type {
   static Type custom(std::string_view name) { return {Kind::Custom, name}; }
 
 private:
-  Type(Kind kind, std::string_view name) : kind(kind), name(name) {};
+  Type(Kind kind, std::string_view name) : kind(kind), name(name){};
 };
+
+#define DUMP_IMPL                                                              \
+public:                                                                        \
+  void dump_to_stream(std::stringstream &stream, size_t indent = 0)            \
+      const override;                                                          \
+  inline void dump(size_t indent = 0) const override {                         \
+    std::stringstream stream{};                                                \
+    dump_to_stream(stream, indent);                                            \
+    std::cerr << stream.str();                                                 \
+  }
 
 struct Decl : public IDumpable {
   SourceLocation location;
@@ -54,7 +64,6 @@ struct Decl : public IDumpable {
   inline Decl(SourceLocation location, std::string id)
       : location(location), id(std::move(id)) {}
   virtual ~Decl() = default;
-  void dump(size_t indent) const = 0;
 };
 
 struct Stmt : public IDumpable {
@@ -71,11 +80,10 @@ struct NumberLiteral : public Expr {
   enum class NumberType { Integer, Real };
   NumberType type;
   std::string value;
-  inline NumberLiteral(SourceLocation loc, NumberType type,
-                       std::string value)
+  inline NumberLiteral(SourceLocation loc, NumberType type, std::string value)
       : Expr(loc), type(type), value(std::move(value)) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct DeclRefExpr : public Expr {
@@ -83,7 +91,7 @@ struct DeclRefExpr : public Expr {
   inline DeclRefExpr(SourceLocation loc, std::string id)
       : Expr(loc), id(std::move(id)) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct CallExpr : public Expr {
@@ -93,7 +101,7 @@ struct CallExpr : public Expr {
                   std::vector<std::unique_ptr<Expr>> &&args)
       : Expr(loc), id(std::move(id)), args(std::move(args)) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct ReturnStmt : public Stmt {
@@ -102,7 +110,7 @@ struct ReturnStmt : public Stmt {
   inline ReturnStmt(SourceLocation loc, std::unique_ptr<Expr> &&expr = nullptr)
       : Stmt(loc), expr(std::move(expr)) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct Block : public IDumpable {
@@ -111,7 +119,7 @@ struct Block : public IDumpable {
   inline Block(SourceLocation location,
                std::vector<std::unique_ptr<Stmt>> &&statements)
       : location(location), statements(std::move(statements)) {}
-  void dump(size_t indent) const override;
+  DUMP_IMPL
 };
 
 struct ParamDecl : public Decl {
@@ -119,7 +127,7 @@ struct ParamDecl : public Decl {
   inline ParamDecl(SourceLocation loc, std::string id, Type type)
       : Decl(loc, id), type(std::move(type)) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct FunctionDecl : public Decl {
@@ -130,10 +138,9 @@ struct FunctionDecl : public Decl {
   inline FunctionDecl(SourceLocation location, std::string id, Type type,
                       std::vector<std::unique_ptr<ParamDecl>> &&params,
                       std::unique_ptr<Block> &&body)
-      : Decl(location, std::move(id)), type(std::move(type)), params(std::move(params)),
-        body(std::move(body)) {}
-
-  void dump(size_t indent) const override;
+      : Decl(location, std::move(id)), type(std::move(type)),
+        params(std::move(params)), body(std::move(body)) {}
+  DUMP_IMPL
 };
 
 struct ResolvedStmt : public IDumpable {
@@ -159,7 +166,7 @@ struct ResolvedBlock : public IDumpable {
 
   virtual ~ResolvedBlock() = default;
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct ResolvedDecl : public IDumpable {
@@ -189,14 +196,14 @@ struct ResolvedNumberLiteral : public ResolvedExpr {
   explicit ResolvedNumberLiteral(SourceLocation loc,
                                  NumberLiteral::NumberType type,
                                  const std::string &value);
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct ResolvedParamDecl : public ResolvedDecl {
   inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type)
       : ResolvedDecl(loc, std::move(id), std::move(type)) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct ResolvedFuncDecl : public ResolvedDecl {
@@ -207,10 +214,10 @@ struct ResolvedFuncDecl : public ResolvedDecl {
       SourceLocation loc, std::string id, Type type,
       std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
       std::unique_ptr<ResolvedBlock> body)
-      : ResolvedDecl(loc, std::move(id), std::move(type)), params(std::move(params)),
-        body(std::move(body)) {}
+      : ResolvedDecl(loc, std::move(id), std::move(type)),
+        params(std::move(params)), body(std::move(body)) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct ResolvedDeclRefExpr : public ResolvedExpr {
@@ -219,7 +226,7 @@ struct ResolvedDeclRefExpr : public ResolvedExpr {
   inline ResolvedDeclRefExpr(SourceLocation loc, const ResolvedDecl *decl)
       : ResolvedExpr(loc, decl->type), decl(decl) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct ResolvedCallExpr : public ResolvedExpr {
@@ -231,7 +238,7 @@ struct ResolvedCallExpr : public ResolvedExpr {
       : ResolvedExpr(loc, callee->type), func_decl(callee),
         args(std::move(args)) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 
 struct ResolvedReturnStmt : public ResolvedStmt {
@@ -241,6 +248,6 @@ struct ResolvedReturnStmt : public ResolvedStmt {
                             std::unique_ptr<ResolvedExpr> expr)
       : ResolvedStmt(loc), expr(std::move(expr)) {}
 
-  void dump(size_t indent_level) const override;
+  DUMP_IMPL
 };
 } // namespace saplang

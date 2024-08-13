@@ -1,6 +1,8 @@
 #pragma once
 
+#include <sstream>
 #include <string>
+#include <iostream>
 
 namespace saplang {
 struct SourceFile {
@@ -17,6 +19,8 @@ struct SourceLocation {
 class IDumpable {
 public:
   virtual ~IDumpable() = default;
+  virtual void dump_to_stream(std::stringstream &stream,
+                              size_t indent = 0) const = 0;
   virtual void dump(size_t indent = 0) const = 0;
 };
 
