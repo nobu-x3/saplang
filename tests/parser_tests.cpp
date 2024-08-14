@@ -277,3 +277,43 @@ fn void f(x){}
     REQUIRE(parser.is_complete_ast());
   }
 }
+
+TEST_CASE("Return statement", "[parser]") {
+  SECTION("return |;") {
+    TEST_SETUP("fn void foo(){return |;}");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: foo:void
+  Block
+)");
+    REQUIRE(error_stream.str() == "test:1:22 error: expected expression.\n");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  SECTION("return 0 |;") {
+    TEST_SETUP("fn void foo(){return 0 |;}");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: foo:void
+  Block
+)");
+    REQUIRE(error_stream.str() ==
+            "test:1:24 error: expected ';' at the end of a statement.\n");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  SECTION("return 1;") {
+    TEST_SETUP("fn void foo() {return 1;}");
+    REQUIRE(output_buffer.str() ==
+            R"(FunctionDecl: foo:void
+  Block
+    ReturnStmt
+      NumberLiteral: integer(1)
+)");
+    REQUIRE(error_stream.str().empty());
+    REQUIRE(parser.is_complete_ast());
+  }
+  SECTION("return;") {
+    TEST_SETUP("fn void foo() {return;}");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: foo:void
+  Block
+    ReturnStmt
+)");
+    REQUIRE(error_stream.str().empty());
+    REQUIRE(parser.is_complete_ast());
+  }
+}
