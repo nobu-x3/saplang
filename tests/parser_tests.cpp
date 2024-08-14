@@ -317,3 +317,42 @@ TEST_CASE("Return statement", "[parser]") {
     REQUIRE(parser.is_complete_ast());
   }
 }
+
+TEST_CASE("Error recovery functions", "[parser]") {
+  TEST_SETUP(R"(
+fn error() {
+    int number = 1 + 2;
+}
+
+fn int main() {
+    return 1;
+}
+
+fn int error2({
+return 1;
+}
+
+fn void error3(){
+return;
+
+fn int pass() {
+return 2;
+}
+)");
+  REQUIRE(output_buffer.str() == R"(FunctionDecl: main:int
+  Block
+    ReturnStmt
+      NumberLiteral: integer(1)
+FunctionDecl: pass:int
+  Block
+    ReturnStmt
+      NumberLiteral: integer(2)
+)");
+  REQUIRE(error_stream.str() ==
+          R"(test:2:9 error: expected function identifier.
+test:10:15 error: expected parameter declaration.
+test:17:1 error: expected '}' at the end of a block.
+test:17:1 error: failed to parse function block.
+)");
+  REQUIRE(!parser.is_complete_ast());
+}
