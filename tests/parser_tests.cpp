@@ -109,6 +109,32 @@ FunctionDecl: bar:void
   }
 }
 
+TEST_CASE("Blocks", "[parser]") {
+  SECTION("Expected '}' at the end of block") {
+    TEST_SETUP(R"(
+fn void bar(){
+fn void main(){
+)");
+    REQUIRE(output_buffer.str().empty());
+    REQUIRE(error_stream.str() ==
+            R"(test:3:1 error: expected '}' at the end of a block.
+test:3:1 error: failed to parse function block.
+test:4:1 error: expected '}' at the end of a block.
+test:4:1 error: failed to parse function block.
+)");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  SECTION("Proper syntax") {
+    TEST_SETUP("fn void f(){}");
+    REQUIRE(output_buffer.str() ==
+            R"(FunctionDecl: f:void
+  Block
+)");
+    REQUIRE(error_stream.str().empty());
+    REQUIRE(parser.is_complete_ast());
+  }
+}
+
 TEST_CASE("Primary", "[parser]") {
   SECTION("Incorrect number literals") {
     TEST_SETUP(
