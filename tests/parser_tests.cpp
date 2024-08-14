@@ -356,3 +356,25 @@ test:17:1 error: failed to parse function block.
 )");
   REQUIRE(!parser.is_complete_ast());
 }
+
+TEST_CASE("Error recovery semicolon", "[parser]") {
+  TEST_SETUP(R"(
+fn void error(){
+i32 x = ;
+
+1.0;
+
+f32 z =;
+}
+)");
+  REQUIRE(output_buffer.str() ==
+          R"(FunctionDecl: error:void
+  Block
+    NumberLiteral: real(1.0)
+)");
+  REQUIRE(error_stream.str() ==
+          R"(test:3:5 error: expected ';' at the end of a statement.
+test:7:5 error: expected ';' at the end of a statement.
+)");
+  REQUIRE(!parser.is_complete_ast());
+}
