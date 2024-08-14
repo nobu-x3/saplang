@@ -44,13 +44,13 @@ std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast() {
   }
   if (error)
     return {};
-  for (int i = 1; i < resolved_functions.size(); ++i) {
+  for (int i = 0; i < resolved_functions.size(); ++i) {
     Scope fn_scope{this};
     m_CurrFunction = resolved_functions[i].get();
     for (auto &&param : m_CurrFunction->params) {
       insert_decl_to_current_scope(*param);
     }
-    auto resolved_body = resolve_block(*m_AST[i - 1]->body);
+    auto resolved_body = resolve_block(*m_AST[i]->body);
     if (!resolved_body) {
       error = true;
       continue;
@@ -59,7 +59,7 @@ std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast() {
   }
   if (error)
     return {};
-  return std::move(resolved_functions);
+  return resolved_functions;
 }
 
 std::optional<Type> Sema::resolve_type(Type parsed_type) {
@@ -161,6 +161,7 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr) {
   if (const auto *call_expr = dynamic_cast<const CallExpr *>(&expr))
     return resolve_call_expr(*call_expr);
   assert(false && "unexpected expression.");
+  return nullptr;
 }
 
 std::unique_ptr<ResolvedDeclRefExpr>
@@ -181,12 +182,12 @@ Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
 
 std::unique_ptr<ResolvedCallExpr>
 Sema::resolve_call_expr(const CallExpr &call) {
-  const auto *decl_ref_expr = dynamic_cast<const DeclRefExpr *>(call.id.get());
-  if (!decl_ref_expr)
-    return report(call.location, "expression cannot be called as a function.");
   auto &&resolved_callee = resolve_decl_ref_expr(*call.id, true);
   if (!resolved_callee)
     return nullptr;
+  const auto *decl_ref_expr = dynamic_cast<const DeclRefExpr *>(call.id.get());
+  if (!decl_ref_expr)
+    return report(call.location, "expression cannot be called as a function.");
   const auto *resolved_func_decl =
       dynamic_cast<const ResolvedFuncDecl *>(resolved_callee->decl);
   if (!resolved_func_decl)

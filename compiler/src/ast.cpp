@@ -70,7 +70,8 @@ void ResolvedFuncDecl::dump_to_stream(std::stringstream& stream, size_t indent_l
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);
   }
-  body->dump_to_stream(stream, indent_level + 1);
+  if (body)
+    body->dump_to_stream(stream, indent_level + 1);
 }
 
 void ResolvedDeclRefExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
