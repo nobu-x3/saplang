@@ -198,3 +198,56 @@ fn void main() {
 )");
   REQUIRE(!parser.is_complete_ast());
 }
+
+TEST_CASE("Parameter list", "[parser]") {
+  SECTION("fn void f({}") {
+    TEST_SETUP(R"(
+fn void f({}
+)");
+    REQUIRE(output_buffer.str().size() == 0);
+    REQUIRE(error_stream.str() ==
+            R"(test:2:11 error: expected parameter declaration.
+)");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  SECTION("fn void f(x){}") {
+    TEST_SETUP(R"(
+fn void f(x){}
+)");
+    REQUIRE(output_buffer.str().empty());
+    REQUIRE(error_stream.str() == R"(test:2:11 error: expected identifier.
+)");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  SECTION("fn void f(1.0 x){}") {
+    TEST_SETUP("fn void f(1.0 x){}");
+    REQUIRE(output_buffer.str().empty());
+    REQUIRE(error_stream.str() ==
+            R"(test:1:11 error: expected parameter declaration.
+)");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  SECTION("fn void f(int a{}") {
+    TEST_SETUP("fn void f(int a{}");
+    REQUIRE(output_buffer.str().empty());
+    REQUIRE(error_stream.str() == "test:1:16 error: expected ')'.\n");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  SECTION("fn void f(int a,){}") {
+    TEST_SETUP("fn void f(int a,){}");
+    REQUIRE(output_buffer.str().empty());
+    REQUIRE(error_stream.str() ==
+            "test:1:17 error: expected parameter declaration.\n");
+    REQUIRE(!parser.is_complete_ast());
+  }
+  SECTION("fn void foo(i32 a, i32 b){}") {
+    TEST_SETUP("fn void foo(i32 a, i32 b){}");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: foo:void
+  ParamDecl: a:i32
+  ParamDecl: b:i32
+  Block
+)");
+    REQUIRE(error_stream.str().empty());
+    REQUIRE(parser.is_complete_ast());
+  }
+}
