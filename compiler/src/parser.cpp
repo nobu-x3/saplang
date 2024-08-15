@@ -194,6 +194,11 @@ Parser::parse_parameter_list() {
     return param_decls;
   }
   while (true) {
+    if (m_NextToken.kind == TokenKind::KwVoid) {
+      report(m_NextToken.location,
+             "invalid paramater type 'void'.");
+      return std::nullopt;
+    }
     if (m_NextToken.kind != TokenKind::Identifier) {
       report(m_NextToken.location, "expected parameter declaration.");
       return std::nullopt;
