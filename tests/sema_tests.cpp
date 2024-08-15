@@ -102,6 +102,7 @@ sema_test:6:3 error: symbol 'y' undefined.
   }
 }
 
+
 TEST_CASE("Function parameters", "[sema]") {
   SECTION("Unknown paramatere type") {
     TEST_SETUP(R"(
