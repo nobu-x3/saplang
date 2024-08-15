@@ -9,8 +9,7 @@ std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id,
   int scope_id = 0;
   for (auto it = m_Scopes.rbegin(); it != m_Scopes.rend(); ++it) {
     for (const auto *decl : *it) {
-      if (decl->id == id &&
-          (!type || (decl->type.kind == type.value()->kind))) {
+      if (decl->id == id) {
         return DeclLookupResult{decl, scope_id};
       }
     }
@@ -22,7 +21,7 @@ std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id,
 bool Sema::insert_decl_to_current_scope(ResolvedDecl &decl) {
   auto lookup_result = lookup_decl(decl.id, &decl.type);
   if (lookup_result && lookup_result->index == 0) {
-    report(decl.location, "redeclaration of '" + decl.id + "\'");
+    report(decl.location, "redeclaration of '" + decl.id + "\'.");
     return false;
   }
   m_Scopes.back().emplace_back(&decl);

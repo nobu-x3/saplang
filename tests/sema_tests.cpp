@@ -41,7 +41,7 @@ fn void foo(){}
 )");
   REQUIRE(output_buffer.str().empty());
   REQUIRE(error_stream.str() ==
-          "sema_test:4:1 error: redeclaration of 'foo'\n");
+          "sema_test:4:1 error: redeclaration of 'foo'.\n");
 }
 
 TEST_CASE("Function declarations", "[sema]") {
@@ -126,5 +126,7 @@ fn void foo(void a, u32 b){}
 fn void foo(i32 x, f32 x){}
 )");
     REQUIRE(output_buffer.str().empty());
+    REQUIRE(error_stream.str() ==
+            "sema_test:2:20 error: redeclaration of 'x'.\n");
   }
 }
