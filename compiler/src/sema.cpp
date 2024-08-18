@@ -28,7 +28,7 @@ bool Sema::insert_decl_to_current_scope(ResolvedDecl &decl) {
   return true;
 }
 
-std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast() {
+std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast(bool partial) {
   std::vector<std::unique_ptr<ResolvedFuncDecl>> resolved_functions{};
   Scope global_scope(this);
   // Insert all global scope stuff, e.g. from other modules
@@ -41,7 +41,7 @@ std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast() {
     }
     resolved_functions.emplace_back(std::move(resolved_fn_decl));
   }
-  if (error)
+  if (error && !partial)
     return {};
   for (int i = 0; i < resolved_functions.size(); ++i) {
     Scope fn_scope{this};
@@ -56,7 +56,7 @@ std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast() {
     }
     m_CurrFunction->body = std::move(resolved_body);
   }
-  if (error)
+  if (error && !partial)
     return {};
   return resolved_functions;
 }

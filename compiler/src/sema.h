@@ -18,7 +18,7 @@ public:
   inline explicit Sema(std::vector<std::unique_ptr<FunctionDecl>> ast)
       : m_AST(std::move(ast)) {}
 
-  std::vector<std::unique_ptr<ResolvedFuncDecl>> resolve_ast();
+  std::vector<std::unique_ptr<ResolvedFuncDecl>> resolve_ast(bool partial = false);
 
 private:
   std::optional<DeclLookupResult> lookup_decl(std::string_view id,

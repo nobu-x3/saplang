@@ -53,5 +53,20 @@ int main(int argc, const char **argv) {
     assert(tok.kind == saplang::TokenKind::Eof);
     std::cout << "eof\n";
   }
+  saplang::clear_error_stream();
+  std::stringstream buffer{R"(
+fn void foo(i32 x, f32 x){}
+)"};
+  std::stringstream output_buffer{};
+  saplang::SourceFile src_file{"sema_test", buffer.str()};
+  saplang::Lexer lexer{src_file};
+  saplang::Parser parser(&lexer);
+  auto parse_result = parser.parse_source_file();
+  saplang::Sema sema{std::move(parse_result.functions)};
+  auto resolved_ast = sema.resolve_ast();
+  for (auto &&fn : resolved_ast) {
+    fn->dump_to_stream(output_buffer);
+  }
+  const auto &error_stream = saplang::get_error_stream();
   return 0;
 }

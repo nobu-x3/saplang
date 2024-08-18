@@ -23,6 +23,21 @@
   }                                                                            \
   const auto &error_stream = saplang::get_error_stream();
 
+#define TEST_SETUP_PARTIAL(file_contents)                                      \
+  saplang::clear_error_stream();                                               \
+  std::stringstream buffer{file_contents};                                     \
+  std::stringstream output_buffer{};                                           \
+  saplang::SourceFile src_file{"sema_test", buffer.str()};                     \
+  saplang::Lexer lexer{src_file};                                              \
+  saplang::Parser parser(&lexer);                                              \
+  auto parse_result = parser.parse_source_file();                              \
+  saplang::Sema sema{std::move(parse_result.functions)};                       \
+  auto resolved_ast = sema.resolve_ast(true);                                  \
+  for (auto &&fn : resolved_ast) {                                             \
+    fn->dump_to_stream(output_buffer);                                         \
+  }                                                                            \
+  const auto &error_stream = saplang::get_error_stream();
+
 TEST_CASE("Undeclared type", "[sema]") {
   TEST_SETUP(R"(
 fn CustomType foo(){}
@@ -102,7 +117,6 @@ sema_test:6:3 error: symbol 'y' undefined.
   }
 }
 
-
 TEST_CASE("Function parameters", "[sema]") {
   SECTION("Unknown paramatere type") {
     TEST_SETUP(R"(
@@ -129,4 +143,21 @@ fn void foo(i32 x, f32 x){}
     REQUIRE(error_stream.str() ==
             "sema_test:2:20 error: redeclaration of 'x'.\n");
   }
+}
+
+TEST_CASE("Error recovery", "[sema]") {
+  TEST_SETUP_PARTIAL(R"(
+fn CustomType foo() {}
+
+fn void main() {}
+)");
+  auto buf_str = output_buffer.str();
+  std::cerr << buf_str;
+  REQUIRE(
+      error_stream.str() ==
+      "sema_test:2:1 error: function 'foo' has invalid 'CustomType' type\n");
+  REQUIRE(!buf_str.empty());
+  REQUIRE(buf_str.find("ResolvedFuncDecl:") == 0);
+  REQUIRE(buf_str.find("main") == 38);
+  REQUIRE(buf_str.find("ResolvedBlock:") == 46);
 }
