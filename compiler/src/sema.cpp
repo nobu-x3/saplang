@@ -129,6 +129,7 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
     return resolve_return_stmt(*return_stmt);
   }
   assert(false && "unexpected expression.");
+  return nullptr;
 }
 
 std::unique_ptr<ResolvedReturnStmt>

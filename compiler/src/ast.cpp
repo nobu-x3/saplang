@@ -6,40 +6,56 @@
 
 namespace saplang {
 
-void Block::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void Block::dump_to_stream(std::stringstream &stream,
+                           size_t indent_level) const {
   stream << indent(indent_level) << "Block\n";
   for (auto &&stmt : statements) {
     stmt->dump_to_stream(stream, indent_level + 1);
   }
 }
 
-void FunctionDecl::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
-  stream << indent(indent_level) << "FunctionDecl: " << id << ":"
-            << type.name << '\n';
+void FunctionDecl::dump_to_stream(std::stringstream &stream,
+                                  size_t indent_level) const {
+  stream << indent(indent_level) << "FunctionDecl: " << id << ":" << type.name
+         << '\n';
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);
   }
   body->dump_to_stream(stream, indent_level + 1);
 }
 
-void ReturnStmt::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void ReturnStmt::dump_to_stream(std::stringstream &stream,
+                                size_t indent_level) const {
   stream << indent(indent_level) << "ReturnStmt\n";
   if (expr) {
     expr->dump_to_stream(stream, indent_level + 1);
   }
 }
 
-void NumberLiteral::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
-  stream << indent(indent_level) << "NumberLiteral: "
-            << (type == NumberType::Integer ? "integer(" : "real(") << value
-            << ")" << "\n";
+void NumberLiteral::dump_to_stream(std::stringstream &stream,
+                                   size_t indent_level) const {
+  stream << indent(indent_level) << "NumberLiteral: ";
+  switch (type) {
+  case NumberType::Integer:
+    stream << "integer(";
+    break;
+  case NumberType::Real:
+    stream << "real(";
+    break;
+  case NumberType::Bool:
+    stream << "bool(";
+  }
+  stream << value << ")"
+         << "\n";
 }
 
-void DeclRefExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void DeclRefExpr::dump_to_stream(std::stringstream &stream,
+                                 size_t indent_level) const {
   stream << indent(indent_level) << "DeclRefExpr: " << id << "\n";
 }
 
-void CallExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void CallExpr::dump_to_stream(std::stringstream &stream,
+                              size_t indent_level) const {
   stream << indent(indent_level) << "CallExpr:\n";
   id->dump_to_stream(stream, indent_level + 1);
   for (auto &&arg : args) {
@@ -47,26 +63,30 @@ void CallExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) co
   }
 }
 
-void ParamDecl::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void ParamDecl::dump_to_stream(std::stringstream &stream,
+                               size_t indent_level) const {
   stream << indent(indent_level) << "ParamDecl: " << id << ":" << type.name
-            << "\n";
+         << "\n";
 }
 
-void ResolvedBlock::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void ResolvedBlock::dump_to_stream(std::stringstream &stream,
+                                   size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedBlock:\n";
   for (auto &&statement : statements) {
     statement->dump_to_stream(stream, indent_level + 1);
   }
 }
 
-void ResolvedParamDecl::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,
+                                       size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedParamDecl: @(" << this << ") "
-            << id << ":\n";
+         << id << ":\n";
 }
 
-void ResolvedFuncDecl::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
-  stream << indent(indent_level) << "ResolvedFuncDecl: @(" << this << ") "
-            << id << ":\n";
+void ResolvedFuncDecl::dump_to_stream(std::stringstream &stream,
+                                      size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedFuncDecl: @(" << this << ") " << id
+         << ":\n";
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);
   }
@@ -74,20 +94,23 @@ void ResolvedFuncDecl::dump_to_stream(std::stringstream& stream, size_t indent_l
     body->dump_to_stream(stream, indent_level + 1);
 }
 
-void ResolvedDeclRefExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void ResolvedDeclRefExpr::dump_to_stream(std::stringstream &stream,
+                                         size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedDeclRefExpr: @(" << decl << ") "
-            << decl->id << ":\n";
+         << decl->id << ":\n";
 }
 
-void ResolvedCallExpr::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
-  stream << indent(indent_level) << "ResolvedCallExpr: @(" << func_decl
-            << ") " << func_decl->id << ":\n";
+void ResolvedCallExpr::dump_to_stream(std::stringstream &stream,
+                                      size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedCallExpr: @(" << func_decl << ") "
+         << func_decl->id << ":\n";
   for (auto &&arg : args) {
     arg->dump_to_stream(stream, indent_level + 1);
   }
 }
 
-void ResolvedReturnStmt::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void ResolvedReturnStmt::dump_to_stream(std::stringstream &stream,
+                                        size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedReturnStmt:\n";
   if (expr)
     expr->dump_to_stream(stream, indent_level + 1);
@@ -118,6 +141,8 @@ ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc,
       else if (wide_type >= LONG_MIN && wide_type <= LONG_MAX)
         type = Type::builtin_i64();
     }
+  } else if (num_type == NumberLiteral::NumberType::Bool) {
+    type = Type::builtin_bool();
   } else {
     double wide_type = std::stod(value_str);
     if (wide_type >= FLT_MIN && wide_type <= FLT_MAX) {
@@ -157,13 +182,17 @@ ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc,
   case Type::Kind::f64:
     value.f64 = std::stod(value_str);
     break;
+  case Type::Kind::Bool:
+    value.b8 = value_str == "true" ? true : false;
+    break;
   default:
     // @TODO: implement rest
     break;
   }
 }
 
-void ResolvedNumberLiteral::dump_to_stream(std::stringstream& stream, size_t indent_level) const {
+void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,
+                                           size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedNumberLiteral:\n";
   switch (type.kind) {
   case Type::Kind::i8:
@@ -195,6 +224,9 @@ void ResolvedNumberLiteral::dump_to_stream(std::stringstream& stream, size_t ind
     break;
   case Type::Kind::f64:
     stream << indent(indent_level + 1) << "f64(" << value.f64 << ")";
+    break;
+  case Type::Kind::Bool:
+    stream << indent(indent_level + 1) << "bool(" << value.b8 << ")";
     break;
   default:
     // @TODO: implement rest

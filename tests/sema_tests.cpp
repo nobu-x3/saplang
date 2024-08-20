@@ -83,6 +83,7 @@ fn void main() {
   bar();
   bar(1, 2, 3);
   bar(1, 2);
+  bar(true, false);
   foo();
 }
 )");
@@ -94,6 +95,7 @@ sema_test:9:7 error: unexpected type 'f32', expected 'i32'.
 sema_test:10:6 error: argument count mismatch.
 sema_test:11:6 error: argument count mismatch.
 sema_test:12:7 error: unexpected type 'u8', expected 'i32'.
+sema_test:13:7 error: unexpected type 'bool', expected 'i32'.
 )");
   }
 }

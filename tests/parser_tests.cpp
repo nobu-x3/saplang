@@ -159,12 +159,16 @@ test:4:5 error: expected expression.
 fn void main(){
     1;
     1.0;
+    true;
+    false;
 }
 )");
     REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
   Block
     NumberLiteral: integer(1)
     NumberLiteral: real(1.0)
+    NumberLiteral: bool(true)
+    NumberLiteral: bool(false)
 )");
     REQUIRE(error_stream.str().empty());
     REQUIRE(parser.is_complete_ast());
@@ -193,6 +197,8 @@ fn void main() {
     a;
     a();
     a(1.0, 2);
+    a(true);
+    a(false);
 }
 )");
     REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
@@ -204,6 +210,12 @@ fn void main() {
       DeclRefExpr: a
       NumberLiteral: real(1.0)
       NumberLiteral: integer(2)
+    CallExpr:
+      DeclRefExpr: a
+      NumberLiteral: bool(true)
+    CallExpr:
+      DeclRefExpr: a
+      NumberLiteral: bool(false)
 )");
     REQUIRE(error_stream.str().empty());
     REQUIRE(parser.is_complete_ast());
@@ -303,6 +315,23 @@ TEST_CASE("Return statement", "[parser]") {
   Block
     ReturnStmt
       NumberLiteral: integer(1)
+)");
+    REQUIRE(error_stream.str().empty());
+    REQUIRE(parser.is_complete_ast());
+  }
+  SECTION("return bool;") {
+    TEST_SETUP(R"(
+fn bool foo() {return true;}
+fn bool bar() {return false;}
+)");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: foo:bool
+  Block
+    ReturnStmt
+      NumberLiteral: bool(true)
+FunctionDecl: bar:bool
+  Block
+    ReturnStmt
+      NumberLiteral: bool(false)
 )");
     REQUIRE(error_stream.str().empty());
     REQUIRE(parser.is_complete_ast());

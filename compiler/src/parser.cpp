@@ -131,6 +131,12 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     eat_next_token();
     return literal;
   }
+  if (m_NextToken.kind == TokenKind::BoolConstant) {
+    auto literal = std::make_unique<NumberLiteral>(
+        location, NumberLiteral::NumberType::Bool, *m_NextToken.value);
+    eat_next_token();
+    return literal;
+  }
   if (m_NextToken.kind == TokenKind::Identifier) {
     auto declRefExpr =
         std::make_unique<DeclRefExpr>(location, *m_NextToken.value);
@@ -195,8 +201,7 @@ Parser::parse_parameter_list() {
   }
   while (true) {
     if (m_NextToken.kind == TokenKind::KwVoid) {
-      report(m_NextToken.location,
-             "invalid paramater type 'void'.");
+      report(m_NextToken.location, "invalid paramater type 'void'.");
       return std::nullopt;
     }
     if (m_NextToken.kind != TokenKind::Identifier) {

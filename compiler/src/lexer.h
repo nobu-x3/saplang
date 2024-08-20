@@ -12,6 +12,7 @@ enum class TokenKind : char {
   Identifier,
   Integer,
   Real,
+  BoolConstant,
   KwExport,
   KwFn,
   KwVoid,

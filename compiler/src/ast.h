@@ -77,7 +77,7 @@ struct Expr : public Stmt {
 };
 
 struct NumberLiteral : public Expr {
-  enum class NumberType { Integer, Real };
+  enum class NumberType { Integer, Real, Bool };
   NumberType type;
   std::string value;
   inline NumberLiteral(SourceLocation loc, NumberType type, std::string value)
@@ -190,6 +190,7 @@ struct ResolvedNumberLiteral : public ResolvedExpr {
     std::uint64_t u64;
     float f32;
     double f64;
+    bool b8;
   };
   Value value;
 

@@ -41,6 +41,10 @@ Token Lexer::get_next_token() {
     }
     // TIL unordered_map::count return 1 if found and 0 if not aka C++17
     // .contains
+    if (value == "true" || value == "false") {
+      return Token{token_start_location, TokenKind::BoolConstant,
+                   std::move(value)};
+    }
     if (keywords.count(value)) {
       return Token{token_start_location, keywords.at(value), std::move(value)};
     }
