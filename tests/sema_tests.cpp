@@ -154,12 +154,11 @@ fn CustomType foo() {}
 fn void main() {}
 )");
   auto buf_str = output_buffer.str();
-  std::cerr << buf_str;
   REQUIRE(
       error_stream.str() ==
       "sema_test:2:1 error: function 'foo' has invalid 'CustomType' type\n");
   REQUIRE(!buf_str.empty());
   REQUIRE(buf_str.find("ResolvedFuncDecl:") == 0);
-  REQUIRE(buf_str.find("main") == 38);
-  REQUIRE(buf_str.find("ResolvedBlock:") == 46);
+  REQUIRE(buf_str.find("main") == 36);
+  REQUIRE(buf_str.find("ResolvedBlock:") == 44);
 }
