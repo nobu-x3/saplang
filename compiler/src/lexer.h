@@ -42,7 +42,6 @@ const std::unordered_map<std::string_view, TokenKind> keywords = {
     {"void", TokenKind::KwVoid},     {"export", TokenKind::KwExport},
     {"module", TokenKind::KwModule}, {"defer", TokenKind::KwDefer},
     {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},
-    // {"i8", TokenKind::KwI8}, {"i16", TokenKind::}
 };
 
 struct Token {

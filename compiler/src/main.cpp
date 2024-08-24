@@ -72,6 +72,29 @@ CompilerOptions parse_args(int argc, const char **argv) {
 }
 
 int main(int argc, const char **argv) {
+  {
+    saplang::clear_error_stream();
+    std::stringstream buffer{R"(
+fn i32 foo() {
+    return -1;
+}
+
+fn i32 main() {
+    return -1;
+}
+)"};
+    std::stringstream output_buffer{};
+    saplang::SourceFile src_file{"sema_test", buffer.str()};
+    saplang::Lexer lexer{src_file};
+    saplang::Parser parser(&lexer);
+    auto parse_result = parser.parse_source_file();
+    saplang::Sema sema{std::move(parse_result.functions)};
+    auto resolved_ast = sema.resolve_ast();
+    for (auto &&fn : resolved_ast) {
+      fn->dump_to_stream(output_buffer);
+    }
+    const auto &error_stream = saplang::get_error_stream();
+  }
   CompilerOptions options = parse_args(argc, argv);
   if (options.display_help) {
     display_help();
@@ -89,7 +112,8 @@ int main(int argc, const char **argv) {
   } else {
     buffer << *options.input_string;
   }
-  saplang::SourceFile src_file{options.source.c_str(), buffer.str()};
+  std::string source{options.source.string()};
+  saplang::SourceFile src_file{source, buffer.str()};
   saplang::Lexer lexer{src_file};
   saplang::Parser parser{&lexer};
   auto ast = parser.parse_source_file();
@@ -115,7 +139,7 @@ int main(int argc, const char **argv) {
   }
   if (resolved_tree.empty())
     return 1;
-  saplang::Codegen codegen{std::move(resolved_tree), options.source.c_str()};
+  saplang::Codegen codegen{std::move(resolved_tree), source};
   auto llvm_ir = codegen.generate_ir();
   if (options.llvm_dump) {
     std::string output_string;

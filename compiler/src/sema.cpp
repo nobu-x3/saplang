@@ -5,6 +5,19 @@
 
 namespace saplang {
 
+std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
+    {Type::Kind::Bool, sizeof(bool)},
+    {Type::Kind::u8, sizeof(char)},
+    {Type::Kind::i8, sizeof(char)},
+    {Type::Kind::u16, sizeof(std::uint16_t)},
+    {Type::Kind::i16, sizeof(std::int16_t)},
+    {Type::Kind::u32, sizeof(std::uint32_t)},
+    {Type::Kind::i32, sizeof(std::int32_t)},
+    {Type::Kind::u64, sizeof(std::uint64_t)},
+    {Type::Kind::i64, sizeof(std::int64_t)},
+    {Type::Kind::f32, sizeof(float)},
+    {Type::Kind::f64, sizeof(double)},
+};
 std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id,
                                                   std::optional<Type *> type) {
   int scope_id = 0;
@@ -145,6 +158,16 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
     if (!resolved_expr)
       return nullptr;
     if (m_CurrFunction->type.kind != resolved_expr->type.kind) {
+      if (auto *number_literal =
+              dynamic_cast<ResolvedNumberLiteral *>(resolved_expr.get())) {
+        if (g_AssociatedNumberLiteralSizes.count(number_literal->type.kind) &&
+            g_AssociatedNumberLiteralSizes.count(m_CurrFunction->type.kind) &&
+            g_AssociatedNumberLiteralSizes[number_literal->type.kind] <=
+                g_AssociatedNumberLiteralSizes[m_CurrFunction->type.kind]) {
+          number_literal->type = m_CurrFunction->type;
+        }
+      }
+    } else {
       return report(resolved_expr->location, "unexpected return type.");
     }
   }
@@ -181,20 +204,6 @@ Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
   return std::make_unique<ResolvedDeclRefExpr>(decl_ref_expr.location, decl);
 }
 
-std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
-    {Type::Kind::Bool, sizeof(bool)},
-    {Type::Kind::u8, sizeof(char)},
-    {Type::Kind::i8, sizeof(char)},
-    {Type::Kind::u16, sizeof(std::uint16_t)},
-    {Type::Kind::i16, sizeof(std::int16_t)},
-    {Type::Kind::u32, sizeof(std::uint32_t)},
-    {Type::Kind::i32, sizeof(std::int32_t)},
-    {Type::Kind::u64, sizeof(std::uint64_t)},
-    {Type::Kind::i64, sizeof(std::int64_t)},
-    {Type::Kind::f32, sizeof(float)},
-    {Type::Kind::f64, sizeof(double)},
-};
-
 std::unique_ptr<ResolvedCallExpr>
 Sema::resolve_call_expr(const CallExpr &call) {
   auto &&resolved_callee = resolve_decl_ref_expr(*call.id, true);
@@ -223,7 +232,7 @@ Sema::resolve_call_expr(const CallExpr &call) {
             g_AssociatedNumberLiteralSizes[number_literal->type.kind] <=
                 g_AssociatedNumberLiteralSizes[resolved_func_decl->params[i]
                                                    ->type.kind]) {
-          number_literal->type.kind = resolved_func_decl->params[i]->type.kind;
+          number_literal->type = resolved_func_decl->params[i]->type;
         }
       } else {
         return report(resolved_arg->location,
