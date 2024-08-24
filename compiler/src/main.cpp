@@ -4,69 +4,137 @@
 #include <iostream>
 #include <sstream>
 
+#include "codegen.h"
 #include "lexer.h"
 #include "parser.h"
 #include "sema.h"
 #include "utils.h"
 
-int main(int argc, const char **argv) {
-  // if (argc < 2)
-  //   return 1;
-  // std::ifstream file(argv[1]);
-  // saplang::SourceFile src_file{argv[1], buffer.str()};
-  { // Lexer test
-    std::cout << std::filesystem::current_path() << std::endl;
-    std::ifstream file{"../tests/lexer_01.sl"};
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    saplang::SourceFile src_file{"../tests/lexer_01.sl", buffer.str()};
-    saplang::Lexer lexer{src_file};
-    saplang::Token tok = lexer.get_next_token();
-    while (tok.kind != saplang::TokenKind::Eof) {
-      if (tok.kind == saplang::TokenKind::Identifier) {
-        std::cout << "identifier(" << *tok.value << ")";
-      } else if (tok.kind == saplang::TokenKind::Integer) {
-        std::cout << "integer(" << *tok.value << ")";
-      } else if (tok.kind == saplang::TokenKind::Real) {
-        std::cout << "real(" << *tok.value << ")";
-      } else if (tok.kind == saplang::TokenKind::KwVoid) {
-        std::cout << "void";
-      } else if (tok.kind == saplang::TokenKind::KwFn) {
-        std::cout << "fn";
-      } else if (tok.kind == saplang::TokenKind::KwDefer) {
-        std::cout << "defer";
-      } else if (tok.kind == saplang::TokenKind::KwExport) {
-        std::cout << "export";
-      } else if (tok.kind == saplang::TokenKind::KwModule) {
-        std::cout << "module";
-      } else if (tok.kind == saplang::TokenKind::KwReturn) {
-        std::cout << "return";
-      } else if (tok.kind == saplang::TokenKind::Unknown) {
-        std::cout << "unknown";
-      } else {
-        // single character symbol
-        std::cout << static_cast<char>(tok.kind);
+[[noreturn]] void error(std::string_view msg) {
+  std::cerr << "error: " << msg << "\n";
+  std::exit(1);
+}
+
+struct CompilerOptions {
+  std::filesystem::path source;
+  std::filesystem::path output;
+  std::optional<std::string> input_string{std::nullopt};
+  bool display_help{false};
+  bool ast_dump{false};
+  bool res_dump{false};
+  bool llvm_dump{false};
+};
+
+void display_help() {
+  std::cout << "Usage:\n"
+            << "compiler [options] <source_file>\n\n"
+            << "Options:\n"
+            << "\t-h                            display this message.\n"
+            << "\t-string <input_string>        use <input_string> instead of "
+               "<source_file>.\n"
+            << "\t-o <file>                     write executable to <file>.\n"
+            << "\t-ast-dump                     print ast.\n"
+            << "\t-res-dump                     print resolved syntax tree.\n"
+            << "\t-llvm-dump                    print the generated llvm module"
+            << std::endl;
+}
+
+CompilerOptions parse_args(int argc, const char **argv) {
+  CompilerOptions options{};
+  if (argc < 2)
+    display_help();
+  for (int idx = 1; idx < argc; ++idx) {
+    std::string_view arg = argv[idx];
+    if (arg[0] != '-') {
+      if (!options.source.empty()) {
+        error("unexpected argument '" + std::string{arg} + ".'\n");
       }
-      std::cout << std::endl;
-      tok = lexer.get_next_token();
+      options.source = arg;
+    } else {
+      if (arg == "-h")
+        options.display_help = true;
+      else if (arg == "-o")
+        options.output = idx + 1 >= argc ? "" : argv[++idx];
+      else if (arg == "-string") {
+        options.input_string = idx + 1 >= argc ? "" : argv[++idx];
+        options.source = "input_string.sl";
+      } else if (arg == "-ast-dump")
+        options.ast_dump = true;
+      else if (arg == "-res-dump")
+        options.res_dump = true;
+      else if (arg == "-llvm-dump")
+        options.llvm_dump = true;
+      else
+        error("unexpected argument '" + std::string{arg} + ".'\n");
     }
-    assert(tok.kind == saplang::TokenKind::Eof);
-    std::cout << "eof\n";
   }
-  saplang::clear_error_stream();
-  std::stringstream buffer{R"(
-fn void foo(i32 x, f32 x){}
-)"};
-  std::stringstream output_buffer{};
-  saplang::SourceFile src_file{"sema_test", buffer.str()};
+  return options;
+}
+
+int main(int argc, const char **argv) {
+  CompilerOptions options = parse_args(argc, argv);
+  if (options.display_help) {
+    display_help();
+    return 0;
+  }
+  std::stringstream buffer;
+  if (!options.input_string.has_value()) {
+    if (options.source.empty())
+      error("no source file specified.");
+    std::ifstream file{options.source};
+    if (!file) {
+      error("failed to open '" + options.source.string() + ".'");
+    }
+    buffer << file.rdbuf();
+  } else {
+    buffer << *options.input_string;
+  }
+  saplang::SourceFile src_file{options.source.c_str(), buffer.str()};
   saplang::Lexer lexer{src_file};
-  saplang::Parser parser(&lexer);
-  auto parse_result = parser.parse_source_file();
-  saplang::Sema sema{std::move(parse_result.functions)};
-  auto resolved_ast = sema.resolve_ast();
-  for (auto &&fn : resolved_ast) {
-    fn->dump_to_stream(output_buffer);
+  saplang::Parser parser{&lexer};
+  auto ast = parser.parse_source_file();
+  if (options.ast_dump) {
+    std::stringstream ast_stream;
+    for (auto &&fn : ast.functions) {
+      fn->dump_to_stream(ast_stream, 0);
+    }
+    std::cout << ast_stream.str();
+    return 0;
   }
-  const auto &error_stream = saplang::get_error_stream();
-  return 0;
+  if (!ast.is_complete_ast)
+    return 1;
+  saplang::Sema sema{std::move(ast.functions)};
+  auto resolved_tree = sema.resolve_ast(options.res_dump);
+  if (options.res_dump) {
+    std::stringstream output_stream;
+    for (auto &&fn : resolved_tree) {
+      fn->dump_to_stream(output_stream, 0);
+    }
+    std::cout << output_stream.str();
+    return 0;
+  }
+  if (resolved_tree.empty())
+    return 1;
+  saplang::Codegen codegen{std::move(resolved_tree), options.source.c_str()};
+  auto llvm_ir = codegen.generate_ir();
+  if (options.llvm_dump) {
+    std::string output_string;
+    llvm::raw_string_ostream output_buffer{output_string};
+    llvm_ir->print(output_buffer, nullptr, true, true);
+    std::cout << output_string;
+    return 0;
+  }
+  std::stringstream path;
+  path << "tmp-" << std::filesystem::hash_value(options.source) << ".ll";
+  const std::string llvm_ir_path = path.str();
+  std::error_code error_code;
+  llvm::raw_fd_ostream f{llvm_ir_path, error_code};
+  llvm_ir->print(f, nullptr);
+  std::stringstream command;
+  command << "clang " << llvm_ir_path;
+  if (!options.output.empty())
+    command << " -o " << options.output;
+  int ret = std::system(command.str().c_str());
+  std::filesystem::remove(llvm_ir_path);
+  return ret;
 }
