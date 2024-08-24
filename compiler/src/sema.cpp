@@ -1,6 +1,7 @@
 #include "sema.h"
 
 #include <cassert>
+#include <unordered_map>
 
 namespace saplang {
 
@@ -180,6 +181,20 @@ Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
   return std::make_unique<ResolvedDeclRefExpr>(decl_ref_expr.location, decl);
 }
 
+std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
+    {Type::Kind::Bool, sizeof(bool)},
+    {Type::Kind::u8, sizeof(char)},
+    {Type::Kind::i8, sizeof(char)},
+    {Type::Kind::u16, sizeof(std::uint16_t)},
+    {Type::Kind::i16, sizeof(std::int16_t)},
+    {Type::Kind::u32, sizeof(std::uint32_t)},
+    {Type::Kind::i32, sizeof(std::int32_t)},
+    {Type::Kind::u64, sizeof(std::uint64_t)},
+    {Type::Kind::i64, sizeof(std::int64_t)},
+    {Type::Kind::f32, sizeof(float)},
+    {Type::Kind::f64, sizeof(double)},
+};
+
 std::unique_ptr<ResolvedCallExpr>
 Sema::resolve_call_expr(const CallExpr &call) {
   auto &&resolved_callee = resolve_decl_ref_expr(*call.id, true);
@@ -200,10 +215,22 @@ Sema::resolve_call_expr(const CallExpr &call) {
     if (!resolved_arg)
       return nullptr;
     if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind)
-      return report(resolved_arg->location,
-                    "unexpected type '" + resolved_arg->type.name +
-                        "', expected '" +
-                        resolved_func_decl->params[i]->type.name + "'.");
+      if (auto *number_literal =
+              dynamic_cast<ResolvedNumberLiteral *>(resolved_arg.get())) {
+        if (g_AssociatedNumberLiteralSizes.count(number_literal->type.kind) &&
+            g_AssociatedNumberLiteralSizes.count(
+                resolved_func_decl->params[i]->type.kind) &&
+            g_AssociatedNumberLiteralSizes[number_literal->type.kind] <=
+                g_AssociatedNumberLiteralSizes[resolved_func_decl->params[i]
+                                                   ->type.kind]) {
+          number_literal->type.kind = resolved_func_decl->params[i]->type.kind;
+        }
+      } else {
+        return report(resolved_arg->location,
+                      "unexpected type '" + resolved_arg->type.name +
+                          "', expected '" +
+                          resolved_func_decl->params[i]->type.name + "'.");
+      }
     resolved_args.emplace_back(std::move(resolved_arg));
   }
   return std::make_unique<ResolvedCallExpr>(call.location, resolved_func_decl,

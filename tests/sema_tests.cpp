@@ -91,11 +91,9 @@ fn void main() {
     REQUIRE(error_stream.str() ==
             R"(sema_test:7:6 error: argument count mismatch.
 sema_test:8:10 error: unexpected type 'void', expected 'i32'.
-sema_test:9:7 error: unexpected type 'f32', expected 'i32'.
+sema_test:9:15 error: unexpected type 'void', expected 'i32'.
 sema_test:10:6 error: argument count mismatch.
 sema_test:11:6 error: argument count mismatch.
-sema_test:12:7 error: unexpected type 'u8', expected 'i32'.
-sema_test:13:7 error: unexpected type 'bool', expected 'i32'.
 )");
   }
 }

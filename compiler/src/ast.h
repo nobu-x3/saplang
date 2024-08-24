@@ -12,7 +12,7 @@ namespace saplang {
 struct Type {
   enum class Kind {
     Void,
-    Pointer,
+    Bool,
     i8,
     i16,
     i32,
@@ -21,9 +21,9 @@ struct Type {
     u16,
     u32,
     u64,
+    Pointer,
     f32,
     f64,
-    Bool,
     Custom
   };
   Kind kind;
