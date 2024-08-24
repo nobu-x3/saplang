@@ -16,7 +16,7 @@
   std::stringstream buffer{file_contents};                                     \
   std::string output_string;                                                   \
   llvm::raw_string_ostream output_buffer{output_string};                       \
-  saplang::SourceFile src_file{"sema_test", buffer.str()};                     \
+  saplang::SourceFile src_file{"codegen_test", buffer.str()};                  \
   saplang::Lexer lexer{src_file};                                              \
   saplang::Parser parser(&lexer);                                              \
   auto parse_result = parser.parse_source_file();                              \
@@ -124,6 +124,43 @@ entry:
   %0 = load i32, ptr %x1, align 4
   %1 = load i1, ptr %y2, align 1
   %2 = load i64, ptr %z3, align 4
+  ret void
+}
+)");
+  }
+  SECTION("Setup with call") {
+    TEST_SETUP(R"(
+fn void foo(i32 x, bool y, i64 z) {
+  x;
+  y;
+  z;
+}
+
+fn void main() {
+  foo(1, true, 255);
+}
+)");
+    REQUIRE(output_string == R"(; ModuleID = '<tu>'
+source_filename = "codegen_tests"
+target triple = "x86-64"
+
+define void @foo(i32 %x, i1 %y, i64 %z) {
+entry:
+  %x1 = alloca i32, align 4
+  %y2 = alloca i1, align 1
+  %z3 = alloca i64, align 8
+  store i32 %x, ptr %x1, align 4
+  store i1 %y, ptr %y2, align 1
+  store i64 %z, ptr %z3, align 4
+  %0 = load i32, ptr %x1, align 4
+  %1 = load i1, ptr %y2, align 1
+  %2 = load i64, ptr %z3, align 4
+  ret void
+}
+
+define void @main() {
+entry:
+  call void @foo(i32 1953038337, i1 true, i64 2687231)
   ret void
 }
 )");
