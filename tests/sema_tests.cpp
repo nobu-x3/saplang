@@ -162,7 +162,8 @@ fn void main() {}
 }
 
 TEST_CASE("Number literal returns", "[sema]") {
-  TEST_SETUP(R"(
+  SECTION("Basic return") {
+    TEST_SETUP(R"(
 fn i32 foo() {
     return -1;
 }
@@ -171,5 +172,14 @@ fn i32 main() {
     return -1;
 }
 )");
-  REQUIRE(error_stream.str() == "");
+    REQUIRE(error_stream.str() == "");
+  }
+  SECTION("Function returning literal") {
+    TEST_SETUP(R"(
+  fn i32 foo() { return -1; }
+
+  fn i32 main() { return foo(); }
+)");
+    REQUIRE(error_stream.str() == "");
+  }
 }

@@ -166,9 +166,9 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
                 g_AssociatedNumberLiteralSizes[m_CurrFunction->type.kind]) {
           number_literal->type = m_CurrFunction->type;
         }
+      } else {
+        return report(resolved_expr->location, "unexpected return type.");
       }
-    } else {
-      return report(resolved_expr->location, "unexpected return type.");
     }
   }
   return std::make_unique<ResolvedReturnStmt>(stmt.location,
