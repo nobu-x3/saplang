@@ -165,6 +165,174 @@ Sema::resolve_binary_operator(const BinaryOperator &op) {
       op.location, std::move(resolved_lhs), std::move(resolved_rhs), op.op);
 }
 
+std::unique_ptr<ResolvedUnaryOperator>
+Sema::resolve_unary_operator(const UnaryOperator &op) {
+  auto resolved_rhs = resolve_expr(*op.rhs);
+  if (!resolved_rhs)
+    return nullptr;
+  if (resolved_rhs->type.kind == Type::Kind::Void)
+    return report(
+        resolved_rhs->location,
+        "void expression cannot be used as operand to unary operator.");
+  return std::make_unique<ResolvedUnaryOperator>(
+      op.location, std::move(resolved_rhs), op.op);
+}
+
+void apply_unary_op_to_num_literal(ResolvedUnaryOperator *unop) {
+  // @TODO: implement call exprs too
+  auto *numlit = dynamic_cast<ResolvedNumberLiteral *>(unop->rhs.get());
+  if(!numlit)
+    return;
+  if (unop->op == TokenKind::Minus) {
+    switch (numlit->type.kind) {
+    case Type::Kind::i8:
+      numlit->value.i8 *= -1;
+      break;
+    case Type::Kind::u8:
+      numlit->value.u8 *= -1;
+      break;
+    case Type::Kind::i16:
+      numlit->value.i16 *= -1;
+      break;
+    case Type::Kind::u16:
+      numlit->value.u16 *= -1;
+      break;
+    case Type::Kind::i32:
+      numlit->value.i32 *= -1;
+      break;
+    case Type::Kind::u32:
+      numlit->value.u32 *= -1;
+      break;
+    case Type::Kind::i64:
+      numlit->value.i64 *= -1;
+      break;
+    case Type::Kind::u64:
+      numlit->value.u64 *= -1;
+      break;
+    case Type::Kind::f32:
+      numlit->value.i32 *= -1;
+      break;
+    case Type::Kind::f64:
+      numlit->value.f64 *= -1;
+      break;
+    case Type::Kind::Bool:
+      numlit->value.b8 *= -1;
+      break;
+    }
+  } else if (unop->op == TokenKind::Exclamation) {
+    switch (numlit->type.kind) {
+    case Type::Kind::i8:
+      numlit->value.b8 = !numlit->value.i8;
+      break;
+    case Type::Kind::u8:
+      numlit->value.u8 = !numlit->value.u8;
+      break;
+    case Type::Kind::i16:
+      numlit->value.i16 = !numlit->value.i16;
+      break;
+    case Type::Kind::u16:
+      numlit->value.u16 = !numlit->value.u16;
+      break;
+    case Type::Kind::i32:
+      numlit->value.i32 = !numlit->value.i32;
+      break;
+    case Type::Kind::u32:
+      numlit->value.u32 = !numlit->value.u32;
+      break;
+    case Type::Kind::i64:
+      numlit->value.i64 = !numlit->value.i64;
+      break;
+    case Type::Kind::u64:
+      numlit->value.u64 = !numlit->value.u64;
+      break;
+    case Type::Kind::f32:
+      numlit->value.i32 = !numlit->value.i32;
+      break;
+    case Type::Kind::f64:
+      numlit->value.f64 = !numlit->value.f64;
+      break;
+    case Type::Kind::Bool:
+      numlit->value.b8 = !numlit->value.b8;
+      break;
+    }
+  }
+}
+
+ResolvedNumberLiteral::Value
+construct_value(Type::Kind current_type, Type::Kind new_type,
+                ResolvedNumberLiteral::Value *old_value) {
+
+  #define ASSIGN(outer_type, inner_type) \
+    case Type::Kind::inner_type: \
+      ret_val.inner_type = old_value->outer_type; \
+      break;
+
+  ResolvedNumberLiteral::Value ret_val;
+  switch (current_type) {
+    case Type::Kind::i8:{
+      switch (new_type){
+      ASSIGN(i8, i16);
+      ASSIGN(i8, i32);
+      ASSIGN(i8, i64);
+      }
+    }
+    break;
+    case Type::Kind::i16:{
+      switch(new_type){
+      ASSIGN(i16, i32);
+      ASSIGN(i16, i64);
+      }
+    }
+    break;
+    case Type::Kind::i32:{
+      switch(new_type) {
+      ASSIGN(i32, i64);
+      }
+    }
+    break;
+    case Type::Kind::u8:{
+      switch(new_type) {
+        ASSIGN(u8, u16);
+        ASSIGN(u8, u32);
+        ASSIGN(u8, u64);
+      }
+    }
+    break;
+    case Type::Kind::u16:{
+      switch(new_type) {
+        ASSIGN(u16, u32);
+        ASSIGN(u16, u64);
+      }
+    }
+    break;
+    case Type::Kind::u32:{
+      switch(new_type) {
+        ASSIGN(u32, u64);
+      }
+    }
+    break;
+    case Type::Kind::f32:{
+      switch(new_type) {
+        ASSIGN(f32, f64);
+      }
+    }
+    break;
+}
+    return ret_val;
+}
+
+bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
+                          Type::Kind cast_to) {
+  if (g_AssociatedNumberLiteralSizes.count(number_literal->type.kind) &&
+      g_AssociatedNumberLiteralSizes.count(cast_to) &&
+      g_AssociatedNumberLiteralSizes[number_literal->type.kind] <=
+          g_AssociatedNumberLiteralSizes[cast_to]) {
+    number_literal->value = construct_value(number_literal->type.kind, cast_to, &number_literal->value);
+    return true;
+  }
+  return false;
+}
+
 std::unique_ptr<ResolvedReturnStmt>
 Sema::resolve_return_stmt(const ReturnStmt &stmt) {
   if (m_CurrFunction->type.kind == Type::Kind::Void && stmt.expr)
@@ -176,13 +344,15 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
     resolved_expr = resolve_expr(*stmt.expr);
     if (!resolved_expr)
       return nullptr;
+    if (auto *unop =
+            dynamic_cast<ResolvedUnaryOperator *>(resolved_expr.get())) {
+      apply_unary_op_to_num_literal(unop);
+      resolved_expr = std::move(unop->rhs);
+    }
     if (m_CurrFunction->type.kind != resolved_expr->type.kind) {
       if (auto *number_literal =
               dynamic_cast<ResolvedNumberLiteral *>(resolved_expr.get())) {
-        if (g_AssociatedNumberLiteralSizes.count(number_literal->type.kind) &&
-            g_AssociatedNumberLiteralSizes.count(m_CurrFunction->type.kind) &&
-            g_AssociatedNumberLiteralSizes[number_literal->type.kind] <=
-                g_AssociatedNumberLiteralSizes[m_CurrFunction->type.kind]) {
+        if (implicit_cast_numlit(number_literal, m_CurrFunction->type.kind)) {
           number_literal->type = m_CurrFunction->type;
         }
       } else {
@@ -206,6 +376,8 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr) {
     return resolve_grouping_expr(*group_expr);
   if (const auto *binary_op = dynamic_cast<const BinaryOperator *>(&expr))
     return resolve_binary_operator(*binary_op);
+  if (const auto *unary_op = dynamic_cast<const UnaryOperator *>(&expr))
+    return resolve_unary_operator(*unary_op);
   assert(false && "unexpected expression.");
   return nullptr;
 }
@@ -248,13 +420,8 @@ Sema::resolve_call_expr(const CallExpr &call) {
     if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind)
       if (auto *number_literal =
               dynamic_cast<ResolvedNumberLiteral *>(resolved_arg.get())) {
-        if (g_AssociatedNumberLiteralSizes.count(number_literal->type.kind) &&
-            g_AssociatedNumberLiteralSizes.count(
-                resolved_func_decl->params[i]->type.kind) &&
-            g_AssociatedNumberLiteralSizes[number_literal->type.kind] <=
-                g_AssociatedNumberLiteralSizes[resolved_func_decl->params[i]
-                                                   ->type.kind]) {
-          number_literal->type = resolved_func_decl->params[i]->type;
+        if (implicit_cast_numlit(number_literal, m_CurrFunction->type.kind)) {
+          number_literal->type = m_CurrFunction->type;
         }
       } else {
         return report(resolved_arg->location,

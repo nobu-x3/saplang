@@ -160,7 +160,7 @@ entry:
 
 define void @main() {
 entry:
-  call void @foo(i32 1953038337, i1 true, i64 2687231)
+  call void @foo(i8 1, i1 true, i16 255)
   ret void
 }
 )");

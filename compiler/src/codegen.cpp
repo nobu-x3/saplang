@@ -147,34 +147,49 @@ llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt) {
   return m_Builder.CreateBr(m_RetBB);
 }
 
-llvm::Instruction::BinaryOps get_op_kind(TokenKind op, Type::Kind type) {
+enum class SimpleNumType { SINT, UINT, FLOAT };
+SimpleNumType get_simple_type(Type::Kind type) {
+  if (type >= Type::Kind::u8 && type <= Type::Kind::u64) {
+    return SimpleNumType::UINT;
+  } else if (type >= Type::Kind::i8 && type <= Type::Kind::i64) {
+    return SimpleNumType::SINT;
+  } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
+    return SimpleNumType::FLOAT;
+  }
+}
+
+llvm::Instruction::BinaryOps get_binop_kind(TokenKind op, Type::Kind type) {
+  SimpleNumType simple_type = get_simple_type(type);
   if (op == TokenKind::Plus) {
-    if (type >= Type::Kind::u8 && type <= Type::Kind::i64) {
+    if (simple_type == SimpleNumType::SINT ||
+        simple_type == SimpleNumType::UINT) {
       return llvm::BinaryOperator::Add;
-    } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
+    } else if (simple_type == SimpleNumType::FLOAT) {
       return llvm::BinaryOperator::FAdd;
     }
   }
   if (op == TokenKind::Minus) {
-    if (type >= Type::Kind::u8 && type <= Type::Kind::i64) {
+    if (simple_type == SimpleNumType::SINT ||
+        simple_type == SimpleNumType::UINT) {
       return llvm::BinaryOperator::Sub;
-    } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
+    } else if (simple_type == SimpleNumType::FLOAT) {
       return llvm::BinaryOperator::FSub;
     }
   }
   if (op == TokenKind::Asterisk) {
-    if (type >= Type::Kind::u8 && type <= Type::Kind::i64) {
+    if (simple_type == SimpleNumType::SINT ||
+        simple_type == SimpleNumType::UINT) {
       return llvm::BinaryOperator::Mul;
-    } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
+    } else if (simple_type == SimpleNumType::FLOAT) {
       return llvm::BinaryOperator::FMul;
     }
   }
   if (op == TokenKind::Slash) {
-    if (type >= Type::Kind::u8 && type <= Type::Kind::u64) {
+    if (simple_type == SimpleNumType::UINT) {
       return llvm::BinaryOperator::UDiv;
-    } else if (type >= Type::Kind::i8 && type <= Type::Kind::i64) {
+    } else if (simple_type == SimpleNumType::SINT) {
       return llvm::BinaryOperator::SDiv;
-    } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
+    } else if (simple_type == SimpleNumType::FLOAT) {
       return llvm::BinaryOperator::FDiv;
     }
   }
@@ -219,6 +234,8 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     return gen_expr(*group->expr);
   if (auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
     return gen_binary_op(*binop);
+  if (auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr))
+    return gen_unary_op(*unop);
   llvm_unreachable("unknown expression");
   return nullptr;
 }
@@ -226,7 +243,20 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
 llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &op) {
   llvm::Value *lhs = gen_expr(*op.lhs);
   llvm::Value *rhs = gen_expr(*op.rhs);
-  return m_Builder.CreateBinOp(get_op_kind(op.op, op.type.kind), lhs, rhs);
+  return m_Builder.CreateBinOp(get_binop_kind(op.op, op.type.kind), lhs, rhs);
+}
+
+llvm::Value *Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
+  llvm::Value *rhs = gen_expr(*op.rhs);
+  SimpleNumType type = get_simple_type(op.rhs->type.kind);
+  if (op.op == TokenKind::Minus) {
+    if (type == SimpleNumType::SINT || type == SimpleNumType::UINT)
+      return m_Builder.CreateNeg(rhs);
+    else if (type == SimpleNumType::FLOAT)
+      return m_Builder.CreateFNeg(rhs);
+  }
+  llvm_unreachable("unknown unary op.");
+  return nullptr;
 }
 
 llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {

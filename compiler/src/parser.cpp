@@ -103,6 +103,20 @@ std::unique_ptr<ReturnStmt> Parser::parse_return_stmt() {
   return std::make_unique<ReturnStmt>(location, std::move(expr));
 }
 
+// <prefixExpression>
+// ::= ('!' | '-')* <primaryExpr>
+std::unique_ptr<Expr> Parser::parse_prefix_expr() {
+  Token token = m_NextToken;
+  if (token.kind != TokenKind::Exclamation && token.kind != TokenKind::Minus)
+    return parse_primary_expr();
+  eat_next_token(); // eat '!' or '-'
+  auto rhs = parse_prefix_expr();
+  if (!rhs)
+    return nullptr;
+  return std::make_unique<UnaryOperator>(token.location, std::move(rhs),
+                                         token.kind);
+}
+
 // <primaryExpression>
 // ::= <numberLiteral>
 // | <declRefExpr>
@@ -237,7 +251,7 @@ Parser::parse_parameter_list() {
 }
 
 std::unique_ptr<Expr> Parser::parse_expr() {
-  auto lhs = parse_primary_expr();
+  auto lhs = parse_prefix_expr();
   if (!lhs)
     return nullptr;
   return parse_expr_rhs(std::move(lhs), 0);
@@ -259,7 +273,7 @@ std::unique_ptr<Expr> Parser::parse_expr_rhs(std::unique_ptr<Expr> lhs,
     if (cur_op_proc < precedence)
       return lhs;
     eat_next_token();
-    auto rhs = parse_primary_expr();
+    auto rhs = parse_prefix_expr();
     if (!rhs)
       return nullptr;
     if (cur_op_proc < get_tok_precedence(m_NextToken.kind)) {

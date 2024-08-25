@@ -194,4 +194,16 @@ fn i32 main() {
 )");
     REQUIRE(error_stream.str() == "");
   }
+  SECTION("Unary on callexpr") {
+    TEST_SETUP(R"(
+fn i32 foo() {
+    return -1;
+}
+
+fn i32 main() {
+    return -foo();
+}
+)");
+    REQUIRE(error_stream.str() == "");
+  }
 }

@@ -37,10 +37,14 @@ private:
 
   std::unique_ptr<ResolvedStmt> resolve_stmt(const Stmt &stmt);
 
-  std::unique_ptr<ResolvedGroupingExpr> resolve_grouping_expr(const GroupingExpr& group);
+  std::unique_ptr<ResolvedGroupingExpr>
+  resolve_grouping_expr(const GroupingExpr &group);
 
   std::unique_ptr<ResolvedBinaryOperator>
   resolve_binary_operator(const BinaryOperator &op);
+
+  std::unique_ptr<ResolvedUnaryOperator>
+  resolve_unary_operator(const UnaryOperator &op);
 
   std::unique_ptr<ResolvedReturnStmt>
   resolve_return_stmt(const ReturnStmt &stmt);

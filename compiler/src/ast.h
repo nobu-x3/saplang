@@ -106,6 +106,15 @@ struct BinaryOperator : public Expr {
   DUMP_IMPL
 };
 
+struct UnaryOperator : public Expr {
+  std::unique_ptr<Expr> rhs;
+  TokenKind op;
+  inline UnaryOperator(SourceLocation loc, std::unique_ptr<Expr> rhs,
+                       TokenKind op)
+      : Expr(loc), rhs(std::move(rhs)), op(op) {}
+  DUMP_IMPL
+};
+
 struct DeclRefExpr : public Expr {
   std::string id;
   inline DeclRefExpr(SourceLocation loc, std::string id)
@@ -240,6 +249,16 @@ struct ResolvedBinaryOperator : public ResolvedExpr {
       : ResolvedExpr(loc, lhs->type), lhs(std::move(lhs)), rhs(std::move(rhs)),
         op(op) {}
 
+  DUMP_IMPL
+};
+
+struct ResolvedUnaryOperator : public ResolvedExpr {
+  std::unique_ptr<ResolvedExpr> rhs;
+  TokenKind op;
+  inline explicit ResolvedUnaryOperator(SourceLocation loc,
+                                        std::unique_ptr<ResolvedExpr> rhs,
+                                        TokenKind op)
+      : ResolvedExpr(loc, rhs->type), rhs(std::move(rhs)), op(op) {}
   DUMP_IMPL
 };
 

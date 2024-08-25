@@ -55,9 +55,7 @@ void GroupingExpr::dump_to_stream(std::stringstream &stream,
   expr->dump_to_stream(stream, indent_level + 1);
 }
 
-void BinaryOperator::dump_to_stream(std::stringstream &stream,
-                                    size_t indent_level) const {
-  stream << indent(indent_level) << "BinaryOperator: '";
+void dump_op(std::stringstream &stream, TokenKind op) {
   if (op == TokenKind::Plus)
     stream << '+';
   if (op == TokenKind::Minus)
@@ -66,8 +64,36 @@ void BinaryOperator::dump_to_stream(std::stringstream &stream,
     stream << '*';
   if (op == TokenKind::Slash)
     stream << '/';
+  if (op == TokenKind::EqualEqual)
+    stream << "==";
+  if (op == TokenKind::AmpAmp)
+    stream << "&&";
+  if (op == TokenKind::PipePipe)
+    stream << "||";
+  if (op == TokenKind::LessThan)
+    stream << '<';
+  if (op == TokenKind::GreaterThan)
+    stream << '>';
+  if (op == TokenKind::Minus)
+    stream << '-';
+  if (op == TokenKind::Exclamation)
+    stream << '!';
+}
+
+void BinaryOperator::dump_to_stream(std::stringstream &stream,
+                                    size_t indent_level) const {
+  stream << indent(indent_level) << "BinaryOperator: '";
+  dump_op(stream, op);
   stream << "\'\n";
   lhs->dump_to_stream(stream, indent_level + 1);
+  rhs->dump_to_stream(stream, indent_level + 1);
+}
+
+void UnaryOperator::dump_to_stream(std::stringstream &stream,
+                                   size_t indent_level) const {
+  stream << indent(indent_level) << "UnaryOperator: '";
+  dump_op(stream, op);
+  stream << "\'\n";
   rhs->dump_to_stream(stream, indent_level + 1);
 }
 
@@ -218,20 +244,21 @@ void ResolvedGroupingExpr::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedGroupingExpr:\n";
   expr->dump_to_stream(stream, indent_level + 1);
 }
-
 void ResolvedBinaryOperator::dump_to_stream(std::stringstream &stream,
                                             size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedBinaryOperator: '";
-  if (op == TokenKind::Plus)
-    stream << '+';
-  if (op == TokenKind::Minus)
-    stream << '-';
-  if (op == TokenKind::Asterisk)
-    stream << '*';
-  if (op == TokenKind::Slash)
-    stream << '/';
+  dump_op(stream, op);
   stream << "\'\n";
   lhs->dump_to_stream(stream, indent_level + 1);
+  rhs->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedUnaryOperator::dump_to_stream(std::stringstream &stream,
+                                           size_t indent_level) const {
+
+  stream << indent(indent_level) << "ResolvedBinaryOperator: '";
+  dump_op(stream, op);
+  stream << "\'\n";
   rhs->dump_to_stream(stream, indent_level + 1);
 }
 
