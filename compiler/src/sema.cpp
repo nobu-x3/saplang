@@ -146,6 +146,25 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
   return nullptr;
 }
 
+std::unique_ptr<ResolvedGroupingExpr>
+Sema::resolve_grouping_expr(const GroupingExpr &group) {
+  auto resolved_expr = resolve_expr(*group.expr);
+  if (!resolved_expr)
+    return nullptr;
+  return std::make_unique<ResolvedGroupingExpr>(group.location,
+                                                std::move(resolved_expr));
+}
+
+std::unique_ptr<ResolvedBinaryOperator>
+Sema::resolve_binary_operator(const BinaryOperator &op) {
+  auto resolved_lhs = resolve_expr(*op.lhs);
+  auto resolved_rhs = resolve_expr(*op.rhs);
+  if (!resolved_lhs || !resolved_rhs)
+    return nullptr;
+  return std::make_unique<ResolvedBinaryOperator>(
+      op.location, std::move(resolved_lhs), std::move(resolved_rhs), op.op);
+}
+
 std::unique_ptr<ResolvedReturnStmt>
 Sema::resolve_return_stmt(const ReturnStmt &stmt) {
   if (m_CurrFunction->type.kind == Type::Kind::Void && stmt.expr)
@@ -179,11 +198,14 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr) {
   if (const auto *number = dynamic_cast<const NumberLiteral *>(&expr))
     return std::make_unique<ResolvedNumberLiteral>(number->location,
                                                    number->type, number->value);
-  if (const auto *decl_ref_expr = dynamic_cast<const DeclRefExpr *>(&expr)) {
+  if (const auto *decl_ref_expr = dynamic_cast<const DeclRefExpr *>(&expr))
     return resolve_decl_ref_expr(*decl_ref_expr);
-  }
   if (const auto *call_expr = dynamic_cast<const CallExpr *>(&expr))
     return resolve_call_expr(*call_expr);
+  if (const auto *group_expr = dynamic_cast<const GroupingExpr *>(&expr))
+    return resolve_grouping_expr(*group_expr);
+  if (const auto *binary_op = dynamic_cast<const BinaryOperator *>(&expr))
+    return resolve_binary_operator(*binary_op);
   assert(false && "unexpected expression.");
   return nullptr;
 }

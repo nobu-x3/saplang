@@ -165,20 +165,32 @@ TEST_CASE("Number literal returns", "[sema]") {
   SECTION("Basic return") {
     TEST_SETUP(R"(
 fn i32 foo() {
-    return -1;
+    return 1;
 }
 
 fn i32 main() {
-    return -1;
+    return 1;
 }
 )");
     REQUIRE(error_stream.str() == "");
   }
   SECTION("Function returning literal") {
     TEST_SETUP(R"(
-  fn i32 foo() { return -1; }
+  fn i32 foo() { return 1; }
 
   fn i32 main() { return foo(); }
+)");
+    REQUIRE(error_stream.str() == "");
+  }
+  SECTION("Function returning with unary ops") {
+    TEST_SETUP(R"(
+fn i32 foo() {
+    return -1;
+}
+
+fn i32 main() {
+    return -1;
+}
 )");
     REQUIRE(error_stream.str() == "");
   }

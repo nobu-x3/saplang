@@ -18,11 +18,12 @@ public:
   inline explicit Sema(std::vector<std::unique_ptr<FunctionDecl>> ast)
       : m_AST(std::move(ast)) {}
 
-  std::vector<std::unique_ptr<ResolvedFuncDecl>> resolve_ast(bool partial = false);
+  std::vector<std::unique_ptr<ResolvedFuncDecl>>
+  resolve_ast(bool partial = false);
 
 private:
-  std::optional<DeclLookupResult> lookup_decl(std::string_view id,
-                                              std::optional<Type *> type = std::nullopt);
+  std::optional<DeclLookupResult>
+  lookup_decl(std::string_view id, std::optional<Type *> type = std::nullopt);
 
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
@@ -35,6 +36,11 @@ private:
   std::unique_ptr<ResolvedBlock> resolve_block(const Block &block);
 
   std::unique_ptr<ResolvedStmt> resolve_stmt(const Stmt &stmt);
+
+  std::unique_ptr<ResolvedGroupingExpr> resolve_grouping_expr(const GroupingExpr& group);
+
+  std::unique_ptr<ResolvedBinaryOperator>
+  resolve_binary_operator(const BinaryOperator &op);
 
   std::unique_ptr<ResolvedReturnStmt>
   resolve_return_stmt(const ReturnStmt &stmt);

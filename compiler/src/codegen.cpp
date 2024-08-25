@@ -147,6 +147,40 @@ llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt) {
   return m_Builder.CreateBr(m_RetBB);
 }
 
+llvm::Instruction::BinaryOps get_op_kind(TokenKind op, Type::Kind type) {
+  if (op == TokenKind::Plus) {
+    if (type >= Type::Kind::u8 && type <= Type::Kind::i64) {
+      return llvm::BinaryOperator::Add;
+    } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
+      return llvm::BinaryOperator::FAdd;
+    }
+  }
+  if (op == TokenKind::Minus) {
+    if (type >= Type::Kind::u8 && type <= Type::Kind::i64) {
+      return llvm::BinaryOperator::Sub;
+    } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
+      return llvm::BinaryOperator::FSub;
+    }
+  }
+  if (op == TokenKind::Asterisk) {
+    if (type >= Type::Kind::u8 && type <= Type::Kind::i64) {
+      return llvm::BinaryOperator::Mul;
+    } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
+      return llvm::BinaryOperator::FMul;
+    }
+  }
+  if (op == TokenKind::Slash) {
+    if (type >= Type::Kind::u8 && type <= Type::Kind::u64) {
+      return llvm::BinaryOperator::UDiv;
+    } else if (type >= Type::Kind::i8 && type <= Type::Kind::i64) {
+      return llvm::BinaryOperator::SDiv;
+    } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
+      return llvm::BinaryOperator::FDiv;
+    }
+  }
+  llvm_unreachable("unknown expression encountered.");
+}
+
 llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
   if (auto *number = dynamic_cast<const ResolvedNumberLiteral *>(&expr)) {
     auto *type = gen_type(number->type);
@@ -179,11 +213,20 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     auto *type = gen_type(dre->type);
     return m_Builder.CreateLoad(type, m_Declarations[dre->decl]);
   }
-  if (auto *call = dynamic_cast<const ResolvedCallExpr *>(&expr)) {
+  if (auto *call = dynamic_cast<const ResolvedCallExpr *>(&expr))
     return gen_call_expr(*call);
-  }
+  if (auto *group = dynamic_cast<const ResolvedGroupingExpr *>(&expr))
+    return gen_expr(*group->expr);
+  if (auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
+    return gen_binary_op(*binop);
   llvm_unreachable("unknown expression");
   return nullptr;
+}
+
+llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &op) {
+  llvm::Value *lhs = gen_expr(*op.lhs);
+  llvm::Value *rhs = gen_expr(*op.rhs);
+  return m_Builder.CreateBinOp(get_op_kind(op.op, op.type.kind), lhs, rhs);
 }
 
 llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {

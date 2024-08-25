@@ -49,6 +49,28 @@ void NumberLiteral::dump_to_stream(std::stringstream &stream,
          << "\n";
 }
 
+void GroupingExpr::dump_to_stream(std::stringstream &stream,
+                                  size_t indent_level) const {
+  stream << indent(indent_level) << "GroupingExpr:\n";
+  expr->dump_to_stream(stream, indent_level + 1);
+}
+
+void BinaryOperator::dump_to_stream(std::stringstream &stream,
+                                    size_t indent_level) const {
+  stream << indent(indent_level) << "BinaryOperator: '";
+  if (op == TokenKind::Plus)
+    stream << '+';
+  if (op == TokenKind::Minus)
+    stream << '-';
+  if (op == TokenKind::Asterisk)
+    stream << '*';
+  if (op == TokenKind::Slash)
+    stream << '/';
+  stream << "\'\n";
+  lhs->dump_to_stream(stream, indent_level + 1);
+  rhs->dump_to_stream(stream, indent_level + 1);
+}
+
 void DeclRefExpr::dump_to_stream(std::stringstream &stream,
                                  size_t indent_level) const {
   stream << indent(indent_level) << "DeclRefExpr: " << id << "\n";
@@ -189,6 +211,28 @@ ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc,
     // @TODO: implement rest
     break;
   }
+}
+
+void ResolvedGroupingExpr::dump_to_stream(std::stringstream &stream,
+                                          size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedGroupingExpr:\n";
+  expr->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedBinaryOperator::dump_to_stream(std::stringstream &stream,
+                                            size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedBinaryOperator: '";
+  if (op == TokenKind::Plus)
+    stream << '+';
+  if (op == TokenKind::Minus)
+    stream << '-';
+  if (op == TokenKind::Asterisk)
+    stream << '*';
+  if (op == TokenKind::Slash)
+    stream << '/';
+  stream << "\'\n";
+  lhs->dump_to_stream(stream, indent_level + 1);
+  rhs->dump_to_stream(stream, indent_level + 1);
 }
 
 void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,

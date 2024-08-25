@@ -107,6 +107,7 @@ std::unique_ptr<ReturnStmt> Parser::parse_return_stmt() {
 // ::= <numberLiteral>
 // | <declRefExpr>
 // | <callExpr>
+// | '(' <expr> ')'
 //
 // <numberLiteral>
 // ::= <integer>
@@ -119,6 +120,17 @@ std::unique_ptr<ReturnStmt> Parser::parse_return_stmt() {
 // ::= <declRefExpr> <argList>
 std::unique_ptr<Expr> Parser::parse_primary_expr() {
   SourceLocation location = m_NextToken.location;
+  // @TODO: distinguish between casting and grouping... or maybe not here, idk
+  if (m_NextToken.kind == TokenKind::Lparent) {
+    eat_next_token(); // eat '('
+    auto expr = parse_expr();
+    if (!expr)
+      return nullptr;
+    if (m_NextToken.kind != TokenKind::Rparent)
+      return report(m_NextToken.location, "expected ')'.");
+    eat_next_token(); // eat ')'
+    return std::make_unique<GroupingExpr>(location, std::move(expr));
+  }
   if (m_NextToken.kind == TokenKind::Integer) {
     auto literal = std::make_unique<NumberLiteral>(
         location, NumberLiteral::NumberType::Integer, *m_NextToken.value);
@@ -224,8 +236,41 @@ Parser::parse_parameter_list() {
   return param_decls;
 }
 
-std::unique_ptr<Expr> Parser::parse_expr() { return parse_primary_expr(); }
+std::unique_ptr<Expr> Parser::parse_expr() {
+  auto lhs = parse_primary_expr();
+  if (!lhs)
+    return nullptr;
+  return parse_expr_rhs(std::move(lhs), 0);
+}
 
+int get_tok_precedence(TokenKind tok) {
+  if (tok == TokenKind::Asterisk || tok == TokenKind::Slash)
+    return 2;
+  if (tok == TokenKind::Plus || tok == TokenKind::Minus)
+    return 1;
+  return -1;
+}
+
+std::unique_ptr<Expr> Parser::parse_expr_rhs(std::unique_ptr<Expr> lhs,
+                                             int precedence) {
+  while (true) {
+    TokenKind op = m_NextToken.kind;
+    int cur_op_proc = get_tok_precedence(op);
+    if (cur_op_proc < precedence)
+      return lhs;
+    eat_next_token();
+    auto rhs = parse_primary_expr();
+    if (!rhs)
+      return nullptr;
+    if (cur_op_proc < get_tok_precedence(m_NextToken.kind)) {
+      rhs = parse_expr_rhs(std::move(lhs), cur_op_proc + 1);
+      if (!rhs)
+        return nullptr;
+    }
+    lhs = std::make_unique<BinaryOperator>(lhs->location, std::move(lhs),
+                                           std::move(rhs), op);
+  }
+}
 // <paramDecl>
 // ::= <type> <identifier>
 std::unique_ptr<ParamDecl> Parser::parse_param_decl() {

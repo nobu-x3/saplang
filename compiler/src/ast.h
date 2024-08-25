@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include "lexer.h"
 #include "utils.h"
 
 namespace saplang {
@@ -45,7 +46,7 @@ struct Type {
   static Type custom(std::string_view name) { return {Kind::Custom, name}; }
 
 private:
-  Type(Kind kind, std::string_view name) : kind(kind), name(name){};
+  Type(Kind kind, std::string_view name) : kind(kind), name(name) {};
 };
 
 #define DUMP_IMPL                                                              \
@@ -82,6 +83,25 @@ struct NumberLiteral : public Expr {
   std::string value;
   inline NumberLiteral(SourceLocation loc, NumberType type, std::string value)
       : Expr(loc), type(type), value(std::move(value)) {}
+
+  DUMP_IMPL
+};
+
+struct GroupingExpr : public Expr {
+  std::unique_ptr<Expr> expr;
+  inline explicit GroupingExpr(SourceLocation loc, std::unique_ptr<Expr> expr)
+      : Expr(loc), expr(std::move(expr)) {}
+
+  DUMP_IMPL
+};
+
+struct BinaryOperator : public Expr {
+  std::unique_ptr<Expr> lhs;
+  std::unique_ptr<Expr> rhs;
+  TokenKind op;
+  inline BinaryOperator(SourceLocation loc, std ::unique_ptr<Expr> lhs,
+                        std::unique_ptr<Expr> rhs, TokenKind op)
+      : Expr(loc), lhs(std::move(lhs)), rhs(std::move(rhs)), op(op) {}
 
   DUMP_IMPL
 };
@@ -197,6 +217,29 @@ struct ResolvedNumberLiteral : public ResolvedExpr {
   explicit ResolvedNumberLiteral(SourceLocation loc,
                                  NumberLiteral::NumberType type,
                                  const std::string &value);
+  DUMP_IMPL
+};
+
+struct ResolvedGroupingExpr : public ResolvedExpr {
+  std::unique_ptr<ResolvedExpr> expr;
+  inline explicit ResolvedGroupingExpr(SourceLocation loc,
+                                       std::unique_ptr<ResolvedExpr> expr)
+      : ResolvedExpr(loc, expr->type), expr(std::move(expr)) {}
+
+  DUMP_IMPL
+};
+
+struct ResolvedBinaryOperator : public ResolvedExpr {
+  std::unique_ptr<ResolvedExpr> lhs;
+  std::unique_ptr<ResolvedExpr> rhs;
+  TokenKind op;
+  inline explicit ResolvedBinaryOperator(SourceLocation loc,
+                                         std::unique_ptr<ResolvedExpr> lhs,
+                                         std::unique_ptr<ResolvedExpr> rhs,
+                                         TokenKind op)
+      : ResolvedExpr(loc, lhs->type), lhs(std::move(lhs)), rhs(std::move(rhs)),
+        op(op) {}
+
   DUMP_IMPL
 };
 

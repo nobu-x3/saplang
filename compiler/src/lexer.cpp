@@ -28,11 +28,25 @@ Token Lexer::get_next_token() {
       return Token{token_start_location, static_cast<TokenKind>(c)};
     }
   }
-  if (curr_char == '/' && peek_next_char() == '/') {
+  if (curr_char == '/') {
+    if (peek_next_char() != '/')
+      return Token{token_start_location, TokenKind::Slash};
     char c = eat_next_char();
     while (c != '\n' && c != '\0')
       c = eat_next_char();
     return get_next_token();
+  }
+  if (curr_char == '=' && peek_next_char() == '=') {
+    eat_next_char();
+    return Token{token_start_location, TokenKind::EqualEqual};
+  }
+  if (curr_char == '&' && peek_next_char() == '&') {
+    eat_next_char();
+    return Token{token_start_location, TokenKind::AmpAmp};
+  }
+  if (curr_char == '|' && peek_next_char() == '|') {
+    eat_next_char();
+    return Token{token_start_location, TokenKind::PipePipe};
   }
   if (is_alpha(curr_char)) {
     std::string value{curr_char};

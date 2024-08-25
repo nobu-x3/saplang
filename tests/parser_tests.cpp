@@ -407,3 +407,18 @@ test:7:5 error: expected ';' at the end of a statement.
 )");
   REQUIRE(!parser.is_complete_ast());
 }
+
+TEST_CASE("Unary operations", "[Parser]") {
+  SECTION("Function returning with unary ops") {
+    TEST_SETUP(R"(
+fn i32 foo() {
+    return -1;
+}
+
+fn i32 main() {
+    return -1;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+  }
+}

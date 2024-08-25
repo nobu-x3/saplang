@@ -25,6 +25,7 @@ private:
   llvm::Value *gen_stmt(const ResolvedStmt &stmt);
   llvm::Value *gen_return_stmt(const ResolvedReturnStmt &stmt);
   llvm::Value *gen_expr(const ResolvedExpr &expr);
+  llvm::Value* gen_binary_op(const ResolvedBinaryOperator& op);
   llvm::Value *gen_call_expr(const ResolvedCallExpr &call);
 
 private:
