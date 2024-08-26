@@ -25,7 +25,15 @@ struct Type {
     Pointer,
     f32,
     f64,
-    Custom
+    Custom,
+    INTEGERS_START = i8,
+    INTEGERS_END = u64,
+    SIGNED_INT_START = i8,
+    SIGNED_INT_END = i64,
+    UNSIGNED_INT_START = u8,
+    UNSIGNED_INT_END = u64,
+    FLOATS_START = f32,
+    FLOATS_END = f64,
   };
   Kind kind;
   std::string name;

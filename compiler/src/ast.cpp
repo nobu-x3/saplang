@@ -74,10 +74,14 @@ void dump_op(std::stringstream &stream, TokenKind op) {
     stream << '<';
   if (op == TokenKind::GreaterThan)
     stream << '>';
-  if (op == TokenKind::Minus)
-    stream << '-';
   if (op == TokenKind::Exclamation)
     stream << '!';
+  else if (op == TokenKind::GreaterThanOrEqual)
+    stream << ">=";
+  else if (op == TokenKind::LessThanOrEqual)
+    stream << "<=";
+  else if (op == TokenKind::ExclamationEqual)
+    stream << "!=";
 }
 
 void BinaryOperator::dump_to_stream(std::stringstream &stream,

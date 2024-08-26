@@ -158,7 +158,8 @@ SimpleNumType get_simple_type(Type::Kind type) {
   }
 }
 
-llvm::Instruction::BinaryOps get_binop_kind(TokenKind op, Type::Kind type) {
+llvm::Instruction::BinaryOps get_math_binop_kind(TokenKind op,
+                                                 Type::Kind type) {
   SimpleNumType simple_type = get_simple_type(type);
   if (op == TokenKind::Plus) {
     if (simple_type == SimpleNumType::SINT ||
@@ -240,10 +241,163 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
   return nullptr;
 }
 
-llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &op) {
-  llvm::Value *lhs = gen_expr(*op.lhs);
-  llvm::Value *rhs = gen_expr(*op.rhs);
-  return m_Builder.CreateBinOp(get_binop_kind(op.op, op.type.kind), lhs, rhs);
+llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop) {
+  TokenKind op = binop.op;
+  if (op == TokenKind::AmpAmp || op == TokenKind::PipePipe) {
+    llvm::Function *function = get_current_function();
+    bool is_or = op == TokenKind::PipePipe;
+    const char *rhs_tag = is_or ? "or.rhs" : "and.rhs";
+    const char *merge_tag = is_or ? "or.merge" : "and.merge";
+    auto *rhs_bb = llvm::BasicBlock::Create(m_Context, rhs_tag, function);
+    auto *merge_bb = llvm::BasicBlock::Create(m_Context, merge_tag, function);
+    auto *true_bb = is_or ? merge_bb : rhs_bb;
+    auto *false_bb = is_or ? rhs_bb : merge_bb;
+    gen_conditional_op(*binop.lhs, true_bb, false_bb);
+    m_Builder.SetInsertPoint(rhs_bb);
+    llvm::Value *rhs = type_to_bool(binop.type.kind, gen_expr(*binop.rhs));
+    m_Builder.CreateBr(merge_bb);
+    rhs_bb = m_Builder.GetInsertBlock();
+    m_Builder.SetInsertPoint(merge_bb);
+    llvm::PHINode *phi = m_Builder.CreatePHI(m_Builder.getInt1Ty(), 2);
+    for (auto it = llvm::pred_begin(merge_bb); it != llvm::pred_end(merge_bb);
+         ++it) {
+      if (*it == rhs_bb)
+        phi->addIncoming(rhs, rhs_bb);
+      else
+        phi->addIncoming(m_Builder.getInt1(is_or), *it);
+    }
+    return bool_to_type(binop.type.kind, phi);
+  }
+  llvm::Value *lhs = gen_expr(*binop.lhs);
+  llvm::Value *rhs = gen_expr(*binop.rhs);
+  if (op == TokenKind::LessThan || op == TokenKind::GreaterThan ||
+      op == TokenKind::EqualEqual || op == TokenKind::ExclamationEqual ||
+      op == TokenKind::GreaterThanOrEqual || op == TokenKind::LessThanOrEqual)
+    return bool_to_type(binop.type.kind,
+                        gen_comp_op(op, binop.type.kind, lhs, rhs));
+  return m_Builder.CreateBinOp(get_math_binop_kind(op, binop.type.kind), lhs,
+                               rhs);
+}
+
+llvm::Value *gen_lt_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
+                         llvm::Value *lhs, llvm::Value *rhs) {
+  if (kind >= Type::Kind::SIGNED_INT_START &&
+      kind <= Type::Kind::SIGNED_INT_END) {
+    return builder->CreateICmpSLT(lhs, rhs);
+  }
+  if ((kind >= Type::Kind::UNSIGNED_INT_START &&
+       kind <= Type::Kind::UNSIGNED_INT_END) ||
+      kind == Type::Kind::Bool) {
+    return builder->CreateICmpULT(lhs, rhs);
+  }
+  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+    return builder->CreateFCmpOLT(lhs, rhs);
+  }
+  llvm_unreachable("unexpected type.");
+}
+
+llvm::Value *gen_gt_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
+                         llvm::Value *lhs, llvm::Value *rhs) {
+  if (kind >= Type::Kind::SIGNED_INT_START &&
+      kind <= Type::Kind::SIGNED_INT_END) {
+    return builder->CreateICmpSGT(lhs, rhs);
+  }
+  if ((kind >= Type::Kind::UNSIGNED_INT_START &&
+       kind <= Type::Kind::UNSIGNED_INT_END) ||
+      kind == Type::Kind::Bool) {
+    return builder->CreateICmpUGT(lhs, rhs);
+  }
+  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+    return builder->CreateFCmpOGT(lhs, rhs);
+  }
+  llvm_unreachable("unexpected type.");
+}
+
+llvm::Value *gen_eq_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
+                         llvm::Value *lhs, llvm::Value *rhs) {
+  if ((kind >= Type::Kind::INTEGERS_START &&
+       kind <= Type::Kind::INTEGERS_END) ||
+      kind == Type::Kind::Bool) {
+    return builder->CreateICmpEQ(lhs, rhs);
+  }
+  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+    return builder->CreateFCmpOEQ(lhs, rhs);
+  }
+  llvm_unreachable("unexpected type.");
+}
+
+llvm::Value *gen_neq_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
+                          llvm::Value *lhs, llvm::Value *rhs) {
+  if ((kind >= Type::Kind::INTEGERS_START &&
+       kind <= Type::Kind::INTEGERS_END) ||
+      kind == Type::Kind::Bool) {
+    return builder->CreateICmpNE(lhs, rhs);
+  }
+  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+    return builder->CreateFCmpONE(lhs, rhs);
+  }
+  llvm_unreachable("unexpected type.");
+}
+
+llvm::Value *gen_gte_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
+                          llvm::Value *lhs, llvm::Value *rhs) {
+  if (kind >= Type::Kind::SIGNED_INT_START &&
+      kind <= Type::Kind::SIGNED_INT_END) {
+    return builder->CreateICmpSGE(lhs, rhs);
+  }
+  if ((kind >= Type::Kind::UNSIGNED_INT_START &&
+       kind <= Type::Kind::UNSIGNED_INT_END) ||
+      kind == Type::Kind::Bool) {
+    return builder->CreateICmpUGE(lhs, rhs);
+  }
+  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+    return builder->CreateFCmpOGE(lhs, rhs);
+  }
+  llvm_unreachable("unexpected type.");
+}
+
+llvm::Value *gen_lte_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
+                          llvm::Value *lhs, llvm::Value *rhs) {
+  if (kind >= Type::Kind::SIGNED_INT_START &&
+      kind <= Type::Kind::SIGNED_INT_END) {
+    return builder->CreateICmpSLE(lhs, rhs);
+  }
+  if ((kind >= Type::Kind::UNSIGNED_INT_START &&
+       kind <= Type::Kind::UNSIGNED_INT_END) ||
+      kind == Type::Kind::Bool) {
+    return builder->CreateICmpULE(lhs, rhs);
+  }
+  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+    return builder->CreateFCmpOLE(lhs, rhs);
+  }
+  llvm_unreachable("unexpected type.");
+}
+
+// @TODO: !=, <=, >=
+llvm::Value *Codegen::gen_comp_op(TokenKind op, Type::Kind kind,
+                                  llvm::Value *lhs, llvm::Value *rhs) {
+  llvm::Value *ret_val;
+  switch (op) {
+  case TokenKind::LessThan: {
+    ret_val = gen_lt_expr(&m_Builder, kind, lhs, rhs);
+  } break;
+  case TokenKind::GreaterThan: {
+    ret_val = gen_gt_expr(&m_Builder, kind, lhs, rhs);
+  } break;
+  case TokenKind::EqualEqual: {
+    ret_val = gen_eq_expr(&m_Builder, kind, lhs, rhs);
+  } break;
+  case TokenKind::ExclamationEqual: {
+    ret_val = gen_neq_expr(&m_Builder, kind, lhs, rhs);
+  } break;
+  case TokenKind::LessThanOrEqual: {
+    ret_val = gen_lte_expr(&m_Builder, kind, lhs, rhs);
+  } break;
+  case TokenKind::GreaterThanOrEqual: {
+    ret_val = gen_gte_expr(&m_Builder, kind, lhs, rhs);
+  } break;
+  }
+  return bool_to_type(kind, ret_val);
 }
 
 llvm::Value *Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
@@ -259,6 +413,30 @@ llvm::Value *Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
   return nullptr;
 }
 
+void Codegen::gen_conditional_op(const ResolvedExpr &op,
+                                 llvm::BasicBlock *true_bb,
+                                 llvm::BasicBlock *false_bb) {
+  const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&op);
+  if (binop && binop->op == TokenKind::PipePipe) {
+    llvm::BasicBlock *next_bb = llvm::BasicBlock::Create(
+        m_Context, "or.lhs.false", true_bb->getParent());
+    gen_conditional_op(*binop->lhs, true_bb, next_bb);
+    m_Builder.SetInsertPoint(next_bb);
+    gen_conditional_op(*binop->rhs, true_bb, false_bb);
+    return;
+  }
+  if (binop && binop->op == TokenKind::AmpAmp) {
+    llvm::BasicBlock *next_bb = llvm::BasicBlock::Create(
+        m_Context, "and.lhs.true", true_bb->getParent());
+    gen_conditional_op(*binop->lhs, next_bb, false_bb);
+    m_Builder.SetInsertPoint(next_bb);
+    gen_conditional_op(*binop->rhs, true_bb, false_bb);
+    return;
+  }
+  llvm::Value *val = type_to_bool(op.type.kind, gen_expr(op));
+  m_Builder.CreateCondBr(val, true_bb, false_bb);
+}
+
 llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
   llvm::Function *callee = m_Module->getFunction(call.func_decl->id);
   std::vector<llvm::Value *> args{};
@@ -266,6 +444,34 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
     args.emplace_back(gen_expr(*arg));
   }
   return m_Builder.CreateCall(callee, args);
+}
+
+llvm::Function *Codegen::get_current_function() {
+  return m_Builder.GetInsertBlock()->getParent();
+}
+
+llvm::Value *Codegen::type_to_bool(Type::Kind kind, llvm::Value *value) {
+  if (kind >= Type::Kind::INTEGERS_START && kind <= Type::Kind::INTEGERS_END)
+    return m_Builder.CreateICmpNE(
+        value, llvm::ConstantInt::getBool(m_Context, false), "to.bool");
+  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END)
+    return m_Builder.CreateFCmpONE(
+        value, llvm::ConstantFP::get(m_Builder.getDoubleTy(), 0.0), "to.bool");
+  if (kind == Type::Kind::Bool)
+    return value;
+  llvm_unreachable("unexpected type cast to bool.");
+}
+
+llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
+  if ((kind >= Type::Kind::INTEGERS_START &&
+       kind <= Type::Kind::INTEGERS_END) ||
+      kind == Type::Kind::Bool)
+    return value;
+  if (kind == Type::Kind::f32)
+    return m_Builder.CreateUIToFP(value, m_Builder.getFloatTy(), "to.float");
+  if (kind == Type::Kind::f64)
+    return m_Builder.CreateUIToFP(value, m_Builder.getDoubleTy(), "to.double");
+  llvm_unreachable("unexpected type cast from bool.");
 }
 
 } // namespace saplang

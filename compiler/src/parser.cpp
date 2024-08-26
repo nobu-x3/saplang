@@ -258,26 +258,43 @@ std::unique_ptr<Expr> Parser::parse_expr() {
 }
 
 int get_tok_precedence(TokenKind tok) {
-  if (tok == TokenKind::Asterisk || tok == TokenKind::Slash)
+  switch (tok) {
+  case TokenKind::Asterisk:
+  case TokenKind::Slash:
+    return 6;
+  case TokenKind::Plus:
+  case TokenKind::Minus:
+    return 5;
+  case TokenKind::LessThan:
+  case TokenKind::LessThanOrEqual:
+  case TokenKind::GreaterThan:
+  case TokenKind::GreaterThanOrEqual:
+    return 4;
+  case TokenKind::EqualEqual:
+  case TokenKind::ExclamationEqual:
+    return 3;
+  case TokenKind::AmpAmp:
     return 2;
-  if (tok == TokenKind::Plus || tok == TokenKind::Minus)
+  case TokenKind::PipePipe:
     return 1;
-  return -1;
+  default:
+    return -1;
+  }
 }
 
 std::unique_ptr<Expr> Parser::parse_expr_rhs(std::unique_ptr<Expr> lhs,
                                              int precedence) {
   while (true) {
     TokenKind op = m_NextToken.kind;
-    int cur_op_proc = get_tok_precedence(op);
-    if (cur_op_proc < precedence)
+    int cur_op_prec = get_tok_precedence(op);
+    if (cur_op_prec < precedence)
       return lhs;
     eat_next_token();
     auto rhs = parse_prefix_expr();
     if (!rhs)
       return nullptr;
-    if (cur_op_proc < get_tok_precedence(m_NextToken.kind)) {
-      rhs = parse_expr_rhs(std::move(lhs), cur_op_proc + 1);
+    if (cur_op_prec < get_tok_precedence(m_NextToken.kind)) {
+      rhs = parse_expr_rhs(std::move(rhs), cur_op_prec + 1);
       if (!rhs)
         return nullptr;
     }

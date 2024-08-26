@@ -22,6 +22,18 @@ Token Lexer::get_next_token() {
   while (is_space(curr_char))
     curr_char = eat_next_char();
   SourceLocation token_start_location{m_Source->path, m_Line, m_Column};
+  if (curr_char == '!' && peek_next_char() == '=') {
+    eat_next_char();
+    return Token{token_start_location, TokenKind::ExclamationEqual};
+  }
+  if (curr_char == '<' && peek_next_char() == '=') {
+    eat_next_char();
+    return Token{token_start_location, TokenKind::LessThanOrEqual};
+  }
+  if (curr_char == '>' && peek_next_char() == '=') {
+    eat_next_char();
+    return Token{token_start_location, TokenKind::GreaterThanOrEqual};
+  }
   for (auto &&c : single_char_tokens) {
     // TODO: manually write it out to avoid branching for better performance.
     if (c == curr_char) {

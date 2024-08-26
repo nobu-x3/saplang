@@ -27,7 +27,14 @@ private:
   llvm::Value *gen_expr(const ResolvedExpr &expr);
   llvm::Value *gen_binary_op(const ResolvedBinaryOperator &op);
   llvm::Value *gen_unary_op(const ResolvedUnaryOperator &op);
+  llvm::Value *gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lhs,
+                           llvm::Value *rhs);
+  void gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_bb,
+                          llvm::BasicBlock *false_bb);
   llvm::Value *gen_call_expr(const ResolvedCallExpr &call);
+  llvm::Function *get_current_function();
+  llvm::Value *type_to_bool(Type::Kind kind, llvm::Value *value);
+  llvm::Value *bool_to_type(Type::Kind kind, llvm::Value *value);
 
 private:
   std::vector<std::unique_ptr<ResolvedFuncDecl>> m_ResolvedTree{};

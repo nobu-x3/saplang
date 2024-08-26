@@ -408,7 +408,7 @@ test:7:5 error: expected ';' at the end of a statement.
   REQUIRE(!parser.is_complete_ast());
 }
 
-TEST_CASE("Unary operations", "[Parser]") {
+TEST_CASE("Unary operations", "[parser]") {
   SECTION("Function returning with unary ops") {
     TEST_SETUP(R"(
 fn i32 foo() {
@@ -420,5 +420,306 @@ fn i32 main() {
 }
 )");
     REQUIRE(error_stream.str() == "");
+  }
+}
+
+TEST_CASE("Binary operators", "[parser]") {
+  SECTION("Number literal and symbol") {
+    TEST_SETUP(R"(
+fn void main() {
+  1 + |;
+  1 +;
+  1 + 1.0 + |;
+  1 + 1.0 * |;
+}
+)");
+    REQUIRE(error_stream.str() == R"(test:3:7 error: expected expression.
+test:4:6 error: expected expression.
+test:5:13 error: expected expression.
+test:6:13 error: expected expression.
+)");
+  }
+  SECTION("Grouping") {
+    SECTION("Pure *") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 * 1.0 * 2;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '*'
+      BinaryOperator: '*'
+        NumberLiteral: integer(1)
+        NumberLiteral: real(1.0)
+      NumberLiteral: integer(2)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure /") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 / 1.0 / 2;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '/'
+      BinaryOperator: '/'
+        NumberLiteral: integer(1)
+        NumberLiteral: real(1.0)
+      NumberLiteral: integer(2)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure +") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 + 1.0 + 2;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '+'
+      BinaryOperator: '+'
+        NumberLiteral: integer(1)
+        NumberLiteral: real(1.0)
+      NumberLiteral: integer(2)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure -") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 - 1.0 - 2;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '-'
+      BinaryOperator: '-'
+        NumberLiteral: integer(1)
+        NumberLiteral: real(1.0)
+      NumberLiteral: integer(2)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Mixed * /") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 * 1.0 / 2;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '/'
+      BinaryOperator: '*'
+        NumberLiteral: integer(1)
+        NumberLiteral: real(1.0)
+      NumberLiteral: integer(2)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Mixed + -") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 + 1.0 - 2;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '-'
+      BinaryOperator: '+'
+        NumberLiteral: integer(1)
+        NumberLiteral: real(1.0)
+      NumberLiteral: integer(2)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Mixed + * +") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 + 2 * 3 + 4;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '+'
+      BinaryOperator: '+'
+        NumberLiteral: integer(1)
+        BinaryOperator: '*'
+          NumberLiteral: integer(2)
+          NumberLiteral: integer(3)
+      NumberLiteral: integer(4)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Mixed + / +") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 + 2 / 3 - 4;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '-'
+      BinaryOperator: '+'
+        NumberLiteral: integer(1)
+        BinaryOperator: '/'
+          NumberLiteral: integer(2)
+          NumberLiteral: integer(3)
+      NumberLiteral: integer(4)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure < <") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 < 2 < 3;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '<'
+      BinaryOperator: '<'
+        NumberLiteral: integer(1)
+        NumberLiteral: integer(2)
+      NumberLiteral: integer(3)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure > >") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 > 2 > 3;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '>'
+      BinaryOperator: '>'
+        NumberLiteral: integer(1)
+        NumberLiteral: integer(2)
+      NumberLiteral: integer(3)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure == ==") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 == 2 == 3;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '=='
+      BinaryOperator: '=='
+        NumberLiteral: integer(1)
+        NumberLiteral: integer(2)
+      NumberLiteral: integer(3)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure != !=") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 != 2 != 3;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '!='
+      BinaryOperator: '!='
+        NumberLiteral: integer(1)
+        NumberLiteral: integer(2)
+      NumberLiteral: integer(3)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure <= <=") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 <= 2 <= 3;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '<='
+      BinaryOperator: '<='
+        NumberLiteral: integer(1)
+        NumberLiteral: integer(2)
+      NumberLiteral: integer(3)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure >= >=") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 >= 2 >= 3;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '>='
+      BinaryOperator: '>='
+        NumberLiteral: integer(1)
+        NumberLiteral: integer(2)
+      NumberLiteral: integer(3)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure && &&") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 && 2 && 3;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '&&'
+      BinaryOperator: '&&'
+        NumberLiteral: integer(1)
+        NumberLiteral: integer(2)
+      NumberLiteral: integer(3)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Pure || ||") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 || 2 || 3;
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '||'
+      BinaryOperator: '||'
+        NumberLiteral: integer(1)
+        NumberLiteral: integer(2)
+      NumberLiteral: integer(3)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
+    SECTION("Mixed || && && (||)") {
+      TEST_SETUP(R"(
+fn void main() {
+  1 || 2 && 3 && (4 || 5);
+}
+)");
+      REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
+  Block
+    BinaryOperator: '||'
+      NumberLiteral: integer(1)
+      BinaryOperator: '&&'
+        BinaryOperator: '&&'
+          NumberLiteral: integer(2)
+          NumberLiteral: integer(3)
+        GroupingExpr:
+          BinaryOperator: '||'
+            NumberLiteral: integer(4)
+            NumberLiteral: integer(5)
+)");
+      REQUIRE(error_stream.str() == "");
+    }
   }
 }

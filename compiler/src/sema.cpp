@@ -18,6 +18,7 @@ std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
     {Type::Kind::f32, sizeof(float)},
     {Type::Kind::f64, sizeof(double)},
 };
+
 std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id,
                                                   std::optional<Type *> type) {
   int scope_id = 0;
