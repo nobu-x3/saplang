@@ -263,101 +263,113 @@ ResolvedNumberLiteral::Value
 construct_value(Type::Kind current_type, Type::Kind new_type,
                 ResolvedNumberLiteral::Value *old_value) {
 
-#define ASSIGN(outer_type, inner_type)                                         \
-  case Type::Kind::inner_type:                                                 \
-    ret_val.inner_type = old_value->outer_type;                                \
+#define CAST_CASE(from, to)                                                    \
+  case Type::Kind::from:                                                       \
+    ret_val.to = old_value->from;                                              \
+    break;
+
+#define BOOL_CAST_CASE(to)                                                     \
+  case Type::Kind::Bool:                                                       \
+    ret_val.to = old_value->b8 ? 1 : 0;                                        \
     break;
 
   ResolvedNumberLiteral::Value ret_val;
-  switch (current_type) {
+  switch (new_type) {
   case Type::Kind::Bool: {
-    switch (new_type) {
-      ASSIGN(b8, i8);
-      ASSIGN(b8, i16);
-      ASSIGN(b8, i32);
-      ASSIGN(b8, i64);
+    switch (current_type) {
+    case Type::Kind::i8:
+      ret_val.b8 = old_value->i8 > 0 ? true : false;
+      break;
+    case Type::Kind::i16:
+      ret_val.b8 = old_value->i16 > 0 ? true : false;
+      break;
+    case Type::Kind::i32:
+      ret_val.b8 = old_value->i32 > 0 ? true : false;
+      break;
+    case Type::Kind::i64:
+      ret_val.b8 = old_value->i64 > 0 ? true : false;
+      break;
+    case Type::Kind::u8:
+      ret_val.b8 = old_value->u8 > 0 ? true : false;
+      break;
+    case Type::Kind::u16:
+      ret_val.b8 = old_value->u16 > 0 ? true : false;
+      break;
+    case Type::Kind::u32:
+      ret_val.b8 = old_value->u32 > 0 ? true : false;
+      break;
+    case Type::Kind::u64:
+      ret_val.b8 = old_value->u64 > 0 ? true : false;
+      break;
+    case Type::Kind::f32:
+      ret_val.b8 = old_value->f32 > 0 ? true : false;
+      break;
+    case Type::Kind::f64:
+      ret_val.b8 = old_value->f64 > 0 ? true : false;
+      break;
     }
   } break;
   case Type::Kind::i8: {
-    switch (new_type) {
-      ASSIGN(i8, i16);
-      ASSIGN(i8, i32);
-      ASSIGN(i8, i64);
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->i8 > 0 ? true : false;
-    }
+    switch (current_type) { BOOL_CAST_CASE(i8) }
   } break;
   case Type::Kind::i16: {
-    switch (new_type) {
-      ASSIGN(i16, i32);
-      ASSIGN(i16, i64);
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->i16 > 0 ? true : false;
-      break;
+    switch (current_type) {
+      BOOL_CAST_CASE(i16)
+      CAST_CASE(u8, i16)
+      CAST_CASE(i8, i16)
     }
   } break;
   case Type::Kind::i32: {
-    switch (new_type) {
-      ASSIGN(i32, i64);
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->i32 > 0 ? true : false;
-      break;
+    switch (current_type) {
+      BOOL_CAST_CASE(i32)
+      CAST_CASE(u8, i32)
+      CAST_CASE(u16, i32)
+      CAST_CASE(i8, i32)
+      CAST_CASE(i16, i32)
     }
   } break;
   case Type::Kind::i64: {
-    switch (new_type) {
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->i64 > 0 ? true : false;
-      break;
-    }
-  }
-  case Type::Kind::u8: {
-    switch (new_type) {
-      ASSIGN(u8, u16);
-      ASSIGN(u8, u32);
-      ASSIGN(u8, u64);
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->u8 > 0 ? true : false;
-      break;
+    switch (current_type) {
+      BOOL_CAST_CASE(i64)
+      CAST_CASE(u8, i64)
+      CAST_CASE(u16, i64)
+      CAST_CASE(u32, i64)
+      CAST_CASE(i8, i64)
+      CAST_CASE(i16, i64)
+      CAST_CASE(i32, i64)
     }
   } break;
+  case Type::Kind::u8: {
+    switch (current_type) { BOOL_CAST_CASE(u8) }
+  } break;
   case Type::Kind::u16: {
-    switch (new_type) {
-      ASSIGN(u16, u32);
-      ASSIGN(u16, u64);
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->u16 > 0 ? true : false;
-      break;
+    switch (current_type) {
+      BOOL_CAST_CASE(u16)
+      CAST_CASE(u8, u16)
     }
   } break;
   case Type::Kind::u32: {
-    switch (new_type) {
-      ASSIGN(u32, u64);
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->u32 > 0 ? true : false;
-      break;
+    switch (current_type) {
+      BOOL_CAST_CASE(u32)
+      CAST_CASE(u8, u32)
+      CAST_CASE(u16, u32)
     }
   } break;
   case Type::Kind::u64: {
-    switch (new_type) {
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->u64 > 0 ? true : false;
-      break;
+    switch (current_type) {
+      BOOL_CAST_CASE(u64)
+      CAST_CASE(u8, u64)
+      CAST_CASE(u16, u64)
+      CAST_CASE(u32, u64)
     }
   } break;
   case Type::Kind::f32: {
-    switch (new_type) {
-      ASSIGN(f32, f64);
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->f32 > 0 ? true : false;
-      break;
-    }
+    switch (current_type) { BOOL_CAST_CASE(f32) }
   } break;
   case Type::Kind::f64: {
-    switch (new_type) {
-    case Type::Kind::Bool:
-      ret_val.b8 = old_value->f64 > 0 ? true : false;
-      break;
+    switch (current_type) {
+      BOOL_CAST_CASE(f64)
+      CAST_CASE(f32, f64)
     }
   } break;
   }
