@@ -315,28 +315,28 @@ construct_value(Type::Kind current_type, Type::Kind new_type,
   case Type::Kind::i16: {
     switch (current_type) {
       BOOL_CAST_CASE(i16)
-      CAST_CASE(u8, i16)
       CAST_CASE(i8, i16)
+      CAST_CASE(u8, i16)
     }
   } break;
   case Type::Kind::i32: {
     switch (current_type) {
       BOOL_CAST_CASE(i32)
-      CAST_CASE(u8, i32)
-      CAST_CASE(u16, i32)
       CAST_CASE(i8, i32)
       CAST_CASE(i16, i32)
+      CAST_CASE(u8, i32)
+      CAST_CASE(u16, i32)
     }
   } break;
   case Type::Kind::i64: {
     switch (current_type) {
       BOOL_CAST_CASE(i64)
-      CAST_CASE(u8, i64)
-      CAST_CASE(u16, i64)
-      CAST_CASE(u32, i64)
       CAST_CASE(i8, i64)
       CAST_CASE(i16, i64)
       CAST_CASE(i32, i64)
+      CAST_CASE(u8, i64)
+      CAST_CASE(u16, i64)
+      CAST_CASE(u32, i64)
     }
   } break;
   case Type::Kind::u8: {
