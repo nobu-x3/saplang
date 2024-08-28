@@ -182,7 +182,7 @@ Sema::resolve_unary_operator(const UnaryOperator &op) {
 void apply_unary_op_to_num_literal(ResolvedUnaryOperator *unop) {
   // @TODO: implement call exprs too
   auto *numlit = dynamic_cast<ResolvedNumberLiteral *>(unop->rhs.get());
-  if(!numlit)
+  if (!numlit)
     return;
   if (unop->op == TokenKind::Minus) {
     switch (numlit->type.kind) {
@@ -263,63 +263,105 @@ ResolvedNumberLiteral::Value
 construct_value(Type::Kind current_type, Type::Kind new_type,
                 ResolvedNumberLiteral::Value *old_value) {
 
-  #define ASSIGN(outer_type, inner_type) \
-    case Type::Kind::inner_type: \
-      ret_val.inner_type = old_value->outer_type; \
-      break;
+#define ASSIGN(outer_type, inner_type)                                         \
+  case Type::Kind::inner_type:                                                 \
+    ret_val.inner_type = old_value->outer_type;                                \
+    break;
 
   ResolvedNumberLiteral::Value ret_val;
   switch (current_type) {
-    case Type::Kind::i8:{
-      switch (new_type){
+  case Type::Kind::Bool: {
+    switch (new_type) {
+      ASSIGN(b8, i8);
+      ASSIGN(b8, i16);
+      ASSIGN(b8, i32);
+      ASSIGN(b8, i64);
+    }
+  } break;
+  case Type::Kind::i8: {
+    switch (new_type) {
       ASSIGN(i8, i16);
       ASSIGN(i8, i32);
       ASSIGN(i8, i64);
-      }
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->i8 > 0 ? true : false;
     }
-    break;
-    case Type::Kind::i16:{
-      switch(new_type){
+  } break;
+  case Type::Kind::i16: {
+    switch (new_type) {
       ASSIGN(i16, i32);
       ASSIGN(i16, i64);
-      }
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->i16 > 0 ? true : false;
+      break;
     }
-    break;
-    case Type::Kind::i32:{
-      switch(new_type) {
+  } break;
+  case Type::Kind::i32: {
+    switch (new_type) {
       ASSIGN(i32, i64);
-      }
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->i32 > 0 ? true : false;
+      break;
     }
-    break;
-    case Type::Kind::u8:{
-      switch(new_type) {
-        ASSIGN(u8, u16);
-        ASSIGN(u8, u32);
-        ASSIGN(u8, u64);
-      }
+  } break;
+  case Type::Kind::i64: {
+    switch (new_type) {
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->i64 > 0 ? true : false;
+      break;
     }
-    break;
-    case Type::Kind::u16:{
-      switch(new_type) {
-        ASSIGN(u16, u32);
-        ASSIGN(u16, u64);
-      }
+  }
+  case Type::Kind::u8: {
+    switch (new_type) {
+      ASSIGN(u8, u16);
+      ASSIGN(u8, u32);
+      ASSIGN(u8, u64);
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->u8 > 0 ? true : false;
+      break;
     }
-    break;
-    case Type::Kind::u32:{
-      switch(new_type) {
-        ASSIGN(u32, u64);
-      }
+  } break;
+  case Type::Kind::u16: {
+    switch (new_type) {
+      ASSIGN(u16, u32);
+      ASSIGN(u16, u64);
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->u16 > 0 ? true : false;
+      break;
     }
-    break;
-    case Type::Kind::f32:{
-      switch(new_type) {
-        ASSIGN(f32, f64);
-      }
+  } break;
+  case Type::Kind::u32: {
+    switch (new_type) {
+      ASSIGN(u32, u64);
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->u32 > 0 ? true : false;
+      break;
     }
-    break;
-}
-    return ret_val;
+  } break;
+  case Type::Kind::u64: {
+    switch (new_type) {
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->u64 > 0 ? true : false;
+      break;
+    }
+  } break;
+  case Type::Kind::f32: {
+    switch (new_type) {
+      ASSIGN(f32, f64);
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->f32 > 0 ? true : false;
+      break;
+    }
+  } break;
+  case Type::Kind::f64: {
+    switch (new_type) {
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->f64 > 0 ? true : false;
+      break;
+    }
+  } break;
+  }
+  return ret_val;
 }
 
 bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
@@ -328,7 +370,8 @@ bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
       g_AssociatedNumberLiteralSizes.count(cast_to) &&
       g_AssociatedNumberLiteralSizes[number_literal->type.kind] <=
           g_AssociatedNumberLiteralSizes[cast_to]) {
-    number_literal->value = construct_value(number_literal->type.kind, cast_to, &number_literal->value);
+    number_literal->value = construct_value(number_literal->type.kind, cast_to,
+                                            &number_literal->value);
     return true;
   }
   return false;
