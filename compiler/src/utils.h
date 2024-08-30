@@ -34,5 +34,4 @@ inline std::string indent(size_t level) { return std::string(level * 2, ' '); }
 
 std::nullptr_t report(SourceLocation location, std::string_view msg,
                       bool is_warning = false);
-
 } // namespace saplang
