@@ -5,6 +5,47 @@
 #include <iostream>
 
 namespace saplang {
+void dump_constant(std::stringstream &stream, size_t indent_level, Value value,
+                   Type::Kind kind) {
+  switch (kind) {
+  case Type::Kind::i8:
+    stream << indent(indent_level + 1) << "i8(" << value.i8 << ")";
+    break;
+  case Type::Kind::i16:
+    stream << indent(indent_level + 1) << "i16(" << value.i16 << ")";
+    break;
+  case Type::Kind::i32:
+    stream << indent(indent_level + 1) << "i32(" << value.i32 << ")";
+    break;
+  case Type::Kind::i64:
+    stream << indent(indent_level + 1) << "i64(" << value.i64 << ")";
+    break;
+  case Type::Kind::u8:
+    stream << indent(indent_level + 1) << "u8(" << value.u8 << ")";
+    break;
+  case Type::Kind::u16:
+    stream << indent(indent_level + 1) << "u16(" << value.u16 << ")";
+    break;
+  case Type::Kind::u32:
+    stream << indent(indent_level + 1) << "u32(" << value.u32 << ")";
+    break;
+  case Type::Kind::u64:
+    stream << indent(indent_level + 1) << "u64(" << value.u64 << ")";
+    break;
+  case Type::Kind::f32:
+    stream << indent(indent_level + 1) << "f32(" << value.f32 << ")";
+    break;
+  case Type::Kind::f64:
+    stream << indent(indent_level + 1) << "f64(" << value.f64 << ")";
+    break;
+  case Type::Kind::Bool:
+    stream << indent(indent_level + 1) << "bool(" << value.b8 << ")";
+    break;
+  default:
+    // @TODO: implement rest
+    break;
+  }
+}
 
 void Block::dump_to_stream(std::stringstream &stream,
                            size_t indent_level) const {
@@ -150,12 +191,22 @@ void ResolvedDeclRefExpr::dump_to_stream(std::stringstream &stream,
                                          size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedDeclRefExpr: @(" << decl << ") "
          << decl->id << ":\n";
+  if (auto resolved_constant_expr = get_constant_value()) {
+    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+                  resolved_constant_expr->kind);
+    stream << "\n";
+  }
 }
 
 void ResolvedCallExpr::dump_to_stream(std::stringstream &stream,
                                       size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedCallExpr: @(" << func_decl << ") "
          << func_decl->id << ":\n";
+  if (auto resolved_constant_expr = get_constant_value()) {
+    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+                  resolved_constant_expr->kind);
+    stream << "\n";
+  }
   for (auto &&arg : args) {
     arg->dump_to_stream(stream, indent_level + 1);
   }
@@ -246,6 +297,11 @@ ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc,
 void ResolvedGroupingExpr::dump_to_stream(std::stringstream &stream,
                                           size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedGroupingExpr:\n";
+  if (auto resolved_constant_expr = get_constant_value()) {
+    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+                  resolved_constant_expr->kind);
+    stream << "\n";
+  }
   expr->dump_to_stream(stream, indent_level + 1);
 }
 void ResolvedBinaryOperator::dump_to_stream(std::stringstream &stream,
@@ -253,6 +309,11 @@ void ResolvedBinaryOperator::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedBinaryOperator: '";
   dump_op(stream, op);
   stream << "\'\n";
+  if (auto resolved_constant_expr = get_constant_value()) {
+    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+                  resolved_constant_expr->kind);
+    stream << "\n";
+  }
   lhs->dump_to_stream(stream, indent_level + 1);
   rhs->dump_to_stream(stream, indent_level + 1);
 }
@@ -260,52 +321,21 @@ void ResolvedBinaryOperator::dump_to_stream(std::stringstream &stream,
 void ResolvedUnaryOperator::dump_to_stream(std::stringstream &stream,
                                            size_t indent_level) const {
 
-  stream << indent(indent_level) << "ResolvedBinaryOperator: '";
+  stream << indent(indent_level) << "ResolvedUnaryOperator: '";
   dump_op(stream, op);
   stream << "\'\n";
+  if (auto resolved_constant_expr = get_constant_value()) {
+    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+                  resolved_constant_expr->kind);
+    stream << "\n";
+  }
   rhs->dump_to_stream(stream, indent_level + 1);
 }
 
 void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,
                                            size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedNumberLiteral:\n";
-  switch (type.kind) {
-  case Type::Kind::i8:
-    stream << indent(indent_level + 1) << "i8(" << value.i8 << ")";
-    break;
-  case Type::Kind::i16:
-    stream << indent(indent_level + 1) << "i16(" << value.i16 << ")";
-    break;
-  case Type::Kind::i32:
-    stream << indent(indent_level + 1) << "i32(" << value.i32 << ")";
-    break;
-  case Type::Kind::i64:
-    stream << indent(indent_level + 1) << "i64(" << value.i64 << ")";
-    break;
-  case Type::Kind::u8:
-    stream << indent(indent_level + 1) << "u8(" << value.u8 << ")";
-    break;
-  case Type::Kind::u16:
-    stream << indent(indent_level + 1) << "u16(" << value.u16 << ")";
-    break;
-  case Type::Kind::u32:
-    stream << indent(indent_level + 1) << "u32(" << value.u32 << ")";
-    break;
-  case Type::Kind::u64:
-    stream << indent(indent_level + 1) << "u64(" << value.u64 << ")";
-    break;
-  case Type::Kind::f32:
-    stream << indent(indent_level + 1) << "f32(" << value.f32 << ")";
-    break;
-  case Type::Kind::f64:
-    stream << indent(indent_level + 1) << "f64(" << value.f64 << ")";
-    break;
-  case Type::Kind::Bool:
-    stream << indent(indent_level + 1) << "bool(" << value.b8 << ")";
-    break;
-  default:
-    // @TODO: implement rest
-    break;
-  }
+  dump_constant(stream, indent_level, value, type.kind);
+  stream << "\n";
 }
 } // namespace saplang

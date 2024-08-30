@@ -14,14 +14,14 @@ struct Type {
   enum class Kind {
     Void,
     Bool,
-    i8,
-    i16,
-    i32,
-    i64,
-    u8,
-    u16,
-    u32,
-    u64,
+    i8 = 2,
+    i16 = 3,
+    i32 = 4,
+    i64 = 5,
+    u8 = 6,
+    u16 = 7,
+    u32 = 8,
+    u64 = 9,
     Pointer,
     f32,
     f64,
@@ -67,6 +67,24 @@ public:                                                                        \
     std::cerr << stream.str();                                                 \
   }
 
+union Value {
+  std::int8_t i8;
+  std::int16_t i16;
+  std::int32_t i32;
+  std::int64_t i64;
+  std::uint8_t u8;
+  std::uint16_t u16;
+  std::uint32_t u32;
+  std::uint64_t u64;
+  float f32;
+  double f64;
+  bool b8;
+};
+
+struct ConstexprResult {
+  std::optional<Value> value;
+  Type::Kind kind;
+};
 struct Decl : public IDumpable {
   SourceLocation location;
   std::string id;
@@ -186,7 +204,9 @@ struct ResolvedStmt : public IDumpable {
   virtual ~ResolvedStmt() = default;
 };
 
-struct ResolvedExpr : public ResolvedStmt {
+struct ResolvedExpr
+    : public ConstantValueContainer<ResolvedExpr, ConstexprResult>,
+      public ResolvedStmt {
   Type type;
   inline ResolvedExpr(SourceLocation loc, Type type)
       : ResolvedStmt(loc), type(std::move(type)) {}
@@ -216,19 +236,6 @@ struct ResolvedDecl : public IDumpable {
 };
 
 struct ResolvedNumberLiteral : public ResolvedExpr {
-  union Value {
-    std::int8_t i8;
-    std::int16_t i16;
-    std::int32_t i32;
-    std::int64_t i64;
-    std::uint8_t u8;
-    std::uint16_t u16;
-    std::uint32_t u32;
-    std::uint64_t u64;
-    float f32;
-    double f64;
-    bool b8;
-  };
   Value value;
 
   explicit ResolvedNumberLiteral(SourceLocation loc,

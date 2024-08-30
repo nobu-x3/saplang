@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.h"
+#include "constexpr.h"
 
 #include <memory>
 #include <optional>
@@ -60,6 +61,7 @@ private:
   std::vector<std::unique_ptr<FunctionDecl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};
   ResolvedFuncDecl *m_CurrFunction{nullptr};
+  ConstantExpressionEvaluator m_Cee;
 
 private:
   class Scope {

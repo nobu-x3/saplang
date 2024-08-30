@@ -259,9 +259,8 @@ void apply_unary_op_to_num_literal(ResolvedUnaryOperator *unop) {
   }
 }
 
-ResolvedNumberLiteral::Value
-construct_value(Type::Kind current_type, Type::Kind new_type,
-                ResolvedNumberLiteral::Value *old_value) {
+Value construct_value(Type::Kind current_type, Type::Kind new_type,
+                      Value *old_value) {
 
 #define CAST_CASE(from, to)                                                    \
   case Type::Kind::from:                                                       \
@@ -273,7 +272,7 @@ construct_value(Type::Kind current_type, Type::Kind new_type,
     ret_val.to = old_value->b8 ? 1 : 0;                                        \
     break;
 
-  ResolvedNumberLiteral::Value ret_val;
+  Value ret_val;
   switch (new_type) {
   case Type::Kind::Bool: {
     switch (current_type) {
@@ -391,6 +390,7 @@ bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
 
 std::unique_ptr<ResolvedReturnStmt>
 Sema::resolve_return_stmt(const ReturnStmt &stmt) {
+  assert(m_CurrFunction && "return statement outside of function.");
   if (m_CurrFunction->type.kind == Type::Kind::Void && stmt.expr)
     return report(stmt.location, "unexpected return value in void function.");
   if (m_CurrFunction->type.kind != Type::Kind::Void && !stmt.expr)
@@ -400,21 +400,28 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
     resolved_expr = resolve_expr(*stmt.expr);
     if (!resolved_expr)
       return nullptr;
-    if (auto *unop =
-            dynamic_cast<ResolvedUnaryOperator *>(resolved_expr.get())) {
-      apply_unary_op_to_num_literal(unop);
-      resolved_expr = std::move(unop->rhs);
-    }
     if (m_CurrFunction->type.kind != resolved_expr->type.kind) {
-      if (auto *number_literal =
-              dynamic_cast<ResolvedNumberLiteral *>(resolved_expr.get())) {
+      if (auto *unop =
+              dynamic_cast<ResolvedUnaryOperator *>(resolved_expr.get())) {
+        if (auto *number_literal =
+                dynamic_cast<ResolvedNumberLiteral *>(unop->rhs.get())) {
+          if (implicit_cast_numlit(number_literal, m_CurrFunction->type.kind)) {
+            number_literal->type = m_CurrFunction->type;
+            number_literal->set_constant_value(m_Cee.evaluate(*number_literal));
+            unop->type = m_CurrFunction->type;
+          }
+        }
+      } else if (auto *number_literal = dynamic_cast<ResolvedNumberLiteral *>(
+                     resolved_expr.get())) {
         if (implicit_cast_numlit(number_literal, m_CurrFunction->type.kind)) {
           number_literal->type = m_CurrFunction->type;
+          number_literal->set_constant_value(m_Cee.evaluate(*number_literal));
         }
       } else {
         return report(resolved_expr->location, "unexpected return type.");
       }
     }
+    resolved_expr->set_constant_value(m_Cee.evaluate(*resolved_expr));
   }
   return std::make_unique<ResolvedReturnStmt>(stmt.location,
                                               std::move(resolved_expr));
@@ -485,6 +492,7 @@ Sema::resolve_call_expr(const CallExpr &call) {
                           "', expected '" +
                           resolved_func_decl->params[i]->type.name + "'.");
       }
+    resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
     resolved_args.emplace_back(std::move(resolved_arg));
   }
   return std::make_unique<ResolvedCallExpr>(call.location, resolved_func_decl,
