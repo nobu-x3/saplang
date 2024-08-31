@@ -286,7 +286,10 @@ ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc,
     value.f64 = std::stod(value_str);
     break;
   case Type::Kind::Bool:
-    value.b8 = value_str == "true" ? true : false;
+    if (value_str == "true") {
+      value.b8 = true;
+    } else if (value_str == "false")
+      value.b8 = false;
     break;
   default:
     // @TODO: implement rest

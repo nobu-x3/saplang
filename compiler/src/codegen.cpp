@@ -101,7 +101,7 @@ llvm::Type *Codegen::gen_type(Type type) {
   case Type::Kind::Void:
     return m_Builder.getVoidTy();
   case Type::Kind::Pointer:
-    return m_Builder.getInt8PtrTy();
+    return m_Builder.getPtrTy();
   }
 }
 

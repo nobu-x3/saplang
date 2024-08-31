@@ -415,7 +415,6 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
                      resolved_expr.get())) {
         if (implicit_cast_numlit(number_literal, m_CurrFunction->type.kind)) {
           number_literal->type = m_CurrFunction->type;
-          number_literal->set_constant_value(m_Cee.evaluate(*number_literal));
         }
       } else {
         return report(resolved_expr->location, "unexpected return type.");
@@ -480,11 +479,23 @@ Sema::resolve_call_expr(const CallExpr &call) {
     auto &&resolved_arg = resolve_expr(*call.args[i]);
     if (!resolved_arg)
       return nullptr;
-    if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind)
-      if (auto *number_literal =
-              dynamic_cast<ResolvedNumberLiteral *>(resolved_arg.get())) {
-        if (implicit_cast_numlit(number_literal, m_CurrFunction->type.kind)) {
-          number_literal->type = m_CurrFunction->type;
+    if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind) {
+      if (auto *unop =
+              dynamic_cast<ResolvedUnaryOperator *>(resolved_arg.get())) {
+        if (auto *number_literal =
+                dynamic_cast<ResolvedNumberLiteral *>(unop->rhs.get())) {
+          if (implicit_cast_numlit(number_literal,
+                                   resolved_func_decl->params[i]->type.kind)) {
+            number_literal->type = resolved_func_decl->params[i]->type;
+            number_literal->set_constant_value(m_Cee.evaluate(*number_literal));
+            unop->type = resolved_func_decl->params[i]->type;
+          }
+        }
+      } else if (auto *number_literal = dynamic_cast<ResolvedNumberLiteral *>(
+                     resolved_arg.get())) {
+        if (implicit_cast_numlit(number_literal,
+                                 resolved_func_decl->params[i]->type.kind)) {
+          number_literal->type = resolved_func_decl->params[i]->type;
         }
       } else {
         return report(resolved_arg->location,
@@ -492,6 +503,7 @@ Sema::resolve_call_expr(const CallExpr &call) {
                           "', expected '" +
                           resolved_func_decl->params[i]->type.name + "'.");
       }
+    }
     resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
     resolved_args.emplace_back(std::move(resolved_arg));
   }
