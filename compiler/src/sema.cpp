@@ -388,6 +388,30 @@ bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
   return false;
 }
 
+bool try_cast_expr(ResolvedExpr &expr, const Type &type,
+                   ConstantExpressionEvaluator &cee) {
+  if (auto *binop = dynamic_cast<ResolvedBinaryOperator *>(&expr)) {
+    if (try_cast_expr(*binop->lhs, type, cee) &&
+        try_cast_expr(*binop->rhs, type, cee)) {
+      binop->type = type;
+    }
+    return true;
+  } else if (auto *unop = dynamic_cast<ResolvedUnaryOperator *>(&expr)) {
+    if (try_cast_expr(*unop->rhs, type, cee)) {
+      unop->type = type;
+    }
+    return true;
+  } else if (auto *number_literal =
+                 dynamic_cast<ResolvedNumberLiteral *>(&expr)) {
+    if (implicit_cast_numlit(number_literal, type.kind)) {
+      number_literal->type = type;
+      number_literal->set_constant_value(cee.evaluate(*number_literal));
+    }
+    return true;
+  }
+  return false;
+}
+
 std::unique_ptr<ResolvedReturnStmt>
 Sema::resolve_return_stmt(const ReturnStmt &stmt) {
   assert(m_CurrFunction && "return statement outside of function.");
@@ -401,22 +425,7 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
     if (!resolved_expr)
       return nullptr;
     if (m_CurrFunction->type.kind != resolved_expr->type.kind) {
-      if (auto *unop =
-              dynamic_cast<ResolvedUnaryOperator *>(resolved_expr.get())) {
-        if (auto *number_literal =
-                dynamic_cast<ResolvedNumberLiteral *>(unop->rhs.get())) {
-          if (implicit_cast_numlit(number_literal, m_CurrFunction->type.kind)) {
-            number_literal->type = m_CurrFunction->type;
-            number_literal->set_constant_value(m_Cee.evaluate(*number_literal));
-            unop->type = m_CurrFunction->type;
-          }
-        }
-      } else if (auto *number_literal = dynamic_cast<ResolvedNumberLiteral *>(
-                     resolved_expr.get())) {
-        if (implicit_cast_numlit(number_literal, m_CurrFunction->type.kind)) {
-          number_literal->type = m_CurrFunction->type;
-        }
-      } else {
+      if (!try_cast_expr(*resolved_expr, m_CurrFunction->type, m_Cee)) {
         return report(resolved_expr->location, "unexpected return type.");
       }
     }
@@ -476,28 +485,12 @@ Sema::resolve_call_expr(const CallExpr &call) {
     return report(call.location, "argument count mismatch.");
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
   for (int i = 0; i < call.args.size(); ++i) {
-    auto &&resolved_arg = resolve_expr(*call.args[i]);
+    std::unique_ptr<ResolvedExpr> resolved_arg = resolve_expr(*call.args[i]);
     if (!resolved_arg)
       return nullptr;
     if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind) {
-      if (auto *unop =
-              dynamic_cast<ResolvedUnaryOperator *>(resolved_arg.get())) {
-        if (auto *number_literal =
-                dynamic_cast<ResolvedNumberLiteral *>(unop->rhs.get())) {
-          if (implicit_cast_numlit(number_literal,
-                                   resolved_func_decl->params[i]->type.kind)) {
-            number_literal->type = resolved_func_decl->params[i]->type;
-            number_literal->set_constant_value(m_Cee.evaluate(*number_literal));
-            unop->type = resolved_func_decl->params[i]->type;
-          }
-        }
-      } else if (auto *number_literal = dynamic_cast<ResolvedNumberLiteral *>(
-                     resolved_arg.get())) {
-        if (implicit_cast_numlit(number_literal,
-                                 resolved_func_decl->params[i]->type.kind)) {
-          number_literal->type = resolved_func_decl->params[i]->type;
-        }
-      } else {
+      if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
+                         m_Cee)) {
         return report(resolved_arg->location,
                       "unexpected type '" + resolved_arg->type.name +
                           "', expected '" +
