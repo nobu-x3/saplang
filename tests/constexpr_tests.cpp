@@ -23,11 +23,38 @@ std::vector<std::string> break_by_line(const std::string &input) {
   return output;
 }
 
+#define COMMON_REQUIRES                                                        \
+  REQUIRE(lines[0].find("ResolvedFuncDecl: @(") != std::string::npos);         \
+  REQUIRE(lines[0].find(") foo_int:") != std::string::npos);                   \
+  REQUIRE(lines[1].find("ResolvedParamDecl: @(") != std::string::npos);        \
+  REQUIRE(lines[1].find(") x:") != std::string::npos);                         \
+  REQUIRE(lines[2].find("ResolvedBlock:") != std::string::npos);               \
+  REQUIRE(lines[3].find("ResolvedFuncDecl: @(") != std::string::npos);         \
+  REQUIRE(lines[3].find(") foo_uint:") != std::string::npos);                  \
+  REQUIRE(lines[4].find("ResolvedParamDecl: @(") != std::string::npos);        \
+  REQUIRE(lines[4].find(") x:") != std::string::npos);                         \
+  REQUIRE(lines[5].find("ResolvedBlock:") != std::string::npos);               \
+  REQUIRE(lines[6].find("ResolvedFuncDecl: @(") != std::string::npos);         \
+  REQUIRE(lines[6].find(") foo_float:") != std::string::npos);                 \
+  REQUIRE(lines[7].find("ResolvedParamDecl: @(") != std::string::npos);        \
+  REQUIRE(lines[7].find(") x:") != std::string::npos);                         \
+  REQUIRE(lines[8].find("ResolvedBlock:") != std::string::npos);               \
+  REQUIRE(lines[9].find("ResolvedFuncDecl: @(") != std::string::npos);         \
+  REQUIRE(lines[9].find(") foo_bool:") != std::string::npos);                  \
+  REQUIRE(lines[10].find("ResolvedParamDecl: @(") != std::string::npos);       \
+  REQUIRE(lines[10].find(") x:") != std::string::npos);                        \
+  REQUIRE(lines[11].find("ResolvedBlock:") != std::string::npos);              \
+  REQUIRE(lines[12].find("ResolvedFuncDecl: @(") != std::string::npos);        \
+  REQUIRE(lines[12].find(") main:") != std::string::npos);                     \
+  REQUIRE(lines[13].find("ResolvedParamDecl: @(") != std::string::npos);       \
+  REQUIRE(lines[13].find(") x:") != std::string::npos);                        \
+  REQUIRE(lines[14].find("ResolvedBlock:") != std::string::npos);
+
 #define TEST_SETUP(file_contents)                                              \
   saplang::clear_error_stream();                                               \
   std::stringstream buffer{file_contents};                                     \
   std::stringstream output_buffer{};                                           \
-  saplang::SourceFile src_file{"sema_test", buffer.str()};                     \
+  saplang::SourceFile src_file{"constexpr_tests", buffer.str()};               \
   saplang::Lexer lexer{src_file};                                              \
   saplang::Parser parser(&lexer);                                              \
   auto parse_result = parser.parse_source_file();                              \
@@ -96,13 +123,14 @@ fn i32 main() {
 // }
 
 TEST_CASE("operations", "[constexpr]") {
-  SECTION("prefix") {
-    TEST_SETUP(R"(
+  std::string common = R"(
 fn void foo_int(i32 x) {}
 fn void foo_uint(u32 x) {}
 fn void foo_float(f32 x) {}
 fn void foo_bool(bool x) {}
-
+)";
+  SECTION("prefix") {
+    TEST_SETUP(common + R"(
 fn i32 main(i32 x) {
     foo_uint(-1);
     foo_uint(!1);
@@ -119,31 +147,9 @@ fn i32 main(i32 x) {
 )");
     REQUIRE(error_stream.str() == "");
     REQUIRE(lines.size() == 64);
-    REQUIRE(lines[0].find("ResolvedFuncDecl: @(") != std::string::npos);
-    REQUIRE(lines[0].find(") foo_int:") != std::string::npos);
-    REQUIRE(lines[1].find("ResolvedParamDecl: @(") != std::string::npos);
-    REQUIRE(lines[1].find(") x:") != std::string::npos);
-    REQUIRE(lines[2].find("ResolvedBlock:") != std::string::npos);
-    REQUIRE(lines[3].find("ResolvedFuncDecl: @(") != std::string::npos);
-    REQUIRE(lines[3].find(") foo_uint:") != std::string::npos);
-    REQUIRE(lines[4].find("ResolvedParamDecl: @(") != std::string::npos);
-    REQUIRE(lines[4].find(") x:") != std::string::npos);
-    REQUIRE(lines[5].find("ResolvedBlock:") != std::string::npos);
-    REQUIRE(lines[6].find("ResolvedFuncDecl: @(") != std::string::npos);
-    REQUIRE(lines[6].find(") foo_float:") != std::string::npos);
-    REQUIRE(lines[7].find("ResolvedParamDecl: @(") != std::string::npos);
-    REQUIRE(lines[7].find(") x:") != std::string::npos);
-    REQUIRE(lines[8].find("ResolvedBlock:") != std::string::npos);
-    REQUIRE(lines[9].find("ResolvedFuncDecl: @(") != std::string::npos);
-    REQUIRE(lines[9].find(") foo_bool:") != std::string::npos);
-    REQUIRE(lines[10].find("ResolvedParamDecl: @(") != std::string::npos);
-    REQUIRE(lines[10].find(") x:") != std::string::npos);
-    REQUIRE(lines[11].find("ResolvedBlock:") != std::string::npos);
-    REQUIRE(lines[12].find("ResolvedFuncDecl: @(") != std::string::npos);
-    REQUIRE(lines[12].find(") main:") != std::string::npos);
-    REQUIRE(lines[13].find("ResolvedParamDecl: @(") != std::string::npos);
-    REQUIRE(lines[13].find(") x:") != std::string::npos);
-    REQUIRE(lines[14].find("ResolvedBlock:") != std::string::npos);
+
+    COMMON_REQUIRES
+
     REQUIRE(lines[15].find("ResolvedCallExpr: @(") != std::string::npos);
     REQUIRE(lines[15].find("foo_uint") != std::string::npos);
     REQUIRE(lines[16].find("ResolvedUnaryOperator: '-'") != std::string::npos);
@@ -207,5 +213,145 @@ fn i32 main(i32 x) {
     REQUIRE(lines[61].find("bool(0)") != std::string::npos);
     REQUIRE(lines[62].find("ResolvedNumberLiteral") != std::string::npos);
     REQUIRE(lines[63].find("f32(1.23)") != std::string::npos);
+  }
+  SECTION("multiplicative") {
+    TEST_SETUP(common + R"(
+fn i32 main(i32 x) {
+    foo_int(5 * 3);
+    foo_bool(5 * 3);
+    foo_uint(5 * 3);
+    foo_int(20 / 4);
+    foo_float(20 / 3);
+    foo_float(x * 1.0);
+    foo_float(1.0 * x);
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    REQUIRE(lines.size() == 60);
+    COMMON_REQUIRES
+    REQUIRE(lines[15].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[15].find(") foo_int:") != std::string::npos);
+    REQUIRE(lines[16].find("ResolvedBinaryOperator: '*'") != std::string::npos);
+    REQUIRE(lines[17].find("i32(15)") != std::string::npos);
+    REQUIRE(lines[18].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[19].find("i32(5)") != std::string::npos);
+    REQUIRE(lines[20].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[21].find("i32(3)") != std::string::npos);
+    REQUIRE(lines[22].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[22].find(") foo_bool:") != std::string::npos);
+    REQUIRE(lines[23].find("ResolvedBinaryOperator: '*'") != std::string::npos);
+    REQUIRE(lines[24].find("bool(1)") != std::string::npos);
+    REQUIRE(lines[25].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[26].find("bool(1)") != std::string::npos);
+    REQUIRE(lines[27].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[28].find("bool(1)") != std::string::npos);
+    REQUIRE(lines[29].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[29].find(") foo_uint:") != std::string::npos);
+    REQUIRE(lines[30].find("ResolvedBinaryOperator: '*'") != std::string::npos);
+    REQUIRE(lines[31].find("u32(15)") != std::string::npos);
+    REQUIRE(lines[32].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[33].find("u32(5)") != std::string::npos);
+    REQUIRE(lines[34].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[35].find("u32(3)") != std::string::npos);
+    REQUIRE(lines[36].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[36].find(") foo_int:") != std::string::npos);
+    REQUIRE(lines[37].find("ResolvedBinaryOperator: '/'") != std::string::npos);
+    REQUIRE(lines[38].find("i32(5)") != std::string::npos);
+    REQUIRE(lines[39].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[40].find("i32(20)") != std::string::npos);
+    REQUIRE(lines[41].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[42].find("i32(4)") != std::string::npos);
+    REQUIRE(lines[43].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[43].find(") foo_float:") != std::string::npos);
+    REQUIRE(lines[44].find("ResolvedBinaryOperator: '/'") != std::string::npos);
+    REQUIRE(lines[45].find("f32(6.66667)") != std::string::npos);
+    REQUIRE(lines[46].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[47].find("f32(20)") != std::string::npos);
+    REQUIRE(lines[48].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[49].find("f32(3)") != std::string::npos);
+    REQUIRE(lines[50].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[50].find(") foo_float:") != std::string::npos);
+    REQUIRE(lines[51].find("ResolvedBinaryOperator: '*'") != std::string::npos);
+    REQUIRE(lines[52].find("ResolvedDeclRefExpr: @(") != std::string::npos);
+    REQUIRE(lines[52].find(") x:") != std::string::npos);
+    REQUIRE(lines[53].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[54].find("f32(1)") != std::string::npos);
+    REQUIRE(lines[55].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[55].find(") foo_float:") != std::string::npos);
+    REQUIRE(lines[56].find("ResolvedBinaryOperator: '*'") != std::string::npos);
+    REQUIRE(lines[57].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[58].find("f32(1)") != std::string::npos);
+    REQUIRE(lines[59].find("ResolvedDeclRefExpr: @(") != std::string::npos);
+    REQUIRE(lines[59].find(") x:") != std::string::npos);
+  }
+  SECTION("additive") {
+    TEST_SETUP(common + R"(
+fn i32 main(i32 x) {
+    foo_int(5 + 3);
+    foo_bool(5 + 3);
+    foo_uint(5 - 3);
+    foo_int(20 - 4);
+    foo_float(20 + 3);
+    foo_float(x - 1.0);
+    foo_float(1.0 - x);
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    REQUIRE(lines.size() == 60);
+    COMMON_REQUIRES
+    REQUIRE(lines[15].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[15].find(") foo_int:") != std::string::npos);
+    REQUIRE(lines[16].find("ResolvedBinaryOperator: '+'") != std::string::npos);
+    REQUIRE(lines[17].find("i32(8)") != std::string::npos);
+    REQUIRE(lines[18].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[19].find("i32(5)") != std::string::npos);
+    REQUIRE(lines[20].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[21].find("i32(3)") != std::string::npos);
+    REQUIRE(lines[22].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[22].find(") foo_bool:") != std::string::npos);
+    REQUIRE(lines[23].find("ResolvedBinaryOperator: '+'") != std::string::npos);
+    REQUIRE(lines[24].find("bool(1)") != std::string::npos);
+    REQUIRE(lines[25].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[26].find("bool(1)") != std::string::npos);
+    REQUIRE(lines[27].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[28].find("bool(1)") != std::string::npos);
+    REQUIRE(lines[29].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[29].find(") foo_uint:") != std::string::npos);
+    REQUIRE(lines[30].find("ResolvedBinaryOperator: '-'") != std::string::npos);
+    REQUIRE(lines[31].find("u32(2)") != std::string::npos);
+    REQUIRE(lines[32].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[33].find("u32(5)") != std::string::npos);
+    REQUIRE(lines[34].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[35].find("u32(3)") != std::string::npos);
+    REQUIRE(lines[36].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[36].find(") foo_int:") != std::string::npos);
+    REQUIRE(lines[37].find("ResolvedBinaryOperator: '-'") != std::string::npos);
+    REQUIRE(lines[38].find("i32(16)") != std::string::npos);
+    REQUIRE(lines[39].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[40].find("i32(20)") != std::string::npos);
+    REQUIRE(lines[41].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[42].find("i32(4)") != std::string::npos);
+    REQUIRE(lines[43].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[43].find(") foo_float:") != std::string::npos);
+    REQUIRE(lines[44].find("ResolvedBinaryOperator: '+'") != std::string::npos);
+    REQUIRE(lines[45].find("f32(23)") != std::string::npos);
+    REQUIRE(lines[46].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[47].find("f32(20)") != std::string::npos);
+    REQUIRE(lines[48].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[49].find("f32(3)") != std::string::npos);
+    REQUIRE(lines[50].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[50].find(") foo_float:") != std::string::npos);
+    REQUIRE(lines[51].find("ResolvedBinaryOperator: '-'") != std::string::npos);
+    REQUIRE(lines[52].find("ResolvedDeclRefExpr: @(") != std::string::npos);
+    REQUIRE(lines[52].find(") x:") != std::string::npos);
+    REQUIRE(lines[53].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[54].find("f32(1)") != std::string::npos);
+    REQUIRE(lines[55].find("ResolvedCallExpr: @(") != std::string::npos);
+    REQUIRE(lines[55].find(") foo_float:") != std::string::npos);
+    REQUIRE(lines[56].find("ResolvedBinaryOperator: '-'") != std::string::npos);
+    REQUIRE(lines[57].find("ResolvedNumberLiteral:") != std::string::npos);
+    REQUIRE(lines[58].find("f32(1)") != std::string::npos);
+    REQUIRE(lines[59].find("ResolvedDeclRefExpr: @(") != std::string::npos);
+    REQUIRE(lines[59].find(") x:") != std::string::npos);
   }
 }

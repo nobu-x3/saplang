@@ -363,12 +363,24 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
     }
   } break;
   case Type::Kind::f32: {
-    switch (current_type) { BOOL_CAST_CASE(f32) }
+    switch (current_type) {
+      BOOL_CAST_CASE(f32)
+      CAST_CASE(u8, f32)
+      CAST_CASE(u16, f32)
+      CAST_CASE(i8, f32)
+      CAST_CASE(i16, f32)
+    }
   } break;
   case Type::Kind::f64: {
     switch (current_type) {
       BOOL_CAST_CASE(f64)
       CAST_CASE(f32, f64)
+      CAST_CASE(u8, f64)
+      CAST_CASE(u16, f64)
+      CAST_CASE(u32, f64)
+      CAST_CASE(i8, f64)
+      CAST_CASE(i16, f64)
+      CAST_CASE(i32, f64)
     }
   } break;
   }
@@ -394,11 +406,13 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
     if (try_cast_expr(*binop->lhs, type, cee) &&
         try_cast_expr(*binop->rhs, type, cee)) {
       binop->type = type;
+      binop->set_constant_value(cee.evaluate(*binop));
     }
     return true;
   } else if (auto *unop = dynamic_cast<ResolvedUnaryOperator *>(&expr)) {
     if (try_cast_expr(*unop->rhs, type, cee)) {
       unop->type = type;
+      unop->set_constant_value(cee.evaluate(*unop));
     }
     return true;
   } else if (auto *number_literal =

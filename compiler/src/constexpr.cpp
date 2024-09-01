@@ -269,6 +269,15 @@ std::optional<ConstexprResult> mul(const std::optional<ConstexprResult> &lhs,
   ConstexprResult ret_res;
   if (lhs->kind == rhs->kind) {
     switch (lhs->kind) {
+    case Type::Kind::Bool: {
+      std::optional<bool> b_lhs = to_bool(lhs);
+      std::optional<bool> b_rhs = to_bool(rhs);
+      ret_res.kind = Type::Kind::Bool;
+      if (b_lhs && b_rhs) {
+        ret_res.value->b8 = *b_lhs * *b_rhs;
+      }
+      return ret_res;
+    } break;
     case Type::Kind::i8:
       return cast_up_signed(lhs->value->i8 * rhs->value->i8, Type::Kind::i8);
     case Type::Kind::i16:
@@ -356,6 +365,15 @@ std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs,
   ConstexprResult ret_res;
   if (lhs->kind == rhs->kind) {
     switch (lhs->kind) {
+    case Type::Kind::Bool: {
+      std::optional<bool> b_lhs = to_bool(lhs);
+      std::optional<bool> b_rhs = to_bool(rhs);
+      ret_res.kind = Type::Kind::Bool;
+      if (b_lhs && b_rhs) {
+        ret_res.value->b8 = *b_lhs + *b_rhs;
+      }
+      return ret_res;
+    } break;
     case Type::Kind::i8:
       return cast_up_signed(lhs->value->i8 + rhs->value->i8, Type::Kind::i8);
     case Type::Kind::i16:
@@ -443,6 +461,15 @@ std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs,
   ConstexprResult ret_res;
   if (lhs->kind == rhs->kind) {
     switch (lhs->kind) {
+    case Type::Kind::Bool: {
+      std::optional<bool> b_lhs = to_bool(lhs);
+      std::optional<bool> b_rhs = to_bool(rhs);
+      ret_res.kind = Type::Kind::Bool;
+      if (b_lhs && b_rhs) {
+        ret_res.value->b8 = *b_lhs - *b_rhs;
+      }
+      return ret_res;
+    } break;
     case Type::Kind::i8:
       return cast_up_signed(lhs->value->i8 - rhs->value->i8, Type::Kind::i8);
     case Type::Kind::i16:
