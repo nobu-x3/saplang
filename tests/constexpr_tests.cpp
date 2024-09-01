@@ -469,3 +469,24 @@ fn i32 main(i32 x) {
   REQUIRE(lines[105].find("ResolvedNumberLiteral:") != std::string::npos);
   REQUIRE(lines[106].find("u8(6)") != std::string::npos);
 }
+
+TEST_CASE("equality operators", "[constexpr]") {
+  TEST_SETUP(common + R"(
+fn i32 main(i32 x) {
+  foo_bool(2 == 2);
+  foo_bool(3 == 2);
+  foo_bool(2.3 == 2);
+  foo_bool(2 == 2.3);
+  foo_bool(x == 2);
+  foo_bool(2 == x);
+  foo_bool(2 != 2);
+  foo_bool(3 != 2);
+  foo_bool(2.3 != 2);
+  foo_bool(2 != 2.3);
+  foo_bool(x != 2);
+  foo_bool(2 != x);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  REQUIRE(output_string == "");
+}
