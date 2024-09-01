@@ -5,11 +5,37 @@
 #include <iostream>
 
 namespace saplang {
+
+// Type Type::get_builtin_type(Kind kind) {
+//   static std::unordered_map<Kind, Type> s_TypeMap{
+//       {Kind::Bool, {Type::builtin_bool()}},
+//       {Kind::Void, {Type::builtin_void()}},
+//       {Kind::i8, {Type::builtin_i8()}},
+//       {Kind::u8, {Type::builtin_u8()}},
+//       {Kind::i16, {Type::builtin_i16()}},
+//       {Kind::u16, {Type::builtin_u16()}},
+//       {Kind::i32, {Type::builtin_i32()}},
+//       {Kind::u32, {Type::builtin_u32()}},
+//       {Kind::i64, {Type::builtin_i64()}},
+//       {Kind::u64, {Type::builtin_u64()}},
+//       {Kind::f32, {Type::builtin_f32()}},
+//       {Kind::f64, {Type::builtin_f64()}},
+//       // {Kind::Bool, {Kind::Bool, "bool"}}, {Kind::Void, {Kind::Void, "void"}},
+//       // {Kind::i8, {Kind::i8, "i8"}},       {Kind::u8, {Kind::u8, "u8"}},
+//       // {Kind::i16, {Kind::i16, "i16"}},    {Kind::u16, {Kind::u16, "u16"}},
+//       // {Kind::i32, {Kind::i32, "i32"}},    {Kind::u32, {Kind::u32, "u32"}},
+//       // {Kind::i64, {Kind::i64, "i64"}},    {Kind::u64, {Kind::u64, "u64"}},
+//       // {Kind::f32, {Kind::f32, "f32"}},    {Kind::f64, {Kind::f64, "f64"}},
+//   };
+//   return s_TypeMap[kind];
+// }
+
 void dump_constant(std::stringstream &stream, size_t indent_level, Value value,
                    Type::Kind kind) {
   switch (kind) {
   case Type::Kind::i8:
-    stream << indent(indent_level + 1) << "i8(" << value.i8 << ")";
+    stream << indent(indent_level + 1) << "i8(" << static_cast<int>(value.i8)
+           << ")";
     break;
   case Type::Kind::i16:
     stream << indent(indent_level + 1) << "i16(" << value.i16 << ")";
@@ -21,7 +47,8 @@ void dump_constant(std::stringstream &stream, size_t indent_level, Value value,
     stream << indent(indent_level + 1) << "i64(" << value.i64 << ")";
     break;
   case Type::Kind::u8:
-    stream << indent(indent_level + 1) << "u8(" << value.u8 << ")";
+    stream << indent(indent_level + 1) << "u8("
+           << static_cast<unsigned int>(value.u8) << ")";
     break;
   case Type::Kind::u16:
     stream << indent(indent_level + 1) << "u16(" << value.u16 << ")";

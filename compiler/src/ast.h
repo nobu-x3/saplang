@@ -38,6 +38,11 @@ struct Type {
   Kind kind;
   std::string name;
 
+  Type(const Type &) = default;
+  Type &operator=(const Type &) = default;
+  Type(Type &&) noexcept = default;
+  Type &operator=(Type &&) noexcept = default;
+
   static Type builtin_void() { return {Kind::Void, "void"}; }
   static Type builtin_pointer() { return {Kind::Pointer, "*"}; }
   static Type builtin_i8() { return {Kind::i8, "i8"}; }
@@ -52,6 +57,9 @@ struct Type {
   static Type builtin_f64() { return {Kind::f64, "f64"}; }
   static Type builtin_bool() { return {Kind::Bool, "bool"}; }
   static Type custom(std::string_view name) { return {Kind::Custom, name}; }
+
+  static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
+  // static Type get_builtin_type(Kind kind);
 
 private:
   Type(Kind kind, std::string_view name) : kind(kind), name(name) {};

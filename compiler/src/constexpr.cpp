@@ -637,6 +637,57 @@ std::optional<ConstexprResult> div(const std::optional<ConstexprResult> &lhs,
   }
 }
 
+#define CMP_CASE(type)                                                         \
+  case Type::Kind::type: {                                                     \
+    if (lhs->value->type > rhs->value->type)                                   \
+      return 1;                                                                \
+    else if (lhs->value->type < rhs->value->type)                              \
+      return -1;                                                               \
+    else                                                                       \
+      return 0;                                                                \
+  } break;
+
+int cmp(long lhs, long rhs) {
+  if (lhs > rhs)
+    return 1;
+  else if (lhs < rhs)
+    return -1;
+  else
+    return 0;
+};
+
+// returns 1 if lhs > rhs, -1 if lhs < rhs, 0 if lhs == rhs
+std::optional<int> compare(const std::optional<ConstexprResult> &lhs,
+                           const std::optional<ConstexprResult> &rhs) {
+
+  if (!lhs || !lhs->value || !rhs || !rhs->value)
+    return std::nullopt;
+  if (lhs->kind == rhs->kind) {
+    switch (lhs->kind) {
+    case Type::Kind::Bool: {
+      if (lhs->value->b8 > rhs->value->b8)
+        return 1;
+      else if (lhs->value->b8 < rhs->value->b8)
+        return -1;
+      else
+        return 0;
+    } break;
+      CMP_CASE(u8)
+      CMP_CASE(u16)
+      CMP_CASE(u32)
+      CMP_CASE(u64)
+      CMP_CASE(i8)
+      CMP_CASE(i16)
+      CMP_CASE(i32)
+      CMP_CASE(i64)
+      CMP_CASE(f32)
+      CMP_CASE(f64)
+    }
+  }
+  return cmp(get_value(*lhs->value, lhs->kind),
+             get_value(*rhs->value, rhs->kind));
+}
+
 std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
     const ResolvedBinaryOperator &binop) {
   std::optional<ConstexprResult> lhs = evaluate(*binop.lhs);
@@ -686,12 +737,40 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
     return sub(lhs, rhs);
   case TokenKind::Slash:
     return div(lhs, rhs);
+  case TokenKind::LessThan: {
+    std::optional<int> result = compare(lhs, rhs);
+    if (!result)
+      return std::nullopt;
+    return_value.kind = Type::Kind::Bool;
+    return_value.value->b8 = *result == -1;
+  } break;
+  case TokenKind::LessThanOrEqual: {
+    std::optional<int> result = compare(lhs, rhs);
+    if (!result)
+      return std::nullopt;
+    return_value.kind = Type::Kind::Bool;
+    return_value.value->b8 = *result == -1 || *result == 0;
+  } break;
+  case TokenKind::GreaterThan: {
+    std::optional<int> result = compare(lhs, rhs);
+    if (!result)
+      return std::nullopt;
+    return_value.kind = Type::Kind::Bool;
+    return_value.value->b8 = *result == 1;
+  } break;
+  case TokenKind::GreaterThanOrEqual: {
+    std::optional<int> result = compare(lhs, rhs);
+    if (!result)
+      return std::nullopt;
+    return_value.kind = Type::Kind::Bool;
+    return_value.value->b8 = *result == 1 || *result == 0;
+  } break;
   default:
     assert(binop.op == TokenKind::EqualEqual && "unexpected binary operator");
     return_value.kind = Type::Kind::Bool;
     return_value.value->b8 = lhs->value->b8 == rhs->value->b8;
-    return return_value;
   }
+  return return_value;
 }
 
 std::optional<ConstexprResult>

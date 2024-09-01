@@ -260,7 +260,7 @@ void apply_unary_op_to_num_literal(ResolvedUnaryOperator *unop) {
 }
 
 Value construct_value(Type::Kind current_type, Type::Kind new_type,
-                      Value *old_value) {
+                      Value *old_value, std::string &errmsg) {
 
 #define CAST_CASE(from, to)                                                    \
   case Type::Kind::from:                                                       \
@@ -272,10 +272,14 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
     ret_val.to = old_value->b8 ? 1 : 0;                                        \
     break;
 
+  if (new_type == current_type)
+    return *old_value;
   Value ret_val;
   switch (new_type) {
   case Type::Kind::Bool: {
     switch (current_type) {
+    case Type::Kind::Bool:
+      ret_val.b8 = old_value->b8;
     case Type::Kind::i8:
       ret_val.b8 = old_value->i8 > 0 ? true : false;
       break;
@@ -309,13 +313,25 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
     }
   } break;
   case Type::Kind::i8: {
-    switch (current_type) { BOOL_CAST_CASE(i8) }
+    switch (current_type) {
+      BOOL_CAST_CASE(i8)
+    case Type::Kind::u8: {
+      if (old_value->u8 < INT8_MAX)
+        errmsg = "implicitly casting u8 to i8 with overflow";
+      ret_val.i8 = static_cast<signed char>(old_value->u8);
+    } break;
+    }
   } break;
   case Type::Kind::i16: {
     switch (current_type) {
       BOOL_CAST_CASE(i16)
       CAST_CASE(i8, i16)
       CAST_CASE(u8, i16)
+    case Type::Kind::u16: {
+      if (old_value->u16 < INT16_MAX)
+        errmsg = "casting u16 to i16 with overflow";
+      ret_val.i16 = static_cast<short>(old_value->u16);
+    } break;
     }
   } break;
   case Type::Kind::i32: {
@@ -325,6 +341,11 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       CAST_CASE(i16, i32)
       CAST_CASE(u8, i32)
       CAST_CASE(u16, i32)
+    case Type::Kind::u32: {
+      if (old_value->u32 < INT32_MAX)
+        errmsg = "casting u32 to i32 with overflow";
+      ret_val.i32 = static_cast<int>(old_value->u32);
+    } break;
     }
   } break;
   case Type::Kind::i64: {
@@ -336,15 +357,32 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       CAST_CASE(u8, i64)
       CAST_CASE(u16, i64)
       CAST_CASE(u32, i64)
+    case Type::Kind::u64: {
+      if (old_value->u64 < INT64_MAX)
+        errmsg = "casting u64 to i64 with overflow";
+      ret_val.i64 = static_cast<long>(old_value->u64);
+    } break;
     }
   } break;
   case Type::Kind::u8: {
-    switch (current_type) { BOOL_CAST_CASE(u8) }
+    switch (current_type) {
+      BOOL_CAST_CASE(u8)
+    case Type::Kind::i8: {
+      if (old_value->i8 < 0)
+        errmsg = "implicitly casting i8 to u8 with underflow";
+      ret_val.u8 = static_cast<unsigned char>(old_value->i8);
+    } break;
+    }
   } break;
   case Type::Kind::u16: {
     switch (current_type) {
       BOOL_CAST_CASE(u16)
       CAST_CASE(u8, u16)
+    case Type::Kind::i16: {
+      if (old_value->i16 < 0)
+        errmsg = "implicitly casting i16 to u16 with underflow";
+      ret_val.u16 = static_cast<unsigned short>(old_value->i16);
+    } break;
     }
   } break;
   case Type::Kind::u32: {
@@ -352,6 +390,11 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       BOOL_CAST_CASE(u32)
       CAST_CASE(u8, u32)
       CAST_CASE(u16, u32)
+    case Type::Kind::i32: {
+      if (old_value->i32 < 0)
+        errmsg = "implicitly casting i32 to u32 with underflow";
+      ret_val.u32 = static_cast<unsigned int>(old_value->i32);
+    } break;
     }
   } break;
   case Type::Kind::u64: {
@@ -360,6 +403,11 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       CAST_CASE(u8, u64)
       CAST_CASE(u16, u64)
       CAST_CASE(u32, u64)
+    case Type::Kind::i64: {
+      if (old_value->i64 < 0)
+        errmsg = "implicitly casting i64 to u64 with underflow";
+      ret_val.u64 = static_cast<unsigned long>(old_value->i64);
+    } break;
     }
   } break;
   case Type::Kind::f32: {
@@ -393,18 +441,35 @@ bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
       g_AssociatedNumberLiteralSizes.count(cast_to) &&
       g_AssociatedNumberLiteralSizes[number_literal->type.kind] <=
           g_AssociatedNumberLiteralSizes[cast_to]) {
+    std::string errmsg;
     number_literal->value = construct_value(number_literal->type.kind, cast_to,
-                                            &number_literal->value);
+                                            &number_literal->value, errmsg);
+    if (!errmsg.empty())
+      report(number_literal->location, errmsg);
     return true;
   }
+  return false;
+}
+
+bool is_comp_op(TokenKind op) {
+  if (op == TokenKind::LessThan || op == TokenKind::LessThanOrEqual ||
+      op == TokenKind::GreaterThan || op == TokenKind::GreaterThanOrEqual ||
+      op == TokenKind::ExclamationEqual || op == TokenKind::EqualEqual)
+    return true;
   return false;
 }
 
 bool try_cast_expr(ResolvedExpr &expr, const Type &type,
                    ConstantExpressionEvaluator &cee) {
   if (auto *binop = dynamic_cast<ResolvedBinaryOperator *>(&expr)) {
-    if (try_cast_expr(*binop->lhs, type, cee) &&
-        try_cast_expr(*binop->rhs, type, cee)) {
+    Type max_type = type;
+    bool b_is_comp_op = is_comp_op(binop->op);
+    if (b_is_comp_op)
+      max_type = binop->lhs->type.kind > binop->rhs->type.kind
+                     ? binop->lhs->type
+                     : binop->rhs->type;
+    if (try_cast_expr(*binop->lhs, max_type, cee) &&
+        try_cast_expr(*binop->rhs, max_type, cee)) {
       binop->type = type;
       binop->set_constant_value(cee.evaluate(*binop));
     }
