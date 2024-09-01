@@ -765,10 +765,20 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
     return_value.kind = Type::Kind::Bool;
     return_value.value->b8 = *result == 1 || *result == 0;
   } break;
+  case TokenKind::ExclamationEqual: {
+    std::optional<int> result = compare(lhs, rhs);
+    if (!result)
+      return std::nullopt;
+    return_value.kind = Type::Kind::Bool;
+    return_value.value->b8 = *result != 0;
+  } break;
   default:
     assert(binop.op == TokenKind::EqualEqual && "unexpected binary operator");
+    std::optional<int> result = compare(lhs, rhs);
+    if (!result)
+      return std::nullopt;
     return_value.kind = Type::Kind::Bool;
-    return_value.value->b8 = lhs->value->b8 == rhs->value->b8;
+    return_value.value->b8 = *result == 0;
   }
   return return_value;
 }
