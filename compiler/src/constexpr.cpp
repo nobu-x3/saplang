@@ -694,13 +694,18 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
   ConstexprResult return_value;
   if (binop.op == TokenKind::PipePipe) {
     return_value.kind = Type::Kind::Bool;
-    if (to_bool(lhs).value_or(false)) {
+    std::optional val_lhs = to_bool(lhs);
+    if (val_lhs.value_or(false)) {
       return_value.value->b8 = true;
       return return_value;
     }
-    auto val = to_bool(evaluate(*binop.rhs));
-    if (val) {
-      return_value.value->b8 = *val;
+    std::optional<bool> val_rhs = to_bool(evaluate(*binop.rhs));
+    if (val_rhs.value_or(false)) {
+      return_value.value->b8 = true;
+      return return_value;
+    }
+    if(val_lhs.has_value() && val_rhs.has_value()) {
+      return_value.value->b8 = *val_lhs || *val_rhs;
       return return_value;
     }
     return std::nullopt;
@@ -713,14 +718,17 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
     }
     std::optional<ConstexprResult> rhs = evaluate(*binop.rhs);
     if (!lhs || !lhs->value) {
-      if (!rhs || rhs->value) {
-        return rhs;
+      std::optional<bool> maybe_rhs = to_bool(rhs);
+      if (!to_bool(rhs).value_or(true)) {
+        return_value.value->b8 = false;
+        return return_value;
       }
       return std::nullopt;
     }
     std::optional<bool> maybe_val = to_bool(rhs);
-    if (maybe_val)
-      return_value.value->b8 = *maybe_val;
+    if (!maybe_val)
+      return std::nullopt;
+    return_value.value->b8 = *maybe_val;
     return return_value;
   }
   if (!lhs)
