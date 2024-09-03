@@ -211,6 +211,20 @@ void ResolvedBlock::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void ResolvedIfStmt::dump_to_stream(std::stringstream &stream,
+                                   size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedIfStmt\n";
+  condition->dump_to_stream(stream, indent_level + 1);
+
+  stream << indent(indent_level + 1) << "ResolvedIfBlock\n";
+  true_block->dump_to_stream(stream, indent_level + 2);
+  if (false_block) {
+    stream << indent(indent_level + 1) << "ResolvedElseBlock\n";
+    false_block->dump_to_stream(stream, indent_level + 2);
+  }
+
+}
+
 void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,
                                        size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedParamDecl: @(" << this << ") "

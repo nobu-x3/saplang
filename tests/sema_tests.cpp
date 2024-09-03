@@ -237,6 +237,23 @@ fn i32 main(bool x) {
 }
 )");
     REQUIRE(error_stream.str() == "");
-    REQUIRE(output_buffer.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 8;
+    REQUIRE(lines_it->find("ResolvedIfStmt") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos)
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedElseBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfStmt") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedCallExpr: @(") != std::string::npos)
+    REQUIRE(lines_it->find(") foo:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos)
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedElseBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
   }
 }

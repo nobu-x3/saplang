@@ -249,6 +249,22 @@ struct ResolvedBlock : public IDumpable {
   DUMP_IMPL
 };
 
+struct ResolvedIfStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedStmt> condition;
+  std::unique_ptr<ResolvedBlock> true_block;
+  std::unique_ptr<ResolvedBlock> false_block;
+
+  inline ResolvedIfStmt(SourceLocation loc,
+                        std::unique_ptr<ResolvedExpr> condition,
+                        std::unique_ptr<ResolvedBlock> true_block,
+                        std::unique_ptr<ResolvedBlock> false_block)
+      : ResolvedStmt(loc), condition(std::move(condition)),
+        true_block(std::move(true_block)), false_block(std::move(false_block)) {
+  }
+
+  DUMP_IMPL
+};
+
 struct ResolvedDecl : public IDumpable {
   SourceLocation location;
   std::string id;

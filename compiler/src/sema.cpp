@@ -140,11 +140,34 @@ std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block) {
 std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
   if (auto *expr = dynamic_cast<const Expr *>(&stmt))
     return resolve_expr(*expr);
-  if (auto *return_stmt = dynamic_cast<const ReturnStmt *>(&stmt)) {
+  if (auto *return_stmt = dynamic_cast<const ReturnStmt *>(&stmt))
     return resolve_return_stmt(*return_stmt);
-  }
+  if (auto *if_stmt = dynamic_cast<const IfStmt *>(&stmt))
+    return resolve_if_stmt(*if_stmt);
   assert(false && "unexpected expression.");
   return nullptr;
+}
+
+std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
+  std::unique_ptr<ResolvedExpr> condition = resolve_expr(*stmt.condition);
+  if (!condition)
+    return nullptr;
+  if (condition->type.kind != Type::Kind::Bool)
+    return report(condition->location,
+                  "condition is expected to evaluate to bool.");
+  std::unique_ptr<ResolvedBlock> true_block = resolve_block(*stmt.true_block);
+  if (!true_block)
+    return nullptr;
+  std::unique_ptr<ResolvedBlock> false_block;
+  if (stmt.false_block) {
+    false_block = resolve_block(*stmt.false_block);
+    if (!false_block)
+      return nullptr;
+  }
+  condition->set_constant_value(m_Cee.evaluate(*condition));
+  return std::make_unique<ResolvedIfStmt>(stmt.location, std::move(condition),
+                                          std::move(true_block),
+                                          std::move(false_block));
 }
 
 std::unique_ptr<ResolvedGroupingExpr>

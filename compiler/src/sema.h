@@ -57,6 +57,8 @@ private:
 
   std::unique_ptr<ResolvedCallExpr> resolve_call_expr(const CallExpr &call);
 
+  std::unique_ptr<ResolvedIfStmt> resolve_if_stmt(const IfStmt &stmt);
+
 private:
   std::vector<std::unique_ptr<FunctionDecl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};
