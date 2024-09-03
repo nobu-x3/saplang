@@ -1,27 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
-
-#include <sstream>
-#include <string>
-
-#include <codegen.h>
-#include <lexer.h>
-#include <parser.h>
-#include <sema.h>
-#include <utils.h>
-
-#include <llvm/Support/raw_ostream.h>
-
-std::vector<std::string> break_by_line(const std::string &input) {
-  std::stringstream buffer{input};
-  std::vector<std::string> output{};
-  output.reserve(32);
-  std::string line;
-  while (std::getline(buffer, line, '\n')) {
-    output.push_back(line);
-    line.clear();
-  }
-  return output;
-}
+#include "test_utils.h"
 
 std::string common = R"(
 fn void foo_int(i32 x) {}
@@ -75,9 +52,6 @@ fn void foo_bool(bool x) {}
   auto lines = break_by_line(output_string);                                   \
   auto lines_it = lines.begin() + 15;
 
-#define NEXT_REQUIRE(it, expr)                                                 \
-  ++it;                                                                        \
-  REQUIRE(expr);
 
 TEST_CASE("args", "[constexpr]") {
   TEST_SETUP(R"(

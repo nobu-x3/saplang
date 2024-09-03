@@ -1,11 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
-
-#include <sstream>
-#include <string>
-
-#include <lexer.h>
-#include <parser.h>
-#include <utils.h>
+#include "test_utils.h"
 
 #define TEST_SETUP(file_contents)                                              \
   saplang::clear_error_stream();                                               \

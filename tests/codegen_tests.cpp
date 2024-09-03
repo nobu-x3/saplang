@@ -1,23 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
-
-#include <sstream>
-#include <string>
-
-#include <codegen.h>
-#include <lexer.h>
-#include <parser.h>
-#include <sema.h>
-#include <utils.h>
-
-#include <llvm/Support/raw_ostream.h>
-
-std::string remove_whitespace(std::string_view input) {
-  std::string output_string{input};
-  output_string.erase(
-      std::remove_if(output_string.begin(), output_string.end(), ::isspace),
-      output_string.end());
-  return output_string;
-}
+#include "test_utils.h"
 
 #define TEST_SETUP(file_contents)                                              \
   saplang::clear_error_stream();                                               \
