@@ -36,7 +36,6 @@ inline std::string indent(size_t level) { return std::string(level * 2, ' '); }
 
 std::nullptr_t report(SourceLocation location, std::string_view msg,
                       bool is_warning = false);
-
 template <typename Base, typename Ty> class ConstantValueContainer {
 public:
   inline void set_constant_value(std::optional<Ty> val) {
