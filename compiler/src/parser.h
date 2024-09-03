@@ -46,6 +46,8 @@ private:
   using ParameterList = std::vector<std::unique_ptr<ParamDecl>>;
   std::optional<ParameterList> parse_parameter_list();
 
+  std::unique_ptr<IfStmt> parse_if_stmt();
+
 private:
   Lexer *m_Lexer;
   Token m_NextToken;

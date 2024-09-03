@@ -1,11 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
-
-#include <sstream>
-#include <string>
-
-#include <lexer.h>
-#include <parser.h>
-#include <utils.h>
+#include "test_utils.h"
 
 #define TEST_SETUP(file_contents)                                              \
   saplang::clear_error_stream();                                               \
@@ -721,5 +714,143 @@ fn void main() {
 )");
       REQUIRE(error_stream.str() == "");
     }
+  }
+}
+
+TEST_CASE("if statements", "[parser]") {
+  SECTION("missing condition") {
+    TEST_SETUP(R"(
+fn i32 main() {
+  if {}
+}
+)");
+    REQUIRE(error_stream.str() == "test:3:6 error: expected expression.\n");
+  }
+  SECTION("missing body") {
+    TEST_SETUP(R"(
+fn i32 main() {
+  if (false) ({}
+
+  if(false) {}
+  else ({}
+
+  if false {}
+  else if {}
+  else {}
+}
+)");
+    REQUIRE(error_stream.str() == R"(test:3:14 error: expected '{' at the beginning of a block.
+test:5:3 error: expected 'else' block.
+test:9:11 error: expected expression.
+test:10:3 error: expected expression.
+)");
+  }
+  SECTION("single if"){
+    TEST_SETUP(R"(
+fn i32 main() {
+  if (false) {}
+
+  if false {}
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: main:i32
+  Block
+    IfStmt
+      GroupingExpr:
+        NumberLiteral: bool(false)
+      IfBlock
+        Block
+    IfStmt
+      NumberLiteral: bool(false)
+      IfBlock
+        Block
+)");
+  }
+  SECTION("single if else"){
+    TEST_SETUP(R"(
+fn i32 main() {
+  if (false) {}
+  else {}
+
+  if false {}
+  else {}
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: main:i32
+  Block
+    IfStmt
+      GroupingExpr:
+        NumberLiteral: bool(false)
+      IfBlock
+        Block
+      ElseBlock
+        Block
+    IfStmt
+      NumberLiteral: bool(false)
+      IfBlock
+        Block
+      ElseBlock
+        Block
+)");
+  }
+  SECTION("if else if"){
+    TEST_SETUP(R"(
+fn i32 main() {
+  if (false) {}
+  else if (true) {}
+  else if(false) {}
+  else {}
+
+  if false {}
+  else if true {}
+  else if false {}
+  else {}
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    REQUIRE(output_buffer.str() == R"(FunctionDecl: main:i32
+  Block
+    IfStmt
+      GroupingExpr:
+        NumberLiteral: bool(false)
+      IfBlock
+        Block
+      ElseBlock
+        Block
+          IfStmt
+            GroupingExpr:
+              NumberLiteral: bool(true)
+            IfBlock
+              Block
+            ElseBlock
+              Block
+                IfStmt
+                  GroupingExpr:
+                    NumberLiteral: bool(false)
+                  IfBlock
+                    Block
+                  ElseBlock
+                    Block
+    IfStmt
+      NumberLiteral: bool(false)
+      IfBlock
+        Block
+      ElseBlock
+        Block
+          IfStmt
+            NumberLiteral: bool(true)
+            IfBlock
+              Block
+            ElseBlock
+              Block
+                IfStmt
+                  NumberLiteral: bool(false)
+                  IfBlock
+                    Block
+                  ElseBlock
+                    Block
+)");
   }
 }

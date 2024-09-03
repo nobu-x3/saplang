@@ -26,8 +26,8 @@ struct Type {
     f32,
     f64,
     Custom,
-    INTEGERS_START = i8,
-    INTEGERS_END = u64,
+    INTEGERS_START = u8,
+    INTEGERS_END = i64,
     SIGNED_INT_START = i8,
     SIGNED_INT_END = i64,
     UNSIGNED_INT_START = u8,
@@ -185,6 +185,21 @@ struct Block : public IDumpable {
   DUMP_IMPL
 };
 
+struct IfStmt : public Stmt {
+  std::unique_ptr<Expr> condition;
+  std::unique_ptr<Block> true_block;
+  std::unique_ptr<Block> false_block;
+
+  inline IfStmt(SourceLocation location, std::unique_ptr<Expr> cond,
+                std::unique_ptr<Block> true_block,
+                std::unique_ptr<Block> false_block)
+      : Stmt(location), condition(std::move(cond)),
+        true_block(std::move(true_block)), false_block(std::move(false_block)) {
+  }
+
+  DUMP_IMPL
+};
+
 struct ParamDecl : public Decl {
   Type type;
   inline ParamDecl(SourceLocation loc, std::string id, Type type)
@@ -230,6 +245,22 @@ struct ResolvedBlock : public IDumpable {
       : location(loc), statements(std::move(statements)) {}
 
   virtual ~ResolvedBlock() = default;
+
+  DUMP_IMPL
+};
+
+struct ResolvedIfStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedExpr> condition;
+  std::unique_ptr<ResolvedBlock> true_block;
+  std::unique_ptr<ResolvedBlock> false_block;
+
+  inline ResolvedIfStmt(SourceLocation loc,
+                        std::unique_ptr<ResolvedExpr> condition,
+                        std::unique_ptr<ResolvedBlock> true_block,
+                        std::unique_ptr<ResolvedBlock> false_block)
+      : ResolvedStmt(loc), condition(std::move(condition)),
+        true_block(std::move(true_block)), false_block(std::move(false_block)) {
+  }
 
   DUMP_IMPL
 };

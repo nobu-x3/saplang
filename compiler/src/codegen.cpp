@@ -130,13 +130,38 @@ void Codegen::gen_block(const ResolvedBlock &body) {
 }
 
 llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt) {
-  if (auto *expr = dynamic_cast<const ResolvedExpr *>(&stmt)) {
+  if (auto *expr = dynamic_cast<const ResolvedExpr *>(&stmt))
     return gen_expr(*expr);
-  }
-  if (auto *return_stmt = dynamic_cast<const ResolvedReturnStmt *>(&stmt)) {
+  if (auto *ifstmt = dynamic_cast<const ResolvedIfStmt *>(&stmt))
+    return gen_if_stmt(*ifstmt);
+  if (auto *return_stmt = dynamic_cast<const ResolvedReturnStmt *>(&stmt))
     return gen_return_stmt(*return_stmt);
-  }
   llvm_unreachable("unknown statememt.");
+  return nullptr;
+}
+
+llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt) {
+  llvm::Function* function = get_current_function();
+  auto* true_bb = llvm::BasicBlock::Create(m_Context, "if.true");
+  auto* exit_bb = llvm::BasicBlock::Create(m_Context, "if.exit");
+  auto* else_bb = exit_bb;
+  if(stmt.false_block){
+    else_bb = llvm::BasicBlock::Create(m_Context, "if.false");
+  }
+  llvm::Value* cond = gen_expr(*stmt.condition);
+  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, cond), true_bb, else_bb);
+  true_bb->insertInto(function);
+  m_Builder.SetInsertPoint(true_bb);
+  gen_block(*stmt.true_block);
+  m_Builder.CreateBr(exit_bb);
+  if(stmt.false_block) {
+    else_bb->insertInto(function);
+    m_Builder.SetInsertPoint(else_bb);
+    gen_block(*stmt.false_block);
+    m_Builder.CreateBr(exit_bb);
+  }
+  exit_bb->insertInto(function);
+  m_Builder.SetInsertPoint(exit_bb);
   return nullptr;
 }
 

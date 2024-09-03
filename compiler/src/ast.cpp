@@ -20,7 +20,8 @@ namespace saplang {
 //       {Kind::u64, {Type::builtin_u64()}},
 //       {Kind::f32, {Type::builtin_f32()}},
 //       {Kind::f64, {Type::builtin_f64()}},
-//       // {Kind::Bool, {Kind::Bool, "bool"}}, {Kind::Void, {Kind::Void, "void"}},
+//       // {Kind::Bool, {Kind::Bool, "bool"}}, {Kind::Void, {Kind::Void,
+//       "void"}},
 //       // {Kind::i8, {Kind::i8, "i8"}},       {Kind::u8, {Kind::u8, "u8"}},
 //       // {Kind::i16, {Kind::i16, "i16"}},    {Kind::u16, {Kind::u16, "u16"}},
 //       // {Kind::i32, {Kind::i32, "i32"}},    {Kind::u32, {Kind::u32, "u32"}},
@@ -79,6 +80,19 @@ void Block::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "Block\n";
   for (auto &&stmt : statements) {
     stmt->dump_to_stream(stream, indent_level + 1);
+  }
+}
+
+void IfStmt::dump_to_stream(std::stringstream &stream,
+                            size_t indent_level) const {
+  stream << indent(indent_level) << "IfStmt\n";
+  condition->dump_to_stream(stream, indent_level + 1);
+
+  stream << indent(indent_level + 1) << "IfBlock\n";
+  true_block->dump_to_stream(stream, indent_level + 2);
+  if (false_block) {
+    stream << indent(indent_level + 1) << "ElseBlock\n";
+    false_block->dump_to_stream(stream, indent_level + 2);
   }
 }
 
@@ -195,6 +209,20 @@ void ResolvedBlock::dump_to_stream(std::stringstream &stream,
   for (auto &&statement : statements) {
     statement->dump_to_stream(stream, indent_level + 1);
   }
+}
+
+void ResolvedIfStmt::dump_to_stream(std::stringstream &stream,
+                                   size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedIfStmt\n";
+  condition->dump_to_stream(stream, indent_level + 1);
+
+  stream << indent(indent_level + 1) << "ResolvedIfBlock\n";
+  true_block->dump_to_stream(stream, indent_level + 2);
+  if (false_block) {
+    stream << indent(indent_level + 1) << "ResolvedElseBlock\n";
+    false_block->dump_to_stream(stream, indent_level + 2);
+  }
+
 }
 
 void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,

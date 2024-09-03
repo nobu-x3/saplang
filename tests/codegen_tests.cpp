@@ -1,23 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
-
-#include <sstream>
-#include <string>
-
-#include <codegen.h>
-#include <lexer.h>
-#include <parser.h>
-#include <sema.h>
-#include <utils.h>
-
-#include <llvm/Support/raw_ostream.h>
-
-std::string remove_whitespace(std::string_view input) {
-  std::string output_string{input};
-  output_string.erase(
-      std::remove_if(output_string.begin(), output_string.end(), ::isspace),
-      output_string.end());
-  return output_string;
-}
+#include "test_utils.h"
 
 #define TEST_SETUP(file_contents)                                              \
   saplang::clear_error_stream();                                               \
@@ -531,4 +512,51 @@ and.lhs.true:                                     ; preds = %or.lhs.false
   uselistorder ptr @truef, { 1, 0 })"));
     REQUIRE(error_stream.str() == "");
   }
+}
+
+TEST_CASE("if statement, binop condition") {
+  TEST_SETUP(R"(
+fn void foo(i32 x) {
+  if x == 1 || x == 2 && x > 3 {
+  }
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 3;
+  REQUIRE(lines_it->find("define void @foo(i32 %x) {") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("entry:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%x1 = alloca i32, align 4") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("store i32 %x, ptr %x1, align 4") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%0 = load i32, ptr %x1, align 4") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%1 = icmp eq i32 %0, 1") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%to.bool = icmp ne i1 %1, false") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br i1 %to.bool, label %or.merge, label %or.rhs") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("or.rhs") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %entry") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%2 = load i32, ptr %x1, align 4") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%3 = icmp eq i32 %2, 2") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%to.bool2 = icmp ne i1 %3, false") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br i1 %to.bool2, label %and.rhs, label %and.merge") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("or.merge") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %and.merge, %entry") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%4 = phi i1 [ %7, %and.merge ], [ true, %entry ]") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br i1 %4, label %if.true, label %if.exit") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("and.rhs") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %or.rhs") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%5 = load i32, ptr %x1, align 4") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%6 = icmp sgt i32 %5, 3") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%to.bool3 = icmp ne i1 %6, false") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br label %and.merge") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("and.merge") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %and.rhs, %or.rhs") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%7 = phi i1 [ %to.bool3, %and.rhs ], [ false, %or.rhs ]") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br label %or.merge") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("if.true") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %or.merge") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br label %if.exit") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("if.exit") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %if.true, %or.merge") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ret void") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("}") != std::string::npos);
 }

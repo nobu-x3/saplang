@@ -1,12 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
-
-#include <sstream>
-#include <string>
-
-#include <lexer.h>
-#include <parser.h>
-#include <sema.h>
-#include <utils.h>
+#include "test_utils.h"
 
 #define TEST_SETUP(file_contents)                                              \
   saplang::clear_error_stream();                                               \
@@ -205,5 +197,63 @@ fn i32 main() {
 }
 )");
     REQUIRE(error_stream.str() == "");
+  }
+}
+
+TEST_CASE("if statements", "[sema]") {
+  SECTION("non-bool if condition") {
+    TEST_SETUP(R"(
+fn void foo() {}
+
+fn i32 main() {
+  if foo() {}
+}
+)");
+    REQUIRE(
+        error_stream.str() ==
+        "sema_test:5:9 error: condition is expected to evaluate to bool.\n");
+  }
+  SECTION("non-bool else if condition") {
+    TEST_SETUP(R"(
+fn void foo() {}
+
+fn i32 main(bool x) {
+  if x {}
+  else if foo() {}
+}
+)");
+    REQUIRE(
+        error_stream.str() ==
+        "sema_test:6:14 error: condition is expected to evaluate to bool.\n");
+  }
+  SECTION("valid if else if statement") {
+    TEST_SETUP(R"(
+fn bool foo(bool x) { return x; }
+
+fn i32 main(bool x) {
+  if x {}
+  else if foo(x) {}
+  else {}
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 8;
+    REQUIRE(lines_it->find("ResolvedIfStmt") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos)
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedElseBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfStmt") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedCallExpr: @(") != std::string::npos)
+    REQUIRE(lines_it->find(") foo:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos)
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedElseBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
   }
 }
