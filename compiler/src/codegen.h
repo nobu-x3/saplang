@@ -23,6 +23,7 @@ private:
                                     std::string_view id);
   void gen_block(const ResolvedBlock &body);
   llvm::Value *gen_stmt(const ResolvedStmt &stmt);
+  llvm::Value *gen_if_stmt(const ResolvedIfStmt &stmt);
   llvm::Value *gen_return_stmt(const ResolvedReturnStmt &stmt);
   llvm::Value *gen_expr(const ResolvedExpr &expr);
   llvm::Value *gen_binary_op(const ResolvedBinaryOperator &op);

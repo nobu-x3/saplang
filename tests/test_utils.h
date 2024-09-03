@@ -31,7 +31,8 @@ inline std::vector<std::string> break_by_line(const std::string &input) {
   output.reserve(32);
   std::string line;
   while (std::getline(buffer, line, '\n')) {
-    output.push_back(line);
+    if(!line.empty())
+      output.push_back(line);
     line.clear();
   }
   return output;

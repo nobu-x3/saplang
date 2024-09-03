@@ -148,28 +148,6 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
   return nullptr;
 }
 
-std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
-  std::unique_ptr<ResolvedExpr> condition = resolve_expr(*stmt.condition);
-  if (!condition)
-    return nullptr;
-  if (condition->type.kind != Type::Kind::Bool)
-    return report(condition->location,
-                  "condition is expected to evaluate to bool.");
-  std::unique_ptr<ResolvedBlock> true_block = resolve_block(*stmt.true_block);
-  if (!true_block)
-    return nullptr;
-  std::unique_ptr<ResolvedBlock> false_block;
-  if (stmt.false_block) {
-    false_block = resolve_block(*stmt.false_block);
-    if (!false_block)
-      return nullptr;
-  }
-  condition->set_constant_value(m_Cee.evaluate(*condition));
-  return std::make_unique<ResolvedIfStmt>(stmt.location, std::move(condition),
-                                          std::move(true_block),
-                                          std::move(false_block));
-}
-
 std::unique_ptr<ResolvedGroupingExpr>
 Sema::resolve_grouping_expr(const GroupingExpr &group) {
   auto resolved_expr = resolve_expr(*group.expr);
@@ -526,6 +504,30 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
     return true;
   }
   return false;
+}
+
+std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
+  std::unique_ptr<ResolvedExpr> condition = resolve_expr(*stmt.condition);
+  if (!condition)
+    return nullptr;
+  if (condition->type.kind != Type::Kind::Bool) {
+    if (!try_cast_expr(*condition, Type::builtin_bool(), m_Cee))
+      return report(condition->location,
+                    "condition is expected to evaluate to bool.");
+  }
+  std::unique_ptr<ResolvedBlock> true_block = resolve_block(*stmt.true_block);
+  if (!true_block)
+    return nullptr;
+  std::unique_ptr<ResolvedBlock> false_block;
+  if (stmt.false_block) {
+    false_block = resolve_block(*stmt.false_block);
+    if (!false_block)
+      return nullptr;
+  }
+  condition->set_constant_value(m_Cee.evaluate(*condition));
+  return std::make_unique<ResolvedIfStmt>(stmt.location, std::move(condition),
+                                          std::move(true_block),
+                                          std::move(false_block));
 }
 
 std::unique_ptr<ResolvedReturnStmt>
