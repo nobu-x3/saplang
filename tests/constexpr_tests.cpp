@@ -52,7 +52,6 @@ fn void foo_bool(bool x) {}
   auto lines = break_by_line(output_string);                                   \
   auto lines_it = lines.begin() + 15;
 
-
 TEST_CASE("args", "[constexpr]") {
   TEST_SETUP(R"(
 fn void foo(i32 x) {}
@@ -1330,4 +1329,62 @@ fn i32 binary_lhs_known(i32 x) {
                  lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
     NEXT_REQUIRE(lines_it, lines_it->find("i32(1)") != std::string::npos);
   }
+}
+
+TEST_CASE("Constexpr if condition") {
+  TEST_SETUP(R"(
+fn i32 main(bool x) {
+if true {}
+else if x {}
+else {}
+
+if x || true {}
+else if x && false {}
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("ResolvedParamDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfStmt") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("bool(1)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedElseBlock") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfStmt") != std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedElseBlock") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfStmt") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '||'") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("bool(1)") != std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("bool(1)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedElseBlock") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfStmt") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '&&'") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("bool(0)") != std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("bool(0)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos);
 }

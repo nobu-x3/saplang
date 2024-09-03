@@ -250,7 +250,7 @@ struct ResolvedBlock : public IDumpable {
 };
 
 struct ResolvedIfStmt : public ResolvedStmt {
-  std::unique_ptr<ResolvedStmt> condition;
+  std::unique_ptr<ResolvedExpr> condition;
   std::unique_ptr<ResolvedBlock> true_block;
   std::unique_ptr<ResolvedBlock> false_block;
 
