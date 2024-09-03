@@ -219,7 +219,7 @@ void ResolvedDeclRefExpr::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedDeclRefExpr: @(" << decl << ") "
          << decl->id << ":\n";
   if (auto resolved_constant_expr = get_constant_value()) {
-    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+    dump_constant(stream, indent_level, resolved_constant_expr->value,
                   resolved_constant_expr->kind);
     stream << "\n";
   }
@@ -230,7 +230,7 @@ void ResolvedCallExpr::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedCallExpr: @(" << func_decl << ") "
          << func_decl->id << ":\n";
   if (auto resolved_constant_expr = get_constant_value()) {
-    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+    dump_constant(stream, indent_level, resolved_constant_expr->value,
                   resolved_constant_expr->kind);
     stream << "\n";
   }
@@ -328,7 +328,7 @@ void ResolvedGroupingExpr::dump_to_stream(std::stringstream &stream,
                                           size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedGroupingExpr:\n";
   if (auto resolved_constant_expr = get_constant_value()) {
-    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+    dump_constant(stream, indent_level, resolved_constant_expr->value,
                   resolved_constant_expr->kind);
     stream << "\n";
   }
@@ -340,7 +340,7 @@ void ResolvedBinaryOperator::dump_to_stream(std::stringstream &stream,
   dump_op(stream, op);
   stream << "\'\n";
   if (auto resolved_constant_expr = get_constant_value()) {
-    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+    dump_constant(stream, indent_level, resolved_constant_expr->value,
                   resolved_constant_expr->kind);
     stream << "\n";
   }
@@ -355,7 +355,7 @@ void ResolvedUnaryOperator::dump_to_stream(std::stringstream &stream,
   dump_op(stream, op);
   stream << "\'\n";
   if (auto resolved_constant_expr = get_constant_value()) {
-    dump_constant(stream, indent_level, *resolved_constant_expr->value,
+    dump_constant(stream, indent_level, resolved_constant_expr->value,
                   resolved_constant_expr->kind);
     stream << "\n";
   }

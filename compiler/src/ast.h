@@ -14,14 +14,14 @@ struct Type {
   enum class Kind {
     Void,
     Bool,
-    i8 = 2,
-    i16 = 3,
-    i32 = 4,
-    i64 = 5,
-    u8 = 6,
-    u16 = 7,
-    u32 = 8,
-    u64 = 9,
+    u8,
+    u16,
+    u32,
+    u64,
+    i8,
+    i16,
+    i32,
+    i64,
     Pointer,
     f32,
     f64,
@@ -90,7 +90,7 @@ union Value {
 };
 
 struct ConstexprResult {
-  std::optional<Value> value;
+  Value value;
   Type::Kind kind;
 };
 struct Decl : public IDumpable {

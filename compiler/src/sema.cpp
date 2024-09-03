@@ -316,7 +316,7 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
     switch (current_type) {
       BOOL_CAST_CASE(i8)
     case Type::Kind::u8: {
-      if (old_value->u8 < INT8_MAX)
+      if (old_value->u8 > INT8_MAX)
         errmsg = "implicitly casting u8 to i8 with overflow";
       ret_val.i8 = static_cast<signed char>(old_value->u8);
     } break;
@@ -328,7 +328,7 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       CAST_CASE(i8, i16)
       CAST_CASE(u8, i16)
     case Type::Kind::u16: {
-      if (old_value->u16 < INT16_MAX)
+      if (old_value->u16 > INT16_MAX)
         errmsg = "casting u16 to i16 with overflow";
       ret_val.i16 = static_cast<short>(old_value->u16);
     } break;
@@ -342,7 +342,7 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       CAST_CASE(u8, i32)
       CAST_CASE(u16, i32)
     case Type::Kind::u32: {
-      if (old_value->u32 < INT32_MAX)
+      if (old_value->u32 > INT32_MAX)
         errmsg = "casting u32 to i32 with overflow";
       ret_val.i32 = static_cast<int>(old_value->u32);
     } break;
@@ -358,7 +358,7 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       CAST_CASE(u16, i64)
       CAST_CASE(u32, i64)
     case Type::Kind::u64: {
-      if (old_value->u64 < INT64_MAX)
+      if (old_value->u64 > INT64_MAX)
         errmsg = "casting u64 to i64 with overflow";
       ret_val.i64 = static_cast<long>(old_value->u64);
     } break;
@@ -461,13 +461,17 @@ bool is_comp_op(TokenKind op) {
 
 bool try_cast_expr(ResolvedExpr &expr, const Type &type,
                    ConstantExpressionEvaluator &cee) {
-  if (auto *binop = dynamic_cast<ResolvedBinaryOperator *>(&expr)) {
-    Type max_type = type;
-    bool b_is_comp_op = is_comp_op(binop->op);
-    if (b_is_comp_op)
-      max_type = binop->lhs->type.kind > binop->rhs->type.kind
-                     ? binop->lhs->type
-                     : binop->rhs->type;
+  if (auto *groupexp = dynamic_cast<ResolvedGroupingExpr *>(&expr)) {
+    if (try_cast_expr(*groupexp->expr, type, cee)) {
+      groupexp->type = type;
+      groupexp->set_constant_value(cee.evaluate(*groupexp));
+    }
+    return true;
+  } else if (auto *binop = dynamic_cast<ResolvedBinaryOperator *>(&expr)) {
+    Type max_type = binop->lhs->type.kind > binop->rhs->type.kind
+                        ? binop->lhs->type
+                        : binop->rhs->type;
+    max_type = type.kind > max_type.kind ? type : max_type;
     if (try_cast_expr(*binop->lhs, max_type, cee) &&
         try_cast_expr(*binop->rhs, max_type, cee)) {
       binop->type = type;

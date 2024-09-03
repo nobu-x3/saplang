@@ -6,31 +6,31 @@
 
 namespace saplang {
 std::optional<bool> to_bool(std::optional<ConstexprResult> res) {
-  if (!res || !res->value)
+  if (!res)
     return std::nullopt;
   switch (res->kind) {
   case Type::Kind::Bool:
-    return res->value->b8;
+    return res->value.b8;
   case Type::Kind::u8:
-    return res->value->u8 != 0;
+    return res->value.u8 != 0;
   case Type::Kind::i8:
-    return res->value->i8 != 0;
+    return res->value.i8 != 0;
   case Type::Kind::u16:
-    return res->value->u16 != 0;
+    return res->value.u16 != 0;
   case Type::Kind::i16:
-    return res->value->i16 != 0;
+    return res->value.i16 != 0;
   case Type::Kind::u32:
-    return res->value->u32 != 0;
+    return res->value.u32 != 0;
   case Type::Kind::i32:
-    return res->value->i32 != 0;
+    return res->value.i32 != 0;
   case Type::Kind::u64:
-    return res->value->u64 != 0;
+    return res->value.u64 != 0;
   case Type::Kind::i64:
-    return res->value->i64 != 0;
+    return res->value.i64 != 0;
   case Type::Kind::f32:
-    return res->value->f32 != 0;
+    return res->value.f32 != 0;
   case Type::Kind::f64:
-    return res->value->f64 != 0;
+    return res->value.f64 != 0;
   }
   llvm_unreachable("Unknown kind");
 }
@@ -95,16 +95,16 @@ ConstexprResult cast_up_signed(long val, Type::Kind kind) {
     result.kind = kind;
     switch (kind) {
     case Type::Kind::i8:
-      result.value->i8 = static_cast<signed char>(val);
+      result.value.i8 = static_cast<signed char>(val);
       break;
     case Type::Kind::i16:
-      result.value->i16 = static_cast<short>(val);
+      result.value.i16 = static_cast<short>(val);
       break;
     case Type::Kind::i32:
-      result.value->i32 = static_cast<int>(val);
+      result.value.i32 = static_cast<int>(val);
       break;
     case Type::Kind::i64:
-      result.value->i64 = static_cast<long>(val);
+      result.value.i64 = static_cast<long>(val);
       break;
     }
     return result;
@@ -112,7 +112,7 @@ ConstexprResult cast_up_signed(long val, Type::Kind kind) {
   Type::Kind next_up_kind = (Type::Kind)((unsigned int)(kind) + 1);
   if (next_up_kind <= Type::Kind::SIGNED_INT_END)
     return cast_up_signed(val, next_up_kind);
-  result.value->i64 = val;
+  result.value.i64 = val;
   result.kind = Type::Kind::i64;
   return result;
 }
@@ -123,16 +123,27 @@ ConstexprResult cast_up_unsigned(unsigned long val, Type::Kind kind) {
     result.kind = kind;
     switch (kind) {
     case Type::Kind::u8:
-      result.value->u8 = static_cast<unsigned char>(val);
+      result.value.u8 = static_cast<unsigned char>(val);
       break;
     case Type::Kind::u16:
-      result.value->u16 = static_cast<unsigned short>(val);
+      result.value.u16 = static_cast<unsigned short>(val);
       break;
     case Type::Kind::u32:
-      result.value->i32 = static_cast<unsigned int>(val);
+      result.value.i32 = static_cast<unsigned int>(val);
       break;
     case Type::Kind::u64:
-      result.value->u64 = static_cast<unsigned long>(val);
+      result.value.u64 = static_cast<unsigned long>(val);
+      break;
+    case Type::Kind::Void:
+    case Type::Kind::Bool:
+    case Type::Kind::i8:
+    case Type::Kind::i16:
+    case Type::Kind::i32:
+    case Type::Kind::i64:
+    case Type::Kind::Pointer:
+    case Type::Kind::f32:
+    case Type::Kind::f64:
+    case Type::Kind::Custom:
       break;
     }
     return result;
@@ -140,7 +151,7 @@ ConstexprResult cast_up_unsigned(unsigned long val, Type::Kind kind) {
   Type::Kind next_up_kind = (Type::Kind)((unsigned int)(kind) + 1);
   if (next_up_kind <= Type::Kind::UNSIGNED_INT_END)
     return cast_up_signed(val, next_up_kind);
-  result.value->u64 = val;
+  result.value.u64 = val;
   result.kind = Type::Kind::u64;
   return result;
 }
@@ -151,10 +162,23 @@ ConstexprResult cast_up_float(double val, Type::Kind kind) {
     result.kind = kind;
     switch (kind) {
     case Type::Kind::f32:
-      result.value->f32 = static_cast<float>(val);
+      result.value.f32 = static_cast<float>(val);
       break;
     case Type::Kind::f64:
-      result.value->f64 = static_cast<double>(val);
+      result.value.f64 = static_cast<double>(val);
+      break;
+    case Type::Kind::Void:
+    case Type::Kind::Bool:
+    case Type::Kind::i8:
+    case Type::Kind::i16:
+    case Type::Kind::i32:
+    case Type::Kind::i64:
+    case Type::Kind::u8:
+    case Type::Kind::u16:
+    case Type::Kind::u32:
+    case Type::Kind::u64:
+    case Type::Kind::Pointer:
+    case Type::Kind::Custom:
       break;
     }
     return result;
@@ -162,7 +186,7 @@ ConstexprResult cast_up_float(double val, Type::Kind kind) {
   Type::Kind next_up_kind = (Type::Kind)((unsigned int)(kind) + 1);
   if (next_up_kind <= Type::Kind::FLOATS_END)
     return cast_up_signed(val, next_up_kind);
-  result.value->f64 = val;
+  result.value.f64 = val;
   result.kind = Type::Kind::f64;
   return result;
 }
@@ -264,7 +288,7 @@ ConstexprResult simple_unsigned_to_float(const Value &val, Type::Kind kind) {
 
 std::optional<ConstexprResult> mul(const std::optional<ConstexprResult> &lhs,
                                    const std::optional<ConstexprResult> &rhs) {
-  if (!lhs || !lhs->value || !rhs || !rhs->value)
+  if (!lhs || !rhs)
     return std::nullopt;
   ConstexprResult ret_res;
   if (lhs->kind == rhs->kind) {
@@ -274,93 +298,90 @@ std::optional<ConstexprResult> mul(const std::optional<ConstexprResult> &lhs,
       std::optional<bool> b_rhs = to_bool(rhs);
       ret_res.kind = Type::Kind::Bool;
       if (b_lhs && b_rhs) {
-        ret_res.value->b8 = *b_lhs * *b_rhs;
+        ret_res.value.b8 = *b_lhs * *b_rhs;
       }
       return ret_res;
     } break;
     case Type::Kind::i8:
-      return cast_up_signed(lhs->value->i8 * rhs->value->i8, Type::Kind::i8);
+      return cast_up_signed(lhs->value.i8 * rhs->value.i8, Type::Kind::i8);
     case Type::Kind::i16:
-      return cast_up_signed(lhs->value->i16 * rhs->value->i16, Type::Kind::i16);
+      return cast_up_signed(lhs->value.i16 * rhs->value.i16, Type::Kind::i16);
     case Type::Kind::i32:
-      return cast_up_signed(lhs->value->i32 * rhs->value->i32, Type::Kind::i32);
+      return cast_up_signed(lhs->value.i32 * rhs->value.i32, Type::Kind::i32);
     case Type::Kind::i64:
-      return cast_up_signed(lhs->value->i64 * rhs->value->i64, Type::Kind::i64);
+      return cast_up_signed(lhs->value.i64 * rhs->value.i64, Type::Kind::i64);
     case Type::Kind::u8:
-      return cast_up_unsigned(lhs->value->u8 * rhs->value->u8, Type::Kind::u8);
+      return cast_up_unsigned(lhs->value.u8 * rhs->value.u8, Type::Kind::u8);
     case Type::Kind::u16:
-      return cast_up_unsigned(lhs->value->u16 * rhs->value->u16,
-                              Type::Kind::u16);
+      return cast_up_unsigned(lhs->value.u16 * rhs->value.u16, Type::Kind::u16);
     case Type::Kind::u32:
-      return cast_up_unsigned(lhs->value->u32 * rhs->value->u32,
-                              Type::Kind::u32);
+      return cast_up_unsigned(lhs->value.u32 * rhs->value.u32, Type::Kind::u32);
     case Type::Kind::u64:
-      return cast_up_unsigned(lhs->value->u64 * rhs->value->u64,
-                              Type::Kind::u64);
+      return cast_up_unsigned(lhs->value.u64 * rhs->value.u64, Type::Kind::u64);
     case Type::Kind::f32:
-      return cast_up_float(lhs->value->f32 * rhs->value->f32, Type::Kind::f32);
+      return cast_up_float(lhs->value.f32 * rhs->value.f32, Type::Kind::f32);
     case Type::Kind::f64:
-      return cast_up_float(lhs->value->f64 * rhs->value->f64, Type::Kind::f64);
+      return cast_up_float(lhs->value.f64 * rhs->value.f64, Type::Kind::f64);
     }
   }
   if (is_signed(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) *
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) *
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind - 4));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) *
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) *
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind - 4, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) *
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) *
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_unsigned(get_value(*lhs->value, lhs->kind) *
-                                get_value(*rhs->value, rhs->kind),
+    return cast_up_unsigned(get_value(lhs->value, lhs->kind) *
+                                get_value(rhs->value, rhs->kind),
                             max_kind);
   }
   if (is_float(lhs->kind) || is_float(rhs->kind)) {
     ConstexprResult casted_result;
     ConstexprResult result_other;
     if (is_unsigned(lhs->kind)) {
-      casted_result = simple_unsigned_to_float(*lhs->value, lhs->kind);
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = simple_unsigned_to_float(lhs->value, lhs->kind);
+      result_other = {rhs->value, rhs->kind};
     } else if (is_unsigned(rhs->kind)) {
-      result_other = {*lhs->value, lhs->kind};
-      casted_result = simple_unsigned_to_float(*rhs->value, rhs->kind);
+      result_other = {lhs->value, lhs->kind};
+      casted_result = simple_unsigned_to_float(rhs->value, rhs->kind);
     } else if (is_signed(lhs->kind)) {
-      casted_result = simple_signed_to_float(*lhs->value, lhs->kind);
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = simple_signed_to_float(lhs->value, lhs->kind);
+      result_other = {rhs->value, rhs->kind};
     } else if (is_signed(rhs->kind)) {
-      result_other = {*lhs->value, lhs->kind};
-      casted_result = simple_signed_to_float(*rhs->value, rhs->kind);
+      result_other = {lhs->value, lhs->kind};
+      casted_result = simple_signed_to_float(rhs->value, rhs->kind);
     } else if (is_float(lhs->kind) && is_float(rhs->kind)) {
-      casted_result = {*lhs->value, lhs->kind};
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = {lhs->value, lhs->kind};
+      result_other = {rhs->value, rhs->kind};
     }
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)casted_result.kind, (unsigned int)result_other.kind));
-    return cast_up_float(get_value(*casted_result.value, casted_result.kind) *
-                             get_value(*result_other.value, result_other.kind),
+    return cast_up_float(get_value(casted_result.value, casted_result.kind) *
+                             get_value(result_other.value, result_other.kind),
                          max_kind);
   }
 }
 
 std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs,
                                    const std::optional<ConstexprResult> &rhs) {
-  if (!lhs || !lhs->value || !rhs || !rhs->value)
+  if (!lhs || !rhs)
     return std::nullopt;
   ConstexprResult ret_res;
   if (lhs->kind == rhs->kind) {
@@ -370,93 +391,90 @@ std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs,
       std::optional<bool> b_rhs = to_bool(rhs);
       ret_res.kind = Type::Kind::Bool;
       if (b_lhs && b_rhs) {
-        ret_res.value->b8 = *b_lhs + *b_rhs;
+        ret_res.value.b8 = *b_lhs + *b_rhs;
       }
       return ret_res;
     } break;
     case Type::Kind::i8:
-      return cast_up_signed(lhs->value->i8 + rhs->value->i8, Type::Kind::i8);
+      return cast_up_signed(lhs->value.i8 + rhs->value.i8, Type::Kind::i8);
     case Type::Kind::i16:
-      return cast_up_signed(lhs->value->i16 + rhs->value->i16, Type::Kind::i16);
+      return cast_up_signed(lhs->value.i16 + rhs->value.i16, Type::Kind::i16);
     case Type::Kind::i32:
-      return cast_up_signed(lhs->value->i32 + rhs->value->i32, Type::Kind::i32);
+      return cast_up_signed(lhs->value.i32 + rhs->value.i32, Type::Kind::i32);
     case Type::Kind::i64:
-      return cast_up_signed(lhs->value->i64 + rhs->value->i64, Type::Kind::i64);
+      return cast_up_signed(lhs->value.i64 + rhs->value.i64, Type::Kind::i64);
     case Type::Kind::u8:
-      return cast_up_unsigned(lhs->value->u8 + rhs->value->u8, Type::Kind::u8);
+      return cast_up_unsigned(lhs->value.u8 + rhs->value.u8, Type::Kind::u8);
     case Type::Kind::u16:
-      return cast_up_unsigned(lhs->value->u16 + rhs->value->u16,
-                              Type::Kind::u16);
+      return cast_up_unsigned(lhs->value.u16 + rhs->value.u16, Type::Kind::u16);
     case Type::Kind::u32:
-      return cast_up_unsigned(lhs->value->u32 + rhs->value->u32,
-                              Type::Kind::u32);
+      return cast_up_unsigned(lhs->value.u32 + rhs->value.u32, Type::Kind::u32);
     case Type::Kind::u64:
-      return cast_up_unsigned(lhs->value->u64 + rhs->value->u64,
-                              Type::Kind::u64);
+      return cast_up_unsigned(lhs->value.u64 + rhs->value.u64, Type::Kind::u64);
     case Type::Kind::f32:
-      return cast_up_float(lhs->value->f32 + rhs->value->f32, Type::Kind::f32);
+      return cast_up_float(lhs->value.f32 + rhs->value.f32, Type::Kind::f32);
     case Type::Kind::f64:
-      return cast_up_float(lhs->value->f64 + rhs->value->f64, Type::Kind::f64);
+      return cast_up_float(lhs->value.f64 + rhs->value.f64, Type::Kind::f64);
     }
   }
   if (is_signed(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) +
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) +
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind - 4));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) +
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) +
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind - 4, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) +
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) +
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_unsigned(get_value(*lhs->value, lhs->kind) +
-                                get_value(*rhs->value, rhs->kind),
+    return cast_up_unsigned(get_value(lhs->value, lhs->kind) +
+                                get_value(rhs->value, rhs->kind),
                             max_kind);
   }
   if (is_float(lhs->kind) || is_float(rhs->kind)) {
     ConstexprResult casted_result;
     ConstexprResult result_other;
     if (is_unsigned(lhs->kind)) {
-      casted_result = simple_unsigned_to_float(*lhs->value, lhs->kind);
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = simple_unsigned_to_float(lhs->value, lhs->kind);
+      result_other = {rhs->value, rhs->kind};
     } else if (is_unsigned(rhs->kind)) {
-      result_other = {*lhs->value, lhs->kind};
-      casted_result = simple_unsigned_to_float(*rhs->value, rhs->kind);
+      result_other = {lhs->value, lhs->kind};
+      casted_result = simple_unsigned_to_float(rhs->value, rhs->kind);
     } else if (is_signed(lhs->kind)) {
-      casted_result = simple_signed_to_float(*lhs->value, lhs->kind);
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = simple_signed_to_float(lhs->value, lhs->kind);
+      result_other = {rhs->value, rhs->kind};
     } else if (is_signed(rhs->kind)) {
-      result_other = {*lhs->value, lhs->kind};
-      casted_result = simple_signed_to_float(*rhs->value, rhs->kind);
+      result_other = {lhs->value, lhs->kind};
+      casted_result = simple_signed_to_float(rhs->value, rhs->kind);
     } else if (is_float(lhs->kind) && is_float(rhs->kind)) {
-      casted_result = {*lhs->value, lhs->kind};
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = {lhs->value, lhs->kind};
+      result_other = {rhs->value, rhs->kind};
     }
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)casted_result.kind, (unsigned int)result_other.kind));
-    return cast_up_float(get_value(*casted_result.value, casted_result.kind) +
-                             get_value(*result_other.value, result_other.kind),
+    return cast_up_float(get_value(casted_result.value, casted_result.kind) +
+                             get_value(result_other.value, result_other.kind),
                          max_kind);
   }
 }
 
 std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs,
                                    const std::optional<ConstexprResult> &rhs) {
-  if (!lhs || !lhs->value || !rhs || !rhs->value)
+  if (!lhs || !rhs)
     return std::nullopt;
   ConstexprResult ret_res;
   if (lhs->kind == rhs->kind) {
@@ -466,182 +484,176 @@ std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs,
       std::optional<bool> b_rhs = to_bool(rhs);
       ret_res.kind = Type::Kind::Bool;
       if (b_lhs && b_rhs) {
-        ret_res.value->b8 = *b_lhs - *b_rhs;
+        ret_res.value.b8 = *b_lhs - *b_rhs;
       }
       return ret_res;
     } break;
     case Type::Kind::i8:
-      return cast_up_signed(lhs->value->i8 - rhs->value->i8, Type::Kind::i8);
+      return cast_up_signed(lhs->value.i8 - rhs->value.i8, Type::Kind::i8);
     case Type::Kind::i16:
-      return cast_up_signed(lhs->value->i16 - rhs->value->i16, Type::Kind::i16);
+      return cast_up_signed(lhs->value.i16 - rhs->value.i16, Type::Kind::i16);
     case Type::Kind::i32:
-      return cast_up_signed(lhs->value->i32 - rhs->value->i32, Type::Kind::i32);
+      return cast_up_signed(lhs->value.i32 - rhs->value.i32, Type::Kind::i32);
     case Type::Kind::i64:
-      return cast_up_signed(lhs->value->i64 - rhs->value->i64, Type::Kind::i64);
+      return cast_up_signed(lhs->value.i64 - rhs->value.i64, Type::Kind::i64);
     case Type::Kind::u8:
-      return cast_up_unsigned(lhs->value->u8 - rhs->value->u8, Type::Kind::u8);
+      return cast_up_unsigned(lhs->value.u8 - rhs->value.u8, Type::Kind::u8);
     case Type::Kind::u16:
-      return cast_up_unsigned(lhs->value->u16 - rhs->value->u16,
-                              Type::Kind::u16);
+      return cast_up_unsigned(lhs->value.u16 - rhs->value.u16, Type::Kind::u16);
     case Type::Kind::u32:
-      return cast_up_unsigned(lhs->value->u32 - rhs->value->u32,
-                              Type::Kind::u32);
+      return cast_up_unsigned(lhs->value.u32 - rhs->value.u32, Type::Kind::u32);
     case Type::Kind::u64:
-      return cast_up_unsigned(lhs->value->u64 - rhs->value->u64,
-                              Type::Kind::u64);
+      return cast_up_unsigned(lhs->value.u64 - rhs->value.u64, Type::Kind::u64);
     case Type::Kind::f32:
-      return cast_up_float(lhs->value->f32 - rhs->value->f32, Type::Kind::f32);
+      return cast_up_float(lhs->value.f32 - rhs->value.f32, Type::Kind::f32);
     case Type::Kind::f64:
-      return cast_up_float(lhs->value->f64 - rhs->value->f64, Type::Kind::f64);
+      return cast_up_float(lhs->value.f64 - rhs->value.f64, Type::Kind::f64);
     }
   }
   if (is_signed(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) -
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) -
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind - 4));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) -
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) -
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind - 4, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) -
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) -
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_unsigned(get_value(*lhs->value, lhs->kind) -
-                                get_value(*rhs->value, rhs->kind),
+    return cast_up_unsigned(get_value(lhs->value, lhs->kind) -
+                                get_value(rhs->value, rhs->kind),
                             max_kind);
   }
   if (is_float(lhs->kind) || is_float(rhs->kind)) {
     ConstexprResult casted_result;
     ConstexprResult result_other;
     if (is_unsigned(lhs->kind)) {
-      casted_result = simple_unsigned_to_float(*lhs->value, lhs->kind);
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = simple_unsigned_to_float(lhs->value, lhs->kind);
+      result_other = {rhs->value, rhs->kind};
     } else if (is_unsigned(rhs->kind)) {
-      result_other = {*lhs->value, lhs->kind};
-      casted_result = simple_unsigned_to_float(*rhs->value, rhs->kind);
+      result_other = {lhs->value, lhs->kind};
+      casted_result = simple_unsigned_to_float(rhs->value, rhs->kind);
     } else if (is_signed(lhs->kind)) {
-      casted_result = simple_signed_to_float(*lhs->value, lhs->kind);
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = simple_signed_to_float(lhs->value, lhs->kind);
+      result_other = {rhs->value, rhs->kind};
     } else if (is_signed(rhs->kind)) {
-      result_other = {*lhs->value, lhs->kind};
-      casted_result = simple_signed_to_float(*rhs->value, rhs->kind);
+      result_other = {lhs->value, lhs->kind};
+      casted_result = simple_signed_to_float(rhs->value, rhs->kind);
     } else if (is_float(lhs->kind) && is_float(rhs->kind)) {
-      casted_result = {*lhs->value, lhs->kind};
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = {lhs->value, lhs->kind};
+      result_other = {rhs->value, rhs->kind};
     }
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)casted_result.kind, (unsigned int)result_other.kind));
-    return cast_up_float(get_value(*casted_result.value, casted_result.kind) -
-                             get_value(*result_other.value, result_other.kind),
+    return cast_up_float(get_value(casted_result.value, casted_result.kind) -
+                             get_value(result_other.value, result_other.kind),
                          max_kind);
   }
 }
 
 std::optional<ConstexprResult> div(const std::optional<ConstexprResult> &lhs,
                                    const std::optional<ConstexprResult> &rhs) {
-  if (!lhs || !lhs->value || !rhs || !rhs->value)
+  if (!lhs || !rhs)
     return std::nullopt;
   ConstexprResult ret_res;
   if (lhs->kind == rhs->kind) {
     switch (lhs->kind) {
     case Type::Kind::i8:
-      return cast_up_signed(lhs->value->i8 / rhs->value->i8, Type::Kind::i8);
+      return cast_up_signed(lhs->value.i8 / rhs->value.i8, Type::Kind::i8);
     case Type::Kind::i16:
-      return cast_up_signed(lhs->value->i16 / rhs->value->i16, Type::Kind::i16);
+      return cast_up_signed(lhs->value.i16 / rhs->value.i16, Type::Kind::i16);
     case Type::Kind::i32:
-      return cast_up_signed(lhs->value->i32 / rhs->value->i32, Type::Kind::i32);
+      return cast_up_signed(lhs->value.i32 / rhs->value.i32, Type::Kind::i32);
     case Type::Kind::i64:
-      return cast_up_signed(lhs->value->i64 / rhs->value->i64, Type::Kind::i64);
+      return cast_up_signed(lhs->value.i64 / rhs->value.i64, Type::Kind::i64);
     case Type::Kind::u8:
-      return cast_up_unsigned(lhs->value->u8 / rhs->value->u8, Type::Kind::u8);
+      return cast_up_unsigned(lhs->value.u8 / rhs->value.u8, Type::Kind::u8);
     case Type::Kind::u16:
-      return cast_up_unsigned(lhs->value->u16 / rhs->value->u16,
-                              Type::Kind::u16);
+      return cast_up_unsigned(lhs->value.u16 / rhs->value.u16, Type::Kind::u16);
     case Type::Kind::u32:
-      return cast_up_unsigned(lhs->value->u32 / rhs->value->u32,
-                              Type::Kind::u32);
+      return cast_up_unsigned(lhs->value.u32 / rhs->value.u32, Type::Kind::u32);
     case Type::Kind::u64:
-      return cast_up_unsigned(lhs->value->u64 / rhs->value->u64,
-                              Type::Kind::u64);
+      return cast_up_unsigned(lhs->value.u64 / rhs->value.u64, Type::Kind::u64);
     case Type::Kind::f32:
-      return cast_up_float(lhs->value->f32 / rhs->value->f32, Type::Kind::f32);
+      return cast_up_float(lhs->value.f32 / rhs->value.f32, Type::Kind::f32);
     case Type::Kind::f64:
-      return cast_up_float(lhs->value->f64 / rhs->value->f64, Type::Kind::f64);
+      return cast_up_float(lhs->value.f64 / rhs->value.f64, Type::Kind::f64);
     }
   }
   if (is_signed(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) -
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) -
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind - 4));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) -
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) -
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind - 4, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(*lhs->value, lhs->kind) -
-                              get_value(*rhs->value, rhs->kind),
+    return cast_up_signed(get_value(lhs->value, lhs->kind) -
+                              get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_unsigned(get_value(*lhs->value, lhs->kind) -
-                                get_value(*rhs->value, rhs->kind),
+    return cast_up_unsigned(get_value(lhs->value, lhs->kind) -
+                                get_value(rhs->value, rhs->kind),
                             max_kind);
   }
   if (is_float(lhs->kind) || is_float(rhs->kind)) {
     ConstexprResult casted_result;
     ConstexprResult result_other;
     if (is_unsigned(lhs->kind)) {
-      casted_result = simple_unsigned_to_float(*lhs->value, lhs->kind);
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = simple_unsigned_to_float(lhs->value, lhs->kind);
+      result_other = {rhs->value, rhs->kind};
     } else if (is_unsigned(rhs->kind)) {
-      result_other = {*lhs->value, lhs->kind};
-      casted_result = simple_unsigned_to_float(*rhs->value, rhs->kind);
+      result_other = {lhs->value, lhs->kind};
+      casted_result = simple_unsigned_to_float(rhs->value, rhs->kind);
     } else if (is_signed(lhs->kind)) {
-      casted_result = simple_signed_to_float(*lhs->value, lhs->kind);
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = simple_signed_to_float(lhs->value, lhs->kind);
+      result_other = {rhs->value, rhs->kind};
     } else if (is_signed(rhs->kind)) {
-      result_other = {*lhs->value, lhs->kind};
-      casted_result = simple_signed_to_float(*rhs->value, rhs->kind);
+      result_other = {lhs->value, lhs->kind};
+      casted_result = simple_signed_to_float(rhs->value, rhs->kind);
     } else if (is_float(lhs->kind) && is_float(rhs->kind)) {
-      casted_result = {*lhs->value, lhs->kind};
-      result_other = {*rhs->value, rhs->kind};
+      casted_result = {lhs->value, lhs->kind};
+      result_other = {rhs->value, rhs->kind};
     }
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
         (unsigned int)casted_result.kind, (unsigned int)result_other.kind));
-    return cast_up_float(get_value(*casted_result.value, casted_result.kind) -
-                             get_value(*result_other.value, result_other.kind),
+    return cast_up_float(get_value(casted_result.value, casted_result.kind) -
+                             get_value(result_other.value, result_other.kind),
                          max_kind);
   }
 }
 
 #define CMP_CASE(type)                                                         \
   case Type::Kind::type: {                                                     \
-    if (lhs->value->type > rhs->value->type)                                   \
+    if (lhs->value.type > rhs->value.type)                                     \
       return 1;                                                                \
-    else if (lhs->value->type < rhs->value->type)                              \
+    else if (lhs->value.type < rhs->value.type)                                \
       return -1;                                                               \
     else                                                                       \
       return 0;                                                                \
@@ -660,14 +672,14 @@ int cmp(long lhs, long rhs) {
 std::optional<int> compare(const std::optional<ConstexprResult> &lhs,
                            const std::optional<ConstexprResult> &rhs) {
 
-  if (!lhs || !lhs->value || !rhs || !rhs->value)
+  if (!lhs || !rhs)
     return std::nullopt;
   if (lhs->kind == rhs->kind) {
     switch (lhs->kind) {
     case Type::Kind::Bool: {
-      if (lhs->value->b8 > rhs->value->b8)
+      if (lhs->value.b8 > rhs->value.b8)
         return 1;
-      else if (lhs->value->b8 < rhs->value->b8)
+      else if (lhs->value.b8 < rhs->value.b8)
         return -1;
       else
         return 0;
@@ -684,8 +696,8 @@ std::optional<int> compare(const std::optional<ConstexprResult> &lhs,
       CMP_CASE(f64)
     }
   }
-  return cmp(get_value(*lhs->value, lhs->kind),
-             get_value(*rhs->value, rhs->kind));
+  return cmp(get_value(lhs->value, lhs->kind),
+             get_value(rhs->value, rhs->kind));
 }
 
 std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
@@ -694,18 +706,18 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
   ConstexprResult return_value;
   if (binop.op == TokenKind::PipePipe) {
     return_value.kind = Type::Kind::Bool;
-    std::optional val_lhs = to_bool(lhs);
+    std::optional<bool> val_lhs = to_bool(lhs);
     if (val_lhs.value_or(false)) {
-      return_value.value->b8 = true;
+      return_value.value.b8 = true;
       return return_value;
     }
     std::optional<bool> val_rhs = to_bool(evaluate(*binop.rhs));
     if (val_rhs.value_or(false)) {
-      return_value.value->b8 = true;
+      return_value.value.b8 = true;
       return return_value;
     }
-    if(val_lhs.has_value() && val_rhs.has_value()) {
-      return_value.value->b8 = *val_lhs || *val_rhs;
+    if (val_lhs.has_value() && val_rhs.has_value()) {
+      return_value.value.b8 = *val_lhs || *val_rhs;
       return return_value;
     }
     return std::nullopt;
@@ -713,14 +725,14 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
   if (binop.op == TokenKind::AmpAmp) {
     return_value.kind = Type::Kind::Bool;
     if (!to_bool(lhs).value_or(true)) {
-      return_value.value->b8 = false;
+      return_value.value.b8 = false;
       return return_value;
     }
     std::optional<ConstexprResult> rhs = evaluate(*binop.rhs);
-    if (!lhs || !lhs->value) {
+    if (!lhs ) {
       std::optional<bool> maybe_rhs = to_bool(rhs);
       if (!to_bool(rhs).value_or(true)) {
-        return_value.value->b8 = false;
+        return_value.value.b8 = false;
         return return_value;
       }
       return std::nullopt;
@@ -728,7 +740,7 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
     std::optional<bool> maybe_val = to_bool(rhs);
     if (!maybe_val)
       return std::nullopt;
-    return_value.value->b8 = *maybe_val;
+    return_value.value.b8 = *maybe_val;
     return return_value;
   }
   if (!lhs)
@@ -750,35 +762,35 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
     if (!result)
       return std::nullopt;
     return_value.kind = Type::Kind::Bool;
-    return_value.value->b8 = *result == -1;
+    return_value.value.b8 = *result == -1;
   } break;
   case TokenKind::LessThanOrEqual: {
     std::optional<int> result = compare(lhs, rhs);
     if (!result)
       return std::nullopt;
     return_value.kind = Type::Kind::Bool;
-    return_value.value->b8 = *result == -1 || *result == 0;
+    return_value.value.b8 = *result == -1 || *result == 0;
   } break;
   case TokenKind::GreaterThan: {
     std::optional<int> result = compare(lhs, rhs);
     if (!result)
       return std::nullopt;
     return_value.kind = Type::Kind::Bool;
-    return_value.value->b8 = *result == 1;
+    return_value.value.b8 = *result == 1;
   } break;
   case TokenKind::GreaterThanOrEqual: {
     std::optional<int> result = compare(lhs, rhs);
     if (!result)
       return std::nullopt;
     return_value.kind = Type::Kind::Bool;
-    return_value.value->b8 = *result == 1 || *result == 0;
+    return_value.value.b8 = *result == 1 || *result == 0;
   } break;
   case TokenKind::ExclamationEqual: {
     std::optional<int> result = compare(lhs, rhs);
     if (!result)
       return std::nullopt;
     return_value.kind = Type::Kind::Bool;
-    return_value.value->b8 = *result != 0;
+    return_value.value.b8 = *result != 0;
   } break;
   default:
     assert(binop.op == TokenKind::EqualEqual && "unexpected binary operator");
@@ -786,7 +798,7 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
     if (!result)
       return std::nullopt;
     return_value.kind = Type::Kind::Bool;
-    return_value.value->b8 = *result == 0;
+    return_value.value.b8 = *result == 0;
   }
   return return_value;
 }
@@ -799,7 +811,7 @@ ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
   ConstexprResult result;
   if (unop.op == TokenKind::Exclamation) {
     result.kind = Type::Kind::Bool;
-    result.value->b8 = !*to_bool(rhs);
+    result.value.b8 = !*to_bool(rhs);
     return result;
   }
   if (unop.op == TokenKind::Minus) {
@@ -807,38 +819,38 @@ ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
     case Type::Kind::i8:
     case Type::Kind::u8:
       result.kind = Type::Kind::i8;
-      result.value->i8 = rhs->kind == Type::Kind::i8
-                             ? -rhs->value->i8
-                             : -static_cast<std::int8_t>(rhs->value->u8);
+      result.value.i8 = rhs->kind == Type::Kind::i8
+                             ? -rhs->value.i8
+                             : -static_cast<std::int8_t>(rhs->value.u8);
       break;
     case Type::Kind::i16:
     case Type::Kind::u16:
       result.kind = Type::Kind::i16;
-      result.value->i16 = rhs->kind == Type::Kind::i16
-                              ? -rhs->value->i16
-                              : -static_cast<std::int16_t>(rhs->value->u16);
+      result.value.i16 = rhs->kind == Type::Kind::i16
+                              ? -rhs->value.i16
+                              : -static_cast<std::int16_t>(rhs->value.u16);
       break;
     case Type::Kind::i32:
     case Type::Kind::u32:
       result.kind = Type::Kind::i32;
-      result.value->i32 = rhs->kind == Type::Kind::i32
-                              ? -rhs->value->i32
-                              : -static_cast<std::int32_t>(rhs->value->u32);
+      result.value.i32 = rhs->kind == Type::Kind::i32
+                              ? -rhs->value.i32
+                              : -static_cast<std::int32_t>(rhs->value.u32);
       break;
     case Type::Kind::i64:
     case Type::Kind::u64:
       result.kind = Type::Kind::i64;
-      result.value->i64 = rhs->kind == Type::Kind::i64
-                              ? -rhs->value->i64
-                              : -static_cast<std::int64_t>(rhs->value->u64);
+      result.value.i64 = rhs->kind == Type::Kind::i64
+                              ? -rhs->value.i64
+                              : -static_cast<std::int64_t>(rhs->value.u64);
       break;
     case Type::Kind::f32:
       result.kind = Type::Kind::f32;
-      result.value->f32 = -rhs->value->f32;
+      result.value.f32 = -rhs->value.f32;
       break;
     case Type::Kind::f64:
       result.kind = Type::Kind::f64;
-      result.value->f64 = -rhs->value->f64;
+      result.value.f64 = -rhs->value.f64;
       break;
     }
   }
@@ -847,7 +859,7 @@ ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
 
 std::optional<ConstexprResult>
 ConstantExpressionEvaluator::evaluate(const ResolvedExpr &expr) {
-  if (std::optional<ConstexprResult> res = expr.get_constant_value())
+  if (const std::optional<ConstexprResult> &res = expr.get_constant_value())
     return res;
   if (const auto *numlit = dynamic_cast<const ResolvedNumberLiteral *>(&expr)) {
     ConstexprResult res{numlit->value, numlit->type.kind};
