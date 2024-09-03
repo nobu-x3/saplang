@@ -435,12 +435,17 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
   return ret_val;
 }
 
+bool can_be_cast(Type::Kind cast_from, Type::Kind cast_to) {
+
+  return g_AssociatedNumberLiteralSizes.count(cast_from) &&
+         g_AssociatedNumberLiteralSizes.count(cast_to) &&
+         g_AssociatedNumberLiteralSizes[cast_from] <=
+             g_AssociatedNumberLiteralSizes[cast_to];
+}
+
 bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
                           Type::Kind cast_to) {
-  if (g_AssociatedNumberLiteralSizes.count(number_literal->type.kind) &&
-      g_AssociatedNumberLiteralSizes.count(cast_to) &&
-      g_AssociatedNumberLiteralSizes[number_literal->type.kind] <=
-          g_AssociatedNumberLiteralSizes[cast_to]) {
+  if (can_be_cast(number_literal->type.kind, cast_to)) {
     std::string errmsg;
     number_literal->value = construct_value(number_literal->type.kind, cast_to,
                                             &number_literal->value, errmsg);
@@ -489,6 +494,11 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
     if (implicit_cast_numlit(number_literal, type.kind)) {
       number_literal->type = type;
       number_literal->set_constant_value(cee.evaluate(*number_literal));
+    }
+    return true;
+  } else if (auto *decl_ref = dynamic_cast<ResolvedDeclRefExpr *>(&expr)) {
+    if (can_be_cast(decl_ref->type.kind, type.kind)) {
+      decl_ref->type = type;
     }
     return true;
   }

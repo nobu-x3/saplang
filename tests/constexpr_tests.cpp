@@ -546,7 +546,7 @@ fn i32 main(i32 x) {
   REQUIRE(lines_it->find(") x:") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("u8(2)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("i32(2)") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_bool:") != std::string::npos);
@@ -568,7 +568,7 @@ fn i32 main(i32 x) {
   REQUIRE(lines_it->find(") x:") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("u8(2)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("i32(2)") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_bool:") != std::string::npos);
@@ -720,7 +720,7 @@ fn i32 main(i32 x) {
   REQUIRE(lines_it->find(") x:") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("u8(2)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("i32(2)") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_bool:") != std::string::npos);
@@ -790,7 +790,7 @@ fn i32 main(i32 x) {
   REQUIRE(lines_it->find(") x:") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("u8(2)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("i32(2)") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_bool:") != std::string::npos);
@@ -929,7 +929,7 @@ fn i32 main(i32 x) {
   REQUIRE(lines_it->find(") x:") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("bool(0)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("i32(0)") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_bool:") != std::string::npos);
@@ -1093,7 +1093,7 @@ fn i32 main(i32 x) {
   REQUIRE(lines_it->find(") x:") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("bool(0)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("i32(0)") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_bool:") != std::string::npos);
@@ -1128,7 +1128,7 @@ fn i32 main(i32 x) {
   REQUIRE(lines_it->find(") x:") != std::string::npos);
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("bool(1)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("i32(1)") != std::string::npos);
 }
 
 TEST_CASE("grouping", "[constexpr]") {
@@ -1199,4 +1199,161 @@ fn bool foo() {
   NEXT_REQUIRE(lines_it,
                lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("f32(5)") != std::string::npos);
+}
+
+TEST_CASE("special cases", "[constexpr]") {
+  SECTION("binary lhs known") {
+    TEST_SETUP(R"(
+fn i32 binary_lhs_known(i32 x) {
+  return (0 && x) + (true || x);
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    lines_it = lines.begin();
+    REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") binary_lhs_known:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedParamDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedReturnStmt:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '+'") !=
+                               std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("bool(1)") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedGroupingExpr:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("bool(0)") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '&&'") !=
+                               std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("bool(0)") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("i32(0)") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") !=
+                               std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedGroupingExpr:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("bool(1)") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '||'") !=
+                               std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("bool(1)") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("i32(1)") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") !=
+                               std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+  }
+  SECTION("constexpr return") {
+    TEST_SETUP("fn i32 ret() { return 1; }");
+    REQUIRE(error_stream.str() == "");
+    lines_it = lines.begin();
+    REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") ret:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedReturnStmt:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("i32(1)") != std::string::npos);
+  }
+  SECTION("unary non-const") {
+    TEST_SETUP("fn i32 unary_non_const(i32 x) { return !x; }");
+    REQUIRE(error_stream.str() == "");
+    lines_it = lines.begin();
+    REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") unary_non_const:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedParamDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedReturnStmt:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedUnaryOperator: '!'") !=
+                               std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") !=
+                               std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+  }
+  SECTION("lhs known, rhs not") {
+    TEST_SETUP("fn bool lhs_known_rhs_not(i32 x) { return true && x; }");
+    REQUIRE(error_stream.str() == "");
+    lines_it = lines.begin();
+    REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") lhs_known_rhs_not:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedParamDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedReturnStmt:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '&&'") !=
+                               std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("bool(1)") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") !=
+                               std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+  }
+  SECTION("lhs unknown, rhs false") {
+    TEST_SETUP("fn bool lhs_unknown_rhs_false(i32 x) { return x && false; }");
+    REQUIRE(error_stream.str() == "");
+    lines_it = lines.begin();
+    REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") lhs_unknown_rhs_false:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedParamDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedReturnStmt:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '&&'") !=
+                               std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("bool(0)") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") !=
+                               std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("i32(0)") != std::string::npos);
+  }
+  SECTION("lhs unknown, rhs true") {
+    TEST_SETUP("fn bool lhs_unknown_rhs_false(i32 x) { return x && (0 - 1); }");
+    REQUIRE(error_stream.str() == "");
+    lines_it = lines.begin();
+    REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") lhs_unknown_rhs_false:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedParamDecl: @(") != std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedReturnStmt:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '&&'") !=
+                               std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") !=
+                               std::string::npos);
+    REQUIRE(lines_it->find(") x:") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedGroupingExpr:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("i32(-1)") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '-'") !=
+                               std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("i32(-1)") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("i32(0)") != std::string::npos);
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
+    NEXT_REQUIRE(lines_it, lines_it->find("i32(1)") != std::string::npos);
+  }
 }

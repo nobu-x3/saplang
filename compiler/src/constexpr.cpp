@@ -32,7 +32,7 @@ std::optional<bool> to_bool(std::optional<ConstexprResult> res) {
   case Type::Kind::f64:
     return res->value.f64 != 0;
   }
-  llvm_unreachable("Unknown kind");
+  llvm_unreachable("Given expression evaluates to bool, while the expected expression is not of type bool.");
 }
 
 bool within_range_float(double val, Type::Kind kind) {
