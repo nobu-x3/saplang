@@ -240,20 +240,67 @@ fn i32 main(bool x) {
     auto lines = break_by_line(output_buffer.str());
     auto lines_it = lines.begin() + 8;
     REQUIRE(lines_it->find("ResolvedIfStmt") != std::string::npos);
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos)
     REQUIRE(lines_it->find(") x:") != std::string::npos);
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos)
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedElseBlock") != std::string::npos)
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfStmt") != std::string::npos)
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedCallExpr: @(") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedIfBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedElseBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedIfStmt") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedCallExpr: @(") != std::string::npos)
     REQUIRE(lines_it->find(") foo:") != std::string::npos);
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos)
     REQUIRE(lines_it->find(") x:") != std::string::npos);
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedIfBlock") != std::string::npos)
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedElseBlock") != std::string::npos)
-    NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedIfBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedElseBlock") != std::string::npos)
+    NEXT_REQUIRE(lines_it,
+                 lines_it->find("ResolvedBlock:") != std::string::npos)
   }
+}
+
+TEST_CASE("simple while failing", "[sema]") {
+  TEST_SETUP(R"(
+  fn void bar(bool x) {
+    while bar(x) {}
+  }
+  )");
+  REQUIRE(error_stream.str() ==
+          "sema_test:3:14 error: condition is expected to evaluate to bool.\n");
+  REQUIRE(output_buffer.str() == "");
+}
+
+TEST_CASE("simple while passing", "[sema]") {
+  TEST_SETUP(R"(
+  fn bool foo() { return true; }
+  fn void bar(bool x) {
+    while foo() {
+      !x;
+    }
+  }
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 8;
+  REQUIRE(lines_it->find("ResolvedWhileStmt") != std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBlock:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedUnaryOperator: '!'") !=
+                             std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
 }

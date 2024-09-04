@@ -260,6 +260,19 @@ struct ResolvedBlock : public IDumpable {
   DUMP_IMPL
 };
 
+struct ResolvedWhileStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedExpr> condition;
+  std::unique_ptr<ResolvedBlock> body;
+
+  inline ResolvedWhileStmt(SourceLocation location,
+                           std::unique_ptr<ResolvedExpr> cond,
+                           std::unique_ptr<ResolvedBlock> body)
+      : ResolvedStmt(location), condition(std::move(cond)),
+        body(std::move(body)) {}
+
+  DUMP_IMPL
+};
+
 struct ResolvedIfStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedExpr> condition;
   std::unique_ptr<ResolvedBlock> true_block;

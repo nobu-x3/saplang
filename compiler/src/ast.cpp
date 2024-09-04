@@ -218,6 +218,13 @@ void ResolvedBlock::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void ResolvedWhileStmt::dump_to_stream(std::stringstream &stream,
+                                       size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedWhileStmt\n";
+  condition->dump_to_stream(stream, indent_level + 1);
+  body->dump_to_stream(stream, indent_level + 1);
+}
+
 void ResolvedIfStmt::dump_to_stream(std::stringstream &stream,
                                     size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedIfStmt\n";
