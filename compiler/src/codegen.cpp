@@ -103,6 +103,7 @@ llvm::Type *Codegen::gen_type(Type type) {
   case Type::Kind::Pointer:
     return m_Builder.getPtrTy();
   }
+  llvm_unreachable("unexpected type.");
 }
 
 llvm::AllocaInst *Codegen::alloc_stack_var(llvm::Function *func,
@@ -181,6 +182,7 @@ SimpleNumType get_simple_type(Type::Kind type) {
   } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
     return SimpleNumType::FLOAT;
   }
+  llvm_unreachable("unexpected type.");
 }
 
 llvm::Instruction::BinaryOps get_math_binop_kind(TokenKind op,
