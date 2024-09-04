@@ -83,6 +83,13 @@ void Block::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void WhileStmt::dump_to_stream(std::stringstream &stream,
+                               size_t indent_level) const {
+  stream << indent(indent_level) << "WhileStmt\n";
+  condition->dump_to_stream(stream, indent_level + 1);
+  body->dump_to_stream(stream, indent_level + 1);
+}
+
 void IfStmt::dump_to_stream(std::stringstream &stream,
                             size_t indent_level) const {
   stream << indent(indent_level) << "IfStmt\n";
@@ -212,7 +219,7 @@ void ResolvedBlock::dump_to_stream(std::stringstream &stream,
 }
 
 void ResolvedIfStmt::dump_to_stream(std::stringstream &stream,
-                                   size_t indent_level) const {
+                                    size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedIfStmt\n";
   condition->dump_to_stream(stream, indent_level + 1);
 
@@ -222,7 +229,6 @@ void ResolvedIfStmt::dump_to_stream(std::stringstream &stream,
     stream << indent(indent_level + 1) << "ResolvedElseBlock\n";
     false_block->dump_to_stream(stream, indent_level + 2);
   }
-
 }
 
 void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,

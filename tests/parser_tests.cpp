@@ -739,13 +739,14 @@ fn i32 main() {
   else {}
 }
 )");
-    REQUIRE(error_stream.str() == R"(test:3:14 error: expected '{' at the beginning of a block.
+    REQUIRE(error_stream.str() ==
+            R"(test:3:14 error: expected '{' at the beginning of a block.
 test:5:3 error: expected 'else' block.
 test:9:11 error: expected expression.
 test:10:3 error: expected expression.
 )");
   }
-  SECTION("single if"){
+  SECTION("single if") {
     TEST_SETUP(R"(
 fn i32 main() {
   if (false) {}
@@ -767,7 +768,7 @@ fn i32 main() {
         Block
 )");
   }
-  SECTION("single if else"){
+  SECTION("single if else") {
     TEST_SETUP(R"(
 fn i32 main() {
   if (false) {}
@@ -795,7 +796,7 @@ fn i32 main() {
         Block
 )");
   }
-  SECTION("if else if"){
+  SECTION("if else if") {
     TEST_SETUP(R"(
 fn i32 main() {
   if (false) {}
@@ -853,4 +854,29 @@ fn i32 main() {
                     Block
 )");
   }
+}
+
+TEST_CASE("while statements", "[parser]") {
+  TEST_SETUP(R"(
+  fn void foo(bool x) {
+    while & {};
+    while (false) ;
+    while x {
+    !x;
+    }
+  }
+  )");
+  REQUIRE(error_stream.str() == R"(test:3:11 error: expected expression.
+test:3:15 error: expected expression.
+test:4:19 error: expected 'while' body.
+)");
+  REQUIRE(output_buffer.str() == R"(FunctionDecl: foo:void
+  ParamDecl: x:bool
+  Block
+    WhileStmt
+      DeclRefExpr: x
+      Block
+        UnaryOperator: '!'
+          DeclRefExpr: x
+)");
 }

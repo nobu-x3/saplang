@@ -185,6 +185,17 @@ struct Block : public IDumpable {
   DUMP_IMPL
 };
 
+struct WhileStmt : public Stmt {
+  std::unique_ptr<Expr> condition;
+  std::unique_ptr<Block> body;
+
+  inline WhileStmt(SourceLocation loc, std::unique_ptr<Expr> cond,
+                   std::unique_ptr<Block> body)
+      : Stmt(loc), condition(std::move(cond)), body(std::move(body)) {}
+
+  DUMP_IMPL
+};
+
 struct IfStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Block> true_block;
