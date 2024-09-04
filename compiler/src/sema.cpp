@@ -144,6 +144,8 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
     return resolve_return_stmt(*return_stmt);
   if (auto *if_stmt = dynamic_cast<const IfStmt *>(&stmt))
     return resolve_if_stmt(*if_stmt);
+  if (auto *while_stmt = dynamic_cast<const WhileStmt *>(&stmt))
+    return resolve_while_stmt(*while_stmt);
   assert(false && "unexpected expression.");
   return nullptr;
 }
@@ -528,6 +530,24 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
   return std::make_unique<ResolvedIfStmt>(stmt.location, std::move(condition),
                                           std::move(true_block),
                                           std::move(false_block));
+}
+
+std::unique_ptr<ResolvedWhileStmt>
+Sema::resolve_while_stmt(const WhileStmt &stmt) {
+  std::unique_ptr<ResolvedExpr> condition = resolve_expr(*stmt.condition);
+  if (!condition)
+    return nullptr;
+  if (condition->type.kind != Type::Kind::Bool) {
+    if (!try_cast_expr(*condition, Type::builtin_bool(), m_Cee))
+      return report(condition->location,
+                    "condition is expected to evaluate to bool.");
+  }
+  std::unique_ptr<ResolvedBlock> body = resolve_block(*stmt.body);
+  if (!body)
+    return nullptr;
+  condition->set_constant_value(m_Cee.evaluate(*condition));
+  return std::make_unique<ResolvedWhileStmt>(
+      stmt.location, std::move(condition), std::move(body));
 }
 
 std::unique_ptr<ResolvedReturnStmt>

@@ -22,6 +22,7 @@ enum class TokenKind : char {
   KwElse,
   KwModule,
   KwDefer,
+  KwWhile,
   Slash,
   AmpAmp,
   PipePipe,
@@ -50,6 +51,7 @@ const std::unordered_map<std::string_view, TokenKind> keywords = {
     {"module", TokenKind::KwModule}, {"defer", TokenKind::KwDefer},
     {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},
     {"if", TokenKind::KwIf},         {"else", TokenKind::KwElse},
+    {"while", TokenKind::KwWhile},
 };
 
 struct Token {

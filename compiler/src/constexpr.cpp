@@ -32,7 +32,8 @@ std::optional<bool> to_bool(std::optional<ConstexprResult> res) {
   case Type::Kind::f64:
     return res->value.f64 != 0;
   }
-  llvm_unreachable("Given expression evaluates to bool, while the expected expression is not of type bool.");
+  llvm_unreachable("Given expression evaluates to bool, while the expected "
+                   "expression is not of type bool.");
 }
 
 bool within_range_float(double val, Type::Kind kind) {
@@ -216,6 +217,7 @@ unsigned long get_value(Value value, Type::Kind kind) {
   case Type::Kind::Bool:
     return value.b8;
   }
+  llvm_unreachable("unexpected value type.");
 }
 
 bool is_signed(Type::Kind kind) {
@@ -377,6 +379,7 @@ std::optional<ConstexprResult> mul(const std::optional<ConstexprResult> &lhs,
                              get_value(result_other.value, result_other.kind),
                          max_kind);
   }
+  llvm_unreachable("unexpected constexpr type.");
 }
 
 std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs,
@@ -470,6 +473,7 @@ std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs,
                              get_value(result_other.value, result_other.kind),
                          max_kind);
   }
+  llvm_unreachable("unexpected constexpr type.");
 }
 
 std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs,
@@ -563,6 +567,7 @@ std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs,
                              get_value(result_other.value, result_other.kind),
                          max_kind);
   }
+  llvm_unreachable("unexpected constexpr type.");
 }
 
 std::optional<ConstexprResult> div(const std::optional<ConstexprResult> &lhs,
@@ -647,6 +652,7 @@ std::optional<ConstexprResult> div(const std::optional<ConstexprResult> &lhs,
                              get_value(result_other.value, result_other.kind),
                          max_kind);
   }
+  llvm_unreachable("unexpected constexpr type.");
 }
 
 #define CMP_CASE(type)                                                         \
@@ -729,7 +735,7 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
       return return_value;
     }
     std::optional<ConstexprResult> rhs = evaluate(*binop.rhs);
-    if (!lhs ) {
+    if (!lhs) {
       std::optional<bool> maybe_rhs = to_bool(rhs);
       if (!to_bool(rhs).value_or(true)) {
         return_value.value.b8 = false;
@@ -820,29 +826,29 @@ ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
     case Type::Kind::u8:
       result.kind = Type::Kind::i8;
       result.value.i8 = rhs->kind == Type::Kind::i8
-                             ? -rhs->value.i8
-                             : -static_cast<std::int8_t>(rhs->value.u8);
+                            ? -rhs->value.i8
+                            : -static_cast<std::int8_t>(rhs->value.u8);
       break;
     case Type::Kind::i16:
     case Type::Kind::u16:
       result.kind = Type::Kind::i16;
       result.value.i16 = rhs->kind == Type::Kind::i16
-                              ? -rhs->value.i16
-                              : -static_cast<std::int16_t>(rhs->value.u16);
+                             ? -rhs->value.i16
+                             : -static_cast<std::int16_t>(rhs->value.u16);
       break;
     case Type::Kind::i32:
     case Type::Kind::u32:
       result.kind = Type::Kind::i32;
       result.value.i32 = rhs->kind == Type::Kind::i32
-                              ? -rhs->value.i32
-                              : -static_cast<std::int32_t>(rhs->value.u32);
+                             ? -rhs->value.i32
+                             : -static_cast<std::int32_t>(rhs->value.u32);
       break;
     case Type::Kind::i64:
     case Type::Kind::u64:
       result.kind = Type::Kind::i64;
       result.value.i64 = rhs->kind == Type::Kind::i64
-                              ? -rhs->value.i64
-                              : -static_cast<std::int64_t>(rhs->value.u64);
+                             ? -rhs->value.i64
+                             : -static_cast<std::int64_t>(rhs->value.u64);
       break;
     case Type::Kind::f32:
       result.kind = Type::Kind::f32;

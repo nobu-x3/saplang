@@ -69,7 +69,6 @@ return:                                           ; preds = <null operand!>, %en
 }
 )");
   }
-  SECTION("multiple return") {}
 }
 
 TEST_CASE("multiple return", "[codegen]") {
@@ -526,37 +525,129 @@ fn void foo(i32 x) {
   auto lines_it = lines.begin() + 3;
   REQUIRE(lines_it->find("define void @foo(i32 %x) {") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("entry:") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%x1 = alloca i32, align 4") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("store i32 %x, ptr %x1, align 4") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%0 = load i32, ptr %x1, align 4") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%1 = icmp eq i32 %0, 1") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%to.bool = icmp ne i1 %1, false") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("br i1 %to.bool, label %or.merge, label %or.rhs") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%x1 = alloca i32, align 4") !=
+                             std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("store i32 %x, ptr %x1, align 4") !=
+                             std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%0 = load i32, ptr %x1, align 4") !=
+                             std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("%1 = icmp eq i32 %0, 1") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%to.bool = icmp ne i1 %1, false") !=
+                             std::string::npos);
+  NEXT_REQUIRE(
+      lines_it,
+      lines_it->find("br i1 %to.bool, label %or.merge, label %or.rhs") !=
+          std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("or.rhs") != std::string::npos);
   REQUIRE(lines_it->find("; preds = %entry") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%2 = load i32, ptr %x1, align 4") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%3 = icmp eq i32 %2, 2") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%to.bool2 = icmp ne i1 %3, false") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("br i1 %to.bool2, label %and.rhs, label %and.merge") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%2 = load i32, ptr %x1, align 4") !=
+                             std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("%3 = icmp eq i32 %2, 2") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%to.bool2 = icmp ne i1 %3, false") !=
+                             std::string::npos);
+  NEXT_REQUIRE(
+      lines_it,
+      lines_it->find("br i1 %to.bool2, label %and.rhs, label %and.merge") !=
+          std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("or.merge") != std::string::npos);
   REQUIRE(lines_it->find("; preds = %and.merge, %entry") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%4 = phi i1 [ %7, %and.merge ], [ true, %entry ]") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("br i1 %4, label %if.true, label %if.exit") != std::string::npos);
+  NEXT_REQUIRE(
+      lines_it,
+      lines_it->find("%4 = phi i1 [ %7, %and.merge ], [ true, %entry ]") !=
+          std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("br i1 %4, label %if.true, label %if.exit") !=
+                   std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("and.rhs") != std::string::npos);
   REQUIRE(lines_it->find("; preds = %or.rhs") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%5 = load i32, ptr %x1, align 4") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%6 = icmp sgt i32 %5, 3") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%to.bool3 = icmp ne i1 %6, false") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("br label %and.merge") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%5 = load i32, ptr %x1, align 4") !=
+                             std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("%6 = icmp sgt i32 %5, 3") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%to.bool3 = icmp ne i1 %6, false") !=
+                             std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("br label %and.merge") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("and.merge") != std::string::npos);
   REQUIRE(lines_it->find("; preds = %and.rhs, %or.rhs") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("%7 = phi i1 [ %to.bool3, %and.rhs ], [ false, %or.rhs ]") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("br label %or.merge") != std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find(
+                   "%7 = phi i1 [ %to.bool3, %and.rhs ], [ false, %or.rhs ]") !=
+                   std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("br label %or.merge") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("if.true") != std::string::npos);
   REQUIRE(lines_it->find("; preds = %or.merge") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("br label %if.exit") != std::string::npos);
+  NEXT_REQUIRE(lines_it,
+               lines_it->find("br label %if.exit") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("if.exit") != std::string::npos);
   REQUIRE(lines_it->find("; preds = %if.true, %or.merge") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ret void") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("}") != std::string::npos);
+}
+
+TEST_CASE("simple while loop return", "[codegen]") {
+  TEST_SETUP(R"(
+  fn void foo(bool val) {
+    while val {
+      return;
+    }
+  }
+  )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 3;
+  REQUIRE(lines_it->find("define void @foo(i1 %val) {") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("entry:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%val1 = alloca i1, align 1") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("store i1 %val, ptr %val1, align 1") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br label %while.cond") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("while.cond:") != std::string::npos);
+    REQUIRE(lines_it->find("; preds = <null operand!>, %entry") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%0 = load i1, ptr %val1, align 1") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br i1 %0, label %while.body, label %while.exit") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("while.body:") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %while.cond") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br label %return") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("while.exit:") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %while.cond") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br label %return") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("return:") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %while.exit, %while.body") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ret void") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("}") != std::string::npos);
+}
+
+TEST_CASE("simple while loop", "[codegen]") {
+  TEST_SETUP(R"(
+  fn void foo(i32 val) {
+    while val > 3 {
+      bar();
+    }
+  }
+
+  fn void bar() {}
+  )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 3;
+  REQUIRE(lines_it->find("define void @foo(i32 %val) {") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("entry:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%val1 = alloca i32, align 4") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("store i32 %val, ptr %val1, align 4") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br label %while.cond") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("while.cond:") != std::string::npos);
+    REQUIRE(lines_it->find("; preds = %while.body, %entry") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%0 = load i32, ptr %val1, align 4") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("%1 = icmp ugt i32 %0, 3") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find(" br i1 %1, label %while.body, label %while.exit") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("while.body:") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %while.cond") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("call void @bar()") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("br label %while.cond") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("while.exit:") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %while.cond") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ret void") != std::string::npos);
 }

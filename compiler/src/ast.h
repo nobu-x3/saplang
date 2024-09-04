@@ -185,6 +185,17 @@ struct Block : public IDumpable {
   DUMP_IMPL
 };
 
+struct WhileStmt : public Stmt {
+  std::unique_ptr<Expr> condition;
+  std::unique_ptr<Block> body;
+
+  inline WhileStmt(SourceLocation loc, std::unique_ptr<Expr> cond,
+                   std::unique_ptr<Block> body)
+      : Stmt(loc), condition(std::move(cond)), body(std::move(body)) {}
+
+  DUMP_IMPL
+};
+
 struct IfStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Block> true_block;
@@ -245,6 +256,19 @@ struct ResolvedBlock : public IDumpable {
       : location(loc), statements(std::move(statements)) {}
 
   virtual ~ResolvedBlock() = default;
+
+  DUMP_IMPL
+};
+
+struct ResolvedWhileStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedExpr> condition;
+  std::unique_ptr<ResolvedBlock> body;
+
+  inline ResolvedWhileStmt(SourceLocation location,
+                           std::unique_ptr<ResolvedExpr> cond,
+                           std::unique_ptr<ResolvedBlock> body)
+      : ResolvedStmt(location), condition(std::move(cond)),
+        body(std::move(body)) {}
 
   DUMP_IMPL
 };

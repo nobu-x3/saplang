@@ -103,6 +103,7 @@ llvm::Type *Codegen::gen_type(Type type) {
   case Type::Kind::Pointer:
     return m_Builder.getPtrTy();
   }
+  llvm_unreachable("unexpected type.");
 }
 
 llvm::AllocaInst *Codegen::alloc_stack_var(llvm::Function *func,
@@ -134,6 +135,8 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt) {
     return gen_expr(*expr);
   if (auto *ifstmt = dynamic_cast<const ResolvedIfStmt *>(&stmt))
     return gen_if_stmt(*ifstmt);
+  if (auto *whilestmt = dynamic_cast<const ResolvedWhileStmt *>(&stmt))
+    return gen_while_stmt(*whilestmt);
   if (auto *return_stmt = dynamic_cast<const ResolvedReturnStmt *>(&stmt))
     return gen_return_stmt(*return_stmt);
   llvm_unreachable("unknown statememt.");
@@ -141,20 +144,21 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt) {
 }
 
 llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt) {
-  llvm::Function* function = get_current_function();
-  auto* true_bb = llvm::BasicBlock::Create(m_Context, "if.true");
-  auto* exit_bb = llvm::BasicBlock::Create(m_Context, "if.exit");
-  auto* else_bb = exit_bb;
-  if(stmt.false_block){
+  llvm::Function *function = get_current_function();
+  auto *true_bb = llvm::BasicBlock::Create(m_Context, "if.true");
+  auto *exit_bb = llvm::BasicBlock::Create(m_Context, "if.exit");
+  auto *else_bb = exit_bb;
+  if (stmt.false_block) {
     else_bb = llvm::BasicBlock::Create(m_Context, "if.false");
   }
-  llvm::Value* cond = gen_expr(*stmt.condition);
-  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, cond), true_bb, else_bb);
+  llvm::Value *cond = gen_expr(*stmt.condition);
+  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, cond), true_bb,
+                         else_bb);
   true_bb->insertInto(function);
   m_Builder.SetInsertPoint(true_bb);
   gen_block(*stmt.true_block);
   m_Builder.CreateBr(exit_bb);
-  if(stmt.false_block) {
+  if (stmt.false_block) {
     else_bb->insertInto(function);
     m_Builder.SetInsertPoint(else_bb);
     gen_block(*stmt.false_block);
@@ -162,6 +166,26 @@ llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt) {
   }
   exit_bb->insertInto(function);
   m_Builder.SetInsertPoint(exit_bb);
+  return nullptr;
+}
+
+llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt) {
+  llvm::Function *function = get_current_function();
+  llvm::BasicBlock *header =
+      llvm::BasicBlock::Create(m_Context, "while.cond", function);
+  llvm::BasicBlock *body =
+      llvm::BasicBlock::Create(m_Context, "while.body", function);
+  llvm::BasicBlock *exit =
+      llvm::BasicBlock::Create(m_Context, "while.exit", function);
+  m_Builder.CreateBr(header);
+  m_Builder.SetInsertPoint(header);
+  llvm::Value *condition = gen_expr(*stmt.condition);
+  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, condition),
+                         body, exit);
+  m_Builder.SetInsertPoint(body);
+  gen_block(*stmt.body);
+  m_Builder.CreateBr(header);
+  m_Builder.SetInsertPoint(exit);
   return nullptr;
 }
 
@@ -174,13 +198,15 @@ llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt) {
 
 enum class SimpleNumType { SINT, UINT, FLOAT };
 SimpleNumType get_simple_type(Type::Kind type) {
-  if (type >= Type::Kind::u8 && type <= Type::Kind::u64) {
+  if ((type >= Type::Kind::u8 && type <= Type::Kind::u64) ||
+      type == Type::Kind::Bool) {
     return SimpleNumType::UINT;
   } else if (type >= Type::Kind::i8 && type <= Type::Kind::i64) {
     return SimpleNumType::SINT;
   } else if (type >= Type::Kind::f32 && type <= Type::Kind::f64) {
     return SimpleNumType::FLOAT;
   }
+  llvm_unreachable("unexpected type.");
 }
 
 llvm::Instruction::BinaryOps get_math_binop_kind(TokenKind op,
@@ -398,7 +424,6 @@ llvm::Value *gen_lte_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
   llvm_unreachable("unexpected type.");
 }
 
-// @TODO: !=, <=, >=
 llvm::Value *Codegen::gen_comp_op(TokenKind op, Type::Kind kind,
                                   llvm::Value *lhs, llvm::Value *rhs) {
   llvm::Value *ret_val;
@@ -433,6 +458,9 @@ llvm::Value *Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
       return m_Builder.CreateNeg(rhs);
     else if (type == SimpleNumType::FLOAT)
       return m_Builder.CreateFNeg(rhs);
+  }
+  if (op.op == TokenKind::Exclamation) {
+    return m_Builder.CreateNot(rhs);
   }
   llvm_unreachable("unknown unary op.");
   return nullptr;

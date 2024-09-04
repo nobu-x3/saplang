@@ -59,6 +59,8 @@ private:
 
   std::unique_ptr<ResolvedIfStmt> resolve_if_stmt(const IfStmt &stmt);
 
+  std::unique_ptr<ResolvedWhileStmt> resolve_while_stmt(const WhileStmt &stmt);
+
 private:
   std::vector<std::unique_ptr<FunctionDecl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};

@@ -70,7 +70,11 @@ std::unique_ptr<Block> Parser::parse_block() {
 // <statement>
 // ::= <returnStmt>
 // | <expr> ';'
+// | <ifStatement>
+// | <whileStatement>
 std::unique_ptr<Stmt> Parser::parse_stmt() {
+  if (m_NextToken.kind == TokenKind::KwWhile)
+    return parse_while_stmt();
   if (m_NextToken.kind == TokenKind::KwIf)
     return parse_if_stmt();
   if (m_NextToken.kind == TokenKind::KwReturn)
@@ -104,7 +108,7 @@ std::unique_ptr<IfStmt> Parser::parse_if_stmt() {
   std::unique_ptr<Block> false_block;
   if (m_NextToken.kind == TokenKind::KwIf) {
     std::unique_ptr<IfStmt> else_if = parse_if_stmt();
-    if(!else_if)
+    if (!else_if)
       return nullptr;
     SourceLocation loc = else_if->location;
     std::vector<std::unique_ptr<Stmt>> stmts;
@@ -120,6 +124,22 @@ std::unique_ptr<IfStmt> Parser::parse_if_stmt() {
   return std::make_unique<IfStmt>(location, std::move(condition),
                                   std::move(true_block),
                                   std::move(false_block));
+}
+// <whileStatement>
+//  ::= 'while' <expr> <block>
+std::unique_ptr<WhileStmt> Parser::parse_while_stmt() {
+  SourceLocation location = m_NextToken.location;
+  eat_next_token(); // eat 'while'
+  std::unique_ptr<Expr> condition = parse_expr();
+  if (!condition)
+    return nullptr;
+  if (m_NextToken.kind != TokenKind::Lbrace)
+    return report(m_NextToken.location, "expected 'while' body.");
+  std::unique_ptr<Block> body = parse_block();
+  if (!body)
+    return nullptr;
+  return std::make_unique<WhileStmt>(location, std::move(condition),
+                                    std::move(body));
 }
 
 // <returnStmt>

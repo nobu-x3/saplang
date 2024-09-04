@@ -47,6 +47,7 @@ private:
   std::optional<ParameterList> parse_parameter_list();
 
   std::unique_ptr<IfStmt> parse_if_stmt();
+  std::unique_ptr<WhileStmt> parse_while_stmt();
 
 private:
   Lexer *m_Lexer;
