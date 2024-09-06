@@ -8,6 +8,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "sema.h"
+#include "cfg.h"
 #include "utils.h"
 
 [[noreturn]] void error(std::string_view msg) {
@@ -22,6 +23,7 @@ struct CompilerOptions {
   bool display_help{false};
   bool ast_dump{false};
   bool res_dump{false};
+  bool cfg_dump{false};
   bool llvm_dump{false};
 };
 
@@ -35,6 +37,7 @@ void display_help() {
             << "\t-o <file>                     write executable to <file>.\n"
             << "\t-ast-dump                     print ast.\n"
             << "\t-res-dump                     print resolved syntax tree.\n"
+            << "\t-cfg-dump                     print control flow graph.\n"
             << "\t-llvm-dump                    print the generated llvm module"
             << std::endl;
 }
@@ -62,6 +65,8 @@ CompilerOptions parse_args(int argc, const char **argv) {
         options.ast_dump = true;
       else if (arg == "-res-dump")
         options.res_dump = true;
+      else if (arg == "-cfg-dump")
+        options.cfg_dump = true;
       else if (arg == "-llvm-dump")
         options.llvm_dump = true;
       else
@@ -72,29 +77,6 @@ CompilerOptions parse_args(int argc, const char **argv) {
 }
 
 int main(int argc, const char **argv) {
-  {
-    saplang::clear_error_stream();
-    std::stringstream buffer{R"(
-fn i32 foo() {
-    return -1;
-}
-
-fn i32 main() {
-    return -1;
-}
-)"};
-    std::stringstream output_buffer{};
-    saplang::SourceFile src_file{"sema_test", buffer.str()};
-    saplang::Lexer lexer{src_file};
-    saplang::Parser parser(&lexer);
-    auto parse_result = parser.parse_source_file();
-    saplang::Sema sema{std::move(parse_result.functions)};
-    auto resolved_ast = sema.resolve_ast();
-    for (auto &&fn : resolved_ast) {
-      fn->dump_to_stream(output_buffer);
-    }
-    const auto &error_stream = saplang::get_error_stream();
-  }
   CompilerOptions options = parse_args(argc, argv);
   if (options.display_help) {
     display_help();
@@ -135,6 +117,15 @@ fn i32 main() {
       fn->dump_to_stream(output_stream, 0);
     }
     std::cout << output_stream.str();
+    return 0;
+  }
+  if(options.cfg_dump){
+    std::stringstream output_stream;
+    for(auto&& fn : resolved_tree) {
+      output_stream << fn->id << ":\n";
+      saplang::CFGBuilder().build(*fn).dump_to_stream(output_stream, 1);
+      std::cout << output_stream.str();
+    }
     return 0;
   }
   if (resolved_tree.empty())

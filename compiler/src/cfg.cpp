@@ -44,7 +44,7 @@ void CFG::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
 
     const auto &statements = basic_blocks[i].statements;
     for (auto it = statements.rbegin(); it != statements.rend(); ++it)
-      (*it)->dump(1);
+      (*it)->dump_to_stream(stream, 1);
     stream << '\n';
   }
 }
