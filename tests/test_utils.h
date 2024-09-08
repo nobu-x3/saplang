@@ -9,6 +9,7 @@
 #include <lexer.h>
 #include <parser.h>
 #include <sema.h>
+#include <cfg.h>
 #include <utils.h>
 
 #include <llvm/Support/raw_ostream.h>

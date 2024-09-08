@@ -16,7 +16,7 @@ int CFG::insert_new_block_before(int before, bool reachable) {
 
 void CFG::insert_edge(int from, int to, bool reachable) {
   basic_blocks[from].successors.emplace(std::make_pair(to, reachable));
-  basic_blocks[to].successors.emplace(std::make_pair(from, reachable));
+  basic_blocks[to].predecessors.emplace(std::make_pair(from, reachable));
 }
 
 void CFG::insert_stmt(const ResolvedStmt *stmt, int block) {
@@ -140,7 +140,7 @@ int CFGBuilder::insert_expr(const ResolvedExpr &expr, int block) {
 }
 
 int CFGBuilder::insert_return_stmt(const ResolvedReturnStmt &ret, int block) {
-  block = m_CFG.insert_new_block_before(block, true);
+  block = m_CFG.insert_new_block_before(m_CFG.exit, true);
   m_CFG.insert_stmt(&ret, block);
   if (ret.expr)
     return insert_expr(*ret.expr, block);
