@@ -3,6 +3,8 @@
 #include <cassert>
 #include <unordered_map>
 
+#include "cfg.h"
+
 namespace saplang {
 
 std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
@@ -70,6 +72,8 @@ std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast(bool partial) {
       continue;
     }
     m_CurrFunction->body = std::move(resolved_body);
+    if(m_ShouldRunFlowSensitiveAnalysis)
+      error |= flow_sensitive_analysis(*m_CurrFunction);
   }
   if (error && !partial)
     return {};
@@ -548,6 +552,47 @@ Sema::resolve_while_stmt(const WhileStmt &stmt) {
   condition->set_constant_value(m_Cee.evaluate(*condition));
   return std::make_unique<ResolvedWhileStmt>(
       stmt.location, std::move(condition), std::move(body));
+}
+
+bool Sema::flow_sensitive_analysis(const ResolvedFuncDecl &fn) {
+  CFG cfg = CFGBuilder().build(fn);
+  bool error = false;
+  error |= check_return_on_all_paths(fn, cfg);
+  return error;
+}
+
+bool Sema::check_return_on_all_paths(const ResolvedFuncDecl &fn,
+                                     const CFG &cfg) {
+  if (fn.type.kind == Type::Kind::Void)
+    return false;
+  std::set<int> visited{};
+  std::vector<int> worklist{};
+  worklist.emplace_back(cfg.entry);
+  int return_count = 0;
+  bool exit_reached = false;
+  while (!worklist.empty()) {
+    int basic_block = worklist.back();
+    worklist.pop_back();
+    if (!visited.emplace(basic_block).second)
+      continue;
+    exit_reached |= basic_block == cfg.exit;
+    const auto &[preds, succs, stmts] = cfg.basic_blocks[basic_block];
+    if (!stmts.empty() && dynamic_cast<const ResolvedReturnStmt *>(stmts[0])) {
+      ++return_count;
+      continue;
+    }
+    for (auto &&[succ, reachable] : succs) {
+      if (reachable)
+        worklist.emplace_back(succ);
+    }
+  }
+  if (exit_reached || return_count == 0) {
+    report(fn.location,
+           return_count > 0
+               ? "non-void function does not have a return on every path."
+               : "non-void function does not have a return value.");
+  }
+  return exit_reached || return_count == 0;
 }
 
 std::unique_ptr<ResolvedReturnStmt>

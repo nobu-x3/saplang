@@ -9,6 +9,8 @@
 
 namespace saplang {
 
+class CFG;
+
 struct DeclLookupResult {
   const ResolvedDecl *decl;
   int index;
@@ -16,8 +18,8 @@ struct DeclLookupResult {
 
 class Sema {
 public:
-  inline explicit Sema(std::vector<std::unique_ptr<FunctionDecl>> ast)
-      : m_AST(std::move(ast)) {}
+  inline explicit Sema(std::vector<std::unique_ptr<FunctionDecl>> ast, bool run_flow_sensitive_analysis = false)
+      : m_AST(std::move(ast)), m_ShouldRunFlowSensitiveAnalysis(run_flow_sensitive_analysis) {}
 
   std::vector<std::unique_ptr<ResolvedFuncDecl>>
   resolve_ast(bool partial = false);
@@ -61,11 +63,16 @@ private:
 
   std::unique_ptr<ResolvedWhileStmt> resolve_while_stmt(const WhileStmt &stmt);
 
+  bool flow_sensitive_analysis(const ResolvedFuncDecl& fn);
+
+  bool check_return_on_all_paths(const ResolvedFuncDecl& fn, const CFG& cfg);
+
 private:
   std::vector<std::unique_ptr<FunctionDecl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};
   ResolvedFuncDecl *m_CurrFunction{nullptr};
   ConstantExpressionEvaluator m_Cee;
+  bool m_ShouldRunFlowSensitiveAnalysis;
 
 private:
   class Scope {

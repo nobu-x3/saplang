@@ -109,7 +109,7 @@ int main(int argc, const char **argv) {
   }
   if (!ast.is_complete_ast)
     return 1;
-  saplang::Sema sema{std::move(ast.functions)};
+  saplang::Sema sema{std::move(ast.functions), true};
   auto resolved_tree = sema.resolve_ast(options.res_dump);
   if (options.res_dump) {
     std::stringstream output_stream;
