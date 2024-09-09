@@ -100,7 +100,7 @@ int CFGBuilder::insert_if_stmt(const ResolvedIfStmt &if_stmt, int exit) {
   m_CFG.insert_edge(entry, false_block,
                     !val.has_value() || (val->kind == Type::Kind::Bool &&
                                          val->value.b8 == false));
-  m_CFG.insert_stmt(&if_stmt, exit);
+  m_CFG.insert_stmt(&if_stmt, entry);
   return insert_expr(*if_stmt.condition, entry);
 }
 

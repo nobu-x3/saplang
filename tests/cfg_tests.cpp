@@ -373,3 +373,550 @@ TEST_CASE("conditions", "[cfg]") {
     EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
   }
 }
+
+TEST_CASE("while loops", "[cfg]") {
+  SECTION("empty while loop") {
+    TEST_SETUP(R"(
+    fn void foo(){
+      while true {}
+    }
+    )");
+    REQUIRE(error_stream.str() == "");
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("foo:") != std::string::npos);
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3 (entry)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 2 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 1 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 2 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+  }
+  SECTION("simple while loop") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      5;
+      while 4 {
+        3;
+      }
+      1;
+    }
+    )");
+    REQUIRE(error_stream.str() == "");
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("foo:") != std::string::npos);
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[6 (entry)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[5]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 6 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 4 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[4]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 1 3 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 2 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+  }
+  SECTION("or condition") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      5;
+      while 4 || 4 || 4 {
+        3;
+      }
+      1;
+    }
+    )");
+    REQUIRE(error_stream.str() == "");
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("foo:") != std::string::npos);
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[6 (entry)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[5]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 6 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 4 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[4]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 1 3 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '||'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '||'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '||'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '||'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '||'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 2 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+  }
+  SECTION("and condition") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      5;
+      while 4 && 4 && 4 {
+        3;
+      }
+      1;
+    }
+    )");
+    REQUIRE(error_stream.str() == "");
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("foo:") != std::string::npos);
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[6 (entry)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[5]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 6 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 4 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[4]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 1 3 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '&&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '&&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '&&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '&&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '&&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 2 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+  }
+  SECTION("while after while") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      while 5 {}
+      while 3 {}
+      1;
+    }
+    )");
+    REQUIRE(error_stream.str() == "");
+    auto lines_it = lines.begin();
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[6 (entry)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[5]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 4 6 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 3 4 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[4]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 1 2 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+  }
+  SECTION("while after if") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      if 5 {
+        4;
+      }
+      while 3 {}
+      1;
+    }
+    )");
+    REQUIRE(error_stream.str() == "");
+    auto lines_it = lines.begin();
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[6 (entry)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[5]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 6 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 3(U) 4 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfBlock");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[4]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 3 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 4 5(U) ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 1 2 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+  }
+  SECTION("while after return") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      4;
+      return;
+      while 3 {}
+      1;
+    }
+    )");
+    REQUIRE(error_stream.str() ==
+            "cfg_test:5:7 warning: unreachable statement.\n");
+    auto lines_it = lines.begin();
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[5 (entry)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[4]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 1 2 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+  }
+  SECTION("nested while loops") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      8;
+      while 7 {
+        6;
+        while 5 {
+          4;
+        }
+      }
+      1;
+    }
+    )");
+    REQUIRE(error_stream.str() == "");
+    auto lines_it = lines.begin();
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[9 (entry)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 8 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[8]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 9 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 7 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(8)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[7]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 8 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 1 6 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(6)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[6]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 7 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 5 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(6)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[5]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 6 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 2 4 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[4]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 3 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 4 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 7 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 7 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+  }
+  SECTION("return mid while loop") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      8;
+      while 7 {
+        6;
+        if 6 {
+          5;
+          return;
+          4;
+        }
+        3;
+      }
+      1;
+    }
+    )");
+    REQUIRE(error_stream.str() ==
+            "cfg_test:9:11 warning: unreachable statement.\n");
+    // REQUIRE(output_string == "");
+    auto lines_it = lines.begin();
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[9 (entry)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 8 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[8]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 9 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 7 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(8)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[7]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 8 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 1 6 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedWhileStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(6)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfBlock");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[6]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 7 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 3(U) 5 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(6)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfBlock");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[5]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 6 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[4]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 3 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 4 6(U) ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 2 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 7 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 7 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 5 ");
+    EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+  }
+}
