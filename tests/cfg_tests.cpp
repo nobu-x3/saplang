@@ -8,7 +8,7 @@
   saplang::Lexer lexer{src_file};                                              \
   saplang::Parser parser(&lexer);                                              \
   auto parse_result = parser.parse_source_file();                              \
-  saplang::Sema sema{std::move(parse_result.functions)};                       \
+  saplang::Sema sema{std::move(parse_result.functions), true};                 \
   auto resolved_ast = sema.resolve_ast();                                      \
   for (auto &&fn : resolved_ast) {                                             \
     output_buffer << fn->id << ":\n";                                          \
@@ -1400,4 +1400,13 @@ TEST_CASE("return in if stmt", "[cfg]") {
   EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
   EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 2(U) ");
   EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+}
+TEST_CASE("non-void fn not returning on all paths", "[cfg]") {
+  TEST_SETUP(R"(
+  fn i8 foo() {
+    if true {}
+    else { return 2; }
+  }
+  )");
+  REQUIRE(error_stream.str() == "cfg_test:2:3 error: non-void function does not have a return value.\n");
 }
