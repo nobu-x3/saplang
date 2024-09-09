@@ -1361,3 +1361,43 @@ TEST_CASE("if statements", "[cfg]") {
     EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
   }
 }
+
+TEST_CASE("return in if stmt", "[cfg]") {
+  TEST_SETUP(R"(
+  fn i8 foo() {
+    if false {}
+    else { return 2; }
+  }
+  )");
+  REQUIRE(error_stream.str() == "");
+  auto lines_it = lines.begin();
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "[3 (entry)]");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 2 ");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2]");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 3 ");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0(U) 1 ");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfBlock");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedElseBlock");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i8(2)");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 ");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i8(2)");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 2(U) ");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
+}
