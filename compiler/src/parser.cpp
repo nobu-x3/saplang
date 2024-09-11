@@ -85,7 +85,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
   if (m_NextToken.kind == TokenKind::KwReturn)
     return parse_return_stmt();
   if (m_NextToken.kind == TokenKind::KwConst ||
-      m_NextToken.kind == TokenKind::Identifier)
+      m_NextToken.kind == TokenKind::KwVar)
     return parse_var_decl_stmt();
   auto expr = parse_expr();
   if (!expr)
@@ -151,12 +151,11 @@ std::unique_ptr<WhileStmt> Parser::parse_while_stmt() {
 }
 
 // <varDeclStatement>
-// ::= ('const')? <varDecl> ';'
+// ::= ('const' | 'var') <varDecl> ';'
 std::unique_ptr<DeclStmt> Parser::parse_var_decl_stmt() {
   SourceLocation loc = m_NextToken.location;
   bool is_const = m_NextToken.kind == TokenKind::KwConst;
-  if (is_const)
-    eat_next_token(); // eat 'const'
+  eat_next_token(); // eat 'const' or 'var'
   if (m_NextToken.kind != TokenKind::Identifier)
     return report(m_NextToken.location, "expected identifier.");
   std::unique_ptr<VarDecl> var_decl = parse_var_decl(is_const);

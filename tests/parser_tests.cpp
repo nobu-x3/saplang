@@ -885,7 +885,7 @@ test:4:19 error: expected 'while' body.
 TEST_CASE("var decl", "[parser]") {
     TEST_SETUP(R"(
 fn void foo() {
-    i32 var = 0;
+    var i32 variable = 0;
 }
     )");
     REQUIRE(error_stream.str() == "");
@@ -894,6 +894,6 @@ fn void foo() {
     REQUIRE(lines_it->find("FunctionDecl: foo:void") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "Block");
     CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: var:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: variable:i32");
     CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
 }
