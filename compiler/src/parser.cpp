@@ -1,6 +1,10 @@
 #include <cassert>
+#include <memory>
 
+#include "ast.h"
+#include "lexer.h"
 #include "parser.h"
+#include "utils.h"
 
 namespace saplang {
 
@@ -72,6 +76,7 @@ std::unique_ptr<Block> Parser::parse_block() {
 // | <expr> ';'
 // | <ifStatement>
 // | <whileStatement>
+// | <varDeclStatement>
 std::unique_ptr<Stmt> Parser::parse_stmt() {
   if (m_NextToken.kind == TokenKind::KwWhile)
     return parse_while_stmt();
@@ -79,6 +84,9 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     return parse_if_stmt();
   if (m_NextToken.kind == TokenKind::KwReturn)
     return parse_return_stmt();
+  if (m_NextToken.kind == TokenKind::KwConst ||
+      m_NextToken.kind == TokenKind::Identifier)
+    return parse_var_decl_stmt();
   auto expr = parse_expr();
   if (!expr)
     return nullptr;
@@ -139,7 +147,48 @@ std::unique_ptr<WhileStmt> Parser::parse_while_stmt() {
   if (!body)
     return nullptr;
   return std::make_unique<WhileStmt>(location, std::move(condition),
-                                    std::move(body));
+                                     std::move(body));
+}
+
+// <varDeclStatement>
+// ::= ('const')? <varDecl> ';'
+std::unique_ptr<DeclStmt> Parser::parse_var_decl_stmt() {
+  SourceLocation loc = m_NextToken.location;
+  bool is_const = m_NextToken.kind == TokenKind::KwConst;
+  if (is_const)
+    eat_next_token(); // eat 'const'
+  if (m_NextToken.kind != TokenKind::Identifier)
+    return report(m_NextToken.location, "expected identifier.");
+  std::unique_ptr<VarDecl> var_decl = parse_var_decl(is_const);
+  if (!var_decl)
+    return nullptr;
+  if (m_NextToken.kind != TokenKind::Semicolon)
+    return report(m_NextToken.location,
+                  "expected ';' at the end of declaration.");
+  eat_next_token(); // eat ';'
+  return std::make_unique<DeclStmt>(loc, std::move(var_decl));
+}
+
+// <varDecl>
+// ::= <type> <identifier> ('=' <expr>)?
+std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const) {
+  SourceLocation loc = m_NextToken.location;
+  std::optional<Type> type = parse_type();
+  if (!type)
+    return report(m_NextToken.location,
+                  "expected type before variable identifier.");
+  if (m_NextToken.kind != TokenKind::Identifier)
+    return report(m_NextToken.location, "expected identifier after type.");
+  std::string id = *m_NextToken.value;
+  eat_next_token(); // eat id
+  if (m_NextToken.kind != TokenKind::Equal)
+    return std::make_unique<VarDecl>(loc, id, *type, nullptr, is_const);
+  eat_next_token(); // eat '='
+  std::unique_ptr<Expr> initializer = parse_expr();
+  if (!initializer)
+    return nullptr;
+  return std::make_unique<VarDecl>(loc, id, *type, std::move(initializer),
+                                   is_const);
 }
 
 // <returnStmt>

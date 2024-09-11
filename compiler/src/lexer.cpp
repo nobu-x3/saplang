@@ -48,9 +48,12 @@ Token Lexer::get_next_token() {
       c = eat_next_char();
     return get_next_token();
   }
-  if (curr_char == '=' && peek_next_char() == '=') {
-    eat_next_char();
-    return Token{token_start_location, TokenKind::EqualEqual};
+  if (curr_char == '=') {
+    if (peek_next_char() == '=') {
+      eat_next_char();
+      return Token{token_start_location, TokenKind::EqualEqual};
+    }
+    return Token{token_start_location, TokenKind::Equal};
   }
   if (curr_char == '&' && peek_next_char() == '&') {
     eat_next_char();

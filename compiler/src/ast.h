@@ -111,6 +111,27 @@ struct Expr : public Stmt {
   inline Expr(SourceLocation loc) : Stmt(loc) {}
 };
 
+struct VarDecl : public Decl {
+  Type type;
+  std::unique_ptr<Expr> initializer;
+  bool is_const;
+
+  inline VarDecl(SourceLocation loc, std::string id, Type type,
+                 std::unique_ptr<Expr> init, bool is_const)
+      : Decl(loc, id), type(type), initializer(std::move(init)),
+        is_const(is_const) {}
+
+  DUMP_IMPL
+};
+
+struct DeclStmt : public Stmt {
+  std::unique_ptr<VarDecl> var_decl;
+  inline DeclStmt(SourceLocation loc, std::unique_ptr<VarDecl> var)
+      : Stmt(loc), var_decl(std::move(var)) {}
+
+  DUMP_IMPL
+};
+
 struct NumberLiteral : public Expr {
   enum class NumberType { Integer, Real, Bool };
   NumberType type;

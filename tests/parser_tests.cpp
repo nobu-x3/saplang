@@ -1,3 +1,4 @@
+#include "catch2/catch_test_macros.hpp"
 #include "test_utils.h"
 
 #define TEST_SETUP(file_contents)                                              \
@@ -879,4 +880,20 @@ test:4:19 error: expected 'while' body.
         UnaryOperator: '!'
           DeclRefExpr: x
 )");
+}
+
+TEST_CASE("var decl", "[parser]") {
+    TEST_SETUP(R"(
+fn void foo() {
+    i32 var = 0;
+}
+    )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("FunctionDecl: foo:void") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: var:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
 }
