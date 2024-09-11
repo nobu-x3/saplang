@@ -1,4 +1,4 @@
-#include <llvm-18/llvm/Support/ErrorHandling.h>
+#include <llvm/Support/ErrorHandling.h>
 
 #include "constexpr.h"
 #include <cassert>

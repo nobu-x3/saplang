@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 
 project(saplang)
 
-find_package(LLVM REQUIRED CONFIG)
+find_package(LLVM REQUIRED CONFIG 18.1.8)
 include_directories(compiler/src "${LLVM_INCLUDE_DIR}")
 
 set(CMAKE_CXX_STANDARD 17)
