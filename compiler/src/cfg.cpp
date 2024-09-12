@@ -84,6 +84,8 @@ int CFGBuilder::insert_stmt(const ResolvedStmt &stmt, int block) {
     return insert_expr(*expr, block);
   if (auto *ret_stmt = dynamic_cast<const ResolvedReturnStmt *>(&stmt))
     return insert_return_stmt(*ret_stmt, block);
+  if (auto *decl_stmt = dynamic_cast<const ResolvedDeclStmt *>(&stmt))
+    return insert_decl_stmt(*decl_stmt, block);
   llvm_unreachable("unexpected expression.");
 }
 
@@ -144,6 +146,13 @@ int CFGBuilder::insert_return_stmt(const ResolvedReturnStmt &ret, int block) {
   m_CFG.insert_stmt(&ret, block);
   if (ret.expr)
     return insert_expr(*ret.expr, block);
+  return block;
+}
+
+int CFGBuilder::insert_decl_stmt(const ResolvedDeclStmt &stmt, int block) {
+  m_CFG.insert_stmt(&stmt, block);
+  if (const auto &init = stmt.var_decl->initializer)
+    return insert_expr(*init, block);
   return block;
 }
 
