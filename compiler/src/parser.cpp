@@ -77,6 +77,7 @@ std::unique_ptr<Block> Parser::parse_block() {
 // | <ifStatement>
 // | <whileStatement>
 // | <varDeclStatement>
+// | <assignment>
 std::unique_ptr<Stmt> Parser::parse_stmt() {
   if (m_NextToken.kind == TokenKind::KwWhile)
     return parse_while_stmt();
@@ -87,15 +88,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
   if (m_NextToken.kind == TokenKind::KwConst ||
       m_NextToken.kind == TokenKind::KwVar)
     return parse_var_decl_stmt();
-  auto expr = parse_expr();
-  if (!expr)
-    return nullptr;
-  if (m_NextToken.kind != TokenKind::Semicolon) {
-    return report(m_NextToken.location,
-                  "expected ';' at the end of a statement.");
-  }
-  eat_next_token();
-  return expr;
+  return parse_assignment_or_expr();
 }
 
 // <ifStatement>
@@ -191,6 +184,47 @@ std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const) {
     return nullptr;
   return std::make_unique<VarDecl>(loc, id, *type, std::move(initializer),
                                    is_const);
+}
+
+std::unique_ptr<Stmt> Parser::parse_assignment_or_expr() {
+  std::unique_ptr<Expr> lhs = parse_prefix_expr();
+  if (!lhs)
+    return nullptr;
+  // Assignment
+  if (m_NextToken.kind == TokenKind::Equal) {
+    auto *dre = dynamic_cast<DeclRefExpr *>(lhs.get());
+    if (!dre)
+      return report(lhs->location,
+                    "expected variable on the LHS of assignment.");
+    std::ignore = lhs.release();
+    std::unique_ptr<Assignment> assignment =
+        parse_assignment_rhs(std::unique_ptr<DeclRefExpr>(dre));
+    if (m_NextToken.kind != TokenKind::Semicolon)
+      return report(m_NextToken.location,
+                    "expected ';' at the end of assignment.");
+    eat_next_token(); // eat ';'
+    return assignment;
+  }
+  std::unique_ptr<Expr> expr = parse_expr_rhs(std::move(lhs), 0);
+  if (!expr)
+    return nullptr;
+  if (m_NextToken.kind != TokenKind::Semicolon)
+    return report(m_NextToken.location,
+                  "expected ';' at the end of expression.");
+  eat_next_token(); // eat ';'
+  return expr;
+}
+
+// <assignment>
+// ::= <declRefExpr> '=' <expr>
+std::unique_ptr<Assignment>
+Parser::parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs) {
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat '='
+  std::unique_ptr<Expr> rhs = parse_expr();
+  if (!rhs)
+    return nullptr;
+  return std::make_unique<Assignment>(loc, std::move(lhs), std::move(rhs));
 }
 
 // <returnStmt>

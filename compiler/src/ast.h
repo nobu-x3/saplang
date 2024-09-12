@@ -178,6 +178,17 @@ struct DeclRefExpr : public Expr {
   DUMP_IMPL
 };
 
+struct Assignment : public Stmt {
+  std::unique_ptr<DeclRefExpr> variable;
+  std::unique_ptr<Expr> expr;
+
+  inline Assignment(SourceLocation loc, std::unique_ptr<DeclRefExpr> var,
+                    std::unique_ptr<Expr> expr)
+      : Stmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
+
+  DUMP_IMPL
+};
+
 struct CallExpr : public Expr {
   std::unique_ptr<DeclRefExpr> id;
   std::vector<std::unique_ptr<Expr>> args;

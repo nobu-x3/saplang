@@ -209,6 +209,13 @@ void DeclRefExpr::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "DeclRefExpr: " << id << "\n";
 }
 
+void Assignment::dump_to_stream(std::stringstream &stream,
+                                size_t indent_level) const {
+  stream << indent(indent_level) << "Assignment:\n";
+  variable->dump_to_stream(stream, indent_level + 1);
+  expr->dump_to_stream(stream, indent_level + 1);
+}
+
 void CallExpr::dump_to_stream(std::stringstream &stream,
                               size_t indent_level) const {
   stream << indent(indent_level) << "CallExpr:\n";
