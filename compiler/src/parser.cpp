@@ -180,8 +180,11 @@ std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const) {
     return report(m_NextToken.location, "expected identifier after type.");
   std::string id = *m_NextToken.value;
   eat_next_token(); // eat id
-  if (m_NextToken.kind != TokenKind::Equal)
+  if (m_NextToken.kind != TokenKind::Equal) {
+    if (is_const)
+      return report(loc, "const variable expected to have initializer.");
     return std::make_unique<VarDecl>(loc, id, *type, nullptr, is_const);
+  }
   eat_next_token(); // eat '='
   std::unique_ptr<Expr> initializer = parse_expr();
   if (!initializer)

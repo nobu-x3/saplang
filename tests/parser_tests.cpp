@@ -882,18 +882,75 @@ test:4:19 error: expected 'while' body.
 )");
 }
 
-TEST_CASE("var decl", "[parser]") {
-    TEST_SETUP(R"(
+TEST_CASE("var decl passing", "[parser]") {
+  TEST_SETUP(R"(
 fn void foo() {
     var i32 variable = 0;
+    const i32 const_var = 0;
 }
     )");
-    REQUIRE(error_stream.str() == "");
-    auto lines = break_by_line(output_buffer.str());
-    auto lines_it = lines.begin();
-    REQUIRE(lines_it->find("FunctionDecl: foo:void") != std::string::npos);
-    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: variable:i32");
-    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: foo:void") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: variable:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: const_var:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+}
+
+TEST_CASE("var decl no init", "[parser]") {
+  TEST_SETUP(R"(
+fn void foo() {
+    var i32 variable;
+    const i32 const_var;
+}
+    )");
+  REQUIRE(error_stream.str() == "test:4:11 error: const variable expected to have initializer.\n");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: foo:void") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: variable:i32");
+}
+
+TEST_CASE("var decl failing", "[parser]") {
+  SECTION("missing ;") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      var i32 x = 0 |;
+    }
+    )");
+    REQUIRE(error_stream.str() ==
+            "test:3:21 error: expected ';' at the end of declaration.\n");
+  }
+  SECTION("missing identifier") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      var i32;
+    }
+    )");
+    REQUIRE(error_stream.str() ==
+            "test:3:14 error: expected identifier after type.\n");
+  }
+  SECTION("missing identifier 2") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      var;
+    }
+    )");
+    REQUIRE(error_stream.str() == "test:3:10 error: expected identifier.\n");
+  }
+  SECTION("missing initializer expression") {
+    TEST_SETUP(R"(
+    fn void foo() {
+      var i32 x =;
+    }
+    )");
+    REQUIRE(error_stream.str() == "test:3:18 error: expected expression.\n");
+  }
 }
