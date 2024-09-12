@@ -304,3 +304,62 @@ TEST_CASE("simple while passing", "[sema]") {
                lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") x:") != std::string::npos);
 }
+
+TEST_CASE("sema var decl passing", "[sema]") {
+  TEST_SETUP(R"(
+  fn i32 foo() { return 1; }
+  fn void bar() {
+    var i32 x;
+    var i32 x2 = 1;
+    var i32 x3 = foo();
+  }
+  )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") x:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") x2:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") x3:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+}
+
+TEST_CASE("sema var decl failing", "[sema]") {
+  SECTION("undeclared type") {
+    TEST_SETUP(R"(
+  fn void bar() {
+    var CustomType x;
+  }
+  )");
+    REQUIRE(
+        error_stream.str() ==
+        "sema_test:3:9 error: variable 'x' has invalid 'CustomType' type.\n");
+  }
+  SECTION("type mismatch") {
+    TEST_SETUP(R"(
+  fn void foo() { }
+  fn void bar() {
+    var i32 x = foo();
+  }
+  )");
+    REQUIRE(error_stream.str() ==
+            "sema_test:4:20 error: initializer type mismatch.\n");
+  }
+  SECTION("undeclared initializer symbol") {
+    TEST_SETUP(R"(
+  fn void bar() {
+    var i32 x = y;
+  }
+  )");
+    REQUIRE(error_stream.str() ==
+            "sema_test:3:17 error: symbol 'y' undefined.\n");
+  }
+}

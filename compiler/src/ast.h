@@ -319,6 +319,26 @@ struct ResolvedDecl : public IDumpable {
   virtual ~ResolvedDecl() = default;
 };
 
+struct ResolvedVarDecl : public ResolvedDecl {
+  std::unique_ptr<ResolvedExpr> initializer;
+  bool is_const;
+  inline ResolvedVarDecl(SourceLocation loc, std::string id, Type type,
+                         std::unique_ptr<ResolvedExpr> init, bool is_const)
+      : ResolvedDecl(loc, id, std::move(type)), initializer(std::move(init)),
+        is_const(is_const) {}
+
+  DUMP_IMPL
+};
+
+struct ResolvedDeclStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedVarDecl> var_decl;
+  inline ResolvedDeclStmt(SourceLocation loc,
+                          std::unique_ptr<ResolvedVarDecl> decl)
+      : ResolvedStmt(loc), var_decl(std::move(decl)) {}
+
+  DUMP_IMPL
+};
+
 struct ResolvedNumberLiteral : public ResolvedExpr {
   Value value;
 

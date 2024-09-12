@@ -124,7 +124,8 @@ void ReturnStmt::dump_to_stream(std::stringstream &stream,
 
 void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
-  stream << indent(indent_level) << "VarDecl: " << id << ":" << type.name << "\n";
+  stream << indent(indent_level) << "VarDecl: " << id << ":" << type.name
+         << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -255,6 +256,20 @@ void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,
                                        size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedParamDecl: @(" << this << ") "
          << id << ":\n";
+}
+
+void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
+                                     size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << id
+         << ":" << type.name << "\n";
+  if (initializer)
+    initializer->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedDeclStmt::dump_to_stream(std::stringstream &stream,
+                                      size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedDeclStmt:\n";
+  var_decl->dump_to_stream(stream, indent_level + 1);
 }
 
 void ResolvedFuncDecl::dump_to_stream(std::stringstream &stream,
