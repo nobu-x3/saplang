@@ -3,6 +3,7 @@
 #include <cfloat>
 #include <climits>
 #include <iostream>
+#include <sstream>
 
 namespace saplang {
 
@@ -121,6 +122,20 @@ void ReturnStmt::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void VarDecl::dump_to_stream(std::stringstream &stream,
+                             size_t indent_level) const {
+  stream << indent(indent_level) << "VarDecl: " << id << ":" << type.name
+         << "\n";
+  if (initializer)
+    initializer->dump_to_stream(stream, indent_level + 1);
+}
+
+void DeclStmt::dump_to_stream(std::stringstream &stream,
+                              size_t indent_level) const {
+  stream << indent(indent_level) << "DeclStmt:\n";
+  var_decl->dump_to_stream(stream, indent_level + 1);
+}
+
 void NumberLiteral::dump_to_stream(std::stringstream &stream,
                                    size_t indent_level) const {
   stream << indent(indent_level) << "NumberLiteral: ";
@@ -134,8 +149,7 @@ void NumberLiteral::dump_to_stream(std::stringstream &stream,
   case NumberType::Bool:
     stream << "bool(";
   }
-  stream << value << ")"
-         << "\n";
+  stream << value << ")" << "\n";
 }
 
 void GroupingExpr::dump_to_stream(std::stringstream &stream,
@@ -242,6 +256,20 @@ void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,
                                        size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedParamDecl: @(" << this << ") "
          << id << ":\n";
+}
+
+void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
+                                     size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << id
+         << ":" << type.name << "\n";
+  if (initializer)
+    initializer->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedDeclStmt::dump_to_stream(std::stringstream &stream,
+                                      size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedDeclStmt:\n";
+  var_decl->dump_to_stream(stream, indent_level + 1);
 }
 
 void ResolvedFuncDecl::dump_to_stream(std::stringstream &stream,

@@ -1,4 +1,4 @@
-#include <llvm-18/llvm/Support/ErrorHandling.h>
+#include <llvm/Support/ErrorHandling.h>
 
 #include "constexpr.h"
 #include <cassert>
@@ -335,14 +335,14 @@ std::optional<ConstexprResult> mul(const std::optional<ConstexprResult> &lhs,
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind - 4));
+        (unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
     return cast_up_signed(get_value(lhs->value, lhs->kind) *
                               get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind - 4, (unsigned int)rhs->kind));
+        (unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
     return cast_up_signed(get_value(lhs->value, lhs->kind) *
                               get_value(rhs->value, rhs->kind),
                           max_kind);
@@ -429,14 +429,14 @@ std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs,
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind - 4));
+        (unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
     return cast_up_signed(get_value(lhs->value, lhs->kind) +
                               get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind - 4, (unsigned int)rhs->kind));
+        (unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
     return cast_up_signed(get_value(lhs->value, lhs->kind) +
                               get_value(rhs->value, rhs->kind),
                           max_kind);
@@ -523,14 +523,14 @@ std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs,
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind - 4));
+        (unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
     return cast_up_signed(get_value(lhs->value, lhs->kind) -
                               get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind - 4, (unsigned int)rhs->kind));
+        (unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
     return cast_up_signed(get_value(lhs->value, lhs->kind) -
                               get_value(rhs->value, rhs->kind),
                           max_kind);
@@ -608,14 +608,14 @@ std::optional<ConstexprResult> div(const std::optional<ConstexprResult> &lhs,
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind - 4));
+        (unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
     return cast_up_signed(get_value(lhs->value, lhs->kind) -
                               get_value(rhs->value, rhs->kind),
                           max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
     Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind - 4, (unsigned int)rhs->kind));
+        (unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
     return cast_up_signed(get_value(lhs->value, lhs->kind) -
                               get_value(rhs->value, rhs->kind),
                           max_kind);
@@ -863,6 +863,14 @@ ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
   return result;
 }
 
+std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_decl_ref_expr(
+    const ResolvedDeclRefExpr &ref) {
+  const auto *rvd = dynamic_cast<const ResolvedVarDecl *>(ref.decl);
+  if (!rvd || !rvd->is_const || !rvd->initializer)
+    return std::nullopt;
+  return evaluate(*rvd->initializer);
+}
+
 std::optional<ConstexprResult>
 ConstantExpressionEvaluator::evaluate(const ResolvedExpr &expr) {
   if (const std::optional<ConstexprResult> &res = expr.get_constant_value())
@@ -880,6 +888,10 @@ ConstantExpressionEvaluator::evaluate(const ResolvedExpr &expr) {
   }
   if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr)) {
     return eval_unary_op(*unop);
+  }
+  if (const auto *decl_ref_expr =
+          dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
+    return eval_decl_ref_expr(*decl_ref_expr);
   }
   return std::nullopt;
 }

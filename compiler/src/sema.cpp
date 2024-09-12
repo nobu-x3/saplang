@@ -21,171 +21,6 @@ std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
     {Type::Kind::f64, sizeof(double)},
 };
 
-std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id,
-                                                  std::optional<Type *> type) {
-  int scope_id = 0;
-  for (auto it = m_Scopes.rbegin(); it != m_Scopes.rend(); ++it) {
-    for (const auto *decl : *it) {
-      if (decl->id == id) {
-        return DeclLookupResult{decl, scope_id};
-      }
-    }
-    ++scope_id;
-  }
-  return std::nullopt;
-}
-
-bool Sema::insert_decl_to_current_scope(ResolvedDecl &decl) {
-  auto lookup_result = lookup_decl(decl.id, &decl.type);
-  if (lookup_result && lookup_result->index == 0) {
-    report(decl.location, "redeclaration of '" + decl.id + "\'.");
-    return false;
-  }
-  m_Scopes.back().emplace_back(&decl);
-  return true;
-}
-
-std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast(bool partial) {
-  std::vector<std::unique_ptr<ResolvedFuncDecl>> resolved_functions{};
-  Scope global_scope(this);
-  // Insert all global scope stuff, e.g. from other modules
-  bool error = false;
-  for (auto &&fn : m_AST) {
-    auto resolved_fn_decl = resolve_func_decl(*fn);
-    if (!resolved_fn_decl || !insert_decl_to_current_scope(*resolved_fn_decl)) {
-      error = true;
-      continue;
-    }
-    resolved_functions.emplace_back(std::move(resolved_fn_decl));
-  }
-  if (error && !partial)
-    return {};
-  for (int i = 0; i < resolved_functions.size(); ++i) {
-    Scope fn_scope{this};
-    m_CurrFunction = resolved_functions[i].get();
-    for (auto &&param : m_CurrFunction->params) {
-      insert_decl_to_current_scope(*param);
-    }
-    auto resolved_body = resolve_block(*m_AST[i]->body);
-    if (!resolved_body) {
-      error = true;
-      continue;
-    }
-    m_CurrFunction->body = std::move(resolved_body);
-    if(m_ShouldRunFlowSensitiveAnalysis)
-      error |= flow_sensitive_analysis(*m_CurrFunction);
-  }
-  if (error && !partial)
-    return {};
-  return resolved_functions;
-}
-
-std::optional<Type> Sema::resolve_type(Type parsed_type) {
-  if (parsed_type.kind == Type::Kind::Custom) {
-    return std::nullopt;
-  }
-  return parsed_type;
-}
-
-std::unique_ptr<ResolvedFuncDecl>
-Sema::resolve_func_decl(const FunctionDecl &func) {
-  auto type = resolve_type(func.type);
-  if (!type) {
-    return report(func.location, "function '" + func.id + "' has invalid '" +
-                                     func.type.name + "' type");
-  }
-  std::vector<std::unique_ptr<ResolvedParamDecl>> resolved_params{};
-  Scope param_scope{this};
-  for (auto &&param : func.params) {
-    auto resolved_param = resolve_param_decl(*param);
-    if (!resolved_param || !insert_decl_to_current_scope(*resolved_param))
-      return nullptr;
-    resolved_params.emplace_back(std::move(resolved_param));
-  }
-  return std::make_unique<ResolvedFuncDecl>(
-      func.location, func.id, *type, std::move(resolved_params), nullptr);
-}
-
-std::unique_ptr<ResolvedParamDecl>
-Sema::resolve_param_decl(const ParamDecl &decl) {
-  auto type = resolve_type(decl.type);
-  if (!type || type->kind == Type::Kind::Void) {
-    return report(decl.location, "parameter '" + decl.id + "' has invalid '" +
-                                     decl.type.name + "' type");
-  }
-  return std::make_unique<ResolvedParamDecl>(decl.location, decl.id,
-                                             std::move(*type));
-}
-
-std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block) {
-  std::vector<std::unique_ptr<ResolvedStmt>> resolved_stmts{};
-  bool error = false;
-  Scope block_scope{this};
-  int unreachable_count = 0;
-  for (auto &&stmt : block.statements) {
-    auto resolved_stmt = resolve_stmt(*stmt);
-    error |= !resolved_stmts.emplace_back(std::move(resolved_stmt));
-    if (error)
-      continue;
-    if (unreachable_count == 1) {
-      report(stmt->location, "unreachable statement.", true);
-      ++unreachable_count;
-    }
-    if (dynamic_cast<ReturnStmt *>(stmt.get())) {
-      ++unreachable_count;
-    }
-  }
-  if (error)
-    return nullptr;
-  return std::make_unique<ResolvedBlock>(block.location,
-                                         std::move(resolved_stmts));
-}
-
-std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
-  if (auto *expr = dynamic_cast<const Expr *>(&stmt))
-    return resolve_expr(*expr);
-  if (auto *return_stmt = dynamic_cast<const ReturnStmt *>(&stmt))
-    return resolve_return_stmt(*return_stmt);
-  if (auto *if_stmt = dynamic_cast<const IfStmt *>(&stmt))
-    return resolve_if_stmt(*if_stmt);
-  if (auto *while_stmt = dynamic_cast<const WhileStmt *>(&stmt))
-    return resolve_while_stmt(*while_stmt);
-  assert(false && "unexpected expression.");
-  return nullptr;
-}
-
-std::unique_ptr<ResolvedGroupingExpr>
-Sema::resolve_grouping_expr(const GroupingExpr &group) {
-  auto resolved_expr = resolve_expr(*group.expr);
-  if (!resolved_expr)
-    return nullptr;
-  return std::make_unique<ResolvedGroupingExpr>(group.location,
-                                                std::move(resolved_expr));
-}
-
-std::unique_ptr<ResolvedBinaryOperator>
-Sema::resolve_binary_operator(const BinaryOperator &op) {
-  auto resolved_lhs = resolve_expr(*op.lhs);
-  auto resolved_rhs = resolve_expr(*op.rhs);
-  if (!resolved_lhs || !resolved_rhs)
-    return nullptr;
-  return std::make_unique<ResolvedBinaryOperator>(
-      op.location, std::move(resolved_lhs), std::move(resolved_rhs), op.op);
-}
-
-std::unique_ptr<ResolvedUnaryOperator>
-Sema::resolve_unary_operator(const UnaryOperator &op) {
-  auto resolved_rhs = resolve_expr(*op.rhs);
-  if (!resolved_rhs)
-    return nullptr;
-  if (resolved_rhs->type.kind == Type::Kind::Void)
-    return report(
-        resolved_rhs->location,
-        "void expression cannot be used as operand to unary operator.");
-  return std::make_unique<ResolvedUnaryOperator>(
-      op.location, std::move(resolved_rhs), op.op);
-}
-
 void apply_unary_op_to_num_literal(ResolvedUnaryOperator *unop) {
   // @TODO: implement call exprs too
   auto *numlit = dynamic_cast<ResolvedNumberLiteral *>(unop->rhs.get());
@@ -463,14 +298,6 @@ bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
   return false;
 }
 
-bool is_comp_op(TokenKind op) {
-  if (op == TokenKind::LessThan || op == TokenKind::LessThanOrEqual ||
-      op == TokenKind::GreaterThan || op == TokenKind::GreaterThanOrEqual ||
-      op == TokenKind::ExclamationEqual || op == TokenKind::EqualEqual)
-    return true;
-  return false;
-}
-
 bool try_cast_expr(ResolvedExpr &expr, const Type &type,
                    ConstantExpressionEvaluator &cee) {
   if (auto *groupexp = dynamic_cast<ResolvedGroupingExpr *>(&expr)) {
@@ -534,6 +361,216 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
   return std::make_unique<ResolvedIfStmt>(stmt.location, std::move(condition),
                                           std::move(true_block),
                                           std::move(false_block));
+}
+
+std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id,
+                                                  std::optional<Type *> type) {
+  int scope_id = 0;
+  for (auto it = m_Scopes.rbegin(); it != m_Scopes.rend(); ++it) {
+    for (const auto *decl : *it) {
+      if (decl->id == id) {
+        return DeclLookupResult{decl, scope_id};
+      }
+    }
+    ++scope_id;
+  }
+  return std::nullopt;
+}
+
+bool Sema::insert_decl_to_current_scope(ResolvedDecl &decl) {
+  auto lookup_result = lookup_decl(decl.id, &decl.type);
+  if (lookup_result && lookup_result->index == 0) {
+    report(decl.location, "redeclaration of '" + decl.id + "\'.");
+    return false;
+  }
+  m_Scopes.back().emplace_back(&decl);
+  return true;
+}
+
+std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast(bool partial) {
+  std::vector<std::unique_ptr<ResolvedFuncDecl>> resolved_functions{};
+  Scope global_scope(this);
+  // Insert all global scope stuff, e.g. from other modules
+  bool error = false;
+  for (auto &&fn : m_AST) {
+    auto resolved_fn_decl = resolve_func_decl(*fn);
+    if (!resolved_fn_decl || !insert_decl_to_current_scope(*resolved_fn_decl)) {
+      error = true;
+      continue;
+    }
+    resolved_functions.emplace_back(std::move(resolved_fn_decl));
+  }
+  if (error && !partial)
+    return {};
+  for (int i = 0; i < resolved_functions.size(); ++i) {
+    Scope fn_scope{this};
+    m_CurrFunction = resolved_functions[i].get();
+    for (auto &&param : m_CurrFunction->params) {
+      insert_decl_to_current_scope(*param);
+    }
+    auto resolved_body = resolve_block(*m_AST[i]->body);
+    if (!resolved_body) {
+      error = true;
+      continue;
+    }
+    m_CurrFunction->body = std::move(resolved_body);
+    if (m_ShouldRunFlowSensitiveAnalysis)
+      error |= flow_sensitive_analysis(*m_CurrFunction);
+  }
+  if (error && !partial)
+    return {};
+  return resolved_functions;
+}
+
+std::optional<Type> Sema::resolve_type(Type parsed_type) {
+  if (parsed_type.kind == Type::Kind::Custom) {
+    return std::nullopt;
+  }
+  return parsed_type;
+}
+
+std::unique_ptr<ResolvedFuncDecl>
+Sema::resolve_func_decl(const FunctionDecl &func) {
+  auto type = resolve_type(func.type);
+  if (!type) {
+    return report(func.location, "function '" + func.id + "' has invalid '" +
+                                     func.type.name + "' type");
+  }
+  std::vector<std::unique_ptr<ResolvedParamDecl>> resolved_params{};
+  Scope param_scope{this};
+  for (auto &&param : func.params) {
+    auto resolved_param = resolve_param_decl(*param);
+    if (!resolved_param || !insert_decl_to_current_scope(*resolved_param))
+      return nullptr;
+    resolved_params.emplace_back(std::move(resolved_param));
+  }
+  return std::make_unique<ResolvedFuncDecl>(
+      func.location, func.id, *type, std::move(resolved_params), nullptr);
+}
+
+std::unique_ptr<ResolvedParamDecl>
+Sema::resolve_param_decl(const ParamDecl &decl) {
+  auto type = resolve_type(decl.type);
+  if (!type || type->kind == Type::Kind::Void) {
+    return report(decl.location, "parameter '" + decl.id + "' has invalid '" +
+                                     decl.type.name + "' type");
+  }
+  return std::make_unique<ResolvedParamDecl>(decl.location, decl.id,
+                                             std::move(*type));
+}
+
+std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block) {
+  std::vector<std::unique_ptr<ResolvedStmt>> resolved_stmts{};
+  bool error = false;
+  Scope block_scope{this};
+  int unreachable_count = 0;
+  for (auto &&stmt : block.statements) {
+    auto resolved_stmt = resolve_stmt(*stmt);
+    error |= !resolved_stmts.emplace_back(std::move(resolved_stmt));
+    if (error)
+      continue;
+    if (unreachable_count == 1) {
+      report(stmt->location, "unreachable statement.", true);
+      ++unreachable_count;
+    }
+    if (dynamic_cast<ReturnStmt *>(stmt.get())) {
+      ++unreachable_count;
+    }
+  }
+  if (error)
+    return nullptr;
+  return std::make_unique<ResolvedBlock>(block.location,
+                                         std::move(resolved_stmts));
+}
+
+std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
+  if (auto *expr = dynamic_cast<const Expr *>(&stmt))
+    return resolve_expr(*expr);
+  if (auto *return_stmt = dynamic_cast<const ReturnStmt *>(&stmt))
+    return resolve_return_stmt(*return_stmt);
+  if (auto *if_stmt = dynamic_cast<const IfStmt *>(&stmt))
+    return resolve_if_stmt(*if_stmt);
+  if (auto *while_stmt = dynamic_cast<const WhileStmt *>(&stmt))
+    return resolve_while_stmt(*while_stmt);
+  if (auto *var_decl_stmt = dynamic_cast<const DeclStmt *>(&stmt))
+    return resolve_decl_stmt(*var_decl_stmt);
+  assert(false && "unexpected expression.");
+  return nullptr;
+}
+
+std::unique_ptr<ResolvedDeclStmt>
+Sema::resolve_decl_stmt(const DeclStmt &stmt) {
+  std::unique_ptr<ResolvedVarDecl> var_decl = resolve_var_decl(*stmt.var_decl);
+  if (!var_decl)
+    return nullptr;
+  if (!insert_decl_to_current_scope(*var_decl))
+    return nullptr;
+  return std::make_unique<ResolvedDeclStmt>(stmt.location, std::move(var_decl));
+}
+
+std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
+  std::optional<Type> type = resolve_type(decl.type);
+  if (!type || type->kind == Type::Kind::Void)
+    return report(decl.location, "variable '" + decl.id + "' has invalid '" +
+                                     decl.type.name + "' type.");
+  std::unique_ptr<ResolvedExpr> resolved_initializer = nullptr;
+  if (decl.initializer) {
+    resolved_initializer = resolve_expr(*decl.initializer);
+    if (!resolved_initializer)
+      return nullptr;
+  }
+  if (resolved_initializer) {
+    if (resolved_initializer->type.kind != type->kind) {
+      if (!try_cast_expr(*resolved_initializer, *type, m_Cee))
+        return report(resolved_initializer->location,
+                      "initializer type mismatch.");
+    }
+    resolved_initializer->set_constant_value(
+        m_Cee.evaluate(*resolved_initializer));
+  }
+  return std::make_unique<ResolvedVarDecl>(decl.location, decl.id, decl.type,
+                                           std::move(resolved_initializer),
+                                           decl.is_const);
+}
+
+std::unique_ptr<ResolvedGroupingExpr>
+Sema::resolve_grouping_expr(const GroupingExpr &group) {
+  auto resolved_expr = resolve_expr(*group.expr);
+  if (!resolved_expr)
+    return nullptr;
+  return std::make_unique<ResolvedGroupingExpr>(group.location,
+                                                std::move(resolved_expr));
+}
+
+std::unique_ptr<ResolvedBinaryOperator>
+Sema::resolve_binary_operator(const BinaryOperator &op) {
+  auto resolved_lhs = resolve_expr(*op.lhs);
+  auto resolved_rhs = resolve_expr(*op.rhs);
+  if (!resolved_lhs || !resolved_rhs)
+    return nullptr;
+  return std::make_unique<ResolvedBinaryOperator>(
+      op.location, std::move(resolved_lhs), std::move(resolved_rhs), op.op);
+}
+
+std::unique_ptr<ResolvedUnaryOperator>
+Sema::resolve_unary_operator(const UnaryOperator &op) {
+  auto resolved_rhs = resolve_expr(*op.rhs);
+  if (!resolved_rhs)
+    return nullptr;
+  if (resolved_rhs->type.kind == Type::Kind::Void)
+    return report(
+        resolved_rhs->location,
+        "void expression cannot be used as operand to unary operator.");
+  return std::make_unique<ResolvedUnaryOperator>(
+      op.location, std::move(resolved_rhs), op.op);
+}
+
+bool is_comp_op(TokenKind op) {
+  if (op == TokenKind::LessThan || op == TokenKind::LessThanOrEqual ||
+      op == TokenKind::GreaterThan || op == TokenKind::GreaterThanOrEqual ||
+      op == TokenKind::ExclamationEqual || op == TokenKind::EqualEqual)
+    return true;
+  return false;
 }
 
 std::unique_ptr<ResolvedWhileStmt>

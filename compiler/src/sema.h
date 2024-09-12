@@ -63,6 +63,10 @@ private:
 
   std::unique_ptr<ResolvedWhileStmt> resolve_while_stmt(const WhileStmt &stmt);
 
+  std::unique_ptr<ResolvedDeclStmt> resolve_decl_stmt(const DeclStmt& stmt);
+
+  std::unique_ptr<ResolvedVarDecl> resolve_var_decl(const VarDecl& decl);
+
   bool flow_sensitive_analysis(const ResolvedFuncDecl& fn);
 
   bool check_return_on_all_paths(const ResolvedFuncDecl& fn, const CFG& cfg);

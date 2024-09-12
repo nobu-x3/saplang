@@ -18,6 +18,13 @@
   ++it;                                                                        \
   REQUIRE(expr);
 
+#define EXACT_CHECK_NEXT_REQUIRE(it, text)                                     \
+  NEXT_REQUIRE(it, it->find(text) != std::string::npos);                       \
+  REQUIRE(*it == text);
+
+#define CONTAINS_NEXT_REQUIRE(it, text)                                        \
+  NEXT_REQUIRE(it, it->find(text) != std::string::npos);
+
 inline std::string remove_whitespace(std::string_view input) {
   std::string output_string{input};
   output_string.erase(

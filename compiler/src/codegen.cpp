@@ -139,6 +139,8 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt) {
     return gen_while_stmt(*whilestmt);
   if (auto *return_stmt = dynamic_cast<const ResolvedReturnStmt *>(&stmt))
     return gen_return_stmt(*return_stmt);
+  if (auto *decl_stmt = dynamic_cast<const ResolvedDeclStmt *>(&stmt))
+    return gen_decl_stmt(*decl_stmt);
   llvm_unreachable("unknown statememt.");
   return nullptr;
 }
@@ -497,6 +499,17 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
     args.emplace_back(gen_expr(*arg));
   }
   return m_Builder.CreateCall(callee, args);
+}
+
+llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
+  llvm::Function *function = get_current_function();
+  const auto *decl = stmt.var_decl.get();
+  llvm::Type *type = gen_type(decl->type);
+  llvm::AllocaInst *var = alloc_stack_var(function, type, decl->id);
+  if (const auto &init = decl->initializer)
+    m_Builder.CreateStore(gen_expr(*init), var);
+  m_Declarations[decl] = var;
+  return nullptr;
 }
 
 llvm::Function *Codegen::get_current_function() {

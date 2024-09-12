@@ -1418,3 +1418,45 @@ TEST_CASE("while stmt", "[constexpr]") {
                lines_it->find("ResolvedNumberLiteral") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("bool(0)") != std::string::npos);
 }
+
+TEST_CASE("const var binop", "[constexpr]") {
+  TEST_SETUP(R"(
+  fn i32 foo() {
+    const i32 x = 2;
+    return x * 10;
+  }
+  )");
+  REQUIRE(error_stream.str() == "");
+  lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedBinaryOperator: '*'") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(20)");
+}
+
+TEST_CASE("const var return", "[constexpr]") {
+  TEST_SETUP(R"(
+  fn i32 foo() {
+    const i32 x = 2;
+    return x;
+  }
+  )");
+  REQUIRE(error_stream.str() == "");
+  lines_it = lines.begin() + 6;
+  REQUIRE(lines_it->find("ResolvedReturnStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(")
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)")
+}
+
+TEST_CASE("mutable var return") {
+  TEST_SETUP(R"(
+  fn i32 foo() {
+    var i32 x = 2;
+    return x;
+  }
+  )");
+  REQUIRE(error_stream.str() == "");
+  lines_it = lines.begin() + 6;
+  REQUIRE(lines_it->find("ResolvedReturnStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
+}

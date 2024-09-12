@@ -18,13 +18,6 @@
   auto lines = break_by_line(output_string);                                   \
   const auto &error_stream = saplang::get_error_stream();
 
-#define EXACT_CHECK_NEXT_REQUIRE(it, text)                                     \
-  NEXT_REQUIRE(it, it->find(text) != std::string::npos);                       \
-  REQUIRE(*it == text);
-
-#define CONTAINS_NEXT_REQUIRE(it, text)                                        \
-  NEXT_REQUIRE(it, it->find(text) != std::string::npos);
-
 TEST_CASE("empty function", "[cfg]") {
   TEST_SETUP("fn void foo() {}");
   REQUIRE(error_stream.str() == "");
