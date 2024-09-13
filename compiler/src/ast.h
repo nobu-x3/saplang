@@ -62,7 +62,7 @@ struct Type {
   // static Type get_builtin_type(Kind kind);
 
 private:
-  Type(Kind kind, std::string_view name) : kind(kind), name(name) {};
+  Type(Kind kind, std::string_view name) : kind(kind), name(name){};
 };
 
 #define DUMP_IMPL                                                              \
@@ -442,5 +442,16 @@ struct ResolvedReturnStmt : public ResolvedStmt {
       : ResolvedStmt(loc), expr(std::move(expr)) {}
 
   DUMP_IMPL
+};
+
+struct ResolvedAssignment : public ResolvedStmt {
+  std::unique_ptr<ResolvedDeclRefExpr> variable;
+  std::unique_ptr<ResolvedExpr> expr;
+  inline ResolvedAssignment(SourceLocation loc,
+                            std::unique_ptr<ResolvedDeclRefExpr> var,
+                            std::unique_ptr<ResolvedExpr> expr)
+      : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
+
+    DUMP_IMPL
 };
 } // namespace saplang

@@ -956,7 +956,7 @@ TEST_CASE("var decl failing", "[parser]") {
   }
 }
 
-TEST_CASE("assignment passing", "[parser]") {
+TEST_CASE("assignment", "[parser]") {
   TEST_SETUP(R"(fn void foo() { a = 1; })");
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());

@@ -149,7 +149,8 @@ void NumberLiteral::dump_to_stream(std::stringstream &stream,
   case NumberType::Bool:
     stream << "bool(";
   }
-  stream << value << ")" << "\n";
+  stream << value << ")"
+         << "\n";
 }
 
 void GroupingExpr::dump_to_stream(std::stringstream &stream,
@@ -443,5 +444,12 @@ void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedNumberLiteral:\n";
   dump_constant(stream, indent_level, value, type.kind);
   stream << "\n";
+}
+
+void ResolvedAssignment::dump_to_stream(std::stringstream &stream,
+                                        size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedAssignment:\n";
+  variable->dump_to_stream(stream, indent_level + 1);
+  expr->dump_to_stream(stream, indent_level + 1);
 }
 } // namespace saplang
