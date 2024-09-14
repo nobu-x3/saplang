@@ -226,7 +226,7 @@ fn void main() {
   Block
 )");
   REQUIRE(error_stream.str() ==
-          R"(test:4:1 error: expected ';' at the end of a statement.
+          R"(test:4:1 error: expected ';' at the end of expression.
 )");
   REQUIRE(!parser.is_complete_ast());
 }
@@ -396,8 +396,8 @@ f32 z =;
     NumberLiteral: real(1.0)
 )");
   REQUIRE(error_stream.str() ==
-          R"(test:3:5 error: expected ';' at the end of a statement.
-test:7:5 error: expected ';' at the end of a statement.
+          R"(test:3:5 error: expected ';' at the end of expression.
+test:7:5 error: expected ';' at the end of expression.
 )");
   REQUIRE(!parser.is_complete_ast());
 }
@@ -898,7 +898,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: variable:i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: const_var:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: const_var:const i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
 }
 
@@ -909,7 +909,8 @@ fn void foo() {
     const i32 const_var;
 }
     )");
-  REQUIRE(error_stream.str() == "test:4:11 error: const variable expected to have initializer.\n");
+  REQUIRE(error_stream.str() ==
+          "test:4:11 error: const variable expected to have initializer.\n");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
   REQUIRE(lines_it->find("FunctionDecl: foo:void") != std::string::npos);
@@ -953,4 +954,39 @@ TEST_CASE("var decl failing", "[parser]") {
     )");
     REQUIRE(error_stream.str() == "test:3:18 error: expected expression.\n");
   }
+}
+
+TEST_CASE("assignment", "[parser]") {
+  TEST_SETUP(R"(fn void foo() { a = 1; })");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  REQUIRE(lines_it->find("Assignment:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+}
+
+TEST_CASE("not allowing multiple assignments", "[parser]") {
+  TEST_SETUP("fn void foo() { a = b = 1; }")
+  REQUIRE(error_stream.str() ==
+          "test:1:23 error: expected ';' at the end of assignment.\n");
+}
+
+TEST_CASE("assignment's lhs must be rvalue", "[parser]") {
+  TEST_SETUP(R"(
+fn i32 bar() { return 1; }
+fn void foo() { bar() = 2; }
+)");
+  REQUIRE(error_stream.str() ==
+          "test:3:20 error: expected variable on the LHS of assignment.\n");
+}
+
+TEST_CASE("const parameter", "[parser]") {
+  TEST_SETUP(R"(fn void foo (const i32 x){})");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: foo:void") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: x:const i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
 }

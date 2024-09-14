@@ -141,6 +141,8 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt) {
     return gen_return_stmt(*return_stmt);
   if (auto *decl_stmt = dynamic_cast<const ResolvedDeclStmt *>(&stmt))
     return gen_decl_stmt(*decl_stmt);
+  if (auto *assignment = dynamic_cast<const ResolvedAssignment *>(&stmt))
+    return gen_assignment(*assignment);
   llvm_unreachable("unknown statememt.");
   return nullptr;
 }
@@ -540,4 +542,8 @@ llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
   llvm_unreachable("unexpected type cast from bool.");
 }
 
+llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
+  return m_Builder.CreateStore(gen_expr(*assignment.expr),
+                               m_Declarations[assignment.variable->decl]);
+}
 } // namespace saplang

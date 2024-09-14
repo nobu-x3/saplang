@@ -62,7 +62,7 @@ struct Type {
   // static Type get_builtin_type(Kind kind);
 
 private:
-  Type(Kind kind, std::string_view name) : kind(kind), name(name) {};
+  Type(Kind kind, std::string_view name) : kind(kind), name(name){};
 };
 
 #define DUMP_IMPL                                                              \
@@ -178,6 +178,17 @@ struct DeclRefExpr : public Expr {
   DUMP_IMPL
 };
 
+struct Assignment : public Stmt {
+  std::unique_ptr<DeclRefExpr> variable;
+  std::unique_ptr<Expr> expr;
+
+  inline Assignment(SourceLocation loc, std::unique_ptr<DeclRefExpr> var,
+                    std::unique_ptr<Expr> expr)
+      : Stmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
+
+  DUMP_IMPL
+};
+
 struct CallExpr : public Expr {
   std::unique_ptr<DeclRefExpr> id;
   std::vector<std::unique_ptr<Expr>> args;
@@ -234,8 +245,9 @@ struct IfStmt : public Stmt {
 
 struct ParamDecl : public Decl {
   Type type;
-  inline ParamDecl(SourceLocation loc, std::string id, Type type)
-      : Decl(loc, id), type(std::move(type)) {}
+  bool is_const;
+  inline ParamDecl(SourceLocation loc, std::string id, Type type, bool is_const)
+      : Decl(loc, id), type(std::move(type)), is_const(is_const) {}
 
   DUMP_IMPL
 };
@@ -382,8 +394,9 @@ struct ResolvedUnaryOperator : public ResolvedExpr {
 };
 
 struct ResolvedParamDecl : public ResolvedDecl {
-  inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type)
-      : ResolvedDecl(loc, std::move(id), std::move(type)) {}
+  bool is_const;
+  inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type, bool is_const)
+      : ResolvedDecl(loc, std::move(id), std::move(type)), is_const(is_const) {}
 
   DUMP_IMPL
 };
@@ -431,5 +444,16 @@ struct ResolvedReturnStmt : public ResolvedStmt {
       : ResolvedStmt(loc), expr(std::move(expr)) {}
 
   DUMP_IMPL
+};
+
+struct ResolvedAssignment : public ResolvedStmt {
+  std::unique_ptr<ResolvedDeclRefExpr> variable;
+  std::unique_ptr<ResolvedExpr> expr;
+  inline ResolvedAssignment(SourceLocation loc,
+                            std::unique_ptr<ResolvedDeclRefExpr> var,
+                            std::unique_ptr<ResolvedExpr> expr)
+      : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
+
+    DUMP_IMPL
 };
 } // namespace saplang

@@ -1394,6 +1394,7 @@ TEST_CASE("return in if stmt", "[cfg]") {
   EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 2(U) ");
   EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
 }
+
 TEST_CASE("non-void fn not returning on all paths", "[cfg]") {
   TEST_SETUP(R"(
   fn i8 foo() {
@@ -1401,5 +1402,63 @@ TEST_CASE("non-void fn not returning on all paths", "[cfg]") {
     else { return 2; }
   }
   )");
-  REQUIRE(error_stream.str() == "cfg_test:2:3 error: non-void function does not have a return value.\n");
+  REQUIRE(
+      error_stream.str() ==
+      "cfg_test:2:3 error: non-void function does not have a return value.\n");
+}
+
+TEST_CASE("assignment, reassignment, self reassignment", "[cfg]") {
+  TEST_SETUP(R"(
+fn void foo() {
+    var i32 x;
+    x = 2;
+    x = 3;
+    x = x + 1;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines_it = lines.begin();
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "[2 (entry)]");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 1 ");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "[1]");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 2 ");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: 0 ");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") x:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '+'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '+'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 ");
+  EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");
 }

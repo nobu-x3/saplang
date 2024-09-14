@@ -124,8 +124,8 @@ void ReturnStmt::dump_to_stream(std::stringstream &stream,
 
 void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
-  stream << indent(indent_level) << "VarDecl: " << id << ":" << type.name
-         << "\n";
+  stream << indent(indent_level) << "VarDecl: " << id << ":"
+         << (is_const ? "const " : "") << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -149,7 +149,8 @@ void NumberLiteral::dump_to_stream(std::stringstream &stream,
   case NumberType::Bool:
     stream << "bool(";
   }
-  stream << value << ")" << "\n";
+  stream << value << ")"
+         << "\n";
 }
 
 void GroupingExpr::dump_to_stream(std::stringstream &stream,
@@ -209,6 +210,13 @@ void DeclRefExpr::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "DeclRefExpr: " << id << "\n";
 }
 
+void Assignment::dump_to_stream(std::stringstream &stream,
+                                size_t indent_level) const {
+  stream << indent(indent_level) << "Assignment:\n";
+  variable->dump_to_stream(stream, indent_level + 1);
+  expr->dump_to_stream(stream, indent_level + 1);
+}
+
 void CallExpr::dump_to_stream(std::stringstream &stream,
                               size_t indent_level) const {
   stream << indent(indent_level) << "CallExpr:\n";
@@ -220,8 +228,8 @@ void CallExpr::dump_to_stream(std::stringstream &stream,
 
 void ParamDecl::dump_to_stream(std::stringstream &stream,
                                size_t indent_level) const {
-  stream << indent(indent_level) << "ParamDecl: " << id << ":" << type.name
-         << "\n";
+  stream << indent(indent_level) << "ParamDecl: " << id << ":"
+         << (is_const ? "const " : "") << type.name << "\n";
 }
 
 void ResolvedBlock::dump_to_stream(std::stringstream &stream,
@@ -261,7 +269,7 @@ void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,
 void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
                                      size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << id
-         << ":" << type.name << "\n";
+         << ":" << (is_const ? "const " : "") << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -436,5 +444,12 @@ void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedNumberLiteral:\n";
   dump_constant(stream, indent_level, value, type.kind);
   stream << "\n";
+}
+
+void ResolvedAssignment::dump_to_stream(std::stringstream &stream,
+                                        size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedAssignment:\n";
+  variable->dump_to_stream(stream, indent_level + 1);
+  expr->dump_to_stream(stream, indent_level + 1);
 }
 } // namespace saplang

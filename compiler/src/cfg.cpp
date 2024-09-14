@@ -86,6 +86,8 @@ int CFGBuilder::insert_stmt(const ResolvedStmt &stmt, int block) {
     return insert_return_stmt(*ret_stmt, block);
   if (auto *decl_stmt = dynamic_cast<const ResolvedDeclStmt *>(&stmt))
     return insert_decl_stmt(*decl_stmt, block);
+  if (auto *assignment = dynamic_cast<const ResolvedAssignment *>(&stmt))
+    return insert_assignment(*assignment, block);
   llvm_unreachable("unexpected expression.");
 }
 
@@ -156,4 +158,9 @@ int CFGBuilder::insert_decl_stmt(const ResolvedDeclStmt &stmt, int block) {
   return block;
 }
 
+int CFGBuilder::insert_assignment(const ResolvedAssignment &assignment,
+                                  int block) {
+  m_CFG.insert_stmt(&assignment, block);
+  return insert_expr(*assignment.expr, block);
+}
 } // namespace saplang

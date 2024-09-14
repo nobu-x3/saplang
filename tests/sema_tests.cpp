@@ -103,7 +103,7 @@ fn void main() {
 )");
     REQUIRE(output_buffer.str().empty());
     REQUIRE(error_stream.str() ==
-            R"(sema_test:5:3 error: expected to call function 'foo',
+            R"(sema_test:5:3 error: expected to call function 'foo'.
 sema_test:6:3 error: symbol 'y' undefined.
 )");
   }
@@ -362,4 +362,88 @@ TEST_CASE("sema var decl failing", "[sema]") {
     REQUIRE(error_stream.str() ==
             "sema_test:3:17 error: symbol 'y' undefined.\n");
   }
+}
+
+TEST_CASE("assignment simple", "[sema]") {
+  TEST_SETUP("fn void foo() { var i32 x; x = 1; }");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 4;
+  REQUIRE(lines_it->find("ResolvedAssignment:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+}
+
+TEST_CASE("const assignment variable", "[sema]") {
+  TEST_SETUP("fn void foo() { const i32 x = 1; x = 2; }");
+  REQUIRE(error_stream.str() ==
+          "sema_test:1:34 error: trying to assign to const variable.\n");
+}
+
+TEST_CASE("const assignment parameter", "[sema]") {
+  TEST_SETUP("fn void foo(const i32 x){ x = 2; }");
+  REQUIRE(error_stream.str() ==
+          "sema_test:1:27 error: trying to assign to const variable.\n");
+}
+
+TEST_CASE("uncastable type mismatch", "[sema]") {
+  TEST_SETUP(R"(
+fn void foo() {}
+fn void bar() {
+  var i32 x = 0;
+  x = foo();
+}
+)");
+  REQUIRE(error_stream.str() == "sema_test:5:10 error: assigned value type of "
+                                "'void' does not match variable type 'i32'.\n");
+}
+
+TEST_CASE("assignment implicit casting", "[sema]") {
+  TEST_SETUP(R"(
+fn i8 foo() { return 1; }
+fn void bar() {
+  var i32 x;
+  x = foo();
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 9;
+  REQUIRE(lines_it->find("ResolvedAssignment:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+}
+
+TEST_CASE("function lhs assignment", "[sema]") {
+  TEST_SETUP(R"(
+fn void foo() {}
+fn i32 bar() {}
+fn void baz() {
+  foo = 1;
+  baz = 1;
+}
+)");
+  REQUIRE(error_stream.str() ==
+          "sema_test:5:3 error: expected to call function "
+          "'foo'.\nsema_test:6:3 error: expected to call function 'baz'.\n");
+}
+
+TEST_CASE("mutable parameter assignment", "[sema]") {
+  TEST_SETUP(R"(
+fn void foo(i32 x) {
+  x = 12;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  REQUIRE(lines_it->find("ResolvedAssignment:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") x:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(12)");
 }

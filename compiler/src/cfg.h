@@ -35,7 +35,8 @@ private:
   int insert_while_stmt(const ResolvedWhileStmt &while_stmt, int exit);
   int insert_expr(const ResolvedExpr &expr, int block);
   int insert_return_stmt(const ResolvedReturnStmt &ret, int block);
-  int insert_decl_stmt(const ResolvedDeclStmt& stmt, int block);
+  int insert_decl_stmt(const ResolvedDeclStmt &stmt, int block);
+  int insert_assignment(const ResolvedAssignment &assignment, int block);
 
 private:
   CFG m_CFG;

@@ -35,6 +35,7 @@ private:
                           llvm::BasicBlock *false_bb);
   llvm::Value *gen_call_expr(const ResolvedCallExpr &call);
   llvm::Value *gen_decl_stmt(const ResolvedDeclStmt &stmt);
+  llvm::Value *gen_assignment(const ResolvedAssignment &assignment);
   llvm::Function *get_current_function();
   llvm::Value *type_to_bool(Type::Kind kind, llvm::Value *value);
   llvm::Value *bool_to_type(Type::Kind kind, llvm::Value *value);

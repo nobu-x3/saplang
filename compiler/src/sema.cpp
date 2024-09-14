@@ -278,8 +278,8 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
 }
 
 bool can_be_cast(Type::Kind cast_from, Type::Kind cast_to) {
-
-  return g_AssociatedNumberLiteralSizes.count(cast_from) &&
+  return cast_to != Type::Kind::Void && cast_from != Type::Kind::Void &&
+         g_AssociatedNumberLiteralSizes.count(cast_from) &&
          g_AssociatedNumberLiteralSizes.count(cast_to) &&
          g_AssociatedNumberLiteralSizes[cast_from] <=
              g_AssociatedNumberLiteralSizes[cast_to];
@@ -335,6 +335,13 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
       decl_ref->type = type;
     }
     return true;
+  } else if (auto *call_expr = dynamic_cast<ResolvedCallExpr *>(&expr)) {
+    if (can_be_cast(call_expr->func_decl->type.kind, type.kind)) {
+      call_expr->type = type;
+      call_expr->set_constant_value(cee.evaluate(*call_expr));
+      return true;
+    }
+    return false;
   }
   return false;
 }
@@ -456,7 +463,7 @@ Sema::resolve_param_decl(const ParamDecl &decl) {
                                      decl.type.name + "' type");
   }
   return std::make_unique<ResolvedParamDecl>(decl.location, decl.id,
-                                             std::move(*type));
+                                             std::move(*type), decl.is_const);
 }
 
 std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block) {
@@ -494,6 +501,8 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
     return resolve_while_stmt(*while_stmt);
   if (auto *var_decl_stmt = dynamic_cast<const DeclStmt *>(&stmt))
     return resolve_decl_stmt(*var_decl_stmt);
+  if (auto *assignment = dynamic_cast<const Assignment *>(&stmt))
+    return resolve_assignment(*assignment);
   assert(false && "unexpected expression.");
   return nullptr;
 }
@@ -685,7 +694,7 @@ Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
                   "symbol '" + decl_ref_expr.id + "' undefined.");
   if (!is_call && dynamic_cast<const ResolvedFuncDecl *>(decl))
     return report(decl_ref_expr.location,
-                  "expected to call function '" + decl_ref_expr.id + "',");
+                  "expected to call function '" + decl_ref_expr.id + "'.");
   return std::make_unique<ResolvedDeclRefExpr>(decl_ref_expr.location, decl);
 }
 
@@ -722,5 +731,34 @@ Sema::resolve_call_expr(const CallExpr &call) {
   }
   return std::make_unique<ResolvedCallExpr>(call.location, resolved_func_decl,
                                             std::move(resolved_args));
+}
+
+std::unique_ptr<ResolvedAssignment>
+Sema::resolve_assignment(const Assignment &assignment) {
+  std::unique_ptr<ResolvedDeclRefExpr> lhs =
+      resolve_decl_ref_expr(*assignment.variable);
+  if (!lhs)
+    return nullptr;
+  if (const auto *param_decl =
+          dynamic_cast<const ResolvedParamDecl *>(lhs->decl)) {
+    if (param_decl->is_const)
+      return report(lhs->location, "trying to assign to const variable.");
+  } else if (const auto *var_decl =
+                 dynamic_cast<const ResolvedVarDecl *>(lhs->decl)) {
+    if (var_decl->is_const)
+      return report(lhs->location, "trying to assign to const variable.");
+  }
+  std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr);
+  if (!rhs)
+    return nullptr;
+  if (lhs->type.kind != rhs->type.kind) {
+    if (!try_cast_expr(*rhs, lhs->type, m_Cee))
+      return report(rhs->location, "assigned value type of '" + rhs->type.name +
+                                       "' does not match variable type '" +
+                                       lhs->type.name + "'.");
+  }
+  rhs->set_constant_value(m_Cee.evaluate(*rhs));
+  return std::make_unique<ResolvedAssignment>(assignment.location,
+                                              std::move(lhs), std::move(rhs));
 }
 } // namespace saplang
