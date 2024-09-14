@@ -990,3 +990,41 @@ TEST_CASE("const parameter", "[parser]") {
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: x:const i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "Block");
 }
+
+TEST_CASE("for statement", "[parser]") {
+  TEST_SETUP(R"(
+fn void foo() {
+  for(var i32 i = 0; i < 10; i = i + 1){}
+  for var i32 i = 0; i < 10; i = i + 1 {}
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  REQUIRE(lines_it->find("ForStmt") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: i:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '<'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: i");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(10)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: i");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '+'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: i");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ForStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: i:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '<'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: i");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(10)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: i");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '+'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: i");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+}

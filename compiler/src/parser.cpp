@@ -76,11 +76,14 @@ std::unique_ptr<Block> Parser::parse_block() {
 // | <expr> ';'
 // | <ifStatement>
 // | <whileStatement>
+// | <forStatement>
 // | <varDeclStatement>
 // | <assignment>
 std::unique_ptr<Stmt> Parser::parse_stmt() {
   if (m_NextToken.kind == TokenKind::KwWhile)
     return parse_while_stmt();
+  if (m_NextToken.kind == TokenKind::KwFor)
+    return parse_for_stmt();
   if (m_NextToken.kind == TokenKind::KwIf)
     return parse_if_stmt();
   if (m_NextToken.kind == TokenKind::KwReturn)
@@ -88,7 +91,20 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
   if (m_NextToken.kind == TokenKind::KwConst ||
       m_NextToken.kind == TokenKind::KwVar)
     return parse_var_decl_stmt();
-  return parse_assignment_or_expr();
+  auto stmt = parse_assignment_or_expr();
+  if (auto *assignment = dynamic_cast<const Assignment *>(stmt.get())) {
+    if (m_NextToken.kind != TokenKind::Semicolon)
+      return report(m_NextToken.location,
+                    "expected ';' at the end of assignment.");
+    eat_next_token(); // eat ';'
+  }
+  if (auto *expr = dynamic_cast<const Expr *>(stmt.get())) {
+    if (m_NextToken.kind != TokenKind::Semicolon)
+      return report(m_NextToken.location,
+                    "expected ';' at the end of expression.");
+    eat_next_token(); // eat ';'
+  }
+  return stmt;
 }
 
 // <ifStatement>
@@ -143,6 +159,35 @@ std::unique_ptr<WhileStmt> Parser::parse_while_stmt() {
                                      std::move(body));
 }
 
+// <forStatement>
+// ::= 'for' <varDeclStatement> <expr> <assignment> <block>
+std::unique_ptr<ForStmt> Parser::parse_for_stmt() {
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat 'for'
+  if (m_NextToken.kind == TokenKind::Lparent)
+    eat_next_token(); // eat '('
+  std::unique_ptr<DeclStmt> var_decl = parse_var_decl_stmt();
+  if (!var_decl)
+    return nullptr;
+  std::unique_ptr<Expr> condition = parse_expr();
+  if (!condition)
+    return nullptr;
+  if (m_NextToken.kind != TokenKind::Semicolon)
+    return report(m_NextToken.location, "expected ';' after for condition.");
+  eat_next_token(); // eat ';'
+  std::unique_ptr<Stmt> increment_expr = parse_assignment_or_expr();
+  if (!increment_expr)
+    return nullptr;
+  if (m_NextToken.kind == TokenKind::Rparent)
+    eat_next_token(); // eat ')'
+  std::unique_ptr<Block> body = parse_block();
+  if (!body)
+    return nullptr;
+  return std::make_unique<ForStmt>(loc, std::move(var_decl),
+                                   std::move(condition),
+                                   std::move(increment_expr), std::move(body));
+}
+
 // <varDeclStatement>
 // ::= ('const' | 'var') <varDecl> ';'
 std::unique_ptr<DeclStmt> Parser::parse_var_decl_stmt() {
@@ -186,32 +231,29 @@ std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const) {
                                    is_const);
 }
 
+std::unique_ptr<Assignment>
+Parser::parse_assignment(std::unique_ptr<Expr> lhs) {
+  auto *dre = dynamic_cast<DeclRefExpr *>(lhs.get());
+  if (!dre)
+    return report(lhs->location, "expected variable on the LHS of assignment.");
+  std::ignore = lhs.release();
+  return parse_assignment_rhs(std::unique_ptr<DeclRefExpr>(dre));
+}
+
 std::unique_ptr<Stmt> Parser::parse_assignment_or_expr() {
   std::unique_ptr<Expr> lhs = parse_prefix_expr();
   if (!lhs)
     return nullptr;
   // Assignment
   if (m_NextToken.kind == TokenKind::Equal) {
-    auto *dre = dynamic_cast<DeclRefExpr *>(lhs.get());
-    if (!dre)
-      return report(lhs->location,
-                    "expected variable on the LHS of assignment.");
-    std::ignore = lhs.release();
-    std::unique_ptr<Assignment> assignment =
-        parse_assignment_rhs(std::unique_ptr<DeclRefExpr>(dre));
-    if (m_NextToken.kind != TokenKind::Semicolon)
-      return report(m_NextToken.location,
-                    "expected ';' at the end of assignment.");
-    eat_next_token(); // eat ';'
+    std::unique_ptr<Assignment> assignment = parse_assignment(std::move(lhs));
+    if (!assignment)
+      return nullptr;
     return assignment;
   }
   std::unique_ptr<Expr> expr = parse_expr_rhs(std::move(lhs), 0);
   if (!expr)
     return nullptr;
-  if (m_NextToken.kind != TokenKind::Semicolon)
-    return report(m_NextToken.location,
-                  "expected ';' at the end of expression.");
-  eat_next_token(); // eat ';'
   return expr;
 }
 

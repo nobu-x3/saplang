@@ -48,11 +48,13 @@ private:
 
   std::unique_ptr<IfStmt> parse_if_stmt();
   std::unique_ptr<WhileStmt> parse_while_stmt();
+  std::unique_ptr<ForStmt> parse_for_stmt();
 
   std::unique_ptr<DeclStmt> parse_var_decl_stmt();
   std::unique_ptr<VarDecl> parse_var_decl(bool is_const);
 
   std::unique_ptr<Stmt> parse_assignment_or_expr();
+  std::unique_ptr<Assignment> parse_assignment(std::unique_ptr<Expr> lhs);
   std::unique_ptr<Assignment>
   parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs);
 

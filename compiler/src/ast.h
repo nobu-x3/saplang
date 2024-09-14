@@ -228,6 +228,22 @@ struct WhileStmt : public Stmt {
   DUMP_IMPL
 };
 
+struct ForStmt : public Stmt {
+  std::unique_ptr<DeclStmt> counter_variable;
+  std::unique_ptr<Expr> condition;
+  std::unique_ptr<Stmt> increment_expr;
+  std::unique_ptr<Block> body;
+
+  inline ForStmt(SourceLocation loc, std::unique_ptr<DeclStmt> var,
+                 std::unique_ptr<Expr> condition,
+                 std::unique_ptr<Stmt> increment, std::unique_ptr<Block> body)
+      : Stmt(loc), counter_variable(std::move(var)),
+        condition(std::move(condition)), increment_expr(std::move(increment)),
+        body(std::move(body)) {}
+
+  DUMP_IMPL
+};
+
 struct IfStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Block> true_block;
@@ -395,7 +411,8 @@ struct ResolvedUnaryOperator : public ResolvedExpr {
 
 struct ResolvedParamDecl : public ResolvedDecl {
   bool is_const;
-  inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type, bool is_const)
+  inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type,
+                           bool is_const)
       : ResolvedDecl(loc, std::move(id), std::move(type)), is_const(is_const) {}
 
   DUMP_IMPL
@@ -454,6 +471,6 @@ struct ResolvedAssignment : public ResolvedStmt {
                             std::unique_ptr<ResolvedExpr> expr)
       : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
 
-    DUMP_IMPL
+  DUMP_IMPL
 };
 } // namespace saplang
