@@ -309,35 +309,6 @@ struct ResolvedBlock : public IDumpable {
   DUMP_IMPL
 };
 
-struct ResolvedWhileStmt : public ResolvedStmt {
-  std::unique_ptr<ResolvedExpr> condition;
-  std::unique_ptr<ResolvedBlock> body;
-
-  inline ResolvedWhileStmt(SourceLocation location,
-                           std::unique_ptr<ResolvedExpr> cond,
-                           std::unique_ptr<ResolvedBlock> body)
-      : ResolvedStmt(location), condition(std::move(cond)),
-        body(std::move(body)) {}
-
-  DUMP_IMPL
-};
-
-struct ResolvedIfStmt : public ResolvedStmt {
-  std::unique_ptr<ResolvedExpr> condition;
-  std::unique_ptr<ResolvedBlock> true_block;
-  std::unique_ptr<ResolvedBlock> false_block;
-
-  inline ResolvedIfStmt(SourceLocation loc,
-                        std::unique_ptr<ResolvedExpr> condition,
-                        std::unique_ptr<ResolvedBlock> true_block,
-                        std::unique_ptr<ResolvedBlock> false_block)
-      : ResolvedStmt(loc), condition(std::move(condition)),
-        true_block(std::move(true_block)), false_block(std::move(false_block)) {
-  }
-
-  DUMP_IMPL
-};
-
 struct ResolvedDecl : public IDumpable {
   SourceLocation location;
   std::string id;
@@ -363,6 +334,53 @@ struct ResolvedDeclStmt : public ResolvedStmt {
   inline ResolvedDeclStmt(SourceLocation loc,
                           std::unique_ptr<ResolvedVarDecl> decl)
       : ResolvedStmt(loc), var_decl(std::move(decl)) {}
+
+  DUMP_IMPL
+};
+
+struct ResolvedForStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedDeclStmt> counter_variable;
+  std::unique_ptr<ResolvedExpr> condition;
+  std::unique_ptr<ResolvedStmt> increment_expr;
+  std::unique_ptr<ResolvedBlock> body;
+
+  inline ResolvedForStmt(SourceLocation loc,
+                         std::unique_ptr<ResolvedDeclStmt> var,
+                         std::unique_ptr<ResolvedExpr> condition,
+                         std::unique_ptr<ResolvedStmt> increment,
+                         std::unique_ptr<ResolvedBlock> body)
+      : ResolvedStmt(loc), counter_variable(std::move(var)),
+        condition(std::move(condition)), increment_expr(std::move(increment)),
+        body(std::move(body)) {}
+
+  DUMP_IMPL
+};
+
+struct ResolvedWhileStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedExpr> condition;
+  std::unique_ptr<ResolvedBlock> body;
+
+  inline ResolvedWhileStmt(SourceLocation location,
+                           std::unique_ptr<ResolvedExpr> cond,
+                           std::unique_ptr<ResolvedBlock> body)
+      : ResolvedStmt(location), condition(std::move(cond)),
+        body(std::move(body)) {}
+
+  DUMP_IMPL
+};
+
+struct ResolvedIfStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedExpr> condition;
+  std::unique_ptr<ResolvedBlock> true_block;
+  std::unique_ptr<ResolvedBlock> false_block;
+
+  inline ResolvedIfStmt(SourceLocation loc,
+                        std::unique_ptr<ResolvedExpr> condition,
+                        std::unique_ptr<ResolvedBlock> true_block,
+                        std::unique_ptr<ResolvedBlock> false_block)
+      : ResolvedStmt(loc), condition(std::move(condition)),
+        true_block(std::move(true_block)), false_block(std::move(false_block)) {
+  }
 
   DUMP_IMPL
 };

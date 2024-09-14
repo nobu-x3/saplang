@@ -503,6 +503,8 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
     return resolve_decl_stmt(*var_decl_stmt);
   if (auto *assignment = dynamic_cast<const Assignment *>(&stmt))
     return resolve_assignment(*assignment);
+  if (auto *for_stmt = dynamic_cast<const ForStmt *>(&stmt))
+    return resolve_for_stmt(*for_stmt);
   assert(false && "unexpected expression.");
   return nullptr;
 }
@@ -598,6 +600,27 @@ Sema::resolve_while_stmt(const WhileStmt &stmt) {
   condition->set_constant_value(m_Cee.evaluate(*condition));
   return std::make_unique<ResolvedWhileStmt>(
       stmt.location, std::move(condition), std::move(body));
+}
+
+std::unique_ptr<ResolvedForStmt> Sema::resolve_for_stmt(const ForStmt &stmt) {
+  std::unique_ptr<ResolvedDeclStmt> counter_variable =
+      resolve_decl_stmt(*stmt.counter_variable);
+  if (!counter_variable)
+    return nullptr;
+  std::unique_ptr<ResolvedExpr> condition = resolve_expr(*stmt.condition);
+  if (!condition)
+    return nullptr;
+  condition->set_constant_value(m_Cee.evaluate(*condition));
+  std::unique_ptr<ResolvedStmt> increment_expr =
+      resolve_stmt(*stmt.increment_expr);
+  if (!increment_expr)
+    return nullptr;
+  std::unique_ptr<ResolvedBlock> body = resolve_block(*stmt.body);
+  if (!body)
+    return nullptr;
+  return std::make_unique<ResolvedForStmt>(
+      stmt.location, std::move(counter_variable), std::move(condition),
+      std::move(increment_expr), std::move(body));
 }
 
 bool Sema::flow_sensitive_analysis(const ResolvedFuncDecl &fn) {
