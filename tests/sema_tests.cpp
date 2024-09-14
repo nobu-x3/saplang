@@ -376,9 +376,16 @@ TEST_CASE("assignment simple", "[sema]") {
   CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
 }
 
-TEST_CASE("const assignment", "[sema]") {
+TEST_CASE("const assignment variable", "[sema]") {
   TEST_SETUP("fn void foo() { const i32 x = 1; x = 2; }");
-  REQUIRE(error_stream.str() != "");
+  REQUIRE(error_stream.str() ==
+          "sema_test:1:34 error: trying to assign to const variable.\n");
+}
+
+TEST_CASE("const assignment parameter", "[sema]") {
+  TEST_SETUP("fn void foo(const i32 x){ x = 2; }");
+  REQUIRE(error_stream.str() ==
+          "sema_test:1:27 error: trying to assign to const variable.\n");
 }
 
 TEST_CASE("uncastable type mismatch", "[sema]") {

@@ -898,7 +898,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: variable:i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: const_var:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: const_var:const i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
 }
 
@@ -979,4 +979,14 @@ fn void foo() { bar() = 2; }
 )");
   REQUIRE(error_stream.str() ==
           "test:3:20 error: expected variable on the LHS of assignment.\n");
+}
+
+TEST_CASE("const parameter", "[parser]") {
+  TEST_SETUP(R"(fn void foo (const i32 x){})");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: foo:void") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: x:const i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
 }

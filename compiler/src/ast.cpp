@@ -124,8 +124,8 @@ void ReturnStmt::dump_to_stream(std::stringstream &stream,
 
 void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
-  stream << indent(indent_level) << "VarDecl: " << id << ":" << type.name
-         << "\n";
+  stream << indent(indent_level) << "VarDecl: " << id << ":"
+         << (is_const ? "const " : "") << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -228,8 +228,8 @@ void CallExpr::dump_to_stream(std::stringstream &stream,
 
 void ParamDecl::dump_to_stream(std::stringstream &stream,
                                size_t indent_level) const {
-  stream << indent(indent_level) << "ParamDecl: " << id << ":" << type.name
-         << "\n";
+  stream << indent(indent_level) << "ParamDecl: " << id << ":"
+         << (is_const ? "const " : "") << type.name << "\n";
 }
 
 void ResolvedBlock::dump_to_stream(std::stringstream &stream,
@@ -269,7 +269,7 @@ void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,
 void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
                                      size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << id
-         << ":" << type.name << "\n";
+         << ":" << (is_const ? "const " : "") << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }

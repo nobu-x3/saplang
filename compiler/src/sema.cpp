@@ -463,7 +463,7 @@ Sema::resolve_param_decl(const ParamDecl &decl) {
                                      decl.type.name + "' type");
   }
   return std::make_unique<ResolvedParamDecl>(decl.location, decl.id,
-                                             std::move(*type));
+                                             std::move(*type), decl.is_const);
 }
 
 std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block) {
@@ -739,6 +739,15 @@ Sema::resolve_assignment(const Assignment &assignment) {
       resolve_decl_ref_expr(*assignment.variable);
   if (!lhs)
     return nullptr;
+  if (const auto *param_decl =
+          dynamic_cast<const ResolvedParamDecl *>(lhs->decl)) {
+    if (param_decl->is_const)
+      return report(lhs->location, "trying to assign to const variable.");
+  } else if (const auto *var_decl =
+                 dynamic_cast<const ResolvedVarDecl *>(lhs->decl)) {
+    if (var_decl->is_const)
+      return report(lhs->location, "trying to assign to const variable.");
+  }
   std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr);
   if (!rhs)
     return nullptr;

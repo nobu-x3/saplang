@@ -245,8 +245,9 @@ struct IfStmt : public Stmt {
 
 struct ParamDecl : public Decl {
   Type type;
-  inline ParamDecl(SourceLocation loc, std::string id, Type type)
-      : Decl(loc, id), type(std::move(type)) {}
+  bool is_const;
+  inline ParamDecl(SourceLocation loc, std::string id, Type type, bool is_const)
+      : Decl(loc, id), type(std::move(type)), is_const(is_const) {}
 
   DUMP_IMPL
 };
@@ -393,8 +394,9 @@ struct ResolvedUnaryOperator : public ResolvedExpr {
 };
 
 struct ResolvedParamDecl : public ResolvedDecl {
-  inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type)
-      : ResolvedDecl(loc, std::move(id), std::move(type)) {}
+  bool is_const;
+  inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type, bool is_const)
+      : ResolvedDecl(loc, std::move(id), std::move(type)), is_const(is_const) {}
 
   DUMP_IMPL
 };

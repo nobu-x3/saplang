@@ -373,7 +373,8 @@ Parser::parse_parameter_list() {
       report(m_NextToken.location, "invalid paramater type 'void'.");
       return std::nullopt;
     }
-    if (m_NextToken.kind != TokenKind::Identifier) {
+    if (m_NextToken.kind != TokenKind::Identifier &&
+        m_NextToken.kind != TokenKind::KwConst) {
       report(m_NextToken.location, "expected parameter declaration.");
       return std::nullopt;
     }
@@ -449,6 +450,11 @@ std::unique_ptr<Expr> Parser::parse_expr_rhs(std::unique_ptr<Expr> lhs,
 // ::= <type> <identifier>
 std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
   SourceLocation location = m_NextToken.location;
+  bool is_const = false;
+  if (m_NextToken.kind == TokenKind::KwConst) {
+    is_const = true;
+    eat_next_token(); // eat 'const'
+  }
   auto type = parse_type();
   if (!type)
     return nullptr;
@@ -457,8 +463,10 @@ std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
   }
   std::string id = *m_NextToken.value;
   eat_next_token(); // eat identifier
-  return std::make_unique<ParamDecl>(location, std::move(id), std::move(*type));
+  return std::make_unique<ParamDecl>(location, std::move(id), std::move(*type),
+                                     is_const);
 }
+
 // <type>
 // ::= 'void'
 // |   <identifier>
