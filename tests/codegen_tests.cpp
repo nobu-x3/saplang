@@ -707,3 +707,24 @@ TEST_CASE("codegen var decl", "[codegen]") {
   CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load i32, ptr %a, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @bar(i32 %3)");
 }
+
+TEST_CASE("assignment", "[codegen]") {
+  TEST_SETUP(R"(
+fn void foo(i32 x) {
+  var i64 y;
+  y = 3;
+  y = (x + 4) / 2;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 5;
+  REQUIRE(lines_it->find("%x1 = alloca i32, align 4") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "%y = alloca i64, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %x, ptr %x1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i64 3, ptr %y, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load i64, ptr %x1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = add i64 %0, 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = sdiv i64 %1, 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i64 %2, ptr %y, align 4");
+}
