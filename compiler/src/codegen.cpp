@@ -143,6 +143,8 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt) {
     return gen_decl_stmt(*decl_stmt);
   if (auto *assignment = dynamic_cast<const ResolvedAssignment *>(&stmt))
     return gen_assignment(*assignment);
+  if (auto *for_stmt = dynamic_cast<const ResolvedForStmt *>(&stmt))
+    return gen_for_stmt(*for_stmt);
   llvm_unreachable("unknown statememt.");
   return nullptr;
 }
@@ -188,6 +190,36 @@ llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt) {
                          body, exit);
   m_Builder.SetInsertPoint(body);
   gen_block(*stmt.body);
+  m_Builder.CreateBr(header);
+  m_Builder.SetInsertPoint(exit);
+  return nullptr;
+}
+
+llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt) {
+  llvm::Function *function = get_current_function();
+  llvm::BasicBlock *counter_decl =
+      llvm::BasicBlock::Create(m_Context, "for.counter_decl", function);
+  llvm::BasicBlock *header =
+      llvm::BasicBlock::Create(m_Context, "for.condition", function);
+  llvm::BasicBlock *body =
+      llvm::BasicBlock::Create(m_Context, "for.body", function);
+  llvm::BasicBlock *counter_op =
+      llvm::BasicBlock::Create(m_Context, "for.counter_op", function);
+  llvm::BasicBlock *exit =
+      llvm::BasicBlock::Create(m_Context, "for.exit", function);
+  m_Builder.CreateBr(counter_decl);
+  m_Builder.SetInsertPoint(counter_decl);
+  llvm::Value *var_decl = gen_decl_stmt(*stmt.counter_variable);
+  m_Builder.CreateBr(header);
+  m_Builder.SetInsertPoint(header);
+  llvm::Value *condition = gen_expr(*stmt.condition);
+  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, condition),
+                         body, exit);
+  m_Builder.SetInsertPoint(body);
+  gen_block(*stmt.body);
+  m_Builder.CreateBr(counter_op);
+  m_Builder.SetInsertPoint(counter_op);
+  llvm::Value *counter_incr = gen_stmt(*stmt.increment_expr);
   m_Builder.CreateBr(header);
   m_Builder.SetInsertPoint(exit);
   return nullptr;

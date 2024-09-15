@@ -467,7 +467,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") i:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(10)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(10)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") i:") != std::string::npos);
