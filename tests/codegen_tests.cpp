@@ -728,3 +728,38 @@ fn void foo(i32 x) {
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = sdiv i64 %1, 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i64 %2, ptr %y, align 4");
 }
+
+TEST_CASE("for loop", "[codegen]") {
+  TEST_SETUP(R"(
+fn void foo() {
+  for(var u32 i = 0; i < 10; i = i + 1){}
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 5;
+  REQUIRE(lines_it->find("%i = alloca i32, align 4") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %for.counter_decl");
+  CONTAINS_NEXT_REQUIRE(lines_it, "for.counter_decl:");
+  REQUIRE(lines_it->find("; preds = %entry") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %i, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %for.condition");
+  CONTAINS_NEXT_REQUIRE(lines_it, "for.condition:");
+  REQUIRE(lines_it->find("; preds = %for.counter_op, %for.counter_decl") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load i32, ptr %i, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = icmp ult i32 %0, 10");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool = icmp ne i1 %1, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool, label %for.body, label %for.exit");
+  CONTAINS_NEXT_REQUIRE(lines_it, "for.body:");
+  REQUIRE(lines_it->find("; preds = %for.condition") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %for.counter_op");
+  CONTAINS_NEXT_REQUIRE(lines_it, "for.counter_op:");
+  REQUIRE(lines_it->find("; preds = %for.body") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %i, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = add i32 %2, i8 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %3, ptr %i, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %for.condition");
+  CONTAINS_NEXT_REQUIRE(lines_it, "for.exit:");
+  REQUIRE(lines_it->find("; preds = %for.condition") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+}

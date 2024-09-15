@@ -84,6 +84,15 @@ void Block::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void ForStmt::dump_to_stream(std::stringstream &stream,
+                             size_t indent_level) const {
+  stream << indent(indent_level) << "ForStmt:\n";
+  counter_variable->dump_to_stream(stream, indent_level + 1);
+  condition->dump_to_stream(stream, indent_level + 1);
+  increment_expr->dump_to_stream(stream, indent_level + 1);
+  body->dump_to_stream(stream, indent_level + 1);
+}
+
 void WhileStmt::dump_to_stream(std::stringstream &stream,
                                size_t indent_level) const {
   stream << indent(indent_level) << "WhileStmt\n";
@@ -238,6 +247,15 @@ void ResolvedBlock::dump_to_stream(std::stringstream &stream,
   for (auto &&statement : statements) {
     statement->dump_to_stream(stream, indent_level + 1);
   }
+}
+
+void ResolvedForStmt::dump_to_stream(std::stringstream &stream,
+                                     size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedForStmt:\n";
+  counter_variable->dump_to_stream(stream, indent_level + 1);
+  condition->dump_to_stream(stream, indent_level + 1);
+  increment_expr->dump_to_stream(stream, indent_level + 1);
+  body->dump_to_stream(stream, indent_level + 1);
 }
 
 void ResolvedWhileStmt::dump_to_stream(std::stringstream &stream,

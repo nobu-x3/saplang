@@ -65,6 +65,8 @@ private:
 
   std::unique_ptr<ResolvedWhileStmt> resolve_while_stmt(const WhileStmt &stmt);
 
+  std::unique_ptr<ResolvedForStmt> resolve_for_stmt(const ForStmt &stmt);
+
   std::unique_ptr<ResolvedDeclStmt> resolve_decl_stmt(const DeclStmt &stmt);
 
   std::unique_ptr<ResolvedVarDecl> resolve_var_decl(const VarDecl &decl);

@@ -181,7 +181,7 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       BOOL_CAST_CASE(i32)
       CAST_CASE(i8, i32)
       CAST_CASE(i16, i32)
-      CAST_CASE(u8, i32)
+      CAST_CASE(u8, i32);
       CAST_CASE(u16, i32)
     case Type::Kind::u32: {
       if (old_value->u32 > INT32_MAX)
@@ -225,6 +225,11 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
         errmsg = "implicitly casting i16 to u16 with underflow";
       ret_val.u16 = static_cast<unsigned short>(old_value->i16);
     } break;
+    case Type::Kind::i8: {
+      if (old_value->i8 < 0)
+        errmsg = "implicitly casting i8 to u16 with underflow";
+      ret_val.u16 = static_cast<unsigned int>(old_value->i8);
+    } break;
     }
   } break;
   case Type::Kind::u32: {
@@ -236,6 +241,16 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       if (old_value->i32 < 0)
         errmsg = "implicitly casting i32 to u32 with underflow";
       ret_val.u32 = static_cast<unsigned int>(old_value->i32);
+    } break;
+    case Type::Kind::i16: {
+      if (old_value->i16 < 0)
+        errmsg = "implicitly casting i16 to u32 with underflow";
+      ret_val.u32 = static_cast<unsigned int>(old_value->i16);
+    } break;
+    case Type::Kind::i8: {
+      if (old_value->i8 < 0)
+        errmsg = "implicitly casting i8 to u32 with underflow";
+      ret_val.u32 = static_cast<unsigned int>(old_value->i8);
     } break;
     }
   } break;
@@ -249,6 +264,21 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
       if (old_value->i64 < 0)
         errmsg = "implicitly casting i64 to u64 with underflow";
       ret_val.u64 = static_cast<unsigned long>(old_value->i64);
+    } break;
+    case Type::Kind::i32: {
+      if (old_value->i32 < 0)
+        errmsg = "implicitly casting i32 to u64 with underflow";
+      ret_val.u64 = static_cast<unsigned int>(old_value->i32);
+    } break;
+    case Type::Kind::i16: {
+      if (old_value->i16 < 0)
+        errmsg = "implicitly casting i16 to u64 with underflow";
+      ret_val.u64 = static_cast<unsigned int>(old_value->i16);
+    } break;
+    case Type::Kind::i8: {
+      if (old_value->i8 < 0)
+        errmsg = "implicitly casting i8 to u64 with underflow";
+      ret_val.u64 = static_cast<unsigned int>(old_value->i8);
     } break;
     }
   } break;
@@ -503,6 +533,8 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
     return resolve_decl_stmt(*var_decl_stmt);
   if (auto *assignment = dynamic_cast<const Assignment *>(&stmt))
     return resolve_assignment(*assignment);
+  if (auto *for_stmt = dynamic_cast<const ForStmt *>(&stmt))
+    return resolve_for_stmt(*for_stmt);
   assert(false && "unexpected expression.");
   return nullptr;
 }
@@ -527,8 +559,6 @@ std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
     resolved_initializer = resolve_expr(*decl.initializer);
     if (!resolved_initializer)
       return nullptr;
-  }
-  if (resolved_initializer) {
     if (resolved_initializer->type.kind != type->kind) {
       if (!try_cast_expr(*resolved_initializer, *type, m_Cee))
         return report(resolved_initializer->location,
@@ -551,12 +581,27 @@ Sema::resolve_grouping_expr(const GroupingExpr &group) {
                                                 std::move(resolved_expr));
 }
 
+bool is_comp_op(TokenKind op) {
+  if (op == TokenKind::LessThan || op == TokenKind::LessThanOrEqual ||
+      op == TokenKind::GreaterThan || op == TokenKind::GreaterThanOrEqual ||
+      op == TokenKind::ExclamationEqual || op == TokenKind::EqualEqual)
+    return true;
+  return false;
+}
+
 std::unique_ptr<ResolvedBinaryOperator>
 Sema::resolve_binary_operator(const BinaryOperator &op) {
   auto resolved_lhs = resolve_expr(*op.lhs);
   auto resolved_rhs = resolve_expr(*op.rhs);
   if (!resolved_lhs || !resolved_rhs)
     return nullptr;
+  if (is_comp_op(op.op) && resolved_lhs->type.kind != resolved_rhs->type.kind) {
+    if (!try_cast_expr(*resolved_rhs, resolved_lhs->type, m_Cee))
+      return report(resolved_lhs->location,
+                    "cannot implicitly cast rhs to lhs - from type '" +
+                        resolved_rhs->type.name + "' to type '" +
+                        resolved_lhs->type.name + "'.");
+  }
   return std::make_unique<ResolvedBinaryOperator>(
       op.location, std::move(resolved_lhs), std::move(resolved_rhs), op.op);
 }
@@ -572,14 +617,6 @@ Sema::resolve_unary_operator(const UnaryOperator &op) {
         "void expression cannot be used as operand to unary operator.");
   return std::make_unique<ResolvedUnaryOperator>(
       op.location, std::move(resolved_rhs), op.op);
-}
-
-bool is_comp_op(TokenKind op) {
-  if (op == TokenKind::LessThan || op == TokenKind::LessThanOrEqual ||
-      op == TokenKind::GreaterThan || op == TokenKind::GreaterThanOrEqual ||
-      op == TokenKind::ExclamationEqual || op == TokenKind::EqualEqual)
-    return true;
-  return false;
 }
 
 std::unique_ptr<ResolvedWhileStmt>
@@ -598,6 +635,27 @@ Sema::resolve_while_stmt(const WhileStmt &stmt) {
   condition->set_constant_value(m_Cee.evaluate(*condition));
   return std::make_unique<ResolvedWhileStmt>(
       stmt.location, std::move(condition), std::move(body));
+}
+
+std::unique_ptr<ResolvedForStmt> Sema::resolve_for_stmt(const ForStmt &stmt) {
+  std::unique_ptr<ResolvedDeclStmt> counter_variable =
+      resolve_decl_stmt(*stmt.counter_variable);
+  if (!counter_variable)
+    return nullptr;
+  std::unique_ptr<ResolvedExpr> condition = resolve_expr(*stmt.condition);
+  if (!condition)
+    return nullptr;
+  condition->set_constant_value(m_Cee.evaluate(*condition));
+  std::unique_ptr<ResolvedStmt> increment_expr =
+      resolve_stmt(*stmt.increment_expr);
+  if (!increment_expr)
+    return nullptr;
+  std::unique_ptr<ResolvedBlock> body = resolve_block(*stmt.body);
+  if (!body)
+    return nullptr;
+  return std::make_unique<ResolvedForStmt>(
+      stmt.location, std::move(counter_variable), std::move(condition),
+      std::move(increment_expr), std::move(body));
 }
 
 bool Sema::flow_sensitive_analysis(const ResolvedFuncDecl &fn) {
