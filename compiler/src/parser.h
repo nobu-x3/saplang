@@ -43,6 +43,7 @@ private:
   std::unique_ptr<ReturnStmt> parse_return_stmt();
   std::unique_ptr<Expr> parse_prefix_expr();
   std::unique_ptr<Expr> parse_primary_expr();
+  std::unique_ptr<StructLiteralExpr> parse_struct_literal_expr();
   std::unique_ptr<Expr> parse_expr();
   std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs,
                                        int precedence);

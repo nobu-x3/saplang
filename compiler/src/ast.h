@@ -187,6 +187,16 @@ struct DeclRefExpr : public Expr {
   DUMP_IMPL
 };
 
+using FieldInitializer = std::pair<std::string, std::unique_ptr<Expr>>;
+struct StructLiteralExpr : public Expr {
+  std::vector<FieldInitializer> field_initializers;
+  inline StructLiteralExpr(SourceLocation loc,
+                           std::vector<FieldInitializer> initializers)
+      : Expr(loc), field_initializers(std::move(initializers)) {}
+
+  DUMP_IMPL
+};
+
 struct Assignment : public Stmt {
   std::unique_ptr<DeclRefExpr> variable;
   std::unique_ptr<Expr> expr;

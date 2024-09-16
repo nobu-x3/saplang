@@ -346,11 +346,15 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // ::= <integer>
 // | <real>
 //
+//
 // <declRefExpr>
 // ::= <identifier>
 //
 // <callExpr>
 // ::= <declRefExpr> <argList>
+//
+// <structLiteral>
+// ::= '.' '{' ('.<identifier> '=' ')* <expr> }'
 std::unique_ptr<Expr> Parser::parse_primary_expr() {
   SourceLocation location = m_NextToken.location;
   // @TODO: distinguish between casting and grouping... or maybe not here, idk
@@ -396,7 +400,46 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     return std::make_unique<CallExpr>(location, std::move(declRefExpr),
                                       std::move(*arg_list));
   }
+  if (m_NextToken.kind == TokenKind::Dot) {
+    eat_next_token(); // eat '.'
+    if(m_NextToken.kind != TokenKind::Lbrace)
+      return report(m_NextToken.location, "expected '{' in struct literal initialization.");
+    eat_next_token(); // eat '{'
+    auto struct_lit = parse_struct_literal_expr();
+    if (m_NextToken.kind != TokenKind::Rbrace)
+      return report(m_NextToken.location, "expected '}' after struct literal initialization.");
+    eat_next_token(); // eat '}'
+    return std::move(struct_lit);
+  }
   return report(location, "expected expression.");
+}
+
+std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {
+  SourceLocation loc = m_NextToken.location;
+  std::vector<FieldInitializer> field_initializers;
+  while (m_NextToken.kind != TokenKind::Rbrace) {
+    std::string id;
+    if (m_NextToken.kind == TokenKind::Dot) {
+      eat_next_token(); // eat '.'
+      if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
+        return report(m_NextToken.location,
+                      "expected identifier after '.' in struct literal.");
+      id = *m_NextToken.value;
+      eat_next_token(); // eat id
+      if (m_NextToken.kind != TokenKind::Equal)
+        return report(m_NextToken.location,
+                      "expected '=' in struct literal field value assignment.");
+      eat_next_token(); // eat '='
+    }
+    std::unique_ptr<Expr> initializer = parse_expr();
+    if (!initializer)
+      return nullptr;
+    field_initializers.emplace_back(std::make_pair(id, std::move(initializer)));
+    if (m_NextToken.kind == TokenKind::Comma)
+      eat_next_token();
+  }
+  return std::make_unique<StructLiteralExpr>(loc,
+                                             std::move(field_initializers));
 }
 
 // <argList>

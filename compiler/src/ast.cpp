@@ -228,6 +228,15 @@ void DeclRefExpr::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "DeclRefExpr: " << id << "\n";
 }
 
+void StructLiteralExpr::dump_to_stream(std::stringstream &stream,
+                                       size_t indent_level) const {
+  stream << indent(indent_level) << "StructLiteralExpr:\n";
+  for (auto &&[name, expr] : field_initializers) {
+    stream << indent(indent_level + 1) << "FieldInitializer: " << name << "\n";
+    expr->dump_to_stream(stream, indent_level + 1);
+  }
+}
+
 void Assignment::dump_to_stream(std::stringstream &stream,
                                 size_t indent_level) const {
   stream << indent(indent_level) << "Assignment:\n";

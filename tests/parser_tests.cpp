@@ -143,7 +143,7 @@ fn void main() {
   Block
 )");
     REQUIRE(error_stream.str() ==
-            R"(test:3:5 error: expected expression.
+            R"(test:3:6 error: expected '{' in struct literal initialization.
 test:4:5 error: expected expression.
 )");
     REQUIRE(!parser.is_complete_ast());
@@ -1044,4 +1044,22 @@ struct TestType {
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(a)");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(b)");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: f32(c)");
+}
+
+TEST_CASE("struct literals", "[parser]") {
+  TEST_SETUP(R"(
+fn void foo() {
+  var TestType var_struct = .{.a = 0, .b = false};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  REQUIRE(lines_it->find("DeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: var_struct:TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: bool(false)");
 }
