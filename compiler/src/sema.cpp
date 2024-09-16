@@ -429,30 +429,35 @@ std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast(bool partial) {
   Scope global_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
-  for (auto &&fn : m_AST) {
-    auto resolved_fn_decl = resolve_func_decl(*fn);
-    if (!resolved_fn_decl || !insert_decl_to_current_scope(*resolved_fn_decl)) {
-      error = true;
-      continue;
+  for (auto &&decl : m_AST) {
+    if (auto *fn = dynamic_cast<const FunctionDecl *>(decl.get())) {
+      auto resolved_fn_decl = resolve_func_decl(*fn);
+      if (!resolved_fn_decl ||
+          !insert_decl_to_current_scope(*resolved_fn_decl)) {
+        error = true;
+        continue;
+      }
+      resolved_functions.emplace_back(std::move(resolved_fn_decl));
+      if (error && !partial)
+        return {};
     }
-    resolved_functions.emplace_back(std::move(resolved_fn_decl));
   }
-  if (error && !partial)
-    return {};
   for (int i = 0; i < resolved_functions.size(); ++i) {
     Scope fn_scope{this};
-    m_CurrFunction = resolved_functions[i].get();
-    for (auto &&param : m_CurrFunction->params) {
-      insert_decl_to_current_scope(*param);
+    if (auto *fn = dynamic_cast<const FunctionDecl *>(m_AST[i].get())) {
+      m_CurrFunction = resolved_functions[i].get();
+      for (auto &&param : m_CurrFunction->params) {
+        insert_decl_to_current_scope(*param);
+      }
+      auto resolved_body = resolve_block(*fn->body);
+      if (!resolved_body) {
+        error = true;
+        continue;
+      }
+      m_CurrFunction->body = std::move(resolved_body);
+      if (m_ShouldRunFlowSensitiveAnalysis)
+        error |= flow_sensitive_analysis(*m_CurrFunction);
     }
-    auto resolved_body = resolve_block(*m_AST[i]->body);
-    if (!resolved_body) {
-      error = true;
-      continue;
-    }
-    m_CurrFunction->body = std::move(resolved_body);
-    if (m_ShouldRunFlowSensitiveAnalysis)
-      error |= flow_sensitive_analysis(*m_CurrFunction);
   }
   if (error && !partial)
     return {};

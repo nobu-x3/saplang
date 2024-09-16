@@ -124,6 +124,15 @@ struct VarDecl : public Decl {
   DUMP_IMPL
 };
 
+struct StructDecl : public Decl {
+  std::vector<std::pair<Type, std::string>> members;
+  inline StructDecl(SourceLocation loc, const std::string &id,
+                    std::vector<std::pair<Type, std::string>> types)
+      : Decl(loc, id), members(std::move(types)) {}
+
+  DUMP_IMPL
+};
+
 struct DeclStmt : public Stmt {
   std::unique_ptr<VarDecl> var_decl;
   inline DeclStmt(SourceLocation loc, std::unique_ptr<VarDecl> var)

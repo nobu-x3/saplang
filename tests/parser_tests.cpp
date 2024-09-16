@@ -9,7 +9,7 @@
   saplang::Lexer lexer{src_file};                                              \
   saplang::Parser parser(&lexer);                                              \
   auto parse_result = parser.parse_source_file();                              \
-  for (auto &&fn : parse_result.functions) {                                   \
+  for (auto &&fn : parse_result.declarations) {                                \
     fn->dump_to_stream(output_buffer);                                         \
   }                                                                            \
   const auto &error_stream = saplang::get_error_stream();
@@ -352,15 +352,21 @@ fn int main() {
 }
 
 fn int error2({
-return 1;
+  return 1;
 }
 
 fn void error3(){
-return;
+  return;
 
 fn int pass() {
-return 2;
+  return 2;
 }
+)");
+  REQUIRE(error_stream.str() ==
+          R"(test:2:9 error: expected function identifier.
+test:10:15 error: expected parameter declaration.
+test:17:1 error: expected '}' at the end of a block.
+test:17:1 error: failed to parse function block.
 )");
   REQUIRE(output_buffer.str() == R"(FunctionDecl: main:int
   Block
@@ -370,12 +376,6 @@ FunctionDecl: pass:int
   Block
     ReturnStmt
       NumberLiteral: integer(2)
-)");
-  REQUIRE(error_stream.str() ==
-          R"(test:2:9 error: expected function identifier.
-test:10:15 error: expected parameter declaration.
-test:17:1 error: expected '}' at the end of a block.
-test:17:1 error: failed to parse function block.
 )");
   REQUIRE(!parser.is_complete_ast());
 }
@@ -1027,4 +1027,21 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: i");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+}
+
+TEST_CASE("file-scope struct decl", "[parser]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  i32 b;
+  f32 c;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("StructDecl: TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(b)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: f32(c)");
 }

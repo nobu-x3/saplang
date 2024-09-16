@@ -9,7 +9,7 @@
   saplang::Lexer lexer{src_file};                                              \
   saplang::Parser parser(&lexer);                                              \
   auto parse_result = parser.parse_source_file();                              \
-  saplang::Sema sema{std::move(parse_result.functions)};                       \
+  saplang::Sema sema{std::move(parse_result.declarations)};                    \
   auto resolved_ast = sema.resolve_ast();                                      \
   saplang::Codegen codegen{std::move(resolved_ast), "codegen_tests"};          \
   auto generated_code = codegen.generate_ir();                                 \
@@ -745,11 +745,13 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %i, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %for.condition");
   CONTAINS_NEXT_REQUIRE(lines_it, "for.condition:");
-  REQUIRE(lines_it->find("; preds = %for.counter_op, %for.counter_decl") != std::string::npos);
+  REQUIRE(lines_it->find("; preds = %for.counter_op, %for.counter_decl") !=
+          std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load i32, ptr %i, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%1 = icmp ult i32 %0, 10");
   CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool = icmp ne i1 %1, false");
-  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool, label %for.body, label %for.exit");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "br i1 %to.bool, label %for.body, label %for.exit");
   CONTAINS_NEXT_REQUIRE(lines_it, "for.body:");
   REQUIRE(lines_it->find("; preds = %for.condition") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %for.counter_op");

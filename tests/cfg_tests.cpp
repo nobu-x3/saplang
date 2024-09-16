@@ -8,7 +8,7 @@
   saplang::Lexer lexer{src_file};                                              \
   saplang::Parser parser(&lexer);                                              \
   auto parse_result = parser.parse_source_file();                              \
-  saplang::Sema sema{std::move(parse_result.functions), true};                 \
+  saplang::Sema sema{std::move(parse_result.declarations), true};              \
   auto resolved_ast = sema.resolve_ast();                                      \
   for (auto &&fn : resolved_ast) {                                             \
     output_buffer << fn->id << ":\n";                                          \

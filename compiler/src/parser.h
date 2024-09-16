@@ -2,29 +2,38 @@
 
 #include "ast.h"
 #include "lexer.h"
+#include <algorithm>
 #include <memory>
 #include <vector>
 
 namespace saplang {
 
-struct FuncParsingResult {
+struct ParsingResult {
   bool is_complete_ast;
-  std::vector<std::unique_ptr<FunctionDecl>> functions;
+  std::vector<std::unique_ptr<Decl>> declarations;
 };
 
 class Parser {
 public:
   explicit Parser(Lexer *lexer);
-  FuncParsingResult parse_source_file();
+  ParsingResult parse_source_file();
   inline bool is_complete_ast() const { return m_IsCompleteAst; }
 
 private:
   inline void eat_next_token() { m_NextToken = m_Lexer->get_next_token(); }
 
-  inline void sync_on(TokenKind kind) {
+  inline void sync_on(const std::vector<TokenKind> &kinds) {
     m_IsCompleteAst = false;
-    while (m_NextToken.kind != kind && m_NextToken.kind != TokenKind::Eof)
+    bool found_next = false;
+    while (!found_next && m_NextToken.kind != TokenKind::Eof) {
+      for (auto &&kind : kinds) {
+        if (m_NextToken.kind == kind) {
+          found_next = true;
+          return;
+        }
+      }
       eat_next_token();
+    }
   }
 
   void synchronize();
@@ -52,6 +61,7 @@ private:
 
   std::unique_ptr<DeclStmt> parse_var_decl_stmt();
   std::unique_ptr<VarDecl> parse_var_decl(bool is_const);
+  std::unique_ptr<StructDecl> parse_struct_decl();
 
   std::unique_ptr<Stmt> parse_assignment_or_expr();
   std::unique_ptr<Assignment> parse_assignment(std::unique_ptr<Expr> lhs);

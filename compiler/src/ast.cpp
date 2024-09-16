@@ -131,6 +131,15 @@ void ReturnStmt::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void StructDecl::dump_to_stream(std::stringstream &stream,
+                                size_t indent_level) const {
+  stream << indent(indent_level) << "StructDecl: " << id << "\n";
+  for (auto &&[type, name] : members) {
+    stream << indent(indent_level + 1) << "MemberField: " << type.name << "("
+           << name << ")\n";
+  }
+}
+
 void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
   stream << indent(indent_level) << "VarDecl: " << id << ":"

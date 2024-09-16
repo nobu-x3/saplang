@@ -25,6 +25,7 @@ enum class TokenKind : char {
   KwWhile,
   KwFor,
   KwConst,
+  KwStruct,
   KwVar,
   Slash,
   AmpAmp,
@@ -57,6 +58,7 @@ const std::unordered_map<std::string_view, TokenKind> keywords = {
     {"if", TokenKind::KwIf},         {"else", TokenKind::KwElse},
     {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},
     {"const", TokenKind::KwConst},   {"var", TokenKind::KwVar},
+    {"struct", TokenKind::KwStruct},
 };
 
 struct Token {

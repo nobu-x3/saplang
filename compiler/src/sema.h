@@ -18,7 +18,7 @@ struct DeclLookupResult {
 
 class Sema {
 public:
-  inline explicit Sema(std::vector<std::unique_ptr<FunctionDecl>> ast,
+  inline explicit Sema(std::vector<std::unique_ptr<Decl>> ast,
                        bool run_flow_sensitive_analysis = false)
       : m_AST(std::move(ast)),
         m_ShouldRunFlowSensitiveAnalysis(run_flow_sensitive_analysis) {}
@@ -79,7 +79,7 @@ private:
   bool check_return_on_all_paths(const ResolvedFuncDecl &fn, const CFG &cfg);
 
 private:
-  std::vector<std::unique_ptr<FunctionDecl>> m_AST;
+  std::vector<std::unique_ptr<Decl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};
   ResolvedFuncDecl *m_CurrFunction{nullptr};
   ConstantExpressionEvaluator m_Cee;

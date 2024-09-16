@@ -231,6 +231,40 @@ std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const) {
                                    is_const);
 }
 
+// <structDeclStatement>
+// ::= 'struct' <identifier> '{' (<type> <identifier> ';') '}'
+std::unique_ptr<StructDecl> Parser::parse_struct_decl() {
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat 'struct'
+  if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
+    return report(m_NextToken.location,
+                  "struct type declarations must have a name.");
+  std::string id = *m_NextToken.value;
+  eat_next_token(); // eat identifier
+  if (m_NextToken.kind != TokenKind::Lbrace)
+    return report(m_NextToken.location,
+                  "struct type declarations must have a body.");
+  eat_next_token(); // eat '{'
+  std::vector<std::pair<Type, std::string>> fields{};
+  while (m_NextToken.kind != TokenKind::Rbrace) {
+    std::optional<Type> type = parse_type();
+    if (!type)
+      return nullptr;
+    if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
+      return report(m_NextToken.location,
+                    "struct member field declarations must have a name.");
+    std::string field_name = *m_NextToken.value;
+    eat_next_token(); // eat field name
+    if (m_NextToken.kind != TokenKind::Semicolon)
+      return report(m_NextToken.location,
+                    "struct member field declarations must end with ';'.");
+    eat_next_token(); // eat ';'
+    fields.emplace_back(std::make_pair(*type, field_name));
+  }
+  eat_next_token(); // eat '}'
+  return std::make_unique<StructDecl>(loc, id, std::move(fields));
+}
+
 std::unique_ptr<Assignment>
 Parser::parse_assignment(std::unique_ptr<Expr> lhs) {
   auto *dre = dynamic_cast<DeclRefExpr *>(lhs.get());
@@ -563,28 +597,35 @@ std::optional<Type> Parser::parse_type() {
 }
 
 // <sourceFile>
-// ::= <funcDecl>* EOF
-FuncParsingResult Parser::parse_source_file() {
-  std::vector<std::unique_ptr<FunctionDecl>> functions;
+// ::= <structDeclStmt>* <funcDecl>* EOF
+ParsingResult Parser::parse_source_file() {
+  std::vector<std::unique_ptr<Decl>> decls;
   bool is_complete_ast = true;
+  const std::vector<TokenKind> sync_kinds{TokenKind::KwFn, TokenKind::KwStruct};
   while (m_NextToken.kind != TokenKind::Eof) {
-    if (m_NextToken.kind != TokenKind::KwFn) {
-      report(m_NextToken.location,
-             "only function definitions are allowed in global scope.");
+    if (m_NextToken.kind != TokenKind::KwFn &&
+        m_NextToken.kind != TokenKind::KwStruct) {
+      report(
+          m_NextToken.location,
+          "only function and struct declarations are allowed in global scope.");
       is_complete_ast = false;
-      sync_on(TokenKind::KwFn);
+      sync_on(sync_kinds);
       continue;
     }
-    auto fn = parse_function_decl();
-    if (!fn) {
+    std::unique_ptr<Decl> decl = nullptr;
+    if (m_NextToken.kind == TokenKind::KwFn)
+      decl = parse_function_decl();
+    if (m_NextToken.kind == TokenKind::KwStruct)
+      decl = parse_struct_decl();
+    if (!decl) {
       is_complete_ast = false;
-      sync_on(TokenKind::KwFn);
+      sync_on(sync_kinds);
       continue;
     }
-    functions.emplace_back(std::move(fn));
+    decls.emplace_back(std::move(decl));
   }
   assert(m_NextToken.kind == TokenKind::Eof);
-  return {is_complete_ast, std::move(functions)};
+  return {is_complete_ast, std::move(decls)};
 }
 
 void Parser::synchronize() {
