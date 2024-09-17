@@ -4,11 +4,11 @@
 #include <iostream>
 #include <sstream>
 
+#include "cfg.h"
 #include "codegen.h"
 #include "lexer.h"
 #include "parser.h"
 #include "sema.h"
-#include "cfg.h"
 #include "utils.h"
 
 [[noreturn]] void error(std::string_view msg) {
@@ -119,12 +119,15 @@ int main(int argc, const char **argv) {
     std::cout << output_stream.str();
     return 0;
   }
-  if(options.cfg_dump){
+  if (options.cfg_dump) {
     std::stringstream output_stream;
-    for(auto&& fn : resolved_tree) {
-      output_stream << fn->id << ":\n";
-      saplang::CFGBuilder().build(*fn).dump_to_stream(output_stream, 1);
-      std::cout << output_stream.str();
+    for (auto &&decl : resolved_tree) {
+      if (const auto *fn =
+              dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {
+        output_stream << decl->id << ":\n";
+        saplang::CFGBuilder().build(*fn).dump_to_stream(output_stream, 1);
+        std::cout << output_stream.str();
+      }
     }
     return 0;
   }

@@ -11,7 +11,7 @@
 namespace saplang {
 class Codegen {
 public:
-  explicit Codegen(std::vector<std::unique_ptr<ResolvedFuncDecl>> resolved_tree,
+  explicit Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree,
                    std::string_view source_path);
   std::unique_ptr<llvm::Module> generate_ir();
 
@@ -42,7 +42,7 @@ private:
   llvm::Value *bool_to_type(Type::Kind kind, llvm::Value *value);
 
 private:
-  std::vector<std::unique_ptr<ResolvedFuncDecl>> m_ResolvedTree{};
+  std::vector<std::unique_ptr<ResolvedDecl>> m_ResolvedTree{};
   std::map<const ResolvedDecl *, llvm::Value *> m_Declarations{};
   llvm::Value *m_RetVal{nullptr};
   llvm::BasicBlock *m_RetBB{nullptr};

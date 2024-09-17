@@ -5,7 +5,7 @@
 
 namespace saplang {
 
-Codegen::Codegen(std::vector<std::unique_ptr<ResolvedFuncDecl>> resolved_tree,
+Codegen::Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree,
                  std::string_view source_path)
     : m_ResolvedTree{std::move(resolved_tree)}, m_Builder{m_Context},
       m_Module{std::make_unique<llvm::Module>("<tu>", m_Context)} {
@@ -14,12 +14,14 @@ Codegen::Codegen(std::vector<std::unique_ptr<ResolvedFuncDecl>> resolved_tree,
 }
 
 std::unique_ptr<llvm::Module> Codegen::generate_ir() {
-  for (auto &&func : m_ResolvedTree) {
-    gen_func_decl(*func);
+  for (auto &&decl : m_ResolvedTree) {
+    if (const auto *func = dynamic_cast<const ResolvedFuncDecl *>(decl.get()))
+      gen_func_decl(*func);
   }
 
-  for (auto &&func : m_ResolvedTree) {
-    gen_func_body(*func);
+  for (auto &&decl : m_ResolvedTree) {
+    if (const auto *func = dynamic_cast<const ResolvedFuncDecl *>(decl.get()))
+      gen_func_body(*func);
   }
 
   return std::move(m_Module);

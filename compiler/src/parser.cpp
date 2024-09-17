@@ -402,12 +402,14 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
   }
   if (m_NextToken.kind == TokenKind::Dot) {
     eat_next_token(); // eat '.'
-    if(m_NextToken.kind != TokenKind::Lbrace)
-      return report(m_NextToken.location, "expected '{' in struct literal initialization.");
+    if (m_NextToken.kind != TokenKind::Lbrace)
+      return report(m_NextToken.location,
+                    "expected '{' in struct literal initialization.");
     eat_next_token(); // eat '{'
     auto struct_lit = parse_struct_literal_expr();
     if (m_NextToken.kind != TokenKind::Rbrace)
-      return report(m_NextToken.location, "expected '}' after struct literal initialization.");
+      return report(m_NextToken.location,
+                    "expected '}' after struct literal initialization.");
     eat_next_token(); // eat '}'
     return std::move(struct_lit);
   }
@@ -421,6 +423,22 @@ std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {
     std::string id;
     if (m_NextToken.kind == TokenKind::Dot) {
       eat_next_token(); // eat '.'
+      // this could be another struct literal initialization
+      if (m_NextToken.kind == TokenKind::Lbrace) {
+        eat_next_token(); // eat '{'
+        std::unique_ptr<Expr> initializer = parse_struct_literal_expr();
+        if (!initializer)
+          return nullptr;
+        field_initializers.emplace_back(
+            std::make_pair(id, std::move(initializer)));
+        if (m_NextToken.kind != TokenKind::Rbrace)
+          return report(m_NextToken.location,
+                        "expected '}' after struct literal initialization.");
+        eat_next_token(); // eat '}'
+        if (m_NextToken.kind == TokenKind::Comma)
+          eat_next_token();
+        continue;
+    } else {
       if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
         return report(m_NextToken.location,
                       "expected identifier after '.' in struct literal.");
@@ -431,15 +449,15 @@ std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {
                       "expected '=' in struct literal field value assignment.");
       eat_next_token(); // eat '='
     }
-    std::unique_ptr<Expr> initializer = parse_expr();
-    if (!initializer)
-      return nullptr;
-    field_initializers.emplace_back(std::make_pair(id, std::move(initializer)));
-    if (m_NextToken.kind == TokenKind::Comma)
-      eat_next_token();
   }
-  return std::make_unique<StructLiteralExpr>(loc,
-                                             std::move(field_initializers));
+  std::unique_ptr<Expr> initializer = parse_expr();
+  if (!initializer)
+    return nullptr;
+  field_initializers.emplace_back(std::make_pair(id, std::move(initializer)));
+  if (m_NextToken.kind == TokenKind::Comma)
+    eat_next_token();
+}
+return std::make_unique<StructLiteralExpr>(loc, std::move(field_initializers));
 }
 
 // <argList>

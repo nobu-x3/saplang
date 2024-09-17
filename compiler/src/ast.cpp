@@ -310,6 +310,17 @@ void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
     initializer->dump_to_stream(stream, indent_level + 1);
 }
 
+void ResolvedStructDecl::dump_to_stream(std::stringstream &stream,
+                                        size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedStructDecl: " << id << "\n";
+  int member_index = 0;
+  for (auto &&[type, name] : members) {
+    stream << indent(indent_level + 1) << member_index
+           << ". ResolvedMemberField: " << type.name << "(" << name << ")\n";
+    ++member_index;
+  }
+}
+
 void ResolvedDeclStmt::dump_to_stream(std::stringstream &stream,
                                       size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedDeclStmt:\n";
@@ -480,6 +491,21 @@ void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedNumberLiteral:\n";
   dump_constant(stream, indent_level, value, type.kind);
   stream << "\n";
+}
+
+void ResolvedStructLiteralExpr::dump_to_stream(std::stringstream &stream,
+                                               size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedStructLiteralExpr: " << type.name
+         << "\n";
+  for (auto &&[name, expr] : field_initializers) {
+    stream << indent(indent_level + 1) << "ResolvedFieldInitializer: " << name
+           << "\n";
+    if (!expr) {
+      stream << indent(indent_level + 1) << "Uninitialized\n";
+      continue;
+    }
+    expr->dump_to_stream(stream, indent_level + 1);
+  }
 }
 
 void ResolvedAssignment::dump_to_stream(std::stringstream &stream,

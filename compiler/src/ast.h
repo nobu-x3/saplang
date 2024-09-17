@@ -315,6 +315,19 @@ struct ResolvedExpr
   virtual ~ResolvedExpr() = default;
 };
 
+using ResolvedFieldInitializer =
+    std::pair<std::string, std::unique_ptr<ResolvedExpr>>;
+struct ResolvedStructLiteralExpr : public ResolvedExpr {
+  std::vector<ResolvedFieldInitializer> field_initializers;
+  inline ResolvedStructLiteralExpr(
+      SourceLocation loc, Type type,
+      std::vector<ResolvedFieldInitializer> initializers)
+      : ResolvedExpr(loc, std::move(type)),
+        field_initializers(std::move(initializers)) {}
+
+  DUMP_IMPL
+};
+
 struct ResolvedBlock : public IDumpable {
   SourceLocation location;
   std::vector<std::unique_ptr<ResolvedStmt>> statements;
@@ -344,6 +357,16 @@ struct ResolvedVarDecl : public ResolvedDecl {
                          std::unique_ptr<ResolvedExpr> init, bool is_const)
       : ResolvedDecl(loc, id, std::move(type)), initializer(std::move(init)),
         is_const(is_const) {}
+
+  DUMP_IMPL
+};
+
+struct ResolvedStructDecl : public ResolvedDecl {
+  std::vector<std::pair<Type, std::string>> members;
+  inline ResolvedStructDecl(SourceLocation loc, const std::string &id,
+                            Type type,
+                            std::vector<std::pair<Type, std::string>> types)
+      : ResolvedDecl(loc, id, std::move(type)), members(std::move(types)) {}
 
   DUMP_IMPL
 };
