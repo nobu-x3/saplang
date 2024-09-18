@@ -341,6 +341,7 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // | <declRefExpr>
 // | <callExpr>
 // | '(' <expr> ')'
+// | <memberAccess>
 //
 // <numberLiteral>
 // ::= <integer>
@@ -355,6 +356,9 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 //
 // <structLiteral>
 // ::= '.' '{' ('.<identifier> '=' ')* <expr> }'
+//
+// <memberAccess>
+// ::= <declRefExpr> '.' <identifier>
 std::unique_ptr<Expr> Parser::parse_primary_expr() {
   SourceLocation location = m_NextToken.location;
   // @TODO: distinguish between casting and grouping... or maybe not here, idk
@@ -391,6 +395,17 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
         std::make_unique<DeclRefExpr>(location, *m_NextToken.value);
     eat_next_token();
     if (m_NextToken.kind != TokenKind::Lparent) {
+      // Member access
+      if (m_NextToken.kind == TokenKind::Dot) {
+        eat_next_token(); // eat '.'
+        if (m_NextToken.kind != TokenKind::Identifier)
+          return report(m_NextToken.location,
+                        "expected identifier in struct member access.");
+        std::string member = *m_NextToken.value;
+        eat_next_token(); // eat identifier
+        return std::make_unique<MemberAccess>(
+            declRefExpr->location, std::move(declRefExpr), std::move(member));
+      }
       return declRefExpr;
     }
     location = m_NextToken.location;
@@ -438,26 +453,28 @@ std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {
         if (m_NextToken.kind == TokenKind::Comma)
           eat_next_token();
         continue;
-    } else {
-      if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
-        return report(m_NextToken.location,
-                      "expected identifier after '.' in struct literal.");
-      id = *m_NextToken.value;
-      eat_next_token(); // eat id
-      if (m_NextToken.kind != TokenKind::Equal)
-        return report(m_NextToken.location,
-                      "expected '=' in struct literal field value assignment.");
-      eat_next_token(); // eat '='
+      } else {
+        if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
+          return report(m_NextToken.location,
+                        "expected identifier after '.' in struct literal.");
+        id = *m_NextToken.value;
+        eat_next_token(); // eat id
+        if (m_NextToken.kind != TokenKind::Equal)
+          return report(
+              m_NextToken.location,
+              "expected '=' in struct literal field value assignment.");
+        eat_next_token(); // eat '='
+      }
     }
+    std::unique_ptr<Expr> initializer = parse_expr();
+    if (!initializer)
+      return nullptr;
+    field_initializers.emplace_back(std::make_pair(id, std::move(initializer)));
+    if (m_NextToken.kind == TokenKind::Comma)
+      eat_next_token();
   }
-  std::unique_ptr<Expr> initializer = parse_expr();
-  if (!initializer)
-    return nullptr;
-  field_initializers.emplace_back(std::make_pair(id, std::move(initializer)));
-  if (m_NextToken.kind == TokenKind::Comma)
-    eat_next_token();
-}
-return std::make_unique<StructLiteralExpr>(loc, std::move(field_initializers));
+  return std::make_unique<StructLiteralExpr>(loc,
+                                             std::move(field_initializers));
 }
 
 // <argList>

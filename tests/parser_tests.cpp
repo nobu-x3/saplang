@@ -1063,3 +1063,13 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer: b");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: bool(false)");
 }
+
+TEST_CASE("member access", "[parser]") {
+  TEST_SETUP(R"(fn void foo() { var_struct.a; })");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  REQUIRE(lines_it->find("MemberAccess:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: var_struct");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Field: a");
+}

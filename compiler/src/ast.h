@@ -151,6 +151,18 @@ struct NumberLiteral : public Expr {
   DUMP_IMPL
 };
 
+struct MemberAccess : public Expr {
+  std::unique_ptr<Expr> variable;
+  std::string field;
+
+  inline explicit MemberAccess(SourceLocation loc,
+                               std::unique_ptr<Expr> variable,
+                               std::string field)
+      : Expr(loc), variable(std::move(variable)), field(std::move(field)) {}
+
+  DUMP_IMPL
+};
+
 struct GroupingExpr : public Expr {
   std::unique_ptr<Expr> expr;
   inline explicit GroupingExpr(SourceLocation loc, std::unique_ptr<Expr> expr)

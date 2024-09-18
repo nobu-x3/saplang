@@ -154,6 +154,13 @@ void DeclStmt::dump_to_stream(std::stringstream &stream,
   var_decl->dump_to_stream(stream, indent_level + 1);
 }
 
+void MemberAccess::dump_to_stream(std::stringstream &stream,
+                                  size_t indent_level) const {
+  stream << indent(indent_level) << "MemberAccess:\n";
+  variable->dump_to_stream(stream, indent_level + 1);
+  stream << indent(indent_level + 1) << "Field: " << field << "\n";
+}
+
 void NumberLiteral::dump_to_stream(std::stringstream &stream,
                                    size_t indent_level) const {
   stream << indent(indent_level) << "NumberLiteral: ";
