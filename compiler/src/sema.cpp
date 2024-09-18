@@ -901,7 +901,7 @@ Sema::resolve_call_expr(const CallExpr &call) {
     return report(call.location, "argument count mismatch.");
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
   for (int i = 0; i < call.args.size(); ++i) {
-    std::unique_ptr<ResolvedExpr> resolved_arg = resolve_expr(*call.args[i]);
+    std::unique_ptr<ResolvedExpr> resolved_arg = resolve_expr(*call.args[i], &resolved_func_decl->params[i]->type);
     if (!resolved_arg)
       return nullptr;
     if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind) {
