@@ -151,18 +151,6 @@ struct NumberLiteral : public Expr {
   DUMP_IMPL
 };
 
-struct MemberAccess : public Expr {
-  std::unique_ptr<Expr> variable;
-  std::string field;
-
-  inline explicit MemberAccess(SourceLocation loc,
-                               std::unique_ptr<Expr> variable,
-                               std::string field)
-      : Expr(loc), variable(std::move(variable)), field(std::move(field)) {}
-
-  DUMP_IMPL
-};
-
 struct GroupingExpr : public Expr {
   std::unique_ptr<Expr> expr;
   inline explicit GroupingExpr(SourceLocation loc, std::unique_ptr<Expr> expr)
@@ -195,6 +183,16 @@ struct DeclRefExpr : public Expr {
   std::string id;
   inline DeclRefExpr(SourceLocation loc, std::string id)
       : Expr(loc), id(std::move(id)) {}
+
+  DUMP_IMPL
+};
+
+struct MemberAccess : public DeclRefExpr {
+  std::string field;
+
+  inline explicit MemberAccess(SourceLocation loc, std::string var_id,
+                               std::string field)
+      : DeclRefExpr(loc, std::move(var_id)), field(std::move(field)) {}
 
   DUMP_IMPL
 };
@@ -542,6 +540,20 @@ struct ResolvedAssignment : public ResolvedStmt {
                             std::unique_ptr<ResolvedDeclRefExpr> var,
                             std::unique_ptr<ResolvedExpr> expr)
       : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
+
+  DUMP_IMPL
+};
+
+struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
+  Type type;
+  int member_index;
+  std::string member_id;
+
+  inline ResolvedStructMemberAccess(SourceLocation loc, Type type,
+                                    const ResolvedDecl *decl, int member_index,
+                                    std::string member_id)
+      : ResolvedDeclRefExpr(loc, decl), type(type), member_index(member_index),
+        member_id(std::move(member_id)) {}
 
   DUMP_IMPL
 };

@@ -391,8 +391,8 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     return literal;
   }
   if (m_NextToken.kind == TokenKind::Identifier) {
-    auto declRefExpr =
-        std::make_unique<DeclRefExpr>(location, *m_NextToken.value);
+    std::string var_id = *m_NextToken.value;
+    auto declRefExpr = std::make_unique<DeclRefExpr>(location, var_id);
     eat_next_token();
     if (m_NextToken.kind != TokenKind::Lparent) {
       // Member access
@@ -404,7 +404,7 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
         std::string member = *m_NextToken.value;
         eat_next_token(); // eat identifier
         return std::make_unique<MemberAccess>(
-            declRefExpr->location, std::move(declRefExpr), std::move(member));
+            declRefExpr->location, std::move(var_id), std::move(member));
       }
       return declRefExpr;
     }

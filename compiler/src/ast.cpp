@@ -157,7 +157,7 @@ void DeclStmt::dump_to_stream(std::stringstream &stream,
 void MemberAccess::dump_to_stream(std::stringstream &stream,
                                   size_t indent_level) const {
   stream << indent(indent_level) << "MemberAccess:\n";
-  variable->dump_to_stream(stream, indent_level + 1);
+  DeclRefExpr::dump_to_stream(stream, indent_level + 1);
   stream << indent(indent_level + 1) << "Field: " << field << "\n";
 }
 
@@ -520,5 +520,13 @@ void ResolvedAssignment::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedAssignment:\n";
   variable->dump_to_stream(stream, indent_level + 1);
   expr->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedStructMemberAccess::dump_to_stream(std::stringstream &stream,
+                                                size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedStructMemberAccess:\n";
+  ResolvedDeclRefExpr::dump_to_stream(stream, indent_level + 1);
+  stream << indent(indent_level + 1) << "MemberIndex: " << member_index << "\n";
+  stream << indent(indent_level + 1) << "MemberID: " << member_id << "\n";
 }
 } // namespace saplang

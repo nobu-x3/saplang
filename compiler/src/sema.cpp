@@ -784,6 +784,41 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
   return nullptr;
 }
 
+std::unique_ptr<ResolvedStructMemberAccess>
+Sema::resolve_member_access(const MemberAccess &access,
+                            const ResolvedDecl *decl) {
+  if (!decl)
+    return nullptr;
+  std::optional<Type> type = resolve_type(decl->type);
+  if (!type)
+    return nullptr;
+  if(type->kind != Type::Kind::Custom)
+    return report(access.location,
+                  type->name + " is not a struct type.");
+  std::optional<DeclLookupResult> lookup_res =
+      lookup_decl(type->name, &(*type));
+  if (!lookup_res)
+    return nullptr;
+  const ResolvedStructDecl *struct_decl =
+      dynamic_cast<const ResolvedStructDecl *>(lookup_res->decl);
+  if (!struct_decl)
+    return report(access.location,
+                  lookup_res->decl->id + " is not a struct type.");
+  int decl_member_index = 0;
+  for (auto &&struct_member : struct_decl->members) {
+    // compare field names
+    if (struct_member.second == access.field) {
+      return std::make_unique<ResolvedStructMemberAccess>(
+          access.location, struct_member.first, struct_decl, decl_member_index,
+          access.field);
+    }
+    ++decl_member_index;
+  }
+  return report(access.location, "no member named '" + access.field +
+                                     "' in struct type '" + struct_decl->id +
+                                     "'.");
+}
+
 std::unique_ptr<ResolvedStructLiteralExpr>
 Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
                                   Type struct_type) {
@@ -882,6 +917,9 @@ Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
   if (!is_call && dynamic_cast<const ResolvedFuncDecl *>(decl))
     return report(decl_ref_expr.location,
                   "expected to call function '" + decl_ref_expr.id + "'.");
+  if (const auto *member_access =
+          dynamic_cast<const MemberAccess *>(&decl_ref_expr))
+    return resolve_member_access(*member_access, decl);
   return std::make_unique<ResolvedDeclRefExpr>(decl_ref_expr.location, decl);
 }
 
@@ -901,7 +939,8 @@ Sema::resolve_call_expr(const CallExpr &call) {
     return report(call.location, "argument count mismatch.");
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
   for (int i = 0; i < call.args.size(); ++i) {
-    std::unique_ptr<ResolvedExpr> resolved_arg = resolve_expr(*call.args[i], &resolved_func_decl->params[i]->type);
+    std::unique_ptr<ResolvedExpr> resolved_arg =
+        resolve_expr(*call.args[i], &resolved_func_decl->params[i]->type);
     if (!resolved_arg)
       return nullptr;
     if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind) {

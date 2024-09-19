@@ -874,4 +874,71 @@ fn void bar() {
   CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
 }
 
-// @TODO: member access
+
+TEST_CASE("struct member access", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType var_type = .{.b = 2, 3.0, true, .a = 1};
+  var_type.a = 2;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("var_type:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") TestType:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+}
+
+TEST_CASE("non-struct member access", "[sema]") {
+  TEST_SETUP(R"(
+fn void foo() {
+  var i32 test = 0;
+  test.a = 2;
+}
+)");
+  REQUIRE(error_stream.str() == "sema_test:4:3 error: i32 is not a struct type.\n");
+}
+
+TEST_CASE("struct non-existing member access", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType var_type = .{.b = 2, 3.0, true, .a = 1};
+  var_type.x = 2;
+}
+)");
+  REQUIRE(error_stream.str() == "sema_test:10:3 error: no member named 'x' in struct type 'TestType'.\n");
+}

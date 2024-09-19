@@ -56,7 +56,8 @@ private:
   std::unique_ptr<ResolvedReturnStmt>
   resolve_return_stmt(const ReturnStmt &stmt);
 
-  std::unique_ptr<ResolvedExpr> resolve_expr(const Expr &expr, Type* type = nullptr);
+  std::unique_ptr<ResolvedExpr> resolve_expr(const Expr &expr,
+                                             Type *type = nullptr);
 
   std::unique_ptr<ResolvedDeclRefExpr>
   resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call = false);
@@ -78,6 +79,9 @@ private:
 
   std::unique_ptr<ResolvedAssignment>
   resolve_assignment(const Assignment &assignment);
+
+  std::unique_ptr<ResolvedStructMemberAccess>
+  resolve_member_access(const MemberAccess &access, const ResolvedDecl* decl);
 
   bool flow_sensitive_analysis(const ResolvedFuncDecl &fn);
 
