@@ -17,6 +17,9 @@ std::unique_ptr<llvm::Module> Codegen::generate_ir() {
   for (auto &&decl : m_ResolvedTree) {
     if (const auto *func = dynamic_cast<const ResolvedFuncDecl *>(decl.get()))
       gen_func_decl(*func);
+    else if (const auto *struct_decl =
+                 dynamic_cast<const ResolvedStructDecl *>(decl.get()))
+      gen_struct_decl(*struct_decl);
   }
 
   for (auto &&decl : m_ResolvedTree) {
@@ -36,6 +39,17 @@ void Codegen::gen_func_decl(const ResolvedFuncDecl &decl) {
   auto *type = llvm::FunctionType::get(return_type, param_types, false);
   llvm::Function::Create(type, llvm::Function::ExternalLinkage, decl.id,
                          *m_Module);
+}
+
+void Codegen::gen_struct_decl(const ResolvedStructDecl &decl) {
+  std::vector<llvm::Type *> member_types{};
+  for (auto &&[type, name] : decl.members) {
+    member_types.emplace_back(gen_type(type));
+  }
+  llvm::ArrayRef<llvm::Type *> array_ref{member_types};
+  llvm::StructType *struct_type =
+      llvm::StructType::create(m_Context, array_ref, decl.id);
+  m_CustomTypes[decl.id] = struct_type;
 }
 
 void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
@@ -104,6 +118,8 @@ llvm::Type *Codegen::gen_type(Type type) {
     return m_Builder.getVoidTy();
   case Type::Kind::Pointer:
     return m_Builder.getPtrTy();
+  case Type::Kind::Custom:
+    return m_CustomTypes[type.name];
   }
   llvm_unreachable("unexpected type.");
 }

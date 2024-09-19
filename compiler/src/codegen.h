@@ -18,6 +18,7 @@ public:
 private:
   void gen_func_decl(const ResolvedFuncDecl &decl);
   void gen_func_body(const ResolvedFuncDecl &decl);
+  void gen_struct_decl(const ResolvedStructDecl &decl);
   llvm::Type *gen_type(Type type);
   llvm::AllocaInst *alloc_stack_var(llvm::Function *func, llvm::Type *type,
                                     std::string_view id);
@@ -44,6 +45,7 @@ private:
 private:
   std::vector<std::unique_ptr<ResolvedDecl>> m_ResolvedTree{};
   std::map<const ResolvedDecl *, llvm::Value *> m_Declarations{};
+  std::map<std::string, llvm::Type *> m_CustomTypes{};
   llvm::Value *m_RetVal{nullptr};
   llvm::BasicBlock *m_RetBB{nullptr};
   llvm::Instruction *m_AllocationInsertPoint{nullptr};
