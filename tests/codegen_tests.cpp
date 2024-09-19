@@ -765,3 +765,28 @@ fn void foo() {
   REQUIRE(lines_it->find("; preds = %for.condition") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
 }
+
+TEST_CASE("struct type declaration", "[codegen]") {
+  TEST_SETUP(R"(
+  struct TestType {
+    i32 a;
+    f32 b;
+    i8 c;
+    u32 d;
+  }
+fn void foo() {
+  var TestType t;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  REQUIRE(output_string == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 3;
+  REQUIRE(lines_it->find("%TestType = type { i32, float, i1, i32 }") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%t = alloca %TestType, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
