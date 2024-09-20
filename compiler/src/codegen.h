@@ -17,29 +17,59 @@ public:
 
 private:
   void gen_func_decl(const ResolvedFuncDecl &decl);
+
   void gen_func_body(const ResolvedFuncDecl &decl);
+
   void gen_struct_decl(const ResolvedStructDecl &decl);
+
   llvm::Type *gen_type(Type type);
+
   llvm::AllocaInst *alloc_stack_var(llvm::Function *func, llvm::Type *type,
                                     std::string_view id);
+
   void gen_block(const ResolvedBlock &body);
+
   llvm::Value *gen_stmt(const ResolvedStmt &stmt);
+
   llvm::Value *gen_if_stmt(const ResolvedIfStmt &stmt);
+
   llvm::Value *gen_while_stmt(const ResolvedWhileStmt &stmt);
+
   llvm::Value *gen_for_stmt(const ResolvedForStmt &stmt);
+
   llvm::Value *gen_return_stmt(const ResolvedReturnStmt &stmt);
+
   llvm::Value *gen_expr(const ResolvedExpr &expr);
+
   llvm::Value *gen_binary_op(const ResolvedBinaryOperator &op);
+
   llvm::Value *gen_unary_op(const ResolvedUnaryOperator &op);
+
   llvm::Value *gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lhs,
                            llvm::Value *rhs);
+
   void gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_bb,
                           llvm::BasicBlock *false_bb);
+
   llvm::Value *gen_call_expr(const ResolvedCallExpr &call);
+
+  llvm::Value *
+  gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit);
+
+  llvm::Value *gen_struct_literal_expr_assignment(
+      const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var);
+
+  llvm::Value *
+  gen_struct_member_access(const ResolvedStructMemberAccess &access);
+
   llvm::Value *gen_decl_stmt(const ResolvedDeclStmt &stmt);
+
   llvm::Value *gen_assignment(const ResolvedAssignment &assignment);
+
   llvm::Function *get_current_function();
+
   llvm::Value *type_to_bool(Type::Kind kind, llvm::Value *value);
+
   llvm::Value *bool_to_type(Type::Kind kind, llvm::Value *value);
 
 private:

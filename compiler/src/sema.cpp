@@ -792,9 +792,8 @@ Sema::resolve_member_access(const MemberAccess &access,
   std::optional<Type> type = resolve_type(decl->type);
   if (!type)
     return nullptr;
-  if(type->kind != Type::Kind::Custom)
-    return report(access.location,
-                  type->name + " is not a struct type.");
+  if (type->kind != Type::Kind::Custom)
+    return report(access.location, type->name + " is not a struct type.");
   std::optional<DeclLookupResult> lookup_res =
       lookup_decl(type->name, &(*type));
   if (!lookup_res)
@@ -804,12 +803,16 @@ Sema::resolve_member_access(const MemberAccess &access,
   if (!struct_decl)
     return report(access.location,
                   lookup_res->decl->id + " is not a struct type.");
+  const ResolvedVarDecl *struct_var_decl =
+      dynamic_cast<const ResolvedVarDecl *>(decl);
+  if (!struct_var_decl)
+    return report(access.location, "unknown variabe '" + decl->id + "'.");
   int decl_member_index = 0;
   for (auto &&struct_member : struct_decl->members) {
     // compare field names
     if (struct_member.second == access.field) {
       return std::make_unique<ResolvedStructMemberAccess>(
-          access.location, struct_member.first, struct_decl, decl_member_index,
+          access.location, struct_member.first, struct_var_decl, decl_member_index,
           access.field);
     }
     ++decl_member_index;

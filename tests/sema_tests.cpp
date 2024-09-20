@@ -910,11 +910,51 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
-  REQUIRE(lines_it->find(") TestType:") != std::string::npos);
+  REQUIRE(lines_it->find(") var_type:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: a");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
   CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+}
+
+TEST_CASE("struct member access return", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn i32 foo() {
+  var TestType var_type = .{.b = 2, 3.0, true, .a = 1};
+  return var_type.a;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("var_type:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") var_type:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: a");
 }
 
 TEST_CASE("non-struct member access", "[sema]") {

@@ -152,7 +152,8 @@ int main(int argc, const char **argv) {
   command << "clang " << llvm_ir_path;
   if (!options.output.empty())
     command << " -o " << options.output;
+  command << " -g -O0 -ggdb -glldb -gsce -gdbx";
   int ret = std::system(command.str().c_str());
-  std::filesystem::remove(llvm_ir_path);
+  // std::filesystem::remove(llvm_ir_path);
   return ret;
 }

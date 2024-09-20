@@ -523,6 +523,20 @@ struct ResolvedCallExpr : public ResolvedExpr {
   DUMP_IMPL
 };
 
+struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
+  Type type;
+  int member_index;
+  std::string member_id;
+
+  inline ResolvedStructMemberAccess(SourceLocation loc, Type type,
+                                    const ResolvedDecl *decl, int member_index,
+                                    std::string member_id)
+      : ResolvedDeclRefExpr(loc, decl), type(type), member_index(member_index),
+        member_id(std::move(member_id)) {}
+
+  DUMP_IMPL
+};
+
 struct ResolvedReturnStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedExpr> expr;
 
@@ -540,20 +554,6 @@ struct ResolvedAssignment : public ResolvedStmt {
                             std::unique_ptr<ResolvedDeclRefExpr> var,
                             std::unique_ptr<ResolvedExpr> expr)
       : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
-
-  DUMP_IMPL
-};
-
-struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
-  Type type;
-  int member_index;
-  std::string member_id;
-
-  inline ResolvedStructMemberAccess(SourceLocation loc, Type type,
-                                    const ResolvedDecl *decl, int member_index,
-                                    std::string member_id)
-      : ResolvedDeclRefExpr(loc, decl), type(type), member_index(member_index),
-        member_id(std::move(member_id)) {}
 
   DUMP_IMPL
 };

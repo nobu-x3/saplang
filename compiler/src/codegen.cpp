@@ -149,6 +149,8 @@ void Codegen::gen_block(const ResolvedBlock &body) {
 }
 
 llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt) {
+  if (auto *assignment = dynamic_cast<const ResolvedAssignment *>(&stmt))
+    return gen_assignment(*assignment);
   if (auto *expr = dynamic_cast<const ResolvedExpr *>(&stmt))
     return gen_expr(*expr);
   if (auto *ifstmt = dynamic_cast<const ResolvedIfStmt *>(&stmt))
@@ -159,8 +161,6 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt) {
     return gen_return_stmt(*return_stmt);
   if (auto *decl_stmt = dynamic_cast<const ResolvedDeclStmt *>(&stmt))
     return gen_decl_stmt(*decl_stmt);
-  if (auto *assignment = dynamic_cast<const ResolvedAssignment *>(&stmt))
-    return gen_assignment(*assignment);
   if (auto *for_stmt = dynamic_cast<const ResolvedForStmt *>(&stmt))
     return gen_for_stmt(*for_stmt);
   llvm_unreachable("unknown statememt.");
@@ -330,20 +330,80 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
       return llvm::ConstantInt::get(type, number->value.b8);
     }
   }
-  if (auto *dre = dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
+  if (const auto *dre = dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
+    if (auto *member_access =
+            dynamic_cast<const ResolvedStructMemberAccess *>(dre)) {
+      return gen_struct_member_access(*member_access);
+    }
     auto *type = gen_type(dre->type);
     return m_Builder.CreateLoad(type, m_Declarations[dre->decl]);
   }
-  if (auto *call = dynamic_cast<const ResolvedCallExpr *>(&expr))
+  if (const auto *call = dynamic_cast<const ResolvedCallExpr *>(&expr))
     return gen_call_expr(*call);
-  if (auto *group = dynamic_cast<const ResolvedGroupingExpr *>(&expr))
+  if (const auto *struct_lit =
+          dynamic_cast<const ResolvedStructLiteralExpr *>(&expr))
+    return gen_struct_literal_expr(*struct_lit);
+  if (const auto *group = dynamic_cast<const ResolvedGroupingExpr *>(&expr))
     return gen_expr(*group->expr);
-  if (auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
+  if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
     return gen_binary_op(*binop);
-  if (auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr))
+  if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr))
     return gen_unary_op(*unop);
   llvm_unreachable("unknown expression");
   return nullptr;
+}
+
+llvm::Value *Codegen::gen_struct_literal_expr_assignment(
+    const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var) {
+  // @TODO: if fully const just memset or memcpy directly to variable
+  llvm::Function *current_function = get_current_function();
+  int index = -1;
+  for (auto &&[field_name, expr] : struct_lit.field_initializers) {
+    ++index;
+    if (!expr)
+      continue;
+    llvm::Value *gened_expr = gen_expr(*expr);
+    std::vector<llvm::Value *> indices{
+        llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
+        llvm::ConstantInt::get(m_Context, llvm::APInt(32, index))};
+    llvm::Value *memptr =
+        m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type), var, indices);
+    m_Builder.CreateStore(gened_expr, memptr);
+  }
+  return var;
+}
+
+llvm::Value *
+Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access) {
+  llvm::Function *current_function = get_current_function();
+  llvm::Value *decl = m_Declarations[access.decl];
+  if (!decl)
+    return nullptr;
+  std::vector<llvm::Value *> indices{
+      llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
+      llvm::ConstantInt::get(m_Context, llvm::APInt(32, access.member_index))};
+  llvm::Value *memptr =
+      m_Builder.CreateInBoundsGEP(gen_type(access.decl->type), decl, indices);
+  auto *type = gen_type(access.type);
+  return m_Builder.CreateLoad(type, memptr);
+}
+
+llvm::Value *
+Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit) {
+  // @TODO: if fully const just memset or memcpy directly to variable
+  llvm::Function *current_function = get_current_function();
+  llvm::Value *stack_var =
+      alloc_stack_var(current_function, gen_type(struct_lit.type), "");
+  int index = -1;
+  for (auto &&[field_name, expr] : struct_lit.field_initializers) {
+    ++index;
+    if (!expr)
+      continue;
+    llvm::Value *gened_expr = gen_expr(*expr);
+    m_Builder.CreateInsertValue(stack_var, gened_expr,
+                                {static_cast<unsigned>(index)});
+  }
+  return stack_var;
 }
 
 llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop) {
@@ -558,8 +618,14 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
   const auto *decl = stmt.var_decl.get();
   llvm::Type *type = gen_type(decl->type);
   llvm::AllocaInst *var = alloc_stack_var(function, type, decl->id);
-  if (const auto &init = decl->initializer)
-    m_Builder.CreateStore(gen_expr(*init), var);
+  if (const auto &init = decl->initializer) {
+    if (const auto *struct_lit =
+            dynamic_cast<const ResolvedStructLiteralExpr *>(init.get())) {
+      gen_struct_literal_expr_assignment(*struct_lit, var);
+    } else {
+      m_Builder.CreateStore(gen_expr(*init), var);
+    }
+  }
   m_Declarations[decl] = var;
   return nullptr;
 }
