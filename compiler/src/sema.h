@@ -17,6 +17,8 @@ struct DeclLookupResult {
 };
 
 class Sema {
+  class Scope;
+
 public:
   inline explicit Sema(std::vector<std::unique_ptr<Decl>> ast,
                        bool run_flow_sensitive_analysis = false)
@@ -27,7 +29,9 @@ public:
 
 private:
   std::optional<DeclLookupResult>
-  lookup_decl(std::string_view id, std::optional<Type *> type = std::nullopt);
+  lookup_decl(std::string_view id, std::optional<const Type *> type = std::nullopt);
+
+  bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
@@ -81,7 +85,7 @@ private:
   resolve_assignment(const Assignment &assignment);
 
   std::unique_ptr<ResolvedStructMemberAccess>
-  resolve_member_access(const MemberAccess &access, const ResolvedDecl* decl);
+  resolve_member_access(const MemberAccess &access, const ResolvedDecl *decl);
 
   bool flow_sensitive_analysis(const ResolvedFuncDecl &fn);
 

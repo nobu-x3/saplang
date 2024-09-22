@@ -1041,3 +1041,55 @@ fn i32 bar() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
   CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
 }
+
+TEST_CASE("out of order struct decls", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType2 {
+  TestType variable;
+}
+struct TestType{
+  i32 a;
+  bool b;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedStructDecl: TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: bool(b)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: TestType2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: TestType(variable)");
+}
+
+TEST_CASE("out of order struct decls, unknown struct", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType2 {
+  TestType variable;
+  TestType3 unknown;
+}
+struct TestType{
+  i32 a;
+  bool b;
+}
+)");
+  REQUIRE(error_stream.str() == "sema_test:2:1 error: could not resolve type 'TestType3'.\n");
+}
+
+// TEST_CASE("member access chains", "[sema]") {
+//   TEST_SETUP(R"(
+// struct TestType2 {
+//   TestType variable;
+// }
+// struct TestType{
+//   i32 a;
+//   bool b;
+// }
+// fn void foo() {
+//   var TestType2 t;
+//   t.variable.a = 15;
+// }
+// )");
+//   REQUIRE(error_stream.str() == "");
+//   REQUIRE(output_buffer.str() == "");
+// }

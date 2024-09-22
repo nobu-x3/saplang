@@ -401,8 +401,8 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
                                           std::move(false_block));
 }
 
-std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id,
-                                                  std::optional<Type *> type) {
+std::optional<DeclLookupResult>
+Sema::lookup_decl(std::string_view id, std::optional<const Type *> type) {
   int scope_id = 0;
   for (auto it = m_Scopes.rbegin(); it != m_Scopes.rend(); ++it) {
     for (const ResolvedDecl *decl : *it) {
@@ -426,11 +426,104 @@ bool Sema::insert_decl_to_current_scope(ResolvedDecl &decl) {
   return true;
 }
 
+bool is_leaf(const StructDecl *decl) {
+  for (auto &&[type, id] : decl->members) {
+    if (type.kind == Type::Kind::Custom)
+      return false;
+  }
+  return true;
+}
+
+bool Sema::resolve_struct_decls(
+    std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
+  struct DeclToInspect {
+    const StructDecl *decl{nullptr};
+    bool resolved{false};
+  };
+  std::vector<DeclToInspect> non_leaf_struct_decls{};
+  non_leaf_struct_decls.reserve(m_AST.size());
+  bool error = false;
+  for (std::unique_ptr<Decl> &decl : m_AST) {
+    if (const auto *struct_decl =
+            dynamic_cast<const StructDecl *>(decl.get())) {
+      if (is_leaf(struct_decl)) {
+        std::unique_ptr<ResolvedStructDecl> resolved_struct_decl =
+            resolve_struct_decl(*struct_decl);
+        if (!resolved_struct_decl ||
+            !insert_decl_to_current_scope(*resolved_struct_decl)) {
+          error = true;
+          continue;
+        }
+        resolved_decls.emplace_back(std::move(resolved_struct_decl));
+        continue;
+      }
+      non_leaf_struct_decls.push_back({struct_decl});
+    }
+  }
+  if (error && !partial)
+    return false;
+  if (non_leaf_struct_decls.empty())
+    return true;
+  bool decl_resolved_last_pass = true;
+  while (decl_resolved_last_pass) {
+    decl_resolved_last_pass = false;
+    for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+      bool can_now_resolve = true;
+      for (auto &&[type, id] : struct_decl->members) {
+        std::optional<DeclLookupResult> lookup_result =
+            lookup_decl(type.name, &type);
+        if (type.kind == Type::Kind::Custom &&
+            (!lookup_result || !lookup_result->decl))
+          can_now_resolve = false;
+        break;
+      }
+      if (!can_now_resolve)
+        continue;
+      std::unique_ptr<ResolvedStructDecl> resolved_struct_decl =
+          resolve_struct_decl(*struct_decl);
+      if (!resolved_struct_decl ||
+          !insert_decl_to_current_scope(*resolved_struct_decl)) {
+        error = true;
+        continue;
+      }
+      resolved = true;
+      resolved_decls.emplace_back(std::move(resolved_struct_decl));
+      decl_resolved_last_pass = true;
+      continue;
+    }
+    for (auto it = non_leaf_struct_decls.begin();
+         it != non_leaf_struct_decls.end();) {
+      if (it->resolved) {
+        non_leaf_struct_decls.erase(it);
+        --it;
+      }
+      ++it;
+    }
+  }
+  for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+    if (!resolved) {
+      for (auto &&[type, id] : struct_decl->members) {
+        std::optional<DeclLookupResult> lookup_result =
+            lookup_decl(type.name, &type);
+        if (!lookup_result)
+          report(struct_decl->location,
+                 "could not resolve type '" + type.name + "'.");
+      }
+    }
+  }
+  if (error && !partial)
+    return false;
+  return true;
+}
+
 std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
   Scope global_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
+  if (!resolve_struct_decls(resolved_decls, partial)) {
+    return {};
+  }
   for (std::unique_ptr<Decl> &decl : m_AST) {
     if (const auto *fn = dynamic_cast<const FunctionDecl *>(decl.get())) {
       auto resolved_fn_decl = resolve_func_decl(*fn);
@@ -440,18 +533,6 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
         continue;
       }
       resolved_decls.emplace_back(std::move(resolved_fn_decl));
-      if (error && !partial)
-        return {};
-    } else if (const auto *struct_decl =
-                   dynamic_cast<const StructDecl *>(decl.get())) {
-      std::unique_ptr<ResolvedStructDecl> resolved_struct_decl =
-          resolve_struct_decl(*struct_decl);
-      if (!resolved_struct_decl ||
-          !insert_decl_to_current_scope(*resolved_struct_decl)) {
-        error = true;
-        continue;
-      }
-      resolved_decls.emplace_back(std::move(resolved_struct_decl));
       if (error && !partial)
         return {};
     }
