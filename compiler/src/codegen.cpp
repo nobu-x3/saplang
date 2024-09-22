@@ -87,7 +87,8 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
     m_Builder.CreateRetVoid();
     return;
   }
-  m_Builder.CreateRet(m_Builder.CreateLoad(return_type, m_RetVal));
+  llvm::Value *load_ret = m_Builder.CreateLoad(return_type, m_RetVal);
+  m_Builder.CreateRet(load_ret);
 }
 
 llvm::Type *Codegen::gen_type(Type type) {
@@ -331,12 +332,14 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     }
   }
   if (const auto *dre = dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
+    llvm::Value *decl = m_Declarations[dre->decl];
+    auto *type = gen_type(dre->type);
     if (auto *member_access =
             dynamic_cast<const ResolvedStructMemberAccess *>(dre)) {
-      return gen_struct_member_access(*member_access);
+      decl = gen_struct_member_access(*member_access);
+      type = gen_type(member_access->type);
     }
-    auto *type = gen_type(dre->type);
-    return m_Builder.CreateLoad(type, m_Declarations[dre->decl]);
+    return m_Builder.CreateLoad(type, decl);
   }
   if (const auto *call = dynamic_cast<const ResolvedCallExpr *>(&expr))
     return gen_call_expr(*call);
@@ -378,14 +381,13 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access) {
   llvm::Function *current_function = get_current_function();
   llvm::Value *decl = m_Declarations[access.decl];
   if (!decl)
-    return nullptr;
+    return report(access.location,
+                  "unknown declaration '" + access.decl->id + "'.");
   std::vector<llvm::Value *> indices{
       llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
       llvm::ConstantInt::get(m_Context, llvm::APInt(32, access.member_index))};
-  llvm::Value *memptr =
-      m_Builder.CreateInBoundsGEP(gen_type(access.decl->type), decl, indices);
-  auto *type = gen_type(access.type);
-  return m_Builder.CreateLoad(type, memptr);
+  return m_Builder.CreateInBoundsGEP(gen_type(access.decl->type), decl,
+                                     indices);
 }
 
 llvm::Value *
@@ -659,7 +661,12 @@ llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
 }
 
 llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
-  return m_Builder.CreateStore(gen_expr(*assignment.expr),
-                               m_Declarations[assignment.variable->decl]);
+  llvm::Value *decl = m_Declarations[assignment.variable->decl];
+  if (const auto *member_access =
+          dynamic_cast<const ResolvedStructMemberAccess *>(
+              assignment.variable.get())) {
+    decl = gen_struct_member_access(*member_access);
+  }
+  return m_Builder.CreateStore(gen_expr(*assignment.expr), decl);
 }
 } // namespace saplang
