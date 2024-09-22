@@ -803,17 +803,20 @@ Sema::resolve_member_access(const MemberAccess &access,
   if (!struct_decl)
     return report(access.location,
                   lookup_res->decl->id + " is not a struct type.");
-  const ResolvedVarDecl *struct_var_decl =
+  const ResolvedDecl *struct_or_param_decl =
       dynamic_cast<const ResolvedVarDecl *>(decl);
-  if (!struct_var_decl)
-    return report(access.location, "unknown variabe '" + decl->id + "'.");
+  if (!struct_or_param_decl) {
+    struct_or_param_decl = dynamic_cast<const ResolvedParamDecl *>(decl);
+    if (!struct_or_param_decl)
+      return report(access.location, "unknown variabe '" + decl->id + "'.");
+  }
   int decl_member_index = 0;
   for (auto &&struct_member : struct_decl->members) {
     // compare field names
     if (struct_member.second == access.field) {
       return std::make_unique<ResolvedStructMemberAccess>(
-          access.location, struct_member.first, struct_var_decl, decl_member_index,
-          access.field);
+          access.location, struct_member.first, struct_or_param_decl,
+          decl_member_index, access.field);
     }
     ++decl_member_index;
   }
