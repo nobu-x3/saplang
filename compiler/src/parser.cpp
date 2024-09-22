@@ -392,27 +392,20 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
   }
   if (m_NextToken.kind == TokenKind::Identifier) {
     std::string var_id = *m_NextToken.value;
-    auto declRefExpr = std::make_unique<DeclRefExpr>(location, var_id);
+    auto decl_ref_expr = std::make_unique<DeclRefExpr>(location, var_id);
     eat_next_token();
     if (m_NextToken.kind != TokenKind::Lparent) {
       // Member access
       if (m_NextToken.kind == TokenKind::Dot) {
-        eat_next_token(); // eat '.'
-        if (m_NextToken.kind != TokenKind::Identifier)
-          return report(m_NextToken.location,
-                        "expected identifier in struct member access.");
-        std::string member = *m_NextToken.value;
-        eat_next_token(); // eat identifier
-        return std::make_unique<MemberAccess>(
-            declRefExpr->location, std::move(var_id), std::move(member));
+        return parse_member_access(std::move(decl_ref_expr), var_id);
       }
-      return declRefExpr;
+      return decl_ref_expr;
     }
     location = m_NextToken.location;
     auto arg_list = parse_argument_list();
     if (!arg_list)
       return nullptr;
-    return std::make_unique<CallExpr>(location, std::move(declRefExpr),
+    return std::make_unique<CallExpr>(location, std::move(decl_ref_expr),
                                       std::move(*arg_list));
   }
   if (m_NextToken.kind == TokenKind::Dot) {
@@ -429,6 +422,30 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     return std::move(struct_lit);
   }
   return report(location, "expected expression.");
+}
+
+std::unique_ptr<MemberAccess>
+Parser::parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
+                            const std::string& var_id) {
+  if (m_NextToken.kind == TokenKind::Dot) {
+    eat_next_token(); // eat '.'
+    if (m_NextToken.kind != TokenKind::Identifier)
+      return report(m_NextToken.location,
+                    "expected identifier in struct member access.");
+    SourceLocation this_decl_loc = m_NextToken.location;
+    std::string member = *m_NextToken.value;
+    eat_next_token(); // eat identifier
+    std::unique_ptr<DeclRefExpr> inner_access = nullptr;
+    if (m_NextToken.kind == TokenKind::Dot) {
+      std::unique_ptr<DeclRefExpr> this_decl_ref_expr =
+          std::make_unique<DeclRefExpr>(this_decl_loc, member);
+      inner_access = parse_member_access(std::move(this_decl_ref_expr), member);
+    }
+    return std::make_unique<MemberAccess>(decl_ref_expr->location, var_id,
+                                          std::move(member),
+                                          std::move(inner_access));
+  }
+  return nullptr;
 }
 
 std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {

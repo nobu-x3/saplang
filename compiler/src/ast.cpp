@@ -159,6 +159,8 @@ void MemberAccess::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "MemberAccess:\n";
   DeclRefExpr::dump_to_stream(stream, indent_level + 1);
   stream << indent(indent_level + 1) << "Field: " << field << "\n";
+  if (inner_decl_ref_expr)
+    inner_decl_ref_expr->dump_to_stream(stream, indent_level + 1);
 }
 
 void NumberLiteral::dump_to_stream(std::stringstream &stream,

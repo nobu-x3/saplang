@@ -1089,3 +1089,25 @@ fn void bar() {
   CONTAINS_NEXT_REQUIRE(lines_it, "Field: a");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
 }
+
+TEST_CASE("member access chain", "[parser]") {
+  TEST_SETUP(R"(
+fn void foo() {
+  var_type.first.second.third = 3;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  REQUIRE(lines_it->find("Assignment:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: var_type");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: first");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Field: second");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: second");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Field: third");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
+}

@@ -189,10 +189,12 @@ struct DeclRefExpr : public Expr {
 
 struct MemberAccess : public DeclRefExpr {
   std::string field;
-
+  std::unique_ptr<DeclRefExpr> inner_decl_ref_expr;
   inline explicit MemberAccess(SourceLocation loc, std::string var_id,
-                               std::string field)
-      : DeclRefExpr(loc, std::move(var_id)), field(std::move(field)) {}
+                               std::string field,
+                               std::unique_ptr<DeclRefExpr> inner_decl_ref_expr)
+      : DeclRefExpr(loc, std::move(var_id)), field(std::move(field)),
+        inner_decl_ref_expr(std::move(inner_decl_ref_expr)) {}
 
   DUMP_IMPL
 };
