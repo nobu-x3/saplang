@@ -29,9 +29,11 @@ public:
 
 private:
   std::optional<DeclLookupResult>
-  lookup_decl(std::string_view id, std::optional<const Type *> type = std::nullopt);
+  lookup_decl(std::string_view id,
+              std::optional<const Type *> type = std::nullopt);
 
-  bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
+  bool resolve_struct_decls(
+      std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
@@ -86,6 +88,9 @@ private:
 
   std::unique_ptr<ResolvedStructMemberAccess>
   resolve_member_access(const MemberAccess &access, const ResolvedDecl *decl);
+
+  std::unique_ptr<InnerMemberAccess>
+  resolve_inner_member_access(const MemberAccess &access, Type type);
 
   bool flow_sensitive_analysis(const ResolvedFuncDecl &fn);
 

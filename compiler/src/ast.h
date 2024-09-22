@@ -525,16 +525,26 @@ struct ResolvedCallExpr : public ResolvedExpr {
   DUMP_IMPL
 };
 
-struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
-  Type type;
+struct InnerMemberAccess : public IDumpable {
   int member_index;
   std::string member_id;
+  std::unique_ptr<InnerMemberAccess> inner_member_access;
+  inline InnerMemberAccess(int index, std::string id,
+                           std::unique_ptr<InnerMemberAccess> inner_access)
+      : member_index(index), member_id(std::move(id)),
+        inner_member_access(std::move(inner_access)) {}
+  DUMP_IMPL
+};
 
-  inline ResolvedStructMemberAccess(SourceLocation loc, Type type,
-                                    const ResolvedDecl *decl, int member_index,
-                                    std::string member_id)
-      : ResolvedDeclRefExpr(loc, decl), type(type), member_index(member_index),
-        member_id(std::move(member_id)) {}
+struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
+  Type type;
+  std::unique_ptr<InnerMemberAccess> inner_member_access;
+
+  inline ResolvedStructMemberAccess(
+      SourceLocation loc, Type type, const ResolvedDecl *decl,
+      std::unique_ptr<InnerMemberAccess> inner_access)
+      : ResolvedDeclRefExpr(loc, decl), type(type),
+        inner_member_access(std::move(inner_access)) {}
 
   DUMP_IMPL
 };

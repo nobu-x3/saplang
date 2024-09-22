@@ -1076,20 +1076,30 @@ struct TestType{
   REQUIRE(error_stream.str() == "sema_test:2:1 error: could not resolve type 'TestType3'.\n");
 }
 
-// TEST_CASE("member access chains", "[sema]") {
-//   TEST_SETUP(R"(
-// struct TestType2 {
-//   TestType variable;
-// }
-// struct TestType{
-//   i32 a;
-//   bool b;
-// }
-// fn void foo() {
-//   var TestType2 t;
-//   t.variable.a = 15;
-// }
-// )");
-//   REQUIRE(error_stream.str() == "");
-//   REQUIRE(output_buffer.str() == "");
-// }
+TEST_CASE("member access chains", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType2 {
+  TestType variable;
+}
+struct TestType{
+  i32 a;
+  bool b;
+}
+fn void foo() {
+  var TestType2 t;
+  t.variable.a = 15;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 10;
+  REQUIRE(lines_it->find("ResolvedStructMemberAccess:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") t:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: variable");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(15)");
+}

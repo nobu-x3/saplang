@@ -660,6 +660,9 @@ std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
   if (!type || type->kind == Type::Kind::Void)
     return report(decl.location, "variable '" + decl.id + "' has invalid '" +
                                      decl.type.name + "' type.");
+  std::vector<std::unique_ptr<ResolvedDecl>> subtype_decls;
+  if (type->kind == Type::Kind::Custom) {
+  }
   std::unique_ptr<ResolvedExpr> resolved_initializer = nullptr;
   if (decl.initializer) {
     resolved_initializer = resolve_expr(*decl.initializer, &(*type));
@@ -865,6 +868,43 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
   return nullptr;
 }
 
+std::unique_ptr<InnerMemberAccess>
+Sema::resolve_inner_member_access(const MemberAccess &access, Type type) {
+  std::optional<DeclLookupResult> lookup_res = lookup_decl(type.name, &type);
+  if (!lookup_res)
+    return nullptr;
+  const ResolvedStructDecl *struct_decl =
+      dynamic_cast<const ResolvedStructDecl *>(lookup_res->decl);
+  if (!struct_decl)
+    return report(access.location,
+                  lookup_res->decl->id + " is not a struct type.");
+  int inner_member_index = 0;
+  for (auto &&struct_member : struct_decl->members) {
+    // compare field names
+    if (struct_member.second == access.field) {
+      std::unique_ptr<InnerMemberAccess> inner_member_access =
+          std::make_unique<InnerMemberAccess>(inner_member_index,
+                                              struct_member.second, nullptr);
+      if (access.inner_decl_ref_expr) {
+        if (struct_member.first.kind != Type::Kind::Custom) {
+          return report(access.inner_decl_ref_expr->location,
+                        struct_member.first.name + " is not a struct type.");
+        }
+        if (const auto *inner_access_parser =
+                dynamic_cast<const MemberAccess *>(
+                    access.inner_decl_ref_expr.get())) {
+          inner_member_access->inner_member_access =
+              std::move(resolve_inner_member_access(*inner_access_parser,
+                                                    struct_member.first));
+        }
+      }
+      return std::move(inner_member_access);
+    }
+    ++inner_member_index;
+  }
+  return nullptr;
+}
+
 std::unique_ptr<ResolvedStructMemberAccess>
 Sema::resolve_member_access(const MemberAccess &access,
                             const ResolvedDecl *decl) {
@@ -889,15 +929,29 @@ Sema::resolve_member_access(const MemberAccess &access,
   if (!struct_or_param_decl) {
     struct_or_param_decl = dynamic_cast<const ResolvedParamDecl *>(decl);
     if (!struct_or_param_decl)
-      return report(access.location, "unknown variabe '" + decl->id + "'.");
+      return report(access.location, "unknown variable '" + decl->id + "'.");
   }
   int decl_member_index = 0;
   for (auto &&struct_member : struct_decl->members) {
     // compare field names
     if (struct_member.second == access.field) {
+      std::unique_ptr<InnerMemberAccess> inner_member_access =
+          std::make_unique<InnerMemberAccess>(decl_member_index,
+                                              struct_member.second, nullptr);
+      if (access.inner_decl_ref_expr) {
+        if (struct_member.first.kind != Type::Kind::Custom) {
+          return report(access.inner_decl_ref_expr->location,
+                        struct_member.first.name + " is not a struct type.");
+        }
+        if (const auto *inner_access = dynamic_cast<const MemberAccess *>(
+                access.inner_decl_ref_expr.get())) {
+          inner_member_access->inner_member_access = std::move(
+              resolve_inner_member_access(*inner_access, struct_member.first));
+        }
+      }
       return std::make_unique<ResolvedStructMemberAccess>(
           access.location, struct_member.first, struct_or_param_decl,
-          decl_member_index, access.field);
+          std::move(inner_member_access));
     }
     ++decl_member_index;
   }

@@ -407,7 +407,7 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access) {
                   "unknown declaration '" + access.decl->id + "'.");
   std::vector<llvm::Value *> indices{
       llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
-      llvm::ConstantInt::get(m_Context, llvm::APInt(32, access.member_index))};
+      llvm::ConstantInt::get(m_Context, llvm::APInt(32, access.inner_member_access->member_index))};
   return m_Builder.CreateInBoundsGEP(gen_type(access.decl->type), decl,
                                      indices);
 }

@@ -1131,3 +1131,6 @@ fn i32 foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %9");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
+
+// @TODO: deep member access
+// @TODO: uninitialized members
