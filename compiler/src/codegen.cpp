@@ -377,20 +377,6 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(
 }
 
 llvm::Value *
-Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access) {
-  llvm::Function *current_function = get_current_function();
-  llvm::Value *decl = m_Declarations[access.decl];
-  if (!decl)
-    return report(access.location,
-                  "unknown declaration '" + access.decl->id + "'.");
-  std::vector<llvm::Value *> indices{
-      llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
-      llvm::ConstantInt::get(m_Context, llvm::APInt(32, access.member_index))};
-  return m_Builder.CreateInBoundsGEP(gen_type(access.decl->type), decl,
-                                     indices);
-}
-
-llvm::Value *
 Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit) {
   // @TODO: if fully const just memset or memcpy directly to variable
   llvm::Function *current_function = get_current_function();
@@ -402,10 +388,28 @@ Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit) {
     if (!expr)
       continue;
     llvm::Value *gened_expr = gen_expr(*expr);
-    m_Builder.CreateInsertValue(stack_var, gened_expr,
-                                {static_cast<unsigned>(index)});
+    std::vector<llvm::Value *> indices{
+        llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
+        llvm::ConstantInt::get(m_Context, llvm::APInt(32, index))};
+    llvm::Value *memptr =
+        m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type), stack_var, indices);
+    m_Builder.CreateStore(gened_expr, memptr);
   }
   return stack_var;
+}
+
+llvm::Value *
+Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access) {
+  llvm::Function *current_function = get_current_function();
+  llvm::Value *decl = m_Declarations[access.decl];
+  if (!decl)
+    return report(access.location,
+                  "unknown declaration '" + access.decl->id + "'.");
+  std::vector<llvm::Value *> indices{
+      llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
+      llvm::ConstantInt::get(m_Context, llvm::APInt(32, access.member_index))};
+  return m_Builder.CreateInBoundsGEP(gen_type(access.decl->type), decl,
+                                     indices);
 }
 
 llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop) {
