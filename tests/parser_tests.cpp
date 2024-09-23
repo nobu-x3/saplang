@@ -1111,3 +1111,61 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "Field: third");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
 }
+
+TEST_CASE("global var with initializer", "[parser]") {
+  TEST_SETUP(R"(
+var i32 test = 0;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+}
+
+TEST_CASE("global const with initializer", "[parser]") {
+  TEST_SETUP(R"(
+const i32 test = 0;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:const i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+}
+
+TEST_CASE("global var without initializer", "[parser]") {
+  TEST_SETUP(R"(
+var i32 test;
+)");
+  REQUIRE(error_stream.str() ==
+          "test:2:5 error: global variable expected to have initializer.\n");
+  REQUIRE(output_buffer.str() == "");
+}
+
+TEST_CASE("global const without initializer", "[parser]") {
+  TEST_SETUP(R"(
+const i32 test;
+)");
+  REQUIRE(error_stream.str() ==
+          "test:2:7 error: const variable expected to have initializer.\n");
+  REQUIRE(output_buffer.str() == "");
+}
+
+TEST_CASE("global custom type var with initializer", "[parser]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+}
+var TestType test = .{0};
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("StructDecl: TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+}

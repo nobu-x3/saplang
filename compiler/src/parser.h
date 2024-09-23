@@ -60,8 +60,8 @@ private:
   std::unique_ptr<WhileStmt> parse_while_stmt();
   std::unique_ptr<ForStmt> parse_for_stmt();
 
-  std::unique_ptr<DeclStmt> parse_var_decl_stmt();
-  std::unique_ptr<VarDecl> parse_var_decl(bool is_const);
+  std::unique_ptr<DeclStmt> parse_var_decl_stmt(bool is_global = false);
+  std::unique_ptr<VarDecl> parse_var_decl(bool is_const, bool is_global = false);
   std::unique_ptr<StructDecl> parse_struct_decl();
   std::unique_ptr<MemberAccess>
   parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
