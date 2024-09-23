@@ -336,8 +336,9 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     auto *type = gen_type(dre->type);
     if (auto *member_access =
             dynamic_cast<const ResolvedStructMemberAccess *>(dre)) {
-      decl = gen_struct_member_access(*member_access);
-      type = gen_type(member_access->type);
+      Type member_type = Type::builtin_void();
+      decl = gen_struct_member_access(*member_access, member_type);
+      type = gen_type(member_type);
     }
     return m_Builder.CreateLoad(type, decl);
   }
@@ -359,19 +360,25 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
 llvm::Value *Codegen::gen_struct_literal_expr_assignment(
     const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var) {
   // @TODO: if fully const just memset or memcpy directly to variable
-  llvm::Function *current_function = get_current_function();
   int index = -1;
   for (auto &&[field_name, expr] : struct_lit.field_initializers) {
     ++index;
     if (!expr)
       continue;
-    llvm::Value *gened_expr = gen_expr(*expr);
+    llvm::Value *gened_expr = nullptr;
     std::vector<llvm::Value *> indices{
         llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
         llvm::ConstantInt::get(m_Context, llvm::APInt(32, index))};
     llvm::Value *memptr =
         m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type), var, indices);
-    m_Builder.CreateStore(gened_expr, memptr);
+    if (const auto *struct_lit =
+            dynamic_cast<const ResolvedStructLiteralExpr *>(expr.get())) {
+      gened_expr = gen_struct_literal_expr_assignment(*struct_lit, memptr);
+    } else {
+      gened_expr = gen_expr(*expr);
+    }
+    if (gened_expr != memptr)
+      m_Builder.CreateStore(gened_expr, memptr);
   }
   return var;
 }
@@ -391,25 +398,48 @@ Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit) {
     std::vector<llvm::Value *> indices{
         llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
         llvm::ConstantInt::get(m_Context, llvm::APInt(32, index))};
-    llvm::Value *memptr =
-        m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type), stack_var, indices);
+    llvm::Value *memptr = m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type),
+                                                      stack_var, indices);
     m_Builder.CreateStore(gened_expr, memptr);
   }
   return stack_var;
 }
 
 llvm::Value *
-Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access) {
+Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
+                                  Type &out_type) {
+  if (!access.inner_member_access)
+    return nullptr;
   llvm::Function *current_function = get_current_function();
   llvm::Value *decl = m_Declarations[access.decl];
   if (!decl)
     return report(access.location,
                   "unknown declaration '" + access.decl->id + "'.");
-  std::vector<llvm::Value *> indices{
+  std::vector<llvm::Value *> outer_indices{
       llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
-      llvm::ConstantInt::get(m_Context, llvm::APInt(32, access.inner_member_access->member_index))};
-  return m_Builder.CreateInBoundsGEP(gen_type(access.decl->type), decl,
-                                     indices);
+      llvm::ConstantInt::get(
+          m_Context,
+          llvm::APInt(32, access.inner_member_access->member_index))};
+  llvm::Value *last_gep = m_Builder.CreateInBoundsGEP(
+      gen_type(access.decl->type), decl, outer_indices);
+  out_type = access.inner_member_access->type;
+  if (access.inner_member_access->inner_member_access) {
+    InnerMemberAccess *current_chain =
+        access.inner_member_access->inner_member_access.get();
+    InnerMemberAccess *prev_chain = access.inner_member_access.get();
+    while (current_chain) {
+      out_type = current_chain->type;
+      std::vector<llvm::Value *> inner_indices{
+          llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
+          llvm::ConstantInt::get(m_Context,
+                                 llvm::APInt(32, current_chain->member_index))};
+      last_gep = m_Builder.CreateInBoundsGEP(gen_type(prev_chain->type),
+                                             last_gep, inner_indices);
+      prev_chain = current_chain;
+      current_chain = current_chain->inner_member_access.get();
+    }
+  }
+  return last_gep;
 }
 
 llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop) {
@@ -669,7 +699,8 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
   if (const auto *member_access =
           dynamic_cast<const ResolvedStructMemberAccess *>(
               assignment.variable.get())) {
-    decl = gen_struct_member_access(*member_access);
+    Type member_type = Type::builtin_void();
+    decl = gen_struct_member_access(*member_access, member_type);
   }
   return m_Builder.CreateStore(gen_expr(*assignment.expr), decl);
 }

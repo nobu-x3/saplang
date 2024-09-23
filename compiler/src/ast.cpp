@@ -527,7 +527,9 @@ void ResolvedAssignment::dump_to_stream(std::stringstream &stream,
 void InnerMemberAccess::dump_to_stream(std::stringstream &stream,
                                        size_t indent_level) const {
   stream << indent(indent_level) << "MemberIndex: " << member_index << "\n";
-  stream << indent(indent_level) << "MemberID: " << member_id << "\n";
+  stream << indent(indent_level) << "MemberID:" << type.name << "(" << member_id
+         << ")"
+         << "\n";
   if (inner_member_access)
     inner_member_access->dump_to_stream(stream, indent_level + 1);
 }

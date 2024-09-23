@@ -883,8 +883,8 @@ Sema::resolve_inner_member_access(const MemberAccess &access, Type type) {
     // compare field names
     if (struct_member.second == access.field) {
       std::unique_ptr<InnerMemberAccess> inner_member_access =
-          std::make_unique<InnerMemberAccess>(inner_member_index,
-                                              struct_member.second, nullptr);
+          std::make_unique<InnerMemberAccess>(
+              inner_member_index, struct_member.second, struct_member.first, nullptr);
       if (access.inner_decl_ref_expr) {
         if (struct_member.first.kind != Type::Kind::Custom) {
           return report(access.inner_decl_ref_expr->location,
@@ -936,8 +936,8 @@ Sema::resolve_member_access(const MemberAccess &access,
     // compare field names
     if (struct_member.second == access.field) {
       std::unique_ptr<InnerMemberAccess> inner_member_access =
-          std::make_unique<InnerMemberAccess>(decl_member_index,
-                                              struct_member.second, nullptr);
+          std::make_unique<InnerMemberAccess>(
+              decl_member_index, struct_member.second, struct_member.first, nullptr);
       if (access.inner_decl_ref_expr) {
         if (struct_member.first.kind != Type::Kind::Custom) {
           return report(access.inner_decl_ref_expr->location,

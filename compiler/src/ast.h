@@ -528,10 +528,11 @@ struct ResolvedCallExpr : public ResolvedExpr {
 struct InnerMemberAccess : public IDumpable {
   int member_index;
   std::string member_id;
+  Type type;
   std::unique_ptr<InnerMemberAccess> inner_member_access;
-  inline InnerMemberAccess(int index, std::string id,
+  inline InnerMemberAccess(int index, std::string id, Type type,
                            std::unique_ptr<InnerMemberAccess> inner_access)
-      : member_index(index), member_id(std::move(id)),
+      : member_index(index), member_id(std::move(id)), type(type),
         inner_member_access(std::move(inner_access)) {}
   DUMP_IMPL
 };

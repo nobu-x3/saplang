@@ -60,7 +60,8 @@ private:
       const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var);
 
   llvm::Value *
-  gen_struct_member_access(const ResolvedStructMemberAccess &access);
+  gen_struct_member_access(const ResolvedStructMemberAccess &access,
+                           Type &out_type);
 
   llvm::Value *gen_decl_stmt(const ResolvedDeclStmt &stmt);
 

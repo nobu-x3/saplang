@@ -878,7 +878,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") var_type:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
-  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(a)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
   CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
 }
@@ -920,7 +920,7 @@ fn i32 foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") var_type:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
-  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(a)");
 }
 
 TEST_CASE("non-struct member access", "[sema]") {
@@ -982,7 +982,7 @@ fn i32 bar() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") variable:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 3");
-  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(d)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
   CONTAINS_NEXT_REQUIRE(lines_it, "u8(15)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
@@ -990,7 +990,7 @@ fn i32 bar() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") variable:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 3");
-  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(d)");
 }
 
 TEST_CASE("passing struct literal to function parameters", "[sema]") {
@@ -1021,7 +1021,7 @@ fn i32 bar() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") a:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 1");
-  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:u32(b)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
   REQUIRE(lines_it->find(") bar:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
@@ -1087,7 +1087,7 @@ struct TestType{
 }
 fn void foo() {
   var TestType2 t;
-  t.variable.a = 15;
+  t.variable.b = true;
 }
 )");
   REQUIRE(error_stream.str() == "");
@@ -1097,9 +1097,9 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") t:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
-  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: variable");
-  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
-  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:TestType(variable)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:bool(b)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(15)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
 }
