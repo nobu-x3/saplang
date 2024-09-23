@@ -880,19 +880,15 @@ ConstantExpressionEvaluator::evaluate(const ResolvedExpr &expr) {
     return res;
   }
   if (const auto *grouping_expr =
-          dynamic_cast<const ResolvedGroupingExpr *>(&expr)) {
+          dynamic_cast<const ResolvedGroupingExpr *>(&expr))
     return evaluate(*grouping_expr->expr);
-  }
-  if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr)) {
+  if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
     return eval_binary_op(*binop);
-  }
-  if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr)) {
+  if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr))
     return eval_unary_op(*unop);
-  }
   if (const auto *decl_ref_expr =
-          dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
+          dynamic_cast<const ResolvedDeclRefExpr *>(&expr))
     return eval_decl_ref_expr(*decl_ref_expr);
-  }
   return std::nullopt;
 }
 } // namespace saplang

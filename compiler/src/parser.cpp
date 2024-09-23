@@ -231,6 +231,40 @@ std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const) {
                                    is_const);
 }
 
+// <structDeclStatement>
+// ::= 'struct' <identifier> '{' (<type> <identifier> ';') '}'
+std::unique_ptr<StructDecl> Parser::parse_struct_decl() {
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat 'struct'
+  if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
+    return report(m_NextToken.location,
+                  "struct type declarations must have a name.");
+  std::string id = *m_NextToken.value;
+  eat_next_token(); // eat identifier
+  if (m_NextToken.kind != TokenKind::Lbrace)
+    return report(m_NextToken.location,
+                  "struct type declarations must have a body.");
+  eat_next_token(); // eat '{'
+  std::vector<std::pair<Type, std::string>> fields{};
+  while (m_NextToken.kind != TokenKind::Rbrace) {
+    std::optional<Type> type = parse_type();
+    if (!type)
+      return nullptr;
+    if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
+      return report(m_NextToken.location,
+                    "struct member field declarations must have a name.");
+    std::string field_name = *m_NextToken.value;
+    eat_next_token(); // eat field name
+    if (m_NextToken.kind != TokenKind::Semicolon)
+      return report(m_NextToken.location,
+                    "struct member field declarations must end with ';'.");
+    eat_next_token(); // eat ';'
+    fields.emplace_back(std::make_pair(*type, field_name));
+  }
+  eat_next_token(); // eat '}'
+  return std::make_unique<StructDecl>(loc, id, std::move(fields));
+}
+
 std::unique_ptr<Assignment>
 Parser::parse_assignment(std::unique_ptr<Expr> lhs) {
   auto *dre = dynamic_cast<DeclRefExpr *>(lhs.get());
@@ -307,16 +341,24 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // | <declRefExpr>
 // | <callExpr>
 // | '(' <expr> ')'
+// | <memberAccess>
 //
 // <numberLiteral>
 // ::= <integer>
 // | <real>
+//
 //
 // <declRefExpr>
 // ::= <identifier>
 //
 // <callExpr>
 // ::= <declRefExpr> <argList>
+//
+// <structLiteral>
+// ::= '.' '{' ('.<identifier> '=' ')* <expr> }'
+//
+// <memberAccess>
+// ::= <declRefExpr> '.' <identifier>
 std::unique_ptr<Expr> Parser::parse_primary_expr() {
   SourceLocation location = m_NextToken.location;
   // @TODO: distinguish between casting and grouping... or maybe not here, idk
@@ -349,20 +391,107 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     return literal;
   }
   if (m_NextToken.kind == TokenKind::Identifier) {
-    auto declRefExpr =
-        std::make_unique<DeclRefExpr>(location, *m_NextToken.value);
+    std::string var_id = *m_NextToken.value;
+    auto decl_ref_expr = std::make_unique<DeclRefExpr>(location, var_id);
     eat_next_token();
     if (m_NextToken.kind != TokenKind::Lparent) {
-      return declRefExpr;
+      // Member access
+      if (m_NextToken.kind == TokenKind::Dot) {
+        return parse_member_access(std::move(decl_ref_expr), var_id);
+      }
+      return decl_ref_expr;
     }
     location = m_NextToken.location;
     auto arg_list = parse_argument_list();
     if (!arg_list)
       return nullptr;
-    return std::make_unique<CallExpr>(location, std::move(declRefExpr),
+    return std::make_unique<CallExpr>(location, std::move(decl_ref_expr),
                                       std::move(*arg_list));
   }
+  if (m_NextToken.kind == TokenKind::Dot) {
+    eat_next_token(); // eat '.'
+    if (m_NextToken.kind != TokenKind::Lbrace)
+      return report(m_NextToken.location,
+                    "expected '{' in struct literal initialization.");
+    eat_next_token(); // eat '{'
+    auto struct_lit = parse_struct_literal_expr();
+    if (m_NextToken.kind != TokenKind::Rbrace)
+      return report(m_NextToken.location,
+                    "expected '}' after struct literal initialization.");
+    eat_next_token(); // eat '}'
+    return std::move(struct_lit);
+  }
   return report(location, "expected expression.");
+}
+
+std::unique_ptr<MemberAccess>
+Parser::parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
+                            const std::string& var_id) {
+  if (m_NextToken.kind == TokenKind::Dot) {
+    eat_next_token(); // eat '.'
+    if (m_NextToken.kind != TokenKind::Identifier)
+      return report(m_NextToken.location,
+                    "expected identifier in struct member access.");
+    SourceLocation this_decl_loc = m_NextToken.location;
+    std::string member = *m_NextToken.value;
+    eat_next_token(); // eat identifier
+    std::unique_ptr<DeclRefExpr> inner_access = nullptr;
+    if (m_NextToken.kind == TokenKind::Dot) {
+      std::unique_ptr<DeclRefExpr> this_decl_ref_expr =
+          std::make_unique<DeclRefExpr>(this_decl_loc, member);
+      inner_access = parse_member_access(std::move(this_decl_ref_expr), member);
+    }
+    return std::make_unique<MemberAccess>(decl_ref_expr->location, var_id,
+                                          std::move(member),
+                                          std::move(inner_access));
+  }
+  return nullptr;
+}
+
+std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {
+  SourceLocation loc = m_NextToken.location;
+  std::vector<FieldInitializer> field_initializers;
+  while (m_NextToken.kind != TokenKind::Rbrace) {
+    std::string id;
+    if (m_NextToken.kind == TokenKind::Dot) {
+      eat_next_token(); // eat '.'
+      // this could be another struct literal initialization
+      if (m_NextToken.kind == TokenKind::Lbrace) {
+        eat_next_token(); // eat '{'
+        std::unique_ptr<Expr> initializer = parse_struct_literal_expr();
+        if (!initializer)
+          return nullptr;
+        field_initializers.emplace_back(
+            std::make_pair(id, std::move(initializer)));
+        if (m_NextToken.kind != TokenKind::Rbrace)
+          return report(m_NextToken.location,
+                        "expected '}' after struct literal initialization.");
+        eat_next_token(); // eat '}'
+        if (m_NextToken.kind == TokenKind::Comma)
+          eat_next_token();
+        continue;
+      } else {
+        if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
+          return report(m_NextToken.location,
+                        "expected identifier after '.' in struct literal.");
+        id = *m_NextToken.value;
+        eat_next_token(); // eat id
+        if (m_NextToken.kind != TokenKind::Equal)
+          return report(
+              m_NextToken.location,
+              "expected '=' in struct literal field value assignment.");
+        eat_next_token(); // eat '='
+      }
+    }
+    std::unique_ptr<Expr> initializer = parse_expr();
+    if (!initializer)
+      return nullptr;
+    field_initializers.emplace_back(std::make_pair(id, std::move(initializer)));
+    if (m_NextToken.kind == TokenKind::Comma)
+      eat_next_token();
+  }
+  return std::make_unique<StructLiteralExpr>(loc,
+                                             std::move(field_initializers));
 }
 
 // <argList>
@@ -563,28 +692,35 @@ std::optional<Type> Parser::parse_type() {
 }
 
 // <sourceFile>
-// ::= <funcDecl>* EOF
-FuncParsingResult Parser::parse_source_file() {
-  std::vector<std::unique_ptr<FunctionDecl>> functions;
+// ::= <structDeclStmt>* <funcDecl>* EOF
+ParsingResult Parser::parse_source_file() {
+  std::vector<std::unique_ptr<Decl>> decls;
   bool is_complete_ast = true;
+  const std::vector<TokenKind> sync_kinds{TokenKind::KwFn, TokenKind::KwStruct};
   while (m_NextToken.kind != TokenKind::Eof) {
-    if (m_NextToken.kind != TokenKind::KwFn) {
-      report(m_NextToken.location,
-             "only function definitions are allowed in global scope.");
+    if (m_NextToken.kind != TokenKind::KwFn &&
+        m_NextToken.kind != TokenKind::KwStruct) {
+      report(
+          m_NextToken.location,
+          "only function and struct declarations are allowed in global scope.");
       is_complete_ast = false;
-      sync_on(TokenKind::KwFn);
+      sync_on(sync_kinds);
       continue;
     }
-    auto fn = parse_function_decl();
-    if (!fn) {
+    std::unique_ptr<Decl> decl = nullptr;
+    if (m_NextToken.kind == TokenKind::KwFn)
+      decl = parse_function_decl();
+    if (m_NextToken.kind == TokenKind::KwStruct)
+      decl = parse_struct_decl();
+    if (!decl) {
       is_complete_ast = false;
-      sync_on(TokenKind::KwFn);
+      sync_on(sync_kinds);
       continue;
     }
-    functions.emplace_back(std::move(fn));
+    decls.emplace_back(std::move(decl));
   }
   assert(m_NextToken.kind == TokenKind::Eof);
-  return {is_complete_ast, std::move(functions)};
+  return {is_complete_ast, std::move(decls)};
 }
 
 void Parser::synchronize() {

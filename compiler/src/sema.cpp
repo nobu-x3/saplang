@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include "cfg.h"
+#include <algorithm>
 
 namespace saplang {
 
@@ -400,11 +401,11 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
                                           std::move(false_block));
 }
 
-std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id,
-                                                  std::optional<Type *> type) {
+std::optional<DeclLookupResult>
+Sema::lookup_decl(std::string_view id, std::optional<const Type *> type) {
   int scope_id = 0;
   for (auto it = m_Scopes.rbegin(); it != m_Scopes.rend(); ++it) {
-    for (const auto *decl : *it) {
+    for (const ResolvedDecl *decl : *it) {
       if (decl->id == id) {
         return DeclLookupResult{decl, scope_id};
       }
@@ -415,7 +416,8 @@ std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id,
 }
 
 bool Sema::insert_decl_to_current_scope(ResolvedDecl &decl) {
-  auto lookup_result = lookup_decl(decl.id, &decl.type);
+  std::optional<DeclLookupResult> lookup_result =
+      lookup_decl(decl.id, &decl.type);
   if (lookup_result && lookup_result->index == 0) {
     report(decl.location, "redeclaration of '" + decl.id + "\'.");
     return false;
@@ -424,44 +426,148 @@ bool Sema::insert_decl_to_current_scope(ResolvedDecl &decl) {
   return true;
 }
 
-std::vector<std::unique_ptr<ResolvedFuncDecl>> Sema::resolve_ast(bool partial) {
-  std::vector<std::unique_ptr<ResolvedFuncDecl>> resolved_functions{};
+bool is_leaf(const StructDecl *decl) {
+  for (auto &&[type, id] : decl->members) {
+    if (type.kind == Type::Kind::Custom)
+      return false;
+  }
+  return true;
+}
+
+bool Sema::resolve_struct_decls(
+    std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
+  struct DeclToInspect {
+    const StructDecl *decl{nullptr};
+    bool resolved{false};
+  };
+  std::vector<DeclToInspect> non_leaf_struct_decls{};
+  non_leaf_struct_decls.reserve(m_AST.size());
+  bool error = false;
+  for (std::unique_ptr<Decl> &decl : m_AST) {
+    if (const auto *struct_decl =
+            dynamic_cast<const StructDecl *>(decl.get())) {
+      if (is_leaf(struct_decl)) {
+        std::unique_ptr<ResolvedStructDecl> resolved_struct_decl =
+            resolve_struct_decl(*struct_decl);
+        if (!resolved_struct_decl ||
+            !insert_decl_to_current_scope(*resolved_struct_decl)) {
+          error = true;
+          continue;
+        }
+        resolved_decls.emplace_back(std::move(resolved_struct_decl));
+        continue;
+      }
+      non_leaf_struct_decls.push_back({struct_decl});
+    }
+  }
+  if (error && !partial)
+    return false;
+  if (non_leaf_struct_decls.empty())
+    return true;
+  bool decl_resolved_last_pass = true;
+  while (decl_resolved_last_pass) {
+    decl_resolved_last_pass = false;
+    for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+      bool can_now_resolve = true;
+      for (auto &&[type, id] : struct_decl->members) {
+        std::optional<DeclLookupResult> lookup_result =
+            lookup_decl(type.name, &type);
+        if (type.kind == Type::Kind::Custom &&
+            (!lookup_result || !lookup_result->decl))
+          can_now_resolve = false;
+        break;
+      }
+      if (!can_now_resolve)
+        continue;
+      std::unique_ptr<ResolvedStructDecl> resolved_struct_decl =
+          resolve_struct_decl(*struct_decl);
+      if (!resolved_struct_decl ||
+          !insert_decl_to_current_scope(*resolved_struct_decl)) {
+        error = true;
+        continue;
+      }
+      resolved = true;
+      resolved_decls.emplace_back(std::move(resolved_struct_decl));
+      decl_resolved_last_pass = true;
+      continue;
+    }
+    for (auto it = non_leaf_struct_decls.begin();
+         it != non_leaf_struct_decls.end();) {
+      if (it->resolved) {
+        non_leaf_struct_decls.erase(it);
+        --it;
+      }
+      ++it;
+    }
+  }
+  for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+    if (!resolved) {
+      for (auto &&[type, id] : struct_decl->members) {
+        std::optional<DeclLookupResult> lookup_result =
+            lookup_decl(type.name, &type);
+        if (!lookup_result)
+          report(struct_decl->location,
+                 "could not resolve type '" + type.name + "'.");
+      }
+    }
+  }
+  if (error && !partial)
+    return false;
+  return true;
+}
+
+std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
+  std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
   Scope global_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
-  for (auto &&fn : m_AST) {
-    auto resolved_fn_decl = resolve_func_decl(*fn);
-    if (!resolved_fn_decl || !insert_decl_to_current_scope(*resolved_fn_decl)) {
-      error = true;
-      continue;
-    }
-    resolved_functions.emplace_back(std::move(resolved_fn_decl));
-  }
-  if (error && !partial)
+  if (!resolve_struct_decls(resolved_decls, partial)) {
     return {};
-  for (int i = 0; i < resolved_functions.size(); ++i) {
+  }
+  for (std::unique_ptr<Decl> &decl : m_AST) {
+    if (const auto *fn = dynamic_cast<const FunctionDecl *>(decl.get())) {
+      auto resolved_fn_decl = resolve_func_decl(*fn);
+      if (!resolved_fn_decl ||
+          !insert_decl_to_current_scope(*resolved_fn_decl)) {
+        error = true;
+        continue;
+      }
+      resolved_decls.emplace_back(std::move(resolved_fn_decl));
+      if (error && !partial)
+        return {};
+    }
+  }
+  for (int i = 0; i < resolved_decls.size(); ++i) {
     Scope fn_scope{this};
-    m_CurrFunction = resolved_functions[i].get();
-    for (auto &&param : m_CurrFunction->params) {
-      insert_decl_to_current_scope(*param);
+    if (auto *fn = dynamic_cast<const FunctionDecl *>(m_AST[i].get())) {
+      if (!dynamic_cast<ResolvedFuncDecl *>(resolved_decls[i].get()))
+        return {};
+      m_CurrFunction =
+          dynamic_cast<ResolvedFuncDecl *>(resolved_decls[i].get());
+      for (auto &&param : m_CurrFunction->params) {
+        insert_decl_to_current_scope(*param);
+      }
+      auto resolved_body = resolve_block(*fn->body);
+      if (!resolved_body) {
+        error = true;
+        continue;
+      }
+      m_CurrFunction->body = std::move(resolved_body);
+      if (m_ShouldRunFlowSensitiveAnalysis)
+        error |= flow_sensitive_analysis(*m_CurrFunction);
     }
-    auto resolved_body = resolve_block(*m_AST[i]->body);
-    if (!resolved_body) {
-      error = true;
-      continue;
-    }
-    m_CurrFunction->body = std::move(resolved_body);
-    if (m_ShouldRunFlowSensitiveAnalysis)
-      error |= flow_sensitive_analysis(*m_CurrFunction);
   }
   if (error && !partial)
     return {};
-  return resolved_functions;
+  return resolved_decls;
 }
 
 std::optional<Type> Sema::resolve_type(Type parsed_type) {
   if (parsed_type.kind == Type::Kind::Custom) {
-    return std::nullopt;
+    auto decl = lookup_decl(parsed_type.name, &parsed_type);
+    if (!decl)
+      return std::nullopt;
+    return parsed_type;
   }
   return parsed_type;
 }
@@ -554,9 +660,12 @@ std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
   if (!type || type->kind == Type::Kind::Void)
     return report(decl.location, "variable '" + decl.id + "' has invalid '" +
                                      decl.type.name + "' type.");
+  std::vector<std::unique_ptr<ResolvedDecl>> subtype_decls;
+  if (type->kind == Type::Kind::Custom) {
+  }
   std::unique_ptr<ResolvedExpr> resolved_initializer = nullptr;
   if (decl.initializer) {
-    resolved_initializer = resolve_expr(*decl.initializer);
+    resolved_initializer = resolve_expr(*decl.initializer, &(*type));
     if (!resolved_initializer)
       return nullptr;
     if (resolved_initializer->type.kind != type->kind) {
@@ -570,6 +679,20 @@ std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
   return std::make_unique<ResolvedVarDecl>(decl.location, decl.id, decl.type,
                                            std::move(resolved_initializer),
                                            decl.is_const);
+}
+
+std::unique_ptr<ResolvedStructDecl>
+Sema::resolve_struct_decl(const StructDecl &decl) {
+  std::vector<std::pair<Type, std::string>> types;
+  for (auto &&[type, id] : decl.members) {
+    std::optional<Type> resolved_type = resolve_type(type);
+    if (!resolved_type)
+      return nullptr;
+    types.emplace_back(
+        std::make_pair(std::move(*resolved_type), std::move(id)));
+  }
+  return std::make_unique<ResolvedStructDecl>(
+      decl.location, decl.id, Type::custom(decl.id), std::move(types));
 }
 
 std::unique_ptr<ResolvedGroupingExpr>
@@ -708,7 +831,7 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
     return report(stmt.location, "expected return value.");
   std::unique_ptr<ResolvedExpr> resolved_expr;
   if (stmt.expr) {
-    resolved_expr = resolve_expr(*stmt.expr);
+    resolved_expr = resolve_expr(*stmt.expr, &m_CurrFunction->type);
     if (!resolved_expr)
       return nullptr;
     if (m_CurrFunction->type.kind != resolved_expr->type.kind) {
@@ -722,7 +845,7 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
                                               std::move(resolved_expr));
 }
 
-std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr) {
+std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
   if (const auto *number = dynamic_cast<const NumberLiteral *>(&expr))
     return std::make_unique<ResolvedNumberLiteral>(number->location,
                                                    number->type, number->value);
@@ -736,8 +859,190 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr) {
     return resolve_binary_operator(*binary_op);
   if (const auto *unary_op = dynamic_cast<const UnaryOperator *>(&expr))
     return resolve_unary_operator(*unary_op);
+  if (type) {
+    if (const auto *struct_literal =
+            dynamic_cast<const StructLiteralExpr *>(&expr))
+      return resolve_struct_literal_expr(*struct_literal, *type);
+  }
   assert(false && "unexpected expression.");
   return nullptr;
+}
+
+std::unique_ptr<InnerMemberAccess>
+Sema::resolve_inner_member_access(const MemberAccess &access, Type type) {
+  std::optional<DeclLookupResult> lookup_res = lookup_decl(type.name, &type);
+  if (!lookup_res)
+    return nullptr;
+  const ResolvedStructDecl *struct_decl =
+      dynamic_cast<const ResolvedStructDecl *>(lookup_res->decl);
+  if (!struct_decl)
+    return report(access.location,
+                  lookup_res->decl->id + " is not a struct type.");
+  int inner_member_index = 0;
+  for (auto &&struct_member : struct_decl->members) {
+    // compare field names
+    if (struct_member.second == access.field) {
+      std::unique_ptr<InnerMemberAccess> inner_member_access =
+          std::make_unique<InnerMemberAccess>(
+              inner_member_index, struct_member.second, struct_member.first, nullptr);
+      if (access.inner_decl_ref_expr) {
+        if (struct_member.first.kind != Type::Kind::Custom) {
+          return report(access.inner_decl_ref_expr->location,
+                        struct_member.first.name + " is not a struct type.");
+        }
+        if (const auto *inner_access_parser =
+                dynamic_cast<const MemberAccess *>(
+                    access.inner_decl_ref_expr.get())) {
+          inner_member_access->inner_member_access =
+              std::move(resolve_inner_member_access(*inner_access_parser,
+                                                    struct_member.first));
+        }
+      }
+      return std::move(inner_member_access);
+    }
+    ++inner_member_index;
+  }
+  return nullptr;
+}
+
+std::unique_ptr<ResolvedStructMemberAccess>
+Sema::resolve_member_access(const MemberAccess &access,
+                            const ResolvedDecl *decl) {
+  if (!decl)
+    return nullptr;
+  std::optional<Type> type = resolve_type(decl->type);
+  if (!type)
+    return nullptr;
+  if (type->kind != Type::Kind::Custom)
+    return report(access.location, type->name + " is not a struct type.");
+  std::optional<DeclLookupResult> lookup_res =
+      lookup_decl(type->name, &(*type));
+  if (!lookup_res)
+    return nullptr;
+  const ResolvedStructDecl *struct_decl =
+      dynamic_cast<const ResolvedStructDecl *>(lookup_res->decl);
+  if (!struct_decl)
+    return report(access.location,
+                  lookup_res->decl->id + " is not a struct type.");
+  const ResolvedDecl *struct_or_param_decl =
+      dynamic_cast<const ResolvedVarDecl *>(decl);
+  if (!struct_or_param_decl) {
+    struct_or_param_decl = dynamic_cast<const ResolvedParamDecl *>(decl);
+    if (!struct_or_param_decl)
+      return report(access.location, "unknown variable '" + decl->id + "'.");
+  }
+  int decl_member_index = 0;
+  for (auto &&struct_member : struct_decl->members) {
+    // compare field names
+    if (struct_member.second == access.field) {
+      std::unique_ptr<InnerMemberAccess> inner_member_access =
+          std::make_unique<InnerMemberAccess>(
+              decl_member_index, struct_member.second, struct_member.first, nullptr);
+      if (access.inner_decl_ref_expr) {
+        if (struct_member.first.kind != Type::Kind::Custom) {
+          return report(access.inner_decl_ref_expr->location,
+                        struct_member.first.name + " is not a struct type.");
+        }
+        if (const auto *inner_access = dynamic_cast<const MemberAccess *>(
+                access.inner_decl_ref_expr.get())) {
+          inner_member_access->inner_member_access = std::move(
+              resolve_inner_member_access(*inner_access, struct_member.first));
+        }
+      }
+      return std::make_unique<ResolvedStructMemberAccess>(
+          access.location, struct_member.first, struct_or_param_decl,
+          std::move(inner_member_access));
+    }
+    ++decl_member_index;
+  }
+  return report(access.location, "no member named '" + access.field +
+                                     "' in struct type '" + struct_decl->id +
+                                     "'.");
+}
+
+std::unique_ptr<ResolvedStructLiteralExpr>
+Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
+                                  Type struct_type) {
+  std::optional<Type> type = resolve_type(struct_type);
+  if (!type)
+    return nullptr;
+  std::optional<DeclLookupResult> lookup_res =
+      lookup_decl(type->name, &(*type));
+  if (!lookup_res)
+    return nullptr;
+  const ResolvedStructDecl *struct_decl =
+      dynamic_cast<const ResolvedStructDecl *>(lookup_res->decl);
+  if (!struct_decl)
+    return nullptr;
+  int member_index = 0;
+  std::vector<ResolvedFieldInitializer> resolved_field_initializers{};
+  bool errors = false;
+  for (auto &&field_init : lit.field_initializers) {
+    std::optional<Type> inner_struct_type = std::nullopt;
+    if (!field_init.first.empty()) {
+      int decl_member_index = 0;
+      for (auto &&struct_member : struct_decl->members) {
+        // compare field names
+        if (struct_member.second == field_init.first) {
+          member_index = decl_member_index;
+          inner_struct_type = struct_member.first;
+          break;
+        }
+        ++decl_member_index;
+      }
+    } else {
+      auto &decl_member = struct_decl->members[member_index];
+      inner_struct_type = decl_member.first;
+    }
+    std::unique_ptr<ResolvedExpr> expr;
+    if (const auto *inner_struct_lit =
+            dynamic_cast<const StructLiteralExpr *>(field_init.second.get())) {
+      expr = resolve_struct_literal_expr(*inner_struct_lit, *inner_struct_type);
+    } else {
+      expr = resolve_expr(*field_init.second);
+    }
+    if (!expr) {
+      errors = true;
+      ++member_index;
+      continue;
+    }
+    expr->set_constant_value(m_Cee.evaluate(*expr));
+    const Type &declared_member_type = struct_decl->members[member_index].first;
+    if (expr->type.kind != declared_member_type.kind) {
+      if (!try_cast_expr(*expr, declared_member_type, m_Cee)) {
+        errors = true;
+        report(expr->location, "cannot implicitly cast from type '" +
+                                   expr->type.name + "' to type '" +
+                                   declared_member_type.name + "'.");
+        ++member_index;
+        continue;
+      }
+    }
+    auto it = resolved_field_initializers.begin() + member_index;
+    resolved_field_initializers.emplace_back(std::make_pair(
+        struct_decl->members[member_index].second, std::move(expr)));
+    ++member_index;
+  }
+  // Sorting
+  std::vector<ResolvedFieldInitializer> sorted_field_initializers{};
+  for (int i = 0; i < struct_decl->members.size(); ++i) {
+    bool found = false;
+    auto &decl_member = struct_decl->members[i];
+    for (auto &&init : resolved_field_initializers) {
+      if (init.first == decl_member.second) {
+        sorted_field_initializers.emplace_back(init.first,
+                                               std::move(init.second));
+        found = true;
+        break;
+      }
+    }
+    if (!found)
+      sorted_field_initializers.emplace_back(decl_member.second, nullptr);
+  }
+  if (errors)
+    return nullptr;
+  return std::make_unique<ResolvedStructLiteralExpr>(
+      lit.location, *type, std::move(sorted_field_initializers));
 }
 
 std::unique_ptr<ResolvedDeclRefExpr>
@@ -753,6 +1058,9 @@ Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
   if (!is_call && dynamic_cast<const ResolvedFuncDecl *>(decl))
     return report(decl_ref_expr.location,
                   "expected to call function '" + decl_ref_expr.id + "'.");
+  if (const auto *member_access =
+          dynamic_cast<const MemberAccess *>(&decl_ref_expr))
+    return resolve_member_access(*member_access, decl);
   return std::make_unique<ResolvedDeclRefExpr>(decl_ref_expr.location, decl);
 }
 
@@ -772,7 +1080,8 @@ Sema::resolve_call_expr(const CallExpr &call) {
     return report(call.location, "argument count mismatch.");
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
   for (int i = 0; i < call.args.size(); ++i) {
-    std::unique_ptr<ResolvedExpr> resolved_arg = resolve_expr(*call.args[i]);
+    std::unique_ptr<ResolvedExpr> resolved_arg =
+        resolve_expr(*call.args[i], &resolved_func_decl->params[i]->type);
     if (!resolved_arg)
       return nullptr;
     if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind) {

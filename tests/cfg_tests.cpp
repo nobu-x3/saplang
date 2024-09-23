@@ -8,11 +8,14 @@
   saplang::Lexer lexer{src_file};                                              \
   saplang::Parser parser(&lexer);                                              \
   auto parse_result = parser.parse_source_file();                              \
-  saplang::Sema sema{std::move(parse_result.functions), true};                 \
+  saplang::Sema sema{std::move(parse_result.declarations), true};              \
   auto resolved_ast = sema.resolve_ast();                                      \
-  for (auto &&fn : resolved_ast) {                                             \
-    output_buffer << fn->id << ":\n";                                          \
-    saplang::CFGBuilder().build(*fn).dump_to_stream(output_buffer, 1);         \
+  for (auto &&decl : resolved_ast) {                                           \
+    if (const auto *fn =                                                       \
+            dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {     \
+      output_buffer << decl->id << ":\n";                                      \
+      saplang::CFGBuilder().build(*fn).dump_to_stream(output_buffer, 1);       \
+    }                                                                          \
   }                                                                            \
   std::string output_string = output_buffer.str();                             \
   auto lines = break_by_line(output_string);                                   \

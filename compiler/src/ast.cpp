@@ -131,6 +131,15 @@ void ReturnStmt::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void StructDecl::dump_to_stream(std::stringstream &stream,
+                                size_t indent_level) const {
+  stream << indent(indent_level) << "StructDecl: " << id << "\n";
+  for (auto &&[type, name] : members) {
+    stream << indent(indent_level + 1) << "MemberField: " << type.name << "("
+           << name << ")\n";
+  }
+}
+
 void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
   stream << indent(indent_level) << "VarDecl: " << id << ":"
@@ -143,6 +152,15 @@ void DeclStmt::dump_to_stream(std::stringstream &stream,
                               size_t indent_level) const {
   stream << indent(indent_level) << "DeclStmt:\n";
   var_decl->dump_to_stream(stream, indent_level + 1);
+}
+
+void MemberAccess::dump_to_stream(std::stringstream &stream,
+                                  size_t indent_level) const {
+  stream << indent(indent_level) << "MemberAccess:\n";
+  DeclRefExpr::dump_to_stream(stream, indent_level + 1);
+  stream << indent(indent_level + 1) << "Field: " << field << "\n";
+  if (inner_decl_ref_expr)
+    inner_decl_ref_expr->dump_to_stream(stream, indent_level + 1);
 }
 
 void NumberLiteral::dump_to_stream(std::stringstream &stream,
@@ -219,6 +237,15 @@ void DeclRefExpr::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "DeclRefExpr: " << id << "\n";
 }
 
+void StructLiteralExpr::dump_to_stream(std::stringstream &stream,
+                                       size_t indent_level) const {
+  stream << indent(indent_level) << "StructLiteralExpr:\n";
+  for (auto &&[name, expr] : field_initializers) {
+    stream << indent(indent_level + 1) << "FieldInitializer: " << name << "\n";
+    expr->dump_to_stream(stream, indent_level + 1);
+  }
+}
+
 void Assignment::dump_to_stream(std::stringstream &stream,
                                 size_t indent_level) const {
   stream << indent(indent_level) << "Assignment:\n";
@@ -290,6 +317,17 @@ void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
          << ":" << (is_const ? "const " : "") << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedStructDecl::dump_to_stream(std::stringstream &stream,
+                                        size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedStructDecl: " << id << "\n";
+  int member_index = 0;
+  for (auto &&[type, name] : members) {
+    stream << indent(indent_level + 1) << member_index
+           << ". ResolvedMemberField: " << type.name << "(" << name << ")\n";
+    ++member_index;
+  }
 }
 
 void ResolvedDeclStmt::dump_to_stream(std::stringstream &stream,
@@ -464,10 +502,42 @@ void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,
   stream << "\n";
 }
 
+void ResolvedStructLiteralExpr::dump_to_stream(std::stringstream &stream,
+                                               size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedStructLiteralExpr: " << type.name
+         << "\n";
+  for (auto &&[name, expr] : field_initializers) {
+    stream << indent(indent_level + 1) << "ResolvedFieldInitializer: " << name
+           << "\n";
+    if (!expr) {
+      stream << indent(indent_level + 1) << "Uninitialized\n";
+      continue;
+    }
+    expr->dump_to_stream(stream, indent_level + 1);
+  }
+}
+
 void ResolvedAssignment::dump_to_stream(std::stringstream &stream,
                                         size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedAssignment:\n";
   variable->dump_to_stream(stream, indent_level + 1);
   expr->dump_to_stream(stream, indent_level + 1);
+}
+
+void InnerMemberAccess::dump_to_stream(std::stringstream &stream,
+                                       size_t indent_level) const {
+  stream << indent(indent_level) << "MemberIndex: " << member_index << "\n";
+  stream << indent(indent_level) << "MemberID:" << type.name << "(" << member_id
+         << ")"
+         << "\n";
+  if (inner_member_access)
+    inner_member_access->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedStructMemberAccess::dump_to_stream(std::stringstream &stream,
+                                                size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedStructMemberAccess:\n";
+  ResolvedDeclRefExpr::dump_to_stream(stream, indent_level + 1);
+  inner_member_access->dump_to_stream(stream, indent_level + 1);
 }
 } // namespace saplang

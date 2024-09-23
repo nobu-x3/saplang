@@ -4,11 +4,11 @@
 #include <iostream>
 #include <sstream>
 
+#include "cfg.h"
 #include "codegen.h"
 #include "lexer.h"
 #include "parser.h"
 #include "sema.h"
-#include "cfg.h"
 #include "utils.h"
 
 [[noreturn]] void error(std::string_view msg) {
@@ -101,7 +101,7 @@ int main(int argc, const char **argv) {
   auto ast = parser.parse_source_file();
   if (options.ast_dump) {
     std::stringstream ast_stream;
-    for (auto &&fn : ast.functions) {
+    for (auto &&fn : ast.declarations) {
       fn->dump_to_stream(ast_stream, 0);
     }
     std::cout << ast_stream.str();
@@ -109,7 +109,7 @@ int main(int argc, const char **argv) {
   }
   if (!ast.is_complete_ast)
     return 1;
-  saplang::Sema sema{std::move(ast.functions), true};
+  saplang::Sema sema{std::move(ast.declarations), true};
   auto resolved_tree = sema.resolve_ast(options.res_dump);
   if (options.res_dump) {
     std::stringstream output_stream;
@@ -119,12 +119,15 @@ int main(int argc, const char **argv) {
     std::cout << output_stream.str();
     return 0;
   }
-  if(options.cfg_dump){
+  if (options.cfg_dump) {
     std::stringstream output_stream;
-    for(auto&& fn : resolved_tree) {
-      output_stream << fn->id << ":\n";
-      saplang::CFGBuilder().build(*fn).dump_to_stream(output_stream, 1);
-      std::cout << output_stream.str();
+    for (auto &&decl : resolved_tree) {
+      if (const auto *fn =
+              dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {
+        output_stream << decl->id << ":\n";
+        saplang::CFGBuilder().build(*fn).dump_to_stream(output_stream, 1);
+        std::cout << output_stream.str();
+      }
     }
     return 0;
   }
@@ -149,7 +152,8 @@ int main(int argc, const char **argv) {
   command << "clang " << llvm_ir_path;
   if (!options.output.empty())
     command << " -o " << options.output;
+  command << " -g -O0 -ggdb -glldb -gsce -gdbx";
   int ret = std::system(command.str().c_str());
-  std::filesystem::remove(llvm_ir_path);
+  // std::filesystem::remove(llvm_ir_path);
   return ret;
 }

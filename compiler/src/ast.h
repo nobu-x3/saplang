@@ -124,6 +124,15 @@ struct VarDecl : public Decl {
   DUMP_IMPL
 };
 
+struct StructDecl : public Decl {
+  std::vector<std::pair<Type, std::string>> members;
+  inline StructDecl(SourceLocation loc, const std::string &id,
+                    std::vector<std::pair<Type, std::string>> types)
+      : Decl(loc, id), members(std::move(types)) {}
+
+  DUMP_IMPL
+};
+
 struct DeclStmt : public Stmt {
   std::unique_ptr<VarDecl> var_decl;
   inline DeclStmt(SourceLocation loc, std::unique_ptr<VarDecl> var)
@@ -174,6 +183,28 @@ struct DeclRefExpr : public Expr {
   std::string id;
   inline DeclRefExpr(SourceLocation loc, std::string id)
       : Expr(loc), id(std::move(id)) {}
+
+  DUMP_IMPL
+};
+
+struct MemberAccess : public DeclRefExpr {
+  std::string field;
+  std::unique_ptr<DeclRefExpr> inner_decl_ref_expr;
+  inline explicit MemberAccess(SourceLocation loc, std::string var_id,
+                               std::string field,
+                               std::unique_ptr<DeclRefExpr> inner_decl_ref_expr)
+      : DeclRefExpr(loc, std::move(var_id)), field(std::move(field)),
+        inner_decl_ref_expr(std::move(inner_decl_ref_expr)) {}
+
+  DUMP_IMPL
+};
+
+using FieldInitializer = std::pair<std::string, std::unique_ptr<Expr>>;
+struct StructLiteralExpr : public Expr {
+  std::vector<FieldInitializer> field_initializers;
+  inline StructLiteralExpr(SourceLocation loc,
+                           std::vector<FieldInitializer> initializers)
+      : Expr(loc), field_initializers(std::move(initializers)) {}
 
   DUMP_IMPL
 };
@@ -296,6 +327,19 @@ struct ResolvedExpr
   virtual ~ResolvedExpr() = default;
 };
 
+using ResolvedFieldInitializer =
+    std::pair<std::string, std::unique_ptr<ResolvedExpr>>;
+struct ResolvedStructLiteralExpr : public ResolvedExpr {
+  std::vector<ResolvedFieldInitializer> field_initializers;
+  inline ResolvedStructLiteralExpr(
+      SourceLocation loc, Type type,
+      std::vector<ResolvedFieldInitializer> initializers)
+      : ResolvedExpr(loc, std::move(type)),
+        field_initializers(std::move(initializers)) {}
+
+  DUMP_IMPL
+};
+
 struct ResolvedBlock : public IDumpable {
   SourceLocation location;
   std::vector<std::unique_ptr<ResolvedStmt>> statements;
@@ -325,6 +369,16 @@ struct ResolvedVarDecl : public ResolvedDecl {
                          std::unique_ptr<ResolvedExpr> init, bool is_const)
       : ResolvedDecl(loc, id, std::move(type)), initializer(std::move(init)),
         is_const(is_const) {}
+
+  DUMP_IMPL
+};
+
+struct ResolvedStructDecl : public ResolvedDecl {
+  std::vector<std::pair<Type, std::string>> members;
+  inline ResolvedStructDecl(SourceLocation loc, const std::string &id,
+                            Type type,
+                            std::vector<std::pair<Type, std::string>> types)
+      : ResolvedDecl(loc, id, std::move(type)), members(std::move(types)) {}
 
   DUMP_IMPL
 };
@@ -467,6 +521,31 @@ struct ResolvedCallExpr : public ResolvedExpr {
                           std::vector<std::unique_ptr<ResolvedExpr>> &&args)
       : ResolvedExpr(loc, callee->type), func_decl(callee),
         args(std::move(args)) {}
+
+  DUMP_IMPL
+};
+
+struct InnerMemberAccess : public IDumpable {
+  int member_index;
+  std::string member_id;
+  Type type;
+  std::unique_ptr<InnerMemberAccess> inner_member_access;
+  inline InnerMemberAccess(int index, std::string id, Type type,
+                           std::unique_ptr<InnerMemberAccess> inner_access)
+      : member_index(index), member_id(std::move(id)), type(type),
+        inner_member_access(std::move(inner_access)) {}
+  DUMP_IMPL
+};
+
+struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
+  Type type;
+  std::unique_ptr<InnerMemberAccess> inner_member_access;
+
+  inline ResolvedStructMemberAccess(
+      SourceLocation loc, Type type, const ResolvedDecl *decl,
+      std::unique_ptr<InnerMemberAccess> inner_access)
+      : ResolvedDeclRefExpr(loc, decl), type(type),
+        inner_member_access(std::move(inner_access)) {}
 
   DUMP_IMPL
 };

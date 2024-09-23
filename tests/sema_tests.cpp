@@ -8,7 +8,7 @@
   saplang::Lexer lexer{src_file};                                              \
   saplang::Parser parser(&lexer);                                              \
   auto parse_result = parser.parse_source_file();                              \
-  saplang::Sema sema{std::move(parse_result.functions)};                       \
+  saplang::Sema sema{std::move(parse_result.declarations)};                    \
   auto resolved_ast = sema.resolve_ast();                                      \
   for (auto &&fn : resolved_ast) {                                             \
     fn->dump_to_stream(output_buffer);                                         \
@@ -23,7 +23,7 @@
   saplang::Lexer lexer{src_file};                                              \
   saplang::Parser parser(&lexer);                                              \
   auto parse_result = parser.parse_source_file();                              \
-  saplang::Sema sema{std::move(parse_result.functions)};                       \
+  saplang::Sema sema{std::move(parse_result.declarations)};                    \
   auto resolved_ast = sema.resolve_ast(true);                                  \
   for (auto &&fn : resolved_ast) {                                             \
     fn->dump_to_stream(output_buffer);                                         \
@@ -477,4 +477,629 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
   CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+}
+
+TEST_CASE("struct decl", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedStructDecl: TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: u32(b)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "2. ResolvedMemberField: f32(c)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "3. ResolvedMemberField: bool(d)");
+}
+
+TEST_CASE("struct decl global scope resolution", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType test_var;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedStructDecl: TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: u32(b)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "2. ResolvedMemberField: f32(c)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "3. ResolvedMemberField: bool(d)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("test_var:TestType") != std::string::npos);
+}
+
+TEST_CASE("Struct literal assignment", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType test_var = .{.a = 1, .b = 2, .c = 3.0, .d = true};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("test_var:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+}
+
+TEST_CASE("struct literal member assignment from call", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn i32 foo() { return 1; }
+fn u32 bar() { return 2; }
+fn f32 baz() { return 3.0; }
+fn bool fish() { return true; }
+
+fn void biz() {
+  var TestType test_var = .{.a = foo(), .b = bar(), .c = baz(), .d = fish()};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 27;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("test_var:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") foo") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") bar") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") baz") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") fish") != std::string::npos);
+}
+
+TEST_CASE("out of order struct literal field assignment with field names",
+          "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType test_var = .{.b = 2, .d = true, .a = 1, .c = 3.0};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("test_var:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+}
+
+TEST_CASE("out of order assignment not all field names", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType test_var = .{.b = 2, 3.0, true, .a = 1};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("test_var:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+}
+
+TEST_CASE("unnamed field initialization", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType test_var = .{1, 2, 3.0, true};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("test_var:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+}
+
+TEST_CASE("uninitialized fields", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType test_var = .{.b = 2, .c = 3.0};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("test_var:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Uninitialized");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Uninitialized");
+}
+
+TEST_CASE("returning struct literal", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn TestType foo() {
+  return .{.b = 2, 3.0, true, .a = 1};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedReturnStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+}
+
+TEST_CASE("struct member", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+struct TestType2 {
+  TestType test_var;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedStructDecl: TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: u32(b)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "2. ResolvedMemberField: f32(c)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "3. ResolvedMemberField: bool(d)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: TestType2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: TestType(test_var)");
+}
+
+TEST_CASE("inline struct literal assignment", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+struct TestType2 {
+  TestType testvar;
+}
+fn void foo() {
+  var TestType2 a = .{.{1, 2, 3.0, true},};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 9;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("a:TestType2") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: testvar");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+}
+
+TEST_CASE("struct in function parameters", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo(TestType a) {}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 5;
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+}
+
+TEST_CASE("struct member access", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType var_type = .{.b = 2, 3.0, true, .a = 1};
+  var_type.a = 2;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("var_type:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") var_type:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+}
+
+TEST_CASE("struct member access return", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn i32 foo() {
+  var TestType var_type = .{.b = 2, 3.0, true, .a = 1};
+  return var_type.a;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 7;
+  REQUIRE(lines_it->find("ResolvedDeclStmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find("var_type:TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") var_type:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(a)");
+}
+
+TEST_CASE("non-struct member access", "[sema]") {
+  TEST_SETUP(R"(
+fn void foo() {
+  var i32 test = 0;
+  test.a = 2;
+}
+)");
+  REQUIRE(error_stream.str() ==
+          "sema_test:4:3 error: i32 is not a struct type.\n");
+}
+
+TEST_CASE("struct non-existing member access", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn void foo() {
+  var TestType var_type = .{.b = 2, 3.0, true, .a = 1};
+  var_type.x = 2;
+}
+)");
+  REQUIRE(
+      error_stream.str() ==
+      "sema_test:10:3 error: no member named 'x' in struct type 'TestType'.\n");
+}
+
+TEST_CASE("struct literal in function parameter", "[sema]") {
+  TEST_SETUP(R"(
+  struct TestType {
+    i32 a;
+    f32 b;
+    bool c;
+    i32 d;
+  }
+fn i32 foo(TestType variable) {
+  variable.d = 15;
+  return variable.d;
+}
+fn i32 bar() {
+  var TestType t = .{.a = -1, .b = 2.0, .c = true, .d = 250};
+  return foo(t);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 5;
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, " ResolvedParamDecl: @(");
+  REQUIRE(lines_it->find(") variable:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") variable:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 3");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(d)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(15)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") variable:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 3");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(d)");
+}
+
+TEST_CASE("passing struct literal to function parameters", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+  u32 b;
+  f32 c;
+  bool d;
+}
+fn i32 foo(TestType a) {
+  return a.b;
+}
+fn i32 bar() {
+  foo(.{.b = 2, 3.0, true, .a = 1});
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 5;
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:u32(b)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") bar:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: c");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
+}
+
+TEST_CASE("out of order struct decls", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType2 {
+  TestType variable;
+}
+struct TestType{
+  i32 a;
+  bool b;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedStructDecl: TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: bool(b)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: TestType2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: TestType(variable)");
+}
+
+TEST_CASE("out of order struct decls, unknown struct", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType2 {
+  TestType variable;
+  TestType3 unknown;
+}
+struct TestType{
+  i32 a;
+  bool b;
+}
+)");
+  REQUIRE(error_stream.str() == "sema_test:2:1 error: could not resolve type 'TestType3'.\n");
+}
+
+TEST_CASE("member access chains", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType2 {
+  TestType variable;
+}
+struct TestType{
+  i32 a;
+  bool b;
+}
+fn void foo() {
+  var TestType2 t;
+  t.variable.b = true;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 10;
+  REQUIRE(lines_it->find("ResolvedStructMemberAccess:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") t:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:TestType(variable)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:bool(b)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
 }
