@@ -35,6 +35,9 @@ private:
   bool resolve_struct_decls(
       std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
+  bool resolve_global_var_decls(
+      std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
+
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
   std::optional<Type> resolve_type(Type parsed_type);

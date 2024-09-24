@@ -1073,7 +1073,8 @@ struct TestType{
   bool b;
 }
 )");
-  REQUIRE(error_stream.str() == "sema_test:2:1 error: could not resolve type 'TestType3'.\n");
+  REQUIRE(error_stream.str() ==
+          "sema_test:2:1 error: could not resolve type 'TestType3'.\n");
 }
 
 TEST_CASE("member access chains", "[sema]") {
@@ -1103,3 +1104,119 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
   CONTAINS_NEXT_REQUIRE(lines_it, "bool(1)");
 }
+
+TEST_CASE("global var with initializer", "[sema]") {
+  TEST_SETUP(R"(
+var i32 test = 0;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+}
+
+TEST_CASE("global const with initializer", "[sema]") {
+  TEST_SETUP(R"(
+const i32 test = 0;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global const i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+}
+
+TEST_CASE("global var without initializer", "[sema]") {
+  TEST_SETUP(R"(
+var i32 test;
+)");
+  REQUIRE(
+      error_stream.str() ==
+      "sema_test:2:5 error: global variable expected to have initializer.\n");
+  REQUIRE(output_buffer.str() == "");
+}
+
+TEST_CASE("global const without initializer", "[sema]") {
+  TEST_SETUP(R"(
+const i32 test;
+)");
+  REQUIRE(
+      error_stream.str() ==
+      "sema_test:2:7 error: const variable expected to have initializer.\n");
+  REQUIRE(output_buffer.str() == "");
+}
+
+TEST_CASE("global custom type var with initializer", "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+}
+var TestType test = .{0};
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedStructDecl: TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test:global TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+}
+
+TEST_CASE("global custom type var with initializer access from function",
+          "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+}
+var TestType test = .{0};
+fn void foo() {
+  test.a = 5;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 1;
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test:global TestType") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestType");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+}
+
+TEST_CASE("global custom type const var with initializer access from function",
+          "[sema]") {
+  TEST_SETUP(R"(
+struct TestType {
+  i32 a;
+}
+const TestType test = .{0};
+fn void foo() {
+  test.a = 5;
+}
+)");
+  REQUIRE(error_stream.str() ==
+          "sema_test:7:3 error: trying to assign to const variable.\n");
+}
+
+// @TODO: global and local redeclaration

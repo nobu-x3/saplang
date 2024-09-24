@@ -314,7 +314,8 @@ void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,
 void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
                                      size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << id
-         << ":" << (is_const ? "const " : "") << type.name << "\n";
+         << ":" << (is_global ? "global " : "") << (is_const ? "const " : "")
+         << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }

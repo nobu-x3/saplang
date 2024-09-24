@@ -516,14 +516,37 @@ bool Sema::resolve_struct_decls(
   return true;
 }
 
+bool Sema::resolve_global_var_decls(
+    std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
+  bool error = false;
+  for (std::unique_ptr<Decl> &decl : m_AST) {
+    if (const auto *var_decl = dynamic_cast<const VarDecl *>(decl.get())) {
+      std::unique_ptr<ResolvedVarDecl> resolved_var_decl =
+          resolve_var_decl(*var_decl);
+      if (!resolved_var_decl ||
+          !insert_decl_to_current_scope(*resolved_var_decl)) {
+        error = true;
+        continue;
+      }
+      resolved_var_decl->is_global = true;
+      resolved_decls.emplace_back(std::move(resolved_var_decl));
+      continue;
+    }
+  }
+  if (error && !partial)
+    return false;
+  return true;
+}
+
 std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
   Scope global_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
-  if (!resolve_struct_decls(resolved_decls, partial)) {
+  if (!resolve_struct_decls(resolved_decls, partial))
     return {};
-  }
+  if (!resolve_global_var_decls(resolved_decls, partial))
+    return {};
   for (std::unique_ptr<Decl> &decl : m_AST) {
     if (const auto *fn = dynamic_cast<const FunctionDecl *>(decl.get())) {
       auto resolved_fn_decl = resolve_func_decl(*fn);
@@ -883,8 +906,9 @@ Sema::resolve_inner_member_access(const MemberAccess &access, Type type) {
     // compare field names
     if (struct_member.second == access.field) {
       std::unique_ptr<InnerMemberAccess> inner_member_access =
-          std::make_unique<InnerMemberAccess>(
-              inner_member_index, struct_member.second, struct_member.first, nullptr);
+          std::make_unique<InnerMemberAccess>(inner_member_index,
+                                              struct_member.second,
+                                              struct_member.first, nullptr);
       if (access.inner_decl_ref_expr) {
         if (struct_member.first.kind != Type::Kind::Custom) {
           return report(access.inner_decl_ref_expr->location,
@@ -936,8 +960,9 @@ Sema::resolve_member_access(const MemberAccess &access,
     // compare field names
     if (struct_member.second == access.field) {
       std::unique_ptr<InnerMemberAccess> inner_member_access =
-          std::make_unique<InnerMemberAccess>(
-              decl_member_index, struct_member.second, struct_member.first, nullptr);
+          std::make_unique<InnerMemberAccess>(decl_member_index,
+                                              struct_member.second,
+                                              struct_member.first, nullptr);
       if (access.inner_decl_ref_expr) {
         if (struct_member.first.kind != Type::Kind::Custom) {
           return report(access.inner_decl_ref_expr->location,
@@ -1115,7 +1140,11 @@ Sema::resolve_assignment(const Assignment &assignment) {
     if (var_decl->is_const)
       return report(lhs->location, "trying to assign to const variable.");
   }
-  std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr);
+  Type* type = nullptr;
+  if(auto* member_access = dynamic_cast<ResolvedStructMemberAccess*>(lhs.get()))
+    type = &member_access->type;
+  std::unique_ptr<ResolvedExpr> rhs =
+      resolve_expr(*assignment.expr, type);
   if (!rhs)
     return nullptr;
   if (lhs->type.kind != rhs->type.kind) {

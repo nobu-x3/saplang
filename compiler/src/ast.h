@@ -365,10 +365,11 @@ struct ResolvedDecl : public IDumpable {
 struct ResolvedVarDecl : public ResolvedDecl {
   std::unique_ptr<ResolvedExpr> initializer;
   bool is_const;
+  bool is_global;
   inline ResolvedVarDecl(SourceLocation loc, std::string id, Type type,
-                         std::unique_ptr<ResolvedExpr> init, bool is_const)
+                         std::unique_ptr<ResolvedExpr> init, bool is_const, bool is_global = false)
       : ResolvedDecl(loc, id, std::move(type)), initializer(std::move(init)),
-        is_const(is_const) {}
+        is_const(is_const), is_global(is_global) {}
 
   DUMP_IMPL
 };

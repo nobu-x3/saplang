@@ -1246,3 +1246,333 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %9");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
+
+TEST_CASE("nested struct type var reassignment", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestType {
+i32 a;
+f32 b;
+bool c;
+}
+struct TestType2 {
+TestType test;
+}
+fn void foo(){
+  var TestType2 test1 = .{.{15,16.0,true}};
+  test1.test = .{17,18.0,false};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType2 = type { %TestType }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType = type { i32, float, i1 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%test1 = alloca %TestType2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = alloca %TestType, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%1 = getelementptr inbounds %TestType2, ptr %test1, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %1, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %2, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %1, i32 0, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.600000e+01, ptr %3, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%4 = getelementptr inbounds %TestType, ptr %1, i32 0, i32 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %4, align 1");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%5 = getelementptr inbounds %TestType2, ptr %test1, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%6 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 17, ptr %6, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%7 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.800000e+01, ptr %7, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%8 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i1 false, ptr %8, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @llvm.memcpy.p0.p0.i64(ptr align "
+                                  "8 %5, ptr align 8 %0, i64 12, i1 false)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+}
+
+TEST_CASE("nested struct type var reassignment from another struct",
+          "[codegen]") {
+  TEST_SETUP(R"(
+struct TestType {
+i32 a;
+f32 b;
+bool c;
+}
+struct TestType2 {
+TestType test;
+}
+fn void foo(){
+  const TestType2 test2 = .{.{17,18.0,false}};
+  var TestType2 test1 = .{.{15,16.0,true}};
+  test1.test = test2.test;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType2 = type { %TestType }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType = type { i32, float, i1 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%test2 = alloca %TestType2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%test1 = alloca %TestType2, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%0 = getelementptr inbounds %TestType2, ptr %test2, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 17, ptr %1, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.800000e+01, ptr %2, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i1 false, ptr %3, align 1");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%4 = getelementptr inbounds %TestType2, ptr %test1, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%5 = getelementptr inbounds %TestType, ptr %4, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %5, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%6 = getelementptr inbounds %TestType, ptr %4, i32 0, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.600000e+01, ptr %6, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%7 = getelementptr inbounds %TestType, ptr %4, i32 0, i32 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %7, align 1");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%8 = getelementptr inbounds %TestType2, ptr %test1, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%9 = getelementptr inbounds %TestType2, ptr %test2, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%10 = load %TestType, ptr %9, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store %TestType %10, ptr %8, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+}
+
+TEST_CASE("global builtin type var", "[codegen]") {
+  TEST_SETUP(R"(
+var i32 test_i32 = 15;
+const i32 test_const_i32 = 18;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test_i32 = global i32 15");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test_const_i32 = constant i32 18");
+}
+
+TEST_CASE("global struct type var", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestType {
+i32 a;
+f32 b;
+bool c;
+}
+var TestType test1 = .{15, 16.0, true};
+const TestType test2 = .{17, 18.0, false};
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType = type { i32, float, i1 }");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "@test1 = global %TestType { i32 15, float 1.600000e+01, i1 true }");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "@test2 = constant %TestType { i32 17, float 1.800000e+01, i1 false }");
+}
+
+TEST_CASE("global nested struct type var", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestType {
+i32 a;
+f32 b;
+bool c;
+}
+struct TestType2 {
+TestType test;
+}
+var TestType2 test1 = .{.{15, 16.0, true}};
+const TestType2 test2 = .{.{17, 18.0, false}};
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType2 = type { %TestType }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType = type { i32, float, i1 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test1 = global %TestType2 { %TestType { "
+                                  "i32 15, float 1.600000e+01, i1 true } }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test2 = constant %TestType2 { %TestType { "
+                                  "i32 17, float 1.800000e+01, i1 false } }");
+}
+
+TEST_CASE("global builtin type var access from function", "[codegen]") {
+  TEST_SETUP(R"(
+var i32 test_i32 = 15;
+fn void foo(){
+  test_i32 = 16;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test_i32 = global i32 15");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 16, ptr @test_i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("global struct type var access from function", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestType {
+i32 a;
+f32 b;
+bool c;
+}
+var TestType test1 = .{15, 16.0, true};
+const TestType test2 = .{17, 18.0, false};
+fn void foo(){
+  test1.a = 16;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType = type { i32, float, i1 }");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "@test1 = global %TestType { i32 15, float 1.600000e+01, i1 true }");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "@test2 = constant %TestType { i32 17, float 1.800000e+01, i1 false }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 16, ptr @test1, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("global struct type var access from function last element",
+          "[codegen]") {
+  TEST_SETUP(R"(
+struct TestType {
+i32 a;
+f32 b;
+bool c;
+i32 d;
+}
+var TestType test1 = .{15, 16.0, true, 0};
+const TestType test2 = .{17, 18.0, false, 0};
+fn void foo(){
+  test1.d = 16;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType = type { i32, float, i1, i32 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test1 = global %TestType { i32 15, float "
+                                  "1.600000e+01, i1 true, i32 0 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test2 = constant %TestType { i32 17, float "
+                                  "1.800000e+01, i1 false, i32 0 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "store i8 16, ptr getelementptr inbounds (%TestType, "
+                        "ptr @test1, i32 0, i32 3), align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("global nested struct type var reassignment from function",
+          "[codegen]") {
+  TEST_SETUP(R"(
+struct TestType {
+i32 a;
+f32 b;
+bool c;
+}
+struct TestType2 {
+TestType test;
+}
+var TestType2 test1 = .{.{15, 16.0, true}};
+const TestType2 test2 = .{.{17, 18.0, false}};
+fn void foo(){
+  test1.test = .{15,16.0,true};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType2 = type { %TestType }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType = type { i32, float, i1 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test1 = global %TestType2 { %TestType { "
+                                  "i32 15, float 1.600000e+01, i1 true } }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test2 = constant %TestType2 { %TestType { "
+                                  "i32 17, float 1.800000e+01, i1 false } }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = alloca %TestType, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %1, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.600000e+01, ptr %2, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %3, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "call void @llvm.memcpy.p0.p0.i64(ptr align 8 @test1, "
+                        "ptr align 8 %0, i64 12, i1 false)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+}
+
+TEST_CASE(
+    "global nested struct type var reassignment from another var from function",
+    "[codegen]") {
+  TEST_SETUP(R"(
+struct TestType {
+i32 a;
+f32 b;
+bool c;
+}
+struct TestType2 {
+TestType test;
+}
+var TestType2 test1 = .{.{15, 16.0, true}};
+const TestType2 test2 = .{.{17, 18.0, false}};
+fn void foo(){
+  test1.test = test2.test;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_string);
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType2 = type { %TestType }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestType = type { i32, float, i1 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test1 = global %TestType2 { %TestType { "
+                                  "i32 15, float 1.600000e+01, i1 true } }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test2 = constant %TestType2 { %TestType { "
+                                  "i32 17, float 1.800000e+01, i1 false } }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load %TestType, ptr @test2, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store %TestType %0, ptr @test1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+}

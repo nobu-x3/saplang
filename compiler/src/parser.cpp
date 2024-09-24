@@ -190,13 +190,13 @@ std::unique_ptr<ForStmt> Parser::parse_for_stmt() {
 
 // <varDeclStatement>
 // ::= ('const' | 'var') <varDecl> ';'
-std::unique_ptr<DeclStmt> Parser::parse_var_decl_stmt() {
+std::unique_ptr<DeclStmt> Parser::parse_var_decl_stmt(bool is_global) {
   SourceLocation loc = m_NextToken.location;
   bool is_const = m_NextToken.kind == TokenKind::KwConst;
   eat_next_token(); // eat 'const' or 'var'
   if (m_NextToken.kind != TokenKind::Identifier)
     return report(m_NextToken.location, "expected identifier.");
-  std::unique_ptr<VarDecl> var_decl = parse_var_decl(is_const);
+  std::unique_ptr<VarDecl> var_decl = parse_var_decl(is_const, is_global);
   if (!var_decl)
     return nullptr;
   if (m_NextToken.kind != TokenKind::Semicolon)
@@ -208,7 +208,7 @@ std::unique_ptr<DeclStmt> Parser::parse_var_decl_stmt() {
 
 // <varDecl>
 // ::= <type> <identifier> ('=' <expr>)?
-std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const) {
+std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const, bool is_global) {
   SourceLocation loc = m_NextToken.location;
   std::optional<Type> type = parse_type();
   if (!type)
@@ -221,6 +221,8 @@ std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const) {
   if (m_NextToken.kind != TokenKind::Equal) {
     if (is_const)
       return report(loc, "const variable expected to have initializer.");
+    if (is_global)
+      return report(loc, "global variable expected to have initializer.");
     return std::make_unique<VarDecl>(loc, id, *type, nullptr, is_const);
   }
   eat_next_token(); // eat '='
@@ -426,7 +428,7 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
 
 std::unique_ptr<MemberAccess>
 Parser::parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
-                            const std::string& var_id) {
+                            const std::string &var_id) {
   if (m_NextToken.kind == TokenKind::Dot) {
     eat_next_token(); // eat '.'
     if (m_NextToken.kind != TokenKind::Identifier)
@@ -692,14 +694,17 @@ std::optional<Type> Parser::parse_type() {
 }
 
 // <sourceFile>
-// ::= <structDeclStmt>* <funcDecl>* EOF
+// ::= <structDeclStmt>* <varDeclStatement>* <funcDecl>* EOF
 ParsingResult Parser::parse_source_file() {
   std::vector<std::unique_ptr<Decl>> decls;
   bool is_complete_ast = true;
-  const std::vector<TokenKind> sync_kinds{TokenKind::KwFn, TokenKind::KwStruct};
+  const std::vector<TokenKind> sync_kinds{TokenKind::KwFn, TokenKind::KwStruct,
+                                          TokenKind::KwConst, TokenKind::KwVar};
   while (m_NextToken.kind != TokenKind::Eof) {
     if (m_NextToken.kind != TokenKind::KwFn &&
-        m_NextToken.kind != TokenKind::KwStruct) {
+        m_NextToken.kind != TokenKind::KwStruct &&
+        m_NextToken.kind != TokenKind::KwVar &&
+        m_NextToken.kind != TokenKind::KwConst) {
       report(
           m_NextToken.location,
           "only function and struct declarations are allowed in global scope.");
@@ -710,8 +715,15 @@ ParsingResult Parser::parse_source_file() {
     std::unique_ptr<Decl> decl = nullptr;
     if (m_NextToken.kind == TokenKind::KwFn)
       decl = parse_function_decl();
-    if (m_NextToken.kind == TokenKind::KwStruct)
+    else if (m_NextToken.kind == TokenKind::KwStruct)
       decl = parse_struct_decl();
+    else if (m_NextToken.kind == TokenKind::KwVar ||
+             m_NextToken.kind == TokenKind::KwConst) {
+      std::unique_ptr<DeclStmt> var_decl_stmt = parse_var_decl_stmt(true);
+      if (var_decl_stmt) {
+        decl = std::move(var_decl_stmt->var_decl);
+      }
+    }
     if (!decl) {
       is_complete_ast = false;
       sync_on(sync_kinds);
