@@ -331,6 +331,12 @@ bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
 
 bool try_cast_expr(ResolvedExpr &expr, const Type &type,
                    ConstantExpressionEvaluator &cee) {
+  if (type.is_pointer) {
+    if (const auto *null_expr = dynamic_cast<const NullExpr *>(&expr)) {
+      return true;
+    }
+    return false;
+  }
   if (auto *groupexp = dynamic_cast<ResolvedGroupingExpr *>(&expr)) {
     if (try_cast_expr(*groupexp->expr, type, cee)) {
       groupexp->type = type;
@@ -382,7 +388,7 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
   if (!condition)
     return nullptr;
   if (condition->type.kind != Type::Kind::Bool) {
-    if (!try_cast_expr(*condition, Type::builtin_bool(), m_Cee))
+    if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee))
       return report(condition->location,
                     "condition is expected to evaluate to bool.");
   }
@@ -715,7 +721,7 @@ Sema::resolve_struct_decl(const StructDecl &decl) {
         std::make_pair(std::move(*resolved_type), std::move(id)));
   }
   return std::make_unique<ResolvedStructDecl>(
-      decl.location, decl.id, Type::custom(decl.id), std::move(types));
+      decl.location, decl.id, Type::custom(decl.id, false), std::move(types));
 }
 
 std::unique_ptr<ResolvedGroupingExpr>
@@ -771,7 +777,7 @@ Sema::resolve_while_stmt(const WhileStmt &stmt) {
   if (!condition)
     return nullptr;
   if (condition->type.kind != Type::Kind::Bool) {
-    if (!try_cast_expr(*condition, Type::builtin_bool(), m_Cee))
+    if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee))
       return report(condition->location,
                     "condition is expected to evaluate to bool.");
   }
@@ -886,6 +892,9 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
     if (const auto *struct_literal =
             dynamic_cast<const StructLiteralExpr *>(&expr))
       return resolve_struct_literal_expr(*struct_literal, *type);
+    if (const auto *nullexpr = dynamic_cast<const NullExpr *>(&expr)) {
+      return std::make_unique<ResolvedNullExpr>(nullexpr->location, *type);
+    }
   }
   assert(false && "unexpected expression.");
   return nullptr;
@@ -1140,11 +1149,11 @@ Sema::resolve_assignment(const Assignment &assignment) {
     if (var_decl->is_const)
       return report(lhs->location, "trying to assign to const variable.");
   }
-  Type* type = nullptr;
-  if(auto* member_access = dynamic_cast<ResolvedStructMemberAccess*>(lhs.get()))
+  Type *type = nullptr;
+  if (auto *member_access =
+          dynamic_cast<ResolvedStructMemberAccess *>(lhs.get()))
     type = &member_access->type;
-  std::unique_ptr<ResolvedExpr> rhs =
-      resolve_expr(*assignment.expr, type);
+  std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr, type);
   if (!rhs)
     return nullptr;
   if (lhs->type.kind != rhs->type.kind) {

@@ -22,7 +22,6 @@ struct Type {
     i16,
     i32,
     i64,
-    Pointer,
     f32,
     f64,
     Custom,
@@ -37,32 +36,59 @@ struct Type {
   };
   Kind kind;
   std::string name;
+  bool is_pointer;
 
   Type(const Type &) = default;
   Type &operator=(const Type &) = default;
   Type(Type &&) noexcept = default;
   Type &operator=(Type &&) noexcept = default;
 
-  static Type builtin_void() { return {Kind::Void, "void"}; }
-  static Type builtin_pointer() { return {Kind::Pointer, "*"}; }
-  static Type builtin_i8() { return {Kind::i8, "i8"}; }
-  static Type builtin_i16() { return {Kind::i16, "i16"}; }
-  static Type builtin_i32() { return {Kind::i32, "i32"}; }
-  static Type builtin_i64() { return {Kind::i64, "i64"}; }
-  static Type builtin_u8() { return {Kind::u8, "u8"}; }
-  static Type builtin_u16() { return {Kind::u16, "u16"}; }
-  static Type builtin_u32() { return {Kind::u32, "u32"}; }
-  static Type builtin_u64() { return {Kind::u64, "u64"}; }
-  static Type builtin_f32() { return {Kind::f32, "f32"}; }
-  static Type builtin_f64() { return {Kind::f64, "f64"}; }
-  static Type builtin_bool() { return {Kind::Bool, "bool"}; }
-  static Type custom(std::string_view name) { return {Kind::Custom, name}; }
+  static Type builtin_void(bool is_pointer) {
+    return {Kind::Void, "void", is_pointer};
+  }
+  static Type builtin_i8(bool is_pointer) {
+    return {Kind::i8, "i8", is_pointer};
+  }
+  static Type builtin_i16(bool is_pointer) {
+    return {Kind::i16, "i16", is_pointer};
+  }
+  static Type builtin_i32(bool is_pointer) {
+    return {Kind::i32, "i32", is_pointer};
+  }
+  static Type builtin_i64(bool is_pointer) {
+    return {Kind::i64, "i64", is_pointer};
+  }
+  static Type builtin_u8(bool is_pointer) {
+    return {Kind::u8, "u8", is_pointer};
+  }
+  static Type builtin_u16(bool is_pointer) {
+    return {Kind::u16, "u16", is_pointer};
+  }
+  static Type builtin_u32(bool is_pointer) {
+    return {Kind::u32, "u32", is_pointer};
+  }
+  static Type builtin_u64(bool is_pointer) {
+    return {Kind::u64, "u64", is_pointer};
+  }
+  static Type builtin_f32(bool is_pointer) {
+    return {Kind::f32, "f32", is_pointer};
+  }
+  static Type builtin_f64(bool is_pointer) {
+    return {Kind::f64, "f64", is_pointer};
+  }
+  static Type builtin_bool(bool is_pointer) {
+    return {Kind::Bool, "bool", is_pointer};
+  }
+  static Type custom(std::string_view name, bool is_pointer) {
+    return {Kind::Custom, name, is_pointer};
+  }
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
   // static Type get_builtin_type(Kind kind);
 
 private:
-  Type(Kind kind, std::string_view name) : kind(kind), name(name){};
+  Type(Kind kind, std::string_view name, bool is_pointer)
+      : kind(kind), name(name), is_pointer(is_pointer){};
 };
 
 #define DUMP_IMPL                                                              \
@@ -109,6 +135,11 @@ struct Stmt : public IDumpable {
 
 struct Expr : public Stmt {
   inline Expr(SourceLocation loc) : Stmt(loc) {}
+};
+
+struct NullExpr : public Expr {
+  inline NullExpr(SourceLocation loc) : Expr(loc) {}
+  DUMP_IMPL
 };
 
 struct VarDecl : public Decl {
@@ -367,7 +398,8 @@ struct ResolvedVarDecl : public ResolvedDecl {
   bool is_const;
   bool is_global;
   inline ResolvedVarDecl(SourceLocation loc, std::string id, Type type,
-                         std::unique_ptr<ResolvedExpr> init, bool is_const, bool is_global = false)
+                         std::unique_ptr<ResolvedExpr> init, bool is_const,
+                         bool is_global = false)
       : ResolvedDecl(loc, id, std::move(type)), initializer(std::move(init)),
         is_const(is_const), is_global(is_global) {}
 
@@ -511,6 +543,14 @@ struct ResolvedDeclRefExpr : public ResolvedExpr {
   inline ResolvedDeclRefExpr(SourceLocation loc, const ResolvedDecl *decl)
       : ResolvedExpr(loc, decl->type), decl(decl) {}
 
+  DUMP_IMPL
+};
+
+struct ResolvedNullExpr : public ResolvedExpr {
+  inline ResolvedNullExpr(SourceLocation loc, Type type)
+      : ResolvedExpr(loc, type) {
+    type.is_pointer = true;
+  }
   DUMP_IMPL
 };
 

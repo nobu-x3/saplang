@@ -1219,4 +1219,30 @@ fn void foo() {
           "sema_test:7:3 error: trying to assign to const variable.\n");
 }
 
+TEST_CASE("variable pointer decl null initialization", "[sema]") {
+  TEST_SETUP(R"(
+var i32* test = null;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+}
+
+TEST_CASE("struct pointer decl null initialization", "[sema]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+var TestStruct* test = null;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global ptr TestStruct") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+}
+
 // @TODO: global and local redeclaration
+// @TODO: struct field pointer

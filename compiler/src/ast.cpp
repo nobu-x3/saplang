@@ -76,6 +76,11 @@ void dump_constant(std::stringstream &stream, size_t indent_level, Value value,
   }
 }
 
+void NullExpr::dump_to_stream(std::stringstream &stream,
+                              size_t indent_level) const {
+  stream << indent(indent_level) << "Null\n";
+}
+
 void Block::dump_to_stream(std::stringstream &stream,
                            size_t indent_level) const {
   stream << indent(indent_level) << "Block\n";
@@ -115,8 +120,8 @@ void IfStmt::dump_to_stream(std::stringstream &stream,
 
 void FunctionDecl::dump_to_stream(std::stringstream &stream,
                                   size_t indent_level) const {
-  stream << indent(indent_level) << "FunctionDecl: " << id << ":" << type.name
-         << '\n';
+  stream << indent(indent_level) << "FunctionDecl: " << id << ":"
+         << (type.is_pointer ? "ptr " : "") << type.name << '\n';
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);
   }
@@ -135,15 +140,17 @@ void StructDecl::dump_to_stream(std::stringstream &stream,
                                 size_t indent_level) const {
   stream << indent(indent_level) << "StructDecl: " << id << "\n";
   for (auto &&[type, name] : members) {
-    stream << indent(indent_level + 1) << "MemberField: " << type.name << "("
-           << name << ")\n";
+    stream << indent(indent_level + 1)
+           << "MemberField: " << (type.is_pointer ? "ptr " : "") << type.name
+           << "(" << name << ")\n";
   }
 }
 
 void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
   stream << indent(indent_level) << "VarDecl: " << id << ":"
-         << (is_const ? "const " : "") << type.name << "\n";
+         << (is_const ? "const " : "") << (type.is_pointer ? "ptr " : "")
+         << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -265,7 +272,8 @@ void CallExpr::dump_to_stream(std::stringstream &stream,
 void ParamDecl::dump_to_stream(std::stringstream &stream,
                                size_t indent_level) const {
   stream << indent(indent_level) << "ParamDecl: " << id << ":"
-         << (is_const ? "const " : "") << type.name << "\n";
+         << (is_const ? "const " : "") << (type.is_pointer ? "ptr " : "")
+         << type.name << "\n";
 }
 
 void ResolvedBlock::dump_to_stream(std::stringstream &stream,
@@ -315,7 +323,7 @@ void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
                                      size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << id
          << ":" << (is_global ? "global " : "") << (is_const ? "const " : "")
-         << type.name << "\n";
+         << (type.is_pointer ? "ptr " : "") << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -326,7 +334,8 @@ void ResolvedStructDecl::dump_to_stream(std::stringstream &stream,
   int member_index = 0;
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << member_index
-           << ". ResolvedMemberField: " << type.name << "(" << name << ")\n";
+           << ". ResolvedMemberField: " << (type.is_pointer ? "ptr " : "")
+           << type.name << "(" << name << ")\n";
     ++member_index;
   }
 }
@@ -383,36 +392,36 @@ void ResolvedReturnStmt::dump_to_stream(std::stringstream &stream,
 ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc,
                                              NumberLiteral::NumberType num_type,
                                              const std::string &value_str)
-    : ResolvedExpr(loc, Type::builtin_void()) {
+    : ResolvedExpr(loc, Type::builtin_void(false)) {
   if (num_type == NumberLiteral::NumberType::Integer) {
     std::int64_t wide_type = std::stoll(value_str);
     if (wide_type > 0) {
       if (wide_type <= CHAR_MAX)
-        type = Type::builtin_u8();
+        type = Type::builtin_u8(false);
       else if (wide_type <= USHRT_MAX)
-        type = Type::builtin_u16();
+        type = Type::builtin_u16(false);
       else if (wide_type <= UINT_MAX)
-        type = Type::builtin_u32();
+        type = Type::builtin_u32(false);
       else if (wide_type <= ULONG_MAX)
-        type = Type::builtin_u64();
+        type = Type::builtin_u64(false);
     } else {
       if (wide_type >= SCHAR_MIN && wide_type <= SCHAR_MAX)
-        type = Type::builtin_i8();
+        type = Type::builtin_i8(false);
       else if (wide_type >= SHRT_MIN && wide_type <= SHRT_MAX)
-        type = Type::builtin_i16();
+        type = Type::builtin_i16(false);
       else if (wide_type >= INT_MIN && wide_type <= INT_MAX)
-        type = Type::builtin_i32();
+        type = Type::builtin_i32(false);
       else if (wide_type >= LONG_MIN && wide_type <= LONG_MAX)
-        type = Type::builtin_i64();
+        type = Type::builtin_i64(false);
     }
   } else if (num_type == NumberLiteral::NumberType::Bool) {
-    type = Type::builtin_bool();
+    type = Type::builtin_bool(false);
   } else {
     double wide_type = std::stod(value_str);
     if (wide_type >= FLT_MIN && wide_type <= FLT_MAX) {
-      type = Type::builtin_f32();
+      type = Type::builtin_f32(false);
     } else {
-      type = Type::builtin_f64();
+      type = Type::builtin_f64(false);
     }
   }
   switch (type.kind) {
@@ -505,8 +514,9 @@ void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,
 
 void ResolvedStructLiteralExpr::dump_to_stream(std::stringstream &stream,
                                                size_t indent_level) const {
-  stream << indent(indent_level) << "ResolvedStructLiteralExpr: " << type.name
-         << "\n";
+  stream << indent(indent_level)
+         << "ResolvedStructLiteralExpr: " << (type.is_pointer ? "ptr " : "")
+         << type.name << "\n";
   for (auto &&[name, expr] : field_initializers) {
     stream << indent(indent_level + 1) << "ResolvedFieldInitializer: " << name
            << "\n";
@@ -528,8 +538,9 @@ void ResolvedAssignment::dump_to_stream(std::stringstream &stream,
 void InnerMemberAccess::dump_to_stream(std::stringstream &stream,
                                        size_t indent_level) const {
   stream << indent(indent_level) << "MemberIndex: " << member_index << "\n";
-  stream << indent(indent_level) << "MemberID:" << type.name << "(" << member_id
-         << ")"
+  stream << indent(indent_level)
+         << "MemberID:" << (type.is_pointer ? "ptr " : "") << type.name << "("
+         << member_id << ")"
          << "\n";
   if (inner_member_access)
     inner_member_access->dump_to_stream(stream, indent_level + 1);
@@ -540,5 +551,10 @@ void ResolvedStructMemberAccess::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedStructMemberAccess:\n";
   ResolvedDeclRefExpr::dump_to_stream(stream, indent_level + 1);
   inner_member_access->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedNullExpr::dump_to_stream(std::stringstream &stream,
+                                      size_t indent_level) const {
+  stream << indent(indent_level) << "Null\n";
 }
 } // namespace saplang

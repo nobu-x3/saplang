@@ -344,6 +344,7 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // | <callExpr>
 // | '(' <expr> ')'
 // | <memberAccess>
+// | <nullExpr>
 //
 // <numberLiteral>
 // ::= <integer>
@@ -361,6 +362,9 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 //
 // <memberAccess>
 // ::= <declRefExpr> '.' <identifier>
+//
+// <nullExpr>
+// ::= 'null'
 std::unique_ptr<Expr> Parser::parse_primary_expr() {
   SourceLocation location = m_NextToken.location;
   // @TODO: distinguish between casting and grouping... or maybe not here, idk
@@ -373,6 +377,10 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
       return report(m_NextToken.location, "expected ')'.");
     eat_next_token(); // eat ')'
     return std::make_unique<GroupingExpr>(location, std::move(expr));
+  }
+  if (m_NextToken.kind == TokenKind::KwNull) {
+    eat_next_token(); // eat 'null'
+    return std::make_unique<NullExpr>(location);
   }
   if (m_NextToken.kind == TokenKind::Integer) {
     auto literal = std::make_unique<NumberLiteral>(
@@ -641,52 +649,45 @@ std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
 }
 
 // <type>
-// ::= 'void'
-// |   <identifier>
+// ::= 'void' ('*')*
+// |   <identifier> ('*')*
 std::optional<Type> Parser::parse_type() {
   TokenKind kind = m_NextToken.kind;
   if (kind == TokenKind::KwVoid) {
     eat_next_token();
-    return Type::builtin_void();
+    return Type::builtin_void(m_NextToken.kind == TokenKind::Asterisk);
   }
   if (kind == TokenKind::Identifier) {
-    assert(m_NextToken.value.has_value());
-    if (*m_NextToken.value == "i8") {
-      eat_next_token();
-      return Type::builtin_i8();
-    } else if (*m_NextToken.value == "i16") {
-      eat_next_token();
-      return Type::builtin_i16();
-    } else if (*m_NextToken.value == "i32") {
-      eat_next_token();
-      return Type::builtin_i32();
-    } else if (*m_NextToken.value == "i64") {
-      eat_next_token();
-      return Type::builtin_i64();
-    } else if (*m_NextToken.value == "u8") {
-      eat_next_token();
-      return Type::builtin_u8();
-    } else if (*m_NextToken.value == "u16") {
-      eat_next_token();
-      return Type::builtin_u16();
-    } else if (*m_NextToken.value == "u32") {
-      eat_next_token();
-      return Type::builtin_u32();
-    } else if (*m_NextToken.value == "u64") {
-      eat_next_token();
-      return Type::builtin_u64();
-    } else if (*m_NextToken.value == "f32") {
-      eat_next_token();
-      return Type::builtin_f32();
-    } else if (*m_NextToken.value == "f64") {
-      eat_next_token();
-      return Type::builtin_f64();
-    } else if (*m_NextToken.value == "bool") {
-      eat_next_token();
-      return Type::builtin_bool();
-    }
-    Type type = Type::custom(*m_NextToken.value);
+    Token id_token = m_NextToken;
     eat_next_token();
+    bool is_ptr = m_NextToken.kind == TokenKind::Asterisk;
+    if (is_ptr)
+      eat_next_token();
+    assert(id_token.value.has_value());
+    if (*id_token.value == "i8") {
+      return Type::builtin_i8(is_ptr);
+    } else if (*id_token.value == "i16") {
+      return Type::builtin_i16(is_ptr);
+    } else if (*id_token.value == "i32") {
+      return Type::builtin_i32(is_ptr);
+    } else if (*id_token.value == "i64") {
+      return Type::builtin_i64(is_ptr);
+    } else if (*id_token.value == "u8") {
+      return Type::builtin_u8(is_ptr);
+    } else if (*id_token.value == "u16") {
+      return Type::builtin_u16(is_ptr);
+    } else if (*id_token.value == "u32") {
+      return Type::builtin_u32(is_ptr);
+    } else if (*id_token.value == "u64") {
+      return Type::builtin_u64(is_ptr);
+    } else if (*id_token.value == "f32") {
+      return Type::builtin_f32(is_ptr);
+    } else if (*id_token.value == "f64") {
+      return Type::builtin_f64(is_ptr);
+    } else if (*id_token.value == "bool") {
+      return Type::builtin_bool(is_ptr);
+    }
+    Type type = Type::custom(*id_token.value, is_ptr);
     return type;
   }
   report(m_NextToken.location, "expected type specifier.");

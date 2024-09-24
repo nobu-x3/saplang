@@ -1169,3 +1169,25 @@ var TestType test = .{0};
   CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
 }
+
+TEST_CASE("variable pointer decl", "[parser]") {
+  TEST_SETUP(R"(
+var i32* test = 0;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+}
+
+TEST_CASE("variable pointer decl, null init", "[parser]") {
+  TEST_SETUP(R"(
+var i32* test = null;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+}

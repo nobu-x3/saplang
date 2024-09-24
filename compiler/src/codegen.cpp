@@ -54,6 +54,11 @@ void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl) {
                  dynamic_cast<const ResolvedStructLiteralExpr *>(
                      decl.initializer.get())) {
     var_init = gen_global_struct_init(*struct_init);
+  } else if (const auto *nullexpr = dynamic_cast<const ResolvedNullExpr *>(
+                 decl.initializer.get())) {
+    llvm::Type *type = gen_type(nullexpr->type);
+    llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
+    var_init = llvm::ConstantPointerNull::get(ptr_type);
   }
   // If var_init == nullptr there's an error in sema
   assert(var_init && "unexpected global variable type");
@@ -170,6 +175,8 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
 }
 
 llvm::Type *Codegen::gen_type(Type type) {
+  if (type.is_pointer)
+    return m_Builder.getPtrTy();
   switch (type.kind) {
   case Type::Kind::i8:
   case Type::Kind::u8:
@@ -195,8 +202,6 @@ llvm::Type *Codegen::gen_type(Type type) {
     return m_Builder.getInt1Ty();
   case Type::Kind::Void:
     return m_Builder.getVoidTy();
-  case Type::Kind::Pointer:
-    return m_Builder.getPtrTy();
   case Type::Kind::Custom:
     return m_CustomTypes[type.name];
   }
@@ -390,7 +395,7 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     auto *type = gen_type(dre->type);
     if (auto *member_access =
             dynamic_cast<const ResolvedStructMemberAccess *>(dre)) {
-      Type member_type = Type::builtin_void();
+      Type member_type = Type::builtin_void(false);
       decl = gen_struct_member_access(*member_access, member_type);
       type = gen_type(member_type);
     }
@@ -407,6 +412,11 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     return gen_binary_op(*binop);
   if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr))
     return gen_unary_op(*unop);
+  if (const auto *nullexpr = dynamic_cast<const ResolvedNullExpr *>(&expr)) {
+    llvm::Type *type = gen_type(nullexpr->type);
+    llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
+    return llvm::ConstantPointerNull::get(ptr_type);
+  }
   llvm_unreachable("unknown expression");
   return nullptr;
 }
@@ -750,7 +760,7 @@ llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
 
 llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
   llvm::Value *decl = m_Declarations[assignment.variable->decl];
-  Type member_type = Type::builtin_void();
+  Type member_type = Type::builtin_void(false);
   if (const auto *member_access =
           dynamic_cast<const ResolvedStructMemberAccess *>(
               assignment.variable.get())) {
@@ -761,12 +771,11 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
           assignment.expr.get())) {
     // expr is the stack variable
     llvm::Type *var_type = gen_type(struct_lit->type);
-    llvm::Type* decl_type = gen_type(assignment.variable->decl->type);
-    const llvm::DataLayout& data_layout = m_Module->getDataLayout();
-    return m_Builder.CreateMemCpy(
-        decl, data_layout.getPrefTypeAlign(decl_type), expr,
-        data_layout.getPrefTypeAlign(var_type),
-        data_layout.getTypeAllocSize(var_type));
+    llvm::Type *decl_type = gen_type(assignment.variable->decl->type);
+    const llvm::DataLayout &data_layout = m_Module->getDataLayout();
+    return m_Builder.CreateMemCpy(decl, data_layout.getPrefTypeAlign(decl_type),
+                                  expr, data_layout.getPrefTypeAlign(var_type),
+                                  data_layout.getTypeAllocSize(var_type));
   }
   return m_Builder.CreateStore(expr, decl);
 }

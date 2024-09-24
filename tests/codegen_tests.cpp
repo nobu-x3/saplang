@@ -1576,3 +1576,24 @@ fn void foo(){
   CONTAINS_NEXT_REQUIRE(lines_it, "store %TestType %0, ptr @test1, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
 }
+
+TEST_CASE("builtin type pointer decl null initialization", "[codegen]") {
+  TEST_SETUP(R"(
+var i32* test = null;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test = global ptr null");
+}
+
+TEST_CASE("struct pointer decl null initialization", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+var TestStruct* test = null;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test = global ptr null");
+}

@@ -141,7 +141,6 @@ ConstexprResult cast_up_unsigned(unsigned long val, Type::Kind kind) {
     case Type::Kind::i16:
     case Type::Kind::i32:
     case Type::Kind::i64:
-    case Type::Kind::Pointer:
     case Type::Kind::f32:
     case Type::Kind::f64:
     case Type::Kind::Custom:
@@ -178,7 +177,6 @@ ConstexprResult cast_up_float(double val, Type::Kind kind) {
     case Type::Kind::u16:
     case Type::Kind::u32:
     case Type::Kind::u64:
-    case Type::Kind::Pointer:
     case Type::Kind::Custom:
       break;
     }
