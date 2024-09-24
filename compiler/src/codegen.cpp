@@ -20,6 +20,9 @@ std::unique_ptr<llvm::Module> Codegen::generate_ir() {
     else if (const auto *struct_decl =
                  dynamic_cast<const ResolvedStructDecl *>(decl.get()))
       gen_struct_decl(*struct_decl);
+    else if (const auto *global_var_decl =
+                 dynamic_cast<const ResolvedVarDecl *>(decl.get()))
+      gen_global_var_decl(*global_var_decl);
   }
 
   for (auto &&decl : m_ResolvedTree) {
@@ -39,6 +42,81 @@ void Codegen::gen_func_decl(const ResolvedFuncDecl &decl) {
   auto *type = llvm::FunctionType::get(return_type, param_types, false);
   llvm::Function::Create(type, llvm::Function::ExternalLinkage, decl.id,
                          *m_Module);
+}
+
+void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl) {
+  llvm::Type *var_type = gen_type(decl.type);
+  llvm::Constant *var_init = nullptr;
+  if (const auto *numlit =
+          dynamic_cast<const ResolvedNumberLiteral *>(decl.initializer.get())) {
+    var_init = get_constant_number_value(*numlit);
+  } else if (const auto *struct_init =
+                 dynamic_cast<const ResolvedStructLiteralExpr *>(
+                     decl.initializer.get())) {
+    var_init = gen_global_struct_init(*struct_init);
+  }
+  // If var_init == nullptr there's an error in sema
+  assert(var_init && "unexpected global variable type");
+  llvm::GlobalVariable *global_var = new llvm::GlobalVariable(
+      *m_Module, var_type, decl.is_const, llvm::GlobalVariable::ExternalLinkage,
+      var_init, decl.id);
+  m_Declarations[&decl] = global_var;
+}
+
+llvm::Constant *
+Codegen::gen_global_struct_init(const ResolvedStructLiteralExpr &init) {
+  llvm::StructType *struct_type =
+      llvm::StructType::getTypeByName(m_Context, init.type.name);
+  if (!struct_type)
+    return report(init.location, "could not find struct type with name '" +
+                                     init.type.name + "'.");
+  std::vector<llvm::Constant *> constants{};
+  constants.reserve(init.field_initializers.size());
+  for (auto &&[name, expr] : init.field_initializers) {
+    if (const auto *numlit =
+            dynamic_cast<const ResolvedNumberLiteral *>(expr.get())) {
+      constants.emplace_back(get_constant_number_value(*numlit));
+    } else if (const auto *struct_lit =
+                   dynamic_cast<const ResolvedStructLiteralExpr *>(
+                       expr.get())) {
+      constants.emplace_back(gen_global_struct_init(*struct_lit));
+    }
+  }
+  return llvm::ConstantStruct::get(struct_type, constants);
+}
+
+llvm::Constant *
+Codegen::get_constant_number_value(const ResolvedNumberLiteral &numlit) {
+  auto *type = gen_type(numlit.type);
+  switch (numlit.type.kind) {
+  case Type::Kind::f32:
+    return llvm::ConstantFP::get(type, numlit.value.f32);
+  case Type::Kind::f64:
+    return llvm::ConstantFP::get(type, numlit.value.f64);
+  case Type::Kind::i8:
+    return llvm::ConstantInt::get(type, numlit.value.i8);
+  case Type::Kind::u8:
+    return llvm::ConstantInt::get(type, numlit.value.u8);
+  case Type::Kind::i16:
+    return llvm::ConstantInt::get(type, numlit.value.i16);
+  case Type::Kind::u16:
+    return llvm::ConstantInt::get(type, numlit.value.u16);
+  case Type::Kind::i32:
+    return llvm::ConstantInt::get(type, numlit.value.i32);
+  case Type::Kind::u32:
+    return llvm::ConstantInt::get(type, numlit.value.u32);
+  case Type::Kind::i64:
+    return llvm::ConstantInt::get(type, numlit.value.i64);
+  case Type::Kind::u64:
+    return llvm::ConstantInt::get(type, numlit.value.u64);
+  case Type::Kind::Bool:
+    return llvm::ConstantInt::get(type, numlit.value.b8);
+  default:
+    assert(false);
+    return nullptr;
+  }
+  assert(false);
+  return nullptr;
 }
 
 void Codegen::gen_struct_decl(const ResolvedStructDecl &decl) {
@@ -305,31 +383,7 @@ llvm::Instruction::BinaryOps get_math_binop_kind(TokenKind op,
 
 llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
   if (auto *number = dynamic_cast<const ResolvedNumberLiteral *>(&expr)) {
-    auto *type = gen_type(number->type);
-    switch (number->type.kind) {
-    case Type::Kind::f32:
-      return llvm::ConstantFP::get(type, number->value.f32);
-    case Type::Kind::f64:
-      return llvm::ConstantFP::get(type, number->value.f64);
-    case Type::Kind::i8:
-      return llvm::ConstantInt::get(type, number->value.i8);
-    case Type::Kind::u8:
-      return llvm::ConstantInt::get(type, number->value.u8);
-    case Type::Kind::i16:
-      return llvm::ConstantInt::get(type, number->value.i16);
-    case Type::Kind::u16:
-      return llvm::ConstantInt::get(type, number->value.u16);
-    case Type::Kind::i32:
-      return llvm::ConstantInt::get(type, number->value.i32);
-    case Type::Kind::u32:
-      return llvm::ConstantInt::get(type, number->value.u32);
-    case Type::Kind::i64:
-      return llvm::ConstantInt::get(type, number->value.i64);
-    case Type::Kind::u64:
-      return llvm::ConstantInt::get(type, number->value.u64);
-    case Type::Kind::Bool:
-      return llvm::ConstantInt::get(type, number->value.b8);
-    }
+    return get_constant_number_value(*number);
   }
   if (const auto *dre = dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
     llvm::Value *decl = m_Declarations[dre->decl];
@@ -696,12 +750,24 @@ llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
 
 llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
   llvm::Value *decl = m_Declarations[assignment.variable->decl];
+  Type member_type = Type::builtin_void();
   if (const auto *member_access =
           dynamic_cast<const ResolvedStructMemberAccess *>(
               assignment.variable.get())) {
-    Type member_type = Type::builtin_void();
     decl = gen_struct_member_access(*member_access, member_type);
   }
-  return m_Builder.CreateStore(gen_expr(*assignment.expr), decl);
+  llvm::Value *expr = gen_expr(*assignment.expr);
+  if (const auto *struct_lit = dynamic_cast<const ResolvedStructLiteralExpr *>(
+          assignment.expr.get())) {
+    // expr is the stack variable
+    llvm::Type *var_type = gen_type(struct_lit->type);
+    llvm::Type* decl_type = gen_type(assignment.variable->decl->type);
+    const llvm::DataLayout& data_layout = m_Module->getDataLayout();
+    return m_Builder.CreateMemCpy(
+        decl, data_layout.getPrefTypeAlign(decl_type), expr,
+        data_layout.getPrefTypeAlign(var_type),
+        data_layout.getTypeAllocSize(var_type));
+  }
+  return m_Builder.CreateStore(expr, decl);
 }
 } // namespace saplang

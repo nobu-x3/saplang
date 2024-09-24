@@ -22,6 +22,13 @@ private:
 
   void gen_struct_decl(const ResolvedStructDecl &decl);
 
+  void gen_global_var_decl(const ResolvedVarDecl &decl);
+
+  llvm::Constant *gen_global_struct_init(const ResolvedStructLiteralExpr &init);
+
+  llvm::Constant *
+  get_constant_number_value(const ResolvedNumberLiteral &numlit);
+
   llvm::Type *gen_type(Type type);
 
   llvm::AllocaInst *alloc_stack_var(llvm::Function *func, llvm::Type *type,

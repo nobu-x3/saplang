@@ -1218,3 +1218,5 @@ fn void foo() {
   REQUIRE(error_stream.str() ==
           "sema_test:7:3 error: trying to assign to const variable.\n");
 }
+
+// @TODO: global and local redeclaration

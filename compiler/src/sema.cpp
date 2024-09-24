@@ -1140,7 +1140,11 @@ Sema::resolve_assignment(const Assignment &assignment) {
     if (var_decl->is_const)
       return report(lhs->location, "trying to assign to const variable.");
   }
-  std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr);
+  Type* type = nullptr;
+  if(auto* member_access = dynamic_cast<ResolvedStructMemberAccess*>(lhs.get()))
+    type = &member_access->type;
+  std::unique_ptr<ResolvedExpr> rhs =
+      resolve_expr(*assignment.expr, type);
   if (!rhs)
     return nullptr;
   if (lhs->type.kind != rhs->type.kind) {
