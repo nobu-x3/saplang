@@ -1597,3 +1597,15 @@ var TestStruct* test = null;
   auto lines_it = lines.begin() + 2;
   CONTAINS_NEXT_REQUIRE(lines_it, "@test = global ptr null");
 }
+
+TEST_CASE("struct decl field null initialization", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 *a; }
+var TestStruct test = .{null};
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct = type { ptr }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@test = global %TestStruct zeroinitializer");
+}
