@@ -1245,4 +1245,32 @@ var TestStruct* test = null;
 }
 
 // @TODO: global and local redeclaration
-// @TODO: struct field pointer
+TEST_CASE("struct literal initialization null field", "[sema]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 *a; }
+var TestStruct test = .{null};
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedStructDecl: TestStruct") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: ptr i32(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test:global TestStruct") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestStruct");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+}
+
+TEST_CASE("struct pointer decl initialization null field", "[sema]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 *a; }
+var TestStruct *test = .{null};
+)");
+  REQUIRE(error_stream.str() ==
+          "sema_test:3:26 error: cannot initialize a pointer type struct "
+          "variable with a struct literal.\n");
+  REQUIRE(output_buffer.str() == "");
+}
+

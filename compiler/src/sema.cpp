@@ -1000,6 +1000,9 @@ Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
   std::optional<Type> type = resolve_type(struct_type);
   if (!type)
     return nullptr;
+  if (type->pointer_depth > 0)
+    return report(lit.location, "cannot initialize a pointer type struct "
+                                "variable with a struct literal.");
   std::optional<DeclLookupResult> lookup_res =
       lookup_decl(type->name, &(*type));
   if (!lookup_res)
@@ -1012,28 +1015,28 @@ Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
   std::vector<ResolvedFieldInitializer> resolved_field_initializers{};
   bool errors = false;
   for (auto &&field_init : lit.field_initializers) {
-    std::optional<Type> inner_struct_type = std::nullopt;
+    std::optional<Type> inner_member_type = std::nullopt;
     if (!field_init.first.empty()) {
       int decl_member_index = 0;
       for (auto &&struct_member : struct_decl->members) {
         // compare field names
         if (struct_member.second == field_init.first) {
           member_index = decl_member_index;
-          inner_struct_type = struct_member.first;
+          inner_member_type = struct_member.first;
           break;
         }
         ++decl_member_index;
       }
     } else {
       auto &decl_member = struct_decl->members[member_index];
-      inner_struct_type = decl_member.first;
+      inner_member_type = decl_member.first;
     }
     std::unique_ptr<ResolvedExpr> expr;
     if (const auto *inner_struct_lit =
             dynamic_cast<const StructLiteralExpr *>(field_init.second.get())) {
-      expr = resolve_struct_literal_expr(*inner_struct_lit, *inner_struct_type);
+      expr = resolve_struct_literal_expr(*inner_struct_lit, *inner_member_type);
     } else {
-      expr = resolve_expr(*field_init.second);
+      expr = resolve_expr(*field_init.second, &(*inner_member_type));
     }
     if (!expr) {
       errors = true;
