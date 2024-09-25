@@ -767,6 +767,14 @@ Sema::resolve_unary_operator(const UnaryOperator &op) {
     return report(
         resolved_rhs->location,
         "void expression cannot be used as operand to unary operator.");
+  if (op.op == TokenKind::Amp) {
+    if (const ResolvedNumberLiteral *rvalue =
+            dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
+      return report(resolved_rhs->location,
+                    "cannot take the address of an rvalue.");
+    }
+    ++resolved_rhs->type.pointer_depth;
+  }
   return std::make_unique<ResolvedUnaryOperator>(
       op.location, std::move(resolved_rhs), op.op);
 }

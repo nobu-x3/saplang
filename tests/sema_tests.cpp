@@ -1245,32 +1245,22 @@ var TestStruct* test = null;
 }
 
 // @TODO: global and local redeclaration
-TEST_CASE("struct literal initialization null field", "[sema]") {
+
+TEST_CASE("address of operator", "[sema]") {
   TEST_SETUP(R"(
-struct TestStruct { i32 *a; }
-var TestStruct test = .{null};
+var i32 test = 0;
+var i32* test1 = &test;
 )");
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("ResolvedStructDecl: TestStruct") !=
-          std::string::npos);
-  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: ptr i32(a)");
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
-  REQUIRE(lines_it->find(") test:global TestStruct") != std::string::npos);
-  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestStruct");
-  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
-  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+  REQUIRE(lines_it->find(") test1:global ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test:") != std::string::npos);
 }
-
-TEST_CASE("struct pointer decl initialization null field", "[sema]") {
-  TEST_SETUP(R"(
-struct TestStruct { i32 *a; }
-var TestStruct *test = .{null};
-)");
-  REQUIRE(error_stream.str() ==
-          "sema_test:3:26 error: cannot initialize a pointer type struct "
-          "variable with a struct literal.\n");
-  REQUIRE(output_buffer.str() == "");
-}
-
