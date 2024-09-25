@@ -36,59 +36,59 @@ struct Type {
   };
   Kind kind;
   std::string name;
-  bool is_pointer;
+  uint pointer_depth;
 
   Type(const Type &) = default;
   Type &operator=(const Type &) = default;
   Type(Type &&) noexcept = default;
   Type &operator=(Type &&) noexcept = default;
 
-  static Type builtin_void(bool is_pointer) {
-    return {Kind::Void, "void", is_pointer};
+  static Type builtin_void(uint pointer_depth) {
+    return {Kind::Void, "void", pointer_depth};
   }
-  static Type builtin_i8(bool is_pointer) {
-    return {Kind::i8, "i8", is_pointer};
+  static Type builtin_i8(uint pointer_depth) {
+    return {Kind::i8, "i8", pointer_depth};
   }
-  static Type builtin_i16(bool is_pointer) {
-    return {Kind::i16, "i16", is_pointer};
+  static Type builtin_i16(uint pointer_depth) {
+    return {Kind::i16, "i16", pointer_depth};
   }
-  static Type builtin_i32(bool is_pointer) {
-    return {Kind::i32, "i32", is_pointer};
+  static Type builtin_i32(uint pointer_depth) {
+    return {Kind::i32, "i32", pointer_depth};
   }
-  static Type builtin_i64(bool is_pointer) {
-    return {Kind::i64, "i64", is_pointer};
+  static Type builtin_i64(uint pointer_depth) {
+    return {Kind::i64, "i64", pointer_depth};
   }
-  static Type builtin_u8(bool is_pointer) {
-    return {Kind::u8, "u8", is_pointer};
+  static Type builtin_u8(uint pointer_depth) {
+    return {Kind::u8, "u8", pointer_depth};
   }
-  static Type builtin_u16(bool is_pointer) {
-    return {Kind::u16, "u16", is_pointer};
+  static Type builtin_u16(uint pointer_depth) {
+    return {Kind::u16, "u16", pointer_depth};
   }
-  static Type builtin_u32(bool is_pointer) {
-    return {Kind::u32, "u32", is_pointer};
+  static Type builtin_u32(uint pointer_depth) {
+    return {Kind::u32, "u32", pointer_depth};
   }
-  static Type builtin_u64(bool is_pointer) {
-    return {Kind::u64, "u64", is_pointer};
+  static Type builtin_u64(uint pointer_depth) {
+    return {Kind::u64, "u64", pointer_depth};
   }
-  static Type builtin_f32(bool is_pointer) {
-    return {Kind::f32, "f32", is_pointer};
+  static Type builtin_f32(uint pointer_depth) {
+    return {Kind::f32, "f32", pointer_depth};
   }
-  static Type builtin_f64(bool is_pointer) {
-    return {Kind::f64, "f64", is_pointer};
+  static Type builtin_f64(uint pointer_depth) {
+    return {Kind::f64, "f64", pointer_depth};
   }
-  static Type builtin_bool(bool is_pointer) {
-    return {Kind::Bool, "bool", is_pointer};
+  static Type builtin_bool(uint pointer_depth) {
+    return {Kind::Bool, "bool", pointer_depth};
   }
-  static Type custom(std::string_view name, bool is_pointer) {
-    return {Kind::Custom, name, is_pointer};
+  static Type custom(std::string_view name, uint pointer_depth) {
+    return {Kind::Custom, name, pointer_depth};
   }
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
   // static Type get_builtin_type(Kind kind);
 
 private:
-  Type(Kind kind, std::string_view name, bool is_pointer)
-      : kind(kind), name(name), is_pointer(is_pointer){};
+  Type(Kind kind, std::string_view name, uint pointer_depth)
+      : kind(kind), name(name), pointer_depth(pointer_depth){};
 };
 
 #define DUMP_IMPL                                                              \
@@ -549,7 +549,7 @@ struct ResolvedDeclRefExpr : public ResolvedExpr {
 struct ResolvedNullExpr : public ResolvedExpr {
   inline ResolvedNullExpr(SourceLocation loc, Type type)
       : ResolvedExpr(loc, type) {
-    type.is_pointer = true;
+    type.pointer_depth = 1;
   }
   DUMP_IMPL
 };

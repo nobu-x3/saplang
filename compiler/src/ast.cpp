@@ -120,8 +120,11 @@ void IfStmt::dump_to_stream(std::stringstream &stream,
 
 void FunctionDecl::dump_to_stream(std::stringstream &stream,
                                   size_t indent_level) const {
-  stream << indent(indent_level) << "FunctionDecl: " << id << ":"
-         << (type.is_pointer ? "ptr " : "") << type.name << '\n';
+  stream << indent(indent_level) << "FunctionDecl: " << id << ":";
+  for (uint i = 0; i < type.pointer_depth; ++i) {
+    stream << "ptr ";
+  }
+  stream << type.name << '\n';
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);
   }
@@ -140,17 +143,23 @@ void StructDecl::dump_to_stream(std::stringstream &stream,
                                 size_t indent_level) const {
   stream << indent(indent_level) << "StructDecl: " << id << "\n";
   for (auto &&[type, name] : members) {
-    stream << indent(indent_level + 1)
-           << "MemberField: " << (type.is_pointer ? "ptr " : "") << type.name
-           << "(" << name << ")\n";
+    stream << indent(indent_level + 1) << "MemberField: ";
+    for (uint i = 0; i < type.pointer_depth; ++i) {
+      stream << "ptr ";
+    }
+    stream << type.name << "(" << name << ")\n";
   }
 }
 
 void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
   stream << indent(indent_level) << "VarDecl: " << id << ":"
-         << (is_const ? "const " : "") << (type.is_pointer ? "ptr " : "")
-         << type.name << "\n";
+         << (is_const ? "const " : "");
+
+  for (uint i = 0; i < type.pointer_depth; ++i) {
+    stream << "ptr ";
+  }
+  stream << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -200,6 +209,8 @@ void dump_op(std::stringstream &stream, TokenKind op) {
     stream << '-';
   if (op == TokenKind::Asterisk)
     stream << '*';
+  if (op == TokenKind::Amp)
+    stream << '&';
   if (op == TokenKind::Slash)
     stream << '/';
   if (op == TokenKind::EqualEqual)
@@ -272,8 +283,11 @@ void CallExpr::dump_to_stream(std::stringstream &stream,
 void ParamDecl::dump_to_stream(std::stringstream &stream,
                                size_t indent_level) const {
   stream << indent(indent_level) << "ParamDecl: " << id << ":"
-         << (is_const ? "const " : "") << (type.is_pointer ? "ptr " : "")
-         << type.name << "\n";
+         << (is_const ? "const " : "");
+  for (uint i = 0; i < type.pointer_depth; ++i) {
+    stream << "ptr ";
+  }
+  stream << type.name << "\n";
 }
 
 void ResolvedBlock::dump_to_stream(std::stringstream &stream,
@@ -322,8 +336,11 @@ void ResolvedParamDecl::dump_to_stream(std::stringstream &stream,
 void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
                                      size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << id
-         << ":" << (is_global ? "global " : "") << (is_const ? "const " : "")
-         << (type.is_pointer ? "ptr " : "") << type.name << "\n";
+         << ":" << (is_global ? "global " : "") << (is_const ? "const " : "");
+  for (uint i = 0; i < type.pointer_depth; ++i) {
+    stream << "ptr ";
+  }
+  stream << type.name << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -334,8 +351,11 @@ void ResolvedStructDecl::dump_to_stream(std::stringstream &stream,
   int member_index = 0;
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << member_index
-           << ". ResolvedMemberField: " << (type.is_pointer ? "ptr " : "")
-           << type.name << "(" << name << ")\n";
+           << ". ResolvedMemberField: ";
+    for (uint i = 0; i < type.pointer_depth; ++i) {
+      stream << "ptr ";
+    }
+    stream << type.name << "(" << name << ")\n";
     ++member_index;
   }
 }
@@ -514,9 +534,11 @@ void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,
 
 void ResolvedStructLiteralExpr::dump_to_stream(std::stringstream &stream,
                                                size_t indent_level) const {
-  stream << indent(indent_level)
-         << "ResolvedStructLiteralExpr: " << (type.is_pointer ? "ptr " : "")
-         << type.name << "\n";
+  stream << indent(indent_level) << "ResolvedStructLiteralExpr: ";
+  for (uint i = 0; i < type.pointer_depth; ++i) {
+    stream << "ptr ";
+  }
+  stream << type.name << "\n";
   for (auto &&[name, expr] : field_initializers) {
     stream << indent(indent_level + 1) << "ResolvedFieldInitializer: " << name
            << "\n";
@@ -538,9 +560,11 @@ void ResolvedAssignment::dump_to_stream(std::stringstream &stream,
 void InnerMemberAccess::dump_to_stream(std::stringstream &stream,
                                        size_t indent_level) const {
   stream << indent(indent_level) << "MemberIndex: " << member_index << "\n";
-  stream << indent(indent_level)
-         << "MemberID:" << (type.is_pointer ? "ptr " : "") << type.name << "("
-         << member_id << ")"
+  stream << indent(indent_level) << "MemberID:";
+  for (uint i = 0; i < type.pointer_depth; ++i) {
+    stream << "ptr ";
+  }
+  stream << type.name << "(" << member_id << ")"
          << "\n";
   if (inner_member_access)
     inner_member_access->dump_to_stream(stream, indent_level + 1);

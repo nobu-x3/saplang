@@ -175,7 +175,7 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
 }
 
 llvm::Type *Codegen::gen_type(Type type) {
-  if (type.is_pointer)
+  if (type.pointer_depth)
     return m_Builder.getPtrTy();
   switch (type.kind) {
   case Type::Kind::i8:

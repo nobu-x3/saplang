@@ -325,10 +325,11 @@ std::unique_ptr<ReturnStmt> Parser::parse_return_stmt() {
 }
 
 // <prefixExpression>
-// ::= ('!' | '-')* <primaryExpr>
+// ::= ('!' | '-' | '*' | '&')* <primaryExpr>
 std::unique_ptr<Expr> Parser::parse_prefix_expr() {
   Token token = m_NextToken;
-  if (token.kind != TokenKind::Exclamation && token.kind != TokenKind::Minus)
+  if (token.kind != TokenKind::Exclamation && token.kind != TokenKind::Minus &&
+      token.kind != TokenKind::Asterisk && token.kind != TokenKind::Amp)
     return parse_primary_expr();
   eat_next_token(); // eat '!' or '-'
   auto rhs = parse_prefix_expr();
@@ -652,42 +653,44 @@ std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
 // ::= 'void' ('*')*
 // |   <identifier> ('*')*
 std::optional<Type> Parser::parse_type() {
-  TokenKind kind = m_NextToken.kind;
-  if (kind == TokenKind::KwVoid) {
+  Token token = m_NextToken;
+  if (token.kind == TokenKind::KwVoid) {
     eat_next_token();
-    return Type::builtin_void(m_NextToken.kind == TokenKind::Asterisk);
+    return Type::builtin_void(0);
   }
-  if (kind == TokenKind::Identifier) {
+  if (token.kind == TokenKind::Identifier) {
     Token id_token = m_NextToken;
     eat_next_token();
-    bool is_ptr = m_NextToken.kind == TokenKind::Asterisk;
-    if (is_ptr)
+    uint ptr_depth = 0;
+    while (m_NextToken.kind == TokenKind::Asterisk) {
       eat_next_token();
+      ++ptr_depth;
+    }
     assert(id_token.value.has_value());
     if (*id_token.value == "i8") {
-      return Type::builtin_i8(is_ptr);
+      return Type::builtin_i8(ptr_depth);
     } else if (*id_token.value == "i16") {
-      return Type::builtin_i16(is_ptr);
+      return Type::builtin_i16(ptr_depth);
     } else if (*id_token.value == "i32") {
-      return Type::builtin_i32(is_ptr);
+      return Type::builtin_i32(ptr_depth);
     } else if (*id_token.value == "i64") {
-      return Type::builtin_i64(is_ptr);
+      return Type::builtin_i64(ptr_depth);
     } else if (*id_token.value == "u8") {
-      return Type::builtin_u8(is_ptr);
+      return Type::builtin_u8(ptr_depth);
     } else if (*id_token.value == "u16") {
-      return Type::builtin_u16(is_ptr);
+      return Type::builtin_u16(ptr_depth);
     } else if (*id_token.value == "u32") {
-      return Type::builtin_u32(is_ptr);
+      return Type::builtin_u32(ptr_depth);
     } else if (*id_token.value == "u64") {
-      return Type::builtin_u64(is_ptr);
+      return Type::builtin_u64(ptr_depth);
     } else if (*id_token.value == "f32") {
-      return Type::builtin_f32(is_ptr);
+      return Type::builtin_f32(ptr_depth);
     } else if (*id_token.value == "f64") {
-      return Type::builtin_f64(is_ptr);
+      return Type::builtin_f64(ptr_depth);
     } else if (*id_token.value == "bool") {
-      return Type::builtin_bool(is_ptr);
+      return Type::builtin_bool(ptr_depth);
     }
-    Type type = Type::custom(*id_token.value, is_ptr);
+    Type type = Type::custom(*id_token.value, ptr_depth);
     return type;
   }
   report(m_NextToken.location, "expected type specifier.");

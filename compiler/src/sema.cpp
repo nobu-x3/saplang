@@ -331,7 +331,7 @@ bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
 
 bool try_cast_expr(ResolvedExpr &expr, const Type &type,
                    ConstantExpressionEvaluator &cee) {
-  if (type.is_pointer) {
+  if (type.pointer_depth != expr.type.pointer_depth) {
     if (const auto *null_expr = dynamic_cast<const NullExpr *>(&expr)) {
       return true;
     }
