@@ -34,12 +34,6 @@ Token Lexer::get_next_token() {
     eat_next_char();
     return Token{token_start_location, TokenKind::GreaterThanOrEqual};
   }
-  for (auto &&c : single_char_tokens) {
-    // TODO: manually write it out to avoid branching for better performance.
-    if (c == curr_char) {
-      return Token{token_start_location, static_cast<TokenKind>(c)};
-    }
-  }
   if (curr_char == '/') {
     if (peek_next_char() != '/')
       return Token{token_start_location, TokenKind::Slash};
@@ -55,13 +49,23 @@ Token Lexer::get_next_token() {
     }
     return Token{token_start_location, TokenKind::Equal};
   }
-  if (curr_char == '&' && peek_next_char() == '&') {
-    eat_next_char();
-    return Token{token_start_location, TokenKind::AmpAmp};
+  if (curr_char == '&') {
+    if (peek_next_char() == '&') {
+      eat_next_char();
+      return Token{token_start_location, TokenKind::AmpAmp};
+    } else {
+      return Token{token_start_location, TokenKind::Amp};
+    }
   }
   if (curr_char == '|' && peek_next_char() == '|') {
     eat_next_char();
     return Token{token_start_location, TokenKind::PipePipe};
+  }
+  for (auto &&c : single_char_tokens) {
+    // TODO: manually write it out to avoid branching for better performance.
+    if (c == curr_char) {
+      return Token{token_start_location, static_cast<TokenKind>(c)};
+    }
   }
   if (is_alpha(curr_char)) {
     std::string value{curr_char};

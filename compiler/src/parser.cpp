@@ -329,8 +329,9 @@ std::unique_ptr<ReturnStmt> Parser::parse_return_stmt() {
 std::unique_ptr<Expr> Parser::parse_prefix_expr() {
   Token token = m_NextToken;
   if (token.kind != TokenKind::Exclamation && token.kind != TokenKind::Minus &&
-      token.kind != TokenKind::Asterisk && token.kind != TokenKind::Amp)
+      token.kind != TokenKind::Asterisk && token.kind != TokenKind::Amp) {
     return parse_primary_expr();
+  }
   eat_next_token(); // eat '!' or '-'
   auto rhs = parse_prefix_expr();
   if (!rhs)
