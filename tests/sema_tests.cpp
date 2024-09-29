@@ -1244,8 +1244,6 @@ var TestStruct* test = null;
   CONTAINS_NEXT_REQUIRE(lines_it, "Null");
 }
 
-// @TODO: global and local redeclaration
-
 TEST_CASE("address of operator", "[sema]") {
   TEST_SETUP(R"(
 var i32 test = 0;
@@ -1264,3 +1262,5 @@ var i32* test1 = &test;
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") test:") != std::string::npos);
 }
+
+// @TODO: global and local redeclaration

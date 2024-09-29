@@ -685,7 +685,7 @@ TEST_CASE("codegen var decl", "[codegen]") {
       bar(z);
       bar(a);
     }
-    
+
     fn void bar(i32 num) {}
   )");
   REQUIRE(error_stream.str() == "");
@@ -1608,4 +1608,168 @@ var TestStruct test = .{null};
   auto lines_it = lines.begin() + 2;
   CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct = type { ptr }");
   CONTAINS_NEXT_REQUIRE(lines_it, "@test = global %TestStruct zeroinitializer");
+}
+
+TEST_CASE("builtin type address of operator storing", "[codegen]") {
+  TEST_SETUP(R"(
+fn void foo() {
+var i32 a = 0;
+var i32* ptr = &a;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ptr = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("builtin type address of operator storing to parameter",
+          "[codegen]") {
+  TEST_SETUP(R"(
+fn void bar(i32* ptr) {}
+fn void foo() {
+var i32 a = 0;
+bar(&a);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @bar(ptr %ptr) {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ptr1 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %ptr, ptr %ptr1, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @bar(ptr %a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("custom type address of operator storing", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn void foo() {
+var TestStruct a = .{0};
+var TestStruct* ptr = &a;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct = type { i32 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca %TestStruct, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ptr = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%0 = getelementptr inbounds %TestStruct, ptr %a, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %0, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("custom type address of operator storing to parameter", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn void bar(TestStruct* ptr) {}
+fn void foo() {
+var TestStruct a = .{0};
+bar(&a);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct = type { i32 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @bar(ptr %ptr) {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ptr1 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %ptr, ptr %ptr1, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca %TestStruct, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%0 = getelementptr inbounds %TestStruct, ptr %a, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %0, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @bar(ptr %a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("custom type pointer member assignment", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32* a; }
+fn void foo() {
+var i32 a = 0;
+var TestStruct str = .{&a};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct = type { ptr }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%str = alloca %TestStruct, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%0 = getelementptr inbounds %TestStruct, ptr %str, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %0, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("member field address of function parameter", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32* a; }
+fn void bar(i32* a) {}
+fn void foo() {
+var i32 a = 0;
+var TestStruct str = .{&a};
+bar(str.a);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct = type { ptr }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @bar(ptr %a) {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a1 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %a1, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%str = alloca %TestStruct, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = getelementptr inbounds %TestStruct, ptr %str, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %0, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = getelementptr inbounds %TestStruct, ptr %str, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load ptr, ptr %1, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @bar(ptr %2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }

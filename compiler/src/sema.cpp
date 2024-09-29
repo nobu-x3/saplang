@@ -3,6 +3,7 @@
 #include <cassert>
 #include <unordered_map>
 
+#include "ast.h"
 #include "cfg.h"
 #include <algorithm>
 
@@ -1129,13 +1130,22 @@ Sema::resolve_call_expr(const CallExpr &call) {
         resolve_expr(*call.args[i], &resolved_func_decl->params[i]->type);
     if (!resolved_arg)
       return nullptr;
-    if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind) {
+    Type resolved_type = resolved_arg->type;
+    if (const auto *member_access =
+            dynamic_cast<const ResolvedStructMemberAccess *>(
+                resolved_arg.get())) {
+      resolved_type = member_access->type;
+    }
+    if (resolved_type.kind != resolved_func_decl->params[i]->type.kind) {
       if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
                          m_Cee)) {
-        return report(resolved_arg->location,
-                      "unexpected type '" + resolved_arg->type.name +
-                          "', expected '" +
-                          resolved_func_decl->params[i]->type.name + "'.");
+        return report(
+            resolved_arg->location,
+            "unexpected type '" + resolved_arg->type.name + "', expected '" +
+                resolved_func_decl->params[i]->type.name +
+                (resolved_func_decl->params[i]->type.pointer_depth > 0 ? "*"
+                                                                       : "") +
+                "'.");
       }
     }
     resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));

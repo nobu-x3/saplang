@@ -1,4 +1,6 @@
 #include "codegen.h"
+#include "ast.h"
+#include "lexer.h"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
@@ -438,10 +440,18 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(
     if (const auto *struct_lit =
             dynamic_cast<const ResolvedStructLiteralExpr *>(expr.get())) {
       gened_expr = gen_struct_literal_expr_assignment(*struct_lit, memptr);
+    } else if (const auto *unary_op =
+                   dynamic_cast<const ResolvedUnaryOperator *>(expr.get());
+               unary_op && unary_op->op == TokenKind::Amp) {
+      if (const auto *dre =
+              dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
+        llvm::Value *expr = m_Declarations[dre->decl];
+        m_Builder.CreateStore(expr, memptr);
+      }
     } else {
       gened_expr = gen_expr(*expr);
     }
-    if (gened_expr != memptr)
+    if (gened_expr && memptr && gened_expr != memptr)
       m_Builder.CreateStore(gened_expr, memptr);
   }
   return var;
@@ -708,6 +718,16 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
   llvm::Function *callee = m_Module->getFunction(call.func_decl->id);
   std::vector<llvm::Value *> args{};
   for (auto &&arg : call.args) {
+    if (const auto *unary_op =
+            dynamic_cast<const ResolvedUnaryOperator *>(arg.get());
+        unary_op && unary_op->op == TokenKind::Amp) {
+      if (const auto *dre =
+              dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
+        llvm::Value *expr = m_Declarations[dre->decl];
+        args.emplace_back(expr);
+        continue;
+      }
+    }
     args.emplace_back(gen_expr(*arg));
   }
   return m_Builder.CreateCall(callee, args);
@@ -722,6 +742,14 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
     if (const auto *struct_lit =
             dynamic_cast<const ResolvedStructLiteralExpr *>(init.get())) {
       gen_struct_literal_expr_assignment(*struct_lit, var);
+    } else if (const auto *unary_op =
+                   dynamic_cast<const ResolvedUnaryOperator *>(init.get());
+               unary_op && unary_op->op == TokenKind::Amp) {
+      if (const auto *dre =
+              dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
+        llvm::Value *expr = m_Declarations[dre->decl];
+        m_Builder.CreateStore(expr, var);
+      }
     } else {
       m_Builder.CreateStore(gen_expr(*init), var);
     }
