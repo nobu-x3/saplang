@@ -442,11 +442,20 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(
       gened_expr = gen_struct_literal_expr_assignment(*struct_lit, memptr);
     } else if (const auto *unary_op =
                    dynamic_cast<const ResolvedUnaryOperator *>(expr.get());
-               unary_op && unary_op->op == TokenKind::Amp) {
+               unary_op && (unary_op->op == TokenKind::Amp ||
+                            unary_op->op == TokenKind::Asterisk)) {
       if (const auto *dre =
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         llvm::Value *expr = m_Declarations[dre->decl];
-        m_Builder.CreateStore(expr, memptr);
+        if (unary_op->op == TokenKind::Asterisk) {
+          llvm::Value *ptr = m_Builder.CreateLoad(m_Builder.getPtrTy(), expr);
+          Type new_internal_type = dre->type;
+          --new_internal_type.pointer_depth;
+          llvm::Type *dereferenced_type = gen_type(new_internal_type);
+          gened_expr = m_Builder.CreateLoad(dereferenced_type, ptr);
+        }
+        if (unary_op->op == TokenKind::Amp)
+          m_Builder.CreateStore(expr, memptr);
       }
     } else {
       gened_expr = gen_expr(*expr);
@@ -720,10 +729,18 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
   for (auto &&arg : call.args) {
     if (const auto *unary_op =
             dynamic_cast<const ResolvedUnaryOperator *>(arg.get());
-        unary_op && unary_op->op == TokenKind::Amp) {
+        unary_op && (unary_op->op == TokenKind::Amp ||
+                     unary_op->op == TokenKind::Asterisk)) {
       if (const auto *dre =
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         llvm::Value *expr = m_Declarations[dre->decl];
+        if (unary_op->op == TokenKind::Asterisk) {
+          llvm::Value *ptr = m_Builder.CreateLoad(m_Builder.getPtrTy(), expr);
+          Type new_internal_type = dre->type;
+          --new_internal_type.pointer_depth;
+          llvm::Type *dereferenced_type = gen_type(new_internal_type);
+          expr = m_Builder.CreateLoad(dereferenced_type, ptr);
+        }
         args.emplace_back(expr);
         continue;
       }
@@ -744,11 +761,21 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
       gen_struct_literal_expr_assignment(*struct_lit, var);
     } else if (const auto *unary_op =
                    dynamic_cast<const ResolvedUnaryOperator *>(init.get());
-               unary_op && unary_op->op == TokenKind::Amp) {
+               unary_op && (unary_op->op == TokenKind::Amp ||
+                            unary_op->op == TokenKind::Asterisk)) {
       if (const auto *dre =
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         llvm::Value *expr = m_Declarations[dre->decl];
-        m_Builder.CreateStore(expr, var);
+        if (unary_op->op == TokenKind::Amp) {
+          m_Builder.CreateStore(expr, var);
+        } else if (unary_op->op == TokenKind::Asterisk) {
+          llvm::Value *ptr = m_Builder.CreateLoad(m_Builder.getPtrTy(), expr);
+          Type new_internal_type = dre->type;
+          --new_internal_type.pointer_depth;
+          llvm::Type *dereferenced_type = gen_type(new_internal_type);
+          llvm::Value *load = m_Builder.CreateLoad(dereferenced_type, ptr);
+          m_Builder.CreateStore(load, var);
+        }
       }
     } else {
       m_Builder.CreateStore(gen_expr(*init), var);

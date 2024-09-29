@@ -5,6 +5,7 @@
 
 #include "ast.h"
 #include "cfg.h"
+#include "lexer.h"
 #include <algorithm>
 
 namespace saplang {
@@ -775,6 +776,15 @@ Sema::resolve_unary_operator(const UnaryOperator &op) {
                     "cannot take the address of an rvalue.");
     }
     ++resolved_rhs->type.pointer_depth;
+  } else if (op.op == TokenKind::Asterisk) {
+    if (resolved_rhs->type.pointer_depth < 1)
+      return report(resolved_rhs->location,
+                    "cannot dereference non-pointer type.");
+    if (const ResolvedNumberLiteral *rvalue =
+            dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
+      return report(resolved_rhs->location, "cannot derefenence an rvalue.");
+      --resolved_rhs->type.pointer_depth;
+    }
   }
   return std::make_unique<ResolvedUnaryOperator>(
       op.location, std::move(resolved_rhs), op.op);

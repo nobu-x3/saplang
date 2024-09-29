@@ -1224,3 +1224,22 @@ var i32* test1 = &test;
   CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
 }
+
+TEST_CASE("dereference operator", "[parser]") {
+  TEST_SETUP(R"(
+var i32 test = 0;
+var i32* test1 = &test;
+var i32 test2 = *test1;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test1:ptr i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test2:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test1");
+}
