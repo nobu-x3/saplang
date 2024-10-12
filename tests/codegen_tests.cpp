@@ -910,10 +910,10 @@ fn i32 foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 250, ptr %3, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it, "%4 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 0");
-  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 5, ptr %4, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 5, ptr %4, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it, "%5 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 3");
-  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 15, ptr %5, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %5, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it, "%6 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "%7 = load i32, ptr %6, align 4");
@@ -957,7 +957,7 @@ fn i32 bar() {
   CONTAINS_NEXT_REQUIRE(
       lines_it,
       "%0 = getelementptr inbounds %TestType, ptr %variable1, i32 0, i32 3");
-  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 15, ptr %0, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
       "%1 = getelementptr inbounds %TestType, ptr %variable1, i32 0, i32 3");
@@ -1087,7 +1087,7 @@ fn i32 foo() {
   CONTAINS_NEXT_REQUIRE(
       lines_it,
       "%0 = getelementptr inbounds %TestType, ptr %variable1, i32 0, i32 3");
-  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 15, ptr %0, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
       "%1 = getelementptr inbounds %TestType, ptr %variable1, i32 0, i32 3");
@@ -1463,7 +1463,7 @@ fn void foo(){
       "@test2 = constant %TestType { i32 17, float 1.800000e+01, i1 false }");
   CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
   CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 16, ptr @test1, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 16, ptr @test1, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
@@ -1494,8 +1494,8 @@ fn void foo(){
   CONTAINS_NEXT_REQUIRE(lines_it, "define void @foo() {");
   CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
   CONTAINS_NEXT_REQUIRE(lines_it,
-                        "store i8 16, ptr getelementptr inbounds (%TestType, "
-                        "ptr @test1, i32 0, i32 3), align 1");
+                        "store i32 16, ptr getelementptr inbounds (%TestType, "
+                        "ptr @test1, i32 0, i32 3), align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
@@ -1864,7 +1864,8 @@ var TestStruct b = *ptr;
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
 
-TEST_CASE("custom type dereference operator storing to parameter", "[codegen]") {
+TEST_CASE("custom type dereference operator storing to parameter",
+          "[codegen]") {
   TEST_SETUP(R"(
  struct TestStruct { i32 a; }
  fn void bar(TestStruct a) {}
@@ -1900,7 +1901,8 @@ TEST_CASE("custom type dereference operator storing to parameter", "[codegen]") 
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
 
-TEST_CASE("custom type pointer member assignment via dereference", "[codegen]") {
+TEST_CASE("custom type pointer member assignment via dereference",
+          "[codegen]") {
   TEST_SETUP(R"(
 struct TestStruct { i32 a; }
 fn void foo() {
@@ -1973,5 +1975,56 @@ bar(str.a);
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
 
+TEST_CASE("deref struct copy", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn i32 bar(TestStruct* a) {
+    const TestStruct deref = *a;
+    return deref.a;
+}
+fn  i32 main() {
+    var TestStruct a = .{69};
+    return bar(&a);
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct = type { i32 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @bar(ptr %a) {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a1 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%deref = alloca %TestStruct, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %a1, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load ptr, ptr %a1, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load %TestStruct, ptr %0, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store %TestStruct %1, ptr %deref, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%2 = getelementptr inbounds %TestStruct, ptr %deref, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load i32, ptr %2, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %3, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+  CONTAINS_NEXT_REQUIRE(lines_it, "return:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load i32, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %4");
+}
+
 // @TODO: multidepth pointer
 // @TODO: member field inner access == dereference
+
+TEST_CASE("pointer member access auto dereference", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn i32 bar(TestStruct* a) {
+    return a.a;
+}
+fn  i32 main() {
+    var TestStruct a = .{69};
+    return bar(&a);
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  REQUIRE(output_buffer.str() == "");
+}

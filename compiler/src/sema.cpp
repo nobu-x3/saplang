@@ -1002,9 +1002,11 @@ Sema::resolve_member_access(const MemberAccess &access,
               resolve_inner_member_access(*inner_access, struct_member.first));
         }
       }
-      return std::make_unique<ResolvedStructMemberAccess>(
-          access.location, struct_member.first, struct_or_param_decl,
+      std::unique_ptr<ResolvedStructMemberAccess> member_access = std::make_unique<ResolvedStructMemberAccess>(
+          access.location, struct_or_param_decl,
           std::move(inner_member_access));
+      member_access->type = struct_member.first;
+      return std::move(member_access);
     }
     ++decl_member_index;
   }

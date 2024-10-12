@@ -880,7 +880,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(a)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
 }
 
 TEST_CASE("struct member access return", "[sema]") {
@@ -984,7 +984,7 @@ fn i32 bar() {
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(d)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(15)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(15)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
@@ -1201,7 +1201,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(a)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(5)");
 }
 
 TEST_CASE("global custom type const var with initializer access from function",
@@ -1332,3 +1332,18 @@ foo(*test1);
   REQUIRE(lines_it->find(") test1:") != std::string::npos);
 }
 // @TODO: global and local redeclaration
+
+TEST_CASE("pointer member access auto dereference", "[sema]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn i32 bar(TestStruct* a) {
+    return a.a;
+}
+fn  i32 main() {
+    var TestStruct a = .{69};
+    return bar(&a);
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  REQUIRE(output_buffer.str() == "");
+}

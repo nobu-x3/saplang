@@ -579,13 +579,12 @@ struct InnerMemberAccess : public IDumpable {
 };
 
 struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
-  Type type;
   std::unique_ptr<InnerMemberAccess> inner_member_access;
 
   inline ResolvedStructMemberAccess(
-      SourceLocation loc, Type type, const ResolvedDecl *decl,
+      SourceLocation loc, const ResolvedDecl *decl,
       std::unique_ptr<InnerMemberAccess> inner_access)
-      : ResolvedDeclRefExpr(loc, decl), type(type),
+      : ResolvedDeclRefExpr(loc, decl),
         inner_member_access(std::move(inner_access)) {}
 
   DUMP_IMPL
