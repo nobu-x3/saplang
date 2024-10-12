@@ -498,13 +498,18 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
   if (!decl)
     return report(access.location,
                   "unknown declaration '" + access.decl->id + "'.");
+  Type access_decl_type = access.decl->type;
+  if (access_decl_type.pointer_depth > 0) {
+    decl = m_Builder.CreateLoad(gen_type(access_decl_type), decl);
+    --access_decl_type.pointer_depth;
+  }
   std::vector<llvm::Value *> outer_indices{
       llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
       llvm::ConstantInt::get(
           m_Context,
           llvm::APInt(32, access.inner_member_access->member_index))};
   llvm::Value *last_gep = m_Builder.CreateInBoundsGEP(
-      gen_type(access.decl->type), decl, outer_indices);
+      gen_type(access_decl_type), decl, outer_indices);
   out_type = access.inner_member_access->type;
   if (access.inner_member_access->inner_member_access) {
     InnerMemberAccess *current_chain =
@@ -512,11 +517,16 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
     InnerMemberAccess *prev_chain = access.inner_member_access.get();
     while (current_chain) {
       out_type = current_chain->type;
+      Type tmp_type = prev_chain->type;
+      if (tmp_type.pointer_depth > 0) {
+        last_gep = m_Builder.CreateLoad(gen_type(tmp_type), last_gep);
+        --tmp_type.pointer_depth;
+      }
       std::vector<llvm::Value *> inner_indices{
           llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
           llvm::ConstantInt::get(m_Context,
                                  llvm::APInt(32, current_chain->member_index))};
-      last_gep = m_Builder.CreateInBoundsGEP(gen_type(prev_chain->type),
+      last_gep = m_Builder.CreateInBoundsGEP(gen_type(tmp_type),
                                              last_gep, inner_indices);
       prev_chain = current_chain;
       current_chain = current_chain->inner_member_access.get();

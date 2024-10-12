@@ -991,6 +991,7 @@ Sema::resolve_member_access(const MemberAccess &access,
           std::make_unique<InnerMemberAccess>(decl_member_index,
                                               struct_member.second,
                                               struct_member.first, nullptr);
+      Type innermost_type = struct_member.first;
       if (access.inner_decl_ref_expr) {
         if (struct_member.first.kind != Type::Kind::Custom) {
           return report(access.inner_decl_ref_expr->location,
@@ -1000,12 +1001,13 @@ Sema::resolve_member_access(const MemberAccess &access,
                 access.inner_decl_ref_expr.get())) {
           inner_member_access->inner_member_access = std::move(
               resolve_inner_member_access(*inner_access, struct_member.first));
+          innermost_type = inner_member_access->inner_member_access->type;
         }
       }
       std::unique_ptr<ResolvedStructMemberAccess> member_access = std::make_unique<ResolvedStructMemberAccess>(
           access.location, struct_or_param_decl,
           std::move(inner_member_access));
-      member_access->type = struct_member.first;
+      member_access->type = innermost_type;
       return std::move(member_access);
     }
     ++decl_member_index;

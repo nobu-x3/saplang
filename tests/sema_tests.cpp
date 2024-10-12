@@ -1332,18 +1332,3 @@ foo(*test1);
   REQUIRE(lines_it->find(") test1:") != std::string::npos);
 }
 // @TODO: global and local redeclaration
-
-TEST_CASE("pointer member access auto dereference", "[sema]") {
-  TEST_SETUP(R"(
-struct TestStruct { i32 a; }
-fn i32 bar(TestStruct* a) {
-    return a.a;
-}
-fn  i32 main() {
-    var TestStruct a = .{69};
-    return bar(&a);
-}
-    )");
-  REQUIRE(error_stream.str() == "");
-  REQUIRE(output_buffer.str() == "");
-}

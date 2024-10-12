@@ -2011,9 +2011,6 @@ fn  i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %4");
 }
 
-// @TODO: multidepth pointer
-// @TODO: member field inner access == dereference
-
 TEST_CASE("pointer member access auto dereference", "[codegen]") {
   TEST_SETUP(R"(
 struct TestStruct { i32 a; }
@@ -2026,5 +2023,63 @@ fn  i32 main() {
 }
     )");
   REQUIRE(error_stream.str() == "");
-  REQUIRE(output_buffer.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct = type { i32 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @bar(ptr %a) {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a1 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %a1, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load ptr, ptr %a1, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%1 = getelementptr inbounds %TestStruct, ptr %0, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %2, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+  CONTAINS_NEXT_REQUIRE(lines_it, "return:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load i32, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %3");
 }
+
+TEST_CASE("multi pointer member access auto dereference", "[codegen]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+struct TestStruct2 { TestStruct* t; }
+fn i32 bar(TestStruct2* p) {
+    return p.t.a;
+}
+fn  i32 main() {
+    var TestStruct first = .{69};
+    var TestStruct2 p = .{&first};
+    return bar(&p);
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct2 = type { ptr }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%TestStruct = type { i32 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @bar(ptr %p) {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%p1 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %p, ptr %p1, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load ptr, ptr %p1, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%1 = getelementptr inbounds %TestStruct2, ptr %0, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load ptr, ptr %1, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "%3 = getelementptr inbounds %TestStruct, ptr %2, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load i32, ptr %3, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %4, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+  CONTAINS_NEXT_REQUIRE(lines_it, "return:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%5 = load i32, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %5");
+}
+
+// @TODO: multidepth pointer
