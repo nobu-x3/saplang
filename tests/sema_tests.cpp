@@ -1331,4 +1331,44 @@ foo(*test1);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") test1:") != std::string::npos);
 }
+
+TEST_CASE("multidepth pointer", "[sema]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+  var i32 a = 69;
+  var i32* pa = &a;
+  var i32** ppa = &pa;
+  return **ppa;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") a:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(69)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") pa:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") ppa:ptr ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") pa:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") ppa:") != std::string::npos);
+}
+
 // @TODO: global and local redeclaration

@@ -4,6 +4,7 @@
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
+#include <utility>
 
 namespace saplang {
 
@@ -412,8 +413,10 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     return gen_expr(*group->expr);
   if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
     return gen_binary_op(*binop);
-  if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr))
-    return gen_unary_op(*unop);
+  if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr)) {
+    auto &&[res, type] = gen_unary_op(*unop);
+    return res;
+  }
   if (const auto *nullexpr = dynamic_cast<const ResolvedNullExpr *>(&expr)) {
     llvm::Type *type = gen_type(nullexpr->type);
     llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
@@ -442,20 +445,13 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(
       gened_expr = gen_struct_literal_expr_assignment(*struct_lit, memptr);
     } else if (const auto *unary_op =
                    dynamic_cast<const ResolvedUnaryOperator *>(expr.get());
-               unary_op && (unary_op->op == TokenKind::Amp ||
-                            unary_op->op == TokenKind::Asterisk)) {
+               unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre =
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
-        llvm::Value *expr = m_Declarations[dre->decl];
-        if (unary_op->op == TokenKind::Asterisk) {
-          llvm::Value *ptr = m_Builder.CreateLoad(m_Builder.getPtrTy(), expr);
-          Type new_internal_type = dre->type;
-          --new_internal_type.pointer_depth;
-          llvm::Type *dereferenced_type = gen_type(new_internal_type);
-          gened_expr = m_Builder.CreateLoad(dereferenced_type, ptr);
-        }
-        if (unary_op->op == TokenKind::Amp)
+        if (unary_op->op == TokenKind::Amp) {
+          llvm::Value *expr = m_Declarations[dre->decl];
           m_Builder.CreateStore(expr, memptr);
+        }
       }
     } else {
       gened_expr = gen_expr(*expr);
@@ -526,8 +522,8 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
           llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
           llvm::ConstantInt::get(m_Context,
                                  llvm::APInt(32, current_chain->member_index))};
-      last_gep = m_Builder.CreateInBoundsGEP(gen_type(tmp_type),
-                                             last_gep, inner_indices);
+      last_gep = m_Builder.CreateInBoundsGEP(gen_type(tmp_type), last_gep,
+                                             inner_indices);
       prev_chain = current_chain;
       current_chain = current_chain->inner_member_access.get();
     }
@@ -693,20 +689,43 @@ llvm::Value *Codegen::gen_comp_op(TokenKind op, Type::Kind kind,
   return bool_to_type(kind, ret_val);
 }
 
-llvm::Value *Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
+std::pair<llvm::Value *, Type>
+Codegen::gen_dereference(const ResolvedDeclRefExpr &expr) {
+  llvm::Value *decl = m_Declarations[expr.decl];
+  llvm::Value *ptr = m_Builder.CreateLoad(gen_type(expr.type), decl);
+  Type new_internal_type = expr.type;
+  --new_internal_type.pointer_depth;
+  llvm::Type *dereferenced_type = gen_type(new_internal_type);
+  return std::make_pair(m_Builder.CreateLoad(dereferenced_type, ptr),
+                        new_internal_type);
+}
+
+std::pair<llvm::Value *, Type>
+Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
+  if (op.op == TokenKind::Asterisk) {
+    if (auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(op.rhs.get())) {
+      return gen_dereference(*dre);
+    } else if (auto *unop =
+                   dynamic_cast<ResolvedUnaryOperator *>(op.rhs.get())) {
+      auto &&[rhs, type] = gen_unary_op(*unop);
+      --type.pointer_depth;
+      llvm::Type *dereferenced_type = gen_type(type);
+      return std::make_pair(m_Builder.CreateLoad(dereferenced_type, rhs), type);
+    }
+  }
   llvm::Value *rhs = gen_expr(*op.rhs);
   SimpleNumType type = get_simple_type(op.rhs->type.kind);
   if (op.op == TokenKind::Minus) {
     if (type == SimpleNumType::SINT || type == SimpleNumType::UINT)
-      return m_Builder.CreateNeg(rhs);
+      return std::make_pair(m_Builder.CreateNeg(rhs), op.type);
     else if (type == SimpleNumType::FLOAT)
-      return m_Builder.CreateFNeg(rhs);
+      return std::make_pair(m_Builder.CreateFNeg(rhs), op.type);
   }
   if (op.op == TokenKind::Exclamation) {
-    return m_Builder.CreateNot(rhs);
+    return std::make_pair(m_Builder.CreateNot(rhs), op.type);
   }
   llvm_unreachable("unknown unary op.");
-  return nullptr;
+  return std::make_pair(nullptr, op.type);
 }
 
 void Codegen::gen_conditional_op(const ResolvedExpr &op,
@@ -739,18 +758,10 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
   for (auto &&arg : call.args) {
     if (const auto *unary_op =
             dynamic_cast<const ResolvedUnaryOperator *>(arg.get());
-        unary_op && (unary_op->op == TokenKind::Amp ||
-                     unary_op->op == TokenKind::Asterisk)) {
+        unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre =
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         llvm::Value *expr = m_Declarations[dre->decl];
-        if (unary_op->op == TokenKind::Asterisk) {
-          llvm::Value *ptr = m_Builder.CreateLoad(m_Builder.getPtrTy(), expr);
-          Type new_internal_type = dre->type;
-          --new_internal_type.pointer_depth;
-          llvm::Type *dereferenced_type = gen_type(new_internal_type);
-          expr = m_Builder.CreateLoad(dereferenced_type, ptr);
-        }
         args.emplace_back(expr);
         continue;
       }
@@ -771,20 +782,12 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
       gen_struct_literal_expr_assignment(*struct_lit, var);
     } else if (const auto *unary_op =
                    dynamic_cast<const ResolvedUnaryOperator *>(init.get());
-               unary_op && (unary_op->op == TokenKind::Amp ||
-                            unary_op->op == TokenKind::Asterisk)) {
+               unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre =
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         llvm::Value *expr = m_Declarations[dre->decl];
         if (unary_op->op == TokenKind::Amp) {
           m_Builder.CreateStore(expr, var);
-        } else if (unary_op->op == TokenKind::Asterisk) {
-          llvm::Value *ptr = m_Builder.CreateLoad(m_Builder.getPtrTy(), expr);
-          Type new_internal_type = dre->type;
-          --new_internal_type.pointer_depth;
-          llvm::Type *dereferenced_type = gen_type(new_internal_type);
-          llvm::Value *load = m_Builder.CreateLoad(dereferenced_type, ptr);
-          m_Builder.CreateStore(load, var);
         }
       }
     } else {

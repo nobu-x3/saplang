@@ -2082,4 +2082,70 @@ fn  i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %5");
 }
 
-// @TODO: multidepth pointer
+TEST_CASE("multidepth pointer", "[codegen]") {
+  TEST_SETUP(R"(
+fn void main() {
+  var i32 a = 69;
+  var i32* pa = &a;
+  var i32** ppa = &pa;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%pa = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ppa = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 69, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %pa, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %pa, ptr %ppa, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+}
+
+TEST_CASE("multi dereference", "[codegen]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+  var i32 a = 69;
+  var i32* pa = &a;
+  var i32 copy_a2 = *pa;
+  var i32** ppa = &pa;
+  var i32*** pppa = &ppa;
+  var i32 copy_a = **ppa;
+  return ***pppa;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%pa = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%copy_a2 = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ppa = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%pppa = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%copy_a = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 69, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %pa, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load ptr, ptr %pa, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %0, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %1, ptr %copy_a2, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %pa, ptr %ppa, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %ppa, ptr %pppa, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load ptr, ptr %ppa, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load ptr, ptr %2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load i32, ptr %3, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %4, ptr %copy_a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%5 = load ptr, ptr %pppa, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%6 = load ptr, ptr %5, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%7 = load ptr, ptr %6, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%8 = load i32, ptr %7, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %8, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+  CONTAINS_NEXT_REQUIRE(lines_it, "return:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%9 = load i32, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %9");
+}

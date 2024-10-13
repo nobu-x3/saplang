@@ -50,7 +50,10 @@ private:
 
   llvm::Value *gen_binary_op(const ResolvedBinaryOperator &op);
 
-  llvm::Value *gen_unary_op(const ResolvedUnaryOperator &op);
+  std::pair<llvm::Value *, Type> gen_unary_op(const ResolvedUnaryOperator &op);
+
+  std::pair<llvm::Value *, Type>
+  gen_dereference(const ResolvedDeclRefExpr &expr);
 
   llvm::Value *gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lhs,
                            llvm::Value *rhs);
