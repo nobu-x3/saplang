@@ -700,6 +700,7 @@ fn void main() {
   1 || 2 && 3 && (4 || 5);
 }
 )");
+      REQUIRE(error_stream.str() == "");
       REQUIRE(output_buffer.str() == R"(FunctionDecl: main:void
   Block
     BinaryOperator: '||'
@@ -867,7 +868,7 @@ TEST_CASE("while statements", "[parser]") {
     }
   }
   )");
-  REQUIRE(error_stream.str() == R"(test:3:11 error: expected expression.
+  REQUIRE(error_stream.str() == R"(test:3:13 error: expected expression.
 test:3:15 error: expected expression.
 test:4:19 error: expected 'while' body.
 )");
@@ -1168,4 +1169,77 @@ var TestType test = .{0};
   CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
   CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+}
+
+TEST_CASE("variable pointer decl", "[parser]") {
+  TEST_SETUP(R"(
+var i32* test = 0;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+}
+
+TEST_CASE("variable pointer decl, null init", "[parser]") {
+  TEST_SETUP(R"(
+var i32* test = null;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+}
+
+TEST_CASE("pointer chain decl", "[parser]") {
+  TEST_SETUP(R"(
+var i32* test = null;
+var i32** test1 = null;
+var i32*** test2 = null;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test1:ptr ptr i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test2:ptr ptr ptr i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+}
+
+TEST_CASE("address of operator", "[parser]") {
+  TEST_SETUP(R"(
+var i32 test = 0;
+var i32* test1 = &test;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test1:ptr i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+}
+
+TEST_CASE("dereference operator", "[parser]") {
+  TEST_SETUP(R"(
+var i32 test = 0;
+var i32* test1 = &test;
+var i32 test2 = *test1;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("VarDecl: test:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test1:ptr i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test2:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test1");
 }

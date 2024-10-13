@@ -1,7 +1,10 @@
 #include "codegen.h"
+#include "ast.h"
+#include "lexer.h"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
+#include <utility>
 
 namespace saplang {
 
@@ -54,6 +57,11 @@ void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl) {
                  dynamic_cast<const ResolvedStructLiteralExpr *>(
                      decl.initializer.get())) {
     var_init = gen_global_struct_init(*struct_init);
+  } else if (const auto *nullexpr = dynamic_cast<const ResolvedNullExpr *>(
+                 decl.initializer.get())) {
+    llvm::Type *type = gen_type(nullexpr->type);
+    llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
+    var_init = llvm::ConstantPointerNull::get(ptr_type);
   }
   // If var_init == nullptr there's an error in sema
   assert(var_init && "unexpected global variable type");
@@ -170,6 +178,8 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
 }
 
 llvm::Type *Codegen::gen_type(Type type) {
+  if (type.pointer_depth)
+    return m_Builder.getPtrTy();
   switch (type.kind) {
   case Type::Kind::i8:
   case Type::Kind::u8:
@@ -195,8 +205,6 @@ llvm::Type *Codegen::gen_type(Type type) {
     return m_Builder.getInt1Ty();
   case Type::Kind::Void:
     return m_Builder.getVoidTy();
-  case Type::Kind::Pointer:
-    return m_Builder.getPtrTy();
   case Type::Kind::Custom:
     return m_CustomTypes[type.name];
   }
@@ -390,7 +398,7 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     auto *type = gen_type(dre->type);
     if (auto *member_access =
             dynamic_cast<const ResolvedStructMemberAccess *>(dre)) {
-      Type member_type = Type::builtin_void();
+      Type member_type = Type::builtin_void(false);
       decl = gen_struct_member_access(*member_access, member_type);
       type = gen_type(member_type);
     }
@@ -405,8 +413,15 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     return gen_expr(*group->expr);
   if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
     return gen_binary_op(*binop);
-  if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr))
-    return gen_unary_op(*unop);
+  if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr)) {
+    auto &&[res, type] = gen_unary_op(*unop);
+    return res;
+  }
+  if (const auto *nullexpr = dynamic_cast<const ResolvedNullExpr *>(&expr)) {
+    llvm::Type *type = gen_type(nullexpr->type);
+    llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
+    return llvm::ConstantPointerNull::get(ptr_type);
+  }
   llvm_unreachable("unknown expression");
   return nullptr;
 }
@@ -428,10 +443,20 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(
     if (const auto *struct_lit =
             dynamic_cast<const ResolvedStructLiteralExpr *>(expr.get())) {
       gened_expr = gen_struct_literal_expr_assignment(*struct_lit, memptr);
+    } else if (const auto *unary_op =
+                   dynamic_cast<const ResolvedUnaryOperator *>(expr.get());
+               unary_op && (unary_op->op == TokenKind::Amp)) {
+      if (const auto *dre =
+              dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
+        if (unary_op->op == TokenKind::Amp) {
+          llvm::Value *expr = m_Declarations[dre->decl];
+          m_Builder.CreateStore(expr, memptr);
+        }
+      }
     } else {
       gened_expr = gen_expr(*expr);
     }
-    if (gened_expr != memptr)
+    if (gened_expr && memptr && gened_expr != memptr)
       m_Builder.CreateStore(gened_expr, memptr);
   }
   return var;
@@ -469,13 +494,18 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
   if (!decl)
     return report(access.location,
                   "unknown declaration '" + access.decl->id + "'.");
+  Type access_decl_type = access.decl->type;
+  if (access_decl_type.pointer_depth > 0) {
+    decl = m_Builder.CreateLoad(gen_type(access_decl_type), decl);
+    --access_decl_type.pointer_depth;
+  }
   std::vector<llvm::Value *> outer_indices{
       llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
       llvm::ConstantInt::get(
           m_Context,
           llvm::APInt(32, access.inner_member_access->member_index))};
   llvm::Value *last_gep = m_Builder.CreateInBoundsGEP(
-      gen_type(access.decl->type), decl, outer_indices);
+      gen_type(access_decl_type), decl, outer_indices);
   out_type = access.inner_member_access->type;
   if (access.inner_member_access->inner_member_access) {
     InnerMemberAccess *current_chain =
@@ -483,12 +513,17 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
     InnerMemberAccess *prev_chain = access.inner_member_access.get();
     while (current_chain) {
       out_type = current_chain->type;
+      Type tmp_type = prev_chain->type;
+      if (tmp_type.pointer_depth > 0) {
+        last_gep = m_Builder.CreateLoad(gen_type(tmp_type), last_gep);
+        --tmp_type.pointer_depth;
+      }
       std::vector<llvm::Value *> inner_indices{
           llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
           llvm::ConstantInt::get(m_Context,
                                  llvm::APInt(32, current_chain->member_index))};
-      last_gep = m_Builder.CreateInBoundsGEP(gen_type(prev_chain->type),
-                                             last_gep, inner_indices);
+      last_gep = m_Builder.CreateInBoundsGEP(gen_type(tmp_type), last_gep,
+                                             inner_indices);
       prev_chain = current_chain;
       current_chain = current_chain->inner_member_access.get();
     }
@@ -654,20 +689,43 @@ llvm::Value *Codegen::gen_comp_op(TokenKind op, Type::Kind kind,
   return bool_to_type(kind, ret_val);
 }
 
-llvm::Value *Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
+std::pair<llvm::Value *, Type>
+Codegen::gen_dereference(const ResolvedDeclRefExpr &expr) {
+  llvm::Value *decl = m_Declarations[expr.decl];
+  llvm::Value *ptr = m_Builder.CreateLoad(gen_type(expr.type), decl);
+  Type new_internal_type = expr.type;
+  --new_internal_type.pointer_depth;
+  llvm::Type *dereferenced_type = gen_type(new_internal_type);
+  return std::make_pair(m_Builder.CreateLoad(dereferenced_type, ptr),
+                        new_internal_type);
+}
+
+std::pair<llvm::Value *, Type>
+Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
+  if (op.op == TokenKind::Asterisk) {
+    if (auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(op.rhs.get())) {
+      return gen_dereference(*dre);
+    } else if (auto *unop =
+                   dynamic_cast<ResolvedUnaryOperator *>(op.rhs.get())) {
+      auto &&[rhs, type] = gen_unary_op(*unop);
+      --type.pointer_depth;
+      llvm::Type *dereferenced_type = gen_type(type);
+      return std::make_pair(m_Builder.CreateLoad(dereferenced_type, rhs), type);
+    }
+  }
   llvm::Value *rhs = gen_expr(*op.rhs);
   SimpleNumType type = get_simple_type(op.rhs->type.kind);
   if (op.op == TokenKind::Minus) {
     if (type == SimpleNumType::SINT || type == SimpleNumType::UINT)
-      return m_Builder.CreateNeg(rhs);
+      return std::make_pair(m_Builder.CreateNeg(rhs), op.type);
     else if (type == SimpleNumType::FLOAT)
-      return m_Builder.CreateFNeg(rhs);
+      return std::make_pair(m_Builder.CreateFNeg(rhs), op.type);
   }
   if (op.op == TokenKind::Exclamation) {
-    return m_Builder.CreateNot(rhs);
+    return std::make_pair(m_Builder.CreateNot(rhs), op.type);
   }
   llvm_unreachable("unknown unary op.");
-  return nullptr;
+  return std::make_pair(nullptr, op.type);
 }
 
 void Codegen::gen_conditional_op(const ResolvedExpr &op,
@@ -698,6 +756,16 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
   llvm::Function *callee = m_Module->getFunction(call.func_decl->id);
   std::vector<llvm::Value *> args{};
   for (auto &&arg : call.args) {
+    if (const auto *unary_op =
+            dynamic_cast<const ResolvedUnaryOperator *>(arg.get());
+        unary_op && (unary_op->op == TokenKind::Amp)) {
+      if (const auto *dre =
+              dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
+        llvm::Value *expr = m_Declarations[dre->decl];
+        args.emplace_back(expr);
+        continue;
+      }
+    }
     args.emplace_back(gen_expr(*arg));
   }
   return m_Builder.CreateCall(callee, args);
@@ -712,6 +780,16 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
     if (const auto *struct_lit =
             dynamic_cast<const ResolvedStructLiteralExpr *>(init.get())) {
       gen_struct_literal_expr_assignment(*struct_lit, var);
+    } else if (const auto *unary_op =
+                   dynamic_cast<const ResolvedUnaryOperator *>(init.get());
+               unary_op && (unary_op->op == TokenKind::Amp)) {
+      if (const auto *dre =
+              dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
+        llvm::Value *expr = m_Declarations[dre->decl];
+        if (unary_op->op == TokenKind::Amp) {
+          m_Builder.CreateStore(expr, var);
+        }
+      }
     } else {
       m_Builder.CreateStore(gen_expr(*init), var);
     }
@@ -750,7 +828,7 @@ llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
 
 llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
   llvm::Value *decl = m_Declarations[assignment.variable->decl];
-  Type member_type = Type::builtin_void();
+  Type member_type = Type::builtin_void(false);
   if (const auto *member_access =
           dynamic_cast<const ResolvedStructMemberAccess *>(
               assignment.variable.get())) {
@@ -761,12 +839,11 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
           assignment.expr.get())) {
     // expr is the stack variable
     llvm::Type *var_type = gen_type(struct_lit->type);
-    llvm::Type* decl_type = gen_type(assignment.variable->decl->type);
-    const llvm::DataLayout& data_layout = m_Module->getDataLayout();
-    return m_Builder.CreateMemCpy(
-        decl, data_layout.getPrefTypeAlign(decl_type), expr,
-        data_layout.getPrefTypeAlign(var_type),
-        data_layout.getTypeAllocSize(var_type));
+    llvm::Type *decl_type = gen_type(assignment.variable->decl->type);
+    const llvm::DataLayout &data_layout = m_Module->getDataLayout();
+    return m_Builder.CreateMemCpy(decl, data_layout.getPrefTypeAlign(decl_type),
+                                  expr, data_layout.getPrefTypeAlign(var_type),
+                                  data_layout.getTypeAllocSize(var_type));
   }
   return m_Builder.CreateStore(expr, decl);
 }

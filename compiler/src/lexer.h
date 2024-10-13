@@ -6,7 +6,7 @@
 
 namespace saplang {
 constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':', ';', ',',
-                                       '+',  '-', '*', '<', '>', '!', '.'};
+                                       '+',  '-', '*', '<', '>', '!', '.', '&'};
 
 enum class TokenKind : char {
   Unknown = -128,
@@ -26,6 +26,7 @@ enum class TokenKind : char {
   KwFor,
   KwConst,
   KwStruct,
+  KwNull,
   KwVar,
   Slash,
   AmpAmp,
@@ -49,7 +50,8 @@ enum class TokenKind : char {
   LessThan = single_char_tokens[11],
   GreaterThan = single_char_tokens[12],
   Exclamation = single_char_tokens[13],
-  Dot = single_char_tokens[14]
+  Dot = single_char_tokens[14],
+  Amp = single_char_tokens[15]
 };
 
 const std::unordered_map<std::string_view, TokenKind> keywords = {
@@ -59,7 +61,7 @@ const std::unordered_map<std::string_view, TokenKind> keywords = {
     {"if", TokenKind::KwIf},         {"else", TokenKind::KwElse},
     {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},
     {"const", TokenKind::KwConst},   {"var", TokenKind::KwVar},
-    {"struct", TokenKind::KwStruct},
+    {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},
 };
 
 struct Token {

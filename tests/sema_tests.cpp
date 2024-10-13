@@ -880,7 +880,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(a)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
 }
 
 TEST_CASE("struct member access return", "[sema]") {
@@ -984,7 +984,7 @@ fn i32 bar() {
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(d)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(15)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(15)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
@@ -1201,7 +1201,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(a)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(5)");
 }
 
 TEST_CASE("global custom type const var with initializer access from function",
@@ -1217,6 +1217,158 @@ fn void foo() {
 )");
   REQUIRE(error_stream.str() ==
           "sema_test:7:3 error: trying to assign to const variable.\n");
+}
+
+TEST_CASE("variable pointer decl null initialization", "[sema]") {
+  TEST_SETUP(R"(
+var i32* test = null;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+}
+
+TEST_CASE("struct pointer decl null initialization", "[sema]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+var TestStruct* test = null;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global ptr TestStruct") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+}
+
+TEST_CASE("address of operator", "[sema]") {
+  TEST_SETUP(R"(
+var i32 test = 0;
+var i32* test1 = &test;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test1:global ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test:") != std::string::npos);
+}
+
+TEST_CASE("derefence operator", "[sema]") {
+  TEST_SETUP(R"(
+var i32 test = 0;
+var i32* test1 = &test;
+var i32 test2 = *test1;
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test1:global ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test2:global i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test1:") != std::string::npos);
+}
+
+TEST_CASE("dereferencing non-pointer type", "[sema]") {
+  TEST_SETUP(R"(
+var i32 test = 0;
+var i32 test1 = *test;
+)");
+  REQUIRE(error_stream.str() == "sema_test:3:18 error: cannot dereference non-pointer type.\n");
+}
+
+TEST_CASE("derefence operator function parameter", "[sema]") {
+  TEST_SETUP(R"(
+var i32 test = 0;
+var i32* test1 = &test;
+fn void foo(i32 a) {}
+fn void main() {
+foo(*test1);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedVarDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") test:global i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test1:global ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test1:") != std::string::npos);
+}
+
+TEST_CASE("multidepth pointer", "[sema]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+  var i32 a = 69;
+  var i32* pa = &a;
+  var i32** ppa = &pa;
+  return **ppa;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") a:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(69)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") pa:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") ppa:ptr ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") pa:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") ppa:") != std::string::npos);
 }
 
 // @TODO: global and local redeclaration

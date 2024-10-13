@@ -3,7 +3,9 @@
 #include <cassert>
 #include <unordered_map>
 
+#include "ast.h"
 #include "cfg.h"
+#include "lexer.h"
 #include <algorithm>
 
 namespace saplang {
@@ -331,6 +333,12 @@ bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
 
 bool try_cast_expr(ResolvedExpr &expr, const Type &type,
                    ConstantExpressionEvaluator &cee) {
+  if (type.pointer_depth != expr.type.pointer_depth) {
+    if (const auto *null_expr = dynamic_cast<const NullExpr *>(&expr)) {
+      return true;
+    }
+    return false;
+  }
   if (auto *groupexp = dynamic_cast<ResolvedGroupingExpr *>(&expr)) {
     if (try_cast_expr(*groupexp->expr, type, cee)) {
       groupexp->type = type;
@@ -382,7 +390,7 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
   if (!condition)
     return nullptr;
   if (condition->type.kind != Type::Kind::Bool) {
-    if (!try_cast_expr(*condition, Type::builtin_bool(), m_Cee))
+    if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee))
       return report(condition->location,
                     "condition is expected to evaluate to bool.");
   }
@@ -715,7 +723,7 @@ Sema::resolve_struct_decl(const StructDecl &decl) {
         std::make_pair(std::move(*resolved_type), std::move(id)));
   }
   return std::make_unique<ResolvedStructDecl>(
-      decl.location, decl.id, Type::custom(decl.id), std::move(types));
+      decl.location, decl.id, Type::custom(decl.id, false), std::move(types));
 }
 
 std::unique_ptr<ResolvedGroupingExpr>
@@ -761,6 +769,23 @@ Sema::resolve_unary_operator(const UnaryOperator &op) {
     return report(
         resolved_rhs->location,
         "void expression cannot be used as operand to unary operator.");
+  if (op.op == TokenKind::Amp) {
+    if (const ResolvedNumberLiteral *rvalue =
+            dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
+      return report(resolved_rhs->location,
+                    "cannot take the address of an rvalue.");
+    }
+    ++resolved_rhs->type.pointer_depth;
+  } else if (op.op == TokenKind::Asterisk) {
+    if (resolved_rhs->type.pointer_depth < 1)
+      return report(resolved_rhs->location,
+                    "cannot dereference non-pointer type.");
+    if (const ResolvedNumberLiteral *rvalue =
+            dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
+      return report(resolved_rhs->location, "cannot derefenence an rvalue.");
+      --resolved_rhs->type.pointer_depth;
+    }
+  }
   return std::make_unique<ResolvedUnaryOperator>(
       op.location, std::move(resolved_rhs), op.op);
 }
@@ -771,7 +796,7 @@ Sema::resolve_while_stmt(const WhileStmt &stmt) {
   if (!condition)
     return nullptr;
   if (condition->type.kind != Type::Kind::Bool) {
-    if (!try_cast_expr(*condition, Type::builtin_bool(), m_Cee))
+    if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee))
       return report(condition->location,
                     "condition is expected to evaluate to bool.");
   }
@@ -886,6 +911,9 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
     if (const auto *struct_literal =
             dynamic_cast<const StructLiteralExpr *>(&expr))
       return resolve_struct_literal_expr(*struct_literal, *type);
+    if (const auto *nullexpr = dynamic_cast<const NullExpr *>(&expr)) {
+      return std::make_unique<ResolvedNullExpr>(nullexpr->location, *type);
+    }
   }
   assert(false && "unexpected expression.");
   return nullptr;
@@ -963,6 +991,7 @@ Sema::resolve_member_access(const MemberAccess &access,
           std::make_unique<InnerMemberAccess>(decl_member_index,
                                               struct_member.second,
                                               struct_member.first, nullptr);
+      Type innermost_type = struct_member.first;
       if (access.inner_decl_ref_expr) {
         if (struct_member.first.kind != Type::Kind::Custom) {
           return report(access.inner_decl_ref_expr->location,
@@ -972,11 +1001,14 @@ Sema::resolve_member_access(const MemberAccess &access,
                 access.inner_decl_ref_expr.get())) {
           inner_member_access->inner_member_access = std::move(
               resolve_inner_member_access(*inner_access, struct_member.first));
+          innermost_type = inner_member_access->inner_member_access->type;
         }
       }
-      return std::make_unique<ResolvedStructMemberAccess>(
-          access.location, struct_member.first, struct_or_param_decl,
+      std::unique_ptr<ResolvedStructMemberAccess> member_access = std::make_unique<ResolvedStructMemberAccess>(
+          access.location, struct_or_param_decl,
           std::move(inner_member_access));
+      member_access->type = innermost_type;
+      return std::move(member_access);
     }
     ++decl_member_index;
   }
@@ -991,6 +1023,9 @@ Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
   std::optional<Type> type = resolve_type(struct_type);
   if (!type)
     return nullptr;
+  if (type->pointer_depth > 0)
+    return report(lit.location, "cannot initialize a pointer type struct "
+                                "variable with a struct literal.");
   std::optional<DeclLookupResult> lookup_res =
       lookup_decl(type->name, &(*type));
   if (!lookup_res)
@@ -1003,28 +1038,28 @@ Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
   std::vector<ResolvedFieldInitializer> resolved_field_initializers{};
   bool errors = false;
   for (auto &&field_init : lit.field_initializers) {
-    std::optional<Type> inner_struct_type = std::nullopt;
+    std::optional<Type> inner_member_type = std::nullopt;
     if (!field_init.first.empty()) {
       int decl_member_index = 0;
       for (auto &&struct_member : struct_decl->members) {
         // compare field names
         if (struct_member.second == field_init.first) {
           member_index = decl_member_index;
-          inner_struct_type = struct_member.first;
+          inner_member_type = struct_member.first;
           break;
         }
         ++decl_member_index;
       }
     } else {
       auto &decl_member = struct_decl->members[member_index];
-      inner_struct_type = decl_member.first;
+      inner_member_type = decl_member.first;
     }
     std::unique_ptr<ResolvedExpr> expr;
     if (const auto *inner_struct_lit =
             dynamic_cast<const StructLiteralExpr *>(field_init.second.get())) {
-      expr = resolve_struct_literal_expr(*inner_struct_lit, *inner_struct_type);
+      expr = resolve_struct_literal_expr(*inner_struct_lit, *inner_member_type);
     } else {
-      expr = resolve_expr(*field_init.second);
+      expr = resolve_expr(*field_init.second, &(*inner_member_type));
     }
     if (!expr) {
       errors = true;
@@ -1109,13 +1144,22 @@ Sema::resolve_call_expr(const CallExpr &call) {
         resolve_expr(*call.args[i], &resolved_func_decl->params[i]->type);
     if (!resolved_arg)
       return nullptr;
-    if (resolved_arg->type.kind != resolved_func_decl->params[i]->type.kind) {
+    Type resolved_type = resolved_arg->type;
+    if (const auto *member_access =
+            dynamic_cast<const ResolvedStructMemberAccess *>(
+                resolved_arg.get())) {
+      resolved_type = member_access->type;
+    }
+    if (resolved_type.kind != resolved_func_decl->params[i]->type.kind) {
       if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
                          m_Cee)) {
-        return report(resolved_arg->location,
-                      "unexpected type '" + resolved_arg->type.name +
-                          "', expected '" +
-                          resolved_func_decl->params[i]->type.name + "'.");
+        return report(
+            resolved_arg->location,
+            "unexpected type '" + resolved_arg->type.name + "', expected '" +
+                resolved_func_decl->params[i]->type.name +
+                (resolved_func_decl->params[i]->type.pointer_depth > 0 ? "*"
+                                                                       : "") +
+                "'.");
       }
     }
     resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
@@ -1140,11 +1184,11 @@ Sema::resolve_assignment(const Assignment &assignment) {
     if (var_decl->is_const)
       return report(lhs->location, "trying to assign to const variable.");
   }
-  Type* type = nullptr;
-  if(auto* member_access = dynamic_cast<ResolvedStructMemberAccess*>(lhs.get()))
+  Type *type = nullptr;
+  if (auto *member_access =
+          dynamic_cast<ResolvedStructMemberAccess *>(lhs.get()))
     type = &member_access->type;
-  std::unique_ptr<ResolvedExpr> rhs =
-      resolve_expr(*assignment.expr, type);
+  std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr, type);
   if (!rhs)
     return nullptr;
   if (lhs->type.kind != rhs->type.kind) {

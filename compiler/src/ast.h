@@ -22,7 +22,6 @@ struct Type {
     i16,
     i32,
     i64,
-    Pointer,
     f32,
     f64,
     Custom,
@@ -37,32 +36,59 @@ struct Type {
   };
   Kind kind;
   std::string name;
+  uint pointer_depth;
 
   Type(const Type &) = default;
   Type &operator=(const Type &) = default;
   Type(Type &&) noexcept = default;
   Type &operator=(Type &&) noexcept = default;
 
-  static Type builtin_void() { return {Kind::Void, "void"}; }
-  static Type builtin_pointer() { return {Kind::Pointer, "*"}; }
-  static Type builtin_i8() { return {Kind::i8, "i8"}; }
-  static Type builtin_i16() { return {Kind::i16, "i16"}; }
-  static Type builtin_i32() { return {Kind::i32, "i32"}; }
-  static Type builtin_i64() { return {Kind::i64, "i64"}; }
-  static Type builtin_u8() { return {Kind::u8, "u8"}; }
-  static Type builtin_u16() { return {Kind::u16, "u16"}; }
-  static Type builtin_u32() { return {Kind::u32, "u32"}; }
-  static Type builtin_u64() { return {Kind::u64, "u64"}; }
-  static Type builtin_f32() { return {Kind::f32, "f32"}; }
-  static Type builtin_f64() { return {Kind::f64, "f64"}; }
-  static Type builtin_bool() { return {Kind::Bool, "bool"}; }
-  static Type custom(std::string_view name) { return {Kind::Custom, name}; }
+  static Type builtin_void(uint pointer_depth) {
+    return {Kind::Void, "void", pointer_depth};
+  }
+  static Type builtin_i8(uint pointer_depth) {
+    return {Kind::i8, "i8", pointer_depth};
+  }
+  static Type builtin_i16(uint pointer_depth) {
+    return {Kind::i16, "i16", pointer_depth};
+  }
+  static Type builtin_i32(uint pointer_depth) {
+    return {Kind::i32, "i32", pointer_depth};
+  }
+  static Type builtin_i64(uint pointer_depth) {
+    return {Kind::i64, "i64", pointer_depth};
+  }
+  static Type builtin_u8(uint pointer_depth) {
+    return {Kind::u8, "u8", pointer_depth};
+  }
+  static Type builtin_u16(uint pointer_depth) {
+    return {Kind::u16, "u16", pointer_depth};
+  }
+  static Type builtin_u32(uint pointer_depth) {
+    return {Kind::u32, "u32", pointer_depth};
+  }
+  static Type builtin_u64(uint pointer_depth) {
+    return {Kind::u64, "u64", pointer_depth};
+  }
+  static Type builtin_f32(uint pointer_depth) {
+    return {Kind::f32, "f32", pointer_depth};
+  }
+  static Type builtin_f64(uint pointer_depth) {
+    return {Kind::f64, "f64", pointer_depth};
+  }
+  static Type builtin_bool(uint pointer_depth) {
+    return {Kind::Bool, "bool", pointer_depth};
+  }
+  static Type custom(std::string_view name, uint pointer_depth) {
+    return {Kind::Custom, name, pointer_depth};
+  }
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
   // static Type get_builtin_type(Kind kind);
 
 private:
-  Type(Kind kind, std::string_view name) : kind(kind), name(name){};
+  Type(Kind kind, std::string_view name, uint pointer_depth)
+      : kind(kind), name(name), pointer_depth(pointer_depth){};
 };
 
 #define DUMP_IMPL                                                              \
@@ -109,6 +135,11 @@ struct Stmt : public IDumpable {
 
 struct Expr : public Stmt {
   inline Expr(SourceLocation loc) : Stmt(loc) {}
+};
+
+struct NullExpr : public Expr {
+  inline NullExpr(SourceLocation loc) : Expr(loc) {}
+  DUMP_IMPL
 };
 
 struct VarDecl : public Decl {
@@ -367,7 +398,8 @@ struct ResolvedVarDecl : public ResolvedDecl {
   bool is_const;
   bool is_global;
   inline ResolvedVarDecl(SourceLocation loc, std::string id, Type type,
-                         std::unique_ptr<ResolvedExpr> init, bool is_const, bool is_global = false)
+                         std::unique_ptr<ResolvedExpr> init, bool is_const,
+                         bool is_global = false)
       : ResolvedDecl(loc, id, std::move(type)), initializer(std::move(init)),
         is_const(is_const), is_global(is_global) {}
 
@@ -514,6 +546,14 @@ struct ResolvedDeclRefExpr : public ResolvedExpr {
   DUMP_IMPL
 };
 
+struct ResolvedNullExpr : public ResolvedExpr {
+  inline ResolvedNullExpr(SourceLocation loc, Type type)
+      : ResolvedExpr(loc, type) {
+    type.pointer_depth = 1;
+  }
+  DUMP_IMPL
+};
+
 struct ResolvedCallExpr : public ResolvedExpr {
   const ResolvedFuncDecl *func_decl;
   std::vector<std::unique_ptr<ResolvedExpr>> args;
@@ -539,13 +579,12 @@ struct InnerMemberAccess : public IDumpable {
 };
 
 struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
-  Type type;
   std::unique_ptr<InnerMemberAccess> inner_member_access;
 
   inline ResolvedStructMemberAccess(
-      SourceLocation loc, Type type, const ResolvedDecl *decl,
+      SourceLocation loc, const ResolvedDecl *decl,
       std::unique_ptr<InnerMemberAccess> inner_access)
-      : ResolvedDeclRefExpr(loc, decl), type(type),
+      : ResolvedDeclRefExpr(loc, decl),
         inner_member_access(std::move(inner_access)) {}
 
   DUMP_IMPL
