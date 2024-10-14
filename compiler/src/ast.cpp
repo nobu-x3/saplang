@@ -242,6 +242,16 @@ void BinaryOperator::dump_to_stream(std::stringstream &stream,
   rhs->dump_to_stream(stream, indent_level + 1);
 }
 
+void ExplicitCast::dump_to_stream(std::stringstream &stream,
+                                  size_t indent_level) const {
+  stream << indent(indent_level) << "ExplicitCast: ";
+  for (uint i = 0; i < type.pointer_depth; ++i) {
+    stream << "ptr ";
+  }
+  stream << type.name << "\n";
+  rhs->dump_to_stream(stream, indent_level + 1);
+}
+
 void UnaryOperator::dump_to_stream(std::stringstream &stream,
                                    size_t indent_level) const {
   stream << indent(indent_level) << "UnaryOperator: '";

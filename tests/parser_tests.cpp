@@ -1243,3 +1243,43 @@ var i32 test2 = *test1;
   CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '*'");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test1");
 }
+
+TEST_CASE("Explicit casting", "[parser]") {
+  TEST_SETUP(R"(
+struct TestType1 { i32 a; }
+struct TestType2 { i32 a; }
+fn void foo() {
+    var i32 test = 0;
+    var i64 test1 = (i64)test;
+    var i16 test2 = (i16)test;
+    var i64* ptest3 = (i64*)&test;
+    var TestType1 tt1 = .{0};
+    var TestType2* ptt2 = (TestType2*)&tt1;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 9;
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test1:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ExplicitCast: i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test2:i16");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ExplicitCast: i16");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: ptest3:ptr i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ExplicitCast: ptr i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: tt1:TestType1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: ptt2:ptr TestType2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ExplicitCast: ptr TestType2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: tt1");
+}

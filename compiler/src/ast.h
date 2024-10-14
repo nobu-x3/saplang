@@ -210,6 +210,14 @@ struct UnaryOperator : public Expr {
   DUMP_IMPL
 };
 
+struct ExplicitCast : public Expr {
+  Type type;
+  std::unique_ptr<Expr> rhs;
+  inline ExplicitCast(SourceLocation loc, Type type, std::unique_ptr<Expr> rhs)
+      : Expr(loc), type(type), rhs(std::move(rhs)) {}
+  DUMP_IMPL
+};
+
 struct DeclRefExpr : public Expr {
   std::string id;
   inline DeclRefExpr(SourceLocation loc, std::string id)
