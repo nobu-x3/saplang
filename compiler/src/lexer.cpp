@@ -17,6 +17,14 @@ bool is_alphanum(char c) { return is_alpha(c) || is_num(c); }
 
 Lexer::Lexer(const SourceFile &source) : m_Source(&source) {}
 
+Token Lexer::get_prev_token() {
+  char curr_char = go_back_char();
+  curr_char = go_back_char();
+  while (!is_space(curr_char))
+    curr_char = go_back_char();
+  return get_next_token();
+}
+
 Token Lexer::get_next_token() {
   char curr_char = eat_next_char();
   while (is_space(curr_char))
@@ -109,5 +117,19 @@ char Lexer::eat_next_char() {
     m_Column = 0;
   }
   return m_Source->buffer[m_Idx++];
+}
+
+char Lexer::go_back_char() {
+  --m_Column;
+  if (m_Column <= 0) {
+    --m_Line;
+    for (int i = 0; i < m_Line; ++i) {
+      int col = 0;
+      while (m_Source->buffer[col] != '\n')
+        ++col;
+      m_Column = col;
+    }
+  }
+  return m_Source->buffer[m_Idx--];
 }
 } // namespace saplang
