@@ -562,6 +562,16 @@ struct ResolvedNullExpr : public ResolvedExpr {
   DUMP_IMPL
 };
 
+struct ResolvedExplicitCast : public ResolvedExpr {
+  enum class CastType { Nop, Extend, Truncate, Ptr, IntToPtr, PtrToInt, IntToFloat, FloatToInt };
+  CastType cast_type;
+  std::unique_ptr<ResolvedExpr> rhs;
+  inline ResolvedExplicitCast(SourceLocation loc, Type type, CastType cast_type,
+                              std::unique_ptr<ResolvedExpr> rhs)
+      : ResolvedExpr(loc, type), cast_type(cast_type), rhs(std::move(rhs)) {}
+  DUMP_IMPL
+};
+
 struct ResolvedCallExpr : public ResolvedExpr {
   const ResolvedFuncDecl *func_decl;
   std::vector<std::unique_ptr<ResolvedExpr>> args;

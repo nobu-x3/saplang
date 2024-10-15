@@ -398,6 +398,44 @@ void ResolvedDeclRefExpr::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void ResolvedExplicitCast::dump_to_stream(std::stringstream &stream,
+                                          size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedExplicitCast: ";
+  for (uint i = 0; i < type.pointer_depth; ++i) {
+    stream << "ptr ";
+  }
+  stream << type.name << "\n";
+  std::string cast_type_name;
+  switch (cast_type) {
+  case ResolvedExplicitCast::CastType::Nop:
+    cast_type_name = "Nop";
+    break;
+  case ResolvedExplicitCast::CastType::Extend:
+    cast_type_name = "Extend";
+    break;
+  case ResolvedExplicitCast::CastType::Truncate:
+    cast_type_name = "Truncate";
+    break;
+  case ResolvedExplicitCast::CastType::Ptr:
+    cast_type_name = "Ptr";
+    break;
+  case ResolvedExplicitCast::CastType::IntToPtr:
+    cast_type_name = "IntToPtr";
+    break;
+  case ResolvedExplicitCast::CastType::PtrToInt:
+    cast_type_name = "PtrToInt";
+    break;
+  case ResolvedExplicitCast::CastType::FloatToInt:
+    cast_type_name = "FloatToInt";
+    break;
+  case ResolvedExplicitCast::CastType::IntToFloat:
+    cast_type_name = "IntToFloat";
+    break;
+  }
+  stream << indent(indent_level + 1) << "CastType: " << cast_type_name << '\n';
+  rhs->dump_to_stream(stream, indent_level + 1);
+}
+
 void ResolvedCallExpr::dump_to_stream(std::stringstream &stream,
                                       size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedCallExpr: @(" << func_decl << ") "

@@ -1371,4 +1371,121 @@ fn i32 main() {
   REQUIRE(lines_it->find(") ppa:") != std::string::npos);
 }
 
+TEST_CASE("Explicit casting correct", "[sema]") {
+  TEST_SETUP(R"(
+struct Type1 {
+  i32 a;
+}
+struct Type2 {
+  i32 a;
+}
+fn i32 main() {
+  var i32 a = 69;
+  var Type1 t = .{a};
+  var Type2* t2 = (Type2*)&t;
+  var i64 long = (i64)a;
+  var i8 short = (i8)a;
+  var Type1* t3 = (Type1*)a;
+  var i32 ptr_addr = (i32)t3;
+  var i32 nop = (i32)a;
+  var f64 f = (f64)a;
+  a = (i32)f;
+  return a;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 6;
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") a:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(69)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") t:Type1") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: Type1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") t2:ptr Type2") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: ptr Type2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CastType: Ptr");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") t:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") long:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CastType: Extend");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") short:i8") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: i8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CastType: Truncate");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") t3:ptr Type1") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: ptr Type1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CastType: IntToPtr");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") ptr_addr:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CastType: PtrToInt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") t3:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") nop:i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CastType: Nop");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") f:f64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: f64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CastType: IntToFloat");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CastType: FloatToInt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") f:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") a:") != std::string::npos);
+}
+
+TEST_CASE("Explicit casting incorrect", "[sema]") {
+  TEST_SETUP(R"(
+struct Type1 {
+  i32 a;
+}
+struct Type2 {
+  i32 a;
+}
+fn i32 main() {
+  var i32 a = 69;
+  var Type1 t = .{a};
+  var Type2 t2 = (Type2)t;
+  var Type2* t2 = (Type2*)t;
+  return a;
+}
+    )");
+  REQUIRE(error_stream.str() == "sema_test:11:16 error: expected expression.\nsema_test:12:26 error: pointer depths must me equal.\n");
+  REQUIRE(output_buffer.str() == "");
+}
 // @TODO: global and local redeclaration
