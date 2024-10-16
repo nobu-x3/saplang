@@ -342,10 +342,9 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 
 // <primaryExpression>
 // ::= <numberLiteral>
-// | <declRefExpr>
+// | <explicitCast> <declRefExpr>
 // | <callExpr>
 // | '(' <expr> ')'
-// | <explicitCast>
 // | <memberAccess>
 // | <nullExpr>
 //
@@ -353,6 +352,8 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // ::= <integer>
 // | <real>
 //
+// <explicitCast>
+// ::= '(' <identifier> ')'
 //
 // <declRefExpr>
 // ::= <identifier>

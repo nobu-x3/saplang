@@ -50,6 +50,8 @@ private:
 
   llvm::Value *gen_binary_op(const ResolvedBinaryOperator &op);
 
+  llvm::Value* gen_explicit_cast(const ResolvedExplicitCastExpr& cast);
+
   std::pair<llvm::Value *, Type> gen_unary_op(const ResolvedUnaryOperator &op);
 
   std::pair<llvm::Value *, Type>

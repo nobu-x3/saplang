@@ -10,20 +10,6 @@
 
 namespace saplang {
 
-std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
-    {Type::Kind::Bool, sizeof(bool)},
-    {Type::Kind::u8, sizeof(char)},
-    {Type::Kind::i8, sizeof(char)},
-    {Type::Kind::u16, sizeof(std::uint16_t)},
-    {Type::Kind::i16, sizeof(std::int16_t)},
-    {Type::Kind::u32, sizeof(std::uint32_t)},
-    {Type::Kind::i32, sizeof(std::int32_t)},
-    {Type::Kind::u64, sizeof(std::uint64_t)},
-    {Type::Kind::i64, sizeof(std::int64_t)},
-    {Type::Kind::f32, sizeof(float)},
-    {Type::Kind::f64, sizeof(double)},
-};
-
 void apply_unary_op_to_num_literal(ResolvedUnaryOperator *unop) {
   // @TODO: implement call exprs too
   auto *numlit = dynamic_cast<ResolvedNumberLiteral *>(unop->rhs.get());
@@ -312,10 +298,9 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
 
 bool can_be_cast(Type::Kind cast_from, Type::Kind cast_to) {
   return cast_to != Type::Kind::Void && cast_from != Type::Kind::Void &&
-         g_AssociatedNumberLiteralSizes.count(cast_from) &&
-         g_AssociatedNumberLiteralSizes.count(cast_to) &&
-         g_AssociatedNumberLiteralSizes[cast_from] <=
-             g_AssociatedNumberLiteralSizes[cast_to];
+         does_type_have_associated_size(cast_from) &&
+         does_type_have_associated_size(cast_to) &&
+         get_size(cast_from) <= get_size(cast_to);
 }
 
 bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
@@ -790,7 +775,7 @@ Sema::resolve_unary_operator(const UnaryOperator &op) {
       op.location, std::move(resolved_rhs), op.op);
 }
 
-std::unique_ptr<ResolvedExplicitCast>
+std::unique_ptr<ResolvedExplicitCastExpr>
 Sema::resolve_explicit_cast(const ExplicitCast &cast) {
   std::optional<Type> lhs_type = resolve_type(cast.type);
   if (!lhs_type)
@@ -799,8 +784,8 @@ Sema::resolve_explicit_cast(const ExplicitCast &cast) {
   if (!rhs)
     return report(cast.rhs->location, "cannot cast expression.");
   /* enum class CastType {  Extend, Truncate,  IntToFloat}; */
-  ResolvedExplicitCast::CastType cast_type =
-      ResolvedExplicitCast::CastType::Nop;
+  ResolvedExplicitCastExpr::CastType cast_type =
+      ResolvedExplicitCastExpr::CastType::Nop;
   if (lhs_type->kind == Type::Kind::Custom &&
       rhs->type.kind == Type::Kind::Custom) {
     if (lhs_type->pointer_depth < 1)
@@ -809,7 +794,7 @@ Sema::resolve_explicit_cast(const ExplicitCast &cast) {
           "cannot cast custom types, must cast custom type pointers.");
     if (lhs_type->pointer_depth != rhs->type.pointer_depth)
       return report(cast.location, "pointer depths must me equal.");
-    cast_type = ResolvedExplicitCast::CastType::Ptr;
+    cast_type = ResolvedExplicitCastExpr::CastType::Ptr;
   } else if (lhs_type->pointer_depth > 0) {
     if ((rhs->type.kind > Type::Kind::INTEGERS_END ||
          rhs->type.kind < Type::Kind::INTEGERS_START) &&
@@ -819,9 +804,9 @@ Sema::resolve_explicit_cast(const ExplicitCast &cast) {
     if (rhs->type.kind <= Type::Kind::INTEGERS_END &&
         rhs->type.kind >= Type::Kind::INTEGERS_START &&
         !rhs->type.pointer_depth)
-      cast_type = ResolvedExplicitCast::CastType::IntToPtr;
+      cast_type = ResolvedExplicitCastExpr::CastType::IntToPtr;
     if (rhs->type.pointer_depth == lhs_type->pointer_depth)
-      cast_type = ResolvedExplicitCast::CastType::Ptr;
+      cast_type = ResolvedExplicitCastExpr::CastType::Ptr;
   } else if (!lhs_type->pointer_depth) {
     if (rhs->type.kind == Type::Kind::Custom) {
       if (!rhs->type.pointer_depth)
@@ -832,39 +817,35 @@ Sema::resolve_explicit_cast(const ExplicitCast &cast) {
         return report(cast.location,
                       "cannot cast operand of type " + rhs->type.name +
                           " where arithmetic or pointer type is required.");
-      cast_type = ResolvedExplicitCast::CastType::PtrToInt;
+      cast_type = ResolvedExplicitCastExpr::CastType::PtrToInt;
     } else if (rhs->type.kind >= Type::Kind::FLOATS_START &&
                rhs->type.kind <= Type::Kind::FLOATS_END) {
       if (lhs_type->kind >= Type::Kind::INTEGERS_START &&
           lhs_type->kind <= Type::Kind::INTEGERS_END)
-        cast_type = ResolvedExplicitCast::CastType::FloatToInt;
+        cast_type = ResolvedExplicitCastExpr::CastType::FloatToInt;
       if (lhs_type->kind >= Type::Kind::FLOATS_START &&
           lhs_type->kind <= Type::Kind::FLOATS_END) {
-        if (g_AssociatedNumberLiteralSizes[lhs_type->kind] >
-            g_AssociatedNumberLiteralSizes[rhs->type.kind])
-          cast_type = ResolvedExplicitCast::CastType::Extend;
-        else if (g_AssociatedNumberLiteralSizes[lhs_type->kind] <
-                 g_AssociatedNumberLiteralSizes[rhs->type.kind])
-          cast_type = ResolvedExplicitCast::CastType::Truncate;
+        if (get_size(lhs_type->kind) > get_size(rhs->type.kind))
+          cast_type = ResolvedExplicitCastExpr::CastType::Extend;
+        else if (get_size(lhs_type->kind) < get_size(rhs->type.kind))
+          cast_type = ResolvedExplicitCastExpr::CastType::Truncate;
       }
     } else if (rhs->type.kind >= Type::Kind::INTEGERS_START &&
                rhs->type.kind <= Type::Kind::INTEGERS_END) {
       if (lhs_type->kind >= Type::Kind::FLOATS_START &&
           lhs_type->kind <= Type::Kind::FLOATS_END)
-        cast_type = ResolvedExplicitCast::CastType::IntToFloat;
+        cast_type = ResolvedExplicitCastExpr::CastType::IntToFloat;
       if (lhs_type->kind >= Type::Kind::INTEGERS_START &&
           lhs_type->kind <= Type::Kind::INTEGERS_END) {
-        if (g_AssociatedNumberLiteralSizes[lhs_type->kind] >
-            g_AssociatedNumberLiteralSizes[rhs->type.kind])
-          cast_type = ResolvedExplicitCast::CastType::Extend;
-        else if (g_AssociatedNumberLiteralSizes[lhs_type->kind] <
-                 g_AssociatedNumberLiteralSizes[rhs->type.kind])
-          cast_type = ResolvedExplicitCast::CastType::Truncate;
+        if (get_size(lhs_type->kind) > get_size(rhs->type.kind))
+          cast_type = ResolvedExplicitCastExpr::CastType::Extend;
+        else if (get_size(lhs_type->kind) < get_size(rhs->type.kind))
+          cast_type = ResolvedExplicitCastExpr::CastType::Truncate;
       }
     }
   }
-  return std::make_unique<ResolvedExplicitCast>(cast.location, *lhs_type,
-                                                cast_type, std::move(rhs));
+  return std::make_unique<ResolvedExplicitCastExpr>(cast.location, *lhs_type,
+                                                    cast_type, std::move(rhs));
 }
 
 std::unique_ptr<ResolvedWhileStmt>

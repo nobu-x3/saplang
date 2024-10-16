@@ -422,6 +422,8 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
     llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
     return llvm::ConstantPointerNull::get(ptr_type);
   }
+  if (const auto *cast = dynamic_cast<const ResolvedExplicitCastExpr *>(&expr))
+    return gen_explicit_cast(*cast);
   llvm_unreachable("unknown expression");
   return nullptr;
 }
@@ -529,6 +531,75 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
     }
   }
   return last_gep;
+}
+
+llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast) {
+  llvm::Value *var = nullptr;
+  ResolvedExplicitCastExpr::CastType prev_cast_type =
+      ResolvedExplicitCastExpr::CastType::Nop;
+  const ResolvedDeclRefExpr *decl_ref_expr =
+      dynamic_cast<const ResolvedDeclRefExpr *>(cast.rhs.get());
+  if (!decl_ref_expr) {
+    if (const ResolvedUnaryOperator *unop =
+            dynamic_cast<const ResolvedUnaryOperator *>(cast.rhs.get())) {
+      decl_ref_expr =
+          dynamic_cast<const ResolvedDeclRefExpr *>(unop->rhs.get());
+    } else if (const auto *inner_cast =
+                   dynamic_cast<const ResolvedExplicitCastExpr *>(
+                       cast.rhs.get())) {
+      var = gen_explicit_cast(*inner_cast);
+      prev_cast_type = inner_cast->cast_type;
+    }
+  }
+  var = decl_ref_expr ? m_Declarations[decl_ref_expr->decl] : var;
+  if (!var)
+    return nullptr;
+  llvm::Type *type = gen_type(cast.type);
+  llvm::Type *rhs_type = gen_type(cast.rhs->type);
+  switch (cast.cast_type) {
+  case ResolvedExplicitCastExpr::CastType::IntToPtr: {
+    if (get_size(cast.rhs->type.kind) < platform_ptr_size()) {
+      llvm::Value *load = m_Builder.CreateLoad(rhs_type, var);
+      var = m_Builder.CreateSExt(load, gen_type(platform_ptr_type()),
+                                 "cast_sext");
+    }
+    return m_Builder.CreateIntToPtr(var, type, "cast_itp");
+  }
+  case ResolvedExplicitCastExpr::CastType::PtrToInt: {
+    var = m_Builder.CreateLoad(m_Builder.getPtrTy(), var);
+    return m_Builder.CreatePtrToInt(var, type, "cast_pti");
+  }
+  case ResolvedExplicitCastExpr::CastType::IntToFloat: {
+    llvm::Value *load = m_Builder.CreateLoad(rhs_type, var);
+    if (is_signed(decl_ref_expr->type.kind))
+      return m_Builder.CreateSIToFP(load, type, "cast_stf");
+    return m_Builder.CreateUIToFP(load, type, "cast_utf");
+  }
+  case ResolvedExplicitCastExpr::CastType::FloatToInt: {
+    llvm::Value *load = m_Builder.CreateLoad(rhs_type, var);
+    if (is_signed(cast.type.kind))
+      return m_Builder.CreateFPToSI(load, type, "cast_fts");
+    return m_Builder.CreateFPToUI(load, type, "cast_ftu");
+  }
+  case ResolvedExplicitCastExpr::CastType::Ptr:
+    return var;
+  case ResolvedExplicitCastExpr::CastType::Extend: {
+    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop)
+      var = m_Builder.CreateLoad(rhs_type, var);
+    if (is_float(cast.type.kind))
+      return m_Builder.CreateFPExt(var, type, "cast_fpext");
+    return m_Builder.CreateSExt(var, type, "cast_sext");
+  }
+  case ResolvedExplicitCastExpr::CastType::Truncate: {
+    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop)
+      var = m_Builder.CreateLoad(rhs_type, var);
+    if (is_float(cast.type.kind))
+      return m_Builder.CreateFPTrunc(var, type, "cast_fptrunc");
+    return m_Builder.CreateTrunc(var, type, "cast_trunc");
+  }
+  default:
+    return m_Builder.CreateLoad(type, var);
+  }
 }
 
 llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop) {

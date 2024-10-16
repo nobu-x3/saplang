@@ -2149,3 +2149,63 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%9 = load i32, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %9");
 }
+
+TEST_CASE("Explicit casting", "[codegen]") {
+  TEST_SETUP(R"(
+struct Type1 {
+  i32 a;
+}
+struct Type2 {
+  i32 a;
+}
+fn i32 main() {
+  var i32 a = 69;
+  var Type1 t = .{a};
+  var Type2* t2 = (Type2*)&t;
+  var i64 long = (i64)a;
+  var i8 short = (i8)a;
+  var i8 short_ptrcast = (i8)(i32)t2;
+  var Type1* t3 = (Type1*)a;
+  var i32 ptr_addr = (i32)t3;
+  var i32 nop = (i32)a;
+  var f64 f = (f64)a;
+  a = (i32)f;
+  return a;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 20;
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %t, ptr %t2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%cast_sext = sext i32 %2 to i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i64 %cast_sext, ptr %long, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%cast_trunc = trunc i32 %3 to i8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 %cast_trunc, ptr %short, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load ptr, ptr %t2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%cast_pti = ptrtoint ptr %4 to i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%cast_trunc1 = trunc i32 %cast_pti to i8");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "store i8 %cast_trunc1, ptr %short_ptrcast, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%5 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%cast_sext2 = sext i32 %5 to i64");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "%cast_itp = inttoptr i64 %cast_sext2 to ptr");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %cast_itp, ptr %t3, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%6 = load ptr, ptr %t3, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%cast_pti3 = ptrtoint ptr %6 to i32");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "store i32 %cast_pti3, ptr %ptr_addr, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%7 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %7, ptr %nop, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%8 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%cast_stf = sitofp i32 %8 to double");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store double %cast_stf, ptr %f, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%9 = load double, ptr %f, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%cast_fts = fptosi double %9 to i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %cast_fts, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%10 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %10, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+}

@@ -32,6 +32,34 @@ namespace saplang {
 //   return s_TypeMap[kind];
 // }
 
+std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
+    {Type::Kind::Bool, sizeof(bool)},
+    {Type::Kind::u8, sizeof(char)},
+    {Type::Kind::i8, sizeof(char)},
+    {Type::Kind::u16, sizeof(std::uint16_t)},
+    {Type::Kind::i16, sizeof(std::int16_t)},
+    {Type::Kind::u32, sizeof(std::uint32_t)},
+    {Type::Kind::i32, sizeof(std::int32_t)},
+    {Type::Kind::u64, sizeof(std::uint64_t)},
+    {Type::Kind::i64, sizeof(std::int64_t)},
+    {Type::Kind::f32, sizeof(float)},
+    {Type::Kind::f64, sizeof(double)},
+};
+
+size_t get_size(Type::Kind kind) {
+  return g_AssociatedNumberLiteralSizes[kind];
+}
+
+bool does_type_have_associated_size(Type::Kind kind) {
+  return g_AssociatedNumberLiteralSizes.count(kind);
+}
+
+Type platform_ptr_type() { return Type::builtin_i64(0); }
+
+size_t platform_ptr_size() {
+  return g_AssociatedNumberLiteralSizes[Type::Kind::i64];
+}
+
 void dump_constant(std::stringstream &stream, size_t indent_level, Value value,
                    Type::Kind kind) {
   switch (kind) {
@@ -398,8 +426,8 @@ void ResolvedDeclRefExpr::dump_to_stream(std::stringstream &stream,
   }
 }
 
-void ResolvedExplicitCast::dump_to_stream(std::stringstream &stream,
-                                          size_t indent_level) const {
+void ResolvedExplicitCastExpr::dump_to_stream(std::stringstream &stream,
+                                              size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedExplicitCast: ";
   for (uint i = 0; i < type.pointer_depth; ++i) {
     stream << "ptr ";
@@ -407,28 +435,28 @@ void ResolvedExplicitCast::dump_to_stream(std::stringstream &stream,
   stream << type.name << "\n";
   std::string cast_type_name;
   switch (cast_type) {
-  case ResolvedExplicitCast::CastType::Nop:
+  case ResolvedExplicitCastExpr::CastType::Nop:
     cast_type_name = "Nop";
     break;
-  case ResolvedExplicitCast::CastType::Extend:
+  case ResolvedExplicitCastExpr::CastType::Extend:
     cast_type_name = "Extend";
     break;
-  case ResolvedExplicitCast::CastType::Truncate:
+  case ResolvedExplicitCastExpr::CastType::Truncate:
     cast_type_name = "Truncate";
     break;
-  case ResolvedExplicitCast::CastType::Ptr:
+  case ResolvedExplicitCastExpr::CastType::Ptr:
     cast_type_name = "Ptr";
     break;
-  case ResolvedExplicitCast::CastType::IntToPtr:
+  case ResolvedExplicitCastExpr::CastType::IntToPtr:
     cast_type_name = "IntToPtr";
     break;
-  case ResolvedExplicitCast::CastType::PtrToInt:
+  case ResolvedExplicitCastExpr::CastType::PtrToInt:
     cast_type_name = "PtrToInt";
     break;
-  case ResolvedExplicitCast::CastType::FloatToInt:
+  case ResolvedExplicitCastExpr::CastType::FloatToInt:
     cast_type_name = "FloatToInt";
     break;
-  case ResolvedExplicitCast::CastType::IntToFloat:
+  case ResolvedExplicitCastExpr::CastType::IntToFloat:
     cast_type_name = "IntToFloat";
     break;
   }

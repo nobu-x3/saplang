@@ -59,7 +59,7 @@ private:
   std::unique_ptr<ResolvedUnaryOperator>
   resolve_unary_operator(const UnaryOperator &op);
 
-  std::unique_ptr<ResolvedExplicitCast>
+  std::unique_ptr<ResolvedExplicitCastExpr>
   resolve_explicit_cast(const ExplicitCast &cast);
 
   std::unique_ptr<ResolvedStructLiteralExpr>
