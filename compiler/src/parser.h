@@ -21,6 +21,9 @@ public:
 
 private:
   inline void eat_next_token() { m_NextToken = m_Lexer->get_next_token(); }
+  inline void go_back_to_prev_token() {
+    m_NextToken = m_Lexer->get_prev_token();
+  }
 
   inline void sync_on(const std::vector<TokenKind> &kinds) {
     m_IsCompleteAst = false;
@@ -43,6 +46,7 @@ private:
   std::unique_ptr<ReturnStmt> parse_return_stmt();
   std::unique_ptr<Expr> parse_prefix_expr();
   std::unique_ptr<Expr> parse_primary_expr();
+  std::unique_ptr<ExplicitCast> parse_explicit_cast(Type type);
   std::unique_ptr<StructLiteralExpr> parse_struct_literal_expr();
   std::unique_ptr<Expr> parse_expr();
   std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs,
@@ -61,7 +65,8 @@ private:
   std::unique_ptr<ForStmt> parse_for_stmt();
 
   std::unique_ptr<DeclStmt> parse_var_decl_stmt(bool is_global = false);
-  std::unique_ptr<VarDecl> parse_var_decl(bool is_const, bool is_global = false);
+  std::unique_ptr<VarDecl> parse_var_decl(bool is_const,
+                                          bool is_global = false);
   std::unique_ptr<StructDecl> parse_struct_decl();
   std::unique_ptr<MemberAccess>
   parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,

@@ -91,6 +91,34 @@ private:
       : kind(kind), name(name), pointer_depth(pointer_depth){};
 };
 
+inline bool is_signed(Type::Kind kind) {
+  if (kind >= Type::Kind::SIGNED_INT_START &&
+      kind <= Type::Kind::SIGNED_INT_END)
+    return true;
+  return false;
+}
+
+inline bool is_unsigned(Type::Kind kind) {
+  if (kind >= Type::Kind::UNSIGNED_INT_START &&
+      kind <= Type::Kind::UNSIGNED_INT_END)
+    return true;
+  return false;
+}
+
+inline bool is_float(Type::Kind kind) {
+  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END)
+    return true;
+  return false;
+}
+
+size_t get_size(Type::Kind kind);
+
+bool does_type_have_associated_size(Type::Kind kind);
+
+size_t platform_ptr_size();
+
+Type platform_ptr_type();
+
 #define DUMP_IMPL                                                              \
 public:                                                                        \
   void dump_to_stream(std::stringstream &stream, size_t indent = 0)            \
@@ -207,6 +235,14 @@ struct UnaryOperator : public Expr {
   inline UnaryOperator(SourceLocation loc, std::unique_ptr<Expr> rhs,
                        TokenKind op)
       : Expr(loc), rhs(std::move(rhs)), op(op) {}
+  DUMP_IMPL
+};
+
+struct ExplicitCast : public Expr {
+  Type type;
+  std::unique_ptr<Expr> rhs;
+  inline ExplicitCast(SourceLocation loc, Type type, std::unique_ptr<Expr> rhs)
+      : Expr(loc), type(type), rhs(std::move(rhs)) {}
   DUMP_IMPL
 };
 
@@ -551,6 +587,26 @@ struct ResolvedNullExpr : public ResolvedExpr {
       : ResolvedExpr(loc, type) {
     type.pointer_depth = 1;
   }
+  DUMP_IMPL
+};
+
+struct ResolvedExplicitCastExpr : public ResolvedExpr {
+  enum class CastType {
+    Nop,
+    Extend,
+    Truncate,
+    Ptr,
+    IntToPtr,
+    PtrToInt,
+    IntToFloat,
+    FloatToInt
+  };
+  CastType cast_type;
+  std::unique_ptr<ResolvedExpr> rhs;
+  inline ResolvedExplicitCastExpr(SourceLocation loc, Type type,
+                                  CastType cast_type,
+                                  std::unique_ptr<ResolvedExpr> rhs)
+      : ResolvedExpr(loc, type), cast_type(cast_type), rhs(std::move(rhs)) {}
   DUMP_IMPL
 };
 

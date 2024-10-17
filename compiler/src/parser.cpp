@@ -342,7 +342,7 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 
 // <primaryExpression>
 // ::= <numberLiteral>
-// | <declRefExpr>
+// | <explicitCast> <declRefExpr>
 // | <callExpr>
 // | '(' <expr> ')'
 // | <memberAccess>
@@ -352,6 +352,8 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // ::= <integer>
 // | <real>
 //
+// <explicitCast>
+// ::= '(' <identifier> ')'
 //
 // <declRefExpr>
 // ::= <identifier>
@@ -369,9 +371,22 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // ::= 'null'
 std::unique_ptr<Expr> Parser::parse_primary_expr() {
   SourceLocation location = m_NextToken.location;
-  // @TODO: distinguish between casting and grouping... or maybe not here, idk
   if (m_NextToken.kind == TokenKind::Lparent) {
     eat_next_token(); // eat '('
+    if (m_NextToken.kind == TokenKind::Identifier) {
+      std::optional<Type> maybe_type = parse_type();
+      if (maybe_type) {
+        bool is_explicit_cast = true;
+        if (maybe_type->kind == Type::Kind::Custom &&
+            maybe_type->pointer_depth < 1)
+          is_explicit_cast = false;
+        if (is_explicit_cast) {
+          return parse_explicit_cast(*maybe_type);
+        }
+        go_back_to_prev_token(); // restore identifier
+      } else
+        go_back_to_prev_token(); // restore identifier
+    }
     auto expr = parse_expr();
     if (!expr)
       return nullptr;
@@ -434,6 +449,20 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     return std::move(struct_lit);
   }
   return report(location, "expected expression.");
+}
+
+std::unique_ptr<ExplicitCast> Parser::parse_explicit_cast(Type type) {
+  SourceLocation type_loc = m_NextToken.location;
+  if (type.kind == Type::Kind::Custom && type.pointer_depth < 1)
+    return report(type_loc, "can only cast to pointer to custom type.");
+  if (m_NextToken.kind != TokenKind::Rparent)
+    return report(m_NextToken.location,
+                  "expected ')' after explicit cast type.");
+  eat_next_token(); // eat ')'
+  std::unique_ptr<Expr> expr = parse_expr();
+  if (!expr)
+    return nullptr;
+  return std::make_unique<ExplicitCast>(type_loc, type, std::move(expr));
 }
 
 std::unique_ptr<MemberAccess>

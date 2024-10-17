@@ -218,26 +218,6 @@ unsigned long get_value(Value value, Type::Kind kind) {
   llvm_unreachable("unexpected value type.");
 }
 
-bool is_signed(Type::Kind kind) {
-  if (kind >= Type::Kind::SIGNED_INT_START &&
-      kind <= Type::Kind::SIGNED_INT_END)
-    return true;
-  return false;
-}
-
-bool is_unsigned(Type::Kind kind) {
-  if (kind >= Type::Kind::UNSIGNED_INT_START &&
-      kind <= Type::Kind::UNSIGNED_INT_END)
-    return true;
-  return false;
-}
-
-bool is_float(Type::Kind kind) {
-  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END)
-    return true;
-  return false;
-}
-
 ConstexprResult simple_signed_to_float(const Value &val, Type::Kind kind) {
   Type::Kind casted_float_kind;
   Value casted_float_value;

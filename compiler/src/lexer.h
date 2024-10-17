@@ -74,10 +74,12 @@ class Lexer {
 public:
   explicit Lexer(const SourceFile &source);
   Token get_next_token();
+  Token get_prev_token();
 
 private:
   char peek_next_char() const;
   char eat_next_char();
+  char go_back_char();
 
 private:
   const SourceFile *m_Source;
