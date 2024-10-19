@@ -10,7 +10,22 @@ namespace saplang {
 
 // @TODO: string literals
 
-struct Type {
+struct ArrayData {
+  uint dimension_count = 0;
+  std::vector<uint> dimensions{};
+};
+
+#define DUMP_IMPL                                                              \
+public:                                                                        \
+  void dump_to_stream(std::stringstream &stream, size_t indent = 0)            \
+      const override;                                                          \
+  inline void dump(size_t indent = 0) const override {                         \
+    std::stringstream stream{};                                                \
+    dump_to_stream(stream, indent);                                            \
+    std::cerr << stream.str();                                                 \
+  }
+
+struct Type : public IDumpable {
   enum class Kind {
     Void,
     Bool,
@@ -37,6 +52,7 @@ struct Type {
   Kind kind;
   std::string name;
   uint pointer_depth;
+  std::optional<ArrayData> array_data;
 
   Type(const Type &) = default;
   Type &operator=(const Type &) = default;
@@ -46,49 +62,78 @@ struct Type {
   static Type builtin_void(uint pointer_depth) {
     return {Kind::Void, "void", pointer_depth};
   }
-  static Type builtin_i8(uint pointer_depth) {
-    return {Kind::i8, "i8", pointer_depth};
+
+  static Type builtin_i8(uint pointer_depth,
+                         std::optional<ArrayData> array_data = {}) {
+    return {Kind::i8, "i8", pointer_depth, array_data};
   }
-  static Type builtin_i16(uint pointer_depth) {
-    return {Kind::i16, "i16", pointer_depth};
+
+  static Type builtin_i16(uint pointer_depth,
+                          std::optional<ArrayData> array_data = {}) {
+    return {Kind::i16, "i16", pointer_depth, std::move(array_data)};
   }
-  static Type builtin_i32(uint pointer_depth) {
-    return {Kind::i32, "i32", pointer_depth};
+
+  static Type builtin_i32(uint pointer_depth,
+                          std::optional<ArrayData> array_data = {}) {
+    return {Kind::i32, "i32", pointer_depth, std::move(array_data)};
   }
-  static Type builtin_i64(uint pointer_depth) {
-    return {Kind::i64, "i64", pointer_depth};
+
+  static Type builtin_i64(uint pointer_depth,
+                          std::optional<ArrayData> array_data = {}) {
+    return {Kind::i64, "i64", pointer_depth, std::move(array_data)};
   }
-  static Type builtin_u8(uint pointer_depth) {
-    return {Kind::u8, "u8", pointer_depth};
+
+  static Type builtin_u8(uint pointer_depth,
+                         std::optional<ArrayData> array_data = {}) {
+    return {Kind::u8, "u8", pointer_depth, std::move(array_data)};
   }
-  static Type builtin_u16(uint pointer_depth) {
-    return {Kind::u16, "u16", pointer_depth};
+
+  static Type builtin_u16(uint pointer_depth,
+                          std::optional<ArrayData> array_data = {}) {
+    return {Kind::u16, "u16", pointer_depth, std::move(array_data)};
   }
-  static Type builtin_u32(uint pointer_depth) {
-    return {Kind::u32, "u32", pointer_depth};
+
+  static Type builtin_u32(uint pointer_depth,
+                          std::optional<ArrayData> array_data = {}) {
+    return {Kind::u32, "u32", pointer_depth, std::move(array_data)};
   }
-  static Type builtin_u64(uint pointer_depth) {
-    return {Kind::u64, "u64", pointer_depth};
+
+  static Type builtin_u64(uint pointer_depth,
+                          std::optional<ArrayData> array_data = {}) {
+    return {Kind::u64, "u64", pointer_depth, std::move(array_data)};
   }
-  static Type builtin_f32(uint pointer_depth) {
-    return {Kind::f32, "f32", pointer_depth};
+
+  static Type builtin_f32(uint pointer_depth,
+                          std::optional<ArrayData> array_data = {}) {
+    return {Kind::f32, "f32", pointer_depth, std::move(array_data)};
   }
-  static Type builtin_f64(uint pointer_depth) {
-    return {Kind::f64, "f64", pointer_depth};
+
+  static Type builtin_f64(uint pointer_depth,
+                          std::optional<ArrayData> array_data = {}) {
+    return {Kind::f64, "f64", pointer_depth, std::move(array_data)};
   }
-  static Type builtin_bool(uint pointer_depth) {
-    return {Kind::Bool, "bool", pointer_depth};
+
+  static Type builtin_bool(uint pointer_depth,
+                           std::optional<ArrayData> array_data = {}) {
+    return {Kind::Bool, "bool", pointer_depth, std::move(array_data)};
   }
-  static Type custom(std::string_view name, uint pointer_depth) {
-    return {Kind::Custom, name, pointer_depth};
+
+  static Type custom(std::string name, uint pointer_depth,
+                     std::optional<ArrayData> array_data = {}) {
+    return {Kind::Custom, std::move(name), pointer_depth,
+            std::move(array_data)};
   }
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
   // static Type get_builtin_type(Kind kind);
 
+  // @NOTE: does not insert '\n' when done
+  DUMP_IMPL
 private:
-  Type(Kind kind, std::string_view name, uint pointer_depth)
-      : kind(kind), name(name), pointer_depth(pointer_depth){};
+  inline Type(Kind kind, std::string name, uint pointer_depth,
+              std::optional<ArrayData> array_data = std::nullopt)
+      : kind(kind), name(std::move(name)), pointer_depth(pointer_depth),
+        array_data(std::move(array_data)) {}
 };
 
 inline bool is_signed(Type::Kind kind) {
@@ -118,16 +163,6 @@ bool does_type_have_associated_size(Type::Kind kind);
 size_t platform_ptr_size();
 
 Type platform_ptr_type();
-
-#define DUMP_IMPL                                                              \
-public:                                                                        \
-  void dump_to_stream(std::stringstream &stream, size_t indent = 0)            \
-      const override;                                                          \
-  inline void dump(size_t indent = 0) const override {                         \
-    std::stringstream stream{};                                                \
-    dump_to_stream(stream, indent);                                            \
-    std::cerr << stream.str();                                                 \
-  }
 
 union Value {
   std::int8_t i8;

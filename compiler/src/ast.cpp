@@ -104,6 +104,20 @@ void dump_constant(std::stringstream &stream, size_t indent_level, Value value,
   }
 }
 
+void Type::dump_to_stream(std::stringstream &stream,
+                          size_t indent_level) const {
+  stream << indent(indent_level);
+  for (uint i = 0; i < pointer_depth; ++i) {
+    stream << "ptr ";
+  }
+  stream << name;
+  if (array_data) {
+    for (uint i = 0; i < array_data->dimension_count; ++i) {
+      stream << "[" << array_data->dimensions[i] << "]";
+    }
+  }
+}
+
 void NullExpr::dump_to_stream(std::stringstream &stream,
                               size_t indent_level) const {
   stream << indent(indent_level) << "Null\n";
@@ -149,10 +163,8 @@ void IfStmt::dump_to_stream(std::stringstream &stream,
 void FunctionDecl::dump_to_stream(std::stringstream &stream,
                                   size_t indent_level) const {
   stream << indent(indent_level) << "FunctionDecl: " << id << ":";
-  for (uint i = 0; i < type.pointer_depth; ++i) {
-    stream << "ptr ";
-  }
-  stream << type.name << '\n';
+  type.dump_to_stream(stream);
+  stream << '\n';
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);
   }
@@ -172,10 +184,8 @@ void StructDecl::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "StructDecl: " << id << "\n";
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << "MemberField: ";
-    for (uint i = 0; i < type.pointer_depth; ++i) {
-      stream << "ptr ";
-    }
-    stream << type.name << "(" << name << ")\n";
+    type.dump_to_stream(stream);
+    stream << "(" << name << ")\n";
   }
 }
 
@@ -183,11 +193,8 @@ void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
   stream << indent(indent_level) << "VarDecl: " << id << ":"
          << (is_const ? "const " : "");
-
-  for (uint i = 0; i < type.pointer_depth; ++i) {
-    stream << "ptr ";
-  }
-  stream << type.name << "\n";
+  type.dump_to_stream(stream);
+  stream << '\n';
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -273,10 +280,8 @@ void BinaryOperator::dump_to_stream(std::stringstream &stream,
 void ExplicitCast::dump_to_stream(std::stringstream &stream,
                                   size_t indent_level) const {
   stream << indent(indent_level) << "ExplicitCast: ";
-  for (uint i = 0; i < type.pointer_depth; ++i) {
-    stream << "ptr ";
-  }
-  stream << type.name << "\n";
+  type.dump_to_stream(stream);
+  stream << "\n";
   rhs->dump_to_stream(stream, indent_level + 1);
 }
 
@@ -322,10 +327,8 @@ void ParamDecl::dump_to_stream(std::stringstream &stream,
                                size_t indent_level) const {
   stream << indent(indent_level) << "ParamDecl: " << id << ":"
          << (is_const ? "const " : "");
-  for (uint i = 0; i < type.pointer_depth; ++i) {
-    stream << "ptr ";
-  }
-  stream << type.name << "\n";
+  type.dump_to_stream(stream);
+  stream << '\n';
 }
 
 void ResolvedBlock::dump_to_stream(std::stringstream &stream,
@@ -375,10 +378,8 @@ void ResolvedVarDecl::dump_to_stream(std::stringstream &stream,
                                      size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << id
          << ":" << (is_global ? "global " : "") << (is_const ? "const " : "");
-  for (uint i = 0; i < type.pointer_depth; ++i) {
-    stream << "ptr ";
-  }
-  stream << type.name << "\n";
+  type.dump_to_stream(stream);
+  stream << '\n';
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -390,10 +391,8 @@ void ResolvedStructDecl::dump_to_stream(std::stringstream &stream,
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << member_index
            << ". ResolvedMemberField: ";
-    for (uint i = 0; i < type.pointer_depth; ++i) {
-      stream << "ptr ";
-    }
-    stream << type.name << "(" << name << ")\n";
+    type.dump_to_stream(stream);
+    stream << "(" << name << ")\n";
     ++member_index;
   }
 }
@@ -422,17 +421,15 @@ void ResolvedDeclRefExpr::dump_to_stream(std::stringstream &stream,
   if (auto resolved_constant_expr = get_constant_value()) {
     dump_constant(stream, indent_level, resolved_constant_expr->value,
                   resolved_constant_expr->kind);
-    stream << "\n";
+    stream << '\n';
   }
 }
 
 void ResolvedExplicitCastExpr::dump_to_stream(std::stringstream &stream,
                                               size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedExplicitCast: ";
-  for (uint i = 0; i < type.pointer_depth; ++i) {
-    stream << "ptr ";
-  }
-  stream << type.name << "\n";
+  type.dump_to_stream(stream);
+  stream << '\n';
   std::string cast_type_name;
   switch (cast_type) {
   case ResolvedExplicitCastExpr::CastType::Nop:
@@ -596,7 +593,7 @@ void ResolvedUnaryOperator::dump_to_stream(std::stringstream &stream,
   if (auto resolved_constant_expr = get_constant_value()) {
     dump_constant(stream, indent_level, resolved_constant_expr->value,
                   resolved_constant_expr->kind);
-    stream << "\n";
+    stream << '\n';
   }
   rhs->dump_to_stream(stream, indent_level + 1);
 }
@@ -605,16 +602,14 @@ void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream,
                                            size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedNumberLiteral:\n";
   dump_constant(stream, indent_level, value, type.kind);
-  stream << "\n";
+  stream << '\n';
 }
 
 void ResolvedStructLiteralExpr::dump_to_stream(std::stringstream &stream,
                                                size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedStructLiteralExpr: ";
-  for (uint i = 0; i < type.pointer_depth; ++i) {
-    stream << "ptr ";
-  }
-  stream << type.name << "\n";
+  type.dump_to_stream(stream);
+  stream << '\n';
   for (auto &&[name, expr] : field_initializers) {
     stream << indent(indent_level + 1) << "ResolvedFieldInitializer: " << name
            << "\n";
@@ -637,11 +632,8 @@ void InnerMemberAccess::dump_to_stream(std::stringstream &stream,
                                        size_t indent_level) const {
   stream << indent(indent_level) << "MemberIndex: " << member_index << "\n";
   stream << indent(indent_level) << "MemberID:";
-  for (uint i = 0; i < type.pointer_depth; ++i) {
-    stream << "ptr ";
-  }
-  stream << type.name << "(" << member_id << ")"
-         << "\n";
+  type.dump_to_stream(stream);
+  stream << "(" << member_id << ")" << '\n';
   if (inner_member_access)
     inner_member_access->dump_to_stream(stream, indent_level + 1);
 }
