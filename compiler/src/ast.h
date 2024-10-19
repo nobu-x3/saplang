@@ -125,7 +125,6 @@ struct Type : public IDumpable {
   }
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
-  // static Type get_builtin_type(Kind kind);
 
   // @NOTE: does not insert '\n' when done
   DUMP_IMPL
@@ -307,6 +306,15 @@ struct StructLiteralExpr : public Expr {
   inline StructLiteralExpr(SourceLocation loc,
                            std::vector<FieldInitializer> initializers)
       : Expr(loc), field_initializers(std::move(initializers)) {}
+
+  DUMP_IMPL
+};
+
+struct ArrayLiteralExpr : public Expr {
+  std::vector<std::unique_ptr<Expr>> element_initializers;
+  inline ArrayLiteralExpr(SourceLocation loc,
+                          std::vector<std::unique_ptr<Expr>> el_initializers)
+      : Expr(loc), element_initializers(std::move(el_initializers)) {}
 
   DUMP_IMPL
 };

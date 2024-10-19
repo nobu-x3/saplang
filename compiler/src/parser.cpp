@@ -348,6 +348,10 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // | '(' <expr> ')'
 // | <memberAccess>
 // | <nullExpr>
+// | <arrayInitializer>
+//
+// <arrayInitializer>
+// ::= '[' (<primaryExpression> (',')*)* ']'
 //
 // <numberLiteral>
 // ::= <integer>
@@ -449,6 +453,9 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     eat_next_token(); // eat '}'
     return std::move(struct_lit);
   }
+  if (m_NextToken.kind == TokenKind::Lbracket) {
+    return parse_array_literal_expr();
+  }
   return report(location, "expected expression.");
 }
 
@@ -534,6 +541,23 @@ std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {
   }
   return std::make_unique<StructLiteralExpr>(loc,
                                              std::move(field_initializers));
+}
+
+std::unique_ptr<ArrayLiteralExpr> Parser::parse_array_literal_expr() {
+  assert(m_NextToken.kind == TokenKind::Lbracket && "expected '['");
+  SourceLocation location = m_NextToken.location;
+  eat_next_token(); // eat '['
+  std::vector<std::unique_ptr<Expr>> expressions{};
+  while (m_NextToken.kind != TokenKind::Rbracket) {
+    auto expr = parse_expr();
+    if (!expr)
+      return nullptr;
+    expressions.emplace_back(std::move(expr));
+    if (m_NextToken.kind == TokenKind::Comma)
+      eat_next_token(); // eat ','
+  }
+  eat_next_token(); // eat ']'
+  return std::make_unique<ArrayLiteralExpr>(location, std::move(expressions));
 }
 
 // <argList>

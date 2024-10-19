@@ -48,6 +48,7 @@ private:
   std::unique_ptr<Expr> parse_primary_expr();
   std::unique_ptr<ExplicitCast> parse_explicit_cast(Type type);
   std::unique_ptr<StructLiteralExpr> parse_struct_literal_expr();
+  std::unique_ptr<ArrayLiteralExpr> parse_array_literal_expr();
   std::unique_ptr<Expr> parse_expr();
   std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs,
                                        int precedence);

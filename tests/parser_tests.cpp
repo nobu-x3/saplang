@@ -1303,3 +1303,49 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test3:TestStruct[8][10]");
 }
+
+TEST_CASE("Array declarations with initializers", "[parser]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn void foo() {
+    var i32[3] test = [0, 1, 2];
+    var i32[2][2] test2 = [[0, 1], [2, 3]];
+    var TestStruct[2][2] test3 = [[.{0}, .{1}], [.{2}, .{3}]];
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:i32[3]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test2:i32[2][2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test3:TestStruct[2][2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
+}
