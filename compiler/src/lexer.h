@@ -5,8 +5,9 @@
 #include <unordered_map>
 
 namespace saplang {
-constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':', ';', ',',
-                                       '+',  '-', '*', '<', '>', '!', '.', '&'};
+constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':',
+                                       ';',  ',', '+', '-', '*', '<',
+                                       '>',  '!', '.', '&', '[', ']'};
 
 enum class TokenKind : char {
   Unknown = -128,
@@ -51,7 +52,9 @@ enum class TokenKind : char {
   GreaterThan = single_char_tokens[12],
   Exclamation = single_char_tokens[13],
   Dot = single_char_tokens[14],
-  Amp = single_char_tokens[15]
+  Amp = single_char_tokens[15],
+  Lbracket = single_char_tokens[16],
+  Rbracket = single_char_tokens[17]
 };
 
 const std::unordered_map<std::string_view, TokenKind> keywords = {

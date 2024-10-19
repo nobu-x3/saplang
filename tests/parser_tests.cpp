@@ -1283,3 +1283,23 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: tt1");
 }
+
+TEST_CASE("Array declarations no initializer", "[parser]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn void foo() {
+    var i32[8] test;
+    var i32[8][9] test2;
+    var TestStruct[8][10] test3;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:i32[8]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test2:i32[8][9]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test3:TestStruct[8][10]");
+}

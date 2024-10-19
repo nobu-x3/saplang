@@ -1,5 +1,6 @@
 #include <cassert>
 #include <memory>
+#include <string>
 
 #include "ast.h"
 #include "lexer.h"
@@ -682,6 +683,7 @@ std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
 // <type>
 // ::= 'void' ('*')*
 // |   <identifier> ('*')*
+// |   <identifier>'[' (<integer>)* ']'
 std::optional<Type> Parser::parse_type() {
   Token token = m_NextToken;
   if (token.kind == TokenKind::KwVoid) {
@@ -696,31 +698,50 @@ std::optional<Type> Parser::parse_type() {
       eat_next_token();
       ++ptr_depth;
     }
+    std::optional<ArrayData> maybe_array_data{std::nullopt};
+    if (m_NextToken.kind == TokenKind::Lbracket) {
+      ArrayData array_data;
+      while (m_NextToken.kind == TokenKind::Lbracket) {
+        eat_next_token(); // eat '['
+        ++array_data.dimension_count;
+        if (m_NextToken.kind == TokenKind::Integer) {
+          array_data.dimensions.emplace_back(std::stoi(*m_NextToken.value));
+          eat_next_token(); // eat array len
+        }
+        if (m_NextToken.kind != TokenKind::Rbracket) {
+          report(m_NextToken.location, "expected '].");
+          return std::nullopt;
+        }
+        eat_next_token(); // eat ']'
+      }
+      maybe_array_data = std::move(array_data);
+    }
     assert(id_token.value.has_value());
     if (*id_token.value == "i8") {
-      return Type::builtin_i8(ptr_depth);
+      return Type::builtin_i8(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "i16") {
-      return Type::builtin_i16(ptr_depth);
+      return Type::builtin_i16(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "i32") {
-      return Type::builtin_i32(ptr_depth);
+      return Type::builtin_i32(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "i64") {
-      return Type::builtin_i64(ptr_depth);
+      return Type::builtin_i64(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "u8") {
-      return Type::builtin_u8(ptr_depth);
+      return Type::builtin_u8(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "u16") {
-      return Type::builtin_u16(ptr_depth);
+      return Type::builtin_u16(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "u32") {
-      return Type::builtin_u32(ptr_depth);
+      return Type::builtin_u32(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "u64") {
-      return Type::builtin_u64(ptr_depth);
+      return Type::builtin_u64(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "f32") {
-      return Type::builtin_f32(ptr_depth);
+      return Type::builtin_f32(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "f64") {
-      return Type::builtin_f64(ptr_depth);
+      return Type::builtin_f64(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "bool") {
-      return Type::builtin_bool(ptr_depth);
+      return Type::builtin_bool(ptr_depth, std::move(maybe_array_data));
     }
-    Type type = Type::custom(*id_token.value, ptr_depth);
+    Type type =
+        Type::custom(*id_token.value, ptr_depth, std::move(maybe_array_data));
     return type;
   }
   report(m_NextToken.location, "expected type specifier.");
