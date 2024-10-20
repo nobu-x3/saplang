@@ -450,6 +450,15 @@ struct ResolvedStructLiteralExpr : public ResolvedExpr {
   DUMP_IMPL
 };
 
+struct ResolvedArrayLiteralExpr : public ResolvedExpr {
+  std::vector<std::unique_ptr<ResolvedExpr>> expressions;
+  inline ResolvedArrayLiteralExpr(
+      SourceLocation loc, Type type,
+      std::vector<std::unique_ptr<ResolvedExpr>> exprs)
+      : ResolvedExpr(loc, type), expressions(std::move(exprs)) {}
+  DUMP_IMPL
+};
+
 struct ResolvedBlock : public IDumpable {
   SourceLocation location;
   std::vector<std::unique_ptr<ResolvedStmt>> statements;

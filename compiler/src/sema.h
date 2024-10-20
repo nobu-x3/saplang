@@ -65,6 +65,9 @@ private:
   std::unique_ptr<ResolvedStructLiteralExpr>
   resolve_struct_literal_expr(const StructLiteralExpr &lit, Type struct_type);
 
+  std::unique_ptr<ResolvedArrayLiteralExpr>
+  resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type);
+
   std::unique_ptr<ResolvedReturnStmt>
   resolve_return_stmt(const ReturnStmt &stmt);
 

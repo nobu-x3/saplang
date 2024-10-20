@@ -1,6 +1,7 @@
 #include "sema.h"
 
 #include <cassert>
+#include <memory>
 #include <unordered_map>
 
 #include "ast.h"
@@ -971,6 +972,9 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
     if (const auto *struct_literal =
             dynamic_cast<const StructLiteralExpr *>(&expr))
       return resolve_struct_literal_expr(*struct_literal, *type);
+    if (const auto *array_literal =
+            dynamic_cast<const ArrayLiteralExpr *>(&expr))
+      return resolve_array_literal_expr(*array_literal, *type);
     if (const auto *nullexpr = dynamic_cast<const NullExpr *>(&expr)) {
       return std::make_unique<ResolvedNullExpr>(nullexpr->location, *type);
     }
@@ -1164,6 +1168,28 @@ Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
     return nullptr;
   return std::make_unique<ResolvedStructLiteralExpr>(
       lit.location, *type, std::move(sorted_field_initializers));
+}
+
+std::unique_ptr<ResolvedArrayLiteralExpr>
+Sema::resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type) {
+  if (!array_type.array_data)
+    return report(lit.location,
+                  "trying to initialize a non-array type with array literal.");
+  std::vector<std::unique_ptr<ResolvedExpr>> expressions;
+  for (auto &expr : lit.element_initializers) {
+    Type type = array_type;
+    if (type.array_data->dimension_count > 0) {
+      type.array_data->dimensions.erase(type.array_data->dimensions.begin());
+      --type.array_data->dimension_count;
+    }
+    auto expression = resolve_expr(*expr, &type);
+    if (!expression)
+      return nullptr;
+    expression->set_constant_value(expression->get_constant_value());
+    expressions.emplace_back(std::move(expression));
+  }
+  return std::make_unique<ResolvedArrayLiteralExpr>(lit.location, array_type,
+                                                    std::move(expressions));
 }
 
 std::unique_ptr<ResolvedDeclRefExpr>

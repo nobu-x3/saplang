@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "utils.h"
 
 #include <cfloat>
 #include <climits>
@@ -627,6 +628,15 @@ void ResolvedStructLiteralExpr::dump_to_stream(std::stringstream &stream,
     }
     expr->dump_to_stream(stream, indent_level + 1);
   }
+}
+
+void ResolvedArrayLiteralExpr::dump_to_stream(std::stringstream &stream,
+                                              size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedArrayLiteralExpr: ";
+  type.dump_to_stream(stream);
+  stream << '\n';
+  for (auto &&expr : expressions)
+    expr->dump_to_stream(stream, indent_level + 1);
 }
 
 void ResolvedAssignment::dump_to_stream(std::stringstream &stream,

@@ -1488,4 +1488,97 @@ fn i32 main() {
   REQUIRE(error_stream.str() == "sema_test:11:16 error: expected expression.\nsema_test:12:26 error: pointer depths must me equal.\n");
   REQUIRE(output_buffer.str() == "");
 }
+
+
+TEST_CASE("Array declarations no initializer", "[sema]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn void foo() {
+    var i32[8] test;
+    var i32[8][9] test2;
+    var TestStruct[8][10] test3;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test:i32[8]") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test2:i32[8][9]") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test3:TestStruct[8][10]") != std::string::npos);
+}
+
+TEST_CASE("Array declarations with initializers", "[sema]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn void foo() {
+    var i32[3] test = [0, 1, 2];
+    var i32[3][2] test2 = [[0, 1], [2, 3], [4, 5]];
+    var TestStruct[2][2] test3 = [[.{0}, .{1}], [.{2}, .{3}]];
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test:i32[3]") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[3]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test2:i32[3][2]") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[3][2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test3:TestStruct[2][2]") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: TestStruct[2][2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: TestStruct[2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestStruct");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestStruct");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: TestStruct[2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestStruct");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: TestStruct");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(3)");
+}
+
+// @TODO: array pointer decay
+// @TODO: array element access
+// @TODO: slices
 // @TODO: global and local redeclaration
