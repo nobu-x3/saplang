@@ -13,6 +13,17 @@ namespace saplang {
 struct ArrayData {
   uint dimension_count = 0;
   std::vector<uint> dimensions{};
+
+  inline bool operator==(const ArrayData &other) const {
+    bool is_dim_count_same = dimension_count == other.dimension_count;
+    if (!is_dim_count_same)
+      return false;
+    for (uint i = 0; i < dimension_count; ++i) {
+      if (dimensions[i] != other.dimensions[i])
+        return false;
+    }
+    return true;
+  }
 };
 
 #define DUMP_IMPL                                                              \
@@ -52,6 +63,7 @@ struct Type : public IDumpable {
   Kind kind;
   std::string name;
   uint pointer_depth;
+  uint dereference_counts = 0;
   std::optional<ArrayData> array_data;
 
   Type(const Type &) = default;
@@ -134,6 +146,27 @@ private:
       : kind(kind), name(std::move(name)), pointer_depth(pointer_depth),
         array_data(std::move(array_data)) {}
 };
+
+inline bool is_same_array_decay(const Type &a, const Type &b) {
+  if (a.array_data && !b.array_data) {
+    if (b.pointer_depth == a.array_data->dimension_count)
+      return true;
+    return false;
+  }
+  if (b.array_data && !a.array_data) {
+    if (a.pointer_depth == b.array_data->dimension_count)
+      return true;
+    return false;
+  }
+  return false;
+}
+
+inline bool is_same_type(const Type &a, const Type &b) {
+  return a.kind == b.kind && ((a.pointer_depth - a.dereference_counts ==
+                                   b.pointer_depth - b.dereference_counts &&
+                               a.array_data == b.array_data) ||
+                              is_same_array_decay(a, b));
+}
 
 inline bool is_signed(Type::Kind kind) {
   if (kind >= Type::Kind::SIGNED_INT_START &&

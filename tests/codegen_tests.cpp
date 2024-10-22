@@ -2209,3 +2209,9 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %10, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
 }
+
+// @TODO: array decls
+// @TODO: array literals
+// @TODO: array pointer decay
+// @TODO: array element access
+// @TODO: slices
