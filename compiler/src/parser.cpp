@@ -430,6 +430,8 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
       // Member access
       if (m_NextToken.kind == TokenKind::Dot) {
         return parse_member_access(std::move(decl_ref_expr), var_id);
+      } else if (m_NextToken.kind == TokenKind::Lbracket) {
+        return parse_array_element_access(var_id);
       }
       return decl_ref_expr;
     }
@@ -495,6 +497,27 @@ Parser::parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
                                           std::move(inner_access));
   }
   return nullptr;
+}
+
+std::unique_ptr<ArrayElementAccess>
+Parser::parse_array_element_access(std::string var_id) {
+  assert(m_NextToken.kind == TokenKind::Lbracket &&
+         "unexpected token, expected '['.");
+  SourceLocation location = m_NextToken.location;
+  std::vector<uint> indices{};
+  while (m_NextToken.kind == TokenKind::Lbracket) {
+    eat_next_token(); // eat '['
+    if (m_NextToken.kind == TokenKind::Integer) {
+      indices.emplace_back(std::stoi(*m_NextToken.value));
+      eat_next_token(); // eat index
+    }
+    if (m_NextToken.kind != TokenKind::Rbracket) {
+      return report(m_NextToken.location, "expected '].");
+    }
+    eat_next_token(); // eat ']'
+  }
+  return std::make_unique<ArrayElementAccess>(location, std::move(var_id),
+                                              std::move(indices));
 }
 
 std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {

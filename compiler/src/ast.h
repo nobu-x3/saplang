@@ -333,6 +333,14 @@ struct MemberAccess : public DeclRefExpr {
   DUMP_IMPL
 };
 
+struct ArrayElementAccess : public DeclRefExpr {
+  std::vector<uint> indices;
+  inline explicit ArrayElementAccess(SourceLocation loc, std::string var_id,
+                                     std::vector<uint> indices)
+      : DeclRefExpr(loc, std::move(var_id)), indices(std::move(indices)) {}
+  DUMP_IMPL
+};
+
 using FieldInitializer = std::pair<std::string, std::unique_ptr<Expr>>;
 struct StructLiteralExpr : public Expr {
   std::vector<FieldInitializer> field_initializers;

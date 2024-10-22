@@ -308,6 +308,16 @@ void StructLiteralExpr::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void ArrayElementAccess::dump_to_stream(std::stringstream &stream,
+                                        size_t indent_level) const {
+  stream << indent(indent_level) << "ArrayElementAccess: " << id;
+  stream << " ";
+  for (auto &&index : indices) {
+    stream << "[" << index << "]";
+  }
+  stream << '\n';
+}
+
 void ArrayLiteralExpr::dump_to_stream(std::stringstream &stream,
                                       size_t indent_level) const {
   stream << indent(indent_level) << "ArrayLiteralExpr:\n";

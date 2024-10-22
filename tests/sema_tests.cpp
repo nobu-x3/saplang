@@ -1668,7 +1668,7 @@ fn void foo() {
     var i32 p_t1 = test;
 }
 )");
-  REQUIRE(error_stream.str() == "sema_test:5:20 error: initializer type mismatch.\n");
+  REQUIRE(error_stream.str() == "sema_test:4:20 error: initializer type mismatch.\n");
 }
 
 // @TODO: array element access
