@@ -13,7 +13,6 @@ namespace saplang {
 struct ArrayData {
   uint dimension_count = 0;
   std::vector<uint> dimensions{};
-
   inline bool operator==(const ArrayData &other) const {
     bool is_dim_count_same = dimension_count == other.dimension_count;
     if (!is_dim_count_same)
@@ -65,7 +64,6 @@ struct Type : public IDumpable {
   uint pointer_depth;
   uint dereference_counts = 0;
   std::optional<ArrayData> array_data;
-
   Type(const Type &) = default;
   Type &operator=(const Type &) = default;
   Type(Type &&) noexcept = default;
@@ -241,12 +239,10 @@ struct VarDecl : public Decl {
   Type type;
   std::unique_ptr<Expr> initializer;
   bool is_const;
-
   inline VarDecl(SourceLocation loc, std::string id, Type type,
                  std::unique_ptr<Expr> init, bool is_const)
       : Decl(loc, id), type(type), initializer(std::move(init)),
         is_const(is_const) {}
-
   DUMP_IMPL
 };
 
@@ -255,7 +251,6 @@ struct StructDecl : public Decl {
   inline StructDecl(SourceLocation loc, const std::string &id,
                     std::vector<std::pair<Type, std::string>> types)
       : Decl(loc, id), members(std::move(types)) {}
-
   DUMP_IMPL
 };
 
@@ -263,7 +258,6 @@ struct DeclStmt : public Stmt {
   std::unique_ptr<VarDecl> var_decl;
   inline DeclStmt(SourceLocation loc, std::unique_ptr<VarDecl> var)
       : Stmt(loc), var_decl(std::move(var)) {}
-
   DUMP_IMPL
 };
 
@@ -273,7 +267,6 @@ struct NumberLiteral : public Expr {
   std::string value;
   inline NumberLiteral(SourceLocation loc, NumberType type, std::string value)
       : Expr(loc), type(type), value(std::move(value)) {}
-
   DUMP_IMPL
 };
 
@@ -281,7 +274,6 @@ struct GroupingExpr : public Expr {
   std::unique_ptr<Expr> expr;
   inline explicit GroupingExpr(SourceLocation loc, std::unique_ptr<Expr> expr)
       : Expr(loc), expr(std::move(expr)) {}
-
   DUMP_IMPL
 };
 
@@ -292,7 +284,6 @@ struct BinaryOperator : public Expr {
   inline BinaryOperator(SourceLocation loc, std ::unique_ptr<Expr> lhs,
                         std::unique_ptr<Expr> rhs, TokenKind op)
       : Expr(loc), lhs(std::move(lhs)), rhs(std::move(rhs)), op(op) {}
-
   DUMP_IMPL
 };
 
@@ -317,7 +308,6 @@ struct DeclRefExpr : public Expr {
   std::string id;
   inline DeclRefExpr(SourceLocation loc, std::string id)
       : Expr(loc), id(std::move(id)) {}
-
   DUMP_IMPL
 };
 
@@ -329,7 +319,6 @@ struct MemberAccess : public DeclRefExpr {
                                std::unique_ptr<DeclRefExpr> inner_decl_ref_expr)
       : DeclRefExpr(loc, std::move(var_id)), field(std::move(field)),
         inner_decl_ref_expr(std::move(inner_decl_ref_expr)) {}
-
   DUMP_IMPL
 };
 
@@ -347,7 +336,6 @@ struct StructLiteralExpr : public Expr {
   inline StructLiteralExpr(SourceLocation loc,
                            std::vector<FieldInitializer> initializers)
       : Expr(loc), field_initializers(std::move(initializers)) {}
-
   DUMP_IMPL
 };
 
@@ -356,18 +344,15 @@ struct ArrayLiteralExpr : public Expr {
   inline ArrayLiteralExpr(SourceLocation loc,
                           std::vector<std::unique_ptr<Expr>> el_initializers)
       : Expr(loc), element_initializers(std::move(el_initializers)) {}
-
   DUMP_IMPL
 };
 
 struct Assignment : public Stmt {
   std::unique_ptr<DeclRefExpr> variable;
   std::unique_ptr<Expr> expr;
-
   inline Assignment(SourceLocation loc, std::unique_ptr<DeclRefExpr> var,
                     std::unique_ptr<Expr> expr)
       : Stmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
-
   DUMP_IMPL
 };
 
@@ -377,16 +362,13 @@ struct CallExpr : public Expr {
   inline CallExpr(SourceLocation loc, std::unique_ptr<DeclRefExpr> &&id,
                   std::vector<std::unique_ptr<Expr>> &&args)
       : Expr(loc), id(std::move(id)), args(std::move(args)) {}
-
   DUMP_IMPL
 };
 
 struct ReturnStmt : public Stmt {
   std::unique_ptr<Expr> expr;
-
   inline ReturnStmt(SourceLocation loc, std::unique_ptr<Expr> &&expr = nullptr)
       : Stmt(loc), expr(std::move(expr)) {}
-
   DUMP_IMPL
 };
 
@@ -402,11 +384,9 @@ struct Block : public IDumpable {
 struct WhileStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Block> body;
-
   inline WhileStmt(SourceLocation loc, std::unique_ptr<Expr> cond,
                    std::unique_ptr<Block> body)
       : Stmt(loc), condition(std::move(cond)), body(std::move(body)) {}
-
   DUMP_IMPL
 };
 
@@ -415,14 +395,12 @@ struct ForStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Stmt> increment_expr;
   std::unique_ptr<Block> body;
-
   inline ForStmt(SourceLocation loc, std::unique_ptr<DeclStmt> var,
                  std::unique_ptr<Expr> condition,
                  std::unique_ptr<Stmt> increment, std::unique_ptr<Block> body)
       : Stmt(loc), counter_variable(std::move(var)),
         condition(std::move(condition)), increment_expr(std::move(increment)),
         body(std::move(body)) {}
-
   DUMP_IMPL
 };
 
@@ -430,14 +408,12 @@ struct IfStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Block> true_block;
   std::unique_ptr<Block> false_block;
-
   inline IfStmt(SourceLocation location, std::unique_ptr<Expr> cond,
                 std::unique_ptr<Block> true_block,
                 std::unique_ptr<Block> false_block)
       : Stmt(location), condition(std::move(cond)),
         true_block(std::move(true_block)), false_block(std::move(false_block)) {
   }
-
   DUMP_IMPL
 };
 
@@ -446,7 +422,6 @@ struct ParamDecl : public Decl {
   bool is_const;
   inline ParamDecl(SourceLocation loc, std::string id, Type type, bool is_const)
       : Decl(loc, id), type(std::move(type)), is_const(is_const) {}
-
   DUMP_IMPL
 };
 
@@ -454,7 +429,6 @@ struct FunctionDecl : public Decl {
   Type type;
   std::vector<std::unique_ptr<ParamDecl>> params;
   std::unique_ptr<Block> body;
-
   inline FunctionDecl(SourceLocation location, std::string id, Type type,
                       std::vector<std::unique_ptr<ParamDecl>> &&params,
                       std::unique_ptr<Block> &&body)
@@ -487,7 +461,6 @@ struct ResolvedStructLiteralExpr : public ResolvedExpr {
       std::vector<ResolvedFieldInitializer> initializers)
       : ResolvedExpr(loc, std::move(type)),
         field_initializers(std::move(initializers)) {}
-
   DUMP_IMPL
 };
 
@@ -503,13 +476,10 @@ struct ResolvedArrayLiteralExpr : public ResolvedExpr {
 struct ResolvedBlock : public IDumpable {
   SourceLocation location;
   std::vector<std::unique_ptr<ResolvedStmt>> statements;
-
   inline ResolvedBlock(SourceLocation loc,
                        std::vector<std::unique_ptr<ResolvedStmt>> &&statements)
       : location(loc), statements(std::move(statements)) {}
-
   virtual ~ResolvedBlock() = default;
-
   DUMP_IMPL
 };
 
@@ -531,7 +501,6 @@ struct ResolvedVarDecl : public ResolvedDecl {
                          bool is_global = false)
       : ResolvedDecl(loc, id, std::move(type)), initializer(std::move(init)),
         is_const(is_const), is_global(is_global) {}
-
   DUMP_IMPL
 };
 
@@ -541,7 +510,6 @@ struct ResolvedStructDecl : public ResolvedDecl {
                             Type type,
                             std::vector<std::pair<Type, std::string>> types)
       : ResolvedDecl(loc, id, std::move(type)), members(std::move(types)) {}
-
   DUMP_IMPL
 };
 
@@ -550,7 +518,6 @@ struct ResolvedDeclStmt : public ResolvedStmt {
   inline ResolvedDeclStmt(SourceLocation loc,
                           std::unique_ptr<ResolvedVarDecl> decl)
       : ResolvedStmt(loc), var_decl(std::move(decl)) {}
-
   DUMP_IMPL
 };
 
@@ -559,7 +526,6 @@ struct ResolvedForStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedExpr> condition;
   std::unique_ptr<ResolvedStmt> increment_expr;
   std::unique_ptr<ResolvedBlock> body;
-
   inline ResolvedForStmt(SourceLocation loc,
                          std::unique_ptr<ResolvedDeclStmt> var,
                          std::unique_ptr<ResolvedExpr> condition,
@@ -568,20 +534,17 @@ struct ResolvedForStmt : public ResolvedStmt {
       : ResolvedStmt(loc), counter_variable(std::move(var)),
         condition(std::move(condition)), increment_expr(std::move(increment)),
         body(std::move(body)) {}
-
   DUMP_IMPL
 };
 
 struct ResolvedWhileStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedExpr> condition;
   std::unique_ptr<ResolvedBlock> body;
-
   inline ResolvedWhileStmt(SourceLocation location,
                            std::unique_ptr<ResolvedExpr> cond,
                            std::unique_ptr<ResolvedBlock> body)
       : ResolvedStmt(location), condition(std::move(cond)),
         body(std::move(body)) {}
-
   DUMP_IMPL
 };
 
@@ -589,7 +552,6 @@ struct ResolvedIfStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedExpr> condition;
   std::unique_ptr<ResolvedBlock> true_block;
   std::unique_ptr<ResolvedBlock> false_block;
-
   inline ResolvedIfStmt(SourceLocation loc,
                         std::unique_ptr<ResolvedExpr> condition,
                         std::unique_ptr<ResolvedBlock> true_block,
@@ -597,13 +559,11 @@ struct ResolvedIfStmt : public ResolvedStmt {
       : ResolvedStmt(loc), condition(std::move(condition)),
         true_block(std::move(true_block)), false_block(std::move(false_block)) {
   }
-
   DUMP_IMPL
 };
 
 struct ResolvedNumberLiteral : public ResolvedExpr {
   Value value;
-
   explicit ResolvedNumberLiteral(SourceLocation loc,
                                  NumberLiteral::NumberType type,
                                  const std::string &value);
@@ -615,7 +575,6 @@ struct ResolvedGroupingExpr : public ResolvedExpr {
   inline explicit ResolvedGroupingExpr(SourceLocation loc,
                                        std::unique_ptr<ResolvedExpr> expr)
       : ResolvedExpr(loc, expr->type), expr(std::move(expr)) {}
-
   DUMP_IMPL
 };
 
@@ -629,7 +588,6 @@ struct ResolvedBinaryOperator : public ResolvedExpr {
                                          TokenKind op)
       : ResolvedExpr(loc, lhs->type), lhs(std::move(lhs)), rhs(std::move(rhs)),
         op(op) {}
-
   DUMP_IMPL
 };
 
@@ -648,30 +606,25 @@ struct ResolvedParamDecl : public ResolvedDecl {
   inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type,
                            bool is_const)
       : ResolvedDecl(loc, std::move(id), std::move(type)), is_const(is_const) {}
-
   DUMP_IMPL
 };
 
 struct ResolvedFuncDecl : public ResolvedDecl {
   std::vector<std::unique_ptr<ResolvedParamDecl>> params;
   std::unique_ptr<ResolvedBlock> body;
-
   inline ResolvedFuncDecl(
       SourceLocation loc, std::string id, Type type,
       std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
       std::unique_ptr<ResolvedBlock> body)
       : ResolvedDecl(loc, std::move(id), std::move(type)),
         params(std::move(params)), body(std::move(body)) {}
-
   DUMP_IMPL
 };
 
 struct ResolvedDeclRefExpr : public ResolvedExpr {
   const ResolvedDecl *decl;
-
   inline ResolvedDeclRefExpr(SourceLocation loc, const ResolvedDecl *decl)
       : ResolvedExpr(loc, decl->type), decl(decl) {}
-
   DUMP_IMPL
 };
 
@@ -706,12 +659,10 @@ struct ResolvedExplicitCastExpr : public ResolvedExpr {
 struct ResolvedCallExpr : public ResolvedExpr {
   const ResolvedFuncDecl *func_decl;
   std::vector<std::unique_ptr<ResolvedExpr>> args;
-
   inline ResolvedCallExpr(SourceLocation loc, const ResolvedFuncDecl *callee,
                           std::vector<std::unique_ptr<ResolvedExpr>> &&args)
       : ResolvedExpr(loc, callee->type), func_decl(callee),
         args(std::move(args)) {}
-
   DUMP_IMPL
 };
 
@@ -729,23 +680,19 @@ struct InnerMemberAccess : public IDumpable {
 
 struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
   std::unique_ptr<InnerMemberAccess> inner_member_access;
-
   inline ResolvedStructMemberAccess(
       SourceLocation loc, const ResolvedDecl *decl,
       std::unique_ptr<InnerMemberAccess> inner_access)
       : ResolvedDeclRefExpr(loc, decl),
         inner_member_access(std::move(inner_access)) {}
-
   DUMP_IMPL
 };
 
 struct ResolvedReturnStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedExpr> expr;
-
   inline ResolvedReturnStmt(SourceLocation loc,
                             std::unique_ptr<ResolvedExpr> expr)
       : ResolvedStmt(loc), expr(std::move(expr)) {}
-
   DUMP_IMPL
 };
 
@@ -756,7 +703,6 @@ struct ResolvedAssignment : public ResolvedStmt {
                             std::unique_ptr<ResolvedDeclRefExpr> var,
                             std::unique_ptr<ResolvedExpr> expr)
       : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
-
   DUMP_IMPL
 };
 } // namespace saplang
