@@ -323,9 +323,9 @@ struct MemberAccess : public DeclRefExpr {
 };
 
 struct ArrayElementAccess : public DeclRefExpr {
-  std::vector<uint> indices;
+  std::vector<std::unique_ptr<Expr>> indices;
   inline explicit ArrayElementAccess(SourceLocation loc, std::string var_id,
-                                     std::vector<uint> indices)
+                                     std::vector<std::unique_ptr<Expr>> indices)
       : DeclRefExpr(loc, std::move(var_id)), indices(std::move(indices)) {}
   DUMP_IMPL
 };

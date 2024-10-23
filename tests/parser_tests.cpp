@@ -1358,6 +1358,7 @@ fn void foo() {
     var i32 a = test[0];
     var TestStruct[2][2] test3 = [[.{0}, .{1}], [.{2}, .{3}]];
     var TestStruct b = test3[0][1];
+    var i32 c = test[-1];
 }
 )");
   REQUIRE(error_stream.str() == "");
@@ -1371,7 +1372,9 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: a:i32");
-  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayElementAccess: test [0]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayElementAccess: test");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ElementNo 0:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test3:TestStruct[2][2]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
@@ -1391,5 +1394,15 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: b:TestStruct");
-  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayElementAccess: test3 [0][1]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayElementAccess: test3");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ElementNo 0:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ElementNo 1:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: c:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayElementAccess: test");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ElementNo 0:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '-'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
 }

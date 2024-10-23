@@ -504,13 +504,13 @@ Parser::parse_array_element_access(std::string var_id) {
   assert(m_NextToken.kind == TokenKind::Lbracket &&
          "unexpected token, expected '['.");
   SourceLocation location = m_NextToken.location;
-  std::vector<uint> indices{};
+  std::vector<std::unique_ptr<Expr>> indices{};
   while (m_NextToken.kind == TokenKind::Lbracket) {
     eat_next_token(); // eat '['
-    if (m_NextToken.kind == TokenKind::Integer) {
-      indices.emplace_back(std::stoi(*m_NextToken.value));
-      eat_next_token(); // eat index
-    }
+    auto expr = parse_expr();
+    if(!expr)
+        return nullptr;
+    indices.emplace_back(std::move(expr));
     if (m_NextToken.kind != TokenKind::Rbracket) {
       return report(m_NextToken.location, "expected '].");
     }
