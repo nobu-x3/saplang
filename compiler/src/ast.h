@@ -11,7 +11,7 @@ namespace saplang {
 // @TODO: string literals
 
 struct ArrayData {
-  uint dimension_count = 0;
+  int dimension_count = 0;
   std::vector<uint> dimensions{};
   inline bool operator==(const ArrayData &other) const {
     bool is_dim_count_same = dimension_count == other.dimension_count;
@@ -685,6 +685,15 @@ struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
       std::unique_ptr<InnerMemberAccess> inner_access)
       : ResolvedDeclRefExpr(loc, decl),
         inner_member_access(std::move(inner_access)) {}
+  DUMP_IMPL
+};
+
+struct ResolvedArrayElementAccess : public ResolvedDeclRefExpr {
+  std::vector<std::unique_ptr<ResolvedExpr>> indices;
+  inline ResolvedArrayElementAccess(SourceLocation loc,
+                                    const ResolvedDecl *decl,
+                                    std::vector<std::unique_ptr<ResolvedExpr>> indices)
+      : ResolvedDeclRefExpr(loc, decl), indices(std::move(indices)) {}
   DUMP_IMPL
 };
 

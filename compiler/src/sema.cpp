@@ -1104,6 +1104,46 @@ Sema::resolve_member_access(const MemberAccess &access,
                                      "'.");
 }
 
+std::unique_ptr<ResolvedArrayElementAccess>
+Sema::resolve_array_element_access(const ArrayElementAccess &access,
+                                   const ResolvedDecl *decl) {
+  if (!decl->type.array_data &&
+      (decl->type.pointer_depth - decl->type.dereference_counts < 1))
+    return report(access.location,
+                  "trying to access an array element of a variable that is not "
+                  "an array or pointer: " +
+                      decl->id + ".");
+  std::vector<std::unique_ptr<ResolvedExpr>> indices{};
+  uint deindex_count = 0;
+  for (auto &&index : access.indices) {
+    auto expr = resolve_expr(*index);
+    if (!expr)
+      return nullptr;
+    // @TODO: on constant value it's possible to do bounds check
+    /* if(expr->get_constant_value()) { */
+    /*     auto constant_val = expr->get_constant_value().value(); */
+    /* } */
+    indices.emplace_back(std::move(expr));
+    ++deindex_count;
+  }
+  auto resolved_access = std::make_unique<ResolvedArrayElementAccess>(
+      access.location, decl, std::move(indices));
+  if (resolved_access->type.array_data) {
+    for (uint i = 0; i < deindex_count; ++i) {
+      if (resolved_access->type.array_data->dimensions.size() > 0)
+        resolved_access->type.array_data->dimensions.erase(
+            resolved_access->type.array_data->dimensions.begin());
+    }
+    resolved_access->type.array_data->dimension_count -= deindex_count;
+    if (resolved_access->type.array_data->dimension_count < 0)
+      return report(access.location,
+                    "more array accesses than there are dimensions.");
+    else if (resolved_access->type.array_data->dimension_count == 0)
+      resolved_access->type.array_data = std::nullopt;
+  }
+  return std::move(resolved_access);
+}
+
 std::unique_ptr<ResolvedStructLiteralExpr>
 Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
                                   Type struct_type) {
@@ -1204,6 +1244,8 @@ Sema::resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type) {
     if (type.array_data->dimension_count > 0) {
       type.array_data->dimensions.erase(type.array_data->dimensions.begin());
       --type.array_data->dimension_count;
+      if (type.array_data->dimension_count == 0)
+        type.array_data = std::nullopt;
     }
     auto expression = resolve_expr(*expr, &type);
     if (!expression)
@@ -1231,6 +1273,9 @@ Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
   if (const auto *member_access =
           dynamic_cast<const MemberAccess *>(&decl_ref_expr))
     return resolve_member_access(*member_access, decl);
+  if (const auto *array_access =
+          dynamic_cast<const ArrayElementAccess *>(&decl_ref_expr))
+    return resolve_array_element_access(*array_access, decl);
   return std::make_unique<ResolvedDeclRefExpr>(decl_ref_expr.location, decl);
 }
 

@@ -101,6 +101,10 @@ private:
   std::unique_ptr<InnerMemberAccess>
   resolve_inner_member_access(const MemberAccess &access, Type type);
 
+  std::unique_ptr<ResolvedArrayElementAccess>
+  resolve_array_element_access(const ArrayElementAccess &access,
+                               const ResolvedDecl *decl);
+
   bool flow_sensitive_analysis(const ResolvedFuncDecl &fn);
 
   bool check_return_on_all_paths(const ResolvedFuncDecl &fn, const CFG &cfg);

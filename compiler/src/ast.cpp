@@ -673,6 +673,17 @@ void ResolvedStructMemberAccess::dump_to_stream(std::stringstream &stream,
   inner_member_access->dump_to_stream(stream, indent_level + 1);
 }
 
+void ResolvedArrayElementAccess::dump_to_stream(std::stringstream &stream,
+                                                size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedArrayElementAccess: \n";
+  ResolvedDeclRefExpr::dump_to_stream(stream, indent_level + 1);
+  for (int i = 0; i < indices.size(); ++i) {
+    stream << indent(indent_level + 1) << "IndexAccess " << i << ":\n";
+    indices[i]->dump_to_stream(stream, indent_level + 2);
+  }
+  stream << '\n';
+}
+
 void ResolvedNullExpr::dump_to_stream(std::stringstream &stream,
                                       size_t indent_level) const {
   stream << indent(indent_level) << "Null\n";
