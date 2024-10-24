@@ -2210,6 +2210,24 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
 }
 
+TEST_CASE("Array declarations no init", "[codegen]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+  var i32[2] array;
+  var i32[3][2] array2;
+  return 0;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 4;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%array = alloca [2 x i32], align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%array2 = alloca [3 x [2 x i32]], align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+}
+
 // @TODO: array decls
 // @TODO: array literals
 // @TODO: array pointer decay

@@ -177,7 +177,24 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
   m_Builder.CreateRet(load_ret);
 }
 
-llvm::Type *Codegen::gen_type(Type type) {
+llvm::Type *Codegen::gen_type(const Type &type) {
+  if (type.array_data) {
+    const auto &array_data = *type.array_data;
+    Type de_arrayed_type = type;
+    --de_arrayed_type.array_data->dimension_count;
+    int dimension = 0;
+    if (de_arrayed_type.array_data->dimensions.size() > 0) {
+      auto dim_it = de_arrayed_type.array_data->dimensions.begin();
+      dimension = *dim_it;
+      de_arrayed_type.array_data->dimensions.erase(dim_it);
+    }
+    if (de_arrayed_type.array_data->dimension_count == 0)
+      de_arrayed_type.array_data = std::nullopt;
+    llvm::Type *underlying_type = gen_type(de_arrayed_type);
+    if (!dimension)
+      return underlying_type;
+    return llvm::ArrayType::get(underlying_type, dimension);
+  }
   if (type.pointer_depth)
     return m_Builder.getPtrTy();
   switch (type.kind) {

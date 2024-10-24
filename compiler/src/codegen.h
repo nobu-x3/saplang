@@ -29,7 +29,7 @@ private:
   llvm::Constant *
   get_constant_number_value(const ResolvedNumberLiteral &numlit);
 
-  llvm::Type *gen_type(Type type);
+  llvm::Type *gen_type(const Type& type);
 
   llvm::AllocaInst *alloc_stack_var(llvm::Function *func, llvm::Type *type,
                                     std::string_view id);
