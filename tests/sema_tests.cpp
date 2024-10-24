@@ -1689,7 +1689,6 @@ fn void foo() {
 }
 )");
   REQUIRE(error_stream.str() == "");
-  /* REQUIRE(output_buffer.str() == ""); */
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin() + 3;
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");

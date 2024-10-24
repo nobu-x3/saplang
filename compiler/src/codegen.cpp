@@ -426,6 +426,9 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
   if (const auto *struct_lit =
           dynamic_cast<const ResolvedStructLiteralExpr *>(&expr))
     return gen_struct_literal_expr(*struct_lit);
+  /* if (const auto *array_lit = */
+  /*         dynamic_cast<const ResolvedArrayLiteralExpr *>(&expr)) */
+  /*   return gen_array_literal_expr(*array_lit); */
   if (const auto *group = dynamic_cast<const ResolvedGroupingExpr *>(&expr))
     return gen_expr(*group->expr);
   if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
@@ -501,6 +504,51 @@ Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit) {
     m_Builder.CreateStore(gened_expr, memptr);
   }
   return stack_var;
+}
+
+llvm::Value *
+Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
+                                llvm::Value *p_array_value) {
+  llvm::Function *current_function = get_current_function();
+  // @TODO: memcpy on if all constant
+  bool all_constant = true;
+  for (auto &expr : array_lit.expressions) {
+    if (!expr->get_constant_value()) {
+      all_constant = false;
+      break;
+    }
+  }
+  if (array_lit.expressions.size() > 0) {
+    std::vector<llvm::Value *> indices{
+        llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0)),
+        llvm::ConstantInt::get(m_Context, llvm::APInt(32, 0))};
+    llvm::Value *p_array_element = m_Builder.CreateInBoundsGEP(
+        gen_type(array_lit.type), p_array_value, indices, "arrayinit.begin");
+    if (const auto *inner_array =
+            dynamic_cast<const ResolvedArrayLiteralExpr *>(
+                array_lit.expressions[0].get())) {
+      gen_array_literal_expr(*inner_array, p_array_element);
+    } else {
+      llvm::Value *expr_val = gen_expr(*array_lit.expressions[0]);
+      m_Builder.CreateStore(expr_val, p_array_element);
+    }
+    for (int i = 1; i < array_lit.expressions.size(); ++i) {
+      auto &expr = array_lit.expressions[i];
+      std::vector<llvm::Value *> indices{
+          llvm::ConstantInt::get(m_Context, llvm::APInt(32, 1))};
+      p_array_element = m_Builder.CreateInBoundsGEP(
+          gen_type(expr->type), p_array_element, indices, "arrayinit.element");
+      if (const auto *inner_array =
+              dynamic_cast<const ResolvedArrayLiteralExpr *>(
+                  array_lit.expressions[i].get())) {
+        gen_array_literal_expr(*inner_array, p_array_element);
+      } else {
+        llvm::Value *expr_val = gen_expr(*expr);
+        m_Builder.CreateStore(expr_val, p_array_element);
+      }
+    }
+  }
+  return nullptr;
 }
 
 llvm::Value *
@@ -878,6 +926,9 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
           m_Builder.CreateStore(expr, var);
         }
       }
+    } else if (const auto *array_lit =
+                   dynamic_cast<ResolvedArrayLiteralExpr *>(init.get())) {
+      gen_array_literal_expr(*array_lit, var);
     } else {
       m_Builder.CreateStore(gen_expr(*init), var);
     }

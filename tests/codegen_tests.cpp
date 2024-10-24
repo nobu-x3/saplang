@@ -2228,8 +2228,51 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
 }
 
-// @TODO: array decls
-// @TODO: array literals
+TEST_CASE("Array declarations with init", "[codegen]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+  var i32 a = 0;
+  var i32[3] int_array = [a, 1, 2];
+  var i32[3][2] m_int_array = [[a, 1], [2, 3], [3, 4]];
+  return 0;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 4;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%int_array = alloca [3 x i32], align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%m_int_array = alloca [3 x [2 x i32]], align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.begin = getelementptr inbounds [3 x i32], ptr %int_array, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %0, ptr %arrayinit.begin, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.element = getelementptr inbounds i8, ptr %arrayinit.begin, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 1, ptr %arrayinit.element, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.element1 = getelementptr inbounds i8, ptr %arrayinit.element, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 2, ptr %arrayinit.element1, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.begin2 = getelementptr inbounds [3 x [2 x i32]], ptr %m_int_array, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.begin3 = getelementptr inbounds [2 x i32], ptr %arrayinit.begin2, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %1, ptr %arrayinit.begin3, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.element4 = getelementptr inbounds i8, ptr %arrayinit.begin3, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 1, ptr %arrayinit.element4, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.element5 = getelementptr inbounds [2 x i32], ptr %arrayinit.begin2, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.begin6 = getelementptr inbounds [2 x i32], ptr %arrayinit.element5, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 2, ptr %arrayinit.begin6, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.element7 = getelementptr inbounds i8, ptr %arrayinit.begin6, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 3, ptr %arrayinit.element7, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.element8 = getelementptr inbounds [2 x i32], ptr %arrayinit.element5, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.begin9 = getelementptr inbounds [2 x i32], ptr %arrayinit.element8, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 3, ptr %arrayinit.begin9, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arrayinit.element10 = getelementptr inbounds i8, ptr %arrayinit.begin9, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 4, ptr %arrayinit.element10, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+}
+
+// @TODO: array literal function parameters
 // @TODO: array pointer decay
 // @TODO: array element access
 // @TODO: slices

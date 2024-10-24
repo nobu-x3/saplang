@@ -29,7 +29,7 @@ private:
   llvm::Constant *
   get_constant_number_value(const ResolvedNumberLiteral &numlit);
 
-  llvm::Type *gen_type(const Type& type);
+  llvm::Type *gen_type(const Type &type);
 
   llvm::AllocaInst *alloc_stack_var(llvm::Function *func, llvm::Type *type,
                                     std::string_view id);
@@ -50,7 +50,7 @@ private:
 
   llvm::Value *gen_binary_op(const ResolvedBinaryOperator &op);
 
-  llvm::Value* gen_explicit_cast(const ResolvedExplicitCastExpr& cast);
+  llvm::Value *gen_explicit_cast(const ResolvedExplicitCastExpr &cast);
 
   std::pair<llvm::Value *, Type> gen_unary_op(const ResolvedUnaryOperator &op);
 
@@ -67,6 +67,9 @@ private:
 
   llvm::Value *
   gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit);
+
+  llvm::Value *
+  gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit, llvm::Value* p_array_value);
 
   llvm::Value *gen_struct_literal_expr_assignment(
       const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var);
