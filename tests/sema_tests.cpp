@@ -1532,30 +1532,30 @@ fn void foo() {
   REQUIRE(lines_it->find(") test:i32[3]") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[3]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
   REQUIRE(lines_it->find(") test2:i32[3][2]") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[3][2]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[2]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[2]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(3)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[2]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(4)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(5)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
   REQUIRE(lines_it->find(") test3:TestStruct[2][2]") != std::string::npos);
@@ -1600,11 +1600,11 @@ fn void foo() {
   REQUIRE(lines_it->find(") test:i32[3]") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[3]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
   REQUIRE(lines_it->find(") p_t1:ptr i32") != std::string::npos);
@@ -1616,19 +1616,19 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[3][2]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[2]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[2]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(3)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[2]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(4)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(5)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(5)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
   REQUIRE(lines_it->find("p_t2:ptr ptr i32") != std::string::npos);
@@ -1674,7 +1674,6 @@ fn void foo() {
           "sema_test:4:20 error: initializer type mismatch.\n");
 }
 
-// @TODO: array element access
 TEST_CASE("Array element access", "[sema]") {
   TEST_SETUP(R"(
 struct TestStruct { i32 a; }
@@ -1696,11 +1695,11 @@ fn void foo() {
   REQUIRE(lines_it->find(") test:i32[3]") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedArrayLiteralExpr: i32[3]");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(2)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
   REQUIRE(lines_it->find(") a:i32") != std::string::npos);
@@ -1709,7 +1708,7 @@ fn void foo() {
   REQUIRE(lines_it->find(") test:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "IndexAccess 0:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
   REQUIRE(lines_it->find(") test3:TestStruct[2][2]") != std::string::npos);
@@ -1740,10 +1739,10 @@ fn void foo() {
   REQUIRE(lines_it->find(") test3:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "IndexAccess 0:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "IndexAccess 1:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
   REQUIRE(lines_it->find(") c:i32") != std::string::npos);
@@ -1752,8 +1751,9 @@ fn void foo() {
   REQUIRE(lines_it->find(") test:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "IndexAccess 0:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '-'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(-1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
   REQUIRE(lines_it->find(") d:i32") != std::string::npos);
@@ -1771,7 +1771,7 @@ fn void foo() {
   REQUIRE(lines_it->find(") test3:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "IndexAccess 0:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "i8(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(0)");
 }
 
 TEST_CASE("More array accesses than dimensions", "[sema]") {

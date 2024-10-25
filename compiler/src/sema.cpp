@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include "ast.h"
@@ -301,7 +302,7 @@ bool can_be_cast(Type::Kind cast_from, Type::Kind cast_to) {
   return cast_to != Type::Kind::Void && cast_from != Type::Kind::Void &&
          does_type_have_associated_size(cast_from) &&
          does_type_have_associated_size(cast_to) &&
-         get_size(cast_from) <= get_size(cast_to);
+         get_type_size(cast_from) <= get_type_size(cast_to);
 }
 
 bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
@@ -321,9 +322,15 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
                    ConstantExpressionEvaluator &cee, bool &is_array_decay) {
   is_array_decay = false;
   if (expr.type.array_data) {
+    if (expr.type.kind != type.kind) {
+      auto array_data = expr.type.array_data;
+      expr.type.array_data = std::nullopt;
+      try_cast_expr(expr, type, cee, is_array_decay);
+      expr.type.array_data = array_data;
+    }
     if (type.pointer_depth == expr.type.array_data->dimension_count) {
       is_array_decay = true;
-      return true;
+      return try_cast_expr(expr, type, cee, is_array_decay);
     }
     return false;
   }
@@ -844,9 +851,9 @@ Sema::resolve_explicit_cast(const ExplicitCast &cast) {
         cast_type = ResolvedExplicitCastExpr::CastType::FloatToInt;
       if (lhs_type->kind >= Type::Kind::FLOATS_START &&
           lhs_type->kind <= Type::Kind::FLOATS_END) {
-        if (get_size(lhs_type->kind) > get_size(rhs->type.kind))
+        if (get_type_size(lhs_type->kind) > get_type_size(rhs->type.kind))
           cast_type = ResolvedExplicitCastExpr::CastType::Extend;
-        else if (get_size(lhs_type->kind) < get_size(rhs->type.kind))
+        else if (get_type_size(lhs_type->kind) < get_type_size(rhs->type.kind))
           cast_type = ResolvedExplicitCastExpr::CastType::Truncate;
       }
     } else if (rhs->type.kind >= Type::Kind::INTEGERS_START &&
@@ -856,9 +863,9 @@ Sema::resolve_explicit_cast(const ExplicitCast &cast) {
         cast_type = ResolvedExplicitCastExpr::CastType::IntToFloat;
       if (lhs_type->kind >= Type::Kind::INTEGERS_START &&
           lhs_type->kind <= Type::Kind::INTEGERS_END) {
-        if (get_size(lhs_type->kind) > get_size(rhs->type.kind))
+        if (get_type_size(lhs_type->kind) > get_type_size(rhs->type.kind))
           cast_type = ResolvedExplicitCastExpr::CastType::Extend;
-        else if (get_size(lhs_type->kind) < get_size(rhs->type.kind))
+        else if (get_type_size(lhs_type->kind) < get_type_size(rhs->type.kind))
           cast_type = ResolvedExplicitCastExpr::CastType::Truncate;
       }
     }
@@ -1119,28 +1126,34 @@ Sema::resolve_array_element_access(const ArrayElementAccess &access,
     auto expr = resolve_expr(*index);
     if (!expr)
       return nullptr;
+    if(expr->type.kind != platform_ptr_type().kind) {
+        bool is_decay;
+        if(!try_cast_expr(*expr, platform_ptr_type(), m_Cee, is_decay))
+            return report(expr->location, "cannot cast to address index type.");
+    }
+    indices.emplace_back(std::move(expr));
+    ++deindex_count;
+
+    /* if (get_size(expr->type.kind) != platform_ptr_size()) { */
+    /*   bool is_decay; */
+    /*   if (!try_cast_expr(*expr, platform_ptr_type(), m_Cee, is_decay)) { */
+    /*     return report(expr->location, */
+    /*                   "cannot implicitly cast type used for indexing: " + */
+    /*                       expr->type.name + " to platform ptr size."); */
+    /*   } */
+    /* } */
+
     // @TODO: on constant value it's possible to do bounds check
     /* if(expr->get_constant_value()) { */
     /*     auto constant_val = expr->get_constant_value().value(); */
     /* } */
-    indices.emplace_back(std::move(expr));
-    ++deindex_count;
   }
   auto resolved_access = std::make_unique<ResolvedArrayElementAccess>(
       access.location, decl, std::move(indices));
-  if (resolved_access->type.array_data) {
-    for (uint i = 0; i < deindex_count; ++i) {
-      if (resolved_access->type.array_data->dimensions.size() > 0)
-        resolved_access->type.array_data->dimensions.erase(
-            resolved_access->type.array_data->dimensions.begin());
-    }
-    resolved_access->type.array_data->dimension_count -= deindex_count;
-    if (resolved_access->type.array_data->dimension_count < 0)
-      return report(access.location,
-                    "more array accesses than there are dimensions.");
-    else if (resolved_access->type.array_data->dimension_count == 0)
-      resolved_access->type.array_data = std::nullopt;
-  }
+  if (resolved_access->type.array_data->dimension_count < deindex_count)
+    return report(access.location,
+                  "more array accesses than there are dimensions.");
+  de_array_type(resolved_access->type, deindex_count);
   return std::move(resolved_access);
 }
 
@@ -1241,15 +1254,15 @@ Sema::resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type) {
   std::vector<std::unique_ptr<ResolvedExpr>> expressions;
   for (auto &expr : lit.element_initializers) {
     Type type = array_type;
-    if (type.array_data->dimension_count > 0) {
-      type.array_data->dimensions.erase(type.array_data->dimensions.begin());
-      --type.array_data->dimension_count;
-      if (type.array_data->dimension_count == 0)
-        type.array_data = std::nullopt;
-    }
+    de_array_type(type, 1);
     auto expression = resolve_expr(*expr, &type);
     if (!expression)
       return nullptr;
+    if(expression->type.kind != array_type.kind) {
+        bool is_decay;
+        if(!try_cast_expr(*expression, type, m_Cee, is_decay))
+            return report(expression->location, "cannot cast type.");
+    }
     expression->set_constant_value(expression->get_constant_value());
     expressions.emplace_back(std::move(expression));
   }
