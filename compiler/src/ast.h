@@ -145,6 +145,10 @@ private:
         array_data(std::move(array_data)) {}
 };
 
+// decreases array dimension by dearray_count, removes first dimension and
+// returns it's value
+int de_array_type(Type &type, int dearray_count);
+
 inline bool is_same_array_decay(const Type &a, const Type &b) {
   if (a.array_data && !b.array_data) {
     if (b.pointer_depth == a.array_data->dimension_count)
@@ -186,7 +190,7 @@ inline bool is_float(Type::Kind kind) {
   return false;
 }
 
-size_t get_size(Type::Kind kind);
+size_t get_type_size(Type::Kind kind);
 
 bool does_type_have_associated_size(Type::Kind kind);
 
@@ -690,9 +694,9 @@ struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
 
 struct ResolvedArrayElementAccess : public ResolvedDeclRefExpr {
   std::vector<std::unique_ptr<ResolvedExpr>> indices;
-  inline ResolvedArrayElementAccess(SourceLocation loc,
-                                    const ResolvedDecl *decl,
-                                    std::vector<std::unique_ptr<ResolvedExpr>> indices)
+  inline ResolvedArrayElementAccess(
+      SourceLocation loc, const ResolvedDecl *decl,
+      std::vector<std::unique_ptr<ResolvedExpr>> indices)
       : ResolvedDeclRefExpr(loc, decl), indices(std::move(indices)) {}
   DUMP_IMPL
 };

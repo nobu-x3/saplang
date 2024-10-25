@@ -42,7 +42,7 @@ public:
   inline void set_constant_value(std::optional<Ty> val) {
     m_ConstantValue = std::move(val);
   }
-  inline const std::optional<Ty>& get_constant_value() const {
+  inline std::optional<Ty> get_constant_value() const {
     return m_ConstantValue;
   }
 

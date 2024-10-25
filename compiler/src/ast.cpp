@@ -37,17 +37,34 @@ std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
     {Type::Kind::Bool, sizeof(bool)},
     {Type::Kind::u8, sizeof(char)},
     {Type::Kind::i8, sizeof(char)},
-    {Type::Kind::u16, sizeof(std::uint16_t)},
-    {Type::Kind::i16, sizeof(std::int16_t)},
-    {Type::Kind::u32, sizeof(std::uint32_t)},
-    {Type::Kind::i32, sizeof(std::int32_t)},
-    {Type::Kind::u64, sizeof(std::uint64_t)},
-    {Type::Kind::i64, sizeof(std::int64_t)},
-    {Type::Kind::f32, sizeof(float)},
-    {Type::Kind::f64, sizeof(double)},
+    {Type::Kind::u16, 16},
+    {Type::Kind::i16, 16},
+    {Type::Kind::u32, 32},
+    {Type::Kind::i32, 32},
+    {Type::Kind::u64, 64},
+    {Type::Kind::i64, 64},
+    {Type::Kind::f32, 32},
+    {Type::Kind::f64, 64},
 };
 
-size_t get_size(Type::Kind kind) {
+int de_array_type(Type &type, int dearray_count) {
+  if (!type.array_data)
+    return 0;
+  type.array_data->dimension_count -= dearray_count;
+  int dimension = 0;
+  for (int i = 0; i < dearray_count; ++i) {
+    if (type.array_data->dimensions.size() <= 0)
+      break;
+    auto dim_it = type.array_data->dimensions.begin();
+    dimension = *dim_it;
+    type.array_data->dimensions.erase(dim_it);
+  }
+  if (type.array_data->dimension_count <= 0)
+    type.array_data = std::nullopt;
+  return dimension;
+}
+
+size_t get_type_size(Type::Kind kind) {
   return g_AssociatedNumberLiteralSizes[kind];
 }
 

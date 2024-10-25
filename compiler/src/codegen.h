@@ -68,14 +68,18 @@ private:
   llvm::Value *
   gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit);
 
-  llvm::Value *
-  gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit, llvm::Value* p_array_value);
+  llvm::Value *gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
+                                      llvm::Value *p_array_value);
 
   llvm::Value *gen_struct_literal_expr_assignment(
       const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var);
 
   llvm::Value *
   gen_struct_member_access(const ResolvedStructMemberAccess &access,
+                           Type &out_type);
+
+  llvm::Value *
+  gen_array_element_access(const ResolvedArrayElementAccess &access,
                            Type &out_type);
 
   llvm::Value *gen_decl_stmt(const ResolvedDeclStmt &stmt);
