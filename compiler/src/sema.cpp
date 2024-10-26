@@ -1126,10 +1126,24 @@ Sema::resolve_array_element_access(const ArrayElementAccess &access,
     auto expr = resolve_expr(*index);
     if (!expr)
       return nullptr;
-    if(expr->type.kind != platform_ptr_type().kind) {
+    const auto *decl_ref_expr =
+        dynamic_cast<const ResolvedDeclRefExpr *>(expr.get());
+    const auto *binop =
+        dynamic_cast<const ResolvedBinaryOperator *>(expr.get());
+    if (binop) {
+      Type max_type = binop->lhs->type.kind > binop->rhs->type.kind
+                          ? binop->lhs->type
+                          : binop->rhs->type;
+      bool is_decay;
+      try_cast_expr(*binop->lhs, max_type, m_Cee, is_decay);
+      try_cast_expr(*binop->rhs, max_type, m_Cee, is_decay);
+    }
+    if (!decl_ref_expr && !binop) {
+      if (expr->type.kind != platform_ptr_type().kind) {
         bool is_decay;
-        if(!try_cast_expr(*expr, platform_ptr_type(), m_Cee, is_decay))
-            return report(expr->location, "cannot cast to address index type.");
+        if (!try_cast_expr(*expr, platform_ptr_type(), m_Cee, is_decay))
+          return report(expr->location, "cannot cast to address index type.");
+      }
     }
     indices.emplace_back(std::move(expr));
     ++deindex_count;
@@ -1258,10 +1272,10 @@ Sema::resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type) {
     auto expression = resolve_expr(*expr, &type);
     if (!expression)
       return nullptr;
-    if(expression->type.kind != array_type.kind) {
-        bool is_decay;
-        if(!try_cast_expr(*expression, type, m_Cee, is_decay))
-            return report(expression->location, "cannot cast type.");
+    if (expression->type.kind != array_type.kind) {
+      bool is_decay;
+      if (!try_cast_expr(*expression, type, m_Cee, is_decay))
+        return report(expression->location, "cannot cast type.");
     }
     expression->set_constant_value(expression->get_constant_value());
     expressions.emplace_back(std::move(expression));

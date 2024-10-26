@@ -457,8 +457,12 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(
       continue;
     llvm::Value *gened_expr = nullptr;
     std::vector<llvm::Value *> indices{
-        llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
-        llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), index))};
+        llvm::ConstantInt::get(
+            m_Context,
+            llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
+        llvm::ConstantInt::get(
+            m_Context,
+            llvm::APInt(static_cast<unsigned>(platform_ptr_size()), index))};
     llvm::Value *memptr =
         m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type), var, indices);
     if (const auto *struct_lit =
@@ -496,8 +500,12 @@ Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit) {
       continue;
     llvm::Value *gened_expr = gen_expr(*expr);
     std::vector<llvm::Value *> indices{
-        llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
-        llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), index))};
+        llvm::ConstantInt::get(
+            m_Context,
+            llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
+        llvm::ConstantInt::get(
+            m_Context,
+            llvm::APInt(static_cast<unsigned>(platform_ptr_size()), index))};
     llvm::Value *memptr = m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type),
                                                       stack_var, indices);
     m_Builder.CreateStore(gened_expr, memptr);
@@ -519,8 +527,12 @@ Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
   }
   if (array_lit.expressions.size() > 0) {
     std::vector<llvm::Value *> indices{
-        llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
-        llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0))};
+        llvm::ConstantInt::get(
+            m_Context,
+            llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
+        llvm::ConstantInt::get(
+            m_Context,
+            llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0))};
     llvm::Value *p_array_element = m_Builder.CreateInBoundsGEP(
         gen_type(array_lit.type), p_array_value, indices, "arrayinit.begin");
     if (const auto *inner_array =
@@ -533,8 +545,9 @@ Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
     }
     for (int i = 1; i < array_lit.expressions.size(); ++i) {
       auto &expr = array_lit.expressions[i];
-      std::vector<llvm::Value *> indices{
-          llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 1))};
+      std::vector<llvm::Value *> indices{llvm::ConstantInt::get(
+          m_Context,
+          llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 1))};
       p_array_element = m_Builder.CreateInBoundsGEP(
           gen_type(expr->type), p_array_element, indices, "arrayinit.element");
       if (const auto *inner_array =
@@ -566,10 +579,12 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
     --access_decl_type.pointer_depth;
   }
   std::vector<llvm::Value *> outer_indices{
-      llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
       llvm::ConstantInt::get(
           m_Context,
-          llvm::APInt(static_cast<unsigned>(platform_ptr_size()), access.inner_member_access->member_index))};
+          llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
+      llvm::ConstantInt::get(
+          m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()),
+                                 access.inner_member_access->member_index))};
   llvm::Value *last_gep = m_Builder.CreateInBoundsGEP(
       gen_type(access_decl_type), decl, outer_indices);
   out_type = access.inner_member_access->type;
@@ -585,9 +600,12 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
         --tmp_type.pointer_depth;
       }
       std::vector<llvm::Value *> inner_indices{
-          llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
-          llvm::ConstantInt::get(m_Context,
-                                 llvm::APInt(static_cast<unsigned>(platform_ptr_size()), current_chain->member_index))};
+          llvm::ConstantInt::get(
+              m_Context,
+              llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
+          llvm::ConstantInt::get(
+              m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()),
+                                     current_chain->member_index))};
       last_gep = m_Builder.CreateInBoundsGEP(gen_type(tmp_type), last_gep,
                                              inner_indices);
       prev_chain = current_chain;
@@ -620,25 +638,29 @@ Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access,
       llvm::APInt index{static_cast<unsigned int>(platform_ptr_size()), 0};
       switch (res.kind) {
       case Type::Kind::i8:
-        index = {static_cast<unsigned int>(platform_ptr_size()), static_cast<uint64_t>(res.value.i8)};
+        index = {static_cast<unsigned int>(platform_ptr_size()),
+                 static_cast<uint64_t>(res.value.i8)};
         break;
       case Type::Kind::u8:
         index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u8};
         break;
       case Type::Kind::i16:
-        index = {static_cast<unsigned int>(platform_ptr_size()), static_cast<uint64_t>(res.value.i16)};
+        index = {static_cast<unsigned int>(platform_ptr_size()),
+                 static_cast<uint64_t>(res.value.i16)};
         break;
       case Type::Kind::u16:
         index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u16};
         break;
       case Type::Kind::i32:
-        index = {static_cast<unsigned int>(platform_ptr_size()), static_cast<uint64_t>(res.value.i32)};
+        index = {static_cast<unsigned int>(platform_ptr_size()),
+                 static_cast<uint64_t>(res.value.i32)};
         break;
       case Type::Kind::u32:
         index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u32};
         break;
       case Type::Kind::i64:
-        index = {static_cast<unsigned int>(platform_ptr_size()), static_cast<uint64_t>(res.value.i64)};
+        index = {static_cast<unsigned int>(platform_ptr_size()),
+                 static_cast<uint64_t>(res.value.i64)};
         break;
       case Type::Kind::u64:
         index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u64};
@@ -649,12 +671,25 @@ Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access,
       default:
         break;
       }
-      inner_indices = {llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
-                       llvm::ConstantInt::get(m_Context, index)};
+      inner_indices = {
+          llvm::ConstantInt::get(
+              m_Context,
+              llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
+          llvm::ConstantInt::get(m_Context, index)};
     } else {
       llvm::Value *expr_value = gen_expr(expr);
-      inner_indices = {llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
-                       expr_value};
+      if (get_type_size(expr.type.kind) < platform_ptr_size()) { // extent
+        expr_value = m_Builder.CreateSExt(
+            expr_value, gen_type(platform_ptr_type()), "idxprom");
+      } else if (get_type_size(expr.type.kind) > platform_ptr_size()) { // trunc
+        expr_value = m_Builder.CreateTrunc(
+            expr_value, gen_type(platform_ptr_type()), "idxtrunc");
+      }
+      inner_indices = {
+          llvm::ConstantInt::get(
+              m_Context,
+              llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
+          expr_value};
     }
     return std::move(inner_indices);
   };
@@ -692,7 +727,7 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast) {
       var = gen_explicit_cast(*inner_cast);
       prev_cast_type = inner_cast->cast_type;
     } else {
-        var = m_Declarations[decl_ref_expr->decl];
+      var = m_Declarations[decl_ref_expr->decl];
     }
   }
   var = decl_ref_expr ? m_Declarations[decl_ref_expr->decl] : var;
