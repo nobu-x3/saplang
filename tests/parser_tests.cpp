@@ -1406,3 +1406,17 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '-'");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
 }
+
+TEST_CASE("Pointer decay alternative access", "[parser]") {
+  TEST_SETUP(R"(
+fn i32 bar(i32* arr) { return *(arr + 0); }
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "GroupingExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '+'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: arr");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+}

@@ -53,7 +53,7 @@ private:
   std::unique_ptr<ResolvedGroupingExpr>
   resolve_grouping_expr(const GroupingExpr &group);
 
-  std::unique_ptr<ResolvedBinaryOperator>
+  std::unique_ptr<ResolvedExpr>
   resolve_binary_operator(const BinaryOperator &op);
 
   std::unique_ptr<ResolvedUnaryOperator>
@@ -104,6 +104,10 @@ private:
   std::unique_ptr<ResolvedArrayElementAccess>
   resolve_array_element_access(const ArrayElementAccess &access,
                                const ResolvedDecl *decl);
+
+  std::unique_ptr<ResolvedArrayElementAccess> resolve_array_element_access_no_deref(
+      SourceLocation loc, std::vector<std::unique_ptr<ResolvedExpr>> indices,
+      const ResolvedDecl *decl);
 
   bool flow_sensitive_analysis(const ResolvedFuncDecl &fn);
 

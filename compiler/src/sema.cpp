@@ -8,6 +8,7 @@
 #include "ast.h"
 #include "cfg.h"
 #include "lexer.h"
+#include "utils.h"
 #include <algorithm>
 
 namespace saplang {
@@ -328,7 +329,8 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
       try_cast_expr(expr, type, cee, is_array_decay);
       expr.type.array_data = array_data;
     }
-    if (type.pointer_depth == expr.type.array_data->dimension_count) {
+    if (type.pointer_depth == expr.type.array_data->dimension_count &&
+        type.pointer_depth == 1) {
       is_array_decay = true;
       return try_cast_expr(expr, type, cee, is_array_decay);
     }
@@ -751,7 +753,7 @@ bool is_comp_op(TokenKind op) {
   return false;
 }
 
-std::unique_ptr<ResolvedBinaryOperator>
+std::unique_ptr<ResolvedExpr>
 Sema::resolve_binary_operator(const BinaryOperator &op) {
   auto resolved_lhs = resolve_expr(*op.lhs);
   auto resolved_rhs = resolve_expr(*op.rhs);
@@ -766,6 +768,17 @@ Sema::resolve_binary_operator(const BinaryOperator &op) {
                     "cannot implicitly cast rhs to lhs - from type '" +
                         resolved_rhs->type.name + "' to type '" +
                         resolved_lhs->type.name + "'.");
+  }
+  if (const auto *dre =
+          dynamic_cast<const ResolvedDeclRefExpr *>(resolved_lhs.get())) {
+    if (dre->type.pointer_depth > 0 &&
+        (op.op == TokenKind::Plus || op.op == TokenKind::Minus)) {
+      std::vector<std::unique_ptr<ResolvedExpr>> indices{};
+      SourceLocation loc = resolved_rhs->location;
+      indices.push_back(std::move(resolved_rhs));
+      return resolve_array_element_access_no_deref(loc, std::move(indices),
+                                                   dre->decl);
+    }
   }
   return std::make_unique<ResolvedBinaryOperator>(
       op.location, std::move(resolved_lhs), std::move(resolved_rhs), op.op);
@@ -1164,11 +1177,50 @@ Sema::resolve_array_element_access(const ArrayElementAccess &access,
   }
   auto resolved_access = std::make_unique<ResolvedArrayElementAccess>(
       access.location, decl, std::move(indices));
-  if (resolved_access->type.array_data->dimension_count < deindex_count)
+  if ((resolved_access->type.array_data &&
+       resolved_access->type.array_data->dimension_count < deindex_count) &&
+      resolved_access->type.pointer_depth -
+              resolved_access->type.dereference_counts <
+          deindex_count)
     return report(access.location,
                   "more array accesses than there are dimensions.");
   de_array_type(resolved_access->type, deindex_count);
   return std::move(resolved_access);
+}
+
+std::unique_ptr<ResolvedArrayElementAccess>
+Sema::resolve_array_element_access_no_deref(
+    SourceLocation loc, std::vector<std::unique_ptr<ResolvedExpr>> indices,
+    const ResolvedDecl *decl) {
+  if (!decl->type.array_data &&
+      (decl->type.pointer_depth - decl->type.dereference_counts < 1))
+    return report(loc,
+                  "trying to access an array element of a variable that is not "
+                  "an array or pointer: " +
+                      decl->id + ".");
+  for (auto &&expr : indices) {
+    const auto *decl_ref_expr =
+        dynamic_cast<const ResolvedDeclRefExpr *>(expr.get());
+    const auto *binop =
+        dynamic_cast<const ResolvedBinaryOperator *>(expr.get());
+    if (binop) {
+      Type max_type = binop->lhs->type.kind > binop->rhs->type.kind
+                          ? binop->lhs->type
+                          : binop->rhs->type;
+      bool is_decay;
+      try_cast_expr(*binop->lhs, max_type, m_Cee, is_decay);
+      try_cast_expr(*binop->rhs, max_type, m_Cee, is_decay);
+    }
+    if (!decl_ref_expr && !binop) {
+      if (expr->type.kind != platform_ptr_type().kind) {
+        bool is_decay;
+        if (!try_cast_expr(*expr, platform_ptr_type(), m_Cee, is_decay))
+          return report(expr->location, "cannot cast to address index type.");
+      }
+    }
+  }
+  return std::make_unique<ResolvedArrayElementAccess>(loc, decl,
+                                                      std::move(indices));
 }
 
 std::unique_ptr<ResolvedStructLiteralExpr>
