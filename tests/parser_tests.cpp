@@ -1283,3 +1283,140 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: tt1");
 }
+
+TEST_CASE("Array declarations no initializer", "[parser]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn void foo() {
+    var i32[8] test;
+    var i32[8][9] test2;
+    var TestStruct[8][10] test3;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:i32[8]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test2:i32[8][9]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test3:TestStruct[8][10]");
+}
+
+TEST_CASE("Array declarations with initializers", "[parser]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn void foo() {
+    var i32[3] test = [0, 1, 2];
+    var i32[2][2] test2 = [[0, 1], [2, 3]];
+    var TestStruct[2][2] test3 = [[.{0}, .{1}], [.{2}, .{3}]];
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:i32[3]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test2:i32[2][2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test3:TestStruct[2][2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
+}
+
+TEST_CASE("Array element access", "[parser]") {
+  TEST_SETUP(R"(
+struct TestStruct { i32 a; }
+fn void foo() {
+    var i32[3] test = [0, 1, 2];
+    var i32 a = test[0];
+    var TestStruct[2][2] test3 = [[.{0}, .{1}], [.{2}, .{3}]];
+    var TestStruct b = test3[0][1];
+    var i32 c = test[-1];
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:i32[3]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: a:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayElementAccess: test");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ElementNo 0:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test3:TestStruct[2][2]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: b:TestStruct");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayElementAccess: test3");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ElementNo 0:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ElementNo 1:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: c:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ArrayElementAccess: test");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ElementNo 0:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '-'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+}
+
+TEST_CASE("Pointer decay alternative access", "[parser]") {
+  TEST_SETUP(R"(
+fn i32 bar(i32* arr) { return *(arr + 0); }
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '*'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "GroupingExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '+'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: arr");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+}

@@ -48,6 +48,7 @@ private:
   std::unique_ptr<Expr> parse_primary_expr();
   std::unique_ptr<ExplicitCast> parse_explicit_cast(Type type);
   std::unique_ptr<StructLiteralExpr> parse_struct_literal_expr();
+  std::unique_ptr<ArrayLiteralExpr> parse_array_literal_expr();
   std::unique_ptr<Expr> parse_expr();
   std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs,
                                        int precedence);
@@ -71,7 +72,8 @@ private:
   std::unique_ptr<MemberAccess>
   parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
                       const std::string &var_id);
-
+  std::unique_ptr<ArrayElementAccess>
+  parse_array_element_access(std::string var_id);
   std::unique_ptr<Stmt> parse_assignment_or_expr();
   std::unique_ptr<Assignment> parse_assignment(std::unique_ptr<Expr> lhs);
   std::unique_ptr<Assignment>

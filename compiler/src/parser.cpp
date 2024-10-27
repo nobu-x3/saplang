@@ -1,5 +1,6 @@
 #include <cassert>
 #include <memory>
+#include <string>
 
 #include "ast.h"
 #include "lexer.h"
@@ -347,6 +348,10 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // | '(' <expr> ')'
 // | <memberAccess>
 // | <nullExpr>
+// | <arrayInitializer>
+//
+// <arrayInitializer>
+// ::= '[' (<primaryExpression> (',')*)* ']'
 //
 // <numberLiteral>
 // ::= <integer>
@@ -384,8 +389,9 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
           return parse_explicit_cast(*maybe_type);
         }
         go_back_to_prev_token(); // restore identifier
-      } else
+      } else {
         go_back_to_prev_token(); // restore identifier
+      }
     }
     auto expr = parse_expr();
     if (!expr)
@@ -425,6 +431,8 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
       // Member access
       if (m_NextToken.kind == TokenKind::Dot) {
         return parse_member_access(std::move(decl_ref_expr), var_id);
+      } else if (m_NextToken.kind == TokenKind::Lbracket) {
+        return parse_array_element_access(var_id);
       }
       return decl_ref_expr;
     }
@@ -447,6 +455,9 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
                     "expected '}' after struct literal initialization.");
     eat_next_token(); // eat '}'
     return std::move(struct_lit);
+  }
+  if (m_NextToken.kind == TokenKind::Lbracket) {
+    return parse_array_literal_expr();
   }
   return report(location, "expected expression.");
 }
@@ -487,6 +498,27 @@ Parser::parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
                                           std::move(inner_access));
   }
   return nullptr;
+}
+
+std::unique_ptr<ArrayElementAccess>
+Parser::parse_array_element_access(std::string var_id) {
+  assert(m_NextToken.kind == TokenKind::Lbracket &&
+         "unexpected token, expected '['.");
+  SourceLocation location = m_NextToken.location;
+  std::vector<std::unique_ptr<Expr>> indices{};
+  while (m_NextToken.kind == TokenKind::Lbracket) {
+    eat_next_token(); // eat '['
+    auto expr = parse_expr();
+    if (!expr)
+      return nullptr;
+    indices.emplace_back(std::move(expr));
+    if (m_NextToken.kind != TokenKind::Rbracket) {
+      return report(m_NextToken.location, "expected '].");
+    }
+    eat_next_token(); // eat ']'
+  }
+  return std::make_unique<ArrayElementAccess>(location, std::move(var_id),
+                                              std::move(indices));
 }
 
 std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {
@@ -533,6 +565,23 @@ std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {
   }
   return std::make_unique<StructLiteralExpr>(loc,
                                              std::move(field_initializers));
+}
+
+std::unique_ptr<ArrayLiteralExpr> Parser::parse_array_literal_expr() {
+  assert(m_NextToken.kind == TokenKind::Lbracket && "expected '['");
+  SourceLocation location = m_NextToken.location;
+  eat_next_token(); // eat '['
+  std::vector<std::unique_ptr<Expr>> expressions{};
+  while (m_NextToken.kind != TokenKind::Rbracket) {
+    auto expr = parse_expr();
+    if (!expr)
+      return nullptr;
+    expressions.emplace_back(std::move(expr));
+    if (m_NextToken.kind == TokenKind::Comma)
+      eat_next_token(); // eat ','
+  }
+  eat_next_token(); // eat ']'
+  return std::make_unique<ArrayLiteralExpr>(location, std::move(expressions));
 }
 
 // <argList>
@@ -682,6 +731,7 @@ std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
 // <type>
 // ::= 'void' ('*')*
 // |   <identifier> ('*')*
+// |   <identifier>'[' (<integer>)* ']'
 std::optional<Type> Parser::parse_type() {
   Token token = m_NextToken;
   if (token.kind == TokenKind::KwVoid) {
@@ -696,31 +746,50 @@ std::optional<Type> Parser::parse_type() {
       eat_next_token();
       ++ptr_depth;
     }
+    std::optional<ArrayData> maybe_array_data{std::nullopt};
+    if (m_NextToken.kind == TokenKind::Lbracket) {
+      ArrayData array_data;
+      while (m_NextToken.kind == TokenKind::Lbracket) {
+        eat_next_token(); // eat '['
+        ++array_data.dimension_count;
+        if (m_NextToken.kind == TokenKind::Integer) {
+          array_data.dimensions.emplace_back(std::stoi(*m_NextToken.value));
+          eat_next_token(); // eat array len
+        }
+        if (m_NextToken.kind != TokenKind::Rbracket) {
+          report(m_NextToken.location, "expected '].");
+          return std::nullopt;
+        }
+        eat_next_token(); // eat ']'
+      }
+      maybe_array_data = std::move(array_data);
+    }
     assert(id_token.value.has_value());
     if (*id_token.value == "i8") {
-      return Type::builtin_i8(ptr_depth);
+      return Type::builtin_i8(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "i16") {
-      return Type::builtin_i16(ptr_depth);
+      return Type::builtin_i16(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "i32") {
-      return Type::builtin_i32(ptr_depth);
+      return Type::builtin_i32(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "i64") {
-      return Type::builtin_i64(ptr_depth);
+      return Type::builtin_i64(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "u8") {
-      return Type::builtin_u8(ptr_depth);
+      return Type::builtin_u8(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "u16") {
-      return Type::builtin_u16(ptr_depth);
+      return Type::builtin_u16(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "u32") {
-      return Type::builtin_u32(ptr_depth);
+      return Type::builtin_u32(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "u64") {
-      return Type::builtin_u64(ptr_depth);
+      return Type::builtin_u64(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "f32") {
-      return Type::builtin_f32(ptr_depth);
+      return Type::builtin_f32(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "f64") {
-      return Type::builtin_f64(ptr_depth);
+      return Type::builtin_f64(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "bool") {
-      return Type::builtin_bool(ptr_depth);
+      return Type::builtin_bool(ptr_depth, std::move(maybe_array_data));
     }
-    Type type = Type::custom(*id_token.value, ptr_depth);
+    Type type =
+        Type::custom(*id_token.value, ptr_depth, std::move(maybe_array_data));
     return type;
   }
   report(m_NextToken.location, "expected type specifier.");
@@ -741,7 +810,7 @@ ParsingResult Parser::parse_source_file() {
         m_NextToken.kind != TokenKind::KwConst) {
       report(
           m_NextToken.location,
-          "only function and struct declarations are allowed in global scope.");
+          "only function, struct declarations and global variables are allowed in global scope.");
       is_complete_ast = false;
       sync_on(sync_kinds);
       continue;

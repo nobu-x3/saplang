@@ -19,9 +19,13 @@ Lexer::Lexer(const SourceFile &source) : m_Source(&source) {}
 
 Token Lexer::get_prev_token() {
   char curr_char = go_back_char();
-  curr_char = go_back_char();
   while (!is_space(curr_char))
     curr_char = go_back_char();
+  while (!is_alphanum(curr_char))
+    curr_char = go_back_char();
+  while (is_alphanum(curr_char))
+    curr_char = go_back_char();
+  eat_next_char();
   return get_next_token();
 }
 
@@ -130,6 +134,6 @@ char Lexer::go_back_char() {
       m_Column = col;
     }
   }
-  return m_Source->buffer[m_Idx--];
+  return m_Source->buffer[--m_Idx];
 }
 } // namespace saplang

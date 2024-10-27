@@ -1,11 +1,14 @@
 #include "sema.h"
 
 #include <cassert>
+#include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include "ast.h"
 #include "cfg.h"
 #include "lexer.h"
+#include "utils.h"
 #include <algorithm>
 
 namespace saplang {
@@ -300,7 +303,7 @@ bool can_be_cast(Type::Kind cast_from, Type::Kind cast_to) {
   return cast_to != Type::Kind::Void && cast_from != Type::Kind::Void &&
          does_type_have_associated_size(cast_from) &&
          does_type_have_associated_size(cast_to) &&
-         get_size(cast_from) <= get_size(cast_to);
+         get_type_size(cast_from) <= get_type_size(cast_to);
 }
 
 bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
@@ -317,7 +320,22 @@ bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
 }
 
 bool try_cast_expr(ResolvedExpr &expr, const Type &type,
-                   ConstantExpressionEvaluator &cee) {
+                   ConstantExpressionEvaluator &cee, bool &is_array_decay) {
+  is_array_decay = false;
+  if (expr.type.array_data) {
+    if (expr.type.kind != type.kind) {
+      auto array_data = expr.type.array_data;
+      expr.type.array_data = std::nullopt;
+      try_cast_expr(expr, type, cee, is_array_decay);
+      expr.type.array_data = array_data;
+    }
+    if (type.pointer_depth == expr.type.array_data->dimension_count &&
+        type.pointer_depth == 1) {
+      is_array_decay = true;
+      return try_cast_expr(expr, type, cee, is_array_decay);
+    }
+    return false;
+  }
   if (type.pointer_depth != expr.type.pointer_depth) {
     if (const auto *null_expr = dynamic_cast<const NullExpr *>(&expr)) {
       return true;
@@ -325,7 +343,7 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
     return false;
   }
   if (auto *groupexp = dynamic_cast<ResolvedGroupingExpr *>(&expr)) {
-    if (try_cast_expr(*groupexp->expr, type, cee)) {
+    if (try_cast_expr(*groupexp->expr, type, cee, is_array_decay)) {
       groupexp->type = type;
       groupexp->set_constant_value(cee.evaluate(*groupexp));
     }
@@ -335,16 +353,20 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
                         ? binop->lhs->type
                         : binop->rhs->type;
     max_type = type.kind > max_type.kind ? type : max_type;
-    if (try_cast_expr(*binop->lhs, max_type, cee) &&
-        try_cast_expr(*binop->rhs, max_type, cee)) {
-      binop->type = type;
-      binop->set_constant_value(cee.evaluate(*binop));
+    if (try_cast_expr(*binop->lhs, max_type, cee, is_array_decay) &&
+        try_cast_expr(*binop->rhs, max_type, cee, is_array_decay)) {
+      if (!is_array_decay) {
+        binop->type = type;
+        binop->set_constant_value(cee.evaluate(*binop));
+      }
     }
     return true;
   } else if (auto *unop = dynamic_cast<ResolvedUnaryOperator *>(&expr)) {
-    if (try_cast_expr(*unop->rhs, type, cee)) {
-      unop->type = type;
-      unop->set_constant_value(cee.evaluate(*unop));
+    if (try_cast_expr(*unop->rhs, type, cee, is_array_decay)) {
+      if (!is_array_decay) {
+        unop->type = type;
+        unop->set_constant_value(cee.evaluate(*unop));
+      }
     }
     return true;
   } else if (auto *number_literal =
@@ -356,13 +378,16 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
     return true;
   } else if (auto *decl_ref = dynamic_cast<ResolvedDeclRefExpr *>(&expr)) {
     if (can_be_cast(decl_ref->type.kind, type.kind)) {
-      decl_ref->type = type;
+      if (!is_array_decay)
+        decl_ref->type = type;
     }
     return true;
   } else if (auto *call_expr = dynamic_cast<ResolvedCallExpr *>(&expr)) {
     if (can_be_cast(call_expr->func_decl->type.kind, type.kind)) {
-      call_expr->type = type;
-      call_expr->set_constant_value(cee.evaluate(*call_expr));
+      if (!is_array_decay) {
+        call_expr->type = type;
+        call_expr->set_constant_value(cee.evaluate(*call_expr));
+      }
       return true;
     }
     return false;
@@ -374,8 +399,10 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
   std::unique_ptr<ResolvedExpr> condition = resolve_expr(*stmt.condition);
   if (!condition)
     return nullptr;
+  bool is_array_decay;
   if (condition->type.kind != Type::Kind::Bool) {
-    if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee))
+    if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee,
+                       is_array_decay))
       return report(condition->location,
                     "condition is expected to evaluate to bool.");
   }
@@ -676,16 +703,14 @@ std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
   if (!type || type->kind == Type::Kind::Void)
     return report(decl.location, "variable '" + decl.id + "' has invalid '" +
                                      decl.type.name + "' type.");
-  std::vector<std::unique_ptr<ResolvedDecl>> subtype_decls;
-  if (type->kind == Type::Kind::Custom) {
-  }
   std::unique_ptr<ResolvedExpr> resolved_initializer = nullptr;
   if (decl.initializer) {
     resolved_initializer = resolve_expr(*decl.initializer, &(*type));
     if (!resolved_initializer)
       return nullptr;
-    if (resolved_initializer->type.kind != type->kind) {
-      if (!try_cast_expr(*resolved_initializer, *type, m_Cee))
+    if (!is_same_type(resolved_initializer->type, *type)) {
+      bool is_array_decay;
+      if (!try_cast_expr(*resolved_initializer, *type, m_Cee, is_array_decay))
         return report(resolved_initializer->location,
                       "initializer type mismatch.");
     }
@@ -728,18 +753,32 @@ bool is_comp_op(TokenKind op) {
   return false;
 }
 
-std::unique_ptr<ResolvedBinaryOperator>
+std::unique_ptr<ResolvedExpr>
 Sema::resolve_binary_operator(const BinaryOperator &op) {
   auto resolved_lhs = resolve_expr(*op.lhs);
   auto resolved_rhs = resolve_expr(*op.rhs);
   if (!resolved_lhs || !resolved_rhs)
     return nullptr;
-  if (is_comp_op(op.op) && resolved_lhs->type.kind != resolved_rhs->type.kind) {
-    if (!try_cast_expr(*resolved_rhs, resolved_lhs->type, m_Cee))
+  if (is_comp_op(op.op) &&
+      !is_same_type(resolved_lhs->type, resolved_rhs->type)) {
+    bool is_array_decay;
+    if (!try_cast_expr(*resolved_rhs, resolved_lhs->type, m_Cee,
+                       is_array_decay))
       return report(resolved_lhs->location,
                     "cannot implicitly cast rhs to lhs - from type '" +
                         resolved_rhs->type.name + "' to type '" +
                         resolved_lhs->type.name + "'.");
+  }
+  if (const auto *dre =
+          dynamic_cast<const ResolvedDeclRefExpr *>(resolved_lhs.get())) {
+    if (dre->type.pointer_depth > 0 &&
+        (op.op == TokenKind::Plus || op.op == TokenKind::Minus)) {
+      std::vector<std::unique_ptr<ResolvedExpr>> indices{};
+      SourceLocation loc = resolved_rhs->location;
+      indices.push_back(std::move(resolved_rhs));
+      return resolve_array_element_access_no_deref(loc, std::move(indices),
+                                                   dre->decl);
+    }
   }
   return std::make_unique<ResolvedBinaryOperator>(
       op.location, std::move(resolved_lhs), std::move(resolved_rhs), op.op);
@@ -768,8 +807,8 @@ Sema::resolve_unary_operator(const UnaryOperator &op) {
     if (const ResolvedNumberLiteral *rvalue =
             dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
       return report(resolved_rhs->location, "cannot derefenence an rvalue.");
-      --resolved_rhs->type.pointer_depth;
     }
+    ++resolved_rhs->type.dereference_counts;
   }
   return std::make_unique<ResolvedUnaryOperator>(
       op.location, std::move(resolved_rhs), op.op);
@@ -825,9 +864,9 @@ Sema::resolve_explicit_cast(const ExplicitCast &cast) {
         cast_type = ResolvedExplicitCastExpr::CastType::FloatToInt;
       if (lhs_type->kind >= Type::Kind::FLOATS_START &&
           lhs_type->kind <= Type::Kind::FLOATS_END) {
-        if (get_size(lhs_type->kind) > get_size(rhs->type.kind))
+        if (get_type_size(lhs_type->kind) > get_type_size(rhs->type.kind))
           cast_type = ResolvedExplicitCastExpr::CastType::Extend;
-        else if (get_size(lhs_type->kind) < get_size(rhs->type.kind))
+        else if (get_type_size(lhs_type->kind) < get_type_size(rhs->type.kind))
           cast_type = ResolvedExplicitCastExpr::CastType::Truncate;
       }
     } else if (rhs->type.kind >= Type::Kind::INTEGERS_START &&
@@ -837,9 +876,9 @@ Sema::resolve_explicit_cast(const ExplicitCast &cast) {
         cast_type = ResolvedExplicitCastExpr::CastType::IntToFloat;
       if (lhs_type->kind >= Type::Kind::INTEGERS_START &&
           lhs_type->kind <= Type::Kind::INTEGERS_END) {
-        if (get_size(lhs_type->kind) > get_size(rhs->type.kind))
+        if (get_type_size(lhs_type->kind) > get_type_size(rhs->type.kind))
           cast_type = ResolvedExplicitCastExpr::CastType::Extend;
-        else if (get_size(lhs_type->kind) < get_size(rhs->type.kind))
+        else if (get_type_size(lhs_type->kind) < get_type_size(rhs->type.kind))
           cast_type = ResolvedExplicitCastExpr::CastType::Truncate;
       }
     }
@@ -854,7 +893,9 @@ Sema::resolve_while_stmt(const WhileStmt &stmt) {
   if (!condition)
     return nullptr;
   if (condition->type.kind != Type::Kind::Bool) {
-    if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee))
+    bool is_array_decay;
+    if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee,
+                       is_array_decay))
       return report(condition->location,
                     "condition is expected to evaluate to bool.");
   }
@@ -940,8 +981,10 @@ Sema::resolve_return_stmt(const ReturnStmt &stmt) {
     resolved_expr = resolve_expr(*stmt.expr, &m_CurrFunction->type);
     if (!resolved_expr)
       return nullptr;
-    if (m_CurrFunction->type.kind != resolved_expr->type.kind) {
-      if (!try_cast_expr(*resolved_expr, m_CurrFunction->type, m_Cee)) {
+    if (!is_same_type(m_CurrFunction->type, resolved_expr->type)) {
+      bool is_array_decay;
+      if (!try_cast_expr(*resolved_expr, m_CurrFunction->type, m_Cee,
+                         is_array_decay)) {
         return report(resolved_expr->location, "unexpected return type.");
       }
     }
@@ -971,6 +1014,9 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
     if (const auto *struct_literal =
             dynamic_cast<const StructLiteralExpr *>(&expr))
       return resolve_struct_literal_expr(*struct_literal, *type);
+    if (const auto *array_literal =
+            dynamic_cast<const ArrayLiteralExpr *>(&expr))
+      return resolve_array_literal_expr(*array_literal, *type);
     if (const auto *nullexpr = dynamic_cast<const NullExpr *>(&expr)) {
       return std::make_unique<ResolvedNullExpr>(nullexpr->location, *type);
     }
@@ -1078,6 +1124,105 @@ Sema::resolve_member_access(const MemberAccess &access,
                                      "'.");
 }
 
+std::unique_ptr<ResolvedArrayElementAccess>
+Sema::resolve_array_element_access(const ArrayElementAccess &access,
+                                   const ResolvedDecl *decl) {
+  if (!decl->type.array_data &&
+      (decl->type.pointer_depth - decl->type.dereference_counts < 1))
+    return report(access.location,
+                  "trying to access an array element of a variable that is not "
+                  "an array or pointer: " +
+                      decl->id + ".");
+  std::vector<std::unique_ptr<ResolvedExpr>> indices{};
+  uint deindex_count = 0;
+  for (auto &&index : access.indices) {
+    auto expr = resolve_expr(*index);
+    if (!expr)
+      return nullptr;
+    const auto *decl_ref_expr =
+        dynamic_cast<const ResolvedDeclRefExpr *>(expr.get());
+    const auto *binop =
+        dynamic_cast<const ResolvedBinaryOperator *>(expr.get());
+    if (binop) {
+      Type max_type = binop->lhs->type.kind > binop->rhs->type.kind
+                          ? binop->lhs->type
+                          : binop->rhs->type;
+      bool is_decay;
+      try_cast_expr(*binop->lhs, max_type, m_Cee, is_decay);
+      try_cast_expr(*binop->rhs, max_type, m_Cee, is_decay);
+    }
+    if (!decl_ref_expr && !binop) {
+      if (expr->type.kind != platform_ptr_type().kind) {
+        bool is_decay;
+        if (!try_cast_expr(*expr, platform_ptr_type(), m_Cee, is_decay))
+          return report(expr->location, "cannot cast to address index type.");
+      }
+    }
+    indices.emplace_back(std::move(expr));
+    ++deindex_count;
+
+    /* if (get_size(expr->type.kind) != platform_ptr_size()) { */
+    /*   bool is_decay; */
+    /*   if (!try_cast_expr(*expr, platform_ptr_type(), m_Cee, is_decay)) { */
+    /*     return report(expr->location, */
+    /*                   "cannot implicitly cast type used for indexing: " + */
+    /*                       expr->type.name + " to platform ptr size."); */
+    /*   } */
+    /* } */
+
+    // @TODO: on constant value it's possible to do bounds check
+    /* if(expr->get_constant_value()) { */
+    /*     auto constant_val = expr->get_constant_value().value(); */
+    /* } */
+  }
+  auto resolved_access = std::make_unique<ResolvedArrayElementAccess>(
+      access.location, decl, std::move(indices));
+  if ((resolved_access->type.array_data &&
+       resolved_access->type.array_data->dimension_count < deindex_count) &&
+      resolved_access->type.pointer_depth -
+              resolved_access->type.dereference_counts <
+          deindex_count)
+    return report(access.location,
+                  "more array accesses than there are dimensions.");
+  de_array_type(resolved_access->type, deindex_count);
+  return std::move(resolved_access);
+}
+
+std::unique_ptr<ResolvedArrayElementAccess>
+Sema::resolve_array_element_access_no_deref(
+    SourceLocation loc, std::vector<std::unique_ptr<ResolvedExpr>> indices,
+    const ResolvedDecl *decl) {
+  if (!decl->type.array_data &&
+      (decl->type.pointer_depth - decl->type.dereference_counts < 1))
+    return report(loc,
+                  "trying to access an array element of a variable that is not "
+                  "an array or pointer: " +
+                      decl->id + ".");
+  for (auto &&expr : indices) {
+    const auto *decl_ref_expr =
+        dynamic_cast<const ResolvedDeclRefExpr *>(expr.get());
+    const auto *binop =
+        dynamic_cast<const ResolvedBinaryOperator *>(expr.get());
+    if (binop) {
+      Type max_type = binop->lhs->type.kind > binop->rhs->type.kind
+                          ? binop->lhs->type
+                          : binop->rhs->type;
+      bool is_decay;
+      try_cast_expr(*binop->lhs, max_type, m_Cee, is_decay);
+      try_cast_expr(*binop->rhs, max_type, m_Cee, is_decay);
+    }
+    if (!decl_ref_expr && !binop) {
+      if (expr->type.kind != platform_ptr_type().kind) {
+        bool is_decay;
+        if (!try_cast_expr(*expr, platform_ptr_type(), m_Cee, is_decay))
+          return report(expr->location, "cannot cast to address index type.");
+      }
+    }
+  }
+  return std::make_unique<ResolvedArrayElementAccess>(loc, decl,
+                                                      std::move(indices));
+}
+
 std::unique_ptr<ResolvedStructLiteralExpr>
 Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
                                   Type struct_type) {
@@ -1129,8 +1274,9 @@ Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
     }
     expr->set_constant_value(m_Cee.evaluate(*expr));
     const Type &declared_member_type = struct_decl->members[member_index].first;
-    if (expr->type.kind != declared_member_type.kind) {
-      if (!try_cast_expr(*expr, declared_member_type, m_Cee)) {
+    if (!is_same_type(expr->type, declared_member_type)) {
+      bool is_array_decay;
+      if (!try_cast_expr(*expr, declared_member_type, m_Cee, is_array_decay)) {
         errors = true;
         report(expr->location, "cannot implicitly cast from type '" +
                                    expr->type.name + "' to type '" +
@@ -1166,6 +1312,30 @@ Sema::resolve_struct_literal_expr(const StructLiteralExpr &lit,
       lit.location, *type, std::move(sorted_field_initializers));
 }
 
+std::unique_ptr<ResolvedArrayLiteralExpr>
+Sema::resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type) {
+  if (!array_type.array_data)
+    return report(lit.location,
+                  "trying to initialize a non-array type with array literal.");
+  std::vector<std::unique_ptr<ResolvedExpr>> expressions;
+  for (auto &expr : lit.element_initializers) {
+    Type type = array_type;
+    de_array_type(type, 1);
+    auto expression = resolve_expr(*expr, &type);
+    if (!expression)
+      return nullptr;
+    if (expression->type.kind != array_type.kind) {
+      bool is_decay;
+      if (!try_cast_expr(*expression, type, m_Cee, is_decay))
+        return report(expression->location, "cannot cast type.");
+    }
+    expression->set_constant_value(expression->get_constant_value());
+    expressions.emplace_back(std::move(expression));
+  }
+  return std::make_unique<ResolvedArrayLiteralExpr>(lit.location, array_type,
+                                                    std::move(expressions));
+}
+
 std::unique_ptr<ResolvedDeclRefExpr>
 Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
   auto &&maybe_decl = lookup_decl(decl_ref_expr.id);
@@ -1182,6 +1352,9 @@ Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
   if (const auto *member_access =
           dynamic_cast<const MemberAccess *>(&decl_ref_expr))
     return resolve_member_access(*member_access, decl);
+  if (const auto *array_access =
+          dynamic_cast<const ArrayElementAccess *>(&decl_ref_expr))
+    return resolve_array_element_access(*array_access, decl);
   return std::make_unique<ResolvedDeclRefExpr>(decl_ref_expr.location, decl);
 }
 
@@ -1211,9 +1384,12 @@ Sema::resolve_call_expr(const CallExpr &call) {
                 resolved_arg.get())) {
       resolved_type = member_access->type;
     }
-    if (resolved_type.kind != resolved_func_decl->params[i]->type.kind) {
+    if (!is_same_type(resolved_type, resolved_func_decl->params[i]->type)) {
+      bool is_array_decay;
       if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
-                         m_Cee)) {
+                         m_Cee, is_array_decay) &&
+          !is_same_array_decay(resolved_arg->type,
+                               resolved_func_decl->params[i]->type)) {
         return report(
             resolved_arg->location,
             "unexpected type '" + resolved_arg->type.name + "', expected '" +
@@ -1252,8 +1428,10 @@ Sema::resolve_assignment(const Assignment &assignment) {
   std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr, type);
   if (!rhs)
     return nullptr;
-  if (lhs->type.kind != rhs->type.kind) {
-    if (!try_cast_expr(*rhs, lhs->type, m_Cee))
+  if (!is_same_type(lhs->type, rhs->type)) {
+    bool is_array_decay;
+    if (!try_cast_expr(*rhs, lhs->type, m_Cee, is_array_decay) &&
+        !is_same_array_decay(rhs->type, lhs->type))
       return report(rhs->location, "assigned value type of '" + rhs->type.name +
                                        "' does not match variable type '" +
                                        lhs->type.name + "'.");
