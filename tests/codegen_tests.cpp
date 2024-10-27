@@ -2563,15 +2563,30 @@ fn i32 main() {
                                   "i32], ptr %m_int_array, i64 0, i64 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%4 = call i32 @foo(ptr %arraydecay13)");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %4, ptr %d, align 4");
-
-  CONTAINS_NEXT_REQUIRE(lines_it, "%arraydecay14 = getelementptr inbounds [3 x i32], ptr %int_array, i64 0, i64 0");
-  CONTAINS_NEXT_REQUIRE(lines_it, "%5 = call i32 @fizz(ptr %arraydecay14, i32 0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%arraydecay14 = getelementptr inbounds [3 x "
+                                  "i32], ptr %int_array, i64 0, i64 0");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "%5 = call i32 @fizz(ptr %arraydecay14, i32 0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %5, ptr %e, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%6 = load i32, ptr %e, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %6, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
 }
 
-// @TODO: global arrays
+TEST_CASE("Global arrays", "[codegen]") {
+  TEST_SETUP(R"(
+  var i32[3] arr = [0, 1, 2];
+  var i32[3][2] m_int_array = [[0, 1], [2, 3], [3, 4]];
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "@arr = global [3 x i32] [i32 0, i32 1, i32 2]");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "@m_int_array = global [3 x [2 x i32]] [[2 x i32] [i32 0, i32 "
+                "1], [2 x i32] [i32 2, i32 3], [2 x i32] [i32 3, i32 4]]");
+}
+
 // @TODO: array literal function parameters
 // @TODO: slices

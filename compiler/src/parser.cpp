@@ -810,7 +810,7 @@ ParsingResult Parser::parse_source_file() {
         m_NextToken.kind != TokenKind::KwConst) {
       report(
           m_NextToken.location,
-          "only function and struct declarations are allowed in global scope.");
+          "only function, struct declarations and global variables are allowed in global scope.");
       is_complete_ast = false;
       sync_on(sync_kinds);
       continue;

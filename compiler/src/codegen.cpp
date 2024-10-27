@@ -2,6 +2,7 @@
 #include "ast.h"
 #include "lexer.h"
 
+#include <llvm-18/llvm/IR/DerivedTypes.h>
 #include <llvm-18/llvm/IR/LLVMContext.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
@@ -63,6 +64,10 @@ void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl) {
     llvm::Type *type = gen_type(nullexpr->type);
     llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
     var_init = llvm::ConstantPointerNull::get(ptr_type);
+  } else if (const auto *array_lit =
+                 dynamic_cast<const ResolvedArrayLiteralExpr *>(
+                     decl.initializer.get())) {
+    var_init = gen_global_array_init(*array_lit);
   }
   // If var_init == nullptr there's an error in sema
   assert(var_init && "unexpected global variable type");
@@ -89,9 +94,43 @@ Codegen::gen_global_struct_init(const ResolvedStructLiteralExpr &init) {
                    dynamic_cast<const ResolvedStructLiteralExpr *>(
                        expr.get())) {
       constants.emplace_back(gen_global_struct_init(*struct_lit));
-    }
+    } else if (const auto *array_lit =
+                   dynamic_cast<const ResolvedArrayLiteralExpr *>(expr.get()))
+      constants.emplace_back(gen_global_array_init(*array_lit));
   }
   return llvm::ConstantStruct::get(struct_type, constants);
+}
+
+llvm::Constant *
+Codegen::gen_global_array_init(const ResolvedArrayLiteralExpr &init) {
+  llvm::ArrayType *type = nullptr;
+  if (init.type.array_data) {
+    const auto &array_data = *init.type.array_data;
+    Type de_arrayed_type = init.type;
+    int dimension = de_array_type(de_arrayed_type, 1);
+    llvm::Type *underlying_type = gen_type(de_arrayed_type);
+    if (dimension)
+      type = llvm::ArrayType::get(underlying_type, dimension);
+  }
+  if (!type)
+    return report(init.location, "cannot initialize array of this type.");
+  if (!type->isArrayTy())
+    return report(init.location, "not an array type.");
+  std::vector<llvm::Constant *> constants{};
+  constants.reserve(init.expressions.size());
+  for (auto &&expr : init.expressions) {
+    if (const auto *numlit =
+            dynamic_cast<const ResolvedNumberLiteral *>(expr.get())) {
+      constants.emplace_back(get_constant_number_value(*numlit));
+    } else if (const auto *struct_lit =
+                   dynamic_cast<const ResolvedStructLiteralExpr *>(
+                       expr.get())) {
+      constants.emplace_back(gen_global_struct_init(*struct_lit));
+    } else if (const auto *array_lit =
+                   dynamic_cast<const ResolvedArrayLiteralExpr *>(expr.get()))
+      constants.emplace_back(gen_global_array_init(*array_lit));
+  }
+  return llvm::ConstantArray::get(type, constants);
 }
 
 llvm::Constant *
