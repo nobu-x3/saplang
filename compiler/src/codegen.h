@@ -52,7 +52,12 @@ private:
 
   llvm::Value *gen_explicit_cast(const ResolvedExplicitCastExpr &cast);
 
+  llvm::Value* gen_array_decay(const Type& lhs_type, const ResolvedDeclRefExpr& rhs_dre);
+
   std::pair<llvm::Value *, Type> gen_unary_op(const ResolvedUnaryOperator &op);
+
+std::vector<llvm::Value *> get_index_accesses(const ResolvedExpr &expr,
+                                          llvm::Value *loaded_ptr);
 
   std::pair<llvm::Value *, Type>
   gen_dereference(const ResolvedDeclRefExpr &expr);

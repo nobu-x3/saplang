@@ -48,6 +48,10 @@ std::unordered_map<Type::Kind, size_t> g_AssociatedNumberLiteralSizes{
 };
 
 int de_array_type(Type &type, int dearray_count) {
+  if (type.pointer_depth > 0) {
+    type.pointer_depth -= dearray_count;
+    return type.pointer_depth;
+  }
   if (!type.array_data)
     return 0;
   type.array_data->dimension_count -= dearray_count;

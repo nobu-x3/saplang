@@ -63,6 +63,8 @@ struct Type : public IDumpable {
   std::string name;
   uint pointer_depth;
   uint dereference_counts = 0;
+  // If type has equal pointer_depth and array_data->dimension_count after
+  // casting, it's array decay
   std::optional<ArrayData> array_data;
   Type(const Type &) = default;
   Type &operator=(const Type &) = default;
@@ -150,13 +152,10 @@ private:
 int de_array_type(Type &type, int dearray_count);
 
 inline bool is_same_array_decay(const Type &a, const Type &b) {
-  if (a.array_data && !b.array_data) {
-    if (b.pointer_depth == a.array_data->dimension_count)
-      return true;
+  if (a.kind != b.kind)
     return false;
-  }
-  if (b.array_data && !a.array_data) {
-    if (a.pointer_depth == b.array_data->dimension_count)
+  if (a.array_data && !b.array_data) {
+    if (b.pointer_depth == a.array_data->dimension_count && b.pointer_depth == 1)
       return true;
     return false;
   }

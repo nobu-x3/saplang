@@ -425,9 +425,6 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
   if (const auto *struct_lit =
           dynamic_cast<const ResolvedStructLiteralExpr *>(&expr))
     return gen_struct_literal_expr(*struct_lit);
-  /* if (const auto *array_lit = */
-  /*         dynamic_cast<const ResolvedArrayLiteralExpr *>(&expr)) */
-  /*   return gen_array_literal_expr(*array_lit); */
   if (const auto *group = dynamic_cast<const ResolvedGroupingExpr *>(&expr))
     return gen_expr(*group->expr);
   if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
@@ -615,6 +612,79 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
   return last_gep;
 }
 
+std::vector<llvm::Value *>
+Codegen::get_index_accesses(const ResolvedExpr &expr, llvm::Value *loaded_ptr) {
+  std::vector<llvm::Value *> inner_indices{};
+  std::optional<ConstexprResult> constexpr_res = expr.get_constant_value();
+  if (constexpr_res) {
+    const ConstexprResult &res = *constexpr_res;
+    llvm::APInt index{static_cast<unsigned int>(platform_ptr_size()), 0};
+    switch (res.kind) {
+    case Type::Kind::i8:
+      index = {static_cast<unsigned int>(platform_ptr_size()),
+               static_cast<uint64_t>(res.value.i8)};
+      break;
+    case Type::Kind::u8:
+      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u8};
+      break;
+    case Type::Kind::i16:
+      index = {static_cast<unsigned int>(platform_ptr_size()),
+               static_cast<uint64_t>(res.value.i16)};
+      break;
+    case Type::Kind::u16:
+      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u16};
+      break;
+    case Type::Kind::i32:
+      index = {static_cast<unsigned int>(platform_ptr_size()),
+               static_cast<uint64_t>(res.value.i32)};
+      break;
+    case Type::Kind::u32:
+      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u32};
+      break;
+    case Type::Kind::i64:
+      index = {static_cast<unsigned int>(platform_ptr_size()),
+               static_cast<uint64_t>(res.value.i64)};
+      break;
+    case Type::Kind::u64:
+      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u64};
+      break;
+    case Type::Kind::Bool:
+      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.b8};
+      break;
+    default:
+      break;
+    }
+    if (loaded_ptr) {
+      inner_indices = {llvm::ConstantInt::get(m_Context, index)};
+    } else {
+      inner_indices = {
+          llvm::ConstantInt::get(
+              m_Context,
+              llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
+          llvm::ConstantInt::get(m_Context, index)};
+    }
+  } else {
+    llvm::Value *expr_value = gen_expr(expr);
+    if (get_type_size(expr.type.kind) < platform_ptr_size()) { // extent
+      expr_value = m_Builder.CreateSExt(
+          expr_value, gen_type(platform_ptr_type()), "idxprom");
+    } else if (get_type_size(expr.type.kind) > platform_ptr_size()) { // trunc
+      expr_value = m_Builder.CreateTrunc(
+          expr_value, gen_type(platform_ptr_type()), "idxtrunc");
+    }
+    if (loaded_ptr) {
+      inner_indices = {expr_value};
+    } else {
+      inner_indices = {
+          llvm::ConstantInt::get(
+              m_Context,
+              llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
+          expr_value};
+    }
+  }
+  return std::move(inner_indices);
+}
+
 llvm::Value *
 Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access,
                                   Type &out_type) {
@@ -624,88 +694,38 @@ Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access,
   if (!decl)
     return report(access.location,
                   "unknown declaration '" + access.decl->id + "'.");
-  Type access_decl_type = access.decl->type;
+  Type decl_type = access.decl->type;
   // Technically should be impossible but just in case sema fails to detect this
-  if (!access_decl_type.array_data && access_decl_type.pointer_depth < 1)
+  if (!decl_type.array_data && decl_type.pointer_depth < 1)
     return report(access.location,
                   "trying to access element of a non-array non-pointer type.");
-  // technically should not be possible but just in case
-  auto get_index_from_array_expr = [this](const ResolvedExpr &expr) {
-    std::vector<llvm::Value *> inner_indices{};
-    std::optional<ConstexprResult> constexpr_res = expr.get_constant_value();
-    if (constexpr_res) {
-      const ConstexprResult &res = *constexpr_res;
-      llvm::APInt index{static_cast<unsigned int>(platform_ptr_size()), 0};
-      switch (res.kind) {
-      case Type::Kind::i8:
-        index = {static_cast<unsigned int>(platform_ptr_size()),
-                 static_cast<uint64_t>(res.value.i8)};
-        break;
-      case Type::Kind::u8:
-        index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u8};
-        break;
-      case Type::Kind::i16:
-        index = {static_cast<unsigned int>(platform_ptr_size()),
-                 static_cast<uint64_t>(res.value.i16)};
-        break;
-      case Type::Kind::u16:
-        index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u16};
-        break;
-      case Type::Kind::i32:
-        index = {static_cast<unsigned int>(platform_ptr_size()),
-                 static_cast<uint64_t>(res.value.i32)};
-        break;
-      case Type::Kind::u32:
-        index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u32};
-        break;
-      case Type::Kind::i64:
-        index = {static_cast<unsigned int>(platform_ptr_size()),
-                 static_cast<uint64_t>(res.value.i64)};
-        break;
-      case Type::Kind::u64:
-        index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u64};
-        break;
-      case Type::Kind::Bool:
-        index = {static_cast<unsigned int>(platform_ptr_size()), res.value.b8};
-        break;
-      default:
-        break;
-      }
-      inner_indices = {
-          llvm::ConstantInt::get(
-              m_Context,
-              llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
-          llvm::ConstantInt::get(m_Context, index)};
-    } else {
-      llvm::Value *expr_value = gen_expr(expr);
-      if (get_type_size(expr.type.kind) < platform_ptr_size()) { // extent
-        expr_value = m_Builder.CreateSExt(
-            expr_value, gen_type(platform_ptr_type()), "idxprom");
-      } else if (get_type_size(expr.type.kind) > platform_ptr_size()) { // trunc
-        expr_value = m_Builder.CreateTrunc(
-            expr_value, gen_type(platform_ptr_type()), "idxtrunc");
-      }
-      inner_indices = {
-          llvm::ConstantInt::get(
-              m_Context,
-              llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
-          expr_value};
-    }
-    return std::move(inner_indices);
-  };
+  bool is_decay = false;
+  if (decl_type.pointer_depth > 0) {
+    decl = m_Builder.CreateLoad(gen_type(decl_type), decl);
+    --decl_type.pointer_depth;
+    is_decay = true;
+  }
   std::vector<llvm::Value *> inner_indices =
-      get_index_from_array_expr(*access.indices[0]);
+      get_index_accesses(*access.indices[0], is_decay ? decl : nullptr);
   llvm::Value *last_gep = m_Builder.CreateInBoundsGEP(
-      gen_type(access_decl_type), decl, inner_indices, "arrayidx");
-  de_array_type(access_decl_type, 1);
-  out_type = access_decl_type;
+      gen_type(decl_type), decl, inner_indices, "arrayidx");
+  // we already decreased pointer depth
+  if (!is_decay)
+    de_array_type(decl_type, 1);
+  out_type = decl_type;
   for (int i = 1; i < access.indices.size(); ++i) {
+    if (decl_type.pointer_depth > 0) {
+      last_gep = m_Builder.CreateLoad(gen_type(decl_type), last_gep);
+      --decl_type.pointer_depth;
+      is_decay = true;
+    }
     std::vector<llvm::Value *> inner_indices =
-        get_index_from_array_expr(*access.indices[i]);
-    last_gep = m_Builder.CreateInBoundsGEP(gen_type(access_decl_type), last_gep,
+        get_index_accesses(*access.indices[i], is_decay ? decl : nullptr);
+    last_gep = m_Builder.CreateInBoundsGEP(gen_type(decl_type), last_gep,
                                            inner_indices, "arrayidx");
-    de_array_type(access_decl_type, 1);
-    out_type = access_decl_type;
+    if (!is_decay)
+      de_array_type(decl_type, 1);
+    out_type = decl_type;
   }
   return last_gep;
 }
@@ -961,6 +981,9 @@ Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
       --type.pointer_depth;
       llvm::Type *dereferenced_type = gen_type(type);
       return std::make_pair(m_Builder.CreateLoad(dereferenced_type, rhs), type);
+    } else {
+      llvm::Value *gened = gen_expr(*op.rhs);
+      return std::make_pair(gened, op.rhs->type);
     }
   }
   llvm::Value *rhs = gen_expr(*op.rhs);
@@ -1005,7 +1028,9 @@ void Codegen::gen_conditional_op(const ResolvedExpr &op,
 llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
   llvm::Function *callee = m_Module->getFunction(call.func_decl->id);
   std::vector<llvm::Value *> args{};
+  int param_index = -1;
   for (auto &&arg : call.args) {
+    ++param_index;
     if (const auto *unary_op =
             dynamic_cast<const ResolvedUnaryOperator *>(arg.get());
         unary_op && (unary_op->op == TokenKind::Amp)) {
@@ -1013,6 +1038,14 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         llvm::Value *expr = m_Declarations[dre->decl];
         args.emplace_back(expr);
+        continue;
+      }
+    }
+    if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(arg.get())) {
+      llvm::Value *decay =
+          gen_array_decay(call.func_decl->params[param_index]->type, *dre);
+      if (decay) {
+        args.emplace_back(decay);
         continue;
       }
     }
@@ -1043,11 +1076,34 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
     } else if (const auto *array_lit =
                    dynamic_cast<ResolvedArrayLiteralExpr *>(init.get())) {
       gen_array_literal_expr(*array_lit, var);
+    } else if (const auto *dre =
+                   dynamic_cast<const ResolvedDeclRefExpr *>(init.get())) {
+      llvm::Value *decay = gen_array_decay(decl->type, *dre);
+      m_Builder.CreateStore(decay ? decay : gen_expr(*init), var);
     } else {
       m_Builder.CreateStore(gen_expr(*init), var);
     }
   }
   m_Declarations[decl] = var;
+  return nullptr;
+}
+
+llvm::Value *Codegen::gen_array_decay(const Type &lhs_type,
+                                      const ResolvedDeclRefExpr &rhs_dre) {
+  if (rhs_dre.type.array_data) {
+    if (is_same_array_decay(rhs_dre.type, lhs_type)) {
+      std::vector<llvm::Value *> indices{
+          llvm::ConstantInt::get(
+              m_Context,
+              llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
+          llvm::ConstantInt::get(
+              m_Context,
+              llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0))};
+      llvm::Value *decl = m_Declarations[rhs_dre.decl];
+      return m_Builder.CreateInBoundsGEP(gen_type(rhs_dre.type), decl, indices,
+                                         "arraydecay");
+    }
+  }
   return nullptr;
 }
 
