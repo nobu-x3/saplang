@@ -1780,5 +1780,32 @@ fn i32 bar(i32* arr) { return *(arr + 0); }
   CONTAINS_NEXT_REQUIRE(lines_it, "i64(0)");
 }
 
+TEST_CASE("String literals", "[sema]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+var u8* string = "hello";
+var u8* string2 = "h.e.l.l.o.";
+var u8* string3 = "";
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 1;
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") string:ptr u8") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStringLiteralExpr: \"hello\"");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") string2:ptr u8") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStringLiteralExpr: \"h.e.l.l.o.\"");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") string3:ptr u8") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStringLiteralExpr: \"\"");
+}
+
+// @TODO: prohibit array operations on const vars
+// @TODO: prohibit struct ops on const vars
 // @TODO: slices
 // @TODO: global and local redeclaration

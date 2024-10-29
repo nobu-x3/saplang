@@ -459,6 +459,9 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
   if (m_NextToken.kind == TokenKind::Lbracket) {
     return parse_array_literal_expr();
   }
+  if (m_NextToken.kind == TokenKind::DoubleQuote) {
+    return parse_string_literal_expr();
+  }
   return report(location, "expected expression.");
 }
 
@@ -582,6 +585,20 @@ std::unique_ptr<ArrayLiteralExpr> Parser::parse_array_literal_expr() {
   }
   eat_next_token(); // eat ']'
   return std::make_unique<ArrayLiteralExpr>(location, std::move(expressions));
+}
+
+std::unique_ptr<StringLiteralExpr> Parser::parse_string_literal_expr() {
+  assert(m_NextToken.kind == TokenKind::DoubleQuote &&
+         "assumed token is not double quote.");
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat '"'
+  std::string val;
+  while (m_NextToken.kind != TokenKind::DoubleQuote) {
+    val += *m_NextToken.value;
+    eat_next_token();
+  }
+  eat_next_token(); // eat second '"'
+  return std::make_unique<StringLiteralExpr>(loc, std::move(val));
 }
 
 // <argList>
@@ -808,9 +825,9 @@ ParsingResult Parser::parse_source_file() {
         m_NextToken.kind != TokenKind::KwStruct &&
         m_NextToken.kind != TokenKind::KwVar &&
         m_NextToken.kind != TokenKind::KwConst) {
-      report(
-          m_NextToken.location,
-          "only function, struct declarations and global variables are allowed in global scope.");
+      report(m_NextToken.location,
+             "only function, struct declarations and global variables are "
+             "allowed in global scope.");
       is_complete_ast = false;
       sync_on(sync_kinds);
       continue;

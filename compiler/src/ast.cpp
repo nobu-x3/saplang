@@ -347,6 +347,11 @@ void ArrayLiteralExpr::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void StringLiteralExpr::dump_to_stream(std::stringstream &stream,
+                                       size_t indent_level) const {
+  stream << indent(indent_level) << "StringLiteralExpr: \"" << val << "\"\n";
+}
+
 void Assignment::dump_to_stream(std::stringstream &stream,
                                 size_t indent_level) const {
   stream << indent(indent_level) << "Assignment:\n";
@@ -668,6 +673,12 @@ void ResolvedArrayLiteralExpr::dump_to_stream(std::stringstream &stream,
   stream << '\n';
   for (auto &&expr : expressions)
     expr->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedStringLiteralExpr::dump_to_stream(std::stringstream &stream,
+                                               size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedStringLiteralExpr: \"" << val
+         << "\"\n";
 }
 
 void ResolvedAssignment::dump_to_stream(std::stringstream &stream,

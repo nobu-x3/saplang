@@ -3,6 +3,7 @@
 #include <cassert>
 #include <memory>
 #include <optional>
+#include <string>
 #include <unordered_map>
 
 #include "ast.h"
@@ -1010,6 +1011,8 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
     return resolve_unary_operator(*unary_op);
   if (const auto *explicit_cast = dynamic_cast<const ExplicitCast *>(&expr))
     return resolve_explicit_cast(*explicit_cast);
+  if (const auto *string_lit = dynamic_cast<const StringLiteralExpr *>(&expr))
+    return resolve_string_literal_expr(*string_lit);
   if (type) {
     if (const auto *struct_literal =
             dynamic_cast<const StructLiteralExpr *>(&expr))
@@ -1334,6 +1337,11 @@ Sema::resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type) {
   }
   return std::make_unique<ResolvedArrayLiteralExpr>(lit.location, array_type,
                                                     std::move(expressions));
+}
+
+std::unique_ptr<ResolvedStringLiteralExpr>
+Sema::resolve_string_literal_expr(const StringLiteralExpr &lit) {
+  return std::make_unique<ResolvedStringLiteralExpr>(lit.location, lit.val);
 }
 
 std::unique_ptr<ResolvedDeclRefExpr>
