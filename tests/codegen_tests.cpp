@@ -2590,3 +2590,33 @@ TEST_CASE("Global arrays", "[codegen]") {
 
 // @TODO: array literal function parameters
 // @TODO: slices
+
+TEST_CASE("String literals", "[codegen]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+    var u8* string = "hello";
+    var u8* string2 = "h.e.l.l.o.";
+    var u8* string3 = "";
+    return string[0];
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "@.str = private unnamed_addr constant [6 x i8] c\"hello\00\", align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@.str.1 = private unnamed_addr constant [11 "
+                                  "x i8] c\"h.e.l.l.o.\00\", align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@.str.2 = private unnamed_addr constant [1 "
+                                  "x i8] zeroinitializer, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%string = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%string2 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%string3 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @.str, ptr %string, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @.str.1, ptr %string2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @.str.2, ptr %string3, align 8");
+}

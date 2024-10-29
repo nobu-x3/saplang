@@ -479,6 +479,8 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
   }
   if (const auto *cast = dynamic_cast<const ResolvedExplicitCastExpr *>(&expr))
     return gen_explicit_cast(*cast);
+  if (const auto *str = dynamic_cast<const ResolvedStringLiteralExpr *>(&expr))
+    return gen_string_literal_expr(*str);
   llvm_unreachable("unknown expression");
   return nullptr;
 }
@@ -597,6 +599,11 @@ Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
     }
   }
   return nullptr;
+}
+
+llvm::Value *
+Codegen::gen_string_literal_expr(const ResolvedStringLiteralExpr &str_lit) {
+  return m_Builder.CreateGlobalString(str_lit.val, ".str");
 }
 
 llvm::Value *

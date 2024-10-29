@@ -1804,5 +1804,8 @@ var u8* string3 = "";
   REQUIRE(lines_it->find(") string3:ptr u8") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStringLiteralExpr: \"\"");
 }
+
+// @TODO: prohibit array operations on const vars
+// @TODO: prohibit struct ops on const vars
 // @TODO: slices
 // @TODO: global and local redeclaration
