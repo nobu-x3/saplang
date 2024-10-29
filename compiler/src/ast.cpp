@@ -347,6 +347,11 @@ void ArrayLiteralExpr::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void StringLiteralExpr::dump_to_stream(std::stringstream &stream,
+                                       size_t indent_level) const {
+  stream << indent(indent_level) << "StringLiteralExpr: \"" << val << "\"\n";
+}
+
 void Assignment::dump_to_stream(std::stringstream &stream,
                                 size_t indent_level) const {
   stream << indent(indent_level) << "Assignment:\n";

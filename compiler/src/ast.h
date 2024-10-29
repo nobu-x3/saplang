@@ -350,6 +350,12 @@ struct ArrayLiteralExpr : public Expr {
   DUMP_IMPL
 };
 
+struct StringLiteralExpr : public Expr {
+    std::string val;
+    inline StringLiteralExpr(SourceLocation loc, std::string val) : Expr(loc), val(std::move(val)) {}
+    DUMP_IMPL
+};
+
 struct Assignment : public Stmt {
   std::unique_ptr<DeclRefExpr> variable;
   std::unique_ptr<Expr> expr;

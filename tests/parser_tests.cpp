@@ -1420,3 +1420,25 @@ fn i32 bar(i32* arr) { return *(arr + 0); }
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: arr");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
 }
+
+TEST_CASE("String literals", "[parser]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+var u8* string = "hello";
+var u8* string2 = "h.e.l.l.o.";
+var u8* string3 = "";
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 1;
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: string:ptr u8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StringLiteralExpr: \"hello\"");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: string2:ptr u8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StringLiteralExpr: \"h.e.l.l.o.\"");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: string3:ptr u8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StringLiteralExpr: \"\"");
+}

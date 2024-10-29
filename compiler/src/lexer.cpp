@@ -36,19 +36,19 @@ Token Lexer::get_next_token() {
   SourceLocation token_start_location{m_Source->path, m_Line, m_Column};
   if (curr_char == '!' && peek_next_char() == '=') {
     eat_next_char();
-    return Token{token_start_location, TokenKind::ExclamationEqual};
+    return Token{token_start_location, TokenKind::ExclamationEqual, "!="};
   }
   if (curr_char == '<' && peek_next_char() == '=') {
     eat_next_char();
-    return Token{token_start_location, TokenKind::LessThanOrEqual};
+    return Token{token_start_location, TokenKind::LessThanOrEqual, "<="};
   }
   if (curr_char == '>' && peek_next_char() == '=') {
     eat_next_char();
-    return Token{token_start_location, TokenKind::GreaterThanOrEqual};
+    return Token{token_start_location, TokenKind::GreaterThanOrEqual, ">="};
   }
   if (curr_char == '/') {
     if (peek_next_char() != '/')
-      return Token{token_start_location, TokenKind::Slash};
+      return Token{token_start_location, TokenKind::Slash, "/"};
     char c = eat_next_char();
     while (c != '\n' && c != '\0')
       c = eat_next_char();
@@ -57,30 +57,31 @@ Token Lexer::get_next_token() {
   if (curr_char == '=') {
     if (peek_next_char() == '=') {
       eat_next_char();
-      return Token{token_start_location, TokenKind::EqualEqual};
+      return Token{token_start_location, TokenKind::EqualEqual, "=="};
     }
-    return Token{token_start_location, TokenKind::Equal};
+    return Token{token_start_location, TokenKind::Equal, "="};
   }
   if (curr_char == '&') {
     if (peek_next_char() == '&') {
       eat_next_char();
-      return Token{token_start_location, TokenKind::AmpAmp};
+      return Token{token_start_location, TokenKind::AmpAmp, "&&"};
     } else {
-      return Token{token_start_location, TokenKind::Amp};
+      return Token{token_start_location, TokenKind::Amp, "&"};
     }
   }
   if (curr_char == '|' && peek_next_char() == '|') {
     eat_next_char();
-    return Token{token_start_location, TokenKind::PipePipe};
+    return Token{token_start_location, TokenKind::PipePipe, "||"};
   }
   for (auto &&c : single_char_tokens) {
     // TODO: manually write it out to avoid branching for better performance.
     if (c == curr_char) {
-      return Token{token_start_location, static_cast<TokenKind>(c)};
+      return Token{token_start_location, static_cast<TokenKind>(c),
+                   std::string{c}};
     }
   }
+  std::string value{curr_char};
   if (is_alpha(curr_char)) {
-    std::string value{curr_char};
     while (is_alphanum(peek_next_char())) {
       value += eat_next_char();
     }
@@ -104,12 +105,12 @@ Token Lexer::get_next_token() {
     }
     value += eat_next_char();
     if (!is_num(peek_next_char()))
-      return Token{token_start_location, TokenKind::Unknown};
+      return Token{token_start_location, TokenKind::Unknown, std::move(value)};
     while (is_num(peek_next_char()))
       value += eat_next_char();
     return Token{token_start_location, TokenKind::Real, std::move(value)};
   }
-  return Token{token_start_location, TokenKind::Unknown};
+  return Token{token_start_location, TokenKind::Unknown, std::move(value)};
 }
 
 char Lexer::peek_next_char() const { return m_Source->buffer[m_Idx]; }
