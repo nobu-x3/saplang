@@ -155,7 +155,8 @@ inline bool is_same_array_decay(const Type &a, const Type &b) {
   if (a.kind != b.kind)
     return false;
   if (a.array_data && !b.array_data) {
-    if (b.pointer_depth == a.array_data->dimension_count && b.pointer_depth == 1)
+    if (b.pointer_depth == a.array_data->dimension_count &&
+        b.pointer_depth == 1)
       return true;
     return false;
   }
@@ -351,9 +352,10 @@ struct ArrayLiteralExpr : public Expr {
 };
 
 struct StringLiteralExpr : public Expr {
-    std::string val;
-    inline StringLiteralExpr(SourceLocation loc, std::string val) : Expr(loc), val(std::move(val)) {}
-    DUMP_IMPL
+  std::string val;
+  inline StringLiteralExpr(SourceLocation loc, std::string val)
+      : Expr(loc), val(std::move(val)) {}
+  DUMP_IMPL
 };
 
 struct Assignment : public Stmt {
@@ -479,6 +481,13 @@ struct ResolvedArrayLiteralExpr : public ResolvedExpr {
       SourceLocation loc, Type type,
       std::vector<std::unique_ptr<ResolvedExpr>> exprs)
       : ResolvedExpr(loc, type), expressions(std::move(exprs)) {}
+  DUMP_IMPL
+};
+
+struct ResolvedStringLiteralExpr : public ResolvedExpr {
+  std::string val;
+  inline ResolvedStringLiteralExpr(SourceLocation loc, std::string val)
+      : ResolvedExpr(loc, Type::builtin_u8(1)), val(std::move(val)) {}
   DUMP_IMPL
 };
 

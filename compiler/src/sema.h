@@ -68,6 +68,9 @@ private:
   std::unique_ptr<ResolvedArrayLiteralExpr>
   resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type);
 
+  std::unique_ptr<ResolvedStringLiteralExpr>
+  resolve_string_literal_expr(const StringLiteralExpr &lit);
+
   std::unique_ptr<ResolvedReturnStmt>
   resolve_return_stmt(const ReturnStmt &stmt);
 
@@ -105,7 +108,8 @@ private:
   resolve_array_element_access(const ArrayElementAccess &access,
                                const ResolvedDecl *decl);
 
-  std::unique_ptr<ResolvedArrayElementAccess> resolve_array_element_access_no_deref(
+  std::unique_ptr<ResolvedArrayElementAccess>
+  resolve_array_element_access_no_deref(
       SourceLocation loc, std::vector<std::unique_ptr<ResolvedExpr>> indices,
       const ResolvedDecl *decl);
 
