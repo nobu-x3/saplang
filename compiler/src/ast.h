@@ -263,7 +263,8 @@ struct EnumDecl : public Decl {
   Type underlying_type;
   inline EnumDecl(SourceLocation loc, std::string id, Type underlying_type,
                   std::unordered_map<std::string, int> name_values_map)
-      : Decl(loc, std::move(id)), underlying_type(underlying_type), name_values_map(std::move(name_values_map)) {}
+      : Decl(loc, std::move(id)), underlying_type(underlying_type),
+        name_values_map(std::move(name_values_map)) {}
   DUMP_IMPL
 };
 
@@ -537,6 +538,16 @@ struct ResolvedStructDecl : public ResolvedDecl {
                             Type type,
                             std::vector<std::pair<Type, std::string>> types)
       : ResolvedDecl(loc, id, std::move(type)), members(std::move(types)) {}
+  DUMP_IMPL
+};
+
+struct ResolvedEnumDecl : public ResolvedDecl {
+  std::unordered_map<std::string, int> name_values_map;
+  inline ResolvedEnumDecl(SourceLocation loc, std::string id,
+                          Type underlying_type,
+                          std::unordered_map<std::string, int> name_values_map)
+      : ResolvedDecl(loc, std::move(id), std::move(underlying_type)),
+        name_values_map(std::move(name_values_map)) {}
   DUMP_IMPL
 };
 

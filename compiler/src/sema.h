@@ -35,6 +35,10 @@ private:
   bool resolve_struct_decls(
       std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
+  bool
+  resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls,
+                     bool partial);
+
   bool resolve_global_var_decls(
       std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
@@ -94,6 +98,8 @@ private:
 
   std::unique_ptr<ResolvedStructDecl>
   resolve_struct_decl(const StructDecl &decl);
+
+  std::unique_ptr<ResolvedEnumDecl> resolve_enum_decl(const EnumDecl &decl);
 
   std::unique_ptr<ResolvedAssignment>
   resolve_assignment(const Assignment &assignment);

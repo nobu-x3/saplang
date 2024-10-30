@@ -270,7 +270,8 @@ std::unique_ptr<StructDecl> Parser::parse_struct_decl() {
 }
 
 // <enumDecl>
-// ::= 'enum' <identifier> (':' <identifier>)? '{' (<identifier> ('=' <integer>)?)* (',')* '}'
+// ::= 'enum' <identifier> (':' <identifier>)? '{' (<identifier> ('='
+// <integer>)?)* (',')* '}'
 std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
   assert(m_NextToken.kind == TokenKind::KwEnum &&
          "unexpected call to parse enum declaration.");
@@ -281,10 +282,10 @@ std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
   std::string id = *m_NextToken.value;
   eat_next_token(); // eat enum id
   Type underlying_type = Type::builtin_i32(0);
-  if(m_NextToken.kind == TokenKind::Colon) {
-      eat_next_token(); // eat ':'
-      if(m_NextToken.kind == TokenKind::Identifier)
-          underlying_type = *parse_type();
+  if (m_NextToken.kind == TokenKind::Colon) {
+    eat_next_token(); // eat ':'
+    if (m_NextToken.kind == TokenKind::Identifier)
+      underlying_type = *parse_type();
   }
   if (m_NextToken.kind != TokenKind::Lbrace)
     return report(m_NextToken.location, "expected '{' after enum identifier.");

@@ -1805,6 +1805,34 @@ var u8* string3 = "";
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStringLiteralExpr: \"\"");
 }
 
+TEST_CASE("Enum decls", "[sema]") {
+  TEST_SETUP(R"(
+enum Enum {
+    ZERO,
+    ONE,
+    FOUR = 4,
+    FIVE
+}
+enum Enum2 : u8 {
+    ZERO,
+    ONE,
+    TWO
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedEnumDecl: i32(Enum)") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "FIVE: 5");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FOUR: 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ONE: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedEnumDecl: u8(Enum2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ONE: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "TWO: 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
+}
+
 // @TODO: prohibit array operations on const vars
 // @TODO: prohibit struct ops on const vars
 // @TODO: slices

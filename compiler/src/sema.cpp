@@ -455,6 +455,26 @@ bool is_leaf(const StructDecl *decl) {
   return true;
 }
 
+bool Sema::resolve_enum_decls(
+    std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
+  bool error = false;
+  for (auto &&decl : m_AST) {
+    if (const auto *enum_decl = dynamic_cast<const EnumDecl *>(decl.get())) {
+      std::unique_ptr<ResolvedEnumDecl> resolved_enum_decl =
+          resolve_enum_decl(*enum_decl);
+      if (!resolved_enum_decl ||
+          !insert_decl_to_current_scope(*resolved_enum_decl)) {
+        error = true;
+        continue;
+      }
+      resolved_decls.emplace_back(std::move(resolved_enum_decl));
+    }
+  }
+  if (error && !partial)
+    return false;
+  return true;
+}
+
 bool Sema::resolve_struct_decls(
     std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
   struct DeclToInspect {
@@ -564,6 +584,8 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
   Scope global_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
+  if (!resolve_enum_decls(resolved_decls, partial))
+    return {};
   if (!resolve_struct_decls(resolved_decls, partial))
     return {};
   if (!resolve_global_var_decls(resolved_decls, partial))
@@ -735,6 +757,12 @@ Sema::resolve_struct_decl(const StructDecl &decl) {
   }
   return std::make_unique<ResolvedStructDecl>(
       decl.location, decl.id, Type::custom(decl.id, false), std::move(types));
+}
+
+std::unique_ptr<ResolvedEnumDecl>
+Sema::resolve_enum_decl(const EnumDecl &decl) {
+  return std::make_unique<ResolvedEnumDecl>(
+      decl.location, decl.id, decl.underlying_type, decl.name_values_map);
 }
 
 std::unique_ptr<ResolvedGroupingExpr>

@@ -451,6 +451,15 @@ void ResolvedStructDecl::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void ResolvedEnumDecl::dump_to_stream(std::stringstream &stream,
+                                      size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedEnumDecl: " << type.name << "("
+         << id << ")" << '\n';
+  for (auto &&[name, val] : name_values_map) {
+    stream << indent(indent_level + 1) << name << ": " << val << '\n';
+  }
+}
+
 void ResolvedDeclStmt::dump_to_stream(std::stringstream &stream,
                                       size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedDeclStmt:\n";
