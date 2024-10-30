@@ -1,6 +1,7 @@
 #include <cassert>
 #include <memory>
 #include <string>
+#include <type_traits>
 
 #include "ast.h"
 #include "lexer.h"
@@ -266,6 +267,45 @@ std::unique_ptr<StructDecl> Parser::parse_struct_decl() {
   }
   eat_next_token(); // eat '}'
   return std::make_unique<StructDecl>(loc, id, std::move(fields));
+}
+
+// <enumDecl>
+// ::= 'enum' <identifier> '{' (<identifier> ('=' <integer>)?)* (',')* '}'
+std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
+  assert(m_NextToken.kind == TokenKind::KwEnum &&
+         "unexpected call to parse enum declaration.");
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat "enum"
+  if (m_NextToken.kind != TokenKind::Identifier)
+    return report(m_NextToken.location, "expected enum name.");
+  std::string id = *m_NextToken.value;
+  eat_next_token(); // eat enum id
+  if (m_NextToken.kind != TokenKind::Lbrace)
+    return report(m_NextToken.location, "expected '{' after enum identifier.");
+  eat_next_token(); // eat '{'
+  std::unordered_map<std::string, int> name_values_map{};
+  int current_value = 0;
+  while (m_NextToken.kind != TokenKind::Rbrace) {
+    if (m_NextToken.kind != TokenKind::Identifier)
+      return report(m_NextToken.location, "expected identifier.");
+    std::string name = *m_NextToken.value;
+    eat_next_token(); // eat id
+    if (m_NextToken.kind == TokenKind::Equal) {
+      eat_next_token(); // eat '='
+      if (m_NextToken.kind != TokenKind::Integer)
+        return report(m_NextToken.location,
+                      "only integers can be enum values.");
+      current_value = std::stoi(*m_NextToken.value);
+      eat_next_token(); // eat integer
+    }
+    name_values_map.insert(std::make_pair(name, current_value));
+    ++current_value;
+    if (m_NextToken.kind == TokenKind::Comma)
+      eat_next_token(); // eat ','
+  }
+  eat_next_token(); // eat '}'
+  return std::make_unique<EnumDecl>(loc, std::move(id),
+                                    std::move(name_values_map));
 }
 
 std::unique_ptr<Assignment>
@@ -819,15 +859,17 @@ ParsingResult Parser::parse_source_file() {
   std::vector<std::unique_ptr<Decl>> decls;
   bool is_complete_ast = true;
   const std::vector<TokenKind> sync_kinds{TokenKind::KwFn, TokenKind::KwStruct,
-                                          TokenKind::KwConst, TokenKind::KwVar};
+                                          TokenKind::KwConst, TokenKind::KwVar,
+                                          TokenKind::KwEnum};
   while (m_NextToken.kind != TokenKind::Eof) {
     if (m_NextToken.kind != TokenKind::KwFn &&
         m_NextToken.kind != TokenKind::KwStruct &&
         m_NextToken.kind != TokenKind::KwVar &&
-        m_NextToken.kind != TokenKind::KwConst) {
-      report(m_NextToken.location,
-             "only function, struct declarations and global variables are "
-             "allowed in global scope.");
+        m_NextToken.kind != TokenKind::KwConst &&
+        m_NextToken.kind != TokenKind::KwEnum) {
+      report(m_NextToken.location, "only function, struct declarations, enum "
+                                   "declarations and global variables are "
+                                   "allowed in global scope.");
       is_complete_ast = false;
       sync_on(sync_kinds);
       continue;
@@ -843,7 +885,8 @@ ParsingResult Parser::parse_source_file() {
       if (var_decl_stmt) {
         decl = std::move(var_decl_stmt->var_decl);
       }
-    }
+    } else if (m_NextToken.kind == TokenKind::KwEnum)
+      decl = parse_enum_decl();
     if (!decl) {
       is_complete_ast = false;
       sync_on(sync_kinds);

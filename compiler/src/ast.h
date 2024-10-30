@@ -258,6 +258,14 @@ struct StructDecl : public Decl {
   DUMP_IMPL
 };
 
+struct EnumDecl : public Decl {
+  std::unordered_map<std::string, int> name_values_map;
+  inline EnumDecl(SourceLocation loc, std::string id,
+                  std::unordered_map<std::string, int> name_values_map)
+      : Decl(loc, std::move(id)), name_values_map(std::move(name_values_map)) {}
+  DUMP_IMPL
+};
+
 struct DeclStmt : public Stmt {
   std::unique_ptr<VarDecl> var_decl;
   inline DeclStmt(SourceLocation loc, std::unique_ptr<VarDecl> var)

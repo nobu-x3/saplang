@@ -211,6 +211,14 @@ void StructDecl::dump_to_stream(std::stringstream &stream,
   }
 }
 
+void EnumDecl::dump_to_stream(std::stringstream &stream,
+                              size_t indent_level) const {
+  stream << indent(indent_level) << "EnumDecl: " << id << '\n';
+  for (auto &&[name, val] : name_values_map) {
+    stream << indent(indent_level + 1) << name << ": " << val << '\n';
+  }
+}
+
 void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
   stream << indent(indent_level) << "VarDecl: " << id << ":"

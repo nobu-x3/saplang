@@ -70,6 +70,7 @@ private:
   std::unique_ptr<VarDecl> parse_var_decl(bool is_const,
                                           bool is_global = false);
   std::unique_ptr<StructDecl> parse_struct_decl();
+  std::unique_ptr<EnumDecl> parse_enum_decl();
   std::unique_ptr<MemberAccess>
   parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
                       const std::string &var_id);
