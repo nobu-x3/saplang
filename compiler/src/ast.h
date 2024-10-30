@@ -260,9 +260,10 @@ struct StructDecl : public Decl {
 
 struct EnumDecl : public Decl {
   std::unordered_map<std::string, int> name_values_map;
-  inline EnumDecl(SourceLocation loc, std::string id,
+  Type underlying_type;
+  inline EnumDecl(SourceLocation loc, std::string id, Type underlying_type,
                   std::unordered_map<std::string, int> name_values_map)
-      : Decl(loc, std::move(id)), name_values_map(std::move(name_values_map)) {}
+      : Decl(loc, std::move(id)), underlying_type(underlying_type), name_values_map(std::move(name_values_map)) {}
   DUMP_IMPL
 };
 

@@ -1451,13 +1451,22 @@ enum Enum {
     FOUR = 4,
     FIVE
 }
+enum Enum2 : u8 {
+    ZERO,
+    ONE,
+    TWO
+}
 )");
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("EnumDecl: Enum") != std::string::npos);
+  REQUIRE(lines_it->find("EnumDecl: i32(Enum)") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "FIVE: 5");
   CONTAINS_NEXT_REQUIRE(lines_it, "FOUR: 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ONE: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "EnumDecl: u8(Enum2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ONE: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "TWO: 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
 }
