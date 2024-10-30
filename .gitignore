@@ -3,6 +3,7 @@ bin
 Makefile
 obj
 lib
+tmp
 build
 .cache
 .vs
