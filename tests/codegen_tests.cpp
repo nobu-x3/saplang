@@ -2620,3 +2620,38 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @.str.1, ptr %string2, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @.str.2, ptr %string3, align 8");
 }
+
+TEST_CASE("Enums", "[codegen]") {
+  TEST_SETUP(R"(
+enum Enum {
+    ZERO,
+    ONE,
+    FOUR = 4,
+    FIVE
+}
+enum Enum2 : u8 {
+    ZERO,
+    ONE,
+    TWO
+}
+fn i32 main() {
+    var Enum enum_1 = Enum::FIVE;
+    var Enum2 enum_2 = Enum2::TWO;
+    return enum_1;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  REQUIRE(output_string == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%enum_1 = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%enum_2 = alloca i8, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 5, ptr %enum_1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i8 2, ptr %enum_2, align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load i32, ptr %enum_1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %0, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+}
