@@ -53,6 +53,7 @@ private:
   std::unique_ptr<Expr> parse_expr();
   std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs,
                                        int precedence);
+  std::unique_ptr<EnumElementAccess> parse_enum_element_access(std::string enum_id);
   std::unique_ptr<ParamDecl> parse_param_decl();
   std::optional<Type> parse_type();
 
@@ -70,6 +71,7 @@ private:
   std::unique_ptr<VarDecl> parse_var_decl(bool is_const,
                                           bool is_global = false);
   std::unique_ptr<StructDecl> parse_struct_decl();
+  std::unique_ptr<EnumDecl> parse_enum_decl();
   std::unique_ptr<MemberAccess>
   parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
                       const std::string &var_id);
@@ -81,6 +83,7 @@ private:
   parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs);
 
 private:
+  std::unordered_map<std::string, Type> m_EnumTypes;
   Lexer *m_Lexer;
   Token m_NextToken;
   bool m_IsCompleteAst{true};

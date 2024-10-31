@@ -46,6 +46,10 @@ Token Lexer::get_next_token() {
     eat_next_char();
     return Token{token_start_location, TokenKind::GreaterThanOrEqual, ">="};
   }
+  if (curr_char == ':' && peek_next_char() == ':') {
+    eat_next_char();
+    return Token{token_start_location, TokenKind::ColonColon, "::"};
+  }
   if (curr_char == '/') {
     if (peek_next_char() != '/')
       return Token{token_start_location, TokenKind::Slash, "/"};

@@ -14,6 +14,15 @@
 
 namespace saplang {
 
+bool Sema::is_enum(const Type &type) {
+  auto decl = lookup_decl(type.name, &type);
+  if (!decl)
+    return false;
+  if (auto *enum_decl = dynamic_cast<const ResolvedEnumDecl *>(decl->decl))
+    return true;
+  return false;
+}
+
 void apply_unary_op_to_num_literal(ResolvedUnaryOperator *unop) {
   // @TODO: implement call exprs too
   auto *numlit = dynamic_cast<ResolvedNumberLiteral *>(unop->rhs.get());
@@ -455,6 +464,26 @@ bool is_leaf(const StructDecl *decl) {
   return true;
 }
 
+bool Sema::resolve_enum_decls(
+    std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
+  bool error = false;
+  for (auto &&decl : m_AST) {
+    if (const auto *enum_decl = dynamic_cast<const EnumDecl *>(decl.get())) {
+      std::unique_ptr<ResolvedEnumDecl> resolved_enum_decl =
+          resolve_enum_decl(*enum_decl);
+      if (!resolved_enum_decl ||
+          !insert_decl_to_current_scope(*resolved_enum_decl)) {
+        error = true;
+        continue;
+      }
+      resolved_decls.emplace_back(std::move(resolved_enum_decl));
+    }
+  }
+  if (error && !partial)
+    return false;
+  return true;
+}
+
 bool Sema::resolve_struct_decls(
     std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
   struct DeclToInspect {
@@ -564,6 +593,8 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
   Scope global_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
+  if (!resolve_enum_decls(resolved_decls, partial))
+    return {};
   if (!resolve_struct_decls(resolved_decls, partial))
     return {};
   if (!resolve_global_var_decls(resolved_decls, partial))
@@ -611,6 +642,9 @@ std::optional<Type> Sema::resolve_type(Type parsed_type) {
     auto decl = lookup_decl(parsed_type.name, &parsed_type);
     if (!decl)
       return std::nullopt;
+    if (const auto *enum_decl =
+            dynamic_cast<const ResolvedEnumDecl *>(decl->decl))
+      return enum_decl->type;
     return parsed_type;
   }
   return parsed_type;
@@ -689,6 +723,51 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
   return nullptr;
 }
 
+std::unique_ptr<ResolvedNumberLiteral>
+Sema::resolve_enum_access(const EnumElementAccess &access) {
+  auto maybe_decl = lookup_decl(access.enum_id);
+  if (!maybe_decl)
+    return report(access.location, "undeclared type " + access.enum_id);
+  const auto *decl = dynamic_cast<const ResolvedEnumDecl *>(maybe_decl->decl);
+  if (!decl)
+    return report(access.location, "unknown enum type " + access.enum_id + ".");
+  if (!decl->name_values_map.count(access.member_id))
+    return report(access.location, "unknown enum field " + access.enum_id +
+                                       "::" + access.member_id + ".");
+  Value value;
+  long lookup_value = decl->name_values_map.at(access.member_id);
+  switch (decl->type.kind) {
+  case Type::Kind::u8:
+    value.u8 = lookup_value;
+    break;
+  case Type::Kind::u16:
+    value.u16 = lookup_value;
+    break;
+  case Type::Kind::u32:
+    value.u32 = lookup_value;
+    break;
+  case Type::Kind::u64:
+    value.u64 = lookup_value;
+    break;
+  case Type::Kind::i8:
+    value.i8 = lookup_value;
+    break;
+  case Type::Kind::i16:
+    value.i16 = lookup_value;
+    break;
+  case Type::Kind::i32:
+    value.i32 = lookup_value;
+    break;
+  case Type::Kind::i64:
+    value.i64 = lookup_value;
+    break;
+  default:
+    return report(access.location, "invalid enum underlying type.");
+  }
+  return std::make_unique<ResolvedNumberLiteral>(access.location, decl->type,
+                                                 value);
+}
+
 std::unique_ptr<ResolvedDeclStmt>
 Sema::resolve_decl_stmt(const DeclStmt &stmt) {
   std::unique_ptr<ResolvedVarDecl> var_decl = resolve_var_decl(*stmt.var_decl);
@@ -735,6 +814,12 @@ Sema::resolve_struct_decl(const StructDecl &decl) {
   }
   return std::make_unique<ResolvedStructDecl>(
       decl.location, decl.id, Type::custom(decl.id, false), std::move(types));
+}
+
+std::unique_ptr<ResolvedEnumDecl>
+Sema::resolve_enum_decl(const EnumDecl &decl) {
+  return std::make_unique<ResolvedEnumDecl>(
+      decl.location, decl.id, decl.underlying_type, decl.name_values_map);
 }
 
 std::unique_ptr<ResolvedGroupingExpr>
@@ -999,6 +1084,8 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
   if (const auto *number = dynamic_cast<const NumberLiteral *>(&expr))
     return std::make_unique<ResolvedNumberLiteral>(number->location,
                                                    number->type, number->value);
+  if (const auto *enum_access = dynamic_cast<const EnumElementAccess *>(&expr))
+    return resolve_enum_access(*enum_access);
   if (const auto *decl_ref_expr = dynamic_cast<const DeclRefExpr *>(&expr))
     return resolve_decl_ref_expr(*decl_ref_expr);
   if (const auto *call_expr = dynamic_cast<const CallExpr *>(&expr))

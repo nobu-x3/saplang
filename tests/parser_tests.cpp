@@ -1442,3 +1442,55 @@ var u8* string3 = "";
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: string3:ptr u8");
   CONTAINS_NEXT_REQUIRE(lines_it, "StringLiteralExpr: \"\"");
 }
+
+TEST_CASE("Enum decls", "[parser]") {
+  TEST_SETUP(R"(
+enum Enum {
+    ZERO,
+    ONE,
+    FOUR = 4,
+    FIVE
+}
+enum Enum2 : u8 {
+    ZERO,
+    ONE,
+    TWO
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("EnumDecl: i32(Enum)") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "FIVE: 5");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FOUR: 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ONE: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "EnumDecl: u8(Enum2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ONE: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "TWO: 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
+}
+
+TEST_CASE("Enum member access", "[parser]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+    const Enum variable = Enum::ONE;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 1;
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: variable:const Enum");
+  CONTAINS_NEXT_REQUIRE(lines_it, "EnumElementAccess: Enum::ONE");
+}
+
+TEST_CASE("Failing enum member access", "[parser]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+    const Enum variable1 = Enum::;
+}
+)");
+  REQUIRE(error_stream.str() ==
+          "test:3:34 error: expected identifier in enum field access.\n");
+}

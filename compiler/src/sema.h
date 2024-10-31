@@ -35,12 +35,18 @@ private:
   bool resolve_struct_decls(
       std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
+  bool
+  resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls,
+                     bool partial);
+
   bool resolve_global_var_decls(
       std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
   std::optional<Type> resolve_type(Type parsed_type);
+
+  bool is_enum(const Type &type);
 
   std::unique_ptr<ResolvedFuncDecl> resolve_func_decl(const FunctionDecl &func);
 
@@ -49,6 +55,9 @@ private:
   std::unique_ptr<ResolvedBlock> resolve_block(const Block &block);
 
   std::unique_ptr<ResolvedStmt> resolve_stmt(const Stmt &stmt);
+
+  std::unique_ptr<ResolvedNumberLiteral>
+  resolve_enum_access(const EnumElementAccess &access);
 
   std::unique_ptr<ResolvedGroupingExpr>
   resolve_grouping_expr(const GroupingExpr &group);
@@ -94,6 +103,8 @@ private:
 
   std::unique_ptr<ResolvedStructDecl>
   resolve_struct_decl(const StructDecl &decl);
+
+  std::unique_ptr<ResolvedEnumDecl> resolve_enum_decl(const EnumDecl &decl);
 
   std::unique_ptr<ResolvedAssignment>
   resolve_assignment(const Assignment &assignment);

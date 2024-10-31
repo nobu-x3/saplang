@@ -50,6 +50,7 @@ struct Type : public IDumpable {
     f32,
     f64,
     Custom,
+    Enum,
     INTEGERS_START = u8,
     INTEGERS_END = i64,
     SIGNED_INT_START = i8,
@@ -258,6 +259,16 @@ struct StructDecl : public Decl {
   DUMP_IMPL
 };
 
+struct EnumDecl : public Decl {
+  std::unordered_map<std::string, long> name_values_map;
+  Type underlying_type;
+  inline EnumDecl(SourceLocation loc, std::string id, Type underlying_type,
+                  std::unordered_map<std::string, long> name_values_map)
+      : Decl(loc, std::move(id)), underlying_type(underlying_type),
+        name_values_map(std::move(name_values_map)) {}
+  DUMP_IMPL
+};
+
 struct DeclStmt : public Stmt {
   std::unique_ptr<VarDecl> var_decl;
   inline DeclStmt(SourceLocation loc, std::unique_ptr<VarDecl> var)
@@ -271,6 +282,16 @@ struct NumberLiteral : public Expr {
   std::string value;
   inline NumberLiteral(SourceLocation loc, NumberType type, std::string value)
       : Expr(loc), type(type), value(std::move(value)) {}
+  DUMP_IMPL
+};
+
+struct EnumElementAccess : public Expr {
+  std::string enum_id;
+  std::string member_id;
+  inline EnumElementAccess(SourceLocation loc, std::string enum_id,
+                           std::string member_id)
+      : Expr(loc), enum_id(std::move(enum_id)),
+        member_id(std::move(member_id)) {}
   DUMP_IMPL
 };
 
@@ -531,6 +552,16 @@ struct ResolvedStructDecl : public ResolvedDecl {
   DUMP_IMPL
 };
 
+struct ResolvedEnumDecl : public ResolvedDecl {
+  std::unordered_map<std::string, long> name_values_map;
+  inline ResolvedEnumDecl(SourceLocation loc, std::string id,
+                          Type underlying_type,
+                          std::unordered_map<std::string, long> name_values_map)
+      : ResolvedDecl(loc, std::move(id), std::move(underlying_type)),
+        name_values_map(std::move(name_values_map)) {}
+  DUMP_IMPL
+};
+
 struct ResolvedDeclStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedVarDecl> var_decl;
   inline ResolvedDeclStmt(SourceLocation loc,
@@ -585,6 +616,9 @@ struct ResolvedNumberLiteral : public ResolvedExpr {
   explicit ResolvedNumberLiteral(SourceLocation loc,
                                  NumberLiteral::NumberType type,
                                  const std::string &value);
+  explicit ResolvedNumberLiteral(SourceLocation loc, Type type,
+                                 const Value &val)
+      : ResolvedExpr(loc, std::move(type)), value(val) {}
   DUMP_IMPL
 };
 

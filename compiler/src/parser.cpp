@@ -1,6 +1,7 @@
 #include <cassert>
 #include <memory>
 #include <string>
+#include <type_traits>
 
 #include "ast.h"
 #include "lexer.h"
@@ -268,6 +269,55 @@ std::unique_ptr<StructDecl> Parser::parse_struct_decl() {
   return std::make_unique<StructDecl>(loc, id, std::move(fields));
 }
 
+// <enumDecl>
+// ::= 'enum' <identifier> (':' <identifier>)? '{' (<identifier> ('='
+// <integer>)?)* (',')* '}'
+std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
+  assert(m_NextToken.kind == TokenKind::KwEnum &&
+         "unexpected call to parse enum declaration.");
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat "enum"
+  if (m_NextToken.kind != TokenKind::Identifier)
+    return report(m_NextToken.location, "expected enum name.");
+  std::string id = *m_NextToken.value;
+  if (m_EnumTypes.count(id))
+    return report(m_NextToken.location, "enum redeclaration.");
+  eat_next_token(); // eat enum id
+  Type underlying_type = Type::builtin_i32(0);
+  if (m_NextToken.kind == TokenKind::Colon) {
+    eat_next_token(); // eat ':'
+    if (m_NextToken.kind == TokenKind::Identifier)
+      underlying_type = *parse_type();
+  }
+  if (m_NextToken.kind != TokenKind::Lbrace)
+    return report(m_NextToken.location, "expected '{' after enum identifier.");
+  eat_next_token(); // eat '{'
+  std::unordered_map<std::string, long> name_values_map{};
+  int current_value = 0;
+  while (m_NextToken.kind != TokenKind::Rbrace) {
+    if (m_NextToken.kind != TokenKind::Identifier)
+      return report(m_NextToken.location, "expected identifier.");
+    std::string name = *m_NextToken.value;
+    eat_next_token(); // eat id
+    if (m_NextToken.kind == TokenKind::Equal) {
+      eat_next_token(); // eat '='
+      if (m_NextToken.kind != TokenKind::Integer)
+        return report(m_NextToken.location,
+                      "only integers can be enum values.");
+      current_value = std::stol(*m_NextToken.value);
+      eat_next_token(); // eat integer
+    }
+    name_values_map.insert(std::make_pair(name, current_value));
+    ++current_value;
+    if (m_NextToken.kind == TokenKind::Comma)
+      eat_next_token(); // eat ','
+  }
+  eat_next_token(); // eat '}'
+  m_EnumTypes.insert(std::make_pair(id, underlying_type));
+  return std::make_unique<EnumDecl>(loc, std::move(id), underlying_type,
+                                    std::move(name_values_map));
+}
+
 std::unique_ptr<Assignment>
 Parser::parse_assignment(std::unique_ptr<Expr> lhs) {
   auto *dre = dynamic_cast<DeclRefExpr *>(lhs.get());
@@ -349,6 +399,7 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // | <memberAccess>
 // | <nullExpr>
 // | <arrayInitializer>
+// | <enumElementAccess>
 //
 // <arrayInitializer>
 // ::= '[' (<primaryExpression> (',')*)* ']'
@@ -427,6 +478,9 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     std::string var_id = *m_NextToken.value;
     auto decl_ref_expr = std::make_unique<DeclRefExpr>(location, var_id);
     eat_next_token();
+    if (m_NextToken.kind == TokenKind::ColonColon) {
+      return parse_enum_element_access(std::move(var_id));
+    }
     if (m_NextToken.kind != TokenKind::Lparent) {
       // Member access
       if (m_NextToken.kind == TokenKind::Dot) {
@@ -745,6 +799,23 @@ std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
                                      is_const);
 }
 
+// <enumElementAccess>
+// ::= <identifier> '::' <identifier>
+std::unique_ptr<EnumElementAccess>
+Parser::parse_enum_element_access(std::string enum_id) {
+  assert(m_NextToken.kind == TokenKind::ColonColon &&
+         "expected '::' in enum field access.");
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat "::"
+  if (m_NextToken.kind != TokenKind::Identifier)
+    return report(m_NextToken.location,
+                  "expected identifier in enum field access.");
+  std::string field_id = *m_NextToken.value;
+  eat_next_token(); // eat identifier
+  return std::make_unique<EnumElementAccess>(loc, std::move(enum_id),
+                                             std::move(field_id));
+}
+
 // <type>
 // ::= 'void' ('*')*
 // |   <identifier> ('*')*
@@ -782,6 +853,9 @@ std::optional<Type> Parser::parse_type() {
       maybe_array_data = std::move(array_data);
     }
     assert(id_token.value.has_value());
+    if (m_EnumTypes.count(*id_token.value)) {
+      return m_EnumTypes.at(*id_token.value);
+    }
     if (*id_token.value == "i8") {
       return Type::builtin_i8(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "i16") {
@@ -819,15 +893,17 @@ ParsingResult Parser::parse_source_file() {
   std::vector<std::unique_ptr<Decl>> decls;
   bool is_complete_ast = true;
   const std::vector<TokenKind> sync_kinds{TokenKind::KwFn, TokenKind::KwStruct,
-                                          TokenKind::KwConst, TokenKind::KwVar};
+                                          TokenKind::KwConst, TokenKind::KwVar,
+                                          TokenKind::KwEnum};
   while (m_NextToken.kind != TokenKind::Eof) {
     if (m_NextToken.kind != TokenKind::KwFn &&
         m_NextToken.kind != TokenKind::KwStruct &&
         m_NextToken.kind != TokenKind::KwVar &&
-        m_NextToken.kind != TokenKind::KwConst) {
-      report(m_NextToken.location,
-             "only function, struct declarations and global variables are "
-             "allowed in global scope.");
+        m_NextToken.kind != TokenKind::KwConst &&
+        m_NextToken.kind != TokenKind::KwEnum) {
+      report(m_NextToken.location, "only function, struct declarations, enum "
+                                   "declarations and global variables are "
+                                   "allowed in global scope.");
       is_complete_ast = false;
       sync_on(sync_kinds);
       continue;
@@ -843,7 +919,8 @@ ParsingResult Parser::parse_source_file() {
       if (var_decl_stmt) {
         decl = std::move(var_decl_stmt->var_decl);
       }
-    }
+    } else if (m_NextToken.kind == TokenKind::KwEnum)
+      decl = parse_enum_decl();
     if (!decl) {
       is_complete_ast = false;
       sync_on(sync_kinds);
