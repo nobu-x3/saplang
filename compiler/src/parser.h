@@ -53,6 +53,7 @@ private:
   std::unique_ptr<Expr> parse_expr();
   std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs,
                                        int precedence);
+  std::unique_ptr<EnumElementAccess> parse_enum_element_access(std::string enum_id);
   std::unique_ptr<ParamDecl> parse_param_decl();
   std::optional<Type> parse_type();
 

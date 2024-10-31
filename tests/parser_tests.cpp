@@ -1470,3 +1470,27 @@ enum Enum2 : u8 {
   CONTAINS_NEXT_REQUIRE(lines_it, "TWO: 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
 }
+
+TEST_CASE("Enum member access", "[parser]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+    const Enum variable = Enum::ONE;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 1;
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: variable:const Enum");
+  CONTAINS_NEXT_REQUIRE(lines_it, "EnumElementAccess: Enum::ONE");
+}
+
+TEST_CASE("Failing enum member access", "[parser]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+    const Enum variable1 = Enum::;
+}
+)");
+  REQUIRE(error_stream.str() ==
+          "test:3:34 error: expected identifier in enum field access.\n");
+}

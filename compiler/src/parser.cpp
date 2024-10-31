@@ -396,6 +396,7 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // | <memberAccess>
 // | <nullExpr>
 // | <arrayInitializer>
+// | <enumElementAccess>
 //
 // <arrayInitializer>
 // ::= '[' (<primaryExpression> (',')*)* ']'
@@ -474,6 +475,9 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     std::string var_id = *m_NextToken.value;
     auto decl_ref_expr = std::make_unique<DeclRefExpr>(location, var_id);
     eat_next_token();
+    if (m_NextToken.kind == TokenKind::ColonColon) {
+      return parse_enum_element_access(std::move(var_id));
+    }
     if (m_NextToken.kind != TokenKind::Lparent) {
       // Member access
       if (m_NextToken.kind == TokenKind::Dot) {
@@ -790,6 +794,23 @@ std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
   eat_next_token(); // eat identifier
   return std::make_unique<ParamDecl>(location, std::move(id), std::move(*type),
                                      is_const);
+}
+
+// <enumElementAccess>
+// ::= <identifier> '::' <identifier>
+std::unique_ptr<EnumElementAccess>
+Parser::parse_enum_element_access(std::string enum_id) {
+  assert(m_NextToken.kind == TokenKind::ColonColon &&
+         "expected '::' in enum field access.");
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat "::"
+  if (m_NextToken.kind != TokenKind::Identifier)
+    return report(m_NextToken.location,
+                  "expected identifier in enum field access.");
+  std::string field_id = *m_NextToken.value;
+  eat_next_token(); // eat identifier
+  return std::make_unique<EnumElementAccess>(loc, std::move(enum_id),
+                                             std::move(field_id));
 }
 
 // <type>

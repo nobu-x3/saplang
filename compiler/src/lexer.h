@@ -38,6 +38,7 @@ enum class TokenKind : char {
   GreaterThanOrEqual,
   LessThanOrEqual,
   Equal,
+  ColonColon,
   Eof = single_char_tokens[0],
   Lparent = single_char_tokens[1],
   Rparent = single_char_tokens[2],

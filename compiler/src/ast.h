@@ -50,6 +50,7 @@ struct Type : public IDumpable {
     f32,
     f64,
     Custom,
+    Enum,
     INTEGERS_START = u8,
     INTEGERS_END = i64,
     SIGNED_INT_START = i8,
@@ -281,6 +282,16 @@ struct NumberLiteral : public Expr {
   std::string value;
   inline NumberLiteral(SourceLocation loc, NumberType type, std::string value)
       : Expr(loc), type(type), value(std::move(value)) {}
+  DUMP_IMPL
+};
+
+struct EnumElementAccess : public Expr {
+  std::string enum_id;
+  std::string member_id;
+  inline EnumElementAccess(SourceLocation loc, std::string enum_id,
+                           std::string member_id)
+      : Expr(loc), enum_id(std::move(enum_id)),
+        member_id(std::move(member_id)) {}
   DUMP_IMPL
 };
 

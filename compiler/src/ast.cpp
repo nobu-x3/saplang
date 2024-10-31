@@ -262,6 +262,12 @@ void NumberLiteral::dump_to_stream(std::stringstream &stream,
          << "\n";
 }
 
+void EnumElementAccess::dump_to_stream(std::stringstream &stream,
+                                       size_t indent_level) const {
+  stream << indent(indent_level) << "EnumElementAccess: " << enum_id
+         << "::" << member_id << '\n';
+}
+
 void GroupingExpr::dump_to_stream(std::stringstream &stream,
                                   size_t indent_level) const {
   stream << indent(indent_level) << "GroupingExpr:\n";
