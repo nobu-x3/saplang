@@ -809,8 +809,8 @@ Parser::parse_enum_element_access(std::string enum_id) {
                   "expected identifier in enum field access.");
   std::string field_id = *m_NextToken.value;
   eat_next_token(); // eat identifier
-  return std::make_unique<EnumElementAccess>(loc, std::move(enum_id),
-                                             std::move(field_id));
+  return std::make_unique<EnumElementAccess>(
+      loc, Type::custom(std::move(enum_id), 0), std::move(field_id));
 }
 
 // <type>

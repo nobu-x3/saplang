@@ -286,11 +286,11 @@ struct NumberLiteral : public Expr {
 };
 
 struct EnumElementAccess : public Expr {
-  std::string enum_id;
+  Type enum_type;
   std::string member_id;
-  inline EnumElementAccess(SourceLocation loc, std::string enum_id,
+  inline EnumElementAccess(SourceLocation loc, Type enum_type,
                            std::string member_id)
-      : Expr(loc), enum_id(std::move(enum_id)),
+      : Expr(loc), enum_type(std::move(enum_type)),
         member_id(std::move(member_id)) {}
   DUMP_IMPL
 };

@@ -264,7 +264,7 @@ void NumberLiteral::dump_to_stream(std::stringstream &stream,
 
 void EnumElementAccess::dump_to_stream(std::stringstream &stream,
                                        size_t indent_level) const {
-  stream << indent(indent_level) << "EnumElementAccess: " << enum_id
+  stream << indent(indent_level) << "EnumElementAccess: " << enum_type.name
          << "::" << member_id << '\n';
 }
 
