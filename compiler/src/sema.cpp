@@ -642,6 +642,9 @@ std::optional<Type> Sema::resolve_type(Type parsed_type) {
     auto decl = lookup_decl(parsed_type.name, &parsed_type);
     if (!decl)
       return std::nullopt;
+    if (const auto *enum_decl =
+            dynamic_cast<const ResolvedEnumDecl *>(decl->decl))
+      return enum_decl->type;
     return parsed_type;
   }
   return parsed_type;
@@ -722,16 +725,14 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
 
 std::unique_ptr<ResolvedNumberLiteral>
 Sema::resolve_enum_access(const EnumElementAccess &access) {
-  auto maybe_decl = lookup_decl(access.enum_type.name, &access.enum_type);
+  auto maybe_decl = lookup_decl(access.enum_id);
   if (!maybe_decl)
-    return report(access.location, "undeclared type " + access.enum_type.name);
+    return report(access.location, "undeclared type " + access.enum_id);
   const auto *decl = dynamic_cast<const ResolvedEnumDecl *>(maybe_decl->decl);
   if (!decl)
-    return report(access.location,
-                  "unknown enum type " + access.enum_type.name + ".");
+    return report(access.location, "unknown enum type " + access.enum_id + ".");
   if (!decl->name_values_map.count(access.member_id))
-    return report(access.location, "unknown enum field " +
-                                       access.enum_type.name +
+    return report(access.location, "unknown enum field " + access.enum_id +
                                        "::" + access.member_id + ".");
   Value value;
   long lookup_value = decl->name_values_map.at(access.member_id);

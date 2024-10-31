@@ -280,6 +280,8 @@ std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
   if (m_NextToken.kind != TokenKind::Identifier)
     return report(m_NextToken.location, "expected enum name.");
   std::string id = *m_NextToken.value;
+  if (m_EnumTypes.count(id))
+    return report(m_NextToken.location, "enum redeclaration.");
   eat_next_token(); // eat enum id
   Type underlying_type = Type::builtin_i32(0);
   if (m_NextToken.kind == TokenKind::Colon) {
@@ -311,6 +313,7 @@ std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
       eat_next_token(); // eat ','
   }
   eat_next_token(); // eat '}'
+  m_EnumTypes.insert(std::make_pair(id, underlying_type));
   return std::make_unique<EnumDecl>(loc, std::move(id), underlying_type,
                                     std::move(name_values_map));
 }
@@ -809,8 +812,8 @@ Parser::parse_enum_element_access(std::string enum_id) {
                   "expected identifier in enum field access.");
   std::string field_id = *m_NextToken.value;
   eat_next_token(); // eat identifier
-  return std::make_unique<EnumElementAccess>(
-      loc, Type::custom(std::move(enum_id), 0), std::move(field_id));
+  return std::make_unique<EnumElementAccess>(loc, std::move(enum_id),
+                                             std::move(field_id));
 }
 
 // <type>
@@ -850,6 +853,9 @@ std::optional<Type> Parser::parse_type() {
       maybe_array_data = std::move(array_data);
     }
     assert(id_token.value.has_value());
+    if (m_EnumTypes.count(*id_token.value)) {
+      return m_EnumTypes.at(*id_token.value);
+    }
     if (*id_token.value == "i8") {
       return Type::builtin_i8(ptr_depth, std::move(maybe_array_data));
     } else if (*id_token.value == "i16") {

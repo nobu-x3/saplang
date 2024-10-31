@@ -1869,12 +1869,12 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
-  REQUIRE(lines_it->find(") enum_1:Enum") != std::string::npos);
+  REQUIRE(lines_it->find(") enum_1:i32") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
   CONTAINS_NEXT_REQUIRE(lines_it, "i32(5)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
-  REQUIRE(lines_it->find(") enum_2:Enum2") != std::string::npos);
+  REQUIRE(lines_it->find(") enum_2:u8") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
   CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");

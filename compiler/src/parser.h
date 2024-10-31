@@ -83,6 +83,7 @@ private:
   parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs);
 
 private:
+  std::unordered_map<std::string, Type> m_EnumTypes;
   Lexer *m_Lexer;
   Token m_NextToken;
   bool m_IsCompleteAst{true};
