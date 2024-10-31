@@ -290,7 +290,7 @@ std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
   if (m_NextToken.kind != TokenKind::Lbrace)
     return report(m_NextToken.location, "expected '{' after enum identifier.");
   eat_next_token(); // eat '{'
-  std::unordered_map<std::string, int> name_values_map{};
+  std::unordered_map<std::string, long> name_values_map{};
   int current_value = 0;
   while (m_NextToken.kind != TokenKind::Rbrace) {
     if (m_NextToken.kind != TokenKind::Identifier)
@@ -302,7 +302,7 @@ std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
       if (m_NextToken.kind != TokenKind::Integer)
         return report(m_NextToken.location,
                       "only integers can be enum values.");
-      current_value = std::stoi(*m_NextToken.value);
+      current_value = std::stol(*m_NextToken.value);
       eat_next_token(); // eat integer
     }
     name_values_map.insert(std::make_pair(name, current_value));

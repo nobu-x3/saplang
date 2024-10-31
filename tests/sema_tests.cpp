@@ -1833,6 +1833,54 @@ enum Enum2 : u8 {
   CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
 }
 
+TEST_CASE("Enum access", "[sema]") {
+  TEST_SETUP(R"(
+enum Enum {
+    ZERO,
+    ONE,
+    FOUR = 4,
+    FIVE
+}
+enum Enum2 : u8 {
+    ZERO,
+    ONE,
+    TWO
+}
+fn i32 main() {
+    var Enum enum_1 = Enum::FIVE;
+    var Enum2 enum_2 = Enum2::TWO;
+    return enum_1;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedEnumDecl: i32(Enum)") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "FIVE: 5");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FOUR: 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ONE: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedEnumDecl: u8(Enum2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ONE: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "TWO: 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ZERO: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") enum_1:Enum") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(5)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") enum_2:Enum2") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") enum_1:") != std::string::npos);
+}
 // @TODO: prohibit array operations on const vars
 // @TODO: prohibit struct ops on const vars
 // @TODO: slices

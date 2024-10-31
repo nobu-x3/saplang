@@ -46,6 +46,8 @@ private:
 
   std::optional<Type> resolve_type(Type parsed_type);
 
+  bool is_enum(const Type &type);
+
   std::unique_ptr<ResolvedFuncDecl> resolve_func_decl(const FunctionDecl &func);
 
   std::unique_ptr<ResolvedParamDecl> resolve_param_decl(const ParamDecl &decl);
@@ -53,6 +55,9 @@ private:
   std::unique_ptr<ResolvedBlock> resolve_block(const Block &block);
 
   std::unique_ptr<ResolvedStmt> resolve_stmt(const Stmt &stmt);
+
+  std::unique_ptr<ResolvedNumberLiteral>
+  resolve_enum_access(const EnumElementAccess &access);
 
   std::unique_ptr<ResolvedGroupingExpr>
   resolve_grouping_expr(const GroupingExpr &group);
