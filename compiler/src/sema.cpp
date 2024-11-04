@@ -622,14 +622,16 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
       for (auto &&param : m_CurrFunction->params) {
         insert_decl_to_current_scope(*param);
       }
-      auto resolved_body = resolve_block(*fn->body);
-      if (!resolved_body) {
-        error = true;
-        continue;
+      if (fn->body) {
+        auto resolved_body = resolve_block(*fn->body);
+        if (!resolved_body) {
+          error = true;
+          continue;
+        }
+        m_CurrFunction->body = std::move(resolved_body);
+        if (m_ShouldRunFlowSensitiveAnalysis)
+          error |= flow_sensitive_analysis(*m_CurrFunction);
       }
-      m_CurrFunction->body = std::move(resolved_body);
-      if (m_ShouldRunFlowSensitiveAnalysis)
-        error |= flow_sensitive_analysis(*m_CurrFunction);
     }
   }
   if (error && !partial)
@@ -665,8 +667,9 @@ Sema::resolve_func_decl(const FunctionDecl &func) {
       return nullptr;
     resolved_params.emplace_back(std::move(resolved_param));
   }
-  return std::make_unique<ResolvedFuncDecl>(
-      func.location, func.id, *type, std::move(resolved_params), nullptr);
+  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type,
+                                            std::move(resolved_params), nullptr,
+                                            func.is_vll, func.lib, func.og_name);
 }
 
 std::unique_ptr<ResolvedParamDecl>
@@ -1465,12 +1468,16 @@ Sema::resolve_call_expr(const CallExpr &call) {
       dynamic_cast<const ResolvedFuncDecl *>(resolved_callee->decl);
   if (!resolved_func_decl)
     return report(call.location, "calling non-function symbol.");
-  if (call.args.size() != resolved_func_decl->params.size())
+  if (call.args.size() != resolved_func_decl->params.size() &&
+      !resolved_func_decl->is_vll)
     return report(call.location, "argument count mismatch.");
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
   for (int i = 0; i < call.args.size(); ++i) {
+    auto *decl_type = i < resolved_func_decl->params.size()
+                          ? &resolved_func_decl->params[i]->type
+                          : nullptr;
     std::unique_ptr<ResolvedExpr> resolved_arg =
-        resolve_expr(*call.args[i], &resolved_func_decl->params[i]->type);
+        resolve_expr(*call.args[i], decl_type);
     if (!resolved_arg)
       return nullptr;
     Type resolved_type = resolved_arg->type;
@@ -1479,19 +1486,21 @@ Sema::resolve_call_expr(const CallExpr &call) {
                 resolved_arg.get())) {
       resolved_type = member_access->type;
     }
-    if (!is_same_type(resolved_type, resolved_func_decl->params[i]->type)) {
-      bool is_array_decay;
-      if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
-                         m_Cee, is_array_decay) &&
-          !is_same_array_decay(resolved_arg->type,
-                               resolved_func_decl->params[i]->type)) {
-        return report(
-            resolved_arg->location,
-            "unexpected type '" + resolved_arg->type.name + "', expected '" +
-                resolved_func_decl->params[i]->type.name +
-                (resolved_func_decl->params[i]->type.pointer_depth > 0 ? "*"
-                                                                       : "") +
-                "'.");
+    if (i < resolved_func_decl->params.size()) {
+      if (!is_same_type(resolved_type, resolved_func_decl->params[i]->type)) {
+        bool is_array_decay;
+        if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
+                           m_Cee, is_array_decay) &&
+            !is_same_array_decay(resolved_arg->type,
+                                 resolved_func_decl->params[i]->type)) {
+          return report(
+              resolved_arg->location,
+              "unexpected type '" + resolved_arg->type.name + "', expected '" +
+                  resolved_func_decl->params[i]->type.name +
+                  (resolved_func_decl->params[i]->type.pointer_depth > 0 ? "*"
+                                                                         : "") +
+                  "'.");
+        }
       }
     }
     resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
