@@ -3,6 +3,7 @@
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <utility>
 
 #include "ast.h"
 #include "lexer.h"
@@ -34,16 +35,17 @@ std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
   eat_next_token(); // eat '('
   if (m_NextToken.kind != TokenKind::Lparent)
     return report(m_NextToken.location, "expected '('.");
-  auto param_list = parse_parameter_list();
-  if (!param_list)
+  auto maybe_param_list_vll = parse_parameter_list();
+  if (!maybe_param_list_vll)
     return nullptr;
   std::unique_ptr<Block> block = parse_block();
   if (!block) {
     return report(m_NextToken.location, "failed to parse function block.");
   }
+  auto &&param_list = maybe_param_list_vll->first;
   return std::make_unique<FunctionDecl>(location, function_identifier,
-                                        *return_type, std::move(*param_list),
-                                        std::move(block));
+                                        *return_type, std::move(param_list),
+                                        std::move(block), false);
 }
 
 // <externBlockDecl>
@@ -93,8 +95,8 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
         report(m_NextToken.location, "expected '('.");
         return std::nullopt;
       }
-      auto param_list = parse_parameter_list();
-      if (!param_list)
+      auto maybe_param_list_vll = parse_parameter_list();
+      if (!maybe_param_list_vll)
         return std::nullopt;
       if (m_NextToken.kind == TokenKind::KwAlias) {
         eat_next_token(); // eat 'alias'
@@ -113,9 +115,11 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
         return std::nullopt;
       }
       eat_next_token(); // eat ';'
-      decl = std::make_unique<FunctionDecl>(
-          location, function_identifier, *return_type, std::move(*param_list),
-          nullptr, lib_name, alias);
+      auto is_vll = maybe_param_list_vll->second;
+      auto &&param_list = maybe_param_list_vll->first;
+      decl = std::make_unique<FunctionDecl>(location, function_identifier,
+                                            *return_type, std::move(param_list),
+                                            nullptr, is_vll, lib_name, alias);
     }
     // @TODO: struct and enum decls
     /* if (m_NextToken.kind == TokenKind::KwStruct) */
@@ -770,7 +774,7 @@ Parser::parse_argument_list() {
 
 // <parameterList>
 // ::= '(' (<paramDecl> (',', <paramDecl>)*)? ')'
-std::optional<std::vector<std::unique_ptr<ParamDecl>>>
+std::optional<std::pair<std::vector<std::unique_ptr<ParamDecl>>, bool>>
 Parser::parse_parameter_list() {
   if (m_NextToken.kind != TokenKind::Lparent) {
     report(m_NextToken.location, "expected '('");
@@ -780,12 +784,18 @@ Parser::parse_parameter_list() {
   std::vector<std::unique_ptr<ParamDecl>> param_decls;
   if (m_NextToken.kind == TokenKind::Rparent) {
     eat_next_token(); // eat ')'
-    return param_decls;
+    return std::make_pair(std::move(param_decls), false);
   }
+  bool is_vll = false;
   while (true) {
     if (m_NextToken.kind == TokenKind::KwVoid) {
       report(m_NextToken.location, "invalid paramater type 'void'.");
       return std::nullopt;
+    }
+    if (m_NextToken.kind == TokenKind::VLL) {
+      eat_next_token(); // eat '...'
+      is_vll = true;
+      break;
     }
     if (m_NextToken.kind != TokenKind::Identifier &&
         m_NextToken.kind != TokenKind::KwConst) {
@@ -805,7 +815,7 @@ Parser::parse_parameter_list() {
     return std::nullopt;
   }
   eat_next_token(); // eat ')'
-  return param_decls;
+  return std::make_pair(std::move(param_decls), is_vll);
 }
 
 std::unique_ptr<Expr> Parser::parse_expr() {

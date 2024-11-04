@@ -192,7 +192,7 @@ void FunctionDecl::dump_to_stream(std::stringstream &stream,
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
   stream << indent(indent_level) << "FunctionDecl: "
-         << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id
+         << (is_vll ? "VLL " : "") << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id
          << ":";
   type.dump_to_stream(stream);
   stream << '\n';

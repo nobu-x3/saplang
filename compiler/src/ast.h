@@ -470,13 +470,14 @@ struct FunctionDecl : public Decl {
   Type type;
   std::vector<std::unique_ptr<ParamDecl>> params;
   std::unique_ptr<Block> body;
+  bool is_vll;
   inline FunctionDecl(SourceLocation location, std::string id, Type type,
                       std::vector<std::unique_ptr<ParamDecl>> &&params,
-                      std::unique_ptr<Block> &&body, std::string lib = "",
+                      std::unique_ptr<Block> &&body, bool is_vll = false, std::string lib = "",
                       std::string og_name = "")
       : Decl(location, std::move(id), std::move(lib), std::move(og_name)),
         type(std::move(type)), params(std::move(params)),
-        body(std::move(body)) {}
+        body(std::move(body)), is_vll(is_vll) {}
   DUMP_IMPL
 };
 

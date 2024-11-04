@@ -1512,3 +1512,16 @@ extern sapfire {
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: size:i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: alias sapfire::render_frame render:void");
 }
+
+TEST_CASE("Extern function VLL", "[parser]") {
+  TEST_SETUP(R"(
+extern {
+    fn void print(char* fmt, ...) alias printf;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: VLL alias libc::printf print:void") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: fmt:ptr char");
+}

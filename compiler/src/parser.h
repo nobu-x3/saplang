@@ -65,7 +65,8 @@ private:
   using ArgumentList = std::vector<std::unique_ptr<Expr>>;
   std::optional<ArgumentList> parse_argument_list();
 
-  using ParameterList = std::vector<std::unique_ptr<ParamDecl>>;
+  // bool signifies whether there's a VLL
+  using ParameterList = std::pair<std::vector<std::unique_ptr<ParamDecl>>, bool>;
   std::optional<ParameterList> parse_parameter_list();
 
   std::unique_ptr<IfStmt> parse_if_stmt();
