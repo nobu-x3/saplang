@@ -184,13 +184,23 @@ void IfStmt::dump_to_stream(std::stringstream &stream,
 
 void FunctionDecl::dump_to_stream(std::stringstream &stream,
                                   size_t indent_level) const {
-  stream << indent(indent_level) << "FunctionDecl: " << id << ":";
+  std::string lib_og_name_resolve = "";
+  if (!lib.empty() && !og_name.empty()) {
+    lib_og_name_resolve = "alias " + lib + "::" + og_name;
+  } else if (!lib.empty())
+    lib_og_name_resolve = lib;
+  else if (!og_name.empty())
+    lib_og_name_resolve = "alias " + og_name;
+  stream << indent(indent_level) << "FunctionDecl: "
+         << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id
+         << ":";
   type.dump_to_stream(stream);
   stream << '\n';
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);
   }
-  body->dump_to_stream(stream, indent_level + 1);
+  if (body)
+    body->dump_to_stream(stream, indent_level + 1);
 }
 
 void ReturnStmt::dump_to_stream(std::stringstream &stream,
@@ -203,7 +213,16 @@ void ReturnStmt::dump_to_stream(std::stringstream &stream,
 
 void StructDecl::dump_to_stream(std::stringstream &stream,
                                 size_t indent_level) const {
-  stream << indent(indent_level) << "StructDecl: " << id << "\n";
+  std::string lib_og_name_resolve = "";
+  if (!lib.empty() && !og_name.empty()) {
+    lib_og_name_resolve = "alias " + lib + "::" + og_name;
+  } else if (!lib.empty())
+    lib_og_name_resolve = lib;
+  else if (!og_name.empty())
+    lib_og_name_resolve = "alias " + og_name;
+  stream << indent(indent_level) << "StructDecl: "
+         << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id
+         << "\n";
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << "MemberField: ";
     type.dump_to_stream(stream);
@@ -213,8 +232,16 @@ void StructDecl::dump_to_stream(std::stringstream &stream,
 
 void EnumDecl::dump_to_stream(std::stringstream &stream,
                               size_t indent_level) const {
-  stream << indent(indent_level) << "EnumDecl: " << underlying_type.name << "("
-         << id << ")" << '\n';
+  std::string lib_og_name_resolve = "";
+  if (!lib.empty() && !og_name.empty()) {
+    lib_og_name_resolve = "alias " + lib + "::" + og_name;
+  } else if (!lib.empty())
+    lib_og_name_resolve = lib;
+  else if (!og_name.empty())
+    lib_og_name_resolve = "alias " + og_name;
+  stream << indent(indent_level) << "EnumDecl: "
+         << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ")
+         << underlying_type.name << "(" << id << ")" << '\n';
   for (auto &&[name, val] : name_values_map) {
     stream << indent(indent_level + 1) << name << ": " << val << '\n';
   }
@@ -222,8 +249,16 @@ void EnumDecl::dump_to_stream(std::stringstream &stream,
 
 void VarDecl::dump_to_stream(std::stringstream &stream,
                              size_t indent_level) const {
-  stream << indent(indent_level) << "VarDecl: " << id << ":"
-         << (is_const ? "const " : "");
+  std::string lib_og_name_resolve = "";
+  if (!lib.empty() && !og_name.empty()) {
+    lib_og_name_resolve = "alias " + lib + "::" + og_name;
+  } else if (!lib.empty())
+    lib_og_name_resolve = lib;
+  else if (!og_name.empty())
+    lib_og_name_resolve = "alias " + og_name;
+  stream << indent(indent_level) << "VarDecl: "
+         << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id
+         << ":" << (is_const ? "const " : "");
   type.dump_to_stream(stream);
   stream << '\n';
   if (initializer)

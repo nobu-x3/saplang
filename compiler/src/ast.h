@@ -220,8 +220,12 @@ struct ConstexprResult {
 struct Decl : public IDumpable {
   SourceLocation location;
   std::string id;
-  inline Decl(SourceLocation location, std::string id)
-      : location(location), id(std::move(id)) {}
+  std::string lib;
+  std::string og_name;
+  inline Decl(SourceLocation location, std::string id, std::string lib = "",
+              std::string og_name = "")
+      : location(location), id(std::move(id)), lib(std::move(lib)),
+        og_name(std::move(og_name)) {}
   virtual ~Decl() = default;
 };
 
@@ -245,17 +249,20 @@ struct VarDecl : public Decl {
   std::unique_ptr<Expr> initializer;
   bool is_const;
   inline VarDecl(SourceLocation loc, std::string id, Type type,
-                 std::unique_ptr<Expr> init, bool is_const)
-      : Decl(loc, id), type(type), initializer(std::move(init)),
-        is_const(is_const) {}
+                 std::unique_ptr<Expr> init, bool is_const,
+                 std::string lib = "", std::string og_name = "")
+      : Decl(loc, std::move(id), std::move(lib), std::move(og_name)),
+        type(type), initializer(std::move(init)), is_const(is_const) {}
   DUMP_IMPL
 };
 
 struct StructDecl : public Decl {
   std::vector<std::pair<Type, std::string>> members;
   inline StructDecl(SourceLocation loc, const std::string &id,
-                    std::vector<std::pair<Type, std::string>> types)
-      : Decl(loc, id), members(std::move(types)) {}
+                    std::vector<std::pair<Type, std::string>> types,
+                    std::string lib = "", std::string og_name = "")
+      : Decl(loc, std::move(id), std::move(lib), std::move(og_name)),
+        members(std::move(types)) {}
   DUMP_IMPL
 };
 
@@ -263,8 +270,10 @@ struct EnumDecl : public Decl {
   std::unordered_map<std::string, long> name_values_map;
   Type underlying_type;
   inline EnumDecl(SourceLocation loc, std::string id, Type underlying_type,
-                  std::unordered_map<std::string, long> name_values_map)
-      : Decl(loc, std::move(id)), underlying_type(underlying_type),
+                  std::unordered_map<std::string, long> name_values_map,
+                  std::string lib = "", std::string og_name = "")
+      : Decl(loc, std::move(id), std::move(lib), std::move(og_name)),
+        underlying_type(underlying_type),
         name_values_map(std::move(name_values_map)) {}
   DUMP_IMPL
 };
@@ -463,9 +472,11 @@ struct FunctionDecl : public Decl {
   std::unique_ptr<Block> body;
   inline FunctionDecl(SourceLocation location, std::string id, Type type,
                       std::vector<std::unique_ptr<ParamDecl>> &&params,
-                      std::unique_ptr<Block> &&body)
-      : Decl(location, std::move(id)), type(std::move(type)),
-        params(std::move(params)), body(std::move(body)) {}
+                      std::unique_ptr<Block> &&body, std::string lib = "",
+                      std::string og_name = "")
+      : Decl(location, std::move(id), std::move(lib), std::move(og_name)),
+        type(std::move(type)), params(std::move(params)),
+        body(std::move(body)) {}
   DUMP_IMPL
 };
 

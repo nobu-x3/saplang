@@ -1494,3 +1494,21 @@ fn i32 main() {
   REQUIRE(error_stream.str() ==
           "test:3:34 error: expected identifier in enum field access.\n");
 }
+
+TEST_CASE("Extern function no VLL", "[parser]") {
+  TEST_SETUP(R"(
+extern {
+    fn void* allocate(i32 lenght, i32 size) alias malloc;
+}
+extern sapfire {
+    fn void render() alias render_frame;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: alias libc::malloc allocate:ptr void") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: lenght:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: size:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: alias sapfire::render_frame render:void");
+}

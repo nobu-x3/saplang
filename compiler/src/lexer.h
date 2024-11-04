@@ -16,6 +16,8 @@ enum class TokenKind : char {
   Real,
   BoolConstant,
   KwExport,
+  KwExtern,
+  KwAlias,
   KwFn,
   KwVoid,
   KwReturn,
@@ -68,7 +70,8 @@ const std::unordered_map<std::string_view, TokenKind> keywords = {
     {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},
     {"const", TokenKind::KwConst},   {"var", TokenKind::KwVar},
     {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},
-    {"enum", TokenKind::KwEnum},
+    {"enum", TokenKind::KwEnum},     {"extern", TokenKind::KwExtern},
+    {"alias", TokenKind::KwAlias},
 };
 
 struct Token {

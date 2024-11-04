@@ -41,6 +41,10 @@ private:
 
   void synchronize();
   std::unique_ptr<FunctionDecl> parse_function_decl();
+
+  using MaybeExternBlock = std::optional<std::vector<std::unique_ptr<Decl>>>;
+  MaybeExternBlock parse_extern_block();
+
   std::unique_ptr<Block> parse_block();
   std::unique_ptr<Stmt> parse_stmt();
   std::unique_ptr<ReturnStmt> parse_return_stmt();
@@ -53,7 +57,8 @@ private:
   std::unique_ptr<Expr> parse_expr();
   std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs,
                                        int precedence);
-  std::unique_ptr<EnumElementAccess> parse_enum_element_access(std::string enum_id);
+  std::unique_ptr<EnumElementAccess>
+  parse_enum_element_access(std::string enum_id);
   std::unique_ptr<ParamDecl> parse_param_decl();
   std::optional<Type> parse_type();
 
