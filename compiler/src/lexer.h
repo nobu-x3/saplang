@@ -41,6 +41,7 @@ enum class TokenKind : char {
   LessThanOrEqual,
   Equal,
   ColonColon,
+  VLL,
   Eof = single_char_tokens[0],
   Lparent = single_char_tokens[1],
   Rparent = single_char_tokens[2],
@@ -87,7 +88,7 @@ public:
   Token get_prev_token();
 
 private:
-  char peek_next_char() const;
+  char peek_next_char(size_t count = 0) const;
   char eat_next_char();
   char go_back_char();
 
