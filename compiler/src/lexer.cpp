@@ -73,6 +73,11 @@ Token Lexer::get_next_token() {
       return Token{token_start_location, TokenKind::Amp, "&"};
     }
   }
+  if (curr_char == '.' && peek_next_char() == '.' && peek_next_char(1) == '.') {
+    eat_next_char();
+    eat_next_char();
+    return Token{token_start_location, TokenKind::VLL, "..."};
+  }
   if (curr_char == '|' && peek_next_char() == '|') {
     eat_next_char();
     return Token{token_start_location, TokenKind::PipePipe, "||"};
@@ -117,7 +122,9 @@ Token Lexer::get_next_token() {
   return Token{token_start_location, TokenKind::Unknown, std::move(value)};
 }
 
-char Lexer::peek_next_char() const { return m_Source->buffer[m_Idx]; }
+char Lexer::peek_next_char(size_t count) const {
+  return m_Source->buffer[m_Idx + count];
+}
 
 char Lexer::eat_next_char() {
   ++m_Column;

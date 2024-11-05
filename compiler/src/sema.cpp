@@ -309,19 +309,23 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
   return ret_val;
 }
 
-bool can_be_cast(Type::Kind cast_from, Type::Kind cast_to) {
-  return cast_to != Type::Kind::Void && cast_from != Type::Kind::Void &&
-         does_type_have_associated_size(cast_from) &&
-         does_type_have_associated_size(cast_to) &&
-         get_type_size(cast_from) <= get_type_size(cast_to);
+bool can_be_cast(Type cast_from, Type cast_to) {
+  return (cast_to.kind != Type::Kind::Void &&
+          cast_from.kind != Type::Kind::Void &&
+          does_type_have_associated_size(cast_from.kind) &&
+          does_type_have_associated_size(cast_to.kind) &&
+          get_type_size(cast_from.kind) <= get_type_size(cast_to.kind)) ||
+         (cast_from.kind == Type::Kind::Void &&
+          cast_from.pointer_depth == cast_to.pointer_depth &&
+          cast_from.pointer_depth > 0);
 }
 
-bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
-                          Type::Kind cast_to) {
-  if (can_be_cast(number_literal->type.kind, cast_to)) {
+bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal, Type cast_to) {
+  if (can_be_cast(number_literal->type, cast_to)) {
     std::string errmsg;
-    number_literal->value = construct_value(number_literal->type.kind, cast_to,
-                                            &number_literal->value, errmsg);
+    number_literal->value =
+        construct_value(number_literal->type.kind, cast_to.kind,
+                        &number_literal->value, errmsg);
     if (!errmsg.empty())
       report(number_literal->location, errmsg);
     return true;
@@ -381,19 +385,19 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
     return true;
   } else if (auto *number_literal =
                  dynamic_cast<ResolvedNumberLiteral *>(&expr)) {
-    if (implicit_cast_numlit(number_literal, type.kind)) {
+    if (implicit_cast_numlit(number_literal, type)) {
       number_literal->type = type;
       number_literal->set_constant_value(cee.evaluate(*number_literal));
     }
     return true;
   } else if (auto *decl_ref = dynamic_cast<ResolvedDeclRefExpr *>(&expr)) {
-    if (can_be_cast(decl_ref->type.kind, type.kind)) {
+    if (can_be_cast(decl_ref->type, type)) {
       if (!is_array_decay)
         decl_ref->type = type;
     }
     return true;
   } else if (auto *call_expr = dynamic_cast<ResolvedCallExpr *>(&expr)) {
-    if (can_be_cast(call_expr->func_decl->type.kind, type.kind)) {
+    if (can_be_cast(call_expr->func_decl->type, type)) {
       if (!is_array_decay) {
         call_expr->type = type;
         call_expr->set_constant_value(cee.evaluate(*call_expr));
@@ -622,14 +626,16 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
       for (auto &&param : m_CurrFunction->params) {
         insert_decl_to_current_scope(*param);
       }
-      auto resolved_body = resolve_block(*fn->body);
-      if (!resolved_body) {
-        error = true;
-        continue;
+      if (fn->body) {
+        auto resolved_body = resolve_block(*fn->body);
+        if (!resolved_body) {
+          error = true;
+          continue;
+        }
+        m_CurrFunction->body = std::move(resolved_body);
+        if (m_ShouldRunFlowSensitiveAnalysis)
+          error |= flow_sensitive_analysis(*m_CurrFunction);
       }
-      m_CurrFunction->body = std::move(resolved_body);
-      if (m_ShouldRunFlowSensitiveAnalysis)
-        error |= flow_sensitive_analysis(*m_CurrFunction);
     }
   }
   if (error && !partial)
@@ -666,7 +672,8 @@ Sema::resolve_func_decl(const FunctionDecl &func) {
     resolved_params.emplace_back(std::move(resolved_param));
   }
   return std::make_unique<ResolvedFuncDecl>(
-      func.location, func.id, *type, std::move(resolved_params), nullptr);
+      func.location, func.id, *type, std::move(resolved_params), nullptr,
+      func.is_vll, func.lib, func.og_name);
 }
 
 std::unique_ptr<ResolvedParamDecl>
@@ -1465,12 +1472,16 @@ Sema::resolve_call_expr(const CallExpr &call) {
       dynamic_cast<const ResolvedFuncDecl *>(resolved_callee->decl);
   if (!resolved_func_decl)
     return report(call.location, "calling non-function symbol.");
-  if (call.args.size() != resolved_func_decl->params.size())
+  if (call.args.size() != resolved_func_decl->params.size() &&
+      !resolved_func_decl->is_vll)
     return report(call.location, "argument count mismatch.");
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
   for (int i = 0; i < call.args.size(); ++i) {
+    auto *decl_type = i < resolved_func_decl->params.size()
+                          ? &resolved_func_decl->params[i]->type
+                          : nullptr;
     std::unique_ptr<ResolvedExpr> resolved_arg =
-        resolve_expr(*call.args[i], &resolved_func_decl->params[i]->type);
+        resolve_expr(*call.args[i], decl_type);
     if (!resolved_arg)
       return nullptr;
     Type resolved_type = resolved_arg->type;
@@ -1479,19 +1490,21 @@ Sema::resolve_call_expr(const CallExpr &call) {
                 resolved_arg.get())) {
       resolved_type = member_access->type;
     }
-    if (!is_same_type(resolved_type, resolved_func_decl->params[i]->type)) {
-      bool is_array_decay;
-      if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
-                         m_Cee, is_array_decay) &&
-          !is_same_array_decay(resolved_arg->type,
-                               resolved_func_decl->params[i]->type)) {
-        return report(
-            resolved_arg->location,
-            "unexpected type '" + resolved_arg->type.name + "', expected '" +
-                resolved_func_decl->params[i]->type.name +
-                (resolved_func_decl->params[i]->type.pointer_depth > 0 ? "*"
-                                                                       : "") +
-                "'.");
+    if (i < resolved_func_decl->params.size()) {
+      if (!is_same_type(resolved_type, resolved_func_decl->params[i]->type)) {
+        bool is_array_decay;
+        if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
+                           m_Cee, is_array_decay) &&
+            !is_same_array_decay(resolved_arg->type,
+                                 resolved_func_decl->params[i]->type)) {
+          return report(
+              resolved_arg->location,
+              "unexpected type '" + resolved_arg->type.name + "', expected '" +
+                  resolved_func_decl->params[i]->type.name +
+                  (resolved_func_decl->params[i]->type.pointer_depth > 0 ? "*"
+                                                                         : "") +
+                  "'.");
+        }
       }
     }
     resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
@@ -1523,16 +1536,19 @@ Sema::resolve_assignment(const Assignment &assignment) {
   std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr, type);
   if (!rhs)
     return nullptr;
-  if (!is_same_type(lhs->type, rhs->type)) {
+  Type lhs_derefed_type = lhs->type;
+  lhs_derefed_type.pointer_depth -= assignment.lhs_deref_count;
+  if (!is_same_type(lhs_derefed_type, rhs->type)) {
     bool is_array_decay;
-    if (!try_cast_expr(*rhs, lhs->type, m_Cee, is_array_decay) &&
-        !is_same_array_decay(rhs->type, lhs->type))
+    if (!try_cast_expr(*rhs, lhs_derefed_type, m_Cee, is_array_decay) &&
+        !is_same_array_decay(rhs->type, lhs_derefed_type))
       return report(rhs->location, "assigned value type of '" + rhs->type.name +
                                        "' does not match variable type '" +
                                        lhs->type.name + "'.");
   }
   rhs->set_constant_value(m_Cee.evaluate(*rhs));
   return std::make_unique<ResolvedAssignment>(assignment.location,
-                                              std::move(lhs), std::move(rhs));
+                                              std::move(lhs), std::move(rhs),
+                                              assignment.lhs_deref_count);
 }
 } // namespace saplang

@@ -1,7 +1,9 @@
 #include <cassert>
 #include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
+#include <utility>
 
 #include "ast.h"
 #include "lexer.h"
@@ -14,7 +16,7 @@ Parser::Parser(Lexer *lexer)
     : m_Lexer(lexer), m_NextToken(lexer->get_next_token()) {}
 
 // <funcDecl>
-// ::= 'fn' <type> <identifier> '(' ')' <block>
+// ::= 'fn' <type> <identifier> '(' (<parameterList>)* ')' <block>
 std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
   SourceLocation location = m_NextToken.location;
   if (m_NextToken.kind != TokenKind::KwFn) {
@@ -33,16 +35,100 @@ std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
   eat_next_token(); // eat '('
   if (m_NextToken.kind != TokenKind::Lparent)
     return report(m_NextToken.location, "expected '('.");
-  auto param_list = parse_parameter_list();
-  if (!param_list)
+  auto maybe_param_list_vll = parse_parameter_list();
+  if (!maybe_param_list_vll)
     return nullptr;
   std::unique_ptr<Block> block = parse_block();
   if (!block) {
     return report(m_NextToken.location, "failed to parse function block.");
   }
+  auto &&param_list = maybe_param_list_vll->first;
   return std::make_unique<FunctionDecl>(location, function_identifier,
-                                        *return_type, std::move(*param_list),
-                                        std::move(block));
+                                        *return_type, std::move(param_list),
+                                        std::move(block), false);
+}
+
+// <externBlockDecl>
+// ::= 'extern' <identifier> '{' ('fn' <type> <identifier> '('
+// (<parameterList>)* ')' ';')* <structDeclStmt>* <enumDecl>* '}'
+std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
+  assert(m_NextToken.kind == TokenKind::KwExtern &&
+         "expected 'extern' keyword.");
+  eat_next_token(); // eat 'extern'
+  std::string lib_name = "libc";
+  if (m_NextToken.kind == TokenKind::Identifier) {
+    lib_name = *m_NextToken.value;
+    eat_next_token(); // eat libname
+  }
+  SourceLocation loc = m_NextToken.location;
+  if (m_NextToken.kind != TokenKind::Lbrace) {
+    report(m_NextToken.location,
+           "expected '{' in the beginning of extern block.");
+    return std::nullopt;
+  }
+  eat_next_token(); // eat '{'
+  std::vector<std::unique_ptr<Decl>> declarations;
+  while (m_NextToken.kind != TokenKind::Rbrace) {
+    std::unique_ptr<Decl> decl = nullptr;
+    std::string alias;
+    // this is copied because we're expecting there not to be a block and
+    // parse_function_decl() expects a block
+    if (m_NextToken.kind == TokenKind::KwFn) {
+      SourceLocation location = m_NextToken.location;
+      if (m_NextToken.kind != TokenKind::KwFn) {
+        report(m_NextToken.location,
+               "function declarations must start with 'fn'");
+        return std::nullopt;
+      }
+      eat_next_token();
+      auto return_type = parse_type(); // eats the function identifier
+      if (!return_type) {
+        return std::nullopt;
+      }
+      if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value) {
+        report(m_NextToken.location, "expected function identifier.");
+        return std::nullopt;
+      }
+      std::string function_identifier = *m_NextToken.value;
+      eat_next_token(); // eat '('
+      if (m_NextToken.kind != TokenKind::Lparent) {
+        report(m_NextToken.location, "expected '('.");
+        return std::nullopt;
+      }
+      auto maybe_param_list_vll = parse_parameter_list();
+      if (!maybe_param_list_vll)
+        return std::nullopt;
+      if (m_NextToken.kind == TokenKind::KwAlias) {
+        eat_next_token(); // eat 'alias'
+        if (m_NextToken.kind != TokenKind::Identifier) {
+          report(m_NextToken.location,
+                 "expected identifier with original function name in "
+                 "alias declaration.");
+          return std::nullopt;
+        }
+        alias = *m_NextToken.value;
+        eat_next_token(); // eat identifier
+      }
+      if (m_NextToken.kind != TokenKind::Semicolon) {
+        report(m_NextToken.location,
+               "expected ';' after extern function declaration.");
+        return std::nullopt;
+      }
+      eat_next_token(); // eat ';'
+      auto is_vll = maybe_param_list_vll->second;
+      auto &&param_list = maybe_param_list_vll->first;
+      decl = std::make_unique<FunctionDecl>(location, function_identifier,
+                                            *return_type, std::move(param_list),
+                                            nullptr, is_vll, lib_name, alias);
+    }
+    // @TODO: struct and enum decls
+    /* if (m_NextToken.kind == TokenKind::KwStruct) */
+    /* { */
+    /* } */
+    declarations.emplace_back(std::move(decl));
+  }
+  eat_next_token(); // eat '}'
+  return std::move(declarations);
 }
 
 // <block>
@@ -321,10 +407,24 @@ std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
 std::unique_ptr<Assignment>
 Parser::parse_assignment(std::unique_ptr<Expr> lhs) {
   auto *dre = dynamic_cast<DeclRefExpr *>(lhs.get());
-  if (!dre)
-    return report(lhs->location, "expected variable on the LHS of assignment.");
+  int lhs_dereference_count = 0;
+  if (!dre) {
+    if (const auto *unary = dynamic_cast<const UnaryOperator *>(lhs.get())) {
+      auto *last_valid_deref = unary;
+      while (unary && unary->op == TokenKind::Asterisk) {
+        last_valid_deref = unary;
+        unary = dynamic_cast<const UnaryOperator *>(unary->rhs.get());
+        ++lhs_dereference_count;
+      }
+      dre = dynamic_cast<DeclRefExpr *>(last_valid_deref->rhs.get());
+    }
+    if (!dre)
+      return report(lhs->location,
+                    "expected variable on the LHS of assignment.");
+  }
   std::ignore = lhs.release();
-  return parse_assignment_rhs(std::unique_ptr<DeclRefExpr>(dre));
+  return parse_assignment_rhs(std::unique_ptr<DeclRefExpr>(dre),
+                              lhs_dereference_count);
 }
 
 std::unique_ptr<Stmt> Parser::parse_assignment_or_expr() {
@@ -347,13 +447,15 @@ std::unique_ptr<Stmt> Parser::parse_assignment_or_expr() {
 // <assignment>
 // ::= <declRefExpr> '=' <expr>
 std::unique_ptr<Assignment>
-Parser::parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs) {
+Parser::parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs,
+                             int deref_count) {
   SourceLocation loc = m_NextToken.location;
   eat_next_token(); // eat '='
   std::unique_ptr<Expr> rhs = parse_expr();
   if (!rhs)
     return nullptr;
-  return std::make_unique<Assignment>(loc, std::move(lhs), std::move(rhs));
+  return std::make_unique<Assignment>(loc, std::move(lhs), std::move(rhs),
+                                      deref_count);
 }
 
 // <returnStmt>
@@ -688,7 +790,7 @@ Parser::parse_argument_list() {
 
 // <parameterList>
 // ::= '(' (<paramDecl> (',', <paramDecl>)*)? ')'
-std::optional<std::vector<std::unique_ptr<ParamDecl>>>
+std::optional<std::pair<std::vector<std::unique_ptr<ParamDecl>>, bool>>
 Parser::parse_parameter_list() {
   if (m_NextToken.kind != TokenKind::Lparent) {
     report(m_NextToken.location, "expected '('");
@@ -698,12 +800,18 @@ Parser::parse_parameter_list() {
   std::vector<std::unique_ptr<ParamDecl>> param_decls;
   if (m_NextToken.kind == TokenKind::Rparent) {
     eat_next_token(); // eat ')'
-    return param_decls;
+    return std::make_pair(std::move(param_decls), false);
   }
+  bool is_vll = false;
   while (true) {
     if (m_NextToken.kind == TokenKind::KwVoid) {
       report(m_NextToken.location, "invalid paramater type 'void'.");
       return std::nullopt;
+    }
+    if (m_NextToken.kind == TokenKind::VLL) {
+      eat_next_token(); // eat '...'
+      is_vll = true;
+      break;
     }
     if (m_NextToken.kind != TokenKind::Identifier &&
         m_NextToken.kind != TokenKind::KwConst) {
@@ -723,7 +831,7 @@ Parser::parse_parameter_list() {
     return std::nullopt;
   }
   eat_next_token(); // eat ')'
-  return param_decls;
+  return std::make_pair(std::move(param_decls), is_vll);
 }
 
 std::unique_ptr<Expr> Parser::parse_expr() {
@@ -824,7 +932,12 @@ std::optional<Type> Parser::parse_type() {
   Token token = m_NextToken;
   if (token.kind == TokenKind::KwVoid) {
     eat_next_token();
-    return Type::builtin_void(0);
+    uint ptr_depth = 0;
+    while (m_NextToken.kind == TokenKind::Asterisk) {
+      eat_next_token();
+      ++ptr_depth;
+    }
+    return Type::builtin_void(ptr_depth);
   }
   if (token.kind == TokenKind::Identifier) {
     Token id_token = m_NextToken;
@@ -888,7 +1001,8 @@ std::optional<Type> Parser::parse_type() {
 }
 
 // <sourceFile>
-// ::= <structDeclStmt>* <varDeclStatement>* <funcDecl>* EOF
+// ::= <structDeclStmt>* <varDeclStatement>* <funcDecl>* <externBlockDecl>*
+// <enumDecl>* EOF
 ParsingResult Parser::parse_source_file() {
   std::vector<std::unique_ptr<Decl>> decls;
   bool is_complete_ast = true;
@@ -900,10 +1014,11 @@ ParsingResult Parser::parse_source_file() {
         m_NextToken.kind != TokenKind::KwStruct &&
         m_NextToken.kind != TokenKind::KwVar &&
         m_NextToken.kind != TokenKind::KwConst &&
-        m_NextToken.kind != TokenKind::KwEnum) {
-      report(m_NextToken.location, "only function, struct declarations, enum "
-                                   "declarations and global variables are "
-                                   "allowed in global scope.");
+        m_NextToken.kind != TokenKind::KwEnum &&
+        m_NextToken.kind != TokenKind::KwExtern) {
+      report(m_NextToken.location,
+             "only function, struct, extern block, enum and global variables "
+             "declarations are allowed in global scope.");
       is_complete_ast = false;
       sync_on(sync_kinds);
       continue;
@@ -921,6 +1036,18 @@ ParsingResult Parser::parse_source_file() {
       }
     } else if (m_NextToken.kind == TokenKind::KwEnum)
       decl = parse_enum_decl();
+    else if (m_NextToken.kind == TokenKind::KwExtern) {
+      auto extern_block = parse_extern_block();
+      if (!extern_block) {
+        is_complete_ast = false;
+        sync_on(sync_kinds);
+        continue;
+      }
+      for (auto &&extern_decl : *extern_block) {
+        decls.emplace_back(std::move(extern_decl));
+      }
+      continue;
+    }
     if (!decl) {
       is_complete_ast = false;
       sync_on(sync_kinds);

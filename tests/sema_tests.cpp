@@ -1,4 +1,5 @@
 #include "test_utils.h"
+#include <iterator>
 
 #define TEST_SETUP(file_contents)                                              \
   saplang::clear_error_stream();                                               \
@@ -1268,6 +1269,11 @@ TEST_CASE("derefence operator", "[sema]") {
 var i32 test = 0;
 var i32* test1 = &test;
 var i32 test2 = *test1;
+fn void main() {
+    *test1 = 1;
+    var i32** test3 = &test1;
+    **test3 = 69;
+}
 )");
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
@@ -1286,6 +1292,27 @@ var i32 test2 = *test1;
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '*'");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") test1:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "LhsDereferenceCount: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test1:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test3:ptr ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test1:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "LhsDereferenceCount: 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test3:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(69)");
 }
 
 TEST_CASE("dereferencing non-pointer type", "[sema]") {
@@ -1885,3 +1912,59 @@ fn i32 main() {
 // @TODO: prohibit struct ops on const vars
 // @TODO: slices
 // @TODO: global and local redeclaration
+
+TEST_CASE("Extern function no VLL", "[sema]") {
+  TEST_SETUP(R"(
+extern {
+    fn void* allocate(i32 lenght, i32 size) alias malloc;
+}
+extern sapfire {
+    fn void render() alias render_frame;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") alias libc::malloc allocate:") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
+  REQUIRE(lines_it->find(") lenght:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
+  REQUIRE(lines_it->find(") size:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") alias sapfire::render_frame render:") !=
+          std::string::npos);
+}
+
+TEST_CASE("Extern function VLL", "[sema]") {
+  TEST_SETUP(R"(
+extern {
+    fn void print(u8* fmt, ...) alias printf;
+}
+fn void main() {
+    print("hello %d, %d, %d.\n", 1, 2, 3);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") VLL alias libc::printf print:") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
+  REQUIRE(lines_it->find(") fmt:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") print:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "ResolvedStringLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "8(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(3)");
+}

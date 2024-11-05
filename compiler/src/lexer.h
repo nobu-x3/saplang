@@ -16,6 +16,8 @@ enum class TokenKind : char {
   Real,
   BoolConstant,
   KwExport,
+  KwExtern,
+  KwAlias,
   KwFn,
   KwVoid,
   KwReturn,
@@ -39,6 +41,7 @@ enum class TokenKind : char {
   LessThanOrEqual,
   Equal,
   ColonColon,
+  VLL,
   Eof = single_char_tokens[0],
   Lparent = single_char_tokens[1],
   Rparent = single_char_tokens[2],
@@ -68,7 +71,8 @@ const std::unordered_map<std::string_view, TokenKind> keywords = {
     {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},
     {"const", TokenKind::KwConst},   {"var", TokenKind::KwVar},
     {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},
-    {"enum", TokenKind::KwEnum},
+    {"enum", TokenKind::KwEnum},     {"extern", TokenKind::KwExtern},
+    {"alias", TokenKind::KwAlias},
 };
 
 struct Token {
@@ -84,7 +88,7 @@ public:
   Token get_prev_token();
 
 private:
-  char peek_next_char() const;
+  char peek_next_char(size_t count = 0) const;
   char eat_next_char();
   char go_back_char();
 
