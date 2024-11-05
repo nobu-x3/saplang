@@ -747,13 +747,8 @@ std::unique_ptr<StringLiteralExpr> Parser::parse_string_literal_expr() {
   assert(m_NextToken.kind == TokenKind::DoubleQuote &&
          "assumed token is not double quote.");
   SourceLocation loc = m_NextToken.location;
-  eat_next_token(); // eat '"'
-  std::string val;
-  while (m_NextToken.kind != TokenKind::DoubleQuote) {
-    val += *m_NextToken.value;
-    eat_next_token();
-  }
-  eat_next_token(); // eat second '"'
+  std::string val = m_Lexer->get_string_literal();
+  eat_next_token();
   return std::make_unique<StringLiteralExpr>(loc, std::move(val));
 }
 

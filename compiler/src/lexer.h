@@ -86,6 +86,7 @@ public:
   explicit Lexer(const SourceFile &source);
   Token get_next_token();
   Token get_prev_token();
+  std::string get_string_literal();
 
 private:
   char peek_next_char(size_t count = 0) const;

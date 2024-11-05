@@ -122,6 +122,16 @@ Token Lexer::get_next_token() {
   return Token{token_start_location, TokenKind::Unknown, std::move(value)};
 }
 
+std::string Lexer::get_string_literal() {
+  std::stringstream stream;
+  char curr_char = eat_next_char();
+  while (curr_char != '"') {
+    stream << curr_char;
+    curr_char = eat_next_char();
+  }
+  return stream.str();
+}
+
 char Lexer::peek_next_char(size_t count) const {
   return m_Source->buffer[m_Idx + count];
 }
