@@ -309,19 +309,23 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type,
   return ret_val;
 }
 
-bool can_be_cast(Type::Kind cast_from, Type::Kind cast_to) {
-  return cast_to != Type::Kind::Void && cast_from != Type::Kind::Void &&
-         does_type_have_associated_size(cast_from) &&
-         does_type_have_associated_size(cast_to) &&
-         get_type_size(cast_from) <= get_type_size(cast_to);
+bool can_be_cast(Type cast_from, Type cast_to) {
+  return (cast_to.kind != Type::Kind::Void &&
+          cast_from.kind != Type::Kind::Void &&
+          does_type_have_associated_size(cast_from.kind) &&
+          does_type_have_associated_size(cast_to.kind) &&
+          get_type_size(cast_from.kind) <= get_type_size(cast_to.kind)) ||
+         (cast_from.kind == Type::Kind::Void &&
+          cast_from.pointer_depth == cast_to.pointer_depth &&
+          cast_from.pointer_depth > 0);
 }
 
-bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal,
-                          Type::Kind cast_to) {
-  if (can_be_cast(number_literal->type.kind, cast_to)) {
+bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal, Type cast_to) {
+  if (can_be_cast(number_literal->type, cast_to)) {
     std::string errmsg;
-    number_literal->value = construct_value(number_literal->type.kind, cast_to,
-                                            &number_literal->value, errmsg);
+    number_literal->value =
+        construct_value(number_literal->type.kind, cast_to.kind,
+                        &number_literal->value, errmsg);
     if (!errmsg.empty())
       report(number_literal->location, errmsg);
     return true;
@@ -381,19 +385,19 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
     return true;
   } else if (auto *number_literal =
                  dynamic_cast<ResolvedNumberLiteral *>(&expr)) {
-    if (implicit_cast_numlit(number_literal, type.kind)) {
+    if (implicit_cast_numlit(number_literal, type)) {
       number_literal->type = type;
       number_literal->set_constant_value(cee.evaluate(*number_literal));
     }
     return true;
   } else if (auto *decl_ref = dynamic_cast<ResolvedDeclRefExpr *>(&expr)) {
-    if (can_be_cast(decl_ref->type.kind, type.kind)) {
+    if (can_be_cast(decl_ref->type, type)) {
       if (!is_array_decay)
         decl_ref->type = type;
     }
     return true;
   } else if (auto *call_expr = dynamic_cast<ResolvedCallExpr *>(&expr)) {
-    if (can_be_cast(call_expr->func_decl->type.kind, type.kind)) {
+    if (can_be_cast(call_expr->func_decl->type, type)) {
       if (!is_array_decay) {
         call_expr->type = type;
         call_expr->set_constant_value(cee.evaluate(*call_expr));

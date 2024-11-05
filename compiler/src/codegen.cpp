@@ -44,8 +44,9 @@ void Codegen::gen_func_decl(const ResolvedFuncDecl &decl) {
   for (auto &&param : decl.params) {
     param_types.emplace_back(gen_type(param->type));
   }
-  auto *type = llvm::FunctionType::get(return_type, param_types, false);
-  llvm::Function::Create(type, llvm::Function::ExternalLinkage, decl.id,
+  auto *type = llvm::FunctionType::get(return_type, param_types, decl.is_vll);
+  llvm::Function::Create(type, llvm::Function::ExternalLinkage,
+                         decl.og_name.empty() ? decl.id : decl.og_name,
                          *m_Module);
 }
 
@@ -179,6 +180,8 @@ void Codegen::gen_struct_decl(const ResolvedStructDecl &decl) {
 }
 
 void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
+  if (!decl.body)
+    return;
   auto *function = m_Module->getFunction(decl.id);
   auto *entry_bb = llvm::BasicBlock::Create(m_Context, "entry", function);
   m_Builder.SetInsertPoint(entry_bb);
@@ -793,7 +796,7 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast) {
       var = gen_explicit_cast(*inner_cast);
       prev_cast_type = inner_cast->cast_type;
     } else {
-      var = m_Declarations[decl_ref_expr->decl];
+      var = gen_expr(*cast.rhs);
     }
   }
   var = decl_ref_expr ? m_Declarations[decl_ref_expr->decl] : var;
@@ -1072,7 +1075,9 @@ void Codegen::gen_conditional_op(const ResolvedExpr &op,
 }
 
 llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
-  llvm::Function *callee = m_Module->getFunction(call.func_decl->id);
+  llvm::Function *callee = m_Module->getFunction(call.func_decl->og_name.empty()
+                                                     ? call.func_decl->id
+                                                     : call.func_decl->og_name);
   std::vector<llvm::Value *> args{};
   int param_index = -1;
   for (auto &&arg : call.args) {
@@ -1188,11 +1193,16 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
           dynamic_cast<const ResolvedStructMemberAccess *>(
               assignment.variable.get())) {
     decl = gen_struct_member_access(*member_access, member_type);
-  }
-  if (const auto *array_access =
-          dynamic_cast<const ResolvedArrayElementAccess *>(
-              assignment.variable.get())) {
+  } else if (const auto *array_access =
+                 dynamic_cast<const ResolvedArrayElementAccess *>(
+                     assignment.variable.get())) {
     decl = gen_array_element_access(*array_access, member_type);
+  } else {
+    Type derefed_type = assignment.variable->type;
+    for (int i = 0; i < assignment.lhs_deref_count; ++i) {
+      decl = m_Builder.CreateLoad(gen_type(derefed_type), decl);
+      --derefed_type.pointer_depth;
+    }
   }
   llvm::Value *expr = gen_expr(*assignment.expr);
   if (const auto *struct_lit = dynamic_cast<const ResolvedStructLiteralExpr *>(

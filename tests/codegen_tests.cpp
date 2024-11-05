@@ -2641,7 +2641,6 @@ fn i32 main() {
 }
     )");
   REQUIRE(error_stream.str() == "");
-  REQUIRE(output_string == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin() + 2;
   CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
@@ -2653,5 +2652,46 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store i8 2, ptr %enum_2, align 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load i32, ptr %enum_1, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %0, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+}
+
+TEST_CASE("Extern function", "[codegen]") {
+  TEST_SETUP(R"(
+extern {
+    fn void* allocate(i32 size) alias malloc;
+    fn void print(u8* fmt, ...) alias printf;
+}
+fn i32 main() {
+    var i32* a = allocate(4);
+    *a = 68;
+    var i32** b = &a;
+    **b = 69;
+    print("hello %d, %d, %d.\n", 1, 2, 3);
+    return *a;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 3;
+  CONTAINS_NEXT_REQUIRE(lines_it, "declare ptr @malloc(i32 %0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "declare void @printf(ptr %0, ...)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%b = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = call ptr @malloc(i32 4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %0, ptr %a, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load ptr, ptr %a, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 68, ptr %1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %b, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load ptr, ptr %b, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load ptr, ptr %2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 69, ptr %3, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "call void (ptr, ...) @printf(ptr @.str, i8 1, i8 2, i8 3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load ptr, ptr %a, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%5 = load i32, ptr %4, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %5, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
 }
