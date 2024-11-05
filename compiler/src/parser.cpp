@@ -407,10 +407,24 @@ std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
 std::unique_ptr<Assignment>
 Parser::parse_assignment(std::unique_ptr<Expr> lhs) {
   auto *dre = dynamic_cast<DeclRefExpr *>(lhs.get());
-  if (!dre)
-    return report(lhs->location, "expected variable on the LHS of assignment.");
+  int lhs_dereference_count = 0;
+  if (!dre) {
+    if (const auto *unary = dynamic_cast<const UnaryOperator *>(lhs.get())) {
+      auto *last_valid_deref = unary;
+      while (unary && unary->op == TokenKind::Asterisk) {
+        last_valid_deref = unary;
+        unary = dynamic_cast<const UnaryOperator *>(unary->rhs.get());
+        ++lhs_dereference_count;
+      }
+      dre = dynamic_cast<DeclRefExpr *>(last_valid_deref->rhs.get());
+    }
+    if (!dre)
+      return report(lhs->location,
+                    "expected variable on the LHS of assignment.");
+  }
   std::ignore = lhs.release();
-  return parse_assignment_rhs(std::unique_ptr<DeclRefExpr>(dre));
+  return parse_assignment_rhs(std::unique_ptr<DeclRefExpr>(dre),
+                              lhs_dereference_count);
 }
 
 std::unique_ptr<Stmt> Parser::parse_assignment_or_expr() {
@@ -433,13 +447,15 @@ std::unique_ptr<Stmt> Parser::parse_assignment_or_expr() {
 // <assignment>
 // ::= <declRefExpr> '=' <expr>
 std::unique_ptr<Assignment>
-Parser::parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs) {
+Parser::parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs,
+                             int deref_count) {
   SourceLocation loc = m_NextToken.location;
   eat_next_token(); // eat '='
   std::unique_ptr<Expr> rhs = parse_expr();
   if (!rhs)
     return nullptr;
-  return std::make_unique<Assignment>(loc, std::move(lhs), std::move(rhs));
+  return std::make_unique<Assignment>(loc, std::move(lhs), std::move(rhs),
+                                      deref_count);
 }
 
 // <returnStmt>

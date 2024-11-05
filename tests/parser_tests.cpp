@@ -1230,6 +1230,11 @@ TEST_CASE("dereference operator", "[parser]") {
 var i32 test = 0;
 var i32* test1 = &test;
 var i32 test2 = *test1;
+fn void main() {
+    *test1 = 1;
+    var i32** test3 = &test1;
+    **test3 = 69;
+}
 )");
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
@@ -1242,6 +1247,20 @@ var i32 test2 = *test1;
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test2:i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '*'");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "LhsDereferenceCount: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test3:ptr ptr i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "LhsDereferenceCount: 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test3");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(69)");
 }
 
 TEST_CASE("Explicit casting", "[parser]") {
@@ -1507,10 +1526,13 @@ extern sapfire {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("FunctionDecl: alias libc::malloc allocate:ptr void") != std::string::npos);
+  REQUIRE(
+      lines_it->find("FunctionDecl: alias libc::malloc allocate:ptr void") !=
+      std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: lenght:i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: size:i32");
-  CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: alias sapfire::render_frame render:void");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "FunctionDecl: alias sapfire::render_frame render:void");
 }
 
 TEST_CASE("Extern function VLL", "[parser]") {
@@ -1522,6 +1544,7 @@ extern {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("FunctionDecl: VLL alias libc::printf print:void") != std::string::npos);
+  REQUIRE(lines_it->find("FunctionDecl: VLL alias libc::printf print:void") !=
+          std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: fmt:ptr char");
 }

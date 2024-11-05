@@ -1269,6 +1269,11 @@ TEST_CASE("derefence operator", "[sema]") {
 var i32 test = 0;
 var i32* test1 = &test;
 var i32 test2 = *test1;
+fn void main() {
+    *test1 = 1;
+    var i32** test3 = &test1;
+    **test3 = 69;
+}
 )");
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
@@ -1287,6 +1292,27 @@ var i32 test2 = *test1;
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '*'");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") test1:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "LhsDereferenceCount: 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test1:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") test3:ptr ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test1:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "LhsDereferenceCount: 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") test3:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(69)");
 }
 
 TEST_CASE("dereferencing non-pointer type", "[sema]") {

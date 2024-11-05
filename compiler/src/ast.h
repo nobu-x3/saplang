@@ -391,9 +391,11 @@ struct StringLiteralExpr : public Expr {
 struct Assignment : public Stmt {
   std::unique_ptr<DeclRefExpr> variable;
   std::unique_ptr<Expr> expr;
+  int lhs_deref_count;
   inline Assignment(SourceLocation loc, std::unique_ptr<DeclRefExpr> var,
-                    std::unique_ptr<Expr> expr)
-      : Stmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
+                    std::unique_ptr<Expr> expr, int lhs_deref_count)
+      : Stmt(loc), variable(std::move(var)), expr(std::move(expr)),
+        lhs_deref_count(lhs_deref_count) {}
   DUMP_IMPL
 };
 
@@ -693,8 +695,8 @@ struct ResolvedFuncDecl : public ResolvedDecl {
   inline ResolvedFuncDecl(
       SourceLocation loc, std::string id, Type type,
       std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
-      std::unique_ptr<ResolvedBlock> body, bool is_vll,
-      std::string lib = "", std::string og_name = "")
+      std::unique_ptr<ResolvedBlock> body, bool is_vll, std::string lib = "",
+      std::string og_name = "")
       : ResolvedDecl(loc, std::move(id), std::move(type), std::move(lib),
                      std::move(og_name)),
         params(std::move(params)), body(std::move(body)), is_vll(is_vll) {}
@@ -788,10 +790,11 @@ struct ResolvedReturnStmt : public ResolvedStmt {
 struct ResolvedAssignment : public ResolvedStmt {
   std::unique_ptr<ResolvedDeclRefExpr> variable;
   std::unique_ptr<ResolvedExpr> expr;
+  int lhs_deref_count;
   inline ResolvedAssignment(SourceLocation loc,
                             std::unique_ptr<ResolvedDeclRefExpr> var,
-                            std::unique_ptr<ResolvedExpr> expr)
-      : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)) {}
+                            std::unique_ptr<ResolvedExpr> expr, int lhs_deref_count)
+      : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)), lhs_deref_count(lhs_deref_count) {}
   DUMP_IMPL
 };
 } // namespace saplang

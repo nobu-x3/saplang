@@ -66,7 +66,8 @@ private:
   std::optional<ArgumentList> parse_argument_list();
 
   // bool signifies whether there's a VLL
-  using ParameterList = std::pair<std::vector<std::unique_ptr<ParamDecl>>, bool>;
+  using ParameterList =
+      std::pair<std::vector<std::unique_ptr<ParamDecl>>, bool>;
   std::optional<ParameterList> parse_parameter_list();
 
   std::unique_ptr<IfStmt> parse_if_stmt();
@@ -86,7 +87,7 @@ private:
   std::unique_ptr<Stmt> parse_assignment_or_expr();
   std::unique_ptr<Assignment> parse_assignment(std::unique_ptr<Expr> lhs);
   std::unique_ptr<Assignment>
-  parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs);
+  parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs, int lhs_deref_count);
 
 private:
   std::unordered_map<std::string, Type> m_EnumTypes;

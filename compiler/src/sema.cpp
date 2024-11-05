@@ -667,9 +667,9 @@ Sema::resolve_func_decl(const FunctionDecl &func) {
       return nullptr;
     resolved_params.emplace_back(std::move(resolved_param));
   }
-  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type,
-                                            std::move(resolved_params), nullptr,
-                                            func.is_vll, func.lib, func.og_name);
+  return std::make_unique<ResolvedFuncDecl>(
+      func.location, func.id, *type, std::move(resolved_params), nullptr,
+      func.is_vll, func.lib, func.og_name);
 }
 
 std::unique_ptr<ResolvedParamDecl>
@@ -1532,16 +1532,19 @@ Sema::resolve_assignment(const Assignment &assignment) {
   std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr, type);
   if (!rhs)
     return nullptr;
-  if (!is_same_type(lhs->type, rhs->type)) {
+  Type lhs_derefed_type = lhs->type;
+  lhs_derefed_type.pointer_depth -= assignment.lhs_deref_count;
+  if (!is_same_type(lhs_derefed_type, rhs->type)) {
     bool is_array_decay;
-    if (!try_cast_expr(*rhs, lhs->type, m_Cee, is_array_decay) &&
-        !is_same_array_decay(rhs->type, lhs->type))
+    if (!try_cast_expr(*rhs, lhs_derefed_type, m_Cee, is_array_decay) &&
+        !is_same_array_decay(rhs->type, lhs_derefed_type))
       return report(rhs->location, "assigned value type of '" + rhs->type.name +
                                        "' does not match variable type '" +
                                        lhs->type.name + "'.");
   }
   rhs->set_constant_value(m_Cee.evaluate(*rhs));
   return std::make_unique<ResolvedAssignment>(assignment.location,
-                                              std::move(lhs), std::move(rhs));
+                                              std::move(lhs), std::move(rhs),
+                                              assignment.lhs_deref_count);
 }
 } // namespace saplang
