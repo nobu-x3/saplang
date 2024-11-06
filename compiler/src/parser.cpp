@@ -893,7 +893,7 @@ std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
   auto type = parse_type();
   if (!type)
     return nullptr;
-  if (!m_NextToken.value) {
+  if (m_NextToken.kind != TokenKind::Identifier) {
     return report(location, "expected identifier.");
   }
   std::string id = *m_NextToken.value;
