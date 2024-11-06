@@ -846,6 +846,19 @@ bool is_comp_op(TokenKind op) {
   return false;
 }
 
+bool is_bitwise_op(TokenKind op) {
+  switch (op) {
+  case TokenKind::BitwiseShiftR:
+  case TokenKind::BitwiseShiftL:
+  case TokenKind::Hat:
+  case TokenKind::Amp:
+  case TokenKind::Pipe:
+    return true;
+  default:
+    return false;
+  }
+}
+
 std::unique_ptr<ResolvedExpr>
 Sema::resolve_binary_operator(const BinaryOperator &op) {
   auto resolved_lhs = resolve_expr(*op.lhs);
@@ -861,6 +874,40 @@ Sema::resolve_binary_operator(const BinaryOperator &op) {
                     "cannot implicitly cast rhs to lhs - from type '" +
                         resolved_rhs->type.name + "' to type '" +
                         resolved_lhs->type.name + "'.");
+  }
+  if (is_bitwise_op(op.op) || op.op == TokenKind::Percent) {
+    if (const auto *rhs =
+            dynamic_cast<const ResolvedDeclRefExpr *>(resolved_rhs.get())) {
+      if (const auto *lhs =
+              dynamic_cast<const ResolvedNumberLiteral *>(resolved_lhs.get())) {
+        bool is_array_decay;
+        if (!try_cast_expr(*resolved_lhs, rhs->type, m_Cee, is_array_decay)) {
+          return report(resolved_lhs->location,
+                        "cannot implicitly cast lhs to rhs - from type '" +
+                            resolved_lhs->type.name + "' to type '" +
+                            resolved_rhs->type.name + "'.");
+        }
+      }
+    } else if (const auto *lhs = dynamic_cast<const ResolvedDeclRefExpr *>(
+                   resolved_lhs.get())) {
+      if (const auto *rhs =
+              dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
+        bool is_array_decay;
+        if (!try_cast_expr(*resolved_rhs, lhs->type, m_Cee, is_array_decay)) {
+          return report(resolved_lhs->location,
+                        "cannot implicitly cast rhs to lhs - from type '" +
+                            resolved_rhs->type.name + "' to type '" +
+                            resolved_lhs->type.name + "'.");
+        }
+      }
+    }
+    if ((op.op == TokenKind::BitwiseShiftL ||
+         op.op == TokenKind::BitwiseShiftR) &&
+        resolved_rhs->type.kind < Type::Kind::INTEGERS_START &&
+        resolved_rhs->type.kind > Type::Kind::INTEGERS_END)
+      return report(
+          resolved_rhs->location,
+          "bitshift operator's right hand side can only be an integer.");
   }
   if (const auto *dre =
           dynamic_cast<const ResolvedDeclRefExpr *>(resolved_lhs.get())) {
