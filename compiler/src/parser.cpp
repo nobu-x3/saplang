@@ -482,7 +482,8 @@ std::unique_ptr<ReturnStmt> Parser::parse_return_stmt() {
 std::unique_ptr<Expr> Parser::parse_prefix_expr() {
   Token token = m_NextToken;
   if (token.kind != TokenKind::Exclamation && token.kind != TokenKind::Minus &&
-      token.kind != TokenKind::Asterisk && token.kind != TokenKind::Amp) {
+      token.kind != TokenKind::Asterisk && token.kind != TokenKind::Amp &&
+      token.kind != TokenKind::Tilda) {
     return parse_primary_expr();
   }
   eat_next_token(); // eat '!' or '-'
@@ -840,6 +841,12 @@ int get_tok_precedence(TokenKind tok) {
   switch (tok) {
   case TokenKind::Asterisk:
   case TokenKind::Slash:
+  case TokenKind::Pipe:
+  case TokenKind::Amp:
+  case TokenKind::Hat:
+  case TokenKind::Percent:
+  case TokenKind::BitwiseShiftL:
+  case TokenKind::BitwiseShiftR:
     return 6;
   case TokenKind::Plus:
   case TokenKind::Minus:

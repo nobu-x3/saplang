@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "lexer.h"
 #include "utils.h"
 
 #include <cfloat>
@@ -324,6 +325,18 @@ void dump_op(std::stringstream &stream, TokenKind op) {
     stream << "==";
   if (op == TokenKind::AmpAmp)
     stream << "&&";
+  if (op == TokenKind::BitwiseShiftL)
+    stream << "<<";
+  if (op == TokenKind::BitwiseShiftR)
+    stream << ">>";
+  if (op == TokenKind::Pipe)
+    stream << '|';
+  if (op == TokenKind::Tilda)
+    stream << '~';
+  if (op == TokenKind::Hat)
+    stream << '^';
+  if (op == TokenKind::Percent)
+    stream << '%';
   if (op == TokenKind::PipePipe)
     stream << "||";
   if (op == TokenKind::LessThan)

@@ -299,7 +299,7 @@ TEST_CASE("Return statement", "[parser]") {
   Block
 )");
     REQUIRE(error_stream.str() ==
-            "test:1:24 error: expected ';' at the end of a statement.\n");
+            "test:1:25 error: expected expression.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("return 1;") {
@@ -928,7 +928,7 @@ TEST_CASE("var decl failing", "[parser]") {
     }
     )");
     REQUIRE(error_stream.str() ==
-            "test:3:21 error: expected ';' at the end of declaration.\n");
+            "test:3:22 error: expected expression.\n");
   }
   SECTION("missing identifier") {
     TEST_SETUP(R"(
@@ -1547,4 +1547,58 @@ extern {
   REQUIRE(lines_it->find("FunctionDecl: VLL alias libc::printf print:void") !=
           std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: fmt:ptr char");
+}
+
+TEST_CASE("Bitwise operators", "[parser]") {
+  TEST_SETUP(R"(
+fn void main() {
+    var i32 a = 1 | 2;
+    var i32 b = a & 2;
+    var i32 c = a ^ b;
+    var i32 d = ~b;
+    var i32 e = d % 2;
+    var i32 f = 1 << 4;
+    var i32 g = 10 >> 3;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: main:void") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: a:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '|'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: b:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: c:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '^'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: a");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: d:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '~'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: b");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: e:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '%'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: d");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: f:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '<<'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: g:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "BinaryOperator: '>>'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(10)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
 }

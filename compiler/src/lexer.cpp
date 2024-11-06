@@ -38,13 +38,23 @@ Token Lexer::get_next_token() {
     eat_next_char();
     return Token{token_start_location, TokenKind::ExclamationEqual, "!="};
   }
-  if (curr_char == '<' && peek_next_char() == '=') {
-    eat_next_char();
-    return Token{token_start_location, TokenKind::LessThanOrEqual, "<="};
+  if (curr_char == '<') {
+    if (peek_next_char() == '=') {
+      eat_next_char();
+      return Token{token_start_location, TokenKind::LessThanOrEqual, "<="};
+    } else if (peek_next_char() == '<') {
+      eat_next_char();
+      return Token{token_start_location, TokenKind::BitwiseShiftL, "<<"};
+    }
   }
-  if (curr_char == '>' && peek_next_char() == '=') {
-    eat_next_char();
-    return Token{token_start_location, TokenKind::GreaterThanOrEqual, ">="};
+  if (curr_char == '>') {
+    if (peek_next_char() == '=') {
+      eat_next_char();
+      return Token{token_start_location, TokenKind::GreaterThanOrEqual, ">="};
+    } else if (peek_next_char() == '>') {
+      eat_next_char();
+      return Token{token_start_location, TokenKind::BitwiseShiftR, ">>"};
+    }
   }
   if (curr_char == ':' && peek_next_char() == ':') {
     eat_next_char();
