@@ -3,6 +3,7 @@
 #include "lexer.h"
 
 #include <llvm-18/llvm/IR/DerivedTypes.h>
+#include <llvm-18/llvm/IR/InstrTypes.h>
 #include <llvm-18/llvm/IR/LLVMContext.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
@@ -437,6 +438,24 @@ llvm::Instruction::BinaryOps get_math_binop_kind(TokenKind op,
     } else if (simple_type == SimpleNumType::FLOAT) {
       return llvm::BinaryOperator::FDiv;
     }
+  }
+  if (op == TokenKind::BitwiseShiftL) {
+    return llvm::BinaryOperator::Shl;
+  }
+  if (op == TokenKind::BitwiseShiftR) {
+    return llvm::BinaryOperator::AShr;
+  }
+  if (op == TokenKind::Percent) {
+    return llvm::BinaryOperator::SRem;
+  }
+  if (op == TokenKind::Amp) {
+    return llvm::BinaryOperator::And;
+  }
+  if (op == TokenKind::Pipe) {
+    return llvm::BinaryOperator::Or;
+  }
+  if (op == TokenKind::Hat) {
+    return llvm::BinaryOperator::Xor;
   }
   llvm_unreachable("unknown expression encountered.");
 }
@@ -1045,6 +1064,12 @@ Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
   }
   if (op.op == TokenKind::Exclamation) {
     return std::make_pair(m_Builder.CreateNot(rhs), op.type);
+  }
+  if (op.op == TokenKind::Tilda) {
+    return std::make_pair(
+        m_Builder.CreateXor(rhs, llvm::ConstantInt::get(gen_type(op.type), -1),
+                            "not"),
+        op.type);
   }
   llvm_unreachable("unknown unary op.");
   return std::make_pair(nullptr, op.type);

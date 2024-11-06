@@ -2695,3 +2695,65 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %5, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
 }
+
+TEST_CASE("Bitwise operators", "[codegen]") {
+  TEST_SETUP(R"(
+fn i32 main() {
+    var i32 a = 1 | 2;
+    var i32 a1 = a | 3;
+    var i32 b = a & 2;
+    var i32 c = a ^ b;
+    var i32 d = ~b;
+    var i32 e = d % 2;
+    var i32 f = 1 << 4;
+    var i32 f1 = 1 << f;
+    var i32 g = 10 >> 3;
+    var i32 g1 = 1 >> g;
+    return g;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a1 = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%b = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%c = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%d = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%e = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%f = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%f1 = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%g = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%g1 = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 3, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = or i32 %0, 3");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %1, ptr %a1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = and i32 %2, 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %3, ptr %b, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load i32, ptr %a, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%5 = load i32, ptr %b, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%6 = xor i32 %4, %5");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %6, ptr %c, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%7 = load i32, ptr %b, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%not = xor i32 %7, -1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %not, ptr %d, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%8 = load i32, ptr %d, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%9 = srem i32 %8, 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %9, ptr %e, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 16, ptr %f, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%10 = load i32, ptr %f, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%11 = shl i32 1, %10");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %11, ptr %f1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %g, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%12 = load i32, ptr %g, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%13 = ashr i32 1, %12");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %13, ptr %g1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%14 = load i32, ptr %g, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %14, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+}
