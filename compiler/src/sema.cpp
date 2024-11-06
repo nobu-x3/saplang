@@ -1541,10 +1541,22 @@ Sema::resolve_assignment(const Assignment &assignment) {
   if (!is_same_type(lhs_derefed_type, rhs->type)) {
     bool is_array_decay;
     if (!try_cast_expr(*rhs, lhs_derefed_type, m_Cee, is_array_decay) &&
-        !is_same_array_decay(rhs->type, lhs_derefed_type))
-      return report(rhs->location, "assigned value type of '" + rhs->type.name +
+        !is_same_array_decay(rhs->type, lhs_derefed_type)) {
+      std::string lhs_type_str = lhs_derefed_type.name;
+      for (int i = 0; i < lhs_derefed_type.pointer_depth -
+                              lhs_derefed_type.dereference_counts;
+           ++i) {
+        lhs_type_str += "*";
+      }
+      std::string rhs_type_str = rhs->type.name;
+      for (int i = 0;
+           i < rhs->type.pointer_depth - rhs->type.dereference_counts; ++i) {
+        rhs_type_str += "*";
+      }
+      return report(rhs->location, "assigned value type of '" + rhs_type_str +
                                        "' does not match variable type '" +
-                                       lhs->type.name + "'.");
+                                       lhs_type_str + "'.");
+    }
   }
   rhs->set_constant_value(m_Cee.evaluate(*rhs));
   return std::make_unique<ResolvedAssignment>(assignment.location,
