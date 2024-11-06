@@ -294,7 +294,7 @@ void NumberLiteral::dump_to_stream(std::stringstream &stream,
   case NumberType::Bool:
     stream << "bool(";
   }
-  stream << value << ")"
+  stream << (value) << ")"
          << "\n";
 }
 

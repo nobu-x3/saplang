@@ -387,10 +387,15 @@ std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
     eat_next_token(); // eat id
     if (m_NextToken.kind == TokenKind::Equal) {
       eat_next_token(); // eat '='
-      if (m_NextToken.kind != TokenKind::Integer)
+      if (m_NextToken.kind != TokenKind::Integer &&
+          m_NextToken.kind != TokenKind::BinInteger)
         return report(m_NextToken.location,
                       "only integers can be enum values.");
-      current_value = std::stol(*m_NextToken.value);
+      if (m_NextToken.kind == TokenKind::BinInteger) {
+        current_value = std::stol(*m_NextToken.value, nullptr, 2);
+      } else {
+        current_value = std::stol(*m_NextToken.value);
+      }
       eat_next_token(); // eat integer
     }
     name_values_map.insert(std::make_pair(name, current_value));
@@ -562,6 +567,16 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
   if (m_NextToken.kind == TokenKind::Integer) {
     auto literal = std::make_unique<NumberLiteral>(
         location, NumberLiteral::NumberType::Integer, *m_NextToken.value);
+    eat_next_token();
+    return literal;
+  }
+  if (m_NextToken.kind == TokenKind::BinInteger) {
+    auto converted_value = std::stol(*m_NextToken.value, nullptr, 2);
+    std::stringstream ss;
+    ss << converted_value;
+    std::string value = ss.str();
+    auto literal = std::make_unique<NumberLiteral>(
+        location, NumberLiteral::NumberType::Integer, std::move(value));
     eat_next_token();
     return literal;
   }

@@ -116,6 +116,16 @@ Token Lexer::get_next_token() {
     return Token{token_start_location, TokenKind::Identifier, std::move(value)};
   }
   if (is_num(curr_char)) {
+    // parsing binary number literals
+    if (curr_char == '0' && peek_next_char() == 'b') {
+      std::string value;
+      eat_next_char();
+      while (is_num(peek_next_char())) {
+        value += eat_next_char();
+      }
+      return Token{token_start_location, TokenKind::BinInteger,
+                   std::move(value)};
+    }
     std::string value{curr_char};
     while (is_num(peek_next_char()))
       value += eat_next_char();

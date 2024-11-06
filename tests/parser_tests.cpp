@@ -1602,3 +1602,20 @@ fn void main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(10)");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(3)");
 }
+
+TEST_CASE("Binary number literal", "[parser]") {
+  TEST_SETUP(R"(
+fn void main() {
+    var i32 a = 0b01011;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: main:void") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: a:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(11)");
+}
