@@ -35,6 +35,9 @@ public:                                                                        \
     std::cerr << stream.str();                                                 \
   }
 
+struct Type;
+using FunctionSignature = std::pair<std::vector<Type>, bool>;
+
 struct Type : public IDumpable {
   enum class Kind {
     Void,
@@ -50,7 +53,7 @@ struct Type : public IDumpable {
     f32,
     f64,
     Custom,
-    Enum,
+    FnPtr,
     INTEGERS_START = u8,
     INTEGERS_END = i64,
     SIGNED_INT_START = i8,
@@ -67,6 +70,7 @@ struct Type : public IDumpable {
   // If type has equal pointer_depth and array_data->dimension_count after
   // casting, it's array decay
   std::optional<ArrayData> array_data;
+  std::optional<FunctionSignature> fn_ptr_signature;
   Type(const Type &) = default;
   Type &operator=(const Type &) = default;
   Type(Type &&) noexcept = default;
@@ -137,15 +141,22 @@ struct Type : public IDumpable {
             std::move(array_data)};
   }
 
+  static Type fn_ptr(uint pointer_depth,
+                     std::optional<FunctionSignature> fn_signature = {}) {
+    return {Kind::FnPtr, "fn", pointer_depth, {}, std::move(fn_signature)};
+  }
+
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
 
   // @NOTE: does not insert '\n' when done
   DUMP_IMPL
 private:
   inline Type(Kind kind, std::string name, uint pointer_depth,
-              std::optional<ArrayData> array_data = std::nullopt)
+              std::optional<ArrayData> array_data = std::nullopt,
+              std::optional<FunctionSignature> fn_signature = std::nullopt)
       : kind(kind), name(std::move(name)), pointer_depth(pointer_depth),
-        array_data(std::move(array_data)) {}
+        array_data(std::move(array_data)),
+        fn_ptr_signature(std::move(fn_signature)) {}
 };
 
 // decreases array dimension by dearray_count, removes first dimension and
@@ -793,8 +804,10 @@ struct ResolvedAssignment : public ResolvedStmt {
   int lhs_deref_count;
   inline ResolvedAssignment(SourceLocation loc,
                             std::unique_ptr<ResolvedDeclRefExpr> var,
-                            std::unique_ptr<ResolvedExpr> expr, int lhs_deref_count)
-      : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)), lhs_deref_count(lhs_deref_count) {}
+                            std::unique_ptr<ResolvedExpr> expr,
+                            int lhs_deref_count)
+      : ResolvedStmt(loc), variable(std::move(var)), expr(std::move(expr)),
+        lhs_deref_count(lhs_deref_count) {}
   DUMP_IMPL
 };
 } // namespace saplang

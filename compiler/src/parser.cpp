@@ -282,7 +282,7 @@ std::unique_ptr<DeclStmt> Parser::parse_var_decl_stmt(bool is_global) {
   SourceLocation loc = m_NextToken.location;
   bool is_const = m_NextToken.kind == TokenKind::KwConst;
   eat_next_token(); // eat 'const' or 'var'
-  if (m_NextToken.kind != TokenKind::Identifier)
+  if (m_NextToken.kind != TokenKind::Identifier && m_NextToken.kind != TokenKind::KwFn)
     return report(m_NextToken.location, "expected identifier.");
   std::unique_ptr<VarDecl> var_decl = parse_var_decl(is_const, is_global);
   if (!var_decl)
@@ -916,7 +916,8 @@ std::unique_ptr<ParamDecl> Parser::parse_param_decl() {
   if (!type)
     return nullptr;
   if (m_NextToken.kind != TokenKind::Identifier) {
-    return report(location, "expected identifier.");
+    return std::make_unique<ParamDecl>(location, "", std::move(*type),
+                                       is_const);
   }
   std::string id = *m_NextToken.value;
   eat_next_token(); // eat identifier
@@ -947,6 +948,35 @@ Parser::parse_enum_element_access(std::string enum_id) {
 // |   <identifier>'[' (<integer>)* ']'
 std::optional<Type> Parser::parse_type() {
   Token token = m_NextToken;
+  bool is_fn_ptr = false;
+  if (m_NextToken.kind == TokenKind::KwFn) {
+    eat_next_token();
+    uint ptr_depth = 0;
+    while (m_NextToken.kind == TokenKind::Asterisk) {
+      eat_next_token();
+      ++ptr_depth;
+    }
+    if (ptr_depth == 0) {
+      report(m_NextToken.location,
+             "expected '*' in function pointer declaration.");
+      return std::nullopt;
+    }
+    std::optional<Type> ret_type = parse_type();
+    if (m_NextToken.kind != TokenKind::Lparent) {
+      report(m_NextToken.location,
+             "expected '(' in function pointer argument list declaration.");
+      return std::nullopt;
+    }
+    std::optional<ParameterList> maybe_arg_list = parse_parameter_list();
+    if (!maybe_arg_list)
+      return std::nullopt;
+    FunctionSignature fn_sig{};
+    fn_sig.first.reserve(maybe_arg_list->first.size() + 1);
+    fn_sig.first.push_back(*ret_type);
+    for (auto &&arg : maybe_arg_list->first)
+      fn_sig.first.push_back(arg->type);
+    return Type::fn_ptr(ptr_depth, std::move(fn_sig));
+  }
   if (token.kind == TokenKind::KwVoid) {
     eat_next_token();
     uint ptr_depth = 0;

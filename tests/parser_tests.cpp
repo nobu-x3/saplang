@@ -44,7 +44,7 @@ TEST_CASE("Function declarations", "[parser]") {
   SECTION("expected parameter identifier") {
     TEST_SETUP(R"(fn int f(int{})");
     REQUIRE(output_buffer.str().empty());
-    REQUIRE(error_stream.str() == "test:1:10 error: expected identifier.\n");
+    REQUIRE(error_stream.str() == "test:1:13 error: expected ')'.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("Expected '{'") {
@@ -246,10 +246,9 @@ fn void f({}
     TEST_SETUP(R"(
 fn void f(x){}
 )");
-    REQUIRE(output_buffer.str().empty());
-    REQUIRE(error_stream.str() == R"(test:2:11 error: expected identifier.
-)");
-    REQUIRE(!parser.is_complete_ast());
+    REQUIRE(!output_buffer.str().empty());
+    REQUIRE(error_stream.str() == "");
+    REQUIRE(parser.is_complete_ast());
   }
   SECTION("fn void f(1.0 x){}") {
     TEST_SETUP("fn void f(1.0 x){}");
@@ -298,8 +297,7 @@ TEST_CASE("Return statement", "[parser]") {
     REQUIRE(output_buffer.str() == R"(FunctionDecl: foo:void
   Block
 )");
-    REQUIRE(error_stream.str() ==
-            "test:1:25 error: expected expression.\n");
+    REQUIRE(error_stream.str() == "test:1:25 error: expected expression.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("return 1;") {
@@ -927,8 +925,7 @@ TEST_CASE("var decl failing", "[parser]") {
       var i32 x = 0 |;
     }
     )");
-    REQUIRE(error_stream.str() ==
-            "test:3:22 error: expected expression.\n");
+    REQUIRE(error_stream.str() == "test:3:22 error: expected expression.\n");
   }
   SECTION("missing identifier") {
     TEST_SETUP(R"(
@@ -1564,8 +1561,7 @@ fn void main() {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("FunctionDecl: main:void") !=
-          std::string::npos);
+  REQUIRE(lines_it->find("FunctionDecl: main:void") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "Block");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: a:i32");
@@ -1612,10 +1608,46 @@ fn void main() {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("FunctionDecl: main:void") !=
-          std::string::npos);
+  REQUIRE(lines_it->find("FunctionDecl: main:void") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "Block");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
   CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: a:i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(11)");
+}
+
+TEST_CASE("Function pointers", "[parser]") {
+  TEST_SETUP(R"(
+fn void* foo(i32, f32){}
+fn void main() {
+    var fn* void*(i32, f32) p_foo = &foo;
+    var fn* void*(i32 i, f32 f) p_foo1 = &foo;
+    p_foo(1, 1.0);
+}
+struct Type {
+    fn* void*(i32, f32) p_foo;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: foo:ptr void") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: :i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: :f32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: p_foo:ptr fn(ptr void)(i32, f32)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: foo");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: p_foo1:ptr fn(ptr void)(i32, f32)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: foo");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: p_foo");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: real(1.0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: Type");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr fn(ptr void)(i32, f32)(p_foo)");
 }

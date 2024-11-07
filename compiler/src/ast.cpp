@@ -139,6 +139,20 @@ void Type::dump_to_stream(std::stringstream &stream,
       stream << "[" << array_data->dimensions[i] << "]";
     }
   }
+  if (fn_ptr_signature) {
+    stream << (fn_ptr_signature->second ? "VLA " : "");
+    stream << '(';
+    fn_ptr_signature->first.front().dump_to_stream(stream);
+    stream << ')';
+    stream << '(';
+    for (auto type_it = fn_ptr_signature->first.begin() + 1;
+         type_it != fn_ptr_signature->first.end(); ++type_it) {
+      type_it->dump_to_stream(stream, 0);
+      if (type_it != fn_ptr_signature->first.end() - 1)
+        stream << ", ";
+    }
+    stream << ')';
+  }
 }
 
 void NullExpr::dump_to_stream(std::stringstream &stream,
