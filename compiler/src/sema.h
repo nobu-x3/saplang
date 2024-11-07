@@ -50,7 +50,7 @@ private:
 
   std::unique_ptr<ResolvedFuncDecl> resolve_func_decl(const FunctionDecl &func);
 
-  std::unique_ptr<ResolvedParamDecl> resolve_param_decl(const ParamDecl &decl);
+  std::unique_ptr<ResolvedParamDecl> resolve_param_decl(const ParamDecl &decl, int index, const std::string function_name);
 
   std::unique_ptr<ResolvedBlock> resolve_block(const Block &block);
 

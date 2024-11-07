@@ -578,7 +578,8 @@ bool Sema::resolve_global_var_decls(
       std::unique_ptr<ResolvedVarDecl> resolved_var_decl =
           resolve_var_decl(*var_decl);
       if (!resolved_var_decl ||
-          !insert_decl_to_current_scope(*resolved_var_decl)) {
+          (!resolved_var_decl->id.empty() &&
+           !insert_decl_to_current_scope(*resolved_var_decl))) {
         error = true;
         continue;
       }
@@ -619,10 +620,17 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
   for (int i = 0; i < resolved_decls.size(); ++i) {
     Scope fn_scope{this};
     if (auto *fn = dynamic_cast<const FunctionDecl *>(m_AST[i].get())) {
-      if (!dynamic_cast<ResolvedFuncDecl *>(resolved_decls[i].get()))
-        return {};
-      m_CurrFunction =
-          dynamic_cast<ResolvedFuncDecl *>(resolved_decls[i].get());
+      auto *resolved_decl = resolved_decls[i].get();
+      if (!dynamic_cast<ResolvedFuncDecl *>(resolved_decl)) {
+        for (auto &&decl : resolved_decls) {
+          if (m_AST[i]->id == decl->id) {
+            resolved_decl = decl.get();
+            if (!dynamic_cast<ResolvedFuncDecl *>(resolved_decl))
+              return {};
+          }
+        }
+      }
+      m_CurrFunction = dynamic_cast<ResolvedFuncDecl *>(resolved_decl);
       for (auto &&param : m_CurrFunction->params) {
         insert_decl_to_current_scope(*param);
       }
@@ -665,11 +673,13 @@ Sema::resolve_func_decl(const FunctionDecl &func) {
   }
   std::vector<std::unique_ptr<ResolvedParamDecl>> resolved_params{};
   Scope param_scope{this};
+  int param_index{0};
   for (auto &&param : func.params) {
-    auto resolved_param = resolve_param_decl(*param);
+    auto resolved_param = resolve_param_decl(*param, param_index, func.id);
     if (!resolved_param || !insert_decl_to_current_scope(*resolved_param))
       return nullptr;
     resolved_params.emplace_back(std::move(resolved_param));
+    ++param_index;
   }
   return std::make_unique<ResolvedFuncDecl>(
       func.location, func.id, *type, std::move(resolved_params), nullptr,
@@ -677,13 +687,18 @@ Sema::resolve_func_decl(const FunctionDecl &func) {
 }
 
 std::unique_ptr<ResolvedParamDecl>
-Sema::resolve_param_decl(const ParamDecl &decl) {
+Sema::resolve_param_decl(const ParamDecl &decl, int index,
+                         const std::string function_name) {
   auto type = resolve_type(decl.type);
-  if (!type || type->kind == Type::Kind::Void) {
+  std::string id = decl.id;
+  if (id.empty()) {
+    id = "__param_" + function_name + std::to_string(index);
+  }
+  if (!type || (type->kind == Type::Kind::Void && type->pointer_depth == 0)) {
     return report(decl.location, "parameter '" + decl.id + "' has invalid '" +
                                      decl.type.name + "' type");
   }
-  return std::make_unique<ResolvedParamDecl>(decl.location, decl.id,
+  return std::make_unique<ResolvedParamDecl>(decl.location, std::move(id),
                                              std::move(*type), decl.is_const);
 }
 
