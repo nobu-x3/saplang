@@ -282,7 +282,8 @@ std::unique_ptr<DeclStmt> Parser::parse_var_decl_stmt(bool is_global) {
   SourceLocation loc = m_NextToken.location;
   bool is_const = m_NextToken.kind == TokenKind::KwConst;
   eat_next_token(); // eat 'const' or 'var'
-  if (m_NextToken.kind != TokenKind::Identifier && m_NextToken.kind != TokenKind::KwFn)
+  if (m_NextToken.kind != TokenKind::Identifier &&
+      m_NextToken.kind != TokenKind::KwFn)
     return report(m_NextToken.location, "expected identifier.");
   std::unique_ptr<VarDecl> var_decl = parse_var_decl(is_const, is_global);
   if (!var_decl)
@@ -663,14 +664,26 @@ Parser::parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
     std::string member = *m_NextToken.value;
     eat_next_token(); // eat identifier
     std::unique_ptr<DeclRefExpr> inner_access = nullptr;
+    std::optional<std::vector<std::unique_ptr<Expr>>> params;
     if (m_NextToken.kind == TokenKind::Dot) {
       std::unique_ptr<DeclRefExpr> this_decl_ref_expr =
           std::make_unique<DeclRefExpr>(this_decl_loc, member);
       inner_access = parse_member_access(std::move(this_decl_ref_expr), member);
+    } else if (m_NextToken.kind == TokenKind::Lparent) {
+      eat_next_token(); // eat '('
+      while (m_NextToken.kind != TokenKind::Rparent) {
+        auto expr = parse_expr();
+        if (!expr)
+          return nullptr;
+        params->push_back(std::move(expr));
+        if(m_NextToken.kind == TokenKind::Comma)
+            eat_next_token();
+      }
+      eat_next_token(); // eat ')'
     }
-    return std::make_unique<MemberAccess>(decl_ref_expr->location, var_id,
-                                          std::move(member),
-                                          std::move(inner_access));
+    return std::make_unique<MemberAccess>(
+        decl_ref_expr->location, var_id, std::move(member),
+        std::move(inner_access), std::move(params));
   }
   return nullptr;
 }
@@ -801,8 +814,7 @@ Parser::parse_argument_list() {
 
 // <parameterList>
 // ::= '(' (<paramDecl> (',', <paramDecl>)*)? ')'
-std::optional<std::pair<std::vector<std::unique_ptr<ParamDecl>>, bool>>
-Parser::parse_parameter_list() {
+std::optional<ParameterList> Parser::parse_parameter_list() {
   if (m_NextToken.kind != TokenKind::Lparent) {
     report(m_NextToken.location, "expected '('");
     return std::nullopt;

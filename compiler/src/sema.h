@@ -50,7 +50,9 @@ private:
 
   std::unique_ptr<ResolvedFuncDecl> resolve_func_decl(const FunctionDecl &func);
 
-  std::unique_ptr<ResolvedParamDecl> resolve_param_decl(const ParamDecl &decl, int index, const std::string function_name);
+  std::unique_ptr<ResolvedParamDecl>
+  resolve_param_decl(const ParamDecl &decl, int index,
+                     const std::string function_name);
 
   std::unique_ptr<ResolvedBlock> resolve_block(const Block &block);
 
@@ -66,7 +68,7 @@ private:
   resolve_binary_operator(const BinaryOperator &op);
 
   std::unique_ptr<ResolvedUnaryOperator>
-  resolve_unary_operator(const UnaryOperator &op);
+  resolve_unary_operator(const UnaryOperator &op, Type *type);
 
   std::unique_ptr<ResolvedExplicitCastExpr>
   resolve_explicit_cast(const ExplicitCast &cast);
@@ -87,7 +89,8 @@ private:
                                              Type *type = nullptr);
 
   std::unique_ptr<ResolvedDeclRefExpr>
-  resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call = false);
+  resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call = false,
+                        Type *type = nullptr);
 
   std::unique_ptr<ResolvedCallExpr> resolve_call_expr(const CallExpr &call);
 

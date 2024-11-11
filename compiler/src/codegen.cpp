@@ -1100,9 +1100,8 @@ void Codegen::gen_conditional_op(const ResolvedExpr &op,
 }
 
 llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
-  llvm::Function *callee = m_Module->getFunction(call.func_decl->og_name.empty()
-                                                     ? call.func_decl->id
-                                                     : call.func_decl->og_name);
+  llvm::Function *callee = m_Module->getFunction(
+      call.decl->og_name.empty() ? call.decl->id : call.decl->og_name);
   std::vector<llvm::Value *> args{};
   int param_index = -1;
   for (auto &&arg : call.args) {
@@ -1118,11 +1117,14 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
       }
     }
     if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(arg.get())) {
-      llvm::Value *decay =
-          gen_array_decay(call.func_decl->params[param_index]->type, *dre);
-      if (decay) {
-        args.emplace_back(decay);
-        continue;
+      if (const auto *func_decl =
+              dynamic_cast<const ResolvedFuncDecl *>(call.decl)) {
+        llvm::Value *decay =
+            gen_array_decay(func_decl->params[param_index]->type, *dre);
+        if (decay) {
+          args.emplace_back(decay);
+          continue;
+        }
       }
     }
     args.emplace_back(gen_expr(*arg));

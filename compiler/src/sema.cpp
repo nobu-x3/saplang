@@ -11,6 +11,7 @@
 #include "lexer.h"
 #include "utils.h"
 #include <algorithm>
+#include <utility>
 
 namespace saplang {
 
@@ -397,7 +398,7 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type,
     }
     return true;
   } else if (auto *call_expr = dynamic_cast<ResolvedCallExpr *>(&expr)) {
-    if (can_be_cast(call_expr->func_decl->type, type)) {
+    if (can_be_cast(call_expr->decl->type, type)) {
       if (!is_array_decay) {
         call_expr->type = type;
         call_expr->set_constant_value(cee.evaluate(*call_expr));
@@ -604,6 +605,8 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
     return {};
   if (!resolve_global_var_decls(resolved_decls, partial))
     return {};
+  std::unordered_map<std::string, std::unique_ptr<ResolvedFuncDecl>>
+      resolved_functions;
   for (std::unique_ptr<Decl> &decl : m_AST) {
     if (const auto *fn = dynamic_cast<const FunctionDecl *>(decl.get())) {
       auto resolved_fn_decl = resolve_func_decl(*fn);
@@ -620,29 +623,30 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
   for (int i = 0; i < resolved_decls.size(); ++i) {
     Scope fn_scope{this};
     if (auto *fn = dynamic_cast<const FunctionDecl *>(m_AST[i].get())) {
-      auto *resolved_decl = resolved_decls[i].get();
-      if (!dynamic_cast<ResolvedFuncDecl *>(resolved_decl)) {
-        for (auto &&decl : resolved_decls) {
-          if (m_AST[i]->id == decl->id) {
-            resolved_decl = decl.get();
-            if (!dynamic_cast<ResolvedFuncDecl *>(resolved_decl))
-              return {};
+      ResolvedDecl *resolved_decl = nullptr;
+      for (auto &&decl : resolved_decls) {
+        if (m_AST[i]->id == decl->id) {
+          resolved_decl = decl.get();
+          if (!dynamic_cast<ResolvedFuncDecl *>(resolved_decl))
+            return {};
+          break;
+        }
+      }
+      if (resolved_decl) {
+        m_CurrFunction = dynamic_cast<ResolvedFuncDecl *>(resolved_decl);
+        for (auto &&param : m_CurrFunction->params) {
+          insert_decl_to_current_scope(*param);
+        }
+        if (fn->body) {
+          auto resolved_body = resolve_block(*fn->body);
+          if (!resolved_body) {
+            error = true;
+            continue;
           }
+          m_CurrFunction->body = std::move(resolved_body);
+          if (m_ShouldRunFlowSensitiveAnalysis)
+            error |= flow_sensitive_analysis(*m_CurrFunction);
         }
-      }
-      m_CurrFunction = dynamic_cast<ResolvedFuncDecl *>(resolved_decl);
-      for (auto &&param : m_CurrFunction->params) {
-        insert_decl_to_current_scope(*param);
-      }
-      if (fn->body) {
-        auto resolved_body = resolve_block(*fn->body);
-        if (!resolved_body) {
-          error = true;
-          continue;
-        }
-        m_CurrFunction->body = std::move(resolved_body);
-        if (m_ShouldRunFlowSensitiveAnalysis)
-          error |= flow_sensitive_analysis(*m_CurrFunction);
       }
     }
   }
@@ -802,7 +806,7 @@ Sema::resolve_decl_stmt(const DeclStmt &stmt) {
 
 std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
   std::optional<Type> type = resolve_type(decl.type);
-  if (!type || type->kind == Type::Kind::Void)
+  if (!type || (type->kind == Type::Kind::Void && type->pointer_depth == 0))
     return report(decl.location, "variable '" + decl.id + "' has invalid '" +
                                      decl.type.name + "' type.");
   std::unique_ptr<ResolvedExpr> resolved_initializer = nullptr;
@@ -940,11 +944,12 @@ Sema::resolve_binary_operator(const BinaryOperator &op) {
 }
 
 std::unique_ptr<ResolvedUnaryOperator>
-Sema::resolve_unary_operator(const UnaryOperator &op) {
-  auto resolved_rhs = resolve_expr(*op.rhs);
+Sema::resolve_unary_operator(const UnaryOperator &op, Type *type) {
+  auto resolved_rhs = resolve_expr(*op.rhs, type);
   if (!resolved_rhs)
     return nullptr;
-  if (resolved_rhs->type.kind == Type::Kind::Void)
+  if (resolved_rhs->type.kind == Type::Kind::Void &&
+      resolved_rhs->type.pointer_depth == 0)
     return report(
         resolved_rhs->location,
         "void expression cannot be used as operand to unary operator.");
@@ -953,8 +958,25 @@ Sema::resolve_unary_operator(const UnaryOperator &op) {
             dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
       return report(resolved_rhs->location,
                     "cannot take the address of an rvalue.");
+    } else if (const ResolvedDeclRefExpr *decl_ref_expr =
+                   dynamic_cast<const ResolvedDeclRefExpr *>(
+                       resolved_rhs.get())) {
+      if (const ResolvedFuncDecl *fn =
+              dynamic_cast<const ResolvedFuncDecl *>(decl_ref_expr->decl)) {
+        std::vector<Type> fn_sig;
+        fn_sig.reserve(fn->params.size() + 1);
+        fn_sig.push_back(fn->type);
+        for (auto &&param : fn->params) {
+          fn_sig.push_back(param->type);
+        }
+        resolved_rhs->type.fn_ptr_signature =
+            std::make_pair(std::move(fn_sig), fn->is_vll);
+      } else {
+        ++resolved_rhs->type.pointer_depth;
+      }
+    } else {
+      ++resolved_rhs->type.pointer_depth;
     }
-    ++resolved_rhs->type.pointer_depth;
   } else if (op.op == TokenKind::Asterisk) {
     if (resolved_rhs->type.pointer_depth < 1)
       return report(resolved_rhs->location,
@@ -1156,7 +1178,7 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
   if (const auto *enum_access = dynamic_cast<const EnumElementAccess *>(&expr))
     return resolve_enum_access(*enum_access);
   if (const auto *decl_ref_expr = dynamic_cast<const DeclRefExpr *>(&expr))
-    return resolve_decl_ref_expr(*decl_ref_expr);
+    return resolve_decl_ref_expr(*decl_ref_expr, type);
   if (const auto *call_expr = dynamic_cast<const CallExpr *>(&expr))
     return resolve_call_expr(*call_expr);
   if (const auto *group_expr = dynamic_cast<const GroupingExpr *>(&expr))
@@ -1164,7 +1186,7 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
   if (const auto *binary_op = dynamic_cast<const BinaryOperator *>(&expr))
     return resolve_binary_operator(*binary_op);
   if (const auto *unary_op = dynamic_cast<const UnaryOperator *>(&expr))
-    return resolve_unary_operator(*unary_op);
+    return resolve_unary_operator(*unary_op, type);
   if (const auto *explicit_cast = dynamic_cast<const ExplicitCast *>(&expr))
     return resolve_explicit_cast(*explicit_cast);
   if (const auto *string_lit = dynamic_cast<const StringLiteralExpr *>(&expr))
@@ -1501,7 +1523,8 @@ Sema::resolve_string_literal_expr(const StringLiteralExpr &lit) {
 }
 
 std::unique_ptr<ResolvedDeclRefExpr>
-Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
+Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call,
+                            Type *type) {
   auto &&maybe_decl = lookup_decl(decl_ref_expr.id);
   if (!maybe_decl)
     return report(decl_ref_expr.location,
@@ -1510,7 +1533,8 @@ Sema::resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call) {
   if (!decl)
     return report(decl_ref_expr.location,
                   "symbol '" + decl_ref_expr.id + "' undefined.");
-  if (!is_call && dynamic_cast<const ResolvedFuncDecl *>(decl))
+  if (!is_call && (dynamic_cast<const ResolvedFuncDecl *>(decl) ||
+                   (type && type->fn_ptr_signature)))
     return report(decl_ref_expr.location,
                   "expected to call function '" + decl_ref_expr.id + "'.");
   if (const auto *member_access =
@@ -1530,50 +1554,91 @@ Sema::resolve_call_expr(const CallExpr &call) {
   const auto *decl_ref_expr = dynamic_cast<const DeclRefExpr *>(call.id.get());
   if (!decl_ref_expr)
     return report(call.location, "expression cannot be called as a function.");
-  const auto *resolved_func_decl =
-      dynamic_cast<const ResolvedFuncDecl *>(resolved_callee->decl);
-  if (!resolved_func_decl)
-    return report(call.location, "calling non-function symbol.");
-  if (call.args.size() != resolved_func_decl->params.size() &&
-      !resolved_func_decl->is_vll)
-    return report(call.location, "argument count mismatch.");
+  // Normal function call
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
-  for (int i = 0; i < call.args.size(); ++i) {
-    auto *decl_type = i < resolved_func_decl->params.size()
-                          ? &resolved_func_decl->params[i]->type
-                          : nullptr;
-    std::unique_ptr<ResolvedExpr> resolved_arg =
-        resolve_expr(*call.args[i], decl_type);
-    if (!resolved_arg)
-      return nullptr;
-    Type resolved_type = resolved_arg->type;
-    if (const auto *member_access =
-            dynamic_cast<const ResolvedStructMemberAccess *>(
-                resolved_arg.get())) {
-      resolved_type = member_access->type;
-    }
-    if (i < resolved_func_decl->params.size()) {
-      if (!is_same_type(resolved_type, resolved_func_decl->params[i]->type)) {
-        bool is_array_decay;
-        if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
-                           m_Cee, is_array_decay) &&
-            !is_same_array_decay(resolved_arg->type,
-                                 resolved_func_decl->params[i]->type)) {
-          return report(
-              resolved_arg->location,
-              "unexpected type '" + resolved_arg->type.name + "', expected '" +
-                  resolved_func_decl->params[i]->type.name +
-                  (resolved_func_decl->params[i]->type.pointer_depth > 0 ? "*"
-                                                                         : "") +
-                  "'.");
+  if (const auto *resolved_func_decl =
+          dynamic_cast<const ResolvedFuncDecl *>(resolved_callee->decl)) {
+    if (call.args.size() != resolved_func_decl->params.size() &&
+        !resolved_func_decl->is_vll)
+      return report(call.location, "argument count mismatch.");
+    for (int i = 0; i < call.args.size(); ++i) {
+      auto *decl_type = i < resolved_func_decl->params.size()
+                            ? &resolved_func_decl->params[i]->type
+                            : nullptr;
+      std::unique_ptr<ResolvedExpr> resolved_arg =
+          resolve_expr(*call.args[i], decl_type);
+      if (!resolved_arg)
+        return nullptr;
+      Type resolved_type = resolved_arg->type;
+      if (const auto *member_access =
+              dynamic_cast<const ResolvedStructMemberAccess *>(
+                  resolved_arg.get())) {
+        resolved_type = member_access->type;
+      }
+      if (i < resolved_func_decl->params.size()) {
+        if (!is_same_type(resolved_type, resolved_func_decl->params[i]->type)) {
+          bool is_array_decay;
+          if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type,
+                             m_Cee, is_array_decay) &&
+              !is_same_array_decay(resolved_arg->type,
+                                   resolved_func_decl->params[i]->type)) {
+            return report(
+                resolved_arg->location,
+                "unexpected type '" + resolved_arg->type.name +
+                    "', expected '" + resolved_func_decl->params[i]->type.name +
+                    (resolved_func_decl->params[i]->type.pointer_depth > 0
+                         ? "*"
+                         : "") +
+                    "'.");
+          }
         }
       }
+      resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
+      resolved_args.emplace_back(std::move(resolved_arg));
     }
-    resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
-    resolved_args.emplace_back(std::move(resolved_arg));
+    return std::make_unique<ResolvedCallExpr>(call.location, resolved_func_decl,
+                                              std::move(resolved_args));
+  } else { // could be function pointer
+    if (!resolved_callee->type.fn_ptr_signature)
+      return report(call.location, "calling non-function symbol.");
+    if (call.args.size() !=
+            resolved_callee->type.fn_ptr_signature->first.size() - 1 &&
+        !resolved_func_decl->is_vll)
+      return report(call.location, "argument count mismatch.");
+    auto &fn_sig = resolved_callee->type.fn_ptr_signature->first;
+    bool is_vll = resolved_callee->type.fn_ptr_signature->second;
+    for (int i = 0; i < call.args.size(); ++i) {
+      auto *decl_type = i < fn_sig.size() - 1 ? &fn_sig[i + 1] : nullptr;
+      std::unique_ptr<ResolvedExpr> resolved_arg =
+          resolve_expr(*call.args[i], decl_type);
+      if (!resolved_arg)
+        return nullptr;
+      Type resolved_type = resolved_arg->type;
+      if (const auto *member_access =
+              dynamic_cast<const ResolvedStructMemberAccess *>(
+                  resolved_arg.get())) {
+        resolved_type = member_access->type;
+      }
+      if (i < fn_sig.size()) {
+        if (!is_same_type(resolved_type, fn_sig[i + 1])) {
+          bool is_array_decay;
+          if (!try_cast_expr(*resolved_arg, fn_sig[i + 1], m_Cee,
+                             is_array_decay) &&
+              !is_same_array_decay(resolved_arg->type, fn_sig[i + 1])) {
+            return report(resolved_arg->location,
+                          "unexpected type '" + resolved_arg->type.name +
+                              "', expected '" + fn_sig[i + 1].name +
+                              (fn_sig[i + 1].pointer_depth > 0 ? "*" : "") +
+                              "'.");
+          }
+        }
+      }
+      resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
+      resolved_args.emplace_back(std::move(resolved_arg));
+    }
+    return std::make_unique<ResolvedCallExpr>(
+        call.location, resolved_callee->decl, std::move(resolved_args));
   }
-  return std::make_unique<ResolvedCallExpr>(call.location, resolved_func_decl,
-                                            std::move(resolved_args));
 }
 
 std::unique_ptr<ResolvedAssignment>

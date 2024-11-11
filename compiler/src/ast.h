@@ -356,13 +356,28 @@ struct DeclRefExpr : public Expr {
   DUMP_IMPL
 };
 
+struct ParamDecl : public Decl {
+  Type type;
+  bool is_const;
+  inline ParamDecl(SourceLocation loc, std::string id, Type type, bool is_const)
+      : Decl(loc, id), type(std::move(type)), is_const(is_const) {}
+  DUMP_IMPL
+};
+
+// bool signifies whether there's a VLL
+using ParameterList = std::pair<std::vector<std::unique_ptr<ParamDecl>>, bool>;
+
 struct MemberAccess : public DeclRefExpr {
   std::string field;
   std::unique_ptr<DeclRefExpr> inner_decl_ref_expr;
-  inline explicit MemberAccess(SourceLocation loc, std::string var_id,
-                               std::string field,
-                               std::unique_ptr<DeclRefExpr> inner_decl_ref_expr)
+  std::optional<std::vector<std::unique_ptr<Expr>>>
+      params; // in case we're calling a function pointer
+  inline explicit MemberAccess(
+      SourceLocation loc, std::string var_id, std::string field,
+      std::unique_ptr<DeclRefExpr> inner_decl_ref_expr,
+      std::optional<std::vector<std::unique_ptr<Expr>>> params)
       : DeclRefExpr(loc, std::move(var_id)), field(std::move(field)),
+        params(std::move(params)),
         inner_decl_ref_expr(std::move(inner_decl_ref_expr)) {}
   DUMP_IMPL
 };
@@ -468,14 +483,6 @@ struct IfStmt : public Stmt {
       : Stmt(location), condition(std::move(cond)),
         true_block(std::move(true_block)), false_block(std::move(false_block)) {
   }
-  DUMP_IMPL
-};
-
-struct ParamDecl : public Decl {
-  Type type;
-  bool is_const;
-  inline ParamDecl(SourceLocation loc, std::string id, Type type, bool is_const)
-      : Decl(loc, id), type(std::move(type)), is_const(is_const) {}
   DUMP_IMPL
 };
 
@@ -750,12 +757,11 @@ struct ResolvedExplicitCastExpr : public ResolvedExpr {
 };
 
 struct ResolvedCallExpr : public ResolvedExpr {
-  const ResolvedFuncDecl *func_decl;
+  const ResolvedDecl *decl;
   std::vector<std::unique_ptr<ResolvedExpr>> args;
-  inline ResolvedCallExpr(SourceLocation loc, const ResolvedFuncDecl *callee,
+  inline ResolvedCallExpr(SourceLocation loc, const ResolvedDecl *callee,
                           std::vector<std::unique_ptr<ResolvedExpr>> &&args)
-      : ResolvedExpr(loc, callee->type), func_decl(callee),
-        args(std::move(args)) {}
+      : ResolvedExpr(loc, callee->type), decl(callee), args(std::move(args)) {}
   DUMP_IMPL
 };
 

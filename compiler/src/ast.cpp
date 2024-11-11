@@ -293,6 +293,12 @@ void MemberAccess::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level + 1) << "Field: " << field << "\n";
   if (inner_decl_ref_expr)
     inner_decl_ref_expr->dump_to_stream(stream, indent_level + 1);
+  if (params) {
+    stream << indent(indent_level + 1) << "CallParameters:\n";
+    for (auto &&param : *params) {
+      param->dump_to_stream(stream, indent_level + 2);
+    }
+  }
 }
 
 void NumberLiteral::dump_to_stream(std::stringstream &stream,
@@ -632,8 +638,8 @@ void ResolvedExplicitCastExpr::dump_to_stream(std::stringstream &stream,
 
 void ResolvedCallExpr::dump_to_stream(std::stringstream &stream,
                                       size_t indent_level) const {
-  stream << indent(indent_level) << "ResolvedCallExpr: @(" << func_decl << ") "
-         << func_decl->id << ":\n";
+  stream << indent(indent_level) << "ResolvedCallExpr: @(" << decl << ") "
+         << decl->id << ":\n";
   if (auto resolved_constant_expr = get_constant_value()) {
     dump_constant(stream, indent_level, resolved_constant_expr->value,
                   resolved_constant_expr->kind);
