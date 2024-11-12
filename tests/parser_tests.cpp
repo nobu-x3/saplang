@@ -1652,4 +1652,45 @@ struct Type {
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr fn(ptr void)(i32, f32)(p_foo)");
 }
 
+TEST_CASE("Function pointer chaining in structs", "[parser]") {
+  TEST_SETUP(R"(
+fn Type* foo(i32, f32){}
+fn void main() {
+    var Type t = .{&foo};
+    t.p_foo(1, 1.0).p_foo(1, 1.0);
+}
+struct Type {
+    fn* Type*(i32, f32) p_foo;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: foo:ptr Type") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: :i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: :f32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: t:Type");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: foo");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: t");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Field: p_foo");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: p_foo");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Field: p_foo");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallParameters:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: real(1.0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallParameters:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: real(1.0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: Type");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr fn(ptr Type)(i32, f32)(p_foo)");
+}
 //@TODO: fn ptr chaining
