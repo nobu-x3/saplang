@@ -2069,13 +2069,13 @@ fn void main() {
     p_foo(1, 1.0);
     var Type t = .{&foo};
     t.p_foo(1, 1.0);
+    t.p_foo = &foo;
 }
 struct Type {
     fn* void*(i32, f32) p_foo;
 }
 )");
   REQUIRE(error_stream.str() == "");
-  REQUIRE(output_buffer.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
   REQUIRE(lines_it->find("ResolvedStructDecl: Type") != std::string::npos);
@@ -2116,6 +2116,25 @@ struct Type {
   REQUIRE(lines_it->find(") t:Type") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: Type");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: p_foo");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") t:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:ptr fn(ptr void)(i32, f32)(p_foo)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallParameters:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") t:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:ptr fn(ptr void)(i32, f32)(p_foo)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") foo:") != std::string::npos);

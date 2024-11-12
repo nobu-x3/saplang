@@ -765,25 +765,28 @@ struct ResolvedCallExpr : public ResolvedExpr {
   DUMP_IMPL
 };
 
+using FnPtrCallParams = std::vector<std::unique_ptr<ResolvedExpr>>;
 struct InnerMemberAccess : public IDumpable {
   int member_index;
   std::string member_id;
   Type type;
   std::unique_ptr<InnerMemberAccess> inner_member_access;
+  std::optional<FnPtrCallParams> params; // in case of function pointer call
   inline InnerMemberAccess(int index, std::string id, Type type,
-                           std::unique_ptr<InnerMemberAccess> inner_access)
+                           std::unique_ptr<InnerMemberAccess> inner_access, std::optional<FnPtrCallParams> params)
       : member_index(index), member_id(std::move(id)), type(type),
-        inner_member_access(std::move(inner_access)) {}
+        inner_member_access(std::move(inner_access)), params(std::move(params)) {}
   DUMP_IMPL
 };
 
 struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
   std::unique_ptr<InnerMemberAccess> inner_member_access;
+  std::optional<FnPtrCallParams> params;// in case function pointer call
   inline ResolvedStructMemberAccess(
       SourceLocation loc, const ResolvedDecl *decl,
-      std::unique_ptr<InnerMemberAccess> inner_access)
+      std::unique_ptr<InnerMemberAccess> inner_access, std::optional<FnPtrCallParams> params)
       : ResolvedDeclRefExpr(loc, decl),
-        inner_member_access(std::move(inner_access)) {}
+        inner_member_access(std::move(inner_access)), params(std::move(params)) {}
   DUMP_IMPL
 };
 

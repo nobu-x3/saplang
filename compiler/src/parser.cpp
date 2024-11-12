@@ -664,22 +664,24 @@ Parser::parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
     std::string member = *m_NextToken.value;
     eat_next_token(); // eat identifier
     std::unique_ptr<DeclRefExpr> inner_access = nullptr;
-    std::optional<std::vector<std::unique_ptr<Expr>>> params;
+    std::optional<std::vector<std::unique_ptr<Expr>>> params {std::nullopt};
     if (m_NextToken.kind == TokenKind::Dot) {
       std::unique_ptr<DeclRefExpr> this_decl_ref_expr =
           std::make_unique<DeclRefExpr>(this_decl_loc, member);
       inner_access = parse_member_access(std::move(this_decl_ref_expr), member);
     } else if (m_NextToken.kind == TokenKind::Lparent) {
       eat_next_token(); // eat '('
+      std::vector<std::unique_ptr<Expr>> tmp_params;
       while (m_NextToken.kind != TokenKind::Rparent) {
         auto expr = parse_expr();
         if (!expr)
           return nullptr;
-        params->push_back(std::move(expr));
+        tmp_params.emplace_back(std::move(expr));
         if(m_NextToken.kind == TokenKind::Comma)
             eat_next_token();
       }
       eat_next_token(); // eat ')'
+      params = std::move(tmp_params);
     }
     return std::make_unique<MemberAccess>(
         decl_ref_expr->location, var_id, std::move(member),

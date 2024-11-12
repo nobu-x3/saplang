@@ -1220,10 +1220,20 @@ Sema::resolve_inner_member_access(const MemberAccess &access, Type type) {
   for (auto &&struct_member : struct_decl->members) {
     // compare field names
     if (struct_member.second == access.field) {
+      std::optional<FnPtrCallParams> fn_ptr_call_params;
+      if (access.params) {
+        fn_ptr_call_params->reserve(access.params->size());
+        for (auto &&param : *access.params) {
+          auto expr = resolve_expr(*param);
+          if (!expr)
+            return nullptr;
+          fn_ptr_call_params->emplace_back(std::move(expr));
+        }
+      }
       std::unique_ptr<InnerMemberAccess> inner_member_access =
-          std::make_unique<InnerMemberAccess>(inner_member_index,
-                                              struct_member.second,
-                                              struct_member.first, nullptr);
+          std::make_unique<InnerMemberAccess>(
+              inner_member_index, struct_member.second, struct_member.first,
+              nullptr, std::move(fn_ptr_call_params));
       if (access.inner_decl_ref_expr) {
         if (struct_member.first.kind != Type::Kind::Custom) {
           return report(access.inner_decl_ref_expr->location,
@@ -1274,10 +1284,22 @@ Sema::resolve_member_access(const MemberAccess &access,
   for (auto &&struct_member : struct_decl->members) {
     // compare field names
     if (struct_member.second == access.field) {
+      std::optional<FnPtrCallParams> fn_ptr_call_params{std::nullopt};
+      if (access.params) {
+          FnPtrCallParams tmp_fn_ptr_call_params;
+        tmp_fn_ptr_call_params.reserve(access.params->size());
+        for (auto &&param : *access.params) {
+          auto expr = resolve_expr(*param);
+          if (!expr)
+            return nullptr;
+          tmp_fn_ptr_call_params.emplace_back(std::move(expr));
+        }
+        fn_ptr_call_params = std::move(tmp_fn_ptr_call_params);
+      }
       std::unique_ptr<InnerMemberAccess> inner_member_access =
-          std::make_unique<InnerMemberAccess>(decl_member_index,
-                                              struct_member.second,
-                                              struct_member.first, nullptr);
+          std::make_unique<InnerMemberAccess>(
+              decl_member_index, struct_member.second, struct_member.first,
+              nullptr, std::nullopt); // explicitly forbids function chaining for now @TODO
       Type innermost_type = struct_member.first;
       if (access.inner_decl_ref_expr) {
         if (struct_member.first.kind != Type::Kind::Custom) {
@@ -1294,7 +1316,7 @@ Sema::resolve_member_access(const MemberAccess &access,
       std::unique_ptr<ResolvedStructMemberAccess> member_access =
           std::make_unique<ResolvedStructMemberAccess>(
               access.location, struct_or_param_decl,
-              std::move(inner_member_access));
+              std::move(inner_member_access), std::move(fn_ptr_call_params));
       member_access->type = innermost_type;
       return std::move(member_access);
     }
@@ -1341,16 +1363,6 @@ Sema::resolve_array_element_access(const ArrayElementAccess &access,
     }
     indices.emplace_back(std::move(expr));
     ++deindex_count;
-
-    /* if (get_size(expr->type.kind) != platform_ptr_size()) { */
-    /*   bool is_decay; */
-    /*   if (!try_cast_expr(*expr, platform_ptr_type(), m_Cee, is_decay)) { */
-    /*     return report(expr->location, */
-    /*                   "cannot implicitly cast type used for indexing: " + */
-    /*                       expr->type.name + " to platform ptr size."); */
-    /*   } */
-    /* } */
-
     // @TODO: on constant value it's possible to do bounds check
     /* if(expr->get_constant_value()) { */
     /*     auto constant_val = expr->get_constant_value().value(); */

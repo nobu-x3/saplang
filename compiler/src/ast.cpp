@@ -830,6 +830,12 @@ void InnerMemberAccess::dump_to_stream(std::stringstream &stream,
   stream << "(" << member_id << ")" << '\n';
   if (inner_member_access)
     inner_member_access->dump_to_stream(stream, indent_level + 1);
+  if (params) {
+    stream << indent(indent_level + 1) << "CallParameters:\n";
+    for (auto &&param : *params) {
+      param->dump_to_stream(stream, indent_level + 2);
+    }
+  }
 }
 
 void ResolvedStructMemberAccess::dump_to_stream(std::stringstream &stream,
@@ -837,6 +843,12 @@ void ResolvedStructMemberAccess::dump_to_stream(std::stringstream &stream,
   stream << indent(indent_level) << "ResolvedStructMemberAccess:\n";
   ResolvedDeclRefExpr::dump_to_stream(stream, indent_level + 1);
   inner_member_access->dump_to_stream(stream, indent_level + 1);
+  if (params) {
+    stream << indent(indent_level + 1) << "CallParameters:\n";
+    for (auto &&param : *params) {
+      param->dump_to_stream(stream, indent_level + 2);
+    }
+  }
 }
 
 void ResolvedArrayElementAccess::dump_to_stream(std::stringstream &stream,
