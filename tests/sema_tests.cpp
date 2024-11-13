@@ -2139,3 +2139,59 @@ struct Type {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") foo:") != std::string::npos);
 }
+
+TEST_CASE("Function pointer chaining in structs", "[sema]") {
+  TEST_SETUP(R"(
+fn Type* foo(i32, f32){}
+fn void main() {
+    var Type t = .{&foo};
+    t.p_foo(1, 1.0).p_foo(1, 1.0);
+}
+struct Type {
+    fn* Type*(i32, f32) p_foo;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedStructDecl: Type") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "0. ResolvedMemberField: ptr fn(ptr Type)(i32, f32)(p_foo)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
+  REQUIRE(lines_it->find(") __param_foo0:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
+  REQUIRE(lines_it->find(") __param_foo1:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") t:Type") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: Type");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: p_foo");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") foo:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "esolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") t:") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:ptr fn(ptr Type)(i32, f32)(p_foo)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:ptr fn(ptr Type)(i32, f32)(p_foo)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallParameters:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallParameters:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "f32(1)");
+}

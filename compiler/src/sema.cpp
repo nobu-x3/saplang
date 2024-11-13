@@ -1222,13 +1222,15 @@ Sema::resolve_inner_member_access(const MemberAccess &access, Type type) {
     if (struct_member.second == access.field) {
       std::optional<FnPtrCallParams> fn_ptr_call_params;
       if (access.params) {
-        fn_ptr_call_params->reserve(access.params->size());
+        FnPtrCallParams tmp_fn_ptr_call_params;
+        tmp_fn_ptr_call_params.reserve(access.params->size());
         for (auto &&param : *access.params) {
           auto expr = resolve_expr(*param);
           if (!expr)
             return nullptr;
-          fn_ptr_call_params->emplace_back(std::move(expr));
+          tmp_fn_ptr_call_params.emplace_back(std::move(expr));
         }
+        fn_ptr_call_params = std::move(tmp_fn_ptr_call_params);
       }
       std::unique_ptr<InnerMemberAccess> inner_member_access =
           std::make_unique<InnerMemberAccess>(
@@ -1242,9 +1244,14 @@ Sema::resolve_inner_member_access(const MemberAccess &access, Type type) {
         if (const auto *inner_access_parser =
                 dynamic_cast<const MemberAccess *>(
                     access.inner_decl_ref_expr.get())) {
+          Type struct_member_type = struct_member.first;
+          if (struct_member.first.fn_ptr_signature) {
+            struct_member_type =
+                struct_member.first.fn_ptr_signature->first.front();
+          }
           inner_member_access->inner_member_access =
               std::move(resolve_inner_member_access(*inner_access_parser,
-                                                    struct_member.first));
+                                                    struct_member_type));
         }
       }
       return std::move(inner_member_access);
@@ -1286,7 +1293,7 @@ Sema::resolve_member_access(const MemberAccess &access,
     if (struct_member.second == access.field) {
       std::optional<FnPtrCallParams> fn_ptr_call_params{std::nullopt};
       if (access.params) {
-          FnPtrCallParams tmp_fn_ptr_call_params;
+        FnPtrCallParams tmp_fn_ptr_call_params;
         tmp_fn_ptr_call_params.reserve(access.params->size());
         for (auto &&param : *access.params) {
           auto expr = resolve_expr(*param);
@@ -1299,17 +1306,27 @@ Sema::resolve_member_access(const MemberAccess &access,
       std::unique_ptr<InnerMemberAccess> inner_member_access =
           std::make_unique<InnerMemberAccess>(
               decl_member_index, struct_member.second, struct_member.first,
-              nullptr, std::nullopt); // explicitly forbids function chaining for now @TODO
+              nullptr, std::nullopt); // explicitly forbids function chaining
+                                      // for now @TODO
       Type innermost_type = struct_member.first;
       if (access.inner_decl_ref_expr) {
-        if (struct_member.first.kind != Type::Kind::Custom) {
+        if (struct_member.first.kind != Type::Kind::Custom &&
+            (struct_member.first.kind != Type::Kind::FnPtr ||
+             (struct_member.first.fn_ptr_signature &&
+              struct_member.first.fn_ptr_signature->first[0].kind !=
+                  Type::Kind::Custom))) {
           return report(access.inner_decl_ref_expr->location,
                         struct_member.first.name + " is not a struct type.");
         }
         if (const auto *inner_access = dynamic_cast<const MemberAccess *>(
                 access.inner_decl_ref_expr.get())) {
+          Type struct_member_type = struct_member.first;
+          if (struct_member.first.fn_ptr_signature) {
+            struct_member_type =
+                struct_member.first.fn_ptr_signature->first.front();
+          }
           inner_member_access->inner_member_access = std::move(
-              resolve_inner_member_access(*inner_access, struct_member.first));
+              resolve_inner_member_access(*inner_access, struct_member_type));
           innermost_type = inner_member_access->inner_member_access->type;
         }
       }

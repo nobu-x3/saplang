@@ -1693,4 +1693,3 @@ struct Type {
   CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: Type");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr fn(ptr Type)(i32, f32)(p_foo)");
 }
-//@TODO: fn ptr chaining

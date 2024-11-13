@@ -665,11 +665,7 @@ Parser::parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
     eat_next_token(); // eat identifier
     std::unique_ptr<DeclRefExpr> inner_access = nullptr;
     std::optional<std::vector<std::unique_ptr<Expr>>> params{std::nullopt};
-    if (m_NextToken.kind == TokenKind::Dot) {
-      std::unique_ptr<DeclRefExpr> this_decl_ref_expr =
-          std::make_unique<DeclRefExpr>(this_decl_loc, member);
-      inner_access = parse_member_access(std::move(this_decl_ref_expr), member);
-    } else if (m_NextToken.kind == TokenKind::Lparent) {
+    if (m_NextToken.kind == TokenKind::Lparent) {
       eat_next_token(); // eat '('
       std::vector<std::unique_ptr<Expr>> tmp_params;
       while (m_NextToken.kind != TokenKind::Rparent) {
@@ -682,12 +678,11 @@ Parser::parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
       }
       eat_next_token(); // eat ')'
       params = std::move(tmp_params);
-      if (m_NextToken.kind == TokenKind::Dot) {
-        std::unique_ptr<DeclRefExpr> this_decl_ref_expr =
-            std::make_unique<DeclRefExpr>(this_decl_loc, member);
-        inner_access =
-            parse_member_access(std::move(this_decl_ref_expr), member);
-      }
+    }
+    if (m_NextToken.kind == TokenKind::Dot) {
+      std::unique_ptr<DeclRefExpr> this_decl_ref_expr =
+          std::make_unique<DeclRefExpr>(this_decl_loc, member);
+      inner_access = parse_member_access(std::move(this_decl_ref_expr), member);
     }
     return std::make_unique<MemberAccess>(
         decl_ref_expr->location, var_id, std::move(member),
