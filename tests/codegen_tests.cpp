@@ -2757,3 +2757,106 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %14, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
 }
+
+TEST_CASE("address of assignment as a separate instruction", "[codegen]") {
+  TEST_SETUP(R"(
+fn void main() {
+    var i32 i = 0;
+    var i32* p_i;
+    p_i = &i;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "define void @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%i = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%p_i = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %i, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %i, ptr %p_i, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+/* TEST_CASE("Function pointers", "[codegen]") { */
+/*   TEST_SETUP(R"( */
+/* fn void* foo(i32, f32){} */
+/* fn void main() { */
+/*     var fn* void*(i32, f32) p_foo = &foo; */
+/*     var fn* void*(i32 i, f32 f) p_foo1 = &foo; */
+/*     p_foo(1, 1.0); */
+/*     var Type t = .{&foo}; */
+/*     t.p_foo(1, 1.0); */
+/*     t.p_foo = &foo; */
+/* } */
+/* struct Type { */
+/*     fn* void*(i32, f32) p_foo; */
+/* } */
+/* )"); */
+/*   REQUIRE(error_stream.str() == ""); */
+/*   REQUIRE(output_string == ""); */
+/*   auto lines = break_by_line(output_buffer.str()); */
+/*   auto lines_it = lines.begin(); */
+/*   REQUIRE(lines_it->find("ResolvedStructDecl: Type") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE( */
+/*       lines_it, "0. ResolvedMemberField: ptr fn(ptr void)(i32, f32)(p_foo)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @("); */
+/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @("); */
+/*   REQUIRE(lines_it->find(") __param_foo0:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @("); */
+/*   REQUIRE(lines_it->find(") __param_foo1:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @("); */
+/*   REQUIRE(lines_it->find(") main:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
+/*   REQUIRE(lines_it->find(") p_foo:ptr fn(ptr void)(i32, f32)") != */
+/*           std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
+/*   REQUIRE(lines_it->find(") p_foo1:ptr fn(ptr void)(i32, f32)") != */
+/*           std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @("); */
+/*   REQUIRE(lines_it->find(") p_foo:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "f32(1)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
+/*   REQUIRE(lines_it->find(") t:Type") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: Type"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: p_foo"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") t:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:ptr fn(ptr void)(i32, f32)(p_foo)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "CallParameters:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "f32(1)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") t:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:ptr fn(ptr void)(i32, f32)(p_foo)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
+/* } */

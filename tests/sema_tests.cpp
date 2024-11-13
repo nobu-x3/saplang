@@ -2195,3 +2195,35 @@ struct Type {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
   CONTAINS_NEXT_REQUIRE(lines_it, "f32(1)");
 }
+
+TEST_CASE("address of assignment as a separate instruction", "[sema]") {
+  TEST_SETUP(R"(
+fn void main() {
+var i32 i = 0;
+var i32* p_i;
+p_i = &i;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") i:i32") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") p_i:ptr i32") !=
+          std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") p_i:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") i:") != std::string::npos);
+}
