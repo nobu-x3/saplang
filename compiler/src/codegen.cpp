@@ -41,18 +41,22 @@ std::unique_ptr<llvm::Module> Codegen::generate_ir() {
 
 void Codegen::gen_func_decl(const ResolvedFuncDecl &decl) {
   llvm::Type *return_type = gen_type(decl.type);
+  assert(return_type);
   std::vector<llvm::Type *> param_types{};
   for (auto &&param : decl.params) {
     param_types.emplace_back(gen_type(param->type));
   }
   auto *type = llvm::FunctionType::get(return_type, param_types, decl.is_vll);
-  llvm::Function::Create(type, llvm::Function::ExternalLinkage,
-                         decl.og_name.empty() ? decl.id : decl.og_name,
-                         *m_Module);
+  llvm::Value *value = llvm::Function::Create(
+      type, llvm::Function::ExternalLinkage,
+      decl.og_name.empty() ? decl.id : decl.og_name, *m_Module);
+  assert(value);
+  m_Declarations[&decl] = value;
 }
 
 void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl) {
   llvm::Type *var_type = gen_type(decl.type);
+  assert(var_type);
   llvm::Constant *var_init = nullptr;
   if (const auto *numlit =
           dynamic_cast<const ResolvedNumberLiteral *>(decl.initializer.get())) {
@@ -83,6 +87,7 @@ llvm::Constant *
 Codegen::gen_global_struct_init(const ResolvedStructLiteralExpr &init) {
   llvm::StructType *struct_type =
       llvm::StructType::getTypeByName(m_Context, init.type.name);
+  assert(struct_type);
   if (!struct_type)
     return report(init.location, "could not find struct type with name '" +
                                      init.type.name + "'.");
@@ -111,6 +116,7 @@ Codegen::gen_global_array_init(const ResolvedArrayLiteralExpr &init) {
     Type de_arrayed_type = init.type;
     int dimension = de_array_type(de_arrayed_type, 1);
     llvm::Type *underlying_type = gen_type(de_arrayed_type);
+    assert(underlying_type);
     if (dimension)
       type = llvm::ArrayType::get(underlying_type, dimension);
   }
@@ -138,6 +144,7 @@ Codegen::gen_global_array_init(const ResolvedArrayLiteralExpr &init) {
 llvm::Constant *
 Codegen::get_constant_number_value(const ResolvedNumberLiteral &numlit) {
   auto *type = gen_type(numlit.type);
+  assert(type);
   switch (numlit.type.kind) {
   case Type::Kind::f32:
     return llvm::ConstantFP::get(type, numlit.value.f32);
@@ -177,6 +184,7 @@ void Codegen::gen_struct_decl(const ResolvedStructDecl &decl) {
   llvm::ArrayRef<llvm::Type *> array_ref{member_types};
   llvm::StructType *struct_type =
       llvm::StructType::create(m_Context, array_ref, decl.id);
+  assert(struct_type);
   m_CustomTypes[decl.id] = struct_type;
 }
 
@@ -184,23 +192,32 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
   if (!decl.body)
     return;
   auto *function = m_Module->getFunction(decl.id);
+  assert(function);
   auto *entry_bb = llvm::BasicBlock::Create(m_Context, "entry", function);
+  assert(entry_bb);
   m_Builder.SetInsertPoint(entry_bb);
   llvm::Value *undef = llvm::UndefValue::get(m_Builder.getInt32Ty());
+  assert(undef);
   m_AllocationInsertPoint = new llvm::BitCastInst(
       undef, undef->getType(), "alloca.placeholder", entry_bb);
+  assert(m_AllocationInsertPoint);
   auto *return_type = gen_type(decl.type);
+  assert(return_type);
   bool is_void = decl.type.kind == Type::Kind::Void;
   if (!is_void) {
     m_RetVal = alloc_stack_var(function, return_type, "retval");
   }
   m_RetBB = llvm::BasicBlock::Create(m_Context, "return");
+  assert(m_RetBB);
   int idx = 0;
   for (auto &&arg : function->args()) {
     const auto *param_decl = decl.params[idx].get();
+    assert(param_decl);
     auto *type = gen_type(decl.params[idx]->type);
+    assert(type);
     arg.setName(param_decl->id);
     llvm::Value *var = alloc_stack_var(function, type, param_decl->id);
+    assert(var);
     m_Builder.CreateStore(&arg, var);
     m_Declarations[param_decl] = var;
     ++idx;
@@ -218,6 +235,7 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
     return;
   }
   llvm::Value *load_ret = m_Builder.CreateLoad(return_type, m_RetVal);
+  assert(load_ret);
   m_Builder.CreateRet(load_ret);
 }
 
@@ -227,6 +245,7 @@ llvm::Type *Codegen::gen_type(const Type &type) {
     Type de_arrayed_type = type;
     int dimension = de_array_type(de_arrayed_type, 1);
     llvm::Type *underlying_type = gen_type(de_arrayed_type);
+    assert(underlying_type);
     if (!dimension)
       return underlying_type;
     return llvm::ArrayType::get(underlying_type, dimension);
@@ -309,13 +328,17 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt) {
 
 llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt) {
   llvm::Function *function = get_current_function();
+  assert(function);
   auto *true_bb = llvm::BasicBlock::Create(m_Context, "if.true");
+  assert(true_bb);
   auto *exit_bb = llvm::BasicBlock::Create(m_Context, "if.exit");
+  assert(exit_bb);
   auto *else_bb = exit_bb;
   if (stmt.false_block) {
     else_bb = llvm::BasicBlock::Create(m_Context, "if.false");
   }
   llvm::Value *cond = gen_expr(*stmt.condition);
+  assert(cond);
   m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, cond), true_bb,
                          else_bb);
   true_bb->insertInto(function);
@@ -335,15 +358,20 @@ llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt) {
 
 llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt) {
   llvm::Function *function = get_current_function();
+  assert(function);
   llvm::BasicBlock *header =
       llvm::BasicBlock::Create(m_Context, "while.cond", function);
+  assert(header);
   llvm::BasicBlock *body =
       llvm::BasicBlock::Create(m_Context, "while.body", function);
+  assert(body);
   llvm::BasicBlock *exit =
       llvm::BasicBlock::Create(m_Context, "while.exit", function);
+  assert(exit);
   m_Builder.CreateBr(header);
   m_Builder.SetInsertPoint(header);
   llvm::Value *condition = gen_expr(*stmt.condition);
+  assert(condition);
   m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, condition),
                          body, exit);
   m_Builder.SetInsertPoint(body);
@@ -355,22 +383,29 @@ llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt) {
 
 llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt) {
   llvm::Function *function = get_current_function();
+  assert(function);
   llvm::BasicBlock *counter_decl =
       llvm::BasicBlock::Create(m_Context, "for.counter_decl", function);
+  assert(counter_decl);
   llvm::BasicBlock *header =
       llvm::BasicBlock::Create(m_Context, "for.condition", function);
+  assert(header);
   llvm::BasicBlock *body =
       llvm::BasicBlock::Create(m_Context, "for.body", function);
+  assert(body);
   llvm::BasicBlock *counter_op =
       llvm::BasicBlock::Create(m_Context, "for.counter_op", function);
+  assert(counter_op);
   llvm::BasicBlock *exit =
       llvm::BasicBlock::Create(m_Context, "for.exit", function);
+  assert(exit);
   m_Builder.CreateBr(counter_decl);
   m_Builder.SetInsertPoint(counter_decl);
   llvm::Value *var_decl = gen_decl_stmt(*stmt.counter_variable);
   m_Builder.CreateBr(header);
   m_Builder.SetInsertPoint(header);
   llvm::Value *condition = gen_expr(*stmt.condition);
+  assert(condition);
   m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, condition),
                          body, exit);
   m_Builder.SetInsertPoint(body);
@@ -378,6 +413,7 @@ llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt) {
   m_Builder.CreateBr(counter_op);
   m_Builder.SetInsertPoint(counter_op);
   llvm::Value *counter_incr = gen_stmt(*stmt.increment_expr);
+  assert(counter_incr);
   m_Builder.CreateBr(header);
   m_Builder.SetInsertPoint(exit);
   return nullptr;
@@ -466,18 +502,24 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
   }
   if (const auto *dre = dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
     llvm::Value *decl = m_Declarations[dre->decl];
+    assert(decl);
     auto *type = gen_type(dre->type);
+    assert(type);
     if (auto *member_access =
             dynamic_cast<const ResolvedStructMemberAccess *>(dre)) {
       Type member_type = Type::builtin_void(false);
       decl = gen_struct_member_access(*member_access, member_type);
+      assert(decl);
       type = gen_type(member_type);
+      assert(type);
     }
     if (auto *array_access =
             dynamic_cast<const ResolvedArrayElementAccess *>(dre)) {
       Type underlying_type = Type::builtin_void(false);
       decl = gen_array_element_access(*array_access, underlying_type);
+      assert(decl);
       type = gen_type(underlying_type);
+      assert(type);
     }
     return m_Builder.CreateLoad(type, decl);
   }
@@ -496,7 +538,9 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
   }
   if (const auto *nullexpr = dynamic_cast<const ResolvedNullExpr *>(&expr)) {
     llvm::Type *type = gen_type(nullexpr->type);
+    assert(type);
     llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
+    assert(ptr_type);
     return llvm::ConstantPointerNull::get(ptr_type);
   }
   if (const auto *cast = dynamic_cast<const ResolvedExplicitCastExpr *>(&expr))
@@ -523,8 +567,10 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(
         llvm::ConstantInt::get(
             m_Context,
             llvm::APInt(static_cast<unsigned>(platform_ptr_size()), index))};
-    llvm::Value *memptr =
-        m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type), var, indices);
+    auto *type = gen_type(struct_lit.type);
+    assert(type);
+    llvm::Value *memptr = m_Builder.CreateInBoundsGEP(type, var, indices);
+    assert(memptr);
     if (const auto *struct_lit =
             dynamic_cast<const ResolvedStructLiteralExpr *>(expr.get())) {
       gened_expr = gen_struct_literal_expr_assignment(*struct_lit, memptr);
@@ -535,6 +581,7 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         if (unary_op->op == TokenKind::Amp) {
           llvm::Value *expr = m_Declarations[dre->decl];
+          assert(expr);
           m_Builder.CreateStore(expr, memptr);
         }
       }
@@ -551,14 +598,17 @@ llvm::Value *
 Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit) {
   // @TODO: if fully const just memset or memcpy directly to variable
   llvm::Function *current_function = get_current_function();
+  assert(current_function);
   llvm::Value *stack_var =
       alloc_stack_var(current_function, gen_type(struct_lit.type), "");
+  assert(stack_var);
   int index = -1;
   for (auto &&[field_name, expr] : struct_lit.field_initializers) {
     ++index;
     if (!expr)
       continue;
     llvm::Value *gened_expr = gen_expr(*expr);
+    assert(gened_expr);
     std::vector<llvm::Value *> indices{
         llvm::ConstantInt::get(
             m_Context,
@@ -568,6 +618,7 @@ Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit) {
             llvm::APInt(static_cast<unsigned>(platform_ptr_size()), index))};
     llvm::Value *memptr = m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type),
                                                       stack_var, indices);
+    assert(memptr);
     m_Builder.CreateStore(gened_expr, memptr);
   }
   return stack_var;
@@ -577,6 +628,7 @@ llvm::Value *
 Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
                                 llvm::Value *p_array_value) {
   llvm::Function *current_function = get_current_function();
+  assert(current_function);
   // @TODO: memcpy on if all constant
   bool all_constant = true;
   for (auto &expr : array_lit.expressions) {
@@ -593,14 +645,18 @@ Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
         llvm::ConstantInt::get(
             m_Context,
             llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0))};
+    auto *p_array_type = gen_type(array_lit.type);
+    assert(p_array_type);
     llvm::Value *p_array_element = m_Builder.CreateInBoundsGEP(
-        gen_type(array_lit.type), p_array_value, indices, "arrayinit.begin");
+        p_array_type, p_array_value, indices, "arrayinit.begin");
+    assert(p_array_element);
     if (const auto *inner_array =
             dynamic_cast<const ResolvedArrayLiteralExpr *>(
                 array_lit.expressions[0].get())) {
       gen_array_literal_expr(*inner_array, p_array_element);
     } else {
       llvm::Value *expr_val = gen_expr(*array_lit.expressions[0]);
+      assert(expr_val);
       m_Builder.CreateStore(expr_val, p_array_element);
     }
     for (int i = 1; i < array_lit.expressions.size(); ++i) {
@@ -610,12 +666,14 @@ Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
           llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 1))};
       p_array_element = m_Builder.CreateInBoundsGEP(
           gen_type(expr->type), p_array_element, indices, "arrayinit.element");
+      assert(p_array_element);
       if (const auto *inner_array =
               dynamic_cast<const ResolvedArrayLiteralExpr *>(
                   array_lit.expressions[i].get())) {
         gen_array_literal_expr(*inner_array, p_array_element);
       } else {
         llvm::Value *expr_val = gen_expr(*expr);
+        assert(expr_val);
         m_Builder.CreateStore(expr_val, p_array_element);
       }
     }
@@ -634,6 +692,7 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
   if (!access.inner_member_access)
     return nullptr;
   llvm::Function *current_function = get_current_function();
+  assert(current_function);
   llvm::Value *decl = m_Declarations[access.decl];
   if (!decl)
     return report(access.location,
@@ -650,8 +709,11 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
       llvm::ConstantInt::get(
           m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()),
                                  access.inner_member_access->member_index))};
-  llvm::Value *last_gep = m_Builder.CreateInBoundsGEP(
-      gen_type(access_decl_type), decl, outer_indices);
+  llvm::Type *last_gep_type = gen_type(access_decl_type);
+  assert(last_gep_type);
+  llvm::Value *last_gep =
+      m_Builder.CreateInBoundsGEP(last_gep_type, decl, outer_indices);
+  assert(last_gep);
   out_type = access.inner_member_access->type;
   if (access.inner_member_access->inner_member_access) {
     InnerMemberAccess *current_chain =
@@ -671,8 +733,10 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
           llvm::ConstantInt::get(
               m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()),
                                      current_chain->member_index))};
-      last_gep = m_Builder.CreateInBoundsGEP(gen_type(tmp_type), last_gep,
-                                             inner_indices);
+      auto *type = gen_type(tmp_type);
+      assert(type);
+      last_gep = m_Builder.CreateInBoundsGEP(type, last_gep, inner_indices);
+      assert(last_gep);
       prev_chain = current_chain;
       current_chain = current_chain->inner_member_access.get();
     }
@@ -758,6 +822,7 @@ Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access,
                                   Type &out_type) {
   assert(access.indices.size() >= 1 && "unknown index");
   llvm::Function *current_function = get_current_function();
+  assert(current_function);
   llvm::Value *decl = m_Declarations[access.decl];
   if (!decl)
     return report(access.location,
@@ -773,17 +838,23 @@ Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access,
     --decl_type.pointer_depth;
     is_decay = true;
   }
+  auto *last_gep_type = gen_type(decl_type);
+  assert(last_gep_type);
   std::vector<llvm::Value *> inner_indices =
       get_index_accesses(*access.indices[0], is_decay ? decl : nullptr);
   llvm::Value *last_gep = m_Builder.CreateInBoundsGEP(
-      gen_type(decl_type), decl, inner_indices, "arrayidx");
+      last_gep_type, decl, inner_indices, "arrayidx");
+  assert(last_gep);
   // we already decreased pointer depth
   if (!is_decay)
     de_array_type(decl_type, 1);
   out_type = decl_type;
   for (int i = 1; i < access.indices.size(); ++i) {
     if (decl_type.pointer_depth > 0) {
-      last_gep = m_Builder.CreateLoad(gen_type(decl_type), last_gep);
+      auto *gened_decl_type = gen_type(decl_type);
+      assert(gened_decl_type);
+      last_gep = m_Builder.CreateLoad(gened_decl_type, last_gep);
+      assert(last_gep);
       --decl_type.pointer_depth;
       is_decay = true;
     }
@@ -791,6 +862,7 @@ Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access,
         get_index_accesses(*access.indices[i], is_decay ? decl : nullptr);
     last_gep = m_Builder.CreateInBoundsGEP(gen_type(decl_type), last_gep,
                                            inner_indices, "arrayidx");
+    assert(last_gep);
     if (!is_decay)
       de_array_type(decl_type, 1);
     out_type = decl_type;
@@ -822,28 +894,35 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast) {
   if (!var)
     return nullptr;
   llvm::Type *type = gen_type(cast.type);
+  assert(type);
   llvm::Type *rhs_type = gen_type(cast.rhs->type);
+  assert(rhs_type);
   switch (cast.cast_type) {
   case ResolvedExplicitCastExpr::CastType::IntToPtr: {
     if (get_type_size(cast.rhs->type.kind) < platform_ptr_size()) {
       llvm::Value *load = m_Builder.CreateLoad(rhs_type, var);
-      var = m_Builder.CreateSExt(load, gen_type(platform_ptr_type()),
-                                 "cast_sext");
+      auto *gened_platform_ptr_type = gen_type(platform_ptr_type());
+      assert(gened_platform_ptr_type);
+      var = m_Builder.CreateSExt(load, gened_platform_ptr_type, "cast_sext");
     }
+    assert(var);
     return m_Builder.CreateIntToPtr(var, type, "cast_itp");
   }
   case ResolvedExplicitCastExpr::CastType::PtrToInt: {
     var = m_Builder.CreateLoad(m_Builder.getPtrTy(), var);
+    assert(var);
     return m_Builder.CreatePtrToInt(var, type, "cast_pti");
   }
   case ResolvedExplicitCastExpr::CastType::IntToFloat: {
     llvm::Value *load = m_Builder.CreateLoad(rhs_type, var);
+    assert(load);
     if (is_signed(decl_ref_expr->type.kind))
       return m_Builder.CreateSIToFP(load, type, "cast_stf");
     return m_Builder.CreateUIToFP(load, type, "cast_utf");
   }
   case ResolvedExplicitCastExpr::CastType::FloatToInt: {
     llvm::Value *load = m_Builder.CreateLoad(rhs_type, var);
+    assert(load);
     if (is_signed(cast.type.kind))
       return m_Builder.CreateFPToSI(load, type, "cast_fts");
     return m_Builder.CreateFPToUI(load, type, "cast_ftu");
@@ -851,15 +930,19 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast) {
   case ResolvedExplicitCastExpr::CastType::Ptr:
     return var;
   case ResolvedExplicitCastExpr::CastType::Extend: {
-    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop)
+    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop) {
       var = m_Builder.CreateLoad(rhs_type, var);
+    }
+    assert(var);
     if (is_float(cast.type.kind))
       return m_Builder.CreateFPExt(var, type, "cast_fpext");
     return m_Builder.CreateSExt(var, type, "cast_sext");
   }
   case ResolvedExplicitCastExpr::CastType::Truncate: {
-    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop)
+    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop) {
       var = m_Builder.CreateLoad(rhs_type, var);
+    }
+    assert(var);
     if (is_float(cast.type.kind))
       return m_Builder.CreateFPTrunc(var, type, "cast_fptrunc");
     return m_Builder.CreateTrunc(var, type, "cast_trunc");
@@ -873,20 +956,26 @@ llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop) {
   TokenKind op = binop.op;
   if (op == TokenKind::AmpAmp || op == TokenKind::PipePipe) {
     llvm::Function *function = get_current_function();
+    assert(function);
     bool is_or = op == TokenKind::PipePipe;
     const char *rhs_tag = is_or ? "or.rhs" : "and.rhs";
     const char *merge_tag = is_or ? "or.merge" : "and.merge";
     auto *rhs_bb = llvm::BasicBlock::Create(m_Context, rhs_tag, function);
+    assert(rhs_bb);
     auto *merge_bb = llvm::BasicBlock::Create(m_Context, merge_tag, function);
+    assert(merge_bb);
     auto *true_bb = is_or ? merge_bb : rhs_bb;
     auto *false_bb = is_or ? rhs_bb : merge_bb;
     gen_conditional_op(*binop.lhs, true_bb, false_bb);
     m_Builder.SetInsertPoint(rhs_bb);
     llvm::Value *rhs = type_to_bool(binop.type.kind, gen_expr(*binop.rhs));
+    assert(rhs);
     m_Builder.CreateBr(merge_bb);
     rhs_bb = m_Builder.GetInsertBlock();
+    assert(rhs_bb);
     m_Builder.SetInsertPoint(merge_bb);
     llvm::PHINode *phi = m_Builder.CreatePHI(m_Builder.getInt1Ty(), 2);
+    assert(phi);
     for (auto it = llvm::pred_begin(merge_bb); it != llvm::pred_end(merge_bb);
          ++it) {
       if (*it == rhs_bb)
@@ -897,7 +986,9 @@ llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop) {
     return bool_to_type(binop.type.kind, phi);
   }
   llvm::Value *lhs = gen_expr(*binop.lhs);
+  assert(lhs);
   llvm::Value *rhs = gen_expr(*binop.rhs);
+  assert(rhs);
   if (op == TokenKind::LessThan || op == TokenKind::GreaterThan ||
       op == TokenKind::EqualEqual || op == TokenKind::ExclamationEqual ||
       op == TokenKind::GreaterThanOrEqual || op == TokenKind::LessThanOrEqual)
@@ -909,6 +1000,9 @@ llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop) {
 
 llvm::Value *gen_lt_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
                          llvm::Value *lhs, llvm::Value *rhs) {
+  assert(builder);
+  assert(rhs);
+  assert(lhs);
   if (kind >= Type::Kind::SIGNED_INT_START &&
       kind <= Type::Kind::SIGNED_INT_END) {
     return builder->CreateICmpSLT(lhs, rhs);
@@ -926,6 +1020,9 @@ llvm::Value *gen_lt_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
 
 llvm::Value *gen_gt_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
                          llvm::Value *lhs, llvm::Value *rhs) {
+  assert(builder);
+  assert(rhs);
+  assert(lhs);
   if (kind >= Type::Kind::SIGNED_INT_START &&
       kind <= Type::Kind::SIGNED_INT_END) {
     return builder->CreateICmpSGT(lhs, rhs);
@@ -943,6 +1040,9 @@ llvm::Value *gen_gt_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
 
 llvm::Value *gen_eq_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
                          llvm::Value *lhs, llvm::Value *rhs) {
+  assert(builder);
+  assert(rhs);
+  assert(lhs);
   if ((kind >= Type::Kind::INTEGERS_START &&
        kind <= Type::Kind::INTEGERS_END) ||
       kind == Type::Kind::Bool) {
@@ -956,6 +1056,9 @@ llvm::Value *gen_eq_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
 
 llvm::Value *gen_neq_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
                           llvm::Value *lhs, llvm::Value *rhs) {
+  assert(builder);
+  assert(rhs);
+  assert(lhs);
   if ((kind >= Type::Kind::INTEGERS_START &&
        kind <= Type::Kind::INTEGERS_END) ||
       kind == Type::Kind::Bool) {
@@ -969,6 +1072,9 @@ llvm::Value *gen_neq_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
 
 llvm::Value *gen_gte_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
                           llvm::Value *lhs, llvm::Value *rhs) {
+  assert(builder);
+  assert(rhs);
+  assert(lhs);
   if (kind >= Type::Kind::SIGNED_INT_START &&
       kind <= Type::Kind::SIGNED_INT_END) {
     return builder->CreateICmpSGE(lhs, rhs);
@@ -986,6 +1092,9 @@ llvm::Value *gen_gte_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
 
 llvm::Value *gen_lte_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
                           llvm::Value *lhs, llvm::Value *rhs) {
+  assert(builder);
+  assert(rhs);
+  assert(lhs);
   if (kind >= Type::Kind::SIGNED_INT_START &&
       kind <= Type::Kind::SIGNED_INT_END) {
     return builder->CreateICmpSLE(lhs, rhs);
@@ -1003,6 +1112,8 @@ llvm::Value *gen_lte_expr(llvm::IRBuilder<> *builder, Type::Kind kind,
 
 llvm::Value *Codegen::gen_comp_op(TokenKind op, Type::Kind kind,
                                   llvm::Value *lhs, llvm::Value *rhs) {
+  assert(rhs);
+  assert(lhs);
   llvm::Value *ret_val;
   switch (op) {
   case TokenKind::LessThan: {
@@ -1024,6 +1135,7 @@ llvm::Value *Codegen::gen_comp_op(TokenKind op, Type::Kind kind,
     ret_val = gen_gte_expr(&m_Builder, kind, lhs, rhs);
   } break;
   }
+  assert(ret_val);
   return bool_to_type(kind, ret_val);
 }
 
@@ -1031,10 +1143,14 @@ std::pair<llvm::Value *, Type>
 Codegen::gen_dereference(const ResolvedDeclRefExpr &expr) {
   llvm::Value *decl = m_Declarations[expr.decl];
   llvm::Value *ptr = m_Builder.CreateLoad(gen_type(expr.type), decl);
+  assert(ptr);
   Type new_internal_type = expr.type;
   --new_internal_type.pointer_depth;
   llvm::Type *dereferenced_type = gen_type(new_internal_type);
-  return std::make_pair(m_Builder.CreateLoad(dereferenced_type, ptr),
+  assert(dereferenced_type);
+  auto* gened_load = m_Builder.CreateLoad(dereferenced_type, ptr);
+  assert(gened_load);
+  return std::make_pair(gened_load,
                         new_internal_type);
 }
 
@@ -1046,15 +1162,19 @@ Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
     } else if (auto *unop =
                    dynamic_cast<ResolvedUnaryOperator *>(op.rhs.get())) {
       auto &&[rhs, type] = gen_unary_op(*unop);
+      assert(rhs);
       --type.pointer_depth;
       llvm::Type *dereferenced_type = gen_type(type);
+      assert(dereferenced_type);
       return std::make_pair(m_Builder.CreateLoad(dereferenced_type, rhs), type);
     } else {
       llvm::Value *gened = gen_expr(*op.rhs);
+      assert(gened);
       return std::make_pair(gened, op.rhs->type);
     }
   }
   llvm::Value *rhs = gen_expr(*op.rhs);
+  assert(rhs);
   SimpleNumType type = get_simple_type(op.rhs->type.kind);
   if (op.op == TokenKind::Minus) {
     if (type == SimpleNumType::SINT || type == SimpleNumType::UINT)
@@ -1090,18 +1210,21 @@ void Codegen::gen_conditional_op(const ResolvedExpr &op,
   if (binop && binop->op == TokenKind::AmpAmp) {
     llvm::BasicBlock *next_bb = llvm::BasicBlock::Create(
         m_Context, "and.lhs.true", true_bb->getParent());
+    assert(next_bb);
     gen_conditional_op(*binop->lhs, next_bb, false_bb);
     m_Builder.SetInsertPoint(next_bb);
     gen_conditional_op(*binop->rhs, true_bb, false_bb);
     return;
   }
   llvm::Value *val = type_to_bool(op.type.kind, gen_expr(op));
+  assert(val);
   m_Builder.CreateCondBr(val, true_bb, false_bb);
 }
 
 llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
   llvm::Function *callee = m_Module->getFunction(
       call.decl->og_name.empty() ? call.decl->id : call.decl->og_name);
+  assert(callee);
   std::vector<llvm::Value *> args{};
   int param_index = -1;
   for (auto &&arg : call.args) {
@@ -1112,6 +1235,7 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
       if (const auto *dre =
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         llvm::Value *expr = m_Declarations[dre->decl];
+        assert(expr);
         args.emplace_back(expr);
         continue;
       }
@@ -1134,9 +1258,13 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
 
 llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
   llvm::Function *function = get_current_function();
+  assert(function);
   const auto *decl = stmt.var_decl.get();
+  assert(decl);
   llvm::Type *type = gen_type(decl->type);
+  assert(type);
   llvm::AllocaInst *var = alloc_stack_var(function, type, decl->id);
+  assert(var);
   if (const auto &init = decl->initializer) {
     if (const auto *struct_lit =
             dynamic_cast<const ResolvedStructLiteralExpr *>(init.get())) {
@@ -1147,6 +1275,7 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt) {
       if (const auto *dre =
               dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         llvm::Value *expr = m_Declarations[dre->decl];
+        assert(expr);
         if (unary_op->op == TokenKind::Amp) {
           m_Builder.CreateStore(expr, var);
         }
@@ -1178,7 +1307,9 @@ llvm::Value *Codegen::gen_array_decay(const Type &lhs_type,
               m_Context,
               llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0))};
       llvm::Value *decl = m_Declarations[rhs_dre.decl];
-      return m_Builder.CreateInBoundsGEP(gen_type(rhs_dre.type), decl, indices,
+      auto* type =gen_type(rhs_dre.type);
+      assert(type);
+      return m_Builder.CreateInBoundsGEP(type, decl, indices,
                                          "arraydecay");
     }
   }
@@ -1190,6 +1321,7 @@ llvm::Function *Codegen::get_current_function() {
 }
 
 llvm::Value *Codegen::type_to_bool(Type::Kind kind, llvm::Value *value) {
+    assert(value);
   if (kind >= Type::Kind::INTEGERS_START && kind <= Type::Kind::INTEGERS_END)
     return m_Builder.CreateICmpNE(
         value, llvm::ConstantInt::getBool(m_Context, false), "to.bool");
@@ -1202,6 +1334,7 @@ llvm::Value *Codegen::type_to_bool(Type::Kind kind, llvm::Value *value) {
 }
 
 llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
+    assert(value);
   if ((kind >= Type::Kind::INTEGERS_START &&
        kind <= Type::Kind::INTEGERS_END) ||
       kind == Type::Kind::Bool)
@@ -1231,12 +1364,15 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
       --derefed_type.pointer_depth;
     }
   }
+  assert(decl);
   llvm::Value *expr = gen_expr(*assignment.expr);
   if (const auto *struct_lit = dynamic_cast<const ResolvedStructLiteralExpr *>(
           assignment.expr.get())) {
     // expr is the stack variable
     llvm::Type *var_type = gen_type(struct_lit->type);
+    assert(var_type);
     llvm::Type *decl_type = gen_type(assignment.variable->decl->type);
+    assert(decl_type);
     const llvm::DataLayout &data_layout = m_Module->getDataLayout();
     return m_Builder.CreateMemCpy(decl, data_layout.getPrefTypeAlign(decl_type),
                                   expr, data_layout.getPrefTypeAlign(var_type),
