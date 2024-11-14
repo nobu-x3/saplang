@@ -144,11 +144,13 @@ Token Lexer::get_next_token() {
 
 std::string Lexer::get_string_literal() {
   std::stringstream stream;
+  is_reading_string = true;
   char curr_char = eat_next_char();
   while (curr_char != '"') {
     stream << curr_char;
     curr_char = eat_next_char();
   }
+  is_reading_string = false;
   return stream.str();
 }
 
@@ -158,7 +160,7 @@ char Lexer::peek_next_char(size_t count) const {
 
 char Lexer::eat_next_char() {
   ++m_Column;
-  if (m_Source->buffer[m_Idx] == '\n') {
+  if (m_Source->buffer[m_Idx] == '\n' && !is_reading_string) {
     ++m_Line;
     m_Column = 0;
   }

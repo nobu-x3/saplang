@@ -105,6 +105,7 @@ private:
   size_t m_Idx = 0;
   int m_Line = 1;
   int m_Column = 0;
+  bool is_reading_string = false;
 };
 
 } // namespace saplang
