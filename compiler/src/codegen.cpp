@@ -683,7 +683,21 @@ Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
 
 llvm::Value *
 Codegen::gen_string_literal_expr(const ResolvedStringLiteralExpr &str_lit) {
-  return m_Builder.CreateGlobalString(str_lit.val, ".str");
+  std::string reparsed_string;
+  for(int i = 0; i < str_lit.val.size(); ++i) {
+    if (str_lit.val[i] == '\\') {
+      ++i;
+      if (str_lit.val[i] == 'n') {
+        reparsed_string += '\n';
+        ++i;
+      }
+      continue;
+    }
+    reparsed_string += str_lit.val[i];
+  }
+  for (auto it = str_lit.val.begin(); it != str_lit.val.end(); ++it) {
+  }
+  return m_Builder.CreateGlobalString(reparsed_string, ".str");
 }
 
 llvm::Value *
@@ -714,6 +728,24 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
   llvm::Value *last_gep =
       m_Builder.CreateInBoundsGEP(last_gep_type, decl, outer_indices);
   assert(last_gep);
+  if (access.params &&
+      access.inner_member_access->type.kind == Type::Kind::FnPtr) {
+    llvm::Type *function_ret_type = gen_type(access.inner_member_access->type);
+    assert(function_ret_type);
+    bool is_vll = access.inner_member_access->type.fn_ptr_signature->second;
+    auto *function_type = llvm::FunctionType::get(function_ret_type, is_vll);
+    assert(function_type);
+    llvm::Value *loaded_fn =
+        m_Builder.CreateLoad(m_Builder.getPtrTy(), last_gep);
+    assert(loaded_fn);
+    std::vector<llvm::Value *> args;
+    for (auto &&res_arg : *access.params) {
+      llvm::Value *arg = gen_expr(*res_arg);
+      assert(arg);
+      args.push_back(arg);
+    }
+    last_gep = m_Builder.CreateCall(function_type, loaded_fn, args);
+  }
   out_type = access.inner_member_access->type;
   if (access.inner_member_access->inner_member_access) {
     InnerMemberAccess *current_chain =
@@ -1263,6 +1295,7 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
     }
     args.emplace_back(gen_expr(*arg));
   }
+  // we're probably dealing with fn ptr
   if (!callee) {
     callee = static_cast<llvm::Function *>(m_Declarations[call.decl]);
     llvm::Type *function_ret_type = gen_type(call.type);
@@ -1273,8 +1306,10 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call) {
       is_vll = call.type.fn_ptr_signature->second;
     auto *function_type = llvm::FunctionType::get(function_ret_type, is_vll);
     assert(function_type);
+    llvm::Value *loaded_fn = m_Builder.CreateLoad(m_Builder.getPtrTy(), callee);
+    assert(loaded_fn);
     return m_Builder.CreateCall(
-        function_type, callee, args,
+        function_type, loaded_fn, args,
         call.decl->og_name.empty() ? call.decl->id : call.decl->og_name);
   }
   return m_Builder.CreateCall(callee, args);

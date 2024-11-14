@@ -949,10 +949,22 @@ Sema::resolve_unary_operator(const UnaryOperator &op, Type *type) {
   if (!resolved_rhs)
     return nullptr;
   if (resolved_rhs->type.kind == Type::Kind::Void &&
-      resolved_rhs->type.pointer_depth == 0)
-    return report(
-        resolved_rhs->location,
-        "void expression cannot be used as operand to unary operator.");
+      resolved_rhs->type.pointer_depth == 0) {
+    if (type) {
+      if (type->kind != Type::Kind::FnPtr) {
+        return report(
+            resolved_rhs->location,
+            "void expression cannot be used as operand to unary operator.");
+      }
+      auto &fn_ptr_ret_type = type->fn_ptr_signature->first.front();
+      if (resolved_rhs->type.fn_ptr_signature ==
+              fn_ptr_ret_type.fn_ptr_signature &&
+          resolved_rhs->type.kind == fn_ptr_ret_type.kind &&
+          resolved_rhs->type.pointer_depth == fn_ptr_ret_type.pointer_depth) {
+        resolved_rhs->type = *type;
+      }
+    }
+  }
   if (op.op == TokenKind::Amp) {
     if (const ResolvedNumberLiteral *rvalue =
             dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
@@ -1306,8 +1318,7 @@ Sema::resolve_member_access(const MemberAccess &access,
       std::unique_ptr<InnerMemberAccess> inner_member_access =
           std::make_unique<InnerMemberAccess>(
               decl_member_index, struct_member.second, struct_member.first,
-              nullptr, std::nullopt); // explicitly forbids function chaining
-                                      // for now @TODO
+              nullptr, std::nullopt);
       Type innermost_type = struct_member.first;
       if (access.inner_decl_ref_expr) {
         if (struct_member.first.kind != Type::Kind::Custom &&
@@ -1333,7 +1344,8 @@ Sema::resolve_member_access(const MemberAccess &access,
       std::unique_ptr<ResolvedStructMemberAccess> member_access =
           std::make_unique<ResolvedStructMemberAccess>(
               access.location, struct_or_param_decl,
-              std::move(inner_member_access), std::move(fn_ptr_call_params));
+              std::move(inner_member_access), std::nullopt);
+      member_access->params = std::move(fn_ptr_call_params);
       member_access->type = innermost_type;
       return std::move(member_access);
     }
@@ -1689,7 +1701,8 @@ Sema::resolve_assignment(const Assignment &assignment) {
   if (auto *member_access =
           dynamic_cast<ResolvedStructMemberAccess *>(lhs.get()))
     type = &member_access->type;
-  std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr, type ? type : &lhs->type);
+  std::unique_ptr<ResolvedExpr> rhs =
+      resolve_expr(*assignment.expr, type ? type : &lhs->type);
   if (!rhs)
     return nullptr;
   Type lhs_derefed_type = lhs->type;

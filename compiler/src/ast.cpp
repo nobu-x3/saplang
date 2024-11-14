@@ -84,7 +84,7 @@ size_t platform_array_index_size() {
 }
 
 size_t platform_ptr_size() {
-    return g_AssociatedNumberLiteralSizes[Type::Kind::i32];
+  return g_AssociatedNumberLiteralSizes[Type::Kind::i32];
 }
 
 void dump_constant(std::stringstream &stream, size_t indent_level, Value value,
@@ -157,6 +157,38 @@ void Type::dump_to_stream(std::stringstream &stream,
     }
     stream << ')';
   }
+}
+
+bool is_equal(const Type &a, const Type &b) {
+  bool _is_equal = a.kind == b.kind && a.pointer_depth == b.pointer_depth &&
+                   a.dereference_counts == b.dereference_counts;
+  _is_equal &=
+      (a.array_data && b.array_data) || (!a.array_data && !b.array_data);
+  if (a.array_data && b.array_data) {
+    if (a.array_data->dimension_count != b.array_data->dimension_count)
+      return false;
+    for (int i = 0; i < a.array_data->dimension_count; ++i) {
+      if (a.array_data->dimensions[i] != b.array_data->dimensions[i])
+        return false;
+    }
+  }
+  _is_equal &= (a.fn_ptr_signature && b.fn_ptr_signature) ||
+               (!a.fn_ptr_signature && !b.fn_ptr_signature);
+  if (a.fn_ptr_signature && b.fn_ptr_signature) {
+    if (a.fn_ptr_signature->first.size() != b.fn_ptr_signature->first.size())
+      return false;
+    if (a.fn_ptr_signature->second != b.fn_ptr_signature->second)
+      return false;
+    for (int i = 0; i < a.fn_ptr_signature->first.size(); ++i) {
+      if (!is_equal(a.fn_ptr_signature->first[i], b.fn_ptr_signature->first[i]))
+        return false;
+    }
+  }
+  return _is_equal;
+}
+
+bool Type::operator==(const Type &other) const {
+  return is_equal(*this, other);
 }
 
 void NullExpr::dump_to_stream(std::stringstream &stream,

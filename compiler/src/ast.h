@@ -148,6 +148,8 @@ struct Type : public IDumpable {
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
 
+  bool operator==(const Type &other) const;
+
   // @NOTE: does not insert '\n' when done
   DUMP_IMPL
 private:
@@ -773,22 +775,30 @@ struct InnerMemberAccess : public IDumpable {
   std::string member_id;
   Type type;
   std::unique_ptr<InnerMemberAccess> inner_member_access;
-  std::optional<FnPtrCallParams> params; // in case of function pointer call
+  // in case function pointer call, contains arguments for the call of
+  // inner_member_access
+  std::optional<FnPtrCallParams> params;
   inline InnerMemberAccess(int index, std::string id, Type type,
-                           std::unique_ptr<InnerMemberAccess> inner_access, std::optional<FnPtrCallParams> params)
+                           std::unique_ptr<InnerMemberAccess> inner_access,
+                           std::optional<FnPtrCallParams> params)
       : member_index(index), member_id(std::move(id)), type(type),
-        inner_member_access(std::move(inner_access)), params(std::move(params)) {}
+        inner_member_access(std::move(inner_access)),
+        params(std::move(params)) {}
   DUMP_IMPL
 };
 
 struct ResolvedStructMemberAccess : public ResolvedDeclRefExpr {
   std::unique_ptr<InnerMemberAccess> inner_member_access;
-  std::optional<FnPtrCallParams> params;// in case function pointer call
+  // in case function pointer call, contains arguments for the call of
+  // inner_member_access
+  std::optional<FnPtrCallParams> params;
   inline ResolvedStructMemberAccess(
       SourceLocation loc, const ResolvedDecl *decl,
-      std::unique_ptr<InnerMemberAccess> inner_access, std::optional<FnPtrCallParams> params)
+      std::unique_ptr<InnerMemberAccess> inner_access,
+      std::optional<FnPtrCallParams> params)
       : ResolvedDeclRefExpr(loc, decl),
-        inner_member_access(std::move(inner_access)), params(std::move(params)) {}
+        inner_member_access(std::move(inner_access)),
+        params(std::move(params)) {}
   DUMP_IMPL
 };
 
