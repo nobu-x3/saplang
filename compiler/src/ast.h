@@ -206,6 +206,8 @@ size_t get_type_size(Type::Kind kind);
 
 bool does_type_have_associated_size(Type::Kind kind);
 
+size_t platform_array_index_size();
+
 size_t platform_ptr_size();
 
 Type platform_ptr_type();

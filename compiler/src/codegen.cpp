@@ -640,10 +640,11 @@ Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
     std::vector<llvm::Value *> indices{
         llvm::ConstantInt::get(
             m_Context,
-            llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
+            llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 0)),
         llvm::ConstantInt::get(
             m_Context,
-            llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0))};
+            llvm::APInt(static_cast<unsigned>(platform_array_index_size()),
+                        0))};
     auto *p_array_type = gen_type(array_lit.type);
     assert(p_array_type);
     llvm::Value *p_array_element = m_Builder.CreateInBoundsGEP(
@@ -662,7 +663,7 @@ Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
       auto &expr = array_lit.expressions[i];
       std::vector<llvm::Value *> indices{llvm::ConstantInt::get(
           m_Context,
-          llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 1))};
+          llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 1))};
       p_array_element = m_Builder.CreateInBoundsGEP(
           gen_type(expr->type), p_array_element, indices, "arrayinit.element");
       assert(p_array_element);
@@ -749,38 +750,44 @@ Codegen::get_index_accesses(const ResolvedExpr &expr, llvm::Value *loaded_ptr) {
   std::optional<ConstexprResult> constexpr_res = expr.get_constant_value();
   if (constexpr_res) {
     const ConstexprResult &res = *constexpr_res;
-    llvm::APInt index{static_cast<unsigned int>(platform_ptr_size()), 0};
+    llvm::APInt index{static_cast<unsigned int>(platform_array_index_size()),
+                      0};
     switch (res.kind) {
     case Type::Kind::i8:
-      index = {static_cast<unsigned int>(platform_ptr_size()),
+      index = {static_cast<unsigned int>(platform_array_index_size()),
                static_cast<uint64_t>(res.value.i8)};
       break;
     case Type::Kind::u8:
-      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u8};
+      index = {static_cast<unsigned int>(platform_array_index_size()),
+               res.value.u8};
       break;
     case Type::Kind::i16:
-      index = {static_cast<unsigned int>(platform_ptr_size()),
+      index = {static_cast<unsigned int>(platform_array_index_size()),
                static_cast<uint64_t>(res.value.i16)};
       break;
     case Type::Kind::u16:
-      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u16};
+      index = {static_cast<unsigned int>(platform_array_index_size()),
+               res.value.u16};
       break;
     case Type::Kind::i32:
-      index = {static_cast<unsigned int>(platform_ptr_size()),
+      index = {static_cast<unsigned int>(platform_array_index_size()),
                static_cast<uint64_t>(res.value.i32)};
       break;
     case Type::Kind::u32:
-      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u32};
+      index = {static_cast<unsigned int>(platform_array_index_size()),
+               res.value.u32};
       break;
     case Type::Kind::i64:
-      index = {static_cast<unsigned int>(platform_ptr_size()),
+      index = {static_cast<unsigned int>(platform_array_index_size()),
                static_cast<uint64_t>(res.value.i64)};
       break;
     case Type::Kind::u64:
-      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.u64};
+      index = {static_cast<unsigned int>(platform_array_index_size()),
+               res.value.u64};
       break;
     case Type::Kind::Bool:
-      index = {static_cast<unsigned int>(platform_ptr_size()), res.value.b8};
+      index = {static_cast<unsigned int>(platform_array_index_size()),
+               res.value.b8};
       break;
     default:
       break;
@@ -791,15 +798,17 @@ Codegen::get_index_accesses(const ResolvedExpr &expr, llvm::Value *loaded_ptr) {
       inner_indices = {
           llvm::ConstantInt::get(
               m_Context,
-              llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
+              llvm::APInt(
+                  static_cast<unsigned int>(platform_array_index_size()), 0)),
           llvm::ConstantInt::get(m_Context, index)};
     }
   } else {
     llvm::Value *expr_value = gen_expr(expr);
-    if (get_type_size(expr.type.kind) < platform_ptr_size()) { // extent
+    if (get_type_size(expr.type.kind) < platform_array_index_size()) { // extent
       expr_value = m_Builder.CreateSExt(
           expr_value, gen_type(platform_ptr_type()), "idxprom");
-    } else if (get_type_size(expr.type.kind) > platform_ptr_size()) { // trunc
+    } else if (get_type_size(expr.type.kind) >
+               platform_array_index_size()) { // trunc
       expr_value = m_Builder.CreateTrunc(
           expr_value, gen_type(platform_ptr_type()), "idxtrunc");
     }
@@ -809,7 +818,8 @@ Codegen::get_index_accesses(const ResolvedExpr &expr, llvm::Value *loaded_ptr) {
       inner_indices = {
           llvm::ConstantInt::get(
               m_Context,
-              llvm::APInt(static_cast<unsigned int>(platform_ptr_size()), 0)),
+              llvm::APInt(
+                  static_cast<unsigned int>(platform_array_index_size()), 0)),
           expr_value};
     }
   }
@@ -898,7 +908,7 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast) {
   assert(rhs_type);
   switch (cast.cast_type) {
   case ResolvedExplicitCastExpr::CastType::IntToPtr: {
-    if (get_type_size(cast.rhs->type.kind) < platform_ptr_size()) {
+    if (get_type_size(cast.rhs->type.kind) < platform_array_index_size()) {
       llvm::Value *load = m_Builder.CreateLoad(rhs_type, var);
       auto *gened_platform_ptr_type = gen_type(platform_ptr_type());
       assert(gened_platform_ptr_type);
@@ -1316,10 +1326,12 @@ llvm::Value *Codegen::gen_array_decay(const Type &lhs_type,
       std::vector<llvm::Value *> indices{
           llvm::ConstantInt::get(
               m_Context,
-              llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
+              llvm::APInt(static_cast<unsigned>(platform_array_index_size()),
+                          0)),
           llvm::ConstantInt::get(
               m_Context,
-              llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0))};
+              llvm::APInt(static_cast<unsigned>(platform_array_index_size()),
+                          0))};
       llvm::Value *decl = m_Declarations[rhs_dre.decl];
       auto *type = gen_type(rhs_dre.type);
       assert(type);

@@ -1689,7 +1689,7 @@ Sema::resolve_assignment(const Assignment &assignment) {
   if (auto *member_access =
           dynamic_cast<ResolvedStructMemberAccess *>(lhs.get()))
     type = &member_access->type;
-  std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr, type);
+  std::unique_ptr<ResolvedExpr> rhs = resolve_expr(*assignment.expr, type ? type : &lhs->type);
   if (!rhs)
     return nullptr;
   Type lhs_derefed_type = lhs->type;

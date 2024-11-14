@@ -812,16 +812,16 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
   CONTAINS_NEXT_REQUIRE(lines_it, "%t = alloca %TestType, align 8");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%0 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 0");
+      lines_it, "%0 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 -1, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 1");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 2.000000e+00, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 2");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %2, align 1");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 3");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 250, ptr %3, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
@@ -850,19 +850,19 @@ fn i32 foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%t = alloca %TestType, align 8");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%0 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 0");
+      lines_it, "%0 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 -1, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 1");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 2.000000e+00, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 2");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %2, align 1");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 3");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 250, ptr %3, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%4 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 0");
+      lines_it, "%4 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%5 = load i32, ptr %4, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %5, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
@@ -897,25 +897,25 @@ fn i32 foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%t = alloca %TestType, align 8");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%0 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 0");
+      lines_it, "%0 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 -1, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 1");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 2.000000e+00, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 2");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %2, align 1");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 3");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 250, ptr %3, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%4 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 0");
+      lines_it, "%4 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 5, ptr %4, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%5 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 3");
+      lines_it, "%5 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %5, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%6 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 3");
+      lines_it, "%6 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "%7 = load i32, ptr %6, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %7, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
@@ -956,11 +956,11 @@ fn i32 bar() {
                         "store %TestType %variable, ptr %variable1, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestType, ptr %variable1, i64 0, i64 3");
+      "%0 = getelementptr inbounds %TestType, ptr %variable1, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%1 = getelementptr inbounds %TestType, ptr %variable1, i64 0, i64 3");
+      "%1 = getelementptr inbounds %TestType, ptr %variable1, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %2, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
@@ -975,28 +975,28 @@ fn i32 bar() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%ret1 = alloca i32, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%0 = alloca %TestType, align 8");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 0");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 -1, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 1");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 2.000000e+00, ptr %2, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 2");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %3, align 1");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%4 = getelementptr inbounds %TestType, ptr %t, i64 0, i64 3");
+      lines_it, "%4 = getelementptr inbounds %TestType, ptr %t, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 250, ptr %4, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%5 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 0");
+      lines_it, "%5 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %5, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%6 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 1");
+      lines_it, "%6 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 3.000000e+00, ptr %6, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%7 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 2");
+      lines_it, "%7 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 false, ptr %7, align 1");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%8 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 3");
+      lines_it, "%8 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 251, ptr %8, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%9 = call i32 @foo(ptr %0)");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %9, ptr %ret1, align 4");
@@ -1035,18 +1035,18 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
   CONTAINS_NEXT_REQUIRE(lines_it, "%t = alloca %TestType2, align 8");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%0 = getelementptr inbounds %TestType2, ptr %t, i64 0, i64 0");
+      lines_it, "%0 = getelementptr inbounds %TestType2, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 0");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 -1, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 1");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 2.000000e+00, ptr %2, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 2");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %3, align 1");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%4 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 3");
+      lines_it, "%4 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 250, ptr %4, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
@@ -1086,11 +1086,11 @@ fn i32 foo() {
                         "store %TestType %variable, ptr %variable1, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestType, ptr %variable1, i64 0, i64 3");
+      "%0 = getelementptr inbounds %TestType, ptr %variable1, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%1 = getelementptr inbounds %TestType, ptr %variable1, i64 0, i64 3");
+      "%1 = getelementptr inbounds %TestType, ptr %variable1, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %2, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
@@ -1103,21 +1103,21 @@ fn i32 foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%t = alloca %TestType2, align 8");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%0 = getelementptr inbounds %TestType2, ptr %t, i64 0, i64 0");
+      lines_it, "%0 = getelementptr inbounds %TestType2, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 0");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 -1, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 1");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 2.000000e+00, ptr %2, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 2");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %3, align 1");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%4 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 3");
+      lines_it, "%4 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 250, ptr %4, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%5 = getelementptr inbounds %TestType2, ptr %t, i64 0, i64 0");
+      lines_it, "%5 = getelementptr inbounds %TestType2, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%6 = load %TestType, ptr %5, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%7 = call i32 @bar(%TestType %6)");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %7, ptr %retval, align 4");
@@ -1155,23 +1155,23 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%t = alloca %TestType2, align 8");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%0 = getelementptr inbounds %TestType2, ptr %t, i64 0, i64 0");
+      lines_it, "%0 = getelementptr inbounds %TestType2, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 0");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 -1, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 1");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 2.000000e+00, ptr %2, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 2");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %3, align 1");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%4 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 3");
+      lines_it, "%4 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 250, ptr %4, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%5 = getelementptr inbounds %TestType2, ptr %t, i64 0, i64 0");
+      lines_it, "%5 = getelementptr inbounds %TestType2, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%6 = getelementptr inbounds %TestType, ptr %5, i64 0, i64 3");
+      lines_it, "%6 = getelementptr inbounds %TestType, ptr %5, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "%7 = load i32, ptr %6, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %7, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
@@ -1221,23 +1221,23 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%t = alloca %TestType2, align 8");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%0 = getelementptr inbounds %TestType2, ptr %t, i64 0, i64 0");
+      lines_it, "%0 = getelementptr inbounds %TestType2, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 0");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 -1, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 1");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 2.000000e+00, ptr %2, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 2");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %3, align 1");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%4 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 3");
+      lines_it, "%4 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 250, ptr %4, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%5 = getelementptr inbounds %TestType2, ptr %t, i64 0, i64 0");
+      lines_it, "%5 = getelementptr inbounds %TestType2, ptr %t, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%6 = getelementptr inbounds %TestType, ptr %5, i64 0, i64 3");
+      lines_it, "%6 = getelementptr inbounds %TestType, ptr %5, i32 0, i32 3");
   CONTAINS_NEXT_REQUIRE(lines_it, "%7 = load i32, ptr %6, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%8 = call i32 @foo(i32 %7)");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %8, ptr %retval, align 4");
@@ -1274,27 +1274,27 @@ fn void foo(){
   CONTAINS_NEXT_REQUIRE(lines_it, "%0 = alloca %TestType, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%1 = getelementptr inbounds %TestType2, ptr %test1, i64 0, i64 0");
+      "%1 = getelementptr inbounds %TestType2, ptr %test1, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %1, i64 0, i64 0");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %1, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %2, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %1, i64 0, i64 1");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %1, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.600000e+01, ptr %3, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%4 = getelementptr inbounds %TestType, ptr %1, i64 0, i64 2");
+      lines_it, "%4 = getelementptr inbounds %TestType, ptr %1, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %4, align 1");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%5 = getelementptr inbounds %TestType2, ptr %test1, i64 0, i64 0");
+      "%5 = getelementptr inbounds %TestType2, ptr %test1, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%6 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 0");
+      lines_it, "%6 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 17, ptr %6, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%7 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 1");
+      lines_it, "%7 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.800000e+01, ptr %7, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%8 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 2");
+      lines_it, "%8 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 false, ptr %8, align 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @llvm.memcpy.p0.p0.i64(ptr align "
                                   "8 %5, ptr align 8 %0, i64 12, i1 false)");
@@ -1329,34 +1329,34 @@ fn void foo(){
   CONTAINS_NEXT_REQUIRE(lines_it, "%test1 = alloca %TestType2, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestType2, ptr %test2, i64 0, i64 0");
+      "%0 = getelementptr inbounds %TestType2, ptr %test2, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 0");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 17, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 1");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.800000e+01, ptr %2, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 2");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 false, ptr %3, align 1");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%4 = getelementptr inbounds %TestType2, ptr %test1, i64 0, i64 0");
+      "%4 = getelementptr inbounds %TestType2, ptr %test1, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%5 = getelementptr inbounds %TestType, ptr %4, i64 0, i64 0");
+      lines_it, "%5 = getelementptr inbounds %TestType, ptr %4, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %5, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%6 = getelementptr inbounds %TestType, ptr %4, i64 0, i64 1");
+      lines_it, "%6 = getelementptr inbounds %TestType, ptr %4, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.600000e+01, ptr %6, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%7 = getelementptr inbounds %TestType, ptr %4, i64 0, i64 2");
+      lines_it, "%7 = getelementptr inbounds %TestType, ptr %4, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %7, align 1");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%8 = getelementptr inbounds %TestType2, ptr %test1, i64 0, i64 0");
+      "%8 = getelementptr inbounds %TestType2, ptr %test1, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%9 = getelementptr inbounds %TestType2, ptr %test2, i64 0, i64 0");
+      "%9 = getelementptr inbounds %TestType2, ptr %test2, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%10 = load %TestType, ptr %9, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store %TestType %10, ptr %8, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
@@ -1495,7 +1495,7 @@ fn void foo(){
   CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
   CONTAINS_NEXT_REQUIRE(lines_it,
                         "store i32 16, ptr getelementptr inbounds (%TestType, "
-                        "ptr @test1, i64 0, i64 3), align 4");
+                        "ptr @test1, i32 0, i32 3), align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
@@ -1530,13 +1530,13 @@ fn void foo(){
   CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
   CONTAINS_NEXT_REQUIRE(lines_it, "%0 = alloca %TestType, align 8");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 0");
+      lines_it, "%1 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 15, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 1");
+      lines_it, "%2 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store float 1.600000e+01, ptr %2, align 4");
   CONTAINS_NEXT_REQUIRE(
-      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i64 0, i64 2");
+      lines_it, "%3 = getelementptr inbounds %TestType, ptr %0, i32 0, i32 2");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i1 true, ptr %3, align 1");
   CONTAINS_NEXT_REQUIRE(lines_it,
                         "call void @llvm.memcpy.p0.p0.i64(ptr align 8 @test1, "
@@ -1676,7 +1676,7 @@ var TestStruct* ptr = &a;
   CONTAINS_NEXT_REQUIRE(lines_it, "%ptr = alloca ptr, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestStruct, ptr %a, i64 0, i64 0");
+      "%0 = getelementptr inbounds %TestStruct, ptr %a, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
@@ -1707,7 +1707,7 @@ bar(&a);
   CONTAINS_NEXT_REQUIRE(lines_it, "%a = alloca %TestStruct, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestStruct, ptr %a, i64 0, i64 0");
+      "%0 = getelementptr inbounds %TestStruct, ptr %a, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @bar(ptr %a)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
@@ -1733,7 +1733,7 @@ var TestStruct str = .{&a};
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %a, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestStruct, ptr %str, i64 0, i64 0");
+      "%0 = getelementptr inbounds %TestStruct, ptr %str, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %0, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
@@ -1766,11 +1766,11 @@ bar(str.a);
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %a, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestStruct, ptr %str, i64 0, i64 0");
+      "%0 = getelementptr inbounds %TestStruct, ptr %str, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %0, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%1 = getelementptr inbounds %TestStruct, ptr %str, i64 0, i64 0");
+      "%1 = getelementptr inbounds %TestStruct, ptr %str, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load ptr, ptr %1, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @bar(ptr %2)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
@@ -1854,7 +1854,7 @@ var TestStruct b = *ptr;
   CONTAINS_NEXT_REQUIRE(lines_it, "%b = alloca %TestStruct, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestStruct, ptr %a, i64 0, i64 0");
+      "%0 = getelementptr inbounds %TestStruct, ptr %a, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, " store ptr %a, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load ptr, ptr %ptr, align 8");
@@ -1891,7 +1891,7 @@ TEST_CASE("custom type dereference operator storing to parameter",
   CONTAINS_NEXT_REQUIRE(lines_it, "%ptr = alloca ptr, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestStruct, ptr %a, i64 0, i64 0");
+      "%0 = getelementptr inbounds %TestStruct, ptr %a, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load ptr, ptr %ptr, align 8");
@@ -1924,7 +1924,7 @@ var TestStruct str = .{*ptr};
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestStruct, ptr %str, i64 0, i64 0");
+      "%0 = getelementptr inbounds %TestStruct, ptr %str, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load ptr, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %2, ptr %0, align 4");
@@ -1962,13 +1962,13 @@ bar(str.a);
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %a, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%0 = getelementptr inbounds %TestStruct, ptr %str, i64 0, i64 0");
+      "%0 = getelementptr inbounds %TestStruct, ptr %str, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load ptr, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %2, ptr %0, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%3 = getelementptr inbounds %TestStruct, ptr %str, i64 0, i64 0");
+      "%3 = getelementptr inbounds %TestStruct, ptr %str, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load i32, ptr %3, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @bar(i32 %4)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
@@ -2002,7 +2002,7 @@ fn  i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store %TestStruct %1, ptr %deref, align 4");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%2 = getelementptr inbounds %TestStruct, ptr %deref, i64 0, i64 0");
+      "%2 = getelementptr inbounds %TestStruct, ptr %deref, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load i32, ptr %2, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %3, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
@@ -2034,7 +2034,7 @@ fn  i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load ptr, ptr %a1, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%1 = getelementptr inbounds %TestStruct, ptr %0, i64 0, i64 0");
+      "%1 = getelementptr inbounds %TestStruct, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %1, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %2, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
@@ -2069,11 +2069,11 @@ fn  i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load ptr, ptr %p1, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%1 = getelementptr inbounds %TestStruct2, ptr %0, i64 0, i64 0");
+      "%1 = getelementptr inbounds %TestStruct2, ptr %0, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load ptr, ptr %1, align 8");
   CONTAINS_NEXT_REQUIRE(
       lines_it,
-      "%3 = getelementptr inbounds %TestStruct, ptr %2, i64 0, i64 0");
+      "%3 = getelementptr inbounds %TestStruct, ptr %2, i32 0, i32 0");
   CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load i32, ptr %3, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %4, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
@@ -2769,8 +2769,7 @@ fn void main() {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin() + 2;
-  CONTAINS_NEXT_REQUIRE(
-      lines_it, "define void @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define void @main() {");
   CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
   CONTAINS_NEXT_REQUIRE(lines_it, "%i = alloca i32, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%p_i = alloca ptr, align 8");
@@ -2779,84 +2778,3 @@ fn void main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
-
-/* TEST_CASE("Function pointers", "[codegen]") { */
-/*   TEST_SETUP(R"( */
-/* fn void* foo(i32, f32){} */
-/* fn void main() { */
-/*     var fn* void*(i32, f32) p_foo = &foo; */
-/*     var fn* void*(i32 i, f32 f) p_foo1 = &foo; */
-/*     p_foo(1, 1.0); */
-/*     var Type t = .{&foo}; */
-/*     t.p_foo(1, 1.0); */
-/*     t.p_foo = &foo; */
-/* } */
-/* struct Type { */
-/*     fn* void*(i32, f32) p_foo; */
-/* } */
-/* )"); */
-/*   REQUIRE(error_stream.str() == ""); */
-/*   REQUIRE(output_string == ""); */
-/*   auto lines = break_by_line(output_buffer.str()); */
-/*   auto lines_it = lines.begin(); */
-/*   REQUIRE(lines_it->find("ResolvedStructDecl: Type") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE( */
-/*       lines_it, "0. ResolvedMemberField: ptr fn(ptr void)(i32, f32)(p_foo)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @("); */
-/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @("); */
-/*   REQUIRE(lines_it->find(") __param_foo0:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @("); */
-/*   REQUIRE(lines_it->find(") __param_foo1:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @("); */
-/*   REQUIRE(lines_it->find(") main:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
-/*   REQUIRE(lines_it->find(") p_foo:ptr fn(ptr void)(i32, f32)") != */
-/*           std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
-/*   REQUIRE(lines_it->find(") p_foo1:ptr fn(ptr void)(i32, f32)") != */
-/*           std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @("); */
-/*   REQUIRE(lines_it->find(") p_foo:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "f32(1)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
-/*   REQUIRE(lines_it->find(") t:Type") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: Type"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: p_foo"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") t:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:ptr fn(ptr void)(i32, f32)(p_foo)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "CallParameters:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "f32(1)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") t:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:ptr fn(ptr void)(i32, f32)(p_foo)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") foo:") != std::string::npos); */
-/* } */

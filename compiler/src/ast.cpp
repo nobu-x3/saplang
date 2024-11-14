@@ -79,8 +79,12 @@ bool does_type_have_associated_size(Type::Kind kind) {
 
 Type platform_ptr_type() { return Type::builtin_i64(0); }
 
-size_t platform_ptr_size() {
+size_t platform_array_index_size() {
   return g_AssociatedNumberLiteralSizes[Type::Kind::i64];
+}
+
+size_t platform_ptr_size() {
+    return g_AssociatedNumberLiteralSizes[Type::Kind::i32];
 }
 
 void dump_constant(std::stringstream &stream, size_t indent_level, Value value,

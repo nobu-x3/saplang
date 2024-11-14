@@ -2199,9 +2199,9 @@ struct Type {
 TEST_CASE("address of assignment as a separate instruction", "[sema]") {
   TEST_SETUP(R"(
 fn void main() {
-var i32 i = 0;
-var i32* p_i;
-p_i = &i;
+    var i32 i = 0;
+    var i32* p_i;
+    p_i = &i;
 }
 )");
   REQUIRE(error_stream.str() == "");
