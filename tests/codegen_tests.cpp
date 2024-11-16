@@ -2778,3 +2778,90 @@ fn void main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
+
+TEST_CASE("Function pointers", "[codegen]") {
+  TEST_SETUP(R"(
+extern {
+    fn void print(const u8*, ...) alias printf;
+}
+fn void foo(i32 a, f32){
+    print("%d \n", a);
+}
+fn i32 main() {
+    var fn* void(i32, f32) p_foo = &foo;
+    var fn* void(i32 i, f32 f) p_foo1;
+    p_foo1 = &foo;
+    p_foo(1, 1.0);
+    var Type t = .{&foo, &print};
+    var Type t1;
+    t1.p_foo = &foo;
+    t1.p_bar = &print;
+    t.p_foo(1, 1.0);
+    t.p_bar("hello");
+    return 0;
+}
+struct Type {
+    fn* void(i32, f32) p_foo;
+    fn* void(const u8*, ...) p_bar;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%Type = type { ptr, ptr }");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it,
+      "@.str = private unnamed_addr constant [5 x i8] c\"%d \0A\00\", align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "@.str.1 = private unnamed_addr constant [6 "
+                                  "x i8] c\"hello\00\", align 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "declare void @printf(ptr %0, ...)");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "define void @foo(i32 %a, float %__param_foo1) {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%a1 = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%__param_foo12 = alloca float, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %a, ptr %a1, align 4");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "store float %__param_foo1, ptr %__param_foo12, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load i32, ptr %a1, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "call void (ptr, ...) @printf(ptr @.str, i32 %0)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%p_foo = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%p_foo1 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%t = alloca %Type, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%t1 = alloca %Type, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @foo, ptr %p_foo, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @foo, ptr %p_foo1, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load ptr, ptr %p_foo, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it,
+                        "%p_foo2 = call ptr %0(i32 1, float 1.000000e+00)");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%1 = getelementptr inbounds %Type, ptr %t, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @foo, ptr %1, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%2 = getelementptr inbounds %Type, ptr %t, i32 0, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @printf, ptr %2, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%3 = getelementptr inbounds %Type, ptr %t1, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @foo, ptr %3, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%4 = getelementptr inbounds %Type, ptr %t1, i32 0, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr @printf, ptr %4, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%5 = getelementptr inbounds %Type, ptr %t, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%6 = load ptr, ptr %5, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%7 = call ptr %6(i8 1, float 1.000000e+00)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%8 = load ptr, ptr %7, align 8");
+  CONTAINS_NEXT_REQUIRE(
+      lines_it, "%9 = getelementptr inbounds %Type, ptr %t, i32 0, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%10 = load ptr, ptr %9, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%11 = call ptr %10(ptr @.str.1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%12 = load ptr, ptr %11, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+}
