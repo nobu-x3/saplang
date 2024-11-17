@@ -509,7 +509,6 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr) {
             dynamic_cast<const ResolvedStructMemberAccess *>(dre)) {
       Type member_type = Type::builtin_void(false);
       decl = gen_struct_member_access(*member_access, member_type);
-      assert(decl);
       type = gen_type(member_type);
       assert(type);
     } else if (auto *array_access =
@@ -684,7 +683,7 @@ Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
 llvm::Value *
 Codegen::gen_string_literal_expr(const ResolvedStringLiteralExpr &str_lit) {
   std::string reparsed_string;
-  for(int i = 0; i < str_lit.val.size(); ++i) {
+  for (int i = 0; i < str_lit.val.size(); ++i) {
     if (str_lit.val[i] == '\\') {
       ++i;
       if (str_lit.val[i] == 'n') {
@@ -727,10 +726,12 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
   assert(last_gep_type);
   llvm::Value *last_gep =
       m_Builder.CreateInBoundsGEP(last_gep_type, decl, outer_indices);
+  llvm::Value *tmp_gep = last_gep;
   assert(last_gep);
   if (access.params &&
       access.inner_member_access->type.kind == Type::Kind::FnPtr) {
-    llvm::Type *function_ret_type = gen_type(access.inner_member_access->type);
+    llvm::Type *function_ret_type =
+        gen_type(access.inner_member_access->type.fn_ptr_signature->first[0]);
     assert(function_ret_type);
     bool is_vll = access.inner_member_access->type.fn_ptr_signature->second;
     auto *function_type = llvm::FunctionType::get(function_ret_type, is_vll);
@@ -745,6 +746,15 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
       args.push_back(arg);
     }
     last_gep = m_Builder.CreateCall(function_type, loaded_fn, args);
+    auto &return_type =
+        access.inner_member_access->type.fn_ptr_signature->first[0];
+    // @NOTE: At this point might be worthwile to return after assigning
+    // out_type to return_type, but at this point returning nullptr will
+    // segfault, and not properly handling it in gen_expr results in an extra
+    // load that is unused. I hope LLVM optimizations take care of it but this
+    // will need a refactor.
+    if (return_type.kind == Type::Kind::Void && return_type.pointer_depth < 1)
+      last_gep = tmp_gep;
   }
   out_type = access.inner_member_access->type;
   if (access.inner_member_access->inner_member_access) {
@@ -752,12 +762,6 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
         access.inner_member_access->inner_member_access.get();
     InnerMemberAccess *prev_chain = access.inner_member_access.get();
     while (current_chain) {
-      out_type = current_chain->type;
-      Type tmp_type = prev_chain->type;
-      if (tmp_type.pointer_depth > 0) {
-        last_gep = m_Builder.CreateLoad(gen_type(tmp_type), last_gep);
-        --tmp_type.pointer_depth;
-      }
       std::vector<llvm::Value *> inner_indices{
           llvm::ConstantInt::get(
               m_Context,
@@ -765,9 +769,45 @@ Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access,
           llvm::ConstantInt::get(
               m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()),
                                      current_chain->member_index))};
+      out_type = current_chain->type;
+      Type tmp_type = prev_chain->type;
+      if (tmp_type.pointer_depth > 0 &&
+          current_chain->type.kind != Type::Kind::FnPtr) {
+        last_gep = m_Builder.CreateLoad(gen_type(tmp_type), last_gep);
+        --tmp_type.pointer_depth;
+      }
       auto *type = gen_type(tmp_type);
       assert(type);
       last_gep = m_Builder.CreateInBoundsGEP(type, last_gep, inner_indices);
+      assert(last_gep);
+      tmp_gep = last_gep;
+      if (current_chain->params &&
+          current_chain->type.kind == Type::Kind::FnPtr) {
+        out_type = current_chain->type.fn_ptr_signature->first[0];
+        Type tmp_type = prev_chain->type.fn_ptr_signature->first[0];
+        if (tmp_type.pointer_depth > 0) {
+          last_gep = m_Builder.CreateLoad(gen_type(tmp_type), last_gep);
+          --tmp_type.pointer_depth;
+        }
+        llvm::Type *function_ret_type =
+            gen_type(current_chain->type.fn_ptr_signature->first[0]);
+        assert(function_ret_type);
+        bool is_vll = current_chain->type.fn_ptr_signature->second;
+        auto *function_type =
+            llvm::FunctionType::get(function_ret_type, is_vll);
+        assert(function_type);
+        std::vector<llvm::Value *> args;
+        for (auto &&res_arg : *current_chain->params) {
+          llvm::Value *arg = gen_expr(*res_arg);
+          assert(arg);
+          args.push_back(arg);
+        }
+        last_gep = m_Builder.CreateCall(function_type, last_gep, args);
+        auto &return_type = current_chain->type.fn_ptr_signature->first[0];
+        if (return_type.kind == Type::Kind::Void &&
+            return_type.pointer_depth < 1)
+          last_gep = tmp_gep;
+      }
       assert(last_gep);
       prev_chain = current_chain;
       current_chain = current_chain->inner_member_access.get();
@@ -1214,28 +1254,34 @@ Codegen::gen_unary_op(const ResolvedUnaryOperator &op) {
     }
   } else if (op.op == TokenKind::Amp) {
     if (auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(op.rhs.get())) {
+      ++op.rhs->type.pointer_depth;
+      llvm::Value *val = gen_expr(*op.rhs);
+      assert(val);
+      return std::make_pair(val, op.rhs->type);
     }
+  } else {
+    llvm::Value *rhs = gen_expr(*op.rhs);
+    assert(rhs);
+    SimpleNumType type = get_simple_type(op.rhs->type.kind);
+    if (op.op == TokenKind::Minus) {
+      if (type == SimpleNumType::SINT || type == SimpleNumType::UINT)
+        return std::make_pair(m_Builder.CreateNeg(rhs), op.type);
+      else if (type == SimpleNumType::FLOAT)
+        return std::make_pair(m_Builder.CreateFNeg(rhs), op.type);
+    }
+    if (op.op == TokenKind::Exclamation) {
+      return std::make_pair(m_Builder.CreateNot(rhs), op.type);
+    }
+    if (op.op == TokenKind::Tilda) {
+      return std::make_pair(
+          m_Builder.CreateXor(
+              rhs, llvm::ConstantInt::get(gen_type(op.type), -1), "not"),
+          op.type);
+    }
+    llvm_unreachable("unknown unary op.");
+    return std::make_pair(nullptr, op.type);
   }
-  llvm::Value *rhs = gen_expr(*op.rhs);
-  assert(rhs);
-  SimpleNumType type = get_simple_type(op.rhs->type.kind);
-  if (op.op == TokenKind::Minus) {
-    if (type == SimpleNumType::SINT || type == SimpleNumType::UINT)
-      return std::make_pair(m_Builder.CreateNeg(rhs), op.type);
-    else if (type == SimpleNumType::FLOAT)
-      return std::make_pair(m_Builder.CreateFNeg(rhs), op.type);
-  }
-  if (op.op == TokenKind::Exclamation) {
-    return std::make_pair(m_Builder.CreateNot(rhs), op.type);
-  }
-  if (op.op == TokenKind::Tilda) {
-    return std::make_pair(
-        m_Builder.CreateXor(rhs, llvm::ConstantInt::get(gen_type(op.type), -1),
-                            "not"),
-        op.type);
-  }
-  llvm_unreachable("unknown unary op.");
-  return std::make_pair(nullptr, op.type);
+  assert(false);
 }
 
 void Codegen::gen_conditional_op(const ResolvedExpr &op,
@@ -1413,6 +1459,7 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment) {
           dynamic_cast<const ResolvedStructMemberAccess *>(
               assignment.variable.get())) {
     decl = gen_struct_member_access(*member_access, member_type);
+    assert(decl);
   } else if (const auto *array_access =
                  dynamic_cast<const ResolvedArrayElementAccess *>(
                      assignment.variable.get())) {
