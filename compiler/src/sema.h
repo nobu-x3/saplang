@@ -20,27 +20,19 @@ class Sema {
   class Scope;
 
 public:
-  inline explicit Sema(std::vector<std::unique_ptr<Decl>> ast,
-                       bool run_flow_sensitive_analysis = false)
-      : m_AST(std::move(ast)),
-        m_ShouldRunFlowSensitiveAnalysis(run_flow_sensitive_analysis) {}
+  inline explicit Sema(std::vector<std::unique_ptr<Decl>> ast, bool run_flow_sensitive_analysis = false)
+      : m_AST(std::move(ast)), m_ShouldRunFlowSensitiveAnalysis(run_flow_sensitive_analysis) {}
 
   std::vector<std::unique_ptr<ResolvedDecl>> resolve_ast(bool partial = false);
 
 private:
-  std::optional<DeclLookupResult>
-  lookup_decl(std::string_view id,
-              std::optional<const Type *> type = std::nullopt);
+  std::optional<DeclLookupResult> lookup_decl(std::string_view id, std::optional<const Type *> type = std::nullopt);
 
-  bool resolve_struct_decls(
-      std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
+  bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
-  bool
-  resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls,
-                     bool partial);
+  bool resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
-  bool resolve_global_var_decls(
-      std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
+  bool resolve_global_var_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
 
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
@@ -50,47 +42,33 @@ private:
 
   std::unique_ptr<ResolvedFuncDecl> resolve_func_decl(const FunctionDecl &func);
 
-  std::unique_ptr<ResolvedParamDecl>
-  resolve_param_decl(const ParamDecl &decl, int index,
-                     const std::string function_name);
+  std::unique_ptr<ResolvedParamDecl> resolve_param_decl(const ParamDecl &decl, int index, const std::string function_name);
 
   std::unique_ptr<ResolvedBlock> resolve_block(const Block &block);
 
   std::unique_ptr<ResolvedStmt> resolve_stmt(const Stmt &stmt);
 
-  std::unique_ptr<ResolvedNumberLiteral>
-  resolve_enum_access(const EnumElementAccess &access);
+  std::unique_ptr<ResolvedNumberLiteral> resolve_enum_access(const EnumElementAccess &access);
 
-  std::unique_ptr<ResolvedGroupingExpr>
-  resolve_grouping_expr(const GroupingExpr &group);
+  std::unique_ptr<ResolvedGroupingExpr> resolve_grouping_expr(const GroupingExpr &group);
 
-  std::unique_ptr<ResolvedExpr>
-  resolve_binary_operator(const BinaryOperator &op);
+  std::unique_ptr<ResolvedExpr> resolve_binary_operator(const BinaryOperator &op);
 
-  std::unique_ptr<ResolvedUnaryOperator>
-  resolve_unary_operator(const UnaryOperator &op, Type *type);
+  std::unique_ptr<ResolvedUnaryOperator> resolve_unary_operator(const UnaryOperator &op, Type *type);
 
-  std::unique_ptr<ResolvedExplicitCastExpr>
-  resolve_explicit_cast(const ExplicitCast &cast);
+  std::unique_ptr<ResolvedExplicitCastExpr> resolve_explicit_cast(const ExplicitCast &cast);
 
-  std::unique_ptr<ResolvedStructLiteralExpr>
-  resolve_struct_literal_expr(const StructLiteralExpr &lit, Type struct_type);
+  std::unique_ptr<ResolvedStructLiteralExpr> resolve_struct_literal_expr(const StructLiteralExpr &lit, Type struct_type);
 
-  std::unique_ptr<ResolvedArrayLiteralExpr>
-  resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type);
+  std::unique_ptr<ResolvedArrayLiteralExpr> resolve_array_literal_expr(const ArrayLiteralExpr &lit, Type array_type);
 
-  std::unique_ptr<ResolvedStringLiteralExpr>
-  resolve_string_literal_expr(const StringLiteralExpr &lit);
+  std::unique_ptr<ResolvedStringLiteralExpr> resolve_string_literal_expr(const StringLiteralExpr &lit);
 
-  std::unique_ptr<ResolvedReturnStmt>
-  resolve_return_stmt(const ReturnStmt &stmt);
+  std::unique_ptr<ResolvedReturnStmt> resolve_return_stmt(const ReturnStmt &stmt);
 
-  std::unique_ptr<ResolvedExpr> resolve_expr(const Expr &expr,
-                                             Type *type = nullptr);
+  std::unique_ptr<ResolvedExpr> resolve_expr(const Expr &expr, Type *type = nullptr);
 
-  std::unique_ptr<ResolvedDeclRefExpr>
-  resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call = false,
-                        Type *type = nullptr);
+  std::unique_ptr<ResolvedDeclRefExpr> resolve_decl_ref_expr(const DeclRefExpr &decl_ref_expr, bool is_call = false, Type *type = nullptr);
 
   std::unique_ptr<ResolvedCallExpr> resolve_call_expr(const CallExpr &call);
 
@@ -104,28 +82,20 @@ private:
 
   std::unique_ptr<ResolvedVarDecl> resolve_var_decl(const VarDecl &decl);
 
-  std::unique_ptr<ResolvedStructDecl>
-  resolve_struct_decl(const StructDecl &decl);
+  std::unique_ptr<ResolvedStructDecl> resolve_struct_decl(const StructDecl &decl);
 
   std::unique_ptr<ResolvedEnumDecl> resolve_enum_decl(const EnumDecl &decl);
 
-  std::unique_ptr<ResolvedAssignment>
-  resolve_assignment(const Assignment &assignment);
+  std::unique_ptr<ResolvedAssignment> resolve_assignment(const Assignment &assignment);
 
-  std::unique_ptr<ResolvedStructMemberAccess>
-  resolve_member_access(const MemberAccess &access, const ResolvedDecl *decl);
+  std::unique_ptr<ResolvedStructMemberAccess> resolve_member_access(const MemberAccess &access, const ResolvedDecl *decl);
 
-  std::unique_ptr<InnerMemberAccess>
-  resolve_inner_member_access(const MemberAccess &access, Type type);
+  std::unique_ptr<InnerMemberAccess> resolve_inner_member_access(const MemberAccess &access, Type type);
 
-  std::unique_ptr<ResolvedArrayElementAccess>
-  resolve_array_element_access(const ArrayElementAccess &access,
-                               const ResolvedDecl *decl);
+  std::unique_ptr<ResolvedArrayElementAccess> resolve_array_element_access(const ArrayElementAccess &access, const ResolvedDecl *decl);
 
-  std::unique_ptr<ResolvedArrayElementAccess>
-  resolve_array_element_access_no_deref(
-      SourceLocation loc, std::vector<std::unique_ptr<ResolvedExpr>> indices,
-      const ResolvedDecl *decl);
+  std::unique_ptr<ResolvedArrayElementAccess> resolve_array_element_access_no_deref(SourceLocation loc, std::vector<std::unique_ptr<ResolvedExpr>> indices,
+                                                                                    const ResolvedDecl *decl);
 
   bool flow_sensitive_analysis(const ResolvedFuncDecl &fn);
 
@@ -141,9 +111,7 @@ private:
 private:
   class Scope {
   public:
-    inline explicit Scope(Sema *sema) : m_Sema(sema) {
-      m_Sema->m_Scopes.emplace_back();
-    }
+    inline explicit Scope(Sema *sema) : m_Sema(sema) { m_Sema->m_Scopes.emplace_back(); }
 
     inline ~Scope() { m_Sema->m_Scopes.pop_back(); }
 

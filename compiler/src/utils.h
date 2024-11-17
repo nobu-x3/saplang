@@ -27,24 +27,18 @@ struct SourceLocation {
 class IDumpable {
 public:
   virtual ~IDumpable() = default;
-  virtual void dump_to_stream(std::stringstream &stream,
-                              size_t indent = 0) const = 0;
+  virtual void dump_to_stream(std::stringstream &stream, size_t indent = 0) const = 0;
   virtual void dump(size_t indent = 0) const = 0;
 };
 
 inline std::string indent(size_t level) { return std::string(level * 2, ' '); }
 
-std::nullptr_t report(SourceLocation location, std::string_view msg,
-                      bool is_warning = false);
+std::nullptr_t report(SourceLocation location, std::string_view msg, bool is_warning = false);
 
 template <typename Base, typename Ty> class ConstantValueContainer {
 public:
-  inline void set_constant_value(std::optional<Ty> val) {
-    m_ConstantValue = std::move(val);
-  }
-  inline std::optional<Ty> get_constant_value() const {
-    return m_ConstantValue;
-  }
+  inline void set_constant_value(std::optional<Ty> val) { m_ConstantValue = std::move(val); }
+  inline std::optional<Ty> get_constant_value() const { return m_ConstantValue; }
 
 private:
   ConstantValueContainer() = default;

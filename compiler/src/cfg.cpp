@@ -19,9 +19,7 @@ void CFG::insert_edge(int from, int to, bool reachable) {
   basic_blocks[to].predecessors.emplace(std::make_pair(from, reachable));
 }
 
-void CFG::insert_stmt(const ResolvedStmt *stmt, int block) {
-  basic_blocks[block].statements.emplace_back(stmt);
-}
+void CFG::insert_stmt(const ResolvedStmt *stmt, int block) { basic_blocks[block].statements.emplace_back(stmt); }
 
 void CFG::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   for (int i = basic_blocks.size() - 1; i >= 0; --i) {
@@ -58,9 +56,7 @@ CFG CFGBuilder::build(const ResolvedFuncDecl &fn) {
 }
 
 bool is_terminator(const ResolvedStmt &stmt) {
-  return dynamic_cast<const ResolvedReturnStmt *>(&stmt) ||
-         dynamic_cast<const ResolvedIfStmt *>(&stmt) ||
-         dynamic_cast<const ResolvedWhileStmt *>(&stmt);
+  return dynamic_cast<const ResolvedReturnStmt *>(&stmt) || dynamic_cast<const ResolvedIfStmt *>(&stmt) || dynamic_cast<const ResolvedWhileStmt *>(&stmt);
 }
 int CFGBuilder::insert_block(const ResolvedBlock &block, int successor) {
   const auto &stmts = block.statements;
@@ -68,8 +64,7 @@ int CFGBuilder::insert_block(const ResolvedBlock &block, int successor) {
   for (auto it = stmts.rbegin(); it != stmts.rend(); ++it) {
     if (should_insert_block && !is_terminator(**it))
       successor = m_CFG.insert_new_block_before(successor, true);
-    should_insert_block =
-        dynamic_cast<const ResolvedWhileStmt *>(it->get()) != nullptr;
+    should_insert_block = dynamic_cast<const ResolvedWhileStmt *>(it->get()) != nullptr;
     successor = insert_stmt(**it, successor);
   }
   return successor;
@@ -98,30 +93,20 @@ int CFGBuilder::insert_if_stmt(const ResolvedIfStmt &if_stmt, int exit) {
   int true_block = insert_block(*if_stmt.true_block, exit);
   int entry = m_CFG.insert_new_block();
   std::optional<ConstexprResult> val = if_stmt.condition->get_constant_value();
-  m_CFG.insert_edge(entry, true_block,
-                    val.has_value() && val->kind == Type::Kind::Bool &&
-                        val->value.b8 != false);
-  m_CFG.insert_edge(entry, false_block,
-                    !val.has_value() || (val->kind == Type::Kind::Bool &&
-                                         val->value.b8 == false));
+  m_CFG.insert_edge(entry, true_block, val.has_value() && val->kind == Type::Kind::Bool && val->value.b8 != false);
+  m_CFG.insert_edge(entry, false_block, !val.has_value() || (val->kind == Type::Kind::Bool && val->value.b8 == false));
   m_CFG.insert_stmt(&if_stmt, entry);
   return insert_expr(*if_stmt.condition, entry);
 }
 
-int CFGBuilder::insert_while_stmt(const ResolvedWhileStmt &while_stmt,
-                                  int exit) {
+int CFGBuilder::insert_while_stmt(const ResolvedWhileStmt &while_stmt, int exit) {
   int latch = m_CFG.insert_new_block();
   int body = insert_block(*while_stmt.body, latch);
   int header = m_CFG.insert_new_block();
   m_CFG.insert_edge(latch, header, true);
-  std::optional<ConstexprResult> val =
-      while_stmt.condition->get_constant_value();
-  m_CFG.insert_edge(header, body,
-                    val.has_value() && val->kind == Type::Kind::Bool &&
-                        val->value.b8 != false);
-  m_CFG.insert_edge(header, exit,
-                    !val.has_value() || (val->kind == Type::Kind::Bool &&
-                                         val->value.b8 != false));
+  std::optional<ConstexprResult> val = while_stmt.condition->get_constant_value();
+  m_CFG.insert_edge(header, body, val.has_value() && val->kind == Type::Kind::Bool && val->value.b8 != false);
+  m_CFG.insert_edge(header, exit, !val.has_value() || (val->kind == Type::Kind::Bool && val->value.b8 != false));
   m_CFG.insert_stmt(&while_stmt, header);
   insert_expr(*while_stmt.condition, header);
   return header;
@@ -158,8 +143,7 @@ int CFGBuilder::insert_decl_stmt(const ResolvedDeclStmt &stmt, int block) {
   return block;
 }
 
-int CFGBuilder::insert_assignment(const ResolvedAssignment &assignment,
-                                  int block) {
+int CFGBuilder::insert_assignment(const ResolvedAssignment &assignment, int block) {
   m_CFG.insert_stmt(&assignment, block);
   return insert_expr(*assignment.expr, block);
 }

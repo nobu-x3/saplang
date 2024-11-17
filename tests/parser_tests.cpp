@@ -1,17 +1,17 @@
 #include "catch2/catch_test_macros.hpp"
 #include "test_utils.h"
 
-#define TEST_SETUP(file_contents)                                              \
-  saplang::clear_error_stream();                                               \
-  std::stringstream buffer{file_contents};                                     \
-  std::stringstream output_buffer{};                                           \
-  saplang::SourceFile src_file{"test", buffer.str()};                          \
-  saplang::Lexer lexer{src_file};                                              \
-  saplang::Parser parser(&lexer);                                              \
-  auto parse_result = parser.parse_source_file();                              \
-  for (auto &&fn : parse_result.declarations) {                                \
-    fn->dump_to_stream(output_buffer);                                         \
-  }                                                                            \
+#define TEST_SETUP(file_contents)                                                                                                                              \
+  saplang::clear_error_stream();                                                                                                                               \
+  std::stringstream buffer{file_contents};                                                                                                                     \
+  std::stringstream output_buffer{};                                                                                                                           \
+  saplang::SourceFile src_file{"test", buffer.str()};                                                                                                          \
+  saplang::Lexer lexer{src_file};                                                                                                                              \
+  saplang::Parser parser(&lexer);                                                                                                                              \
+  auto parse_result = parser.parse_source_file();                                                                                                              \
+  for (auto &&fn : parse_result.declarations) {                                                                                                                \
+    fn->dump_to_stream(output_buffer);                                                                                                                         \
+  }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
 
 TEST_CASE("Function declarations", "[parser]") {
@@ -24,8 +24,7 @@ TEST_CASE("Function declarations", "[parser]") {
   SECTION("expected function identifier") {
     TEST_SETUP(R"(fn int{}))");
     REQUIRE(output_buffer.str().empty());
-    REQUIRE(error_stream.str() ==
-            "test:1:7 error: expected function identifier.\n");
+    REQUIRE(error_stream.str() == "test:1:7 error: expected function identifier.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("expected '('") {
@@ -37,8 +36,7 @@ TEST_CASE("Function declarations", "[parser]") {
   SECTION("expected parameter declaration") {
     TEST_SETUP(R"(fn int f({})");
     REQUIRE(output_buffer.str().empty());
-    REQUIRE(error_stream.str() ==
-            "test:1:10 error: expected parameter declaration.\n");
+    REQUIRE(error_stream.str() == "test:1:10 error: expected parameter declaration.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("expected parameter identifier") {
@@ -267,8 +265,7 @@ fn void f(x){}
   SECTION("fn void f(int a,){}") {
     TEST_SETUP("fn void f(int a,){}");
     REQUIRE(output_buffer.str().empty());
-    REQUIRE(error_stream.str() ==
-            "test:1:17 error: expected parameter declaration.\n");
+    REQUIRE(error_stream.str() == "test:1:17 error: expected parameter declaration.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("fn void foo(i32 a, i32 b){}") {
@@ -908,8 +905,7 @@ fn void foo() {
     const i32 const_var;
 }
     )");
-  REQUIRE(error_stream.str() ==
-          "test:4:11 error: const variable expected to have initializer.\n");
+  REQUIRE(error_stream.str() == "test:4:11 error: const variable expected to have initializer.\n");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
   REQUIRE(lines_it->find("FunctionDecl: foo:void") != std::string::npos);
@@ -933,8 +929,7 @@ TEST_CASE("var decl failing", "[parser]") {
       var i32;
     }
     )");
-    REQUIRE(error_stream.str() ==
-            "test:3:14 error: expected identifier after type.\n");
+    REQUIRE(error_stream.str() == "test:3:14 error: expected identifier after type.\n");
   }
   SECTION("missing identifier 2") {
     TEST_SETUP(R"(
@@ -966,8 +961,7 @@ TEST_CASE("assignment", "[parser]") {
 
 TEST_CASE("not allowing multiple assignments", "[parser]") {
   TEST_SETUP("fn void foo() { a = b = 1; }")
-  REQUIRE(error_stream.str() ==
-          "test:1:23 error: expected ';' at the end of assignment.\n");
+  REQUIRE(error_stream.str() == "test:1:23 error: expected ';' at the end of assignment.\n");
 }
 
 TEST_CASE("assignment's lhs must be rvalue", "[parser]") {
@@ -975,8 +969,7 @@ TEST_CASE("assignment's lhs must be rvalue", "[parser]") {
 fn i32 bar() { return 1; }
 fn void foo() { bar() = 2; }
 )");
-  REQUIRE(error_stream.str() ==
-          "test:3:20 error: expected variable on the LHS of assignment.\n");
+  REQUIRE(error_stream.str() == "test:3:20 error: expected variable on the LHS of assignment.\n");
 }
 
 TEST_CASE("const parameter", "[parser]") {
@@ -1136,8 +1129,7 @@ TEST_CASE("global var without initializer", "[parser]") {
   TEST_SETUP(R"(
 var i32 test;
 )");
-  REQUIRE(error_stream.str() ==
-          "test:2:5 error: global variable expected to have initializer.\n");
+  REQUIRE(error_stream.str() == "test:2:5 error: global variable expected to have initializer.\n");
   REQUIRE(output_buffer.str() == "");
 }
 
@@ -1145,8 +1137,7 @@ TEST_CASE("global const without initializer", "[parser]") {
   TEST_SETUP(R"(
 const i32 test;
 )");
-  REQUIRE(error_stream.str() ==
-          "test:2:7 error: const variable expected to have initializer.\n");
+  REQUIRE(error_stream.str() == "test:2:7 error: const variable expected to have initializer.\n");
   REQUIRE(output_buffer.str() == "");
 }
 
@@ -1507,8 +1498,7 @@ fn i32 main() {
     const Enum variable1 = Enum::;
 }
 )");
-  REQUIRE(error_stream.str() ==
-          "test:3:34 error: expected identifier in enum field access.\n");
+  REQUIRE(error_stream.str() == "test:3:34 error: expected identifier in enum field access.\n");
 }
 
 TEST_CASE("Extern function no VLL", "[parser]") {
@@ -1523,13 +1513,10 @@ extern sapfire {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(
-      lines_it->find("FunctionDecl: alias libc::malloc allocate:ptr void") !=
-      std::string::npos);
+  REQUIRE(lines_it->find("FunctionDecl: alias libc::malloc allocate:ptr void") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: lenght:i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: size:i32");
-  CONTAINS_NEXT_REQUIRE(
-      lines_it, "FunctionDecl: alias sapfire::render_frame render:void");
+  CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: alias sapfire::render_frame render:void");
 }
 
 TEST_CASE("Extern function VLL", "[parser]") {
@@ -1541,8 +1528,7 @@ extern {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("FunctionDecl: VLL alias libc::printf print:void") !=
-          std::string::npos);
+  REQUIRE(lines_it->find("FunctionDecl: VLL alias libc::printf print:void") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: fmt:ptr char");
 }
 

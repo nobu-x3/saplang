@@ -21,9 +21,7 @@ public:
 
 private:
   inline void eat_next_token() { m_NextToken = m_Lexer->get_next_token(); }
-  inline void go_back_to_prev_token() {
-    m_NextToken = m_Lexer->get_prev_token();
-  }
+  inline void go_back_to_prev_token() { m_NextToken = m_Lexer->get_prev_token(); }
 
   inline void sync_on(const std::vector<TokenKind> &kinds) {
     m_IsCompleteAst = false;
@@ -55,10 +53,8 @@ private:
   std::unique_ptr<ArrayLiteralExpr> parse_array_literal_expr();
   std::unique_ptr<StringLiteralExpr> parse_string_literal_expr();
   std::unique_ptr<Expr> parse_expr();
-  std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs,
-                                       int precedence);
-  std::unique_ptr<EnumElementAccess>
-  parse_enum_element_access(std::string enum_id);
+  std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs, int precedence);
+  std::unique_ptr<EnumElementAccess> parse_enum_element_access(std::string enum_id);
   std::unique_ptr<ParamDecl> parse_param_decl();
   std::optional<Type> parse_type();
 
@@ -72,19 +68,14 @@ private:
   std::unique_ptr<ForStmt> parse_for_stmt();
 
   std::unique_ptr<DeclStmt> parse_var_decl_stmt(bool is_global = false);
-  std::unique_ptr<VarDecl> parse_var_decl(bool is_const,
-                                          bool is_global = false);
+  std::unique_ptr<VarDecl> parse_var_decl(bool is_const, bool is_global = false);
   std::unique_ptr<StructDecl> parse_struct_decl();
   std::unique_ptr<EnumDecl> parse_enum_decl();
-  std::unique_ptr<MemberAccess>
-  parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr,
-                      const std::string &var_id);
-  std::unique_ptr<ArrayElementAccess>
-  parse_array_element_access(std::string var_id);
+  std::unique_ptr<MemberAccess> parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr, const std::string &var_id);
+  std::unique_ptr<ArrayElementAccess> parse_array_element_access(std::string var_id);
   std::unique_ptr<Stmt> parse_assignment_or_expr();
   std::unique_ptr<Assignment> parse_assignment(std::unique_ptr<Expr> lhs);
-  std::unique_ptr<Assignment>
-  parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs, int lhs_deref_count);
+  std::unique_ptr<Assignment> parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs, int lhs_deref_count);
 
 private:
   std::unordered_map<std::string, Type> m_EnumTypes;
