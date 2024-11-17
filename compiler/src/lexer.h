@@ -5,9 +5,7 @@
 #include <unordered_map>
 
 namespace saplang {
-constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':', ';', ',',
-                                       '+',  '-', '*', '<', '>', '!', '.', '&',
-                                       '[',  ']', '"', '~', '^', '|', '%'};
+constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':', ';', ',', '+', '-', '*', '<', '>', '!', '.', '&', '[', ']', '"', '~', '^', '|', '%'};
 
 enum class TokenKind : char {
   Unknown = -128,
@@ -71,14 +69,10 @@ enum class TokenKind : char {
 };
 
 const std::unordered_map<std::string_view, TokenKind> keywords = {
-    {"void", TokenKind::KwVoid},     {"export", TokenKind::KwExport},
-    {"module", TokenKind::KwModule}, {"defer", TokenKind::KwDefer},
-    {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},
-    {"if", TokenKind::KwIf},         {"else", TokenKind::KwElse},
-    {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},
-    {"const", TokenKind::KwConst},   {"var", TokenKind::KwVar},
-    {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},
-    {"enum", TokenKind::KwEnum},     {"extern", TokenKind::KwExtern},
+    {"void", TokenKind::KwVoid},     {"export", TokenKind::KwExport}, {"module", TokenKind::KwModule}, {"defer", TokenKind::KwDefer},
+    {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},         {"if", TokenKind::KwIf},         {"else", TokenKind::KwElse},
+    {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},       {"const", TokenKind::KwConst},   {"var", TokenKind::KwVar},
+    {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},     {"enum", TokenKind::KwEnum},     {"extern", TokenKind::KwExtern},
     {"alias", TokenKind::KwAlias},
 };
 
@@ -105,6 +99,7 @@ private:
   size_t m_Idx = 0;
   int m_Line = 1;
   int m_Column = 0;
+  bool is_reading_string = false;
 };
 
 } // namespace saplang

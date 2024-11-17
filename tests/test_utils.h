@@ -5,31 +5,28 @@
 #include <sstream>
 #include <string>
 
+#include <cfg.h>
 #include <codegen.h>
 #include <lexer.h>
 #include <parser.h>
 #include <sema.h>
-#include <cfg.h>
 #include <utils.h>
 
 #include <llvm/Support/raw_ostream.h>
 
-#define NEXT_REQUIRE(it, expr)                                                 \
-  ++it;                                                                        \
+#define NEXT_REQUIRE(it, expr)                                                                                                                                 \
+  ++it;                                                                                                                                                        \
   REQUIRE(expr);
 
-#define EXACT_CHECK_NEXT_REQUIRE(it, text)                                     \
-  NEXT_REQUIRE(it, it->find(text) != std::string::npos);                       \
+#define EXACT_CHECK_NEXT_REQUIRE(it, text)                                                                                                                     \
+  NEXT_REQUIRE(it, it->find(text) != std::string::npos);                                                                                                       \
   REQUIRE(*it == text);
 
-#define CONTAINS_NEXT_REQUIRE(it, text)                                        \
-  NEXT_REQUIRE(it, it->find(text) != std::string::npos);
+#define CONTAINS_NEXT_REQUIRE(it, text) NEXT_REQUIRE(it, it->find(text) != std::string::npos);
 
 inline std::string remove_whitespace(std::string_view input) {
   std::string output_string{input};
-  output_string.erase(
-      std::remove_if(output_string.begin(), output_string.end(), ::isspace),
-      output_string.end());
+  output_string.erase(std::remove_if(output_string.begin(), output_string.end(), ::isspace), output_string.end());
   return output_string;
 }
 
@@ -39,7 +36,7 @@ inline std::vector<std::string> break_by_line(const std::string &input) {
   output.reserve(32);
   std::string line;
   while (std::getline(buffer, line, '\n')) {
-    if(!line.empty())
+    if (!line.empty())
       output.push_back(line);
     line.clear();
   }

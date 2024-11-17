@@ -38,8 +38,7 @@ void display_help() {
             << "\t-ast-dump                     print ast.\n"
             << "\t-res-dump                     print resolved syntax tree.\n"
             << "\t-cfg-dump                     print control flow graph.\n"
-            << "\t-llvm-dump                    print the generated llvm module"
-            << std::endl;
+            << "\t-llvm-dump                    print the generated llvm module" << std::endl;
 }
 
 CompilerOptions parse_args(int argc, const char **argv) {
@@ -122,8 +121,7 @@ int main(int argc, const char **argv) {
   if (options.cfg_dump) {
     std::stringstream output_stream;
     for (auto &&decl : resolved_tree) {
-      if (const auto *fn =
-              dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {
+      if (const auto *fn = dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {
         output_stream << decl->id << ":\n";
         saplang::CFGBuilder().build(*fn).dump_to_stream(output_stream, 1);
         std::cout << output_stream.str();

@@ -11,8 +11,7 @@
 namespace saplang {
 class Codegen {
 public:
-  explicit Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree,
-                   std::string_view source_path);
+  explicit Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree, std::string_view source_path);
   std::unique_ptr<llvm::Module> generate_ir();
 
 private:
@@ -28,13 +27,11 @@ private:
 
   llvm::Constant *gen_global_array_init(const ResolvedArrayLiteralExpr &init);
 
-  llvm::Constant *
-  get_constant_number_value(const ResolvedNumberLiteral &numlit);
+  llvm::Constant *get_constant_number_value(const ResolvedNumberLiteral &numlit);
 
   llvm::Type *gen_type(const Type &type);
 
-  llvm::AllocaInst *alloc_stack_var(llvm::Function *func, llvm::Type *type,
-                                    std::string_view id);
+  llvm::AllocaInst *alloc_stack_var(llvm::Function *func, llvm::Type *type, std::string_view id);
 
   void gen_block(const ResolvedBlock &body);
 
@@ -54,44 +51,31 @@ private:
 
   llvm::Value *gen_explicit_cast(const ResolvedExplicitCastExpr &cast);
 
-  llvm::Value *gen_array_decay(const Type &lhs_type,
-                               const ResolvedDeclRefExpr &rhs_dre);
+  llvm::Value *gen_array_decay(const Type &lhs_type, const ResolvedDeclRefExpr &rhs_dre);
 
   std::pair<llvm::Value *, Type> gen_unary_op(const ResolvedUnaryOperator &op);
 
-  std::vector<llvm::Value *> get_index_accesses(const ResolvedExpr &expr,
-                                                llvm::Value *loaded_ptr);
+  std::vector<llvm::Value *> get_index_accesses(const ResolvedExpr &expr, llvm::Value *loaded_ptr);
 
-  std::pair<llvm::Value *, Type>
-  gen_dereference(const ResolvedDeclRefExpr &expr);
+  std::pair<llvm::Value *, Type> gen_dereference(const ResolvedDeclRefExpr &expr);
 
-  llvm::Value *gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lhs,
-                           llvm::Value *rhs);
+  llvm::Value *gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs);
 
-  void gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_bb,
-                          llvm::BasicBlock *false_bb);
+  void gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_bb, llvm::BasicBlock *false_bb);
 
   llvm::Value *gen_call_expr(const ResolvedCallExpr &call);
 
-  llvm::Value *
-  gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit);
+  llvm::Value *gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit);
 
-  llvm::Value *gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit,
-                                      llvm::Value *p_array_value);
+  llvm::Value *gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit, llvm::Value *p_array_value);
 
-  llvm::Value *
-  gen_string_literal_expr(const ResolvedStringLiteralExpr &str_lit);
+  llvm::Value *gen_string_literal_expr(const ResolvedStringLiteralExpr &str_lit);
 
-  llvm::Value *gen_struct_literal_expr_assignment(
-      const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var);
+  llvm::Value *gen_struct_literal_expr_assignment(const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var);
 
-  llvm::Value *
-  gen_struct_member_access(const ResolvedStructMemberAccess &access,
-                           Type &out_type);
+  llvm::Value *gen_struct_member_access(const ResolvedStructMemberAccess &access, Type &out_type);
 
-  llvm::Value *
-  gen_array_element_access(const ResolvedArrayElementAccess &access,
-                           Type &out_type);
+  llvm::Value *gen_array_element_access(const ResolvedArrayElementAccess &access, Type &out_type);
 
   llvm::Value *gen_decl_stmt(const ResolvedDeclStmt &stmt);
 

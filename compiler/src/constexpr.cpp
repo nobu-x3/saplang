@@ -268,8 +268,7 @@ ConstexprResult simple_unsigned_to_float(const Value &val, Type::Kind kind) {
   return ConstexprResult{casted_float_value, casted_float_kind};
 }
 
-std::optional<ConstexprResult> mul(const std::optional<ConstexprResult> &lhs,
-                                   const std::optional<ConstexprResult> &rhs) {
+std::optional<ConstexprResult> mul(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
   if (!lhs || !rhs)
     return std::nullopt;
   ConstexprResult ret_res;
@@ -307,32 +306,20 @@ std::optional<ConstexprResult> mul(const std::optional<ConstexprResult> &lhs,
     }
   }
   if (is_signed(lhs->kind) && is_signed(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) *
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) * get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) *
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) * get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) *
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) * get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_unsigned(lhs->kind) && is_unsigned(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_unsigned(get_value(lhs->value, lhs->kind) *
-                                get_value(rhs->value, rhs->kind),
-                            max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind));
+    return cast_up_unsigned(get_value(lhs->value, lhs->kind) * get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_float(lhs->kind) || is_float(rhs->kind)) {
     ConstexprResult casted_result;
@@ -353,17 +340,13 @@ std::optional<ConstexprResult> mul(const std::optional<ConstexprResult> &lhs,
       casted_result = {lhs->value, lhs->kind};
       result_other = {rhs->value, rhs->kind};
     }
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)casted_result.kind, (unsigned int)result_other.kind));
-    return cast_up_float(get_value(casted_result.value, casted_result.kind) *
-                             get_value(result_other.value, result_other.kind),
-                         max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)casted_result.kind, (unsigned int)result_other.kind));
+    return cast_up_float(get_value(casted_result.value, casted_result.kind) * get_value(result_other.value, result_other.kind), max_kind);
   }
   llvm_unreachable("unexpected constexpr type.");
 }
 
-std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs,
-                                   const std::optional<ConstexprResult> &rhs) {
+std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
   if (!lhs || !rhs)
     return std::nullopt;
   ConstexprResult ret_res;
@@ -401,32 +384,20 @@ std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs,
     }
   }
   if (is_signed(lhs->kind) && is_signed(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) +
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) + get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) +
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) + get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) +
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) + get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_unsigned(lhs->kind) && is_unsigned(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_unsigned(get_value(lhs->value, lhs->kind) +
-                                get_value(rhs->value, rhs->kind),
-                            max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind));
+    return cast_up_unsigned(get_value(lhs->value, lhs->kind) + get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_float(lhs->kind) || is_float(rhs->kind)) {
     ConstexprResult casted_result;
@@ -447,17 +418,13 @@ std::optional<ConstexprResult> add(const std::optional<ConstexprResult> &lhs,
       casted_result = {lhs->value, lhs->kind};
       result_other = {rhs->value, rhs->kind};
     }
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)casted_result.kind, (unsigned int)result_other.kind));
-    return cast_up_float(get_value(casted_result.value, casted_result.kind) +
-                             get_value(result_other.value, result_other.kind),
-                         max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)casted_result.kind, (unsigned int)result_other.kind));
+    return cast_up_float(get_value(casted_result.value, casted_result.kind) + get_value(result_other.value, result_other.kind), max_kind);
   }
   llvm_unreachable("unexpected constexpr type.");
 }
 
-std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs,
-                                   const std::optional<ConstexprResult> &rhs) {
+std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
   if (!lhs || !rhs)
     return std::nullopt;
   ConstexprResult ret_res;
@@ -495,32 +462,20 @@ std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs,
     }
   }
   if (is_signed(lhs->kind) && is_signed(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) -
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) - get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) -
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) - get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) -
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) - get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_unsigned(lhs->kind) && is_unsigned(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_unsigned(get_value(lhs->value, lhs->kind) -
-                                get_value(rhs->value, rhs->kind),
-                            max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind));
+    return cast_up_unsigned(get_value(lhs->value, lhs->kind) - get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_float(lhs->kind) || is_float(rhs->kind)) {
     ConstexprResult casted_result;
@@ -541,54 +496,49 @@ std::optional<ConstexprResult> sub(const std::optional<ConstexprResult> &lhs,
       casted_result = {lhs->value, lhs->kind};
       result_other = {rhs->value, rhs->kind};
     }
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)casted_result.kind, (unsigned int)result_other.kind));
-    return cast_up_float(get_value(casted_result.value, casted_result.kind) -
-                             get_value(result_other.value, result_other.kind),
-                         max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)casted_result.kind, (unsigned int)result_other.kind));
+    return cast_up_float(get_value(casted_result.value, casted_result.kind) - get_value(result_other.value, result_other.kind), max_kind);
   }
   llvm_unreachable("unexpected constexpr type.");
 }
 
-std::optional<ConstexprResult> shl(const std::optional<ConstexprResult> &lhs,
-                                   const std::optional<ConstexprResult> &rhs) {
-#define BIT_SHIFT_L(value_type)                                                \
-  case Type::Kind::value_type: {                                               \
-    switch (rhs->kind) {                                                       \
-    case Type::Kind::i8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type << rhs->value.i8;       \
-      break;                                                                   \
-    case Type::Kind::u8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type << rhs->value.u8;       \
-      break;                                                                   \
-    case Type::Kind::i16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type << rhs->value.i16;      \
-      break;                                                                   \
-    case Type::Kind::u16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type << rhs->value.u16;      \
-      break;                                                                   \
-    case Type::Kind::i32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type << rhs->value.i32;      \
-      break;                                                                   \
-    case Type::Kind::u32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type << rhs->value.u32;      \
-      break;                                                                   \
-    case Type::Kind::i64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type << rhs->value.i64;      \
-      break;                                                                   \
-    case Type::Kind::u64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type << rhs->value.u64;      \
-      break;                                                                   \
-    default:                                                                   \
-      return std::nullopt;                                                     \
-      break;                                                                   \
-    }                                                                          \
+std::optional<ConstexprResult> shl(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
+#define BIT_SHIFT_L(value_type)                                                                                                                                \
+  case Type::Kind::value_type: {                                                                                                                               \
+    switch (rhs->kind) {                                                                                                                                       \
+    case Type::Kind::i8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type << rhs->value.i8;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type << rhs->value.u8;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type << rhs->value.i16;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::u16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type << rhs->value.u16;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::i32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type << rhs->value.i32;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::u32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type << rhs->value.u32;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::i64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type << rhs->value.i64;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::u64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type << rhs->value.u64;                                                                                      \
+      break;                                                                                                                                                   \
+    default:                                                                                                                                                   \
+      return std::nullopt;                                                                                                                                     \
+      break;                                                                                                                                                   \
+    }                                                                                                                                                          \
   } break;
 
   if (!lhs || !rhs)
     return std::nullopt;
-  if (rhs->kind < Type::Kind::INTEGERS_START ||
-      rhs->kind > Type::Kind::INTEGERS_END)
+  if (rhs->kind < Type::Kind::INTEGERS_START || rhs->kind > Type::Kind::INTEGERS_END)
     return std::nullopt;
   ConstexprResult ret_res = *lhs;
   switch (lhs->kind) {
@@ -607,45 +557,43 @@ std::optional<ConstexprResult> shl(const std::optional<ConstexprResult> &lhs,
   return ret_res;
 }
 
-std::optional<ConstexprResult> shr(const std::optional<ConstexprResult> &lhs,
-                                   const std::optional<ConstexprResult> &rhs) {
-#define BIT_SHIFT_R(value_type)                                                \
-  case Type::Kind::value_type: {                                               \
-    switch (rhs->kind) {                                                       \
-    case Type::Kind::i8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type >> rhs->value.i8;       \
-      break;                                                                   \
-    case Type::Kind::u8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type >> rhs->value.u8;       \
-      break;                                                                   \
-    case Type::Kind::i16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type >> rhs->value.i16;      \
-      break;                                                                   \
-    case Type::Kind::u16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type >> rhs->value.u16;      \
-      break;                                                                   \
-    case Type::Kind::i32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type >> rhs->value.i32;      \
-      break;                                                                   \
-    case Type::Kind::u32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type >> rhs->value.u32;      \
-      break;                                                                   \
-    case Type::Kind::i64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type >> rhs->value.i64;      \
-      break;                                                                   \
-    case Type::Kind::u64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type >> rhs->value.u64;      \
-      break;                                                                   \
-    default:                                                                   \
-      return std::nullopt;                                                     \
-      break;                                                                   \
-    }                                                                          \
+std::optional<ConstexprResult> shr(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
+#define BIT_SHIFT_R(value_type)                                                                                                                                \
+  case Type::Kind::value_type: {                                                                                                                               \
+    switch (rhs->kind) {                                                                                                                                       \
+    case Type::Kind::i8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type >> rhs->value.i8;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type >> rhs->value.u8;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type >> rhs->value.i16;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::u16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type >> rhs->value.u16;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::i32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type >> rhs->value.i32;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::u32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type >> rhs->value.u32;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::i64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type >> rhs->value.i64;                                                                                      \
+      break;                                                                                                                                                   \
+    case Type::Kind::u64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type >> rhs->value.u64;                                                                                      \
+      break;                                                                                                                                                   \
+    default:                                                                                                                                                   \
+      return std::nullopt;                                                                                                                                     \
+      break;                                                                                                                                                   \
+    }                                                                                                                                                          \
   } break;
 
   if (!lhs || !rhs)
     return std::nullopt;
-  if (rhs->kind < Type::Kind::INTEGERS_START ||
-      rhs->kind > Type::Kind::INTEGERS_END)
+  if (rhs->kind < Type::Kind::INTEGERS_START || rhs->kind > Type::Kind::INTEGERS_END)
     return std::nullopt;
   ConstexprResult ret_res = *lhs;
   switch (lhs->kind) {
@@ -664,46 +612,43 @@ std::optional<ConstexprResult> shr(const std::optional<ConstexprResult> &lhs,
   return ret_res;
 }
 
-std::optional<ConstexprResult>
-bitwise_and(const std::optional<ConstexprResult> &lhs,
-            const std::optional<ConstexprResult> &rhs) {
-#define BITWISE_AND(value_type)                                                \
-  case Type::Kind::value_type: {                                               \
-    switch (rhs->kind) {                                                       \
-    case Type::Kind::i8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type & rhs->value.i8;        \
-      break;                                                                   \
-    case Type::Kind::u8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type & rhs->value.u8;        \
-      break;                                                                   \
-    case Type::Kind::i16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type & rhs->value.i16;       \
-      break;                                                                   \
-    case Type::Kind::u16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type & rhs->value.u16;       \
-      break;                                                                   \
-    case Type::Kind::i32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type & rhs->value.i32;       \
-      break;                                                                   \
-    case Type::Kind::u32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type & rhs->value.u32;       \
-      break;                                                                   \
-    case Type::Kind::i64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type & rhs->value.i64;       \
-      break;                                                                   \
-    case Type::Kind::u64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type & rhs->value.u64;       \
-      break;                                                                   \
-    default:                                                                   \
-      return std::nullopt;                                                     \
-      break;                                                                   \
-    }                                                                          \
+std::optional<ConstexprResult> bitwise_and(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
+#define BITWISE_AND(value_type)                                                                                                                                \
+  case Type::Kind::value_type: {                                                                                                                               \
+    switch (rhs->kind) {                                                                                                                                       \
+    case Type::Kind::i8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type & rhs->value.i8;                                                                                        \
+      break;                                                                                                                                                   \
+    case Type::Kind::u8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type & rhs->value.u8;                                                                                        \
+      break;                                                                                                                                                   \
+    case Type::Kind::i16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type & rhs->value.i16;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type & rhs->value.u16;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type & rhs->value.i32;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type & rhs->value.u32;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type & rhs->value.i64;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type & rhs->value.u64;                                                                                       \
+      break;                                                                                                                                                   \
+    default:                                                                                                                                                   \
+      return std::nullopt;                                                                                                                                     \
+      break;                                                                                                                                                   \
+    }                                                                                                                                                          \
   } break;
 
   if (!lhs || !rhs)
     return std::nullopt;
-  if (rhs->kind < Type::Kind::INTEGERS_START ||
-      rhs->kind > Type::Kind::INTEGERS_END)
+  if (rhs->kind < Type::Kind::INTEGERS_START || rhs->kind > Type::Kind::INTEGERS_END)
     return std::nullopt;
   ConstexprResult ret_res = *lhs;
   switch (lhs->kind) {
@@ -722,46 +667,43 @@ bitwise_and(const std::optional<ConstexprResult> &lhs,
   return ret_res;
 }
 
-std::optional<ConstexprResult>
-bitwise_or(const std::optional<ConstexprResult> &lhs,
-           const std::optional<ConstexprResult> &rhs) {
-#define BITWISE_OR(value_type)                                                 \
-  case Type::Kind::value_type: {                                               \
-    switch (rhs->kind) {                                                       \
-    case Type::Kind::i8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type | rhs->value.i8;        \
-      break;                                                                   \
-    case Type::Kind::u8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type | rhs->value.u8;        \
-      break;                                                                   \
-    case Type::Kind::i16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type | rhs->value.i16;       \
-      break;                                                                   \
-    case Type::Kind::u16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type | rhs->value.u16;       \
-      break;                                                                   \
-    case Type::Kind::i32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type | rhs->value.i32;       \
-      break;                                                                   \
-    case Type::Kind::u32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type | rhs->value.u32;       \
-      break;                                                                   \
-    case Type::Kind::i64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type | rhs->value.i64;       \
-      break;                                                                   \
-    case Type::Kind::u64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type | rhs->value.u64;       \
-      break;                                                                   \
-    default:                                                                   \
-      return std::nullopt;                                                     \
-      break;                                                                   \
-    }                                                                          \
+std::optional<ConstexprResult> bitwise_or(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
+#define BITWISE_OR(value_type)                                                                                                                                 \
+  case Type::Kind::value_type: {                                                                                                                               \
+    switch (rhs->kind) {                                                                                                                                       \
+    case Type::Kind::i8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type | rhs->value.i8;                                                                                        \
+      break;                                                                                                                                                   \
+    case Type::Kind::u8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type | rhs->value.u8;                                                                                        \
+      break;                                                                                                                                                   \
+    case Type::Kind::i16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type | rhs->value.i16;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type | rhs->value.u16;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type | rhs->value.i32;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type | rhs->value.u32;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type | rhs->value.i64;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type | rhs->value.u64;                                                                                       \
+      break;                                                                                                                                                   \
+    default:                                                                                                                                                   \
+      return std::nullopt;                                                                                                                                     \
+      break;                                                                                                                                                   \
+    }                                                                                                                                                          \
   } break;
 
   if (!lhs || !rhs)
     return std::nullopt;
-  if (rhs->kind < Type::Kind::INTEGERS_START ||
-      rhs->kind > Type::Kind::INTEGERS_END)
+  if (rhs->kind < Type::Kind::INTEGERS_START || rhs->kind > Type::Kind::INTEGERS_END)
     return std::nullopt;
   ConstexprResult ret_res = *lhs;
   switch (lhs->kind) {
@@ -780,45 +722,43 @@ bitwise_or(const std::optional<ConstexprResult> &lhs,
   return ret_res;
 }
 
-std::optional<ConstexprResult> rem(const std::optional<ConstexprResult> &lhs,
-                                   const std::optional<ConstexprResult> &rhs) {
-#define REM(value_type)                                                        \
-  case Type::Kind::value_type: {                                               \
-    switch (rhs->kind) {                                                       \
-    case Type::Kind::i8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type % rhs->value.i8;        \
-      break;                                                                   \
-    case Type::Kind::u8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type % rhs->value.u8;        \
-      break;                                                                   \
-    case Type::Kind::i16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type % rhs->value.i16;       \
-      break;                                                                   \
-    case Type::Kind::u16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type % rhs->value.u16;       \
-      break;                                                                   \
-    case Type::Kind::i32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type % rhs->value.i32;       \
-      break;                                                                   \
-    case Type::Kind::u32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type % rhs->value.u32;       \
-      break;                                                                   \
-    case Type::Kind::i64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type % rhs->value.i64;       \
-      break;                                                                   \
-    case Type::Kind::u64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type % rhs->value.u64;       \
-      break;                                                                   \
-    default:                                                                   \
-      return std::nullopt;                                                     \
-      break;                                                                   \
-    }                                                                          \
+std::optional<ConstexprResult> rem(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
+#define REM(value_type)                                                                                                                                        \
+  case Type::Kind::value_type: {                                                                                                                               \
+    switch (rhs->kind) {                                                                                                                                       \
+    case Type::Kind::i8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type % rhs->value.i8;                                                                                        \
+      break;                                                                                                                                                   \
+    case Type::Kind::u8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type % rhs->value.u8;                                                                                        \
+      break;                                                                                                                                                   \
+    case Type::Kind::i16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type % rhs->value.i16;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type % rhs->value.u16;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type % rhs->value.i32;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type % rhs->value.u32;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type % rhs->value.i64;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type % rhs->value.u64;                                                                                       \
+      break;                                                                                                                                                   \
+    default:                                                                                                                                                   \
+      return std::nullopt;                                                                                                                                     \
+      break;                                                                                                                                                   \
+    }                                                                                                                                                          \
   } break;
 
   if (!lhs || !rhs)
     return std::nullopt;
-  if (rhs->kind < Type::Kind::INTEGERS_START ||
-      rhs->kind > Type::Kind::INTEGERS_END)
+  if (rhs->kind < Type::Kind::INTEGERS_START || rhs->kind > Type::Kind::INTEGERS_END)
     return std::nullopt;
   ConstexprResult ret_res = *lhs;
   switch (lhs->kind) {
@@ -837,46 +777,43 @@ std::optional<ConstexprResult> rem(const std::optional<ConstexprResult> &lhs,
   return ret_res;
 }
 
-std::optional<ConstexprResult>
-bitwise_xor(const std::optional<ConstexprResult> &lhs,
-            const std::optional<ConstexprResult> &rhs) {
-#define XOR(value_type)                                                        \
-  case Type::Kind::value_type: {                                               \
-    switch (rhs->kind) {                                                       \
-    case Type::Kind::i8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.i8;        \
-      break;                                                                   \
-    case Type::Kind::u8:                                                       \
-      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.u8;        \
-      break;                                                                   \
-    case Type::Kind::i16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.i16;       \
-      break;                                                                   \
-    case Type::Kind::u16:                                                      \
-      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.u16;       \
-      break;                                                                   \
-    case Type::Kind::i32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.i32;       \
-      break;                                                                   \
-    case Type::Kind::u32:                                                      \
-      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.u32;       \
-      break;                                                                   \
-    case Type::Kind::i64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.i64;       \
-      break;                                                                   \
-    case Type::Kind::u64:                                                      \
-      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.u64;       \
-      break;                                                                   \
-    default:                                                                   \
-      return std::nullopt;                                                     \
-      break;                                                                   \
-    }                                                                          \
+std::optional<ConstexprResult> bitwise_xor(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
+#define XOR(value_type)                                                                                                                                        \
+  case Type::Kind::value_type: {                                                                                                                               \
+    switch (rhs->kind) {                                                                                                                                       \
+    case Type::Kind::i8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.i8;                                                                                        \
+      break;                                                                                                                                                   \
+    case Type::Kind::u8:                                                                                                                                       \
+      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.u8;                                                                                        \
+      break;                                                                                                                                                   \
+    case Type::Kind::i16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.i16;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u16:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.u16;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.i32;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u32:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.u32;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::i64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.i64;                                                                                       \
+      break;                                                                                                                                                   \
+    case Type::Kind::u64:                                                                                                                                      \
+      ret_res.value.value_type = lhs->value.value_type ^ rhs->value.u64;                                                                                       \
+      break;                                                                                                                                                   \
+    default:                                                                                                                                                   \
+      return std::nullopt;                                                                                                                                     \
+      break;                                                                                                                                                   \
+    }                                                                                                                                                          \
   } break;
 
   if (!lhs || !rhs)
     return std::nullopt;
-  if (rhs->kind < Type::Kind::INTEGERS_START ||
-      rhs->kind > Type::Kind::INTEGERS_END)
+  if (rhs->kind < Type::Kind::INTEGERS_START || rhs->kind > Type::Kind::INTEGERS_END)
     return std::nullopt;
   ConstexprResult ret_res = *lhs;
   switch (lhs->kind) {
@@ -894,8 +831,7 @@ bitwise_xor(const std::optional<ConstexprResult> &lhs,
   }
   return ret_res;
 }
-std::optional<ConstexprResult> div(const std::optional<ConstexprResult> &lhs,
-                                   const std::optional<ConstexprResult> &rhs) {
+std::optional<ConstexprResult> div(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
   if (!lhs || !rhs)
     return std::nullopt;
   ConstexprResult ret_res;
@@ -924,32 +860,20 @@ std::optional<ConstexprResult> div(const std::optional<ConstexprResult> &lhs,
     }
   }
   if (is_signed(lhs->kind) && is_signed(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) -
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) - get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_signed(lhs->kind) && is_unsigned(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) -
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind + 4));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) - get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_unsigned(lhs->kind) && is_signed(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
-    return cast_up_signed(get_value(lhs->value, lhs->kind) -
-                              get_value(rhs->value, rhs->kind),
-                          max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind + 4, (unsigned int)rhs->kind));
+    return cast_up_signed(get_value(lhs->value, lhs->kind) - get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_unsigned(lhs->kind) && is_unsigned(rhs->kind)) {
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)lhs->kind, (unsigned int)rhs->kind));
-    return cast_up_unsigned(get_value(lhs->value, lhs->kind) -
-                                get_value(rhs->value, rhs->kind),
-                            max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)lhs->kind, (unsigned int)rhs->kind));
+    return cast_up_unsigned(get_value(lhs->value, lhs->kind) - get_value(rhs->value, rhs->kind), max_kind);
   }
   if (is_float(lhs->kind) || is_float(rhs->kind)) {
     ConstexprResult casted_result;
@@ -970,23 +894,20 @@ std::optional<ConstexprResult> div(const std::optional<ConstexprResult> &lhs,
       casted_result = {lhs->value, lhs->kind};
       result_other = {rhs->value, rhs->kind};
     }
-    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>(
-        (unsigned int)casted_result.kind, (unsigned int)result_other.kind));
-    return cast_up_float(get_value(casted_result.value, casted_result.kind) -
-                             get_value(result_other.value, result_other.kind),
-                         max_kind);
+    Type::Kind max_kind = (Type::Kind)(std::max<unsigned int>((unsigned int)casted_result.kind, (unsigned int)result_other.kind));
+    return cast_up_float(get_value(casted_result.value, casted_result.kind) - get_value(result_other.value, result_other.kind), max_kind);
   }
   llvm_unreachable("unexpected constexpr type.");
 }
 
-#define CMP_CASE(type)                                                         \
-  case Type::Kind::type: {                                                     \
-    if (lhs->value.type > rhs->value.type)                                     \
-      return 1;                                                                \
-    else if (lhs->value.type < rhs->value.type)                                \
-      return -1;                                                               \
-    else                                                                       \
-      return 0;                                                                \
+#define CMP_CASE(type)                                                                                                                                         \
+  case Type::Kind::type: {                                                                                                                                     \
+    if (lhs->value.type > rhs->value.type)                                                                                                                     \
+      return 1;                                                                                                                                                \
+    else if (lhs->value.type < rhs->value.type)                                                                                                                \
+      return -1;                                                                                                                                               \
+    else                                                                                                                                                       \
+      return 0;                                                                                                                                                \
   } break;
 
 int cmp(long lhs, long rhs) {
@@ -999,8 +920,7 @@ int cmp(long lhs, long rhs) {
 };
 
 // returns 1 if lhs > rhs, -1 if lhs < rhs, 0 if lhs == rhs
-std::optional<int> compare(const std::optional<ConstexprResult> &lhs,
-                           const std::optional<ConstexprResult> &rhs) {
+std::optional<int> compare(const std::optional<ConstexprResult> &lhs, const std::optional<ConstexprResult> &rhs) {
 
   if (!lhs || !rhs)
     return std::nullopt;
@@ -1026,12 +946,10 @@ std::optional<int> compare(const std::optional<ConstexprResult> &lhs,
       CMP_CASE(f64)
     }
   }
-  return cmp(get_value(lhs->value, lhs->kind),
-             get_value(rhs->value, rhs->kind));
+  return cmp(get_value(lhs->value, lhs->kind), get_value(rhs->value, rhs->kind));
 }
 
-std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
-    const ResolvedBinaryOperator &binop) {
+std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(const ResolvedBinaryOperator &binop) {
   std::optional<ConstexprResult> lhs = evaluate(*binop.lhs);
   ConstexprResult return_value;
   if (binop.op == TokenKind::PipePipe) {
@@ -1145,8 +1063,7 @@ std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_binary_op(
   return return_value;
 }
 
-std::optional<ConstexprResult>
-ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
+std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
   std::optional<ConstexprResult> rhs = evaluate(*unop.rhs);
   if (!rhs)
     return std::nullopt;
@@ -1161,30 +1078,22 @@ ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
     case Type::Kind::i8:
     case Type::Kind::u8:
       result.kind = Type::Kind::i8;
-      result.value.i8 = rhs->kind == Type::Kind::i8
-                            ? ~rhs->value.i8
-                            : ~static_cast<std::int8_t>(rhs->value.u8);
+      result.value.i8 = rhs->kind == Type::Kind::i8 ? ~rhs->value.i8 : ~static_cast<std::int8_t>(rhs->value.u8);
       break;
     case Type::Kind::i16:
     case Type::Kind::u16:
       result.kind = Type::Kind::i16;
-      result.value.i16 = rhs->kind == Type::Kind::i16
-                             ? ~rhs->value.i16
-                             : ~static_cast<std::int16_t>(rhs->value.u16);
+      result.value.i16 = rhs->kind == Type::Kind::i16 ? ~rhs->value.i16 : ~static_cast<std::int16_t>(rhs->value.u16);
       break;
     case Type::Kind::i32:
     case Type::Kind::u32:
       result.kind = Type::Kind::i32;
-      result.value.i32 = rhs->kind == Type::Kind::i32
-                             ? ~rhs->value.i32
-                             : ~static_cast<std::int32_t>(rhs->value.u32);
+      result.value.i32 = rhs->kind == Type::Kind::i32 ? ~rhs->value.i32 : ~static_cast<std::int32_t>(rhs->value.u32);
       break;
     case Type::Kind::i64:
     case Type::Kind::u64:
       result.kind = Type::Kind::i64;
-      result.value.i64 = rhs->kind == Type::Kind::i64
-                             ? ~rhs->value.i64
-                             : ~static_cast<std::int64_t>(rhs->value.u64);
+      result.value.i64 = rhs->kind == Type::Kind::i64 ? ~rhs->value.i64 : ~static_cast<std::int64_t>(rhs->value.u64);
       break;
     default:
       return std::nullopt;
@@ -1195,30 +1104,22 @@ ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
     case Type::Kind::i8:
     case Type::Kind::u8:
       result.kind = Type::Kind::i8;
-      result.value.i8 = rhs->kind == Type::Kind::i8
-                            ? -rhs->value.i8
-                            : -static_cast<std::int8_t>(rhs->value.u8);
+      result.value.i8 = rhs->kind == Type::Kind::i8 ? -rhs->value.i8 : -static_cast<std::int8_t>(rhs->value.u8);
       break;
     case Type::Kind::i16:
     case Type::Kind::u16:
       result.kind = Type::Kind::i16;
-      result.value.i16 = rhs->kind == Type::Kind::i16
-                             ? -rhs->value.i16
-                             : -static_cast<std::int16_t>(rhs->value.u16);
+      result.value.i16 = rhs->kind == Type::Kind::i16 ? -rhs->value.i16 : -static_cast<std::int16_t>(rhs->value.u16);
       break;
     case Type::Kind::i32:
     case Type::Kind::u32:
       result.kind = Type::Kind::i32;
-      result.value.i32 = rhs->kind == Type::Kind::i32
-                             ? -rhs->value.i32
-                             : -static_cast<std::int32_t>(rhs->value.u32);
+      result.value.i32 = rhs->kind == Type::Kind::i32 ? -rhs->value.i32 : -static_cast<std::int32_t>(rhs->value.u32);
       break;
     case Type::Kind::i64:
     case Type::Kind::u64:
       result.kind = Type::Kind::i64;
-      result.value.i64 = rhs->kind == Type::Kind::i64
-                             ? -rhs->value.i64
-                             : -static_cast<std::int64_t>(rhs->value.u64);
+      result.value.i64 = rhs->kind == Type::Kind::i64 ? -rhs->value.i64 : -static_cast<std::int64_t>(rhs->value.u64);
       break;
     case Type::Kind::f32:
       result.kind = Type::Kind::f32;
@@ -1233,31 +1134,27 @@ ConstantExpressionEvaluator::eval_unary_op(const ResolvedUnaryOperator &unop) {
   return result;
 }
 
-std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_decl_ref_expr(
-    const ResolvedDeclRefExpr &ref) {
+std::optional<ConstexprResult> ConstantExpressionEvaluator::eval_decl_ref_expr(const ResolvedDeclRefExpr &ref) {
   const auto *rvd = dynamic_cast<const ResolvedVarDecl *>(ref.decl);
   if (!rvd || !rvd->is_const || !rvd->initializer)
     return std::nullopt;
   return evaluate(*rvd->initializer);
 }
 
-std::optional<ConstexprResult>
-ConstantExpressionEvaluator::evaluate(const ResolvedExpr &expr) {
+std::optional<ConstexprResult> ConstantExpressionEvaluator::evaluate(const ResolvedExpr &expr) {
   if (const std::optional<ConstexprResult> &res = expr.get_constant_value())
     return res;
   if (const auto *numlit = dynamic_cast<const ResolvedNumberLiteral *>(&expr)) {
     ConstexprResult res{numlit->value, numlit->type.kind};
     return res;
   }
-  if (const auto *grouping_expr =
-          dynamic_cast<const ResolvedGroupingExpr *>(&expr))
+  if (const auto *grouping_expr = dynamic_cast<const ResolvedGroupingExpr *>(&expr))
     return evaluate(*grouping_expr->expr);
   if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr))
     return eval_binary_op(*binop);
   if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(&expr))
     return eval_unary_op(*unop);
-  if (const auto *decl_ref_expr =
-          dynamic_cast<const ResolvedDeclRefExpr *>(&expr))
+  if (const auto *decl_ref_expr = dynamic_cast<const ResolvedDeclRefExpr *>(&expr))
     return eval_decl_ref_expr(*decl_ref_expr);
   return std::nullopt;
 }

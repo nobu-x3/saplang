@@ -1,24 +1,23 @@
 #include "test_utils.h"
 
-#define TEST_SETUP(file_contents)                                              \
-  saplang::clear_error_stream();                                               \
-  std::stringstream buffer{file_contents};                                     \
-  std::stringstream output_buffer{};                                           \
-  saplang::SourceFile src_file{"cfg_test", buffer.str()};                      \
-  saplang::Lexer lexer{src_file};                                              \
-  saplang::Parser parser(&lexer);                                              \
-  auto parse_result = parser.parse_source_file();                              \
-  saplang::Sema sema{std::move(parse_result.declarations), true};              \
-  auto resolved_ast = sema.resolve_ast();                                      \
-  for (auto &&decl : resolved_ast) {                                           \
-    if (const auto *fn =                                                       \
-            dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {     \
-      output_buffer << decl->id << ":\n";                                      \
-      saplang::CFGBuilder().build(*fn).dump_to_stream(output_buffer, 1);       \
-    }                                                                          \
-  }                                                                            \
-  std::string output_string = output_buffer.str();                             \
-  auto lines = break_by_line(output_string);                                   \
+#define TEST_SETUP(file_contents)                                                                                                                              \
+  saplang::clear_error_stream();                                                                                                                               \
+  std::stringstream buffer{file_contents};                                                                                                                     \
+  std::stringstream output_buffer{};                                                                                                                           \
+  saplang::SourceFile src_file{"cfg_test", buffer.str()};                                                                                                      \
+  saplang::Lexer lexer{src_file};                                                                                                                              \
+  saplang::Parser parser(&lexer);                                                                                                                              \
+  auto parse_result = parser.parse_source_file();                                                                                                              \
+  saplang::Sema sema{std::move(parse_result.declarations), true};                                                                                              \
+  auto resolved_ast = sema.resolve_ast();                                                                                                                      \
+  for (auto &&decl : resolved_ast) {                                                                                                                           \
+    if (const auto *fn = dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {                                                                        \
+      output_buffer << decl->id << ":\n";                                                                                                                      \
+      saplang::CFGBuilder().build(*fn).dump_to_stream(output_buffer, 1);                                                                                       \
+    }                                                                                                                                                          \
+  }                                                                                                                                                            \
+  std::string output_string = output_buffer.str();                                                                                                             \
+  auto lines = break_by_line(output_string);                                                                                                                   \
   const auto &error_stream = saplang::get_error_stream();
 
 TEST_CASE("empty function", "[cfg]") {
@@ -100,8 +99,7 @@ TEST_CASE("return", "[cfg]") {
         return 1;
     }
     )");
-  REQUIRE(error_stream.str() ==
-          "cfg_test:5:9 warning: unreachable statement.\n");
+  REQUIRE(error_stream.str() == "cfg_test:5:9 warning: unreachable statement.\n");
   // REQUIRE(output_string == "");
   auto lines_it = lines.begin();
   REQUIRE(lines_it->find("foo:") != std::string::npos);
@@ -710,8 +708,7 @@ TEST_CASE("while loops", "[cfg]") {
       1;
     }
     )");
-    REQUIRE(error_stream.str() ==
-            "cfg_test:5:7 warning: unreachable statement.\n");
+    REQUIRE(error_stream.str() == "cfg_test:5:7 warning: unreachable statement.\n");
     auto lines_it = lines.begin();
     EXACT_CHECK_NEXT_REQUIRE(lines_it, "[5 (entry)]");
     EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
@@ -835,8 +832,7 @@ TEST_CASE("while loops", "[cfg]") {
       1;
     }
     )");
-    REQUIRE(error_stream.str() ==
-            "cfg_test:9:11 warning: unreachable statement.\n");
+    REQUIRE(error_stream.str() == "cfg_test:9:11 warning: unreachable statement.\n");
     auto lines_it = lines.begin();
     EXACT_CHECK_NEXT_REQUIRE(lines_it, "[9 (entry)]");
     EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: ");
@@ -1405,9 +1401,7 @@ TEST_CASE("non-void fn not returning on all paths", "[cfg]") {
     else { return 2; }
   }
   )");
-  REQUIRE(
-      error_stream.str() ==
-      "cfg_test:2:3 error: non-void function does not have a return value.\n");
+  REQUIRE(error_stream.str() == "cfg_test:2:3 error: non-void function does not have a return value.\n");
 }
 
 TEST_CASE("assignment, reassignment, self reassignment", "[cfg]") {

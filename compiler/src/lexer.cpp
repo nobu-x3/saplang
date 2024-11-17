@@ -2,14 +2,9 @@
 
 namespace saplang {
 
-bool is_space(char c) {
-  return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' ||
-         c == '\v';
-}
+bool is_space(char c) { return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v'; }
 
-bool is_alpha(char c) {
-  return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (c == '_');
-}
+bool is_alpha(char c) { return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (c == '_'); }
 
 bool is_num(char c) { return ('0' <= c && c <= '9'); }
 
@@ -95,8 +90,7 @@ Token Lexer::get_next_token() {
   for (auto &&c : single_char_tokens) {
     // TODO: manually write it out to avoid branching for better performance.
     if (c == curr_char) {
-      return Token{token_start_location, static_cast<TokenKind>(c),
-                   std::string{c}};
+      return Token{token_start_location, static_cast<TokenKind>(c), std::string{c}};
     }
   }
   std::string value{curr_char};
@@ -107,8 +101,7 @@ Token Lexer::get_next_token() {
     // TIL unordered_map::count return 1 if found and 0 if not aka C++17
     // .contains
     if (value == "true" || value == "false") {
-      return Token{token_start_location, TokenKind::BoolConstant,
-                   std::move(value)};
+      return Token{token_start_location, TokenKind::BoolConstant, std::move(value)};
     }
     if (keywords.count(value)) {
       return Token{token_start_location, keywords.at(value), std::move(value)};
@@ -123,8 +116,7 @@ Token Lexer::get_next_token() {
       while (is_num(peek_next_char())) {
         value += eat_next_char();
       }
-      return Token{token_start_location, TokenKind::BinInteger,
-                   std::move(value)};
+      return Token{token_start_location, TokenKind::BinInteger, std::move(value)};
     }
     std::string value{curr_char};
     while (is_num(peek_next_char()))
@@ -144,21 +136,21 @@ Token Lexer::get_next_token() {
 
 std::string Lexer::get_string_literal() {
   std::stringstream stream;
+  is_reading_string = true;
   char curr_char = eat_next_char();
   while (curr_char != '"') {
     stream << curr_char;
     curr_char = eat_next_char();
   }
+  is_reading_string = false;
   return stream.str();
 }
 
-char Lexer::peek_next_char(size_t count) const {
-  return m_Source->buffer[m_Idx + count];
-}
+char Lexer::peek_next_char(size_t count) const { return m_Source->buffer[m_Idx + count]; }
 
 char Lexer::eat_next_char() {
   ++m_Column;
-  if (m_Source->buffer[m_Idx] == '\n') {
+  if (m_Source->buffer[m_Idx] == '\n' && !is_reading_string) {
     ++m_Line;
     m_Column = 0;
   }
