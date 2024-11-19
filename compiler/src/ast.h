@@ -6,9 +6,10 @@
 #include "lexer.h"
 #include "utils.h"
 
-namespace saplang {
+#define PLATFORM_PTR_SIZE 64
+#define PLATFORM_PTR_ALIGNMENT alignof(signed long)
 
-// @TODO: string literals
+namespace saplang {
 
 struct ArrayData {
   int dimension_count = 0;
@@ -36,6 +37,12 @@ public:                                                                         
 
 struct Type;
 using FunctionSignature = std::pair<std::vector<Type>, bool>;
+
+struct TypeInfo {
+  unsigned long total_size;
+  unsigned long alignment;
+  std::vector<unsigned long> field_sizes;
+};
 
 struct Type : public IDumpable {
   enum class Kind {
@@ -66,6 +73,7 @@ struct Type : public IDumpable {
   std::string name;
   uint pointer_depth;
   uint dereference_counts = 0;
+  TypeInfo type_info;
   // If type has equal pointer_depth and array_data->dimension_count after
   // casting, it's array decay
   std::optional<ArrayData> array_data;
@@ -75,36 +83,98 @@ struct Type : public IDumpable {
   Type(Type &&) noexcept = default;
   Type &operator=(Type &&) noexcept = default;
 
-  static Type builtin_void(uint pointer_depth) { return {Kind::Void, "void", pointer_depth}; }
+  static Type builtin_void(uint pointer_depth) {
+    return {
+        Kind::Void,
+        "void",
+        pointer_depth,
+        {0, 0, {0}},
+    };
+  }
 
-  static Type builtin_i8(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::i8, "i8", pointer_depth, array_data}; }
+  static Type builtin_i8(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(signed char), alignof(signed char), {sizeof(signed char)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::i8, "i8", pointer_depth, ti, array_data};
+  }
 
-  static Type builtin_i16(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::i16, "i16", pointer_depth, std::move(array_data)}; }
+  static Type builtin_i16(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(signed short), alignof(signed short), {sizeof(signed short)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::i16, "i16", pointer_depth, ti, std::move(array_data)};
+  }
 
-  static Type builtin_i32(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::i32, "i32", pointer_depth, std::move(array_data)}; }
+  static Type builtin_i32(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(signed int), alignof(signed int), {sizeof(signed int)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::i32, "i32", pointer_depth, ti, std::move(array_data)};
+  }
 
-  static Type builtin_i64(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::i64, "i64", pointer_depth, std::move(array_data)}; }
+  static Type builtin_i64(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(signed long), alignof(signed long), {sizeof(signed long)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::i64, "i64", pointer_depth, ti, std::move(array_data)};
+  }
 
-  static Type builtin_u8(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::u8, "u8", pointer_depth, std::move(array_data)}; }
+  static Type builtin_u8(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(unsigned char), alignof(unsigned char), {sizeof(unsigned char)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::u8, "u8", pointer_depth, ti, std::move(array_data)};
+  }
 
-  static Type builtin_u16(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::u16, "u16", pointer_depth, std::move(array_data)}; }
+  static Type builtin_u16(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(unsigned short), alignof(unsigned short), {sizeof(unsigned short)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::u16, "u16", pointer_depth, ti, std::move(array_data)};
+  }
 
-  static Type builtin_u32(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::u32, "u32", pointer_depth, std::move(array_data)}; }
+  static Type builtin_u32(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(unsigned int), alignof(unsigned int), {sizeof(unsigned int)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::u32, "u32", pointer_depth, ti, std::move(array_data)};
+  }
 
-  static Type builtin_u64(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::u64, "u64", pointer_depth, std::move(array_data)}; }
+  static Type builtin_u64(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(unsigned long), alignof(unsigned long), {sizeof(unsigned long)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::u64, "u64", pointer_depth, ti, std::move(array_data)};
+  }
 
-  static Type builtin_f32(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::f32, "f32", pointer_depth, std::move(array_data)}; }
+  static Type builtin_f32(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(float), alignof(float), {sizeof(float)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::f32, "f32", pointer_depth, ti, std::move(array_data)};
+  }
 
-  static Type builtin_f64(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::f64, "f64", pointer_depth, std::move(array_data)}; }
+  static Type builtin_f64(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(double), alignof(double), {sizeof(double)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::f64, "f64", pointer_depth, ti, std::move(array_data)};
+  }
 
-  static Type builtin_bool(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::Bool, "bool", pointer_depth, std::move(array_data)}; }
+  static Type builtin_bool(uint pointer_depth, std::optional<ArrayData> array_data = {}) {
+    TypeInfo ti{sizeof(bool), alignof(bool), {sizeof(bool)}};
+    if (pointer_depth)
+      ti = {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}};
+    return {Kind::Bool, "bool", pointer_depth, ti, std::move(array_data)};
+  }
 
   static Type custom(std::string name, uint pointer_depth, std::optional<ArrayData> array_data = {}) {
-    return {Kind::Custom, std::move(name), pointer_depth, std::move(array_data)};
+    return {Kind::Custom, std::move(name), pointer_depth, {}, std::move(array_data)};
   }
 
   static Type fn_ptr(uint pointer_depth, std::optional<FunctionSignature> fn_signature = {}) {
-    return {Kind::FnPtr, "fn", pointer_depth, {}, std::move(fn_signature)};
+    return {Kind::FnPtr, "fn", pointer_depth, {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}}, std::nullopt, std::move(fn_signature)};
   }
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
@@ -114,9 +184,10 @@ struct Type : public IDumpable {
   // @NOTE: does not insert '\n' when done
   DUMP_IMPL
 private:
-  inline Type(Kind kind, std::string name, uint pointer_depth, std::optional<ArrayData> array_data = std::nullopt,
+  inline Type(Kind kind, std::string name, uint pointer_depth, TypeInfo type_info, std::optional<ArrayData> array_data = std::nullopt,
               std::optional<FunctionSignature> fn_signature = std::nullopt)
-      : kind(kind), name(std::move(name)), pointer_depth(pointer_depth), array_data(std::move(array_data)), fn_ptr_signature(std::move(fn_signature)) {}
+      : kind(kind), name(std::move(name)), pointer_depth(pointer_depth), type_info(std::move(type_info)), array_data(std::move(array_data)),
+        fn_ptr_signature(std::move(fn_signature)) {}
 };
 
 // decreases array dimension by dearray_count, removes first dimension and
