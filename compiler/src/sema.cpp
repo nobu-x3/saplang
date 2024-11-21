@@ -1112,6 +1112,32 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
     return resolve_explicit_cast(*explicit_cast);
   if (const auto *string_lit = dynamic_cast<const StringLiteralExpr *>(&expr))
     return resolve_string_literal_expr(*string_lit);
+  if (const auto *sizeof_expr = dynamic_cast<const SizeofExpr *>(&expr)) {
+    if (sizeof_expr->is_ptr) {
+      Value value;
+      value.u64 = m_TypeInfos["*"].total_size * sizeof_expr->array_element_count;
+      return std::make_unique<ResolvedNumberLiteral>(sizeof_expr->location, Type::builtin_u64(0), value);
+    } else if (m_TypeInfos.count(sizeof_expr->type_name)) {
+      Value value;
+      value.u64 = m_TypeInfos[sizeof_expr->type_name].total_size * sizeof_expr->array_element_count;
+      return std::make_unique<ResolvedNumberLiteral>(sizeof_expr->location, Type::builtin_u64(0), value);
+    } else {
+      return report(sizeof_expr->location, "unknown type " + sizeof_expr->type_name + ".");
+    }
+  }
+  if (const auto *alignof_expr = dynamic_cast<const AlignofExpr *>(&expr)) {
+    if (alignof_expr->is_ptr) {
+      Value value;
+      value.u64 = m_TypeInfos["*"].alignment;
+      return std::make_unique<ResolvedNumberLiteral>(alignof_expr->location, Type::builtin_u64(0), value);
+    } else if (m_TypeInfos.count(alignof_expr->type_name)) {
+      Value value;
+      value.u64 = m_TypeInfos[alignof_expr->type_name].alignment;
+      return std::make_unique<ResolvedNumberLiteral>(alignof_expr->location, Type::builtin_u64(0), value);
+    } else {
+      return report(alignof_expr->location, "unknown type " + alignof_expr->type_name + ".");
+    }
+  }
   if (type) {
     if (const auto *struct_literal = dynamic_cast<const StructLiteralExpr *>(&expr))
       return resolve_struct_literal_expr(*struct_literal, *type);
