@@ -120,6 +120,16 @@ void dump_constant(std::stringstream &stream, size_t indent_level, Value value, 
   }
 }
 
+void TypeInfo::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "Alignment: " << alignment << '\n';
+  stream << indent(indent_level) << "Total Size: " << total_size << '\n';
+  stream << indent(indent_level) << '[';
+  for (uint i = 0; i < field_sizes.size(); ++i) {
+    stream << field_sizes[i] << ' ';
+  }
+  stream << "]\n";
+}
+
 void Type::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level);
   for (uint i = 0; i < pointer_depth; ++i) {
@@ -134,7 +144,7 @@ void Type::dump_to_stream(std::stringstream &stream, size_t indent_level) const 
   if (fn_ptr_signature) {
     stream << (fn_ptr_signature->second ? "VLA " : "");
     stream << '(';
-    fn_ptr_signature->first.front().dump_to_stream(stream);
+    fn_ptr_signature->first.front().dump_to_stream(stream, 0);
     stream << ')';
     stream << '(';
     for (auto type_it = fn_ptr_signature->first.begin() + 1; type_it != fn_ptr_signature->first.end(); ++type_it) {
@@ -217,7 +227,7 @@ void FunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
   stream << indent(indent_level) << "FunctionDecl: " << (is_vll ? "VLL " : "") << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":";
-  type.dump_to_stream(stream);
+  type.dump_to_stream(stream, 0);
   stream << '\n';
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);
@@ -244,7 +254,7 @@ void StructDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) 
   stream << indent(indent_level) << "StructDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << "\n";
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << "MemberField: ";
-    type.dump_to_stream(stream);
+    type.dump_to_stream(stream, 0);
     stream << "(" << name << ")\n";
   }
 }
@@ -273,7 +283,7 @@ void VarDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) con
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
   stream << indent(indent_level) << "VarDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":" << (is_const ? "const " : "");
-  type.dump_to_stream(stream);
+  type.dump_to_stream(stream, 0);
   stream << '\n';
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
@@ -376,7 +386,7 @@ void BinaryOperator::dump_to_stream(std::stringstream &stream, size_t indent_lev
 
 void ExplicitCast::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ExplicitCast: ";
-  type.dump_to_stream(stream);
+  type.dump_to_stream(stream, 0);
   stream << "\n";
   rhs->dump_to_stream(stream, indent_level + 1);
 }
@@ -437,7 +447,7 @@ void CallExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) co
 
 void ParamDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ParamDecl: " << id << ":" << (is_const ? "const " : "");
-  type.dump_to_stream(stream);
+  type.dump_to_stream(stream, 0);
   stream << '\n';
 }
 
@@ -488,8 +498,8 @@ void ResolvedVarDecl::dump_to_stream(std::stringstream &stream, size_t indent_le
     lib_og_name_resolve = "alias " + og_name;
   stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":"
          << (is_global ? "global " : "") << (is_const ? "const " : "");
-  type.dump_to_stream(stream);
-  stream << '\n';
+  type.dump_to_stream(stream, 0);
+  stream << "\n";
   if (initializer)
     initializer->dump_to_stream(stream, indent_level + 1);
 }
@@ -506,7 +516,7 @@ void ResolvedStructDecl::dump_to_stream(std::stringstream &stream, size_t indent
   int member_index = 0;
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << member_index << ". ResolvedMemberField: ";
-    type.dump_to_stream(stream);
+    type.dump_to_stream(stream, 0);
     stream << "(" << name << ")\n";
     ++member_index;
   }
@@ -559,7 +569,7 @@ void ResolvedDeclRefExpr::dump_to_stream(std::stringstream &stream, size_t inden
 
 void ResolvedExplicitCastExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedExplicitCast: ";
-  type.dump_to_stream(stream);
+  type.dump_to_stream(stream, 0);
   stream << '\n';
   std::string cast_type_name;
   switch (cast_type) {
@@ -725,7 +735,7 @@ void ResolvedNumberLiteral::dump_to_stream(std::stringstream &stream, size_t ind
 
 void ResolvedStructLiteralExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedStructLiteralExpr: ";
-  type.dump_to_stream(stream);
+  type.dump_to_stream(stream, 0);
   stream << '\n';
   for (auto &&[name, expr] : field_initializers) {
     stream << indent(indent_level + 1) << "ResolvedFieldInitializer: " << name << "\n";
@@ -739,7 +749,7 @@ void ResolvedStructLiteralExpr::dump_to_stream(std::stringstream &stream, size_t
 
 void ResolvedArrayLiteralExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedArrayLiteralExpr: ";
-  type.dump_to_stream(stream);
+  type.dump_to_stream(stream, 0);
   stream << '\n';
   for (auto &&expr : expressions)
     expr->dump_to_stream(stream, indent_level + 1);
@@ -761,7 +771,7 @@ void ResolvedAssignment::dump_to_stream(std::stringstream &stream, size_t indent
 void InnerMemberAccess::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "MemberIndex: " << member_index << "\n";
   stream << indent(indent_level) << "MemberID:";
-  type.dump_to_stream(stream);
+  type.dump_to_stream(stream, 0);
   stream << "(" << member_id << ")" << '\n';
   if (inner_member_access)
     inner_member_access->dump_to_stream(stream, indent_level + 1);

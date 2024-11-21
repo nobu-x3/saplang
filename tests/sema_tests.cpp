@@ -16,6 +16,19 @@
   }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
 
+#define TEST_SETUP_TYPE_INFO(file_contents)                                                                                                                    \
+  saplang::clear_error_stream();                                                                                                                               \
+  std::stringstream buffer{file_contents};                                                                                                                     \
+  std::stringstream output_buffer{};                                                                                                                           \
+  saplang::SourceFile src_file{"sema_test", buffer.str()};                                                                                                     \
+  saplang::Lexer lexer{src_file};                                                                                                                              \
+  saplang::Parser parser(&lexer);                                                                                                                              \
+  auto parse_result = parser.parse_source_file();                                                                                                              \
+  saplang::Sema sema{std::move(parse_result.declarations)};                                                                                                    \
+  auto resolved_ast = sema.resolve_ast();                                                                                                                      \
+  sema.dump_type_infos_to_stream(output_buffer, 0);                                                                                                            \
+  const auto &error_stream = saplang::get_error_stream();
+
 #define TEST_SETUP_PARTIAL(file_contents)                                                                                                                      \
   saplang::clear_error_stream();                                                                                                                               \
   std::stringstream buffer{file_contents};                                                                                                                     \
@@ -2160,4 +2173,65 @@ fn void main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") i:") != std::string::npos);
+}
+
+TEST_CASE("Type info", "[sema]") {
+  TEST_SETUP_TYPE_INFO(R"(
+struct Type {
+    u8 *p;
+    u8 c;
+    i32 x;
+}
+struct Type1 {
+    u8* p;
+    u8 c;
+    u16 x;
+}
+struct Type2 {
+    u8* p;
+    u8 c;
+    u64 x;
+}
+struct Type3 {
+    Type type;
+    Type1 type1;
+    Type2 type3;
+}
+struct Type4 {
+    Type2 type2;
+    Type type;
+    Type1 type1;
+}
+fn void main() {
+    var i32 i = 0;
+    var i32* p_i;
+    var Type t;
+    var Type1 t1;
+    var Type2 t2;
+    var Type3 t3;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("Type info - Type2:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 24");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[8 1 8 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type3:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 56");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[16 16 24 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type1:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 16");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[8 1 2 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type4:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 56");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[24 16 16 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 16");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[8 1 4 ]");
 }
