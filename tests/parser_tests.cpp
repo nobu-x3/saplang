@@ -1679,3 +1679,139 @@ struct Type {
   CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: Type");
   CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr fn(ptr Type)(i32, f32)(p_foo)");
 }
+
+TEST_CASE("builtin sizeof()", "[parser]") {
+  TEST_SETUP(R"(
+fn void main() {
+    var i64 size_i8 = sizeof(i8);
+    var i64 size_i16 = sizeof(i16);
+    var i64 size_i32 = sizeof(i32);
+    var i64 size_i64 = sizeof(i64);
+    var i64 size_u8 = sizeof(u8);
+    var i64 size_u16 = sizeof(u16);
+    var i64 size_u32 = sizeof(u32);
+    var i64 size_u64 = sizeof(u64);
+    var i64 size_f32 = sizeof(f32);
+    var i64 size_f64 = sizeof(f64);
+    var i64 size_bool = sizeof(bool);
+    var i64 size_ptr = sizeof(bool*);
+    var i64 size_arr = sizeof(bool[4]);
+    var i64 size_p_arr = sizeof(bool*[4]);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: main:void") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_i8:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i8 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_i16:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i16 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_i32:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i32 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_i64:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i64 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_u8:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(u8 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_u16:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(u16 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_u32:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(u32 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_u64:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(u64 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_f32:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(f32 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_f64:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(f64 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_bool:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(bool x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_ptr:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(bool* x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_arr:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(bool x4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: size_p_arr:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(bool* x4)");
+}
+
+TEST_CASE("builtin alignof()", "[parser]") {
+  TEST_SETUP(R"(
+fn void main() {
+    var i64 align_i8 = alignof(i8);
+    var i64 align_i16 = alignof(i16);
+    var i64 align_i32 = alignof(i32);
+    var i64 align_i64 = alignof(i64);
+    var i64 align_u8 = alignof(u8);
+    var i64 align_u16 = alignof(u16);
+    var i64 align_u32 = alignof(u32);
+    var i64 align_u64 = alignof(u64);
+    var i64 align_f32 = alignof(f32);
+    var i64 align_f64 = alignof(f64);
+    var i64 align_bool = alignof(bool);
+    var i64 align_ptr = alignof(bool*);
+    var i64 align_arr = alignof(bool[4]);
+    var i64 align_p_arr = alignof(bool*[4]);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("FunctionDecl: main:void") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_i8:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(i8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_i16:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(i16)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_i32:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(i32)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_i64:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(i64)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_u8:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(u8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_u16:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(u16)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_u32:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(u32)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_u64:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(u64)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_f32:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(f32)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_f64:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(f64)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_bool:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(bool)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_ptr:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(bool*)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_arr:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(bool)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: align_p_arr:i64");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignof(bool*)");
+}

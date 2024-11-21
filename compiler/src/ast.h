@@ -6,9 +6,10 @@
 #include "lexer.h"
 #include "utils.h"
 
-namespace saplang {
+#define PLATFORM_PTR_SIZE 8
+#define PLATFORM_PTR_ALIGNMENT alignof(signed long)
 
-// @TODO: string literals
+namespace saplang {
 
 struct ArrayData {
   int dimension_count = 0;
@@ -36,6 +37,19 @@ public:                                                                         
 
 struct Type;
 using FunctionSignature = std::pair<std::vector<Type>, bool>;
+
+struct TypeInfo {
+  unsigned long total_size;
+  unsigned long alignment;
+  std::vector<unsigned long> field_sizes;
+
+  void dump_to_stream(std ::stringstream &stream, size_t indent = 0) const;
+  inline void dump(size_t indent = 0) const {
+    std ::stringstream stream{};
+    dump_to_stream(stream, indent);
+    std ::cerr << stream.str();
+  }
+};
 
 struct Type : public IDumpable {
   enum class Kind {
@@ -104,7 +118,7 @@ struct Type : public IDumpable {
   }
 
   static Type fn_ptr(uint pointer_depth, std::optional<FunctionSignature> fn_signature = {}) {
-    return {Kind::FnPtr, "fn", pointer_depth, {}, std::move(fn_signature)};
+    return {Kind::FnPtr, "fn", pointer_depth, std::nullopt, std::move(fn_signature)};
   }
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
@@ -185,6 +199,7 @@ struct ConstexprResult {
   Value value;
   Type::Kind kind;
 };
+
 struct Decl : public IDumpable {
   SourceLocation location;
   std::string id;
@@ -203,6 +218,22 @@ struct Stmt : public IDumpable {
 
 struct Expr : public Stmt {
   inline Expr(SourceLocation loc) : Stmt(loc) {}
+};
+
+struct SizeofExpr : public Expr {
+  std::string type_name;
+  bool is_ptr;
+  unsigned long array_element_count;
+  inline explicit SizeofExpr(SourceLocation loc, std::string type_name, bool is_ptr, unsigned long array_element_count)
+      : Expr(loc), type_name(std::move(type_name)), is_ptr(is_ptr), array_element_count(array_element_count) {}
+  DUMP_IMPL
+};
+
+struct AlignofExpr : public Expr {
+  std::string type_name;
+  bool is_ptr;
+  inline explicit AlignofExpr(SourceLocation loc, std::string type_name, bool is_ptr) : Expr(loc), type_name(std::move(type_name)), is_ptr(is_ptr) {}
+  DUMP_IMPL
 };
 
 struct NullExpr : public Expr {

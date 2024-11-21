@@ -16,6 +16,19 @@
   }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
 
+#define TEST_SETUP_TYPE_INFO(file_contents)                                                                                                                    \
+  saplang::clear_error_stream();                                                                                                                               \
+  std::stringstream buffer{file_contents};                                                                                                                     \
+  std::stringstream output_buffer{};                                                                                                                           \
+  saplang::SourceFile src_file{"sema_test", buffer.str()};                                                                                                     \
+  saplang::Lexer lexer{src_file};                                                                                                                              \
+  saplang::Parser parser(&lexer);                                                                                                                              \
+  auto parse_result = parser.parse_source_file();                                                                                                              \
+  saplang::Sema sema{std::move(parse_result.declarations)};                                                                                                    \
+  auto resolved_ast = sema.resolve_ast();                                                                                                                      \
+  sema.dump_type_infos_to_stream(output_buffer, 0);                                                                                                            \
+  const auto &error_stream = saplang::get_error_stream();
+
 #define TEST_SETUP_PARTIAL(file_contents)                                                                                                                      \
   saplang::clear_error_stream();                                                                                                                               \
   std::stringstream buffer{file_contents};                                                                                                                     \
@@ -2160,4 +2173,432 @@ fn void main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") i:") != std::string::npos);
+}
+
+TEST_CASE("Type info", "[sema]") {
+  TEST_SETUP_TYPE_INFO(R"(
+struct Type {
+    u8 *p;
+    u8 c;
+    i32 x;
+}
+struct Type1 {
+    u8* p;
+    u8 c;
+    u16 x;
+}
+struct Type2 {
+    u8* p;
+    u8 c;
+    u64 x;
+}
+struct Type3 {
+    Type type;
+    Type1 type1;
+    Type2 type3;
+}
+struct Type4 {
+    Type2 type2;
+    Type type;
+    Type1 type1;
+}
+fn void main() {
+    var i32 i = 0;
+    var i32* p_i;
+    var Type t;
+    var Type1 t1;
+    var Type2 t2;
+    var Type3 t3;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("Type info - Type2:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 24");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[8 1 8 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type3:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 56");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[16 16 24 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type1:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 16");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[8 1 2 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type4:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 56");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[24 16 16 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 16");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[8 1 4 ]");
+}
+
+// TODO: support constexprs
+TEST_CASE("custom type sizeof()", "[sema]") {
+  TEST_SETUP(R"(
+struct Type {
+    u8 *p;
+    u8 c;
+    i32 x;
+}
+struct Type1 {
+    u8* p;
+    u8 c;
+    u16 x;
+}
+struct Type2 {
+    u8* p;
+    u8 c;
+    u64 x;
+}
+struct Type3 {
+    Type type;
+    Type1 type1;
+    Type2 type3;
+}
+struct Type4 {
+    Type2 type2;
+    Type type;
+    Type1 type1;
+}
+fn void main() {
+    var i64 size_t = sizeof(Type);
+    var i64 size_t1 = sizeof(Type1);
+    var i64 size_t2 = sizeof(Type2);
+    var i64 size_t3 = sizeof(Type3);
+    var i64 size_t4 = sizeof(Type4);
+    var i64 size_t4_p = sizeof(Type4*);
+    var i64 size_arr_t4 = sizeof(Type4[12]);
+    var i64 size_arr_t4_p = sizeof(Type4*[399]);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 19;
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_t:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(16)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_t1:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(16)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_t2:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(24)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_t3:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(56)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_t4:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(56)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_t4_p:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_arr_t4:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(672)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_arr_t4_p:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(3192)");
+}
+
+TEST_CASE("builtin types sizeof()", "[sema]") {
+  TEST_SETUP(R"(
+fn void main() {
+    var i64 size_i8 = sizeof(i8);
+    var i64 size_i16 = sizeof(i16);
+    var i64 size_i32 = sizeof(i32);
+    var i64 size_i64 = sizeof(i64);
+    var i64 size_u8 = sizeof(u8);
+    var i64 size_u16 = sizeof(u16);
+    var i64 size_u32 = sizeof(u32);
+    var i64 size_u64 = sizeof(u64);
+    var i64 size_f32 = sizeof(f32);
+    var i64 size_f64 = sizeof(f64);
+    var i64 size_bool = sizeof(bool);
+    var i64 size_ptr = sizeof(bool*);
+    var i64 size_arr = sizeof(u32[4]);
+    var i64 size_p_arr = sizeof(u32*[4]);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_i8:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_i16:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_i32:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_i64:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_u8:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_u16:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_u32:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_u64:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_f32:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_f64:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_bool:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_ptr:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_arr:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(16)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") size_p_arr:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(32)");
+}
+
+TEST_CASE("builtin alignof()", "[sema]") {
+  TEST_SETUP(R"(
+fn void main() {
+    var i64 align_i8 = alignof(i8);
+    var i64 align_i16 = alignof(i16);
+    var i64 align_i32 = alignof(i32);
+    var i64 align_i64 = alignof(i64);
+    var i64 align_u8 = alignof(u8);
+    var i64 align_u16 = alignof(u16);
+    var i64 align_u32 = alignof(u32);
+    var i64 align_u64 = alignof(u64);
+    var i64 align_f32 = alignof(f32);
+    var i64 align_f64 = alignof(f64);
+    var i64 align_bool = alignof(bool);
+    var i64 align_ptr = alignof(bool*);
+    var i64 align_arr = alignof(bool[4]);
+    var i64 align_p_arr = alignof(bool*[4]);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_i8:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_i16:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_i32:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_i64:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_u8:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_u16:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_u32:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_u64:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_f32:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_f64:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_bool:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_ptr:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_arr:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_p_arr:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+}
+
+TEST_CASE("custom type alignof()", "[sema]") {
+  TEST_SETUP(R"(
+struct Type {
+    u8 *p;
+    u8 c;
+    i32 x;
+}
+struct Type1 {
+    u8* p;
+    u8 c;
+    u16 x;
+}
+struct Type2 {
+    u8* p;
+    u8 c;
+    u64 x;
+}
+struct Type3 {
+    Type type;
+    Type1 type1;
+    Type2 type3;
+}
+struct Type4 {
+    Type2 type2;
+    Type type;
+    Type1 type1;
+}
+fn void main() {
+    var i64 align_t = alignof(Type);
+    var i64 align_t1 = alignof(Type1);
+    var i64 align_t2 = alignof(Type2);
+    var i64 align_t3 = alignof(Type3);
+    var i64 align_t4 = alignof(Type4);
+    var i64 align_t4_p = alignof(Type4*);
+    var i64 align_arr_t4 = alignof(Type4[12]);
+    var i64 align_arr_t4_p = alignof(Type4*[399]);
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 19;
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_t:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_t1:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_t2:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_t3:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_t4:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_t4_p:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_arr_t4:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") align_arr_t4_p:i64") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i64(8)");
 }

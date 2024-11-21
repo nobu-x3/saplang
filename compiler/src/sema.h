@@ -21,11 +21,19 @@ class Sema {
 
 public:
   inline explicit Sema(std::vector<std::unique_ptr<Decl>> ast, bool run_flow_sensitive_analysis = false)
-      : m_AST(std::move(ast)), m_ShouldRunFlowSensitiveAnalysis(run_flow_sensitive_analysis) {}
+      : m_AST(std::move(ast)), m_ShouldRunFlowSensitiveAnalysis(run_flow_sensitive_analysis) {
+    init_builtin_type_infos();
+  }
 
   std::vector<std::unique_ptr<ResolvedDecl>> resolve_ast(bool partial = false);
 
+  void dump_type_infos_to_stream(std ::stringstream &stream, size_t indent = 0) const;
+
 private:
+  void init_builtin_type_infos();
+
+  void init_type_info(ResolvedStructDecl &decl);
+
   std::optional<DeclLookupResult> lookup_decl(std::string_view id, std::optional<const Type *> type = std::nullopt);
 
   bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
@@ -104,6 +112,7 @@ private:
 private:
   std::vector<std::unique_ptr<Decl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};
+  std::unordered_map<std::string, TypeInfo> m_TypeInfos;
   ResolvedFuncDecl *m_CurrFunction{nullptr};
   ConstantExpressionEvaluator m_Cee;
   bool m_ShouldRunFlowSensitiveAnalysis;

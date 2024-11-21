@@ -11,6 +11,7 @@
 #include "lexer.h"
 #include "utils.h"
 #include <algorithm>
+#include <numeric>
 #include <utility>
 
 namespace saplang {
@@ -22,6 +23,35 @@ bool Sema::is_enum(const Type &type) {
   if (auto *enum_decl = dynamic_cast<const ResolvedEnumDecl *>(decl->decl))
     return true;
   return false;
+}
+
+bool is_builtin_type_name(std::string_view name) {
+  return name == "i8" || name == "i16" || name == "i32" || name == "i64" || name == "u8" || name == "u16" || name == "u32" || name == "u64" || name == "f32" ||
+         name == "f64" || name == "bool" || name == "*";
+}
+
+void Sema::dump_type_infos_to_stream(std ::stringstream &stream, size_t indent_level) const {
+  for (auto &&[type_name, type_info] : m_TypeInfos) {
+    if (is_builtin_type_name(type_name))
+      continue;
+    stream << indent(indent_level) << "Type info - " << type_name << ":\n";
+    type_info.dump_to_stream(stream, indent_level + 1);
+  }
+}
+
+void Sema::init_builtin_type_infos() {
+  m_TypeInfos.insert({"i8", {sizeof(signed char), alignof(signed char), {sizeof(signed char)}}});
+  m_TypeInfos.insert({"i16", {sizeof(signed short), alignof(signed short), {sizeof(signed short)}}});
+  m_TypeInfos.insert({"i32", {sizeof(signed int), alignof(signed int), {sizeof(signed int)}}});
+  m_TypeInfos.insert({"i64", {sizeof(signed long), alignof(signed long), {sizeof(signed long)}}});
+  m_TypeInfos.insert({"u8", {sizeof(unsigned char), alignof(unsigned char), {sizeof(unsigned char)}}});
+  m_TypeInfos.insert({"u16", {sizeof(unsigned short), alignof(unsigned short), {sizeof(unsigned short)}}});
+  m_TypeInfos.insert({"u32", {sizeof(unsigned int), alignof(unsigned int), {sizeof(unsigned int)}}});
+  m_TypeInfos.insert({"u64", {sizeof(unsigned long), alignof(unsigned long), {sizeof(unsigned long)}}});
+  m_TypeInfos.insert({"*", {PLATFORM_PTR_SIZE, PLATFORM_PTR_ALIGNMENT, {PLATFORM_PTR_SIZE}}});
+  m_TypeInfos.insert({"f32", {sizeof(float), alignof(float), {sizeof(float)}}});
+  m_TypeInfos.insert({"f64", {sizeof(double), alignof(double), {sizeof(double)}}});
+  m_TypeInfos.insert({"bool", {sizeof(bool), alignof(bool), {sizeof(bool)}}});
 }
 
 void apply_unary_op_to_num_literal(ResolvedUnaryOperator *unop) {
@@ -466,6 +496,24 @@ bool Sema::resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolv
   return true;
 }
 
+size_t align_to(size_t offset, size_t alignment) { return (offset + alignment - 1) & ~(alignment - 1); }
+
+void Sema::init_type_info(ResolvedStructDecl &decl) {
+  TypeInfo type_info{};
+  type_info.field_sizes.reserve(decl.members.size());
+  size_t max_align = 0;
+  for (auto &&field : decl.members) {
+    const auto &ti = m_TypeInfos[field.first.pointer_depth ? "*" : field.first.name];
+    type_info.field_sizes.push_back(ti.total_size);
+    type_info.total_size = align_to(type_info.total_size, ti.alignment);
+    type_info.total_size += ti.total_size;
+    max_align = std::max(max_align, ti.alignment);
+  }
+  type_info.total_size = align_to(type_info.total_size, max_align);
+  type_info.alignment = max_align;
+  m_TypeInfos.insert({decl.type.name, std::move(type_info)});
+}
+
 bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
   struct DeclToInspect {
     const StructDecl *decl{nullptr};
@@ -478,14 +526,14 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
     if (const auto *struct_decl = dynamic_cast<const StructDecl *>(decl.get())) {
       if (is_leaf(struct_decl)) {
         std::unique_ptr<ResolvedStructDecl> resolved_struct_decl = resolve_struct_decl(*struct_decl);
+        init_type_info(*resolved_struct_decl);
         if (!resolved_struct_decl || !insert_decl_to_current_scope(*resolved_struct_decl)) {
           error = true;
           continue;
         }
         resolved_decls.emplace_back(std::move(resolved_struct_decl));
-        continue;
-      }
-      non_leaf_struct_decls.push_back({struct_decl});
+      } else
+        non_leaf_struct_decls.push_back({struct_decl});
     }
   }
   if (error && !partial)
@@ -511,6 +559,7 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
         continue;
       }
       resolved = true;
+      init_type_info(*resolved_struct_decl);
       resolved_decls.emplace_back(std::move(resolved_struct_decl));
       decl_resolved_last_pass = true;
       continue;
@@ -1063,6 +1112,32 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
     return resolve_explicit_cast(*explicit_cast);
   if (const auto *string_lit = dynamic_cast<const StringLiteralExpr *>(&expr))
     return resolve_string_literal_expr(*string_lit);
+  if (const auto *sizeof_expr = dynamic_cast<const SizeofExpr *>(&expr)) {
+    if (sizeof_expr->is_ptr) {
+      Value value;
+      value.u64 = m_TypeInfos["*"].total_size * sizeof_expr->array_element_count;
+      return std::make_unique<ResolvedNumberLiteral>(sizeof_expr->location, Type::builtin_u64(0), value);
+    } else if (m_TypeInfos.count(sizeof_expr->type_name)) {
+      Value value;
+      value.u64 = m_TypeInfos[sizeof_expr->type_name].total_size * sizeof_expr->array_element_count;
+      return std::make_unique<ResolvedNumberLiteral>(sizeof_expr->location, Type::builtin_u64(0), value);
+    } else {
+      return report(sizeof_expr->location, "unknown type " + sizeof_expr->type_name + ".");
+    }
+  }
+  if (const auto *alignof_expr = dynamic_cast<const AlignofExpr *>(&expr)) {
+    if (alignof_expr->is_ptr) {
+      Value value;
+      value.u64 = m_TypeInfos["*"].alignment;
+      return std::make_unique<ResolvedNumberLiteral>(alignof_expr->location, Type::builtin_u64(0), value);
+    } else if (m_TypeInfos.count(alignof_expr->type_name)) {
+      Value value;
+      value.u64 = m_TypeInfos[alignof_expr->type_name].alignment;
+      return std::make_unique<ResolvedNumberLiteral>(alignof_expr->location, Type::builtin_u64(0), value);
+    } else {
+      return report(alignof_expr->location, "unknown type " + alignof_expr->type_name + ".");
+    }
+  }
   if (type) {
     if (const auto *struct_literal = dynamic_cast<const StructLiteralExpr *>(&expr))
       return resolve_struct_literal_expr(*struct_literal, *type);

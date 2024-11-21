@@ -31,6 +31,8 @@ enum class TokenKind : char {
   KwNull,
   KwVar,
   KwEnum,
+  KwSizeof,
+  KwAlignof,
   Slash,
   AmpAmp,
   PipePipe,
@@ -69,12 +71,11 @@ enum class TokenKind : char {
 };
 
 const std::unordered_map<std::string_view, TokenKind> keywords = {
-    {"void", TokenKind::KwVoid},     {"export", TokenKind::KwExport}, {"module", TokenKind::KwModule}, {"defer", TokenKind::KwDefer},
-    {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},         {"if", TokenKind::KwIf},         {"else", TokenKind::KwElse},
-    {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},       {"const", TokenKind::KwConst},   {"var", TokenKind::KwVar},
-    {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},     {"enum", TokenKind::KwEnum},     {"extern", TokenKind::KwExtern},
-    {"alias", TokenKind::KwAlias},
-};
+    {"void", TokenKind::KwVoid},     {"export", TokenKind::KwExport}, {"module", TokenKind::KwModule},  {"defer", TokenKind::KwDefer},
+    {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},         {"if", TokenKind::KwIf},          {"else", TokenKind::KwElse},
+    {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},       {"const", TokenKind::KwConst},    {"var", TokenKind::KwVar},
+    {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},     {"enum", TokenKind::KwEnum},      {"extern", TokenKind::KwExtern},
+    {"alias", TokenKind::KwAlias},   {"sizeof", TokenKind::KwSizeof}, {"alignof", TokenKind::KwAlignof}};
 
 struct Token {
   SourceLocation location;
