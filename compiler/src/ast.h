@@ -199,6 +199,7 @@ struct ConstexprResult {
   Value value;
   Type::Kind kind;
 };
+
 struct Decl : public IDumpable {
   SourceLocation location;
   std::string id;
@@ -217,6 +218,22 @@ struct Stmt : public IDumpable {
 
 struct Expr : public Stmt {
   inline Expr(SourceLocation loc) : Stmt(loc) {}
+};
+
+struct SizeofExpr : public Expr {
+  std::string type_name;
+  bool is_ptr;
+  unsigned long array_element_count;
+  inline explicit SizeofExpr(SourceLocation loc, std::string type_name, bool is_ptr, unsigned long array_element_count)
+      : Expr(loc), type_name(std::move(type_name)), is_ptr(is_ptr), array_element_count(array_element_count) {}
+  DUMP_IMPL
+};
+
+struct AlignofExpr : public Expr {
+  std::string type_name;
+  bool is_ptr;
+  inline explicit AlignofExpr(SourceLocation loc, std::string type_name, bool is_ptr) : Expr(loc), type_name(std::move(type_name)), is_ptr(is_ptr) {}
+  DUMP_IMPL
 };
 
 struct NullExpr : public Expr {

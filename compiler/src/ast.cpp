@@ -183,6 +183,14 @@ bool is_equal(const Type &a, const Type &b) {
 
 bool Type::operator==(const Type &other) const { return is_equal(*this, other); }
 
+void SizeofExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "Sizeof(" << type_name << (is_ptr ? "*" : "") << " x" << array_element_count << ")\n";
+}
+
+void AlignofExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "Alignof(" << type_name << (is_ptr ? "*" : "") << ")\n";
+}
+
 void NullExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const { stream << indent(indent_level) << "Null\n"; }
 
 void Block::dump_to_stream(std::stringstream &stream, size_t indent_level) const {

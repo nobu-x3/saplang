@@ -465,6 +465,8 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 // | <nullExpr>
 // | <arrayInitializer>
 // | <enumElementAccess>
+// | <alignOfExpr>
+// | <sizeOfExpr>
 //
 // <arrayInitializer>
 // ::= '[' (<primaryExpression> (',')*)* ']'
@@ -515,6 +517,12 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
       return report(m_NextToken.location, "expected ')'.");
     eat_next_token(); // eat ')'
     return std::make_unique<GroupingExpr>(location, std::move(expr));
+  }
+  if (m_NextToken.kind == TokenKind::KwSizeof) {
+    return parse_sizeof_expr();
+  }
+  if (m_NextToken.kind == TokenKind::KwAlignof) {
+    return parse_alignof_expr();
   }
   if (m_NextToken.kind == TokenKind::KwNull) {
     eat_next_token(); // eat 'null'
@@ -844,6 +852,78 @@ std::unique_ptr<Expr> Parser::parse_expr_rhs(std::unique_ptr<Expr> lhs, int prec
     }
     lhs = std::make_unique<BinaryOperator>(lhs->location, std::move(lhs), std::move(rhs), op);
   }
+}
+
+// <sizeOfExpr>
+// ::= 'sizeof' '(' 'type' ('*')* ')'
+std::unique_ptr<SizeofExpr> Parser::parse_sizeof_expr() {
+  assert(m_NextToken.kind == TokenKind::KwSizeof);
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token();
+  if (m_NextToken.kind != TokenKind::Lparent)
+    return report(m_NextToken.location, "sizeof() is a function. '(' expected before type.");
+  eat_next_token();
+  if (m_NextToken.kind != TokenKind::Identifier)
+    return report(m_NextToken.location, "Name of type expected.");
+  std::string type_name = *m_NextToken.value;
+  eat_next_token();
+  bool is_ptr = false;
+  if (m_NextToken.kind == TokenKind::Asterisk) {
+    is_ptr = true;
+    eat_next_token();
+  }
+  unsigned long array_element_count{1};
+  if (m_NextToken.kind == TokenKind::Lbracket) {
+    eat_next_token();
+    if (m_NextToken.kind != TokenKind::Integer) {
+      return report(m_NextToken.location, "expected integer in sizeof array.");
+    }
+    array_element_count = std::stoul(*m_NextToken.value);
+    eat_next_token();
+    if (m_NextToken.kind != TokenKind::Rbracket) {
+      return report(m_NextToken.location, "expected ']'.");
+    }
+    eat_next_token();
+  }
+  if (m_NextToken.kind != TokenKind::Rparent)
+    return report(m_NextToken.location, "sizeof() is a function. ')' expected after type.");
+  eat_next_token();
+  return std::make_unique<SizeofExpr>(loc, std::move(type_name), is_ptr, array_element_count);
+}
+
+// <alignOfExpr>
+// ::= 'alignof' '(' 'type' ('*')* ')')
+std::unique_ptr<AlignofExpr> Parser::parse_alignof_expr() {
+  assert(m_NextToken.kind == TokenKind::KwAlignof);
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token();
+  if (m_NextToken.kind != TokenKind::Lparent)
+    return report(m_NextToken.location, "alignof() is a function. '(' expected before type.");
+  eat_next_token();
+  if (m_NextToken.kind != TokenKind::Identifier)
+    return report(m_NextToken.location, "Name of type expected.");
+  std::string type_name = *m_NextToken.value;
+  eat_next_token();
+  bool is_ptr = false;
+  if (m_NextToken.kind == TokenKind::Asterisk) {
+    is_ptr = true;
+    eat_next_token();
+  }
+  if (m_NextToken.kind == TokenKind::Lbracket) {
+    eat_next_token();
+    if (m_NextToken.kind != TokenKind::Integer) {
+      return report(m_NextToken.location, "expected integer in alignof array.");
+    }
+    eat_next_token();
+    if (m_NextToken.kind != TokenKind::Rbracket) {
+      return report(m_NextToken.location, "expected ']'.");
+    }
+    eat_next_token();
+  }
+  if (m_NextToken.kind != TokenKind::Rparent)
+    return report(m_NextToken.location, "alignof() is a function. ')' expected after type.");
+  eat_next_token();
+  return std::make_unique<AlignofExpr>(loc, std::move(type_name), is_ptr);
 }
 // <paramDecl>
 // ::= <type> <identifier>
