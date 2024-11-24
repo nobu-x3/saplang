@@ -559,6 +559,12 @@ struct ResolvedIfStmt : public ResolvedStmt {
   DUMP_IMPL
 };
 
+struct ResolvedDeferStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedBlock> block;
+  inline explicit ResolvedDeferStmt(SourceLocation loc, std::unique_ptr<ResolvedBlock> block) : ResolvedStmt(loc), block(std::move(block)) {}
+  DUMP_IMPL
+};
+
 struct ResolvedNumberLiteral : public ResolvedExpr {
   Value value;
   explicit ResolvedNumberLiteral(SourceLocation loc, NumberLiteral::NumberType type, const std::string &value);

@@ -36,7 +36,7 @@ TEST_CASE("Function declarations", "[parser]") {
   SECTION("expected parameter declaration") {
     TEST_SETUP(R"(fn int f({})");
     REQUIRE(output_buffer.str().empty());
-    REQUIRE(error_stream.str() == "test:1:10 error: expected parameter declaration.\n");
+    REQUIRE(error_stream.str() == "test:1:10 error: expected type specifier.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("expected parameter identifier") {
@@ -236,7 +236,7 @@ fn void f({}
 )");
     REQUIRE(output_buffer.str().size() == 0);
     REQUIRE(error_stream.str() ==
-            R"(test:2:11 error: expected parameter declaration.
+            R"(test:2:11 error: expected type specifier.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
@@ -252,7 +252,7 @@ fn void f(x){}
     TEST_SETUP("fn void f(1.0 x){}");
     REQUIRE(output_buffer.str().empty());
     REQUIRE(error_stream.str() ==
-            R"(test:1:11 error: expected parameter declaration.
+            R"(test:1:11 error: expected type specifier.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
@@ -265,7 +265,7 @@ fn void f(x){}
   SECTION("fn void f(int a,){}") {
     TEST_SETUP("fn void f(int a,){}");
     REQUIRE(output_buffer.str().empty());
-    REQUIRE(error_stream.str() == "test:1:17 error: expected parameter declaration.\n");
+    REQUIRE(error_stream.str() == "test:1:17 error: expected type specifier.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("fn void foo(i32 a, i32 b){}") {
@@ -359,7 +359,7 @@ fn int pass() {
 )");
   REQUIRE(error_stream.str() ==
           R"(test:2:9 error: expected function identifier.
-test:10:15 error: expected parameter declaration.
+test:10:15 error: expected type specifier.
 test:17:1 error: expected '}' at the end of a block.
 test:17:1 error: failed to parse function block.
 )");

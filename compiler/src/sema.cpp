@@ -448,6 +448,12 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
   return std::make_unique<ResolvedIfStmt>(stmt.location, std::move(condition), std::move(true_block), std::move(false_block));
 }
 
+std::unique_ptr<ResolvedDeferStmt> Sema::resolve_defer_stmt(const DeferStmt& stmt){
+  auto block = resolve_block(*stmt.block);
+  assert(block && "failed to resolve defer block.");
+  return std::make_unique<ResolvedDeferStmt>(stmt.location, std::move(block));
+}
+
 std::optional<DeclLookupResult> Sema::lookup_decl(std::string_view id, std::optional<const Type *> type) {
   int scope_id = 0;
   for (auto it = m_Scopes.rbegin(); it != m_Scopes.rend(); ++it) {
@@ -736,6 +742,8 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
     return resolve_return_stmt(*return_stmt);
   if (auto *if_stmt = dynamic_cast<const IfStmt *>(&stmt))
     return resolve_if_stmt(*if_stmt);
+  if (auto *defer_stmt = dynamic_cast<const DeferStmt *>(&stmt))
+    return resolve_defer_stmt(*defer_stmt);
   if (auto *while_stmt = dynamic_cast<const WhileStmt *>(&stmt))
     return resolve_while_stmt(*while_stmt);
   if (auto *var_decl_stmt = dynamic_cast<const DeclStmt *>(&stmt))

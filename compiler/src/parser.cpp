@@ -792,18 +792,10 @@ std::optional<ParameterList> Parser::parse_parameter_list() {
   }
   bool is_vll = false;
   while (true) {
-    if (m_NextToken.kind == TokenKind::KwVoid) {
-      report(m_NextToken.location, "invalid paramater type 'void'.");
-      return std::nullopt;
-    }
     if (m_NextToken.kind == TokenKind::VLL) {
       eat_next_token(); // eat '...'
       is_vll = true;
       break;
-    }
-    if (m_NextToken.kind != TokenKind::Identifier && m_NextToken.kind != TokenKind::KwConst) {
-      report(m_NextToken.location, "expected parameter declaration.");
-      return std::nullopt;
     }
     auto param_decl = parse_param_decl();
     if (!param_decl)

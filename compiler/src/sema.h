@@ -82,6 +82,8 @@ private:
 
   std::unique_ptr<ResolvedIfStmt> resolve_if_stmt(const IfStmt &stmt);
 
+  std::unique_ptr<ResolvedDeferStmt> resolve_defer_stmt(const DeferStmt& stmt);
+
   std::unique_ptr<ResolvedWhileStmt> resolve_while_stmt(const WhileStmt &stmt);
 
   std::unique_ptr<ResolvedForStmt> resolve_for_stmt(const ForStmt &stmt);
