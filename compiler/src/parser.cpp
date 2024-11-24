@@ -153,6 +153,7 @@ std::unique_ptr<Block> Parser::parse_block() {
 // | <forStatement>
 // | <varDeclStatement>
 // | <assignment>
+// | <deferStmt>
 std::unique_ptr<Stmt> Parser::parse_stmt() {
   if (m_NextToken.kind == TokenKind::KwWhile)
     return parse_while_stmt();
@@ -162,6 +163,8 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     return parse_if_stmt();
   if (m_NextToken.kind == TokenKind::KwReturn)
     return parse_return_stmt();
+  if (m_NextToken.kind == TokenKind::KwDefer)
+    return parse_defer_stmt();
   if (m_NextToken.kind == TokenKind::KwConst || m_NextToken.kind == TokenKind::KwVar)
     return parse_var_decl_stmt();
   auto stmt = parse_assignment_or_expr();
@@ -210,6 +213,27 @@ std::unique_ptr<IfStmt> Parser::parse_if_stmt() {
     return nullptr;
   return std::make_unique<IfStmt>(location, std::move(condition), std::move(true_block), std::move(false_block));
 }
+
+// <deferStmt>
+// ::= 'defer' <block>
+std::unique_ptr<DeferStmt> Parser::parse_defer_stmt() {
+  assert(m_NextToken.kind == TokenKind::KwDefer && "expected defer stmt");
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token();
+  std::unique_ptr<Block> block{nullptr};
+  if (m_NextToken.kind == TokenKind::Lbrace) {
+    block = parse_block();
+  } else {
+    SourceLocation block_location = m_NextToken.location;
+    auto stmt = parse_stmt();
+    std::vector<std::unique_ptr<Stmt>> stmt_vec{};
+    stmt_vec.emplace_back(std::move(stmt));
+    block = std::make_unique<Block>(block_location, std::move(stmt_vec));
+  }
+  assert(block && "failed to parse defer block.");
+  return std::make_unique<DeferStmt>(loc, std::move(block));
+}
+
 // <whileStatement>
 //  ::= 'while' <expr> <block>
 std::unique_ptr<WhileStmt> Parser::parse_while_stmt() {

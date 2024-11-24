@@ -428,6 +428,12 @@ struct IfStmt : public Stmt {
   DUMP_IMPL
 };
 
+struct DeferStmt : public Stmt {
+  std::unique_ptr<Block> block;
+  inline explicit DeferStmt(SourceLocation loc, std::unique_ptr<Block> block) : Stmt(loc), block(std::move(block)) {}
+  DUMP_IMPL
+};
+
 struct FunctionDecl : public Decl {
   Type type;
   std::vector<std::unique_ptr<ParamDecl>> params;

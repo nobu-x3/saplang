@@ -58,6 +58,7 @@ private:
   std::unique_ptr<AlignofExpr> parse_alignof_expr();
   std::unique_ptr<EnumElementAccess> parse_enum_element_access(std::string enum_id);
   std::unique_ptr<ParamDecl> parse_param_decl();
+  std::unique_ptr<DeferStmt> parse_defer_stmt();
   std::optional<Type> parse_type();
 
   using ArgumentList = std::vector<std::unique_ptr<Expr>>;

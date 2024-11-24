@@ -226,6 +226,11 @@ void IfStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) cons
   }
 }
 
+void DeferStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "DeferStmt:\n";
+  block->dump_to_stream(stream, indent_level + 1);
+}
+
 void FunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   std::string lib_og_name_resolve = "";
   if (!lib.empty() && !og_name.empty()) {
