@@ -2635,3 +2635,83 @@ struct Type {
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %8");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
+
+TEST_CASE("defer stmts", "[codegen]") {
+  TEST_SETUP(R"(
+extern {
+  fn void* malloc(i32 size);
+  fn void free(void* ptr);
+}
+fn void main() {
+  var i32* ptr = malloc(sizeof(i32));
+  defer free(ptr);
+  if(ptr == 0){ return; }
+  var i32* ptr2 = malloc(sizeof(i32));
+  defer {
+    free(ptr2);
+  }
+  if(ptr2 == 0){ return; }
+  var i32* ptr3 = malloc(sizeof(i32));
+  var i32* ptr4 = malloc(sizeof(i32));
+  defer {
+    free(ptr3);
+    free(ptr4);
+  }
+  if(ptr3 == 0 || ptr4 == 0) { return; }
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  REQUIRE(output_string == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 5;
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") ptr:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") malloc:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeferStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") free:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") ptr:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") ptr2:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") malloc:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeferStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") free:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") ptr2:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") ptr3:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") malloc:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") ptr4:ptr i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") malloc:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u64(4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeferStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") free:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") ptr3:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+  REQUIRE(lines_it->find(") free:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+  REQUIRE(lines_it->find(") ptr4:") != std::string::npos);
+}

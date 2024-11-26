@@ -15,6 +15,13 @@ public:
   std::unique_ptr<llvm::Module> generate_ir();
 
 private:
+  struct CurrentFunction {
+    llvm::Function *current_function;
+    std::vector<llvm::BasicBlock *> deferred_blocks;
+    llvm::Value *return_value{nullptr};
+    llvm::BasicBlock *return_bb{nullptr};
+  };
+
   void gen_func_decl(const ResolvedFuncDecl &decl);
 
   void gen_func_body(const ResolvedFuncDecl &decl);
@@ -38,6 +45,8 @@ private:
   llvm::Value *gen_stmt(const ResolvedStmt &stmt);
 
   llvm::Value *gen_if_stmt(const ResolvedIfStmt &stmt);
+
+  llvm::Value *gen_defer_stmt(const ResolvedDeferStmt &stmt);
 
   llvm::Value *gen_while_stmt(const ResolvedWhileStmt &stmt);
 
@@ -88,11 +97,10 @@ private:
   llvm::Value *bool_to_type(Type::Kind kind, llvm::Value *value);
 
 private:
+  CurrentFunction m_CurrentFunction;
   std::vector<std::unique_ptr<ResolvedDecl>> m_ResolvedTree{};
   std::map<const ResolvedDecl *, llvm::Value *> m_Declarations{};
   std::map<std::string, llvm::Type *> m_CustomTypes{};
-  llvm::Value *m_RetVal{nullptr};
-  llvm::BasicBlock *m_RetBB{nullptr};
   llvm::Instruction *m_AllocationInsertPoint{nullptr};
   llvm::LLVMContext m_Context;
   llvm::IRBuilder<> m_Builder;
