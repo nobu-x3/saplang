@@ -371,9 +371,18 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type, ConstantExpressionEvalu
     }
     return false;
   }
+  // @TODO: NULLPTR COMPARISONS
   if (type.pointer_depth != expr.type.pointer_depth) {
-    if (const auto *null_expr = dynamic_cast<const NullExpr *>(&expr)) {
-      return true;
+    if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr)) {
+      if (const auto *null_expr_rhs = dynamic_cast<const ResolvedNullExpr *>(binop->rhs.get())) {
+        return true;
+      } else if (const auto *null_expr_lhs = dynamic_cast<const ResolvedNullExpr *>(binop->lhs.get())) {
+        return true;
+      } else {
+        return try_cast_expr(*binop->lhs, type, cee, is_array_decay) && try_cast_expr(*binop->rhs, type, cee, is_array_decay);
+      }
+    } else if (const auto *groupexp = dynamic_cast<const ResolvedGroupingExpr *>(&expr)) {
+      return try_cast_expr(*groupexp->expr, type, cee, is_array_decay);
     }
     return false;
   }
@@ -448,7 +457,7 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
   return std::make_unique<ResolvedIfStmt>(stmt.location, std::move(condition), std::move(true_block), std::move(false_block));
 }
 
-std::unique_ptr<ResolvedDeferStmt> Sema::resolve_defer_stmt(const DeferStmt& stmt){
+std::unique_ptr<ResolvedDeferStmt> Sema::resolve_defer_stmt(const DeferStmt &stmt) {
   auto block = resolve_block(*stmt.block);
   assert(block && "failed to resolve defer block.");
   return std::make_unique<ResolvedDeferStmt>(stmt.location, std::move(block));
@@ -870,7 +879,12 @@ bool is_bitwise_op(TokenKind op) {
 
 std::unique_ptr<ResolvedExpr> Sema::resolve_binary_operator(const BinaryOperator &op) {
   auto resolved_lhs = resolve_expr(*op.lhs);
-  auto resolved_rhs = resolve_expr(*op.rhs);
+  assert(resolved_lhs);
+  Type *rhs_type = nullptr;
+  if (const auto *nullexpr = dynamic_cast<const NullExpr *>(op.rhs.get())) {
+    rhs_type = &resolved_lhs->type;
+  }
+  auto resolved_rhs = resolve_expr(*op.rhs, rhs_type);
   if (!resolved_lhs || !resolved_rhs)
     return nullptr;
   if (is_comp_op(op.op) && !is_same_type(resolved_lhs->type, resolved_rhs->type)) {
