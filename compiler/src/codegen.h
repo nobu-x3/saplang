@@ -17,9 +17,11 @@ public:
 private:
   struct CurrentFunction {
     llvm::Function *current_function;
-    std::vector<llvm::BasicBlock *> deferred_blocks;
+    std::vector<const ResolvedDeferStmt *> deferred_stmts;
     llvm::Value *return_value{nullptr};
     llvm::BasicBlock *return_bb{nullptr};
+    bool is_void{false};
+    llvm::Type* return_type{nullptr};
   };
 
   void gen_func_decl(const ResolvedFuncDecl &decl);
@@ -45,8 +47,6 @@ private:
   llvm::Value *gen_stmt(const ResolvedStmt &stmt);
 
   llvm::Value *gen_if_stmt(const ResolvedIfStmt &stmt);
-
-  llvm::Value *gen_defer_stmt(const ResolvedDeferStmt &stmt);
 
   llvm::Value *gen_while_stmt(const ResolvedWhileStmt &stmt);
 

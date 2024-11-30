@@ -1,4 +1,5 @@
 #include "cfg.h"
+#include "ast.h"
 
 #include <llvm/Support/ErrorHandling.h>
 
@@ -83,7 +84,12 @@ int CFGBuilder::insert_stmt(const ResolvedStmt &stmt, int block) {
     return insert_decl_stmt(*decl_stmt, block);
   if (auto *assignment = dynamic_cast<const ResolvedAssignment *>(&stmt))
     return insert_assignment(*assignment, block);
-  llvm_unreachable("unexpected expression.");
+  if (auto *defer = dynamic_cast<const ResolvedDeferStmt *>(&stmt)) {
+    // @TODO: atm don't do anything
+    return m_CFG.basic_blocks.size() - 1;
+  } else {
+    llvm_unreachable("unexpected expression.");
+  }
 }
 
 int CFGBuilder::insert_if_stmt(const ResolvedIfStmt &if_stmt, int exit) {
