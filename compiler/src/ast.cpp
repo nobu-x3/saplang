@@ -226,6 +226,11 @@ void IfStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) cons
   }
 }
 
+void DeferStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "DeferStmt:\n";
+  block->dump_to_stream(stream, indent_level + 1);
+}
+
 void FunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   std::string lib_og_name_resolve = "";
   if (!lib.empty() && !og_name.empty()) {
@@ -481,15 +486,19 @@ void ResolvedWhileStmt::dump_to_stream(std::stringstream &stream, size_t indent_
 }
 
 void ResolvedIfStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
-  stream << indent(indent_level) << "ResolvedIfStmt\n";
+  stream << indent(indent_level) << "ResolvedIfStmt:\n";
   condition->dump_to_stream(stream, indent_level + 1);
-
-  stream << indent(indent_level + 1) << "ResolvedIfBlock\n";
+  stream << indent(indent_level + 1) << "ResolvedIfBlock:\n";
   true_block->dump_to_stream(stream, indent_level + 2);
   if (false_block) {
-    stream << indent(indent_level + 1) << "ResolvedElseBlock\n";
+    stream << indent(indent_level + 1) << "ResolvedElseBlock:\n";
     false_block->dump_to_stream(stream, indent_level + 2);
   }
+}
+
+void ResolvedDeferStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedDeferStmt:\n";
+  block->dump_to_stream(stream, indent_level + 1);
 }
 
 void ResolvedParamDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {

@@ -172,14 +172,14 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
   assert(undef);
   m_AllocationInsertPoint = new llvm::BitCastInst(undef, undef->getType(), "alloca.placeholder", entry_bb);
   assert(m_AllocationInsertPoint);
-  auto *return_type = gen_type(decl.type);
-  assert(return_type);
-  bool is_void = decl.type.kind == Type::Kind::Void;
-  if (!is_void) {
-    m_RetVal = alloc_stack_var(function, return_type, "retval");
+  m_CurrentFunction.return_type = gen_type(decl.type);
+  assert(m_CurrentFunction.return_type);
+  m_CurrentFunction.is_void = decl.type.kind == Type::Kind::Void;
+  if (!m_CurrentFunction.is_void) {
+    m_CurrentFunction.return_value = alloc_stack_var(function, m_CurrentFunction.return_type, "retval");
   }
-  m_RetBB = llvm::BasicBlock::Create(m_Context, "return");
-  assert(m_RetBB);
+  m_CurrentFunction.return_bb = llvm::BasicBlock::Create(m_Context, "return");
+  assert(m_CurrentFunction.return_bb);
   int idx = 0;
   for (auto &&arg : function->args()) {
     const auto *param_decl = decl.params[idx].get();
@@ -194,20 +194,22 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl) {
     ++idx;
   }
   gen_block(*decl.body);
-  if (m_RetBB->hasNPredecessorsOrMore(1)) {
-    m_Builder.CreateBr(m_RetBB);
-    m_RetBB->insertInto(function);
-    m_Builder.SetInsertPoint(m_RetBB);
+  if (m_CurrentFunction.return_bb->hasNPredecessorsOrMore(1)) {
+    m_Builder.CreateBr(m_CurrentFunction.return_bb);
+    m_CurrentFunction.return_bb->insertInto(function);
+    m_Builder.SetInsertPoint(m_CurrentFunction.return_bb);
   }
   m_AllocationInsertPoint->eraseFromParent();
   m_AllocationInsertPoint = nullptr;
-  if (is_void) {
+  if (m_CurrentFunction.is_void) {
     m_Builder.CreateRetVoid();
     return;
   }
-  llvm::Value *load_ret = m_Builder.CreateLoad(return_type, m_RetVal);
-  assert(load_ret);
-  m_Builder.CreateRet(load_ret);
+  if (m_CurrentFunction.deferred_stmts.size() == 0) {
+    llvm::Value *load_ret = m_Builder.CreateLoad(m_CurrentFunction.return_type, m_CurrentFunction.return_value);
+    assert(load_ret);
+    m_Builder.CreateRet(load_ret);
+  }
 }
 
 llvm::Type *Codegen::gen_type(const Type &type) {
@@ -261,15 +263,21 @@ llvm::AllocaInst *Codegen::alloc_stack_var(llvm::Function *func, llvm::Type *typ
 }
 
 void Codegen::gen_block(const ResolvedBlock &body) {
+  const ResolvedReturnStmt *last_ret_stmt = nullptr;
   for (auto &&stmt : body.statements) {
-    gen_stmt(*stmt);
+    if (const auto *defer_stmt = dynamic_cast<const ResolvedDeferStmt *>(stmt.get())) {
+      m_CurrentFunction.deferred_stmts.push_back(defer_stmt);
+    } else {
+      gen_stmt(*stmt);
+    }
     // @TODO: defer statements
     // After a return statement we clear the insertion point, so that
     // no other instructions are inserted into the current block and break.
     // The break ensures that no other instruction is generated that will be
     // inserted regardless of there is no insertion point and crash (e.g.:
     // CreateStore, CreateLoad).
-    if (dynamic_cast<const ResolvedReturnStmt *>(stmt.get())) {
+    if (auto *ret_stmt = dynamic_cast<const ResolvedReturnStmt *>(stmt.get())) {
+      last_ret_stmt = ret_stmt;
       m_Builder.ClearInsertionPoint();
       break;
     }
@@ -378,10 +386,22 @@ llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt) {
 }
 
 llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt) {
+  bool defer_present = false;
+  for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
+    defer_present = true;
+    gen_block(*(*rit)->block);
+  }
   if (stmt.expr)
-    m_Builder.CreateStore(gen_expr(*stmt.expr), m_RetVal);
-  assert(m_RetBB && "function with return stmt doesn't have a return block");
-  return m_Builder.CreateBr(m_RetBB);
+    m_Builder.CreateStore(gen_expr(*stmt.expr), m_CurrentFunction.return_value);
+  if (!defer_present) {
+    assert(m_CurrentFunction.return_bb && "function with return stmt doesn't have a return block");
+    return m_Builder.CreateBr(m_CurrentFunction.return_bb);
+  }
+  if (m_CurrentFunction.is_void)
+    return m_Builder.CreateRetVoid();
+  llvm::Value *load_ret = m_Builder.CreateLoad(m_CurrentFunction.return_type, m_CurrentFunction.return_value);
+  assert(load_ret);
+  return m_Builder.CreateRet(load_ret);
 }
 
 enum class SimpleNumType { SINT, UINT, FLOAT };

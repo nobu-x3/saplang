@@ -2635,3 +2635,125 @@ struct Type {
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %8");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }
+
+TEST_CASE("defer stmts", "[codegen]") {
+  TEST_SETUP(R"(
+extern {
+    fn void print(const u8*, ...) alias printf;
+    fn void* malloc(i32 size);
+    fn void free(void* ptr);
+}
+fn i32 main() {
+  var i32* ptr = malloc(sizeof(i32));
+  defer {
+    free(ptr);
+    print("first defer");
+  }
+  if(ptr == null){ return 1; }
+  var i32* ptr2 = malloc(sizeof(i32));
+  defer {
+    free(ptr2);
+    print("second defer");
+  }
+  if(ptr2 == null){ return 1; }
+  var i32* ptr3 = malloc(sizeof(i32));
+  var i32* ptr4 = malloc(sizeof(i32));
+  defer {
+    free(ptr3);
+    free(ptr4);
+    print("third defer");
+  }
+  if(ptr3 == null || ptr4 == null) { return 1; }
+  return 0;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 14;
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ptr = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ptr2 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ptr3 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%ptr4 = alloca ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = call ptr @malloc(i64 4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %0, ptr %ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load ptr, ptr %ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = icmp eq ptr %1, null");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool = icmp ne i1 %2, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool, label %if.true, label %if.exit");
+  CONTAINS_NEXT_REQUIRE(lines_it, "if.true:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load ptr, ptr %ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load i32, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "if.exit:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%5 = call ptr @malloc(i64 4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %5, ptr %ptr2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%6 = load ptr, ptr %ptr2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%7 = icmp eq ptr %6, null");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool1 = icmp ne i1 %7, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool1, label %if.true2, label %if.exit3");
+  CONTAINS_NEXT_REQUIRE(lines_it, "if.true2:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%8 = load ptr, ptr %ptr2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%9 = load ptr, ptr %ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %9)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.2)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%10 = load i32, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %10");
+  CONTAINS_NEXT_REQUIRE(lines_it, "if.exit3:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%11 = call ptr @malloc(i64 4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %11, ptr %ptr3, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%12 = call ptr @malloc(i64 4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %12, ptr %ptr4, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%13 = load ptr, ptr %ptr3, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%14 = icmp eq ptr %13, null");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool4 = icmp ne i1 %14, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool4, label %or.merge, label %or.rhs");
+  CONTAINS_NEXT_REQUIRE(lines_it, "or.rhs:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%15 = load ptr, ptr %ptr4, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%16 = icmp eq ptr %15, null");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool5 = icmp ne i1 %16, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %or.merge");
+  CONTAINS_NEXT_REQUIRE(lines_it, "or.merge:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%17 = phi i1 [ %to.bool5, %or.rhs ], [ true, %if.exit3 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool6 = icmp ne i1 %17, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool6, label %if.true7, label %if.exit8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "if.true7:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%18 = load ptr, ptr %ptr3, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %18)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%19 = load ptr, ptr %ptr4, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %19)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.3)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%20 = load ptr, ptr %ptr2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %20)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.4)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%21 = load ptr, ptr %ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %21)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.5)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%22 = load i32, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %22");
+  CONTAINS_NEXT_REQUIRE(lines_it, "if.exit8:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%23 = load ptr, ptr %ptr3, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %23)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%24 = load ptr, ptr %ptr4, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %24)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.6)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%25 = load ptr, ptr %ptr2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %25)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.7)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%26 = load ptr, ptr %ptr, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %26)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.8)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%27 = load i32, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %27");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}

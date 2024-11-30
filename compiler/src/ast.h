@@ -428,6 +428,12 @@ struct IfStmt : public Stmt {
   DUMP_IMPL
 };
 
+struct DeferStmt : public Stmt {
+  std::unique_ptr<Block> block;
+  inline explicit DeferStmt(SourceLocation loc, std::unique_ptr<Block> block) : Stmt(loc), block(std::move(block)) {}
+  DUMP_IMPL
+};
+
 struct FunctionDecl : public Decl {
   Type type;
   std::vector<std::unique_ptr<ParamDecl>> params;
@@ -550,6 +556,12 @@ struct ResolvedIfStmt : public ResolvedStmt {
   inline ResolvedIfStmt(SourceLocation loc, std::unique_ptr<ResolvedExpr> condition, std::unique_ptr<ResolvedBlock> true_block,
                         std::unique_ptr<ResolvedBlock> false_block)
       : ResolvedStmt(loc), condition(std::move(condition)), true_block(std::move(true_block)), false_block(std::move(false_block)) {}
+  DUMP_IMPL
+};
+
+struct ResolvedDeferStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedBlock> block;
+  inline explicit ResolvedDeferStmt(SourceLocation loc, std::unique_ptr<ResolvedBlock> block) : ResolvedStmt(loc), block(std::move(block)) {}
   DUMP_IMPL
 };
 
