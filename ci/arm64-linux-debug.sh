@@ -17,4 +17,4 @@ git clean -fd
 cmake -B build -G "$GENERATOR" -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILD_TESTS=On
 make -C build
 cd build
-ctest -C $BUILD_TYPE
+ctest -C $BUILD_TYPE --output-on-failure
