@@ -13,9 +13,8 @@ git fetch --unshallow || true
 git fetch --tags
 
 git clean -fd
-rm -rf build
 
 cmake -B build -G "$GENERATOR" -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILD_TESTS=On
-make -C build -j 4
+make -C build
 cd build
 ctest -C $BUILD_TYPE
