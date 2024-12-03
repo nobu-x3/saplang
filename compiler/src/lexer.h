@@ -8,7 +8,7 @@ namespace saplang {
 constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':', ';', ',', '+', '-', '*', '<', '>', '!', '.', '&', '[', ']', '"', '~', '^', '|', '%'};
 
 enum class TokenKind : char {
-  Unknown = -128,
+  Unknown = -127,
   Identifier,
   Integer,
   BinInteger,
