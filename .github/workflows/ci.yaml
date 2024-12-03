@@ -28,8 +28,12 @@ jobs:
         run: sh ci/arm64-linux-debug.sh
   x86_64-linux-debug:
     timeout-minutes: 420
-    runs-on: [Linux, x86_64]
+    runs-on: [ubuntu-latest, Linux, x86_64]
     steps:
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2.0.5
+        with:
+            version: "18.1.2"
       - name: Checkout
         uses: actions/checkout@v4
       - name: Pull changes
