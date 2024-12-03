@@ -35,6 +35,10 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2.0.5
         with:
             version: "18"
+            directory: ${{ runner.temp }}/llvm
+            env: true
+      # - name: Setup environment
+      #   run: sudo ln -s libclang-18.so.1 /lib/x86_64-linux-gnu/libclang.so && sudo ln -s llvm-18 /lib/x86_64-linux-gnu/llvm-18
       - name: Checkout
         uses: actions/checkout@v4
       - name: Pull changes
