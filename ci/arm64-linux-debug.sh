@@ -15,6 +15,6 @@ git fetch --tags
 git clean -fd
 
 cmake -B build -G "$GENERATOR" -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILD_TESTS=On
-make -C build
+make -C build -j 3
 cd build
 ctest -C $BUILD_TYPE --output-on-failure
