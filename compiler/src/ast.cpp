@@ -183,6 +183,13 @@ bool is_equal(const Type &a, const Type &b) {
 
 bool Type::operator==(const Type &other) const { return is_equal(*this, other); }
 
+void Module::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "Module(" << name << "):\n";
+  for (auto &&decl : declarations) {
+    decl->dump_to_stream(stream, indent_level + 1);
+  }
+}
+
 void SizeofExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "Sizeof(" << type_name << (is_ptr ? "*" : "") << " x" << array_element_count << ")\n";
 }
