@@ -220,6 +220,13 @@ struct Expr : public Stmt {
   inline Expr(SourceLocation loc) : Stmt(loc) {}
 };
 
+struct Module : public IDumpable {
+  std::string name;
+  std::vector<std::unique_ptr<Decl>> declarations;
+  inline Module(std::string module_name, std::vector<std::unique_ptr<Decl>> declarations) : name(std::move(module_name)), declarations(std::move(declarations)) {}
+  DUMP_IMPL
+};
+
 struct SizeofExpr : public Expr {
   std::string type_name;
   bool is_ptr;

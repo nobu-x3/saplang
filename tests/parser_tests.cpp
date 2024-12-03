@@ -9,7 +9,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer);                                                                                                                              \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  for (auto &&fn : parse_result.declarations) {                                                                                                                \
+  for (auto &&fn : parse_result.module.declarations) {                                                                                                         \
     fn->dump_to_stream(output_buffer);                                                                                                                         \
   }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
@@ -136,14 +136,8 @@ fn void main() {
     0.;
 }
 )");
-    REQUIRE(output_buffer.str() ==
-            R"(FunctionDecl: main:void
-  Block
-)");
-    REQUIRE(error_stream.str() ==
-            R"(test:3:6 error: expected '{' in struct literal initialization.
-test:4:5 error: expected expression.
-)");
+    REQUIRE(error_stream.str() == "test:3:6 error: expected '{' in struct literal initialization.\ntest:4:5 error: expected '}' at the end of a "
+                                  "block.\ntest:4:5 error: failed to parse function block.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("Correct number literals") {

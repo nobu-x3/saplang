@@ -100,7 +100,7 @@ int main(int argc, const char **argv) {
   auto ast = parser.parse_source_file();
   if (options.ast_dump) {
     std::stringstream ast_stream;
-    for (auto &&fn : ast.declarations) {
+    for (auto &&fn : ast.module.declarations) {
       fn->dump_to_stream(ast_stream, 0);
     }
     std::cout << ast_stream.str();
@@ -108,7 +108,7 @@ int main(int argc, const char **argv) {
   }
   if (!ast.is_complete_ast)
     return 1;
-  saplang::Sema sema{std::move(ast.declarations), true};
+  saplang::Sema sema{std::move(ast.module.declarations), true};
   auto resolved_tree = sema.resolve_ast(options.res_dump);
   if (options.res_dump) {
     std::stringstream output_stream;

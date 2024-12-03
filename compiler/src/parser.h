@@ -10,7 +10,7 @@ namespace saplang {
 
 struct ParsingResult {
   bool is_complete_ast;
-  std::vector<std::unique_ptr<Decl>> declarations;
+  Module module;
 };
 
 class Parser {

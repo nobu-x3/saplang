@@ -8,7 +8,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer);                                                                                                                              \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.declarations), true};                                                                                              \
+  saplang::Sema sema{std::move(parse_result.module.declarations), true};                                                                                       \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
   for (auto &&decl : resolved_ast) {                                                                                                                           \
     if (const auto *fn = dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {                                                                        \

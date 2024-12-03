@@ -30,6 +30,7 @@ enum class TokenKind : char {
   KwStruct,
   KwNull,
   KwVar,
+  KwImport,
   KwEnum,
   KwSizeof,
   KwAlignof,
@@ -43,7 +44,7 @@ enum class TokenKind : char {
   Equal,
   ColonColon,
   VLL,
-  BitwiseShiftL,
+  BitwiseShiftL = 80,
   BitwiseShiftR,
   Eof = single_char_tokens[0],
   Lparent = single_char_tokens[1],
@@ -71,11 +72,11 @@ enum class TokenKind : char {
 };
 
 const std::unordered_map<std::string_view, TokenKind> keywords = {
-    {"void", TokenKind::KwVoid},     {"export", TokenKind::KwExport}, {"module", TokenKind::KwModule},  {"defer", TokenKind::KwDefer},
-    {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},         {"if", TokenKind::KwIf},          {"else", TokenKind::KwElse},
-    {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},       {"const", TokenKind::KwConst},    {"var", TokenKind::KwVar},
-    {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},     {"enum", TokenKind::KwEnum},      {"extern", TokenKind::KwExtern},
-    {"alias", TokenKind::KwAlias},   {"sizeof", TokenKind::KwSizeof}, {"alignof", TokenKind::KwAlignof}};
+    {"void", TokenKind::KwVoid},     {"export", TokenKind::KwExport}, {"module", TokenKind::KwModule},   {"defer", TokenKind::KwDefer},
+    {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},         {"if", TokenKind::KwIf},           {"else", TokenKind::KwElse},
+    {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},       {"const", TokenKind::KwConst},     {"var", TokenKind::KwVar},
+    {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},     {"enum", TokenKind::KwEnum},       {"extern", TokenKind::KwExtern},
+    {"alias", TokenKind::KwAlias},   {"sizeof", TokenKind::KwSizeof}, {"alignof", TokenKind::KwAlignof}, {"import", TokenKind::KwImport}};
 
 struct Token {
   SourceLocation location;
@@ -89,6 +90,7 @@ public:
   Token get_next_token();
   Token get_prev_token();
   std::string get_string_literal();
+  inline std::string get_source_file_path() const { return std::string{m_Source->path}; }
 
 private:
   char peek_next_char(size_t count = 0) const;

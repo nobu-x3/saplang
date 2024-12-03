@@ -1,4 +1,5 @@
 #include <cassert>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -1077,6 +1078,9 @@ std::optional<Type> Parser::parse_type() {
 }
 
 // <sourceFile>
+// ::= <module>
+//
+// <module>
 // ::= <structDeclStmt>* <varDeclStatement>* <funcDecl>* <externBlockDecl>*
 // <enumDecl>* EOF
 ParsingResult Parser::parse_source_file() {
@@ -1124,7 +1128,9 @@ ParsingResult Parser::parse_source_file() {
     decls.emplace_back(std::move(decl));
   }
   assert(m_NextToken.kind == TokenKind::Eof);
-  return {is_complete_ast, std::move(decls)};
+  std::filesystem::path source_filepath = m_Lexer->get_source_file_path();
+  std::string filename = source_filepath.filename().replace_extension();
+  return {is_complete_ast, {std::move(filename), std::move(decls)}};
 }
 
 void Parser::synchronize() {
