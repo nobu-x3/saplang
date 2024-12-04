@@ -185,6 +185,11 @@ bool Type::operator==(const Type &other) const { return is_equal(*this, other); 
 
 void Module::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "Module(" << name << "):\n";
+  stream << indent(indent_level + 1) << "Imports: ";
+  for (auto &&_import : imports) {
+    stream << _import << " ";
+  }
+  stream << '\n';
   for (auto &&decl : declarations) {
     decl->dump_to_stream(stream, indent_level + 1);
   }
@@ -510,6 +515,13 @@ void ResolvedDeferStmt::dump_to_stream(std::stringstream &stream, size_t indent_
 
 void ResolvedParamDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedParamDecl: @(" << this << ") " << id << ":\n";
+}
+
+void ResolvedModule::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedModule(" << name << "):\n";
+  for (auto &&decl : declarations) {
+    decl->dump_to_stream(stream, indent_level + 1);
+  }
 }
 
 void ResolvedVarDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {

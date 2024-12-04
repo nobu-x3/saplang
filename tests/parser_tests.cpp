@@ -14,6 +14,17 @@
   }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
 
+#define TEST_SETUP_MODULE_SINGLE(module_name, file_contents)                                                                                                   \
+  saplang::clear_error_stream();                                                                                                                               \
+  std::stringstream buffer{file_contents};                                                                                                                     \
+  std::stringstream output_buffer{};                                                                                                                           \
+  saplang::SourceFile src_file{module_name, buffer.str()};                                                                                                     \
+  saplang::Lexer lexer{src_file};                                                                                                                              \
+  saplang::Parser parser(&lexer);                                                                                                                              \
+  auto parse_result = parser.parse_source_file();                                                                                                              \
+  parse_result.module.dump_to_stream(output_buffer);                                                                                                           \
+  const auto &error_stream = saplang::get_error_stream();
+
 TEST_CASE("Function declarations", "[parser]") {
   SECTION("Undeclared function name") {
     TEST_SETUP(R"(fn{}))");
@@ -1870,4 +1881,21 @@ fn void main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: free");
   CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: ptr4");
+}
+
+TEST_CASE("Module parsing", "[parser]") {
+  {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+        import std;
+        import renderer;
+        fn void main() {}
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("Module(test):") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "Imports: std renderer");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:void");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  }
 }

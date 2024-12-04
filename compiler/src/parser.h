@@ -43,6 +43,7 @@ private:
   using MaybeExternBlock = std::optional<std::vector<std::unique_ptr<Decl>>>;
   MaybeExternBlock parse_extern_block();
 
+  std::string parse_import();
   std::unique_ptr<Block> parse_block();
   std::unique_ptr<Stmt> parse_stmt();
   std::unique_ptr<ReturnStmt> parse_return_stmt();

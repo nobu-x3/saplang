@@ -45,6 +45,26 @@ std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
   return std::make_unique<FunctionDecl>(location, function_identifier, *return_type, std::move(param_list), std::move(block), false);
 }
 
+// <imports>
+// ::= ('import' <identifier> ';')*
+std::string Parser::parse_import() {
+  assert(m_NextToken.kind == TokenKind::KwImport);
+  eat_next_token(); // eat 'import'
+  std::string import_name;
+  if (m_NextToken.kind != TokenKind::Identifier) {
+    report(m_NextToken.location, "expected module identifier.");
+    return import_name;
+  }
+  import_name = m_NextToken.value.value();
+  eat_next_token(); // eat import name
+  if (m_NextToken.kind != TokenKind::Semicolon) {
+    report(m_NextToken.location, "expected semicolon after module identifier.");
+    return "";
+  }
+  eat_next_token();
+  return import_name;
+}
+
 // <externBlockDecl>
 // ::= 'extern' <identifier> '{' ('fn' <type> <identifier> '('
 // (<parameterList>)* ')' ';')* <structDeclStmt>* <enumDecl>* '}'
@@ -1081,11 +1101,20 @@ std::optional<Type> Parser::parse_type() {
 // ::= <module>
 //
 // <module>
-// ::= <structDeclStmt>* <varDeclStatement>* <funcDecl>* <externBlockDecl>*
+// ::= <imports> <structDeclStmt>* <varDeclStatement>* <funcDecl>* <externBlockDecl>*
 // <enumDecl>* EOF
 ParsingResult Parser::parse_source_file() {
   std::vector<std::unique_ptr<Decl>> decls;
   bool is_complete_ast = true;
+  std::vector<std::string> imports;
+  while (m_NextToken.kind == TokenKind::KwImport) {
+    std::string _import = std::move(parse_import());
+    if (_import.empty()) {
+      is_complete_ast = false;
+      break;
+    }
+    imports.emplace_back(std::move(_import));
+  }
   const std::vector<TokenKind> sync_kinds{TokenKind::KwFn, TokenKind::KwStruct, TokenKind::KwConst, TokenKind::KwVar, TokenKind::KwEnum};
   while (m_NextToken.kind != TokenKind::Eof) {
     if (m_NextToken.kind != TokenKind::KwFn && m_NextToken.kind != TokenKind::KwStruct && m_NextToken.kind != TokenKind::KwVar &&
@@ -1130,7 +1159,7 @@ ParsingResult Parser::parse_source_file() {
   assert(m_NextToken.kind == TokenKind::Eof);
   std::filesystem::path source_filepath = m_Lexer->get_source_file_path();
   std::string filename = source_filepath.filename().replace_extension();
-  return {is_complete_ast, {std::move(filename), std::move(decls)}};
+  return {is_complete_ast, {std::move(filename), std::move(decls), std::move(imports)}};
 }
 
 void Parser::synchronize() {
