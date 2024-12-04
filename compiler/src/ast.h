@@ -223,7 +223,9 @@ struct Expr : public Stmt {
 struct Module : public IDumpable {
   std::string name;
   std::vector<std::unique_ptr<Decl>> declarations;
-  inline Module(std::string module_name, std::vector<std::unique_ptr<Decl>> declarations) : name(std::move(module_name)), declarations(std::move(declarations)) {}
+  std::vector<std::string> imports;
+  inline Module(std::string module_name, std::vector<std::unique_ptr<Decl>> declarations, std::vector<std::string> imports)
+      : name(std::move(module_name)), declarations(std::move(declarations)), imports(std::move(imports)) {}
   DUMP_IMPL
 };
 
@@ -503,6 +505,14 @@ struct ResolvedDecl : public IDumpable {
   inline ResolvedDecl(SourceLocation loc, std::string id, Type &&type, std::string lib = "", std::string og_name = "")
       : location(loc), id(std::move(id)), type(std::move(type)), lib(std::move(lib)), og_name(std::move(og_name)) {}
   virtual ~ResolvedDecl() = default;
+};
+
+struct ResolvedModule : public IDumpable {
+  std::string name;
+  std::vector<std::unique_ptr<ResolvedDecl>> declarations;
+  inline ResolvedModule(std::string module_name, std::vector<std::unique_ptr<ResolvedDecl>> decls)
+      : name(std::move(module_name)), declarations(std::move(decls)) {}
+  DUMP_IMPL
 };
 
 struct ResolvedVarDecl : public ResolvedDecl {
