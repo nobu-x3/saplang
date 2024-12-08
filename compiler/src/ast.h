@@ -205,8 +205,9 @@ struct Decl : public IDumpable {
   std::string id;
   std::string lib;
   std::string og_name;
-  inline Decl(SourceLocation location, std::string id, std::string lib = "", std::string og_name = "")
-      : location(location), id(std::move(id)), lib(std::move(lib)), og_name(std::move(og_name)) {}
+  bool is_exported;
+  inline Decl(SourceLocation location, std::string id, std::string lib = "", std::string og_name = "", bool is_exported = false)
+      : location(location), id(std::move(id)), lib(std::move(lib)), og_name(std::move(og_name)), is_exported(is_exported) {}
   virtual ~Decl() = default;
 };
 
@@ -254,15 +255,17 @@ struct VarDecl : public Decl {
   Type type;
   std::unique_ptr<Expr> initializer;
   bool is_const;
-  inline VarDecl(SourceLocation loc, std::string id, Type type, std::unique_ptr<Expr> init, bool is_const, std::string lib = "", std::string og_name = "")
-      : Decl(loc, std::move(id), std::move(lib), std::move(og_name)), type(type), initializer(std::move(init)), is_const(is_const) {}
+  inline VarDecl(SourceLocation loc, std::string id, Type type, std::unique_ptr<Expr> init, bool is_const, std::string lib = "", std::string og_name = "",
+                 bool is_exported = false)
+      : Decl(loc, std::move(id), std::move(lib), std::move(og_name), is_exported), type(type), initializer(std::move(init)), is_const(is_const) {}
   DUMP_IMPL
 };
 
 struct StructDecl : public Decl {
   std::vector<std::pair<Type, std::string>> members;
-  inline StructDecl(SourceLocation loc, const std::string &id, std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "")
-      : Decl(loc, std::move(id), std::move(lib), std::move(og_name)), members(std::move(types)) {}
+  inline StructDecl(SourceLocation loc, const std::string &id, std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "",
+                    bool is_exported = false)
+      : Decl(loc, std::move(id), std::move(lib), std::move(og_name), is_exported), members(std::move(types)) {}
   DUMP_IMPL
 };
 
@@ -270,8 +273,9 @@ struct EnumDecl : public Decl {
   std::unordered_map<std::string, long> name_values_map;
   Type underlying_type;
   inline EnumDecl(SourceLocation loc, std::string id, Type underlying_type, std::unordered_map<std::string, long> name_values_map, std::string lib = "",
-                  std::string og_name = "")
-      : Decl(loc, std::move(id), std::move(lib), std::move(og_name)), underlying_type(underlying_type), name_values_map(std::move(name_values_map)) {}
+                  std::string og_name = "", bool is_exported = false)
+      : Decl(loc, std::move(id), std::move(lib), std::move(og_name), is_exported), underlying_type(underlying_type),
+        name_values_map(std::move(name_values_map)) {}
   DUMP_IMPL
 };
 
@@ -449,8 +453,8 @@ struct FunctionDecl : public Decl {
   std::unique_ptr<Block> body;
   bool is_vll;
   inline FunctionDecl(SourceLocation location, std::string id, Type type, std::vector<std::unique_ptr<ParamDecl>> &&params, std::unique_ptr<Block> &&body,
-                      bool is_vll = false, std::string lib = "", std::string og_name = "")
-      : Decl(location, std::move(id), std::move(lib), std::move(og_name)), type(std::move(type)), params(std::move(params)), body(std::move(body)),
+                      bool is_vll = false, std::string lib = "", std::string og_name = "", bool is_exported = false)
+      : Decl(location, std::move(id), std::move(lib), std::move(og_name), is_exported), type(std::move(type)), params(std::move(params)), body(std::move(body)),
         is_vll(is_vll) {}
   DUMP_IMPL
 };

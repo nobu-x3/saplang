@@ -1899,3 +1899,22 @@ TEST_CASE("Module parsing", "[parser]") {
     CONTAINS_NEXT_REQUIRE(lines_it, "Block");
   }
 }
+
+TEST_CASE("exported decls", "[parser]") {
+  {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+        export fn void main() {}
+        export struct Test {}
+        export enum TestEnum {}
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("Module(test):") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "Imports:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "exported FunctionDecl: main:void");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "exported StructDecl: Test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "exported EnumDecl: i32(TestEnum)");
+  }
+}

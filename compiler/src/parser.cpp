@@ -1118,7 +1118,8 @@ ParsingResult Parser::parse_source_file() {
   const std::vector<TokenKind> sync_kinds{TokenKind::KwFn, TokenKind::KwStruct, TokenKind::KwConst, TokenKind::KwVar, TokenKind::KwEnum};
   while (m_NextToken.kind != TokenKind::Eof) {
     if (m_NextToken.kind != TokenKind::KwFn && m_NextToken.kind != TokenKind::KwStruct && m_NextToken.kind != TokenKind::KwVar &&
-        m_NextToken.kind != TokenKind::KwConst && m_NextToken.kind != TokenKind::KwEnum && m_NextToken.kind != TokenKind::KwExtern) {
+        m_NextToken.kind != TokenKind::KwConst && m_NextToken.kind != TokenKind::KwEnum && m_NextToken.kind != TokenKind::KwExtern &&
+        m_NextToken.kind != TokenKind::KwExport) {
       report(m_NextToken.location, "only function, struct, extern block, enum and global variables "
                                    "declarations are allowed in global scope.");
       is_complete_ast = false;
@@ -1126,6 +1127,11 @@ ParsingResult Parser::parse_source_file() {
       continue;
     }
     std::unique_ptr<Decl> decl = nullptr;
+    bool is_exported = false;
+    if (m_NextToken.kind == TokenKind::KwExport) {
+      is_exported = true;
+      eat_next_token();
+    }
     if (m_NextToken.kind == TokenKind::KwFn)
       decl = parse_function_decl();
     else if (m_NextToken.kind == TokenKind::KwStruct)
@@ -1154,6 +1160,7 @@ ParsingResult Parser::parse_source_file() {
       sync_on(sync_kinds);
       continue;
     }
+    decl->is_exported = is_exported;
     decls.emplace_back(std::move(decl));
   }
   assert(m_NextToken.kind == TokenKind::Eof);
