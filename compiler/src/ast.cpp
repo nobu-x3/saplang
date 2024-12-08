@@ -251,7 +251,8 @@ void FunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level
     lib_og_name_resolve = lib;
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
-  stream << indent(indent_level) << "FunctionDecl: " << (is_vll ? "VLL " : "") << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":";
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "FunctionDecl: " << (is_vll ? "VLL " : "")
+         << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":";
   type.dump_to_stream(stream, 0);
   stream << '\n';
   for (auto &&param : params) {
@@ -276,7 +277,8 @@ void StructDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) 
     lib_og_name_resolve = lib;
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
-  stream << indent(indent_level) << "StructDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << "\n";
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "StructDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id
+         << "\n";
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << "MemberField: ";
     type.dump_to_stream(stream, 0);
@@ -292,8 +294,8 @@ void EnumDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) co
     lib_og_name_resolve = lib;
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
-  stream << indent(indent_level) << "EnumDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << underlying_type.name << "(" << id << ")"
-         << '\n';
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "EnumDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ")
+         << underlying_type.name << "(" << id << ")" << '\n';
   for (auto &&[name, val] : name_values_map) {
     stream << indent(indent_level + 1) << name << ": " << val << '\n';
   }
