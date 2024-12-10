@@ -1,6 +1,7 @@
 #include "sema.h"
 
 #include <cassert>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -486,6 +487,16 @@ bool Sema::insert_decl_to_current_scope(ResolvedDecl &decl) {
   return true;
 }
 
+bool Sema::insert_decl_to_global_scope(ResolvedDecl &decl) {
+  std::optional<DeclLookupResult> lookup_result = lookup_decl(decl.id, &decl.type);
+  if (lookup_result && lookup_result->index == 0) {
+    report(decl.location, "redeclaration of '" + decl.id + "\'.");
+    return false;
+  }
+  m_Scopes.front().emplace_back(&decl);
+  return true;
+}
+
 bool is_leaf(const StructDecl *decl) {
   for (auto &&[type, id] : decl->members) {
     if (type.kind == Type::Kind::Custom)
@@ -494,12 +505,16 @@ bool is_leaf(const StructDecl *decl) {
   return true;
 }
 
-bool Sema::resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
+bool Sema::resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast) {
   bool error = false;
-  for (auto &&decl : m_AST) {
+  for (auto &&decl : ast) {
     if (const auto *enum_decl = dynamic_cast<const EnumDecl *>(decl.get())) {
       std::unique_ptr<ResolvedEnumDecl> resolved_enum_decl = resolve_enum_decl(*enum_decl);
-      if (!resolved_enum_decl || !insert_decl_to_current_scope(*resolved_enum_decl)) {
+      bool is_exported = decl->is_exported;
+      bool insert_result = false;
+      if (resolved_enum_decl)
+        insert_result = is_exported ? insert_decl_to_global_scope(*resolved_enum_decl) : insert_decl_to_current_scope(*resolved_enum_decl);
+      if (!insert_result) {
         error = true;
         continue;
       }
@@ -529,20 +544,25 @@ void Sema::init_type_info(ResolvedStructDecl &decl) {
   m_TypeInfos.insert({decl.type.name, std::move(type_info)});
 }
 
-bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
+bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast) {
   struct DeclToInspect {
     const StructDecl *decl{nullptr};
     bool resolved{false};
   };
   std::vector<DeclToInspect> non_leaf_struct_decls{};
-  non_leaf_struct_decls.reserve(m_AST.size());
+  non_leaf_struct_decls.reserve(ast.size());
   bool error = false;
-  for (std::unique_ptr<Decl> &decl : m_AST) {
+  for (const std::unique_ptr<Decl> &decl : ast) {
     if (const auto *struct_decl = dynamic_cast<const StructDecl *>(decl.get())) {
       if (is_leaf(struct_decl)) {
         std::unique_ptr<ResolvedStructDecl> resolved_struct_decl = resolve_struct_decl(*struct_decl);
         init_type_info(*resolved_struct_decl);
-        if (!resolved_struct_decl || !insert_decl_to_current_scope(*resolved_struct_decl)) {
+        bool insert_result = false;
+        if (resolved_struct_decl) {
+          bool is_exported = resolved_struct_decl->is_exported;
+          insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
+        }
+        if (!insert_result) {
           error = true;
           continue;
         }
@@ -569,7 +589,12 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
       if (!can_now_resolve)
         continue;
       std::unique_ptr<ResolvedStructDecl> resolved_struct_decl = resolve_struct_decl(*struct_decl);
-      if (!resolved_struct_decl || !insert_decl_to_current_scope(*resolved_struct_decl)) {
+      bool insert_result = false;
+      if (resolved_struct_decl) {
+        bool is_exported = struct_decl->is_exported;
+        insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
+      }
+      if (!insert_result) {
         error = true;
         continue;
       }
@@ -601,12 +626,17 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
   return true;
 }
 
-bool Sema::resolve_global_var_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial) {
+bool Sema::resolve_global_var_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast) {
   bool error = false;
-  for (std::unique_ptr<Decl> &decl : m_AST) {
+  for (const std::unique_ptr<Decl> &decl : ast) {
     if (const auto *var_decl = dynamic_cast<const VarDecl *>(decl.get())) {
       std::unique_ptr<ResolvedVarDecl> resolved_var_decl = resolve_var_decl(*var_decl);
-      if (!resolved_var_decl || (!resolved_var_decl->id.empty() && !insert_decl_to_current_scope(*resolved_var_decl))) {
+      bool insert_result = false;
+      if (resolved_var_decl) {
+        bool is_exported = var_decl->is_exported;
+        insert_result = is_exported ? insert_decl_to_global_scope(*resolved_var_decl) : insert_decl_to_current_scope(*resolved_var_decl);
+      }
+      if (!resolved_var_decl || (!resolved_var_decl->id.empty() && !insert_result)) {
         error = true;
         continue;
       }
@@ -620,16 +650,109 @@ bool Sema::resolve_global_var_decls(std::vector<std::unique_ptr<ResolvedDecl>> &
   return true;
 }
 
+std::vector<std::unique_ptr<ResolvedModule>> Sema::resolve_modules(bool partial) {
+  std::vector<std::unique_ptr<ResolvedModule>> resolved_module_list{};
+  resolved_module_list.reserve(m_Modules.size());
+  for (auto &&_module : m_Modules) {
+    Scope global_scope{this};
+    m_ResolvedModules[_module->name] = std::move(resolve_module(*_module, partial));
+  }
+  for (auto &&[_, mod] : m_ResolvedModules) {
+    resolved_module_list.push_back(std::move(mod));
+  }
+  return resolved_module_list;
+}
+
+std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool partial) {
+  if (m_ResolvedModules.count(_module.name)) {
+    return std::move(m_ResolvedModules[_module.name]);
+  }
+  for (auto &&dep : _module.imports) {
+    auto it = std::find_if(m_Modules.begin(), m_Modules.end(), [&](auto &&mod) { return mod->name == dep; });
+    // We're assuming parser will notify the user and handle the error
+    assert(it != m_Modules.end());
+    std::unique_ptr<ResolvedModule> resolved_dep = resolve_module(**it, partial);
+    if (!resolved_dep)
+      return nullptr;
+    m_ResolvedModules[dep] = std::move(resolved_dep);
+  }
+  std::vector<std::unique_ptr<ResolvedDecl>> module_ast = resolve_ast(partial, _module);
+  return std::make_unique<ResolvedModule>(_module.name, std::move(module_ast));
+}
+
+std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial, const Module &mod) {
+  std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
+  Scope module_scope(this);
+  // Insert all global scope stuff, e.g. from other modules
+  bool error = false;
+  if (!resolve_enum_decls(resolved_decls, partial, mod.declarations))
+    return {};
+  if (!resolve_struct_decls(resolved_decls, partial, mod.declarations))
+    return {};
+  if (!resolve_global_var_decls(resolved_decls, partial, mod.declarations))
+    return {};
+  std::unordered_map<std::string, std::unique_ptr<ResolvedFuncDecl>> resolved_functions;
+  for (const std::unique_ptr<Decl> &decl : mod.declarations) {
+    if (const auto *fn = dynamic_cast<const FunctionDecl *>(decl.get())) {
+      auto resolved_fn_decl = resolve_func_decl(*fn);
+      bool insert_result = false;
+      if (resolved_fn_decl) {
+        bool is_exported = fn->is_exported;
+        insert_result = is_exported ? insert_decl_to_global_scope(*resolved_fn_decl) : insert_decl_to_current_scope(*resolved_fn_decl);
+      }
+      if (!insert_result) {
+        error = true;
+        continue;
+      }
+      resolved_decls.emplace_back(std::move(resolved_fn_decl));
+      if (error && !partial)
+        return {};
+    }
+  }
+  for (int i = 0; i < resolved_decls.size(); ++i) {
+    Scope fn_scope{this};
+    if (auto *fn = dynamic_cast<const FunctionDecl *>(m_AST[i].get())) {
+      ResolvedDecl *resolved_decl = nullptr;
+      for (auto &&decl : resolved_decls) {
+        if (m_AST[i]->id == decl->id) {
+          resolved_decl = decl.get();
+          if (!dynamic_cast<ResolvedFuncDecl *>(resolved_decl))
+            return {};
+          break;
+        }
+      }
+      if (resolved_decl) {
+        m_CurrFunction = dynamic_cast<ResolvedFuncDecl *>(resolved_decl);
+        for (auto &&param : m_CurrFunction->params) {
+          insert_decl_to_current_scope(*param);
+        }
+        if (fn->body) {
+          auto resolved_body = resolve_block(*fn->body);
+          if (!resolved_body) {
+            error = true;
+            continue;
+          }
+          m_CurrFunction->body = std::move(resolved_body);
+          if (m_ShouldRunFlowSensitiveAnalysis)
+            error |= flow_sensitive_analysis(*m_CurrFunction);
+        }
+      }
+    }
+  }
+  if (error && !partial)
+    return {};
+  return resolved_decls;
+}
 std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
   Scope global_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
-  if (!resolve_enum_decls(resolved_decls, partial))
+  if (!resolve_enum_decls(resolved_decls, partial, m_AST))
     return {};
-  if (!resolve_struct_decls(resolved_decls, partial))
+  if (!resolve_struct_decls(resolved_decls, partial, m_AST))
     return {};
-  if (!resolve_global_var_decls(resolved_decls, partial))
+  if (!resolve_global_var_decls(resolved_decls, partial, m_AST))
     return {};
   std::unordered_map<std::string, std::unique_ptr<ResolvedFuncDecl>> resolved_functions;
   for (std::unique_ptr<Decl> &decl : m_AST) {
@@ -811,7 +934,9 @@ std::unique_ptr<ResolvedDeclStmt> Sema::resolve_decl_stmt(const DeclStmt &stmt) 
   std::unique_ptr<ResolvedVarDecl> var_decl = resolve_var_decl(*stmt.var_decl);
   if (!var_decl)
     return nullptr;
-  if (!insert_decl_to_current_scope(*var_decl))
+  bool is_exported = stmt.var_decl->is_exported;
+  bool insert_result = is_exported ? insert_decl_to_global_scope(*var_decl) : insert_decl_to_current_scope(*var_decl);
+  if (!insert_result)
     return nullptr;
   return std::make_unique<ResolvedDeclStmt>(stmt.location, std::move(var_decl));
 }
