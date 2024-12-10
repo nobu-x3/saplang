@@ -13,9 +13,14 @@ struct ParsingResult {
   Module module;
 };
 
+struct ParserConfig {
+    const std::vector<std::string>& include_paths;
+    bool check_paths;
+};
+
 class Parser {
 public:
-  explicit Parser(Lexer *lexer);
+  explicit Parser(Lexer *lexer, ParserConfig cfg);
   ParsingResult parse_source_file();
   inline bool is_complete_ast() const { return m_IsCompleteAst; }
 
@@ -82,6 +87,7 @@ private:
   std::unique_ptr<Assignment> parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs, int lhs_deref_count);
 
 private:
+  ParserConfig m_Config;
   std::unordered_map<std::string, Type> m_EnumTypes;
   Lexer *m_Lexer;
   Token m_NextToken;

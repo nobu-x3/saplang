@@ -7,7 +7,7 @@
   std::stringstream output_buffer{};                                                                                                                           \
   saplang::SourceFile src_file{"sema_test", buffer.str()};                                                                                                     \
   saplang::Lexer lexer{src_file};                                                                                                                              \
-  saplang::Parser parser(&lexer);                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
   saplang::Sema sema{std::move(parse_result.module.declarations)};                                                                                             \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
@@ -22,7 +22,7 @@
   std::stringstream output_buffer{};                                                                                                                           \
   saplang::SourceFile src_file{"sema_test", buffer.str()};                                                                                                     \
   saplang::Lexer lexer{src_file};                                                                                                                              \
-  saplang::Parser parser(&lexer);                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
   saplang::Sema sema{std::move(parse_result.module.declarations)};                                                                                             \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
@@ -35,7 +35,7 @@
   std::stringstream output_buffer{};                                                                                                                           \
   saplang::SourceFile src_file{"sema_test", buffer.str()};                                                                                                     \
   saplang::Lexer lexer{src_file};                                                                                                                              \
-  saplang::Parser parser(&lexer);                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
   saplang::Sema sema{std::move(parse_result.module.declarations)};                                                                                             \
   auto resolved_ast = sema.resolve_ast(true);                                                                                                                  \

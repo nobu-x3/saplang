@@ -7,7 +7,7 @@
   std::stringstream output_buffer{};                                                                                                                           \
   saplang::SourceFile src_file{"test", buffer.str()};                                                                                                          \
   saplang::Lexer lexer{src_file};                                                                                                                              \
-  saplang::Parser parser(&lexer);                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
   for (auto &&fn : parse_result.module.declarations) {                                                                                                         \
     fn->dump_to_stream(output_buffer);                                                                                                                         \
@@ -20,7 +20,7 @@
   std::stringstream output_buffer{};                                                                                                                           \
   saplang::SourceFile src_file{module_name, buffer.str()};                                                                                                     \
   saplang::Lexer lexer{src_file};                                                                                                                              \
-  saplang::Parser parser(&lexer);                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
   parse_result.module.dump_to_stream(output_buffer);                                                                                                           \
   const auto &error_stream = saplang::get_error_stream();

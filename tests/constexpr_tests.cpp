@@ -40,7 +40,7 @@ fn void foo_bool(bool x) {}
   std::stringstream output_buffer{};                                                                                                                           \
   saplang::SourceFile src_file{"constexpr_tests", buffer.str()};                                                                                               \
   saplang::Lexer lexer{src_file};                                                                                                                              \
-  saplang::Parser parser(&lexer);                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
   saplang::Sema sema{std::move(parse_result.module.declarations)};                                                                                             \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \

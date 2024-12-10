@@ -506,6 +506,7 @@ struct ResolvedDecl : public IDumpable {
   Type type;
   std::string lib;
   std::string og_name;
+  bool is_exported;
   inline ResolvedDecl(SourceLocation loc, std::string id, Type &&type, std::string lib = "", std::string og_name = "")
       : location(loc), id(std::move(id)), type(std::move(type)), lib(std::move(lib)), og_name(std::move(og_name)) {}
   virtual ~ResolvedDecl() = default;
