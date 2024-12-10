@@ -13,7 +13,7 @@
 
 namespace saplang {
 
-Parser::Parser(Lexer *lexer) : m_Lexer(lexer), m_NextToken(lexer->get_next_token()) {}
+Parser::Parser(Lexer *lexer, ParserConfig cfg) : m_Lexer(lexer), m_Config(std::move(cfg)), m_NextToken(lexer->get_next_token()) {}
 
 // <funcDecl>
 // ::= 'fn' <type> <identifier> '(' (<parameterList>)* ')' <block>
@@ -55,6 +55,7 @@ std::string Parser::parse_import() {
     report(m_NextToken.location, "expected module identifier.");
     return import_name;
   }
+  SourceLocation loc = m_NextToken.location;
   import_name = m_NextToken.value.value();
   eat_next_token(); // eat import name
   if (m_NextToken.kind != TokenKind::Semicolon) {
@@ -62,6 +63,14 @@ std::string Parser::parse_import() {
     return "";
   }
   eat_next_token();
+  if (m_Config.check_paths) {
+    for (auto &&incl_path : m_Config.include_paths) {
+      if (!std::filesystem::exists(incl_path + std::filesystem::path::preferred_separator + import_name + ".sl")) {
+        report(loc, "referenced module '" + import_name + "' not found on any specified include paths.");
+        return "";
+      }
+    }
+  }
   return import_name;
 }
 

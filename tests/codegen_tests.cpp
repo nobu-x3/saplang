@@ -8,9 +8,9 @@
   llvm::raw_string_ostream output_buffer{output_string};                                                                                                       \
   saplang::SourceFile src_file{"codegen_test", buffer.str()};                                                                                                  \
   saplang::Lexer lexer{src_file};                                                                                                                              \
-  saplang::Parser parser(&lexer);                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.module.declarations)};                                                                                                    \
+  saplang::Sema sema{std::move(parse_result.module.declarations)};                                                                                             \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
   saplang::Codegen codegen{std::move(resolved_ast), "codegen_tests"};                                                                                          \
   auto generated_code = codegen.generate_ir();                                                                                                                 \

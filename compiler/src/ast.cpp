@@ -534,8 +534,8 @@ void ResolvedVarDecl::dump_to_stream(std::stringstream &stream, size_t indent_le
     lib_og_name_resolve = lib;
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
-  stream << indent(indent_level) << "ResolvedVarDecl: @(" << this << ") " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":"
-         << (is_global ? "global " : "") << (is_const ? "const " : "");
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "ResolvedVarDecl: @(" << this << ") "
+         << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":" << (is_global ? "global " : "") << (is_const ? "const " : "");
   type.dump_to_stream(stream, 0);
   stream << "\n";
   if (initializer)
@@ -550,7 +550,8 @@ void ResolvedStructDecl::dump_to_stream(std::stringstream &stream, size_t indent
     lib_og_name_resolve = lib;
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
-  stream << indent(indent_level) << "ResolvedStructDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << "\n";
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "ResolvedStructDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ")
+         << id << "\n";
   int member_index = 0;
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << member_index << ". ResolvedMemberField: ";
@@ -568,8 +569,8 @@ void ResolvedEnumDecl::dump_to_stream(std::stringstream &stream, size_t indent_l
     lib_og_name_resolve = lib;
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
-  stream << indent(indent_level) << "ResolvedEnumDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << type.name << "(" << id << ")"
-         << '\n';
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "ResolvedEnumDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ")
+         << type.name << "(" << id << ")" << '\n';
   for (auto &&[name, val] : name_values_map) {
     stream << indent(indent_level + 1) << name << ": " << val << '\n';
   }
@@ -588,7 +589,7 @@ void ResolvedFuncDecl::dump_to_stream(std::stringstream &stream, size_t indent_l
     lib_og_name_resolve = lib;
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
-  stream << indent(indent_level) << "ResolvedFuncDecl: @(" << this << ") " << (is_vll ? "VLL " : "")
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "ResolvedFuncDecl: @(" << this << ") " << (is_vll ? "VLL " : "")
          << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":\n";
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);

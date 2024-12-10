@@ -20,6 +20,7 @@ struct CompilerOptions {
   std::filesystem::path source;
   std::filesystem::path output;
   std::optional<std::string> input_string{std::nullopt};
+  std::vector<std::string> import_paths{};
   bool display_help{false};
   bool ast_dump{false};
   bool res_dump{false};
@@ -32,6 +33,7 @@ void display_help() {
             << "compiler [options] <source_file>\n\n"
             << "Options:\n"
             << "\t-h                            display this message.\n"
+            << "\t-i \"IMP1;IMP2;...\"          import paths.\n"
             << "\t-string <input_string>        use <input_string> instead of "
                "<source_file>.\n"
             << "\t-o <file>                     write executable to <file>.\n"
@@ -39,6 +41,17 @@ void display_help() {
             << "\t-res-dump                     print resolved syntax tree.\n"
             << "\t-cfg-dump                     print control flow graph.\n"
             << "\t-llvm-dump                    print the generated llvm module" << std::endl;
+}
+std::vector<std::string> split(const std::string &s, char delim) {
+  std::vector<std::string> result;
+  std::stringstream ss(s);
+  std::string item;
+
+  while (getline(ss, item, delim)) {
+    result.push_back(item);
+  }
+
+  return result;
 }
 
 CompilerOptions parse_args(int argc, const char **argv) {
@@ -68,6 +81,8 @@ CompilerOptions parse_args(int argc, const char **argv) {
         options.cfg_dump = true;
       else if (arg == "-llvm-dump")
         options.llvm_dump = true;
+      else if (arg == "-i")
+        options.import_paths = split(argv[++idx], ';');
       else
         error("unexpected argument '" + std::string{arg} + ".'\n");
     }
@@ -80,6 +95,9 @@ int main(int argc, const char **argv) {
   if (options.display_help) {
     display_help();
     return 0;
+  }
+  if (options.import_paths.size() == 0) {
+    options.import_paths.push_back(std::filesystem::path{options.source}.parent_path());
   }
   std::stringstream buffer;
   if (!options.input_string.has_value()) {
@@ -96,7 +114,7 @@ int main(int argc, const char **argv) {
   std::string source{options.source.string()};
   saplang::SourceFile src_file{source, buffer.str()};
   saplang::Lexer lexer{src_file};
-  saplang::Parser parser{&lexer};
+  saplang::Parser parser{&lexer, {options.import_paths, true}};
   auto ast = parser.parse_source_file();
   if (options.ast_dump) {
     std::stringstream ast_stream;
