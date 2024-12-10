@@ -27,22 +27,30 @@ public:
 
   std::vector<std::unique_ptr<ResolvedDecl>> resolve_ast(bool partial = false);
 
+  std::vector<std::unique_ptr<ResolvedModule>> resolve_modules(bool partial = false);
+
   void dump_type_infos_to_stream(std ::stringstream &stream, size_t indent = 0) const;
 
 private:
+  std::unique_ptr<ResolvedModule> resolve_module(const Module &mod, bool partial);
+
+  std::vector<std::unique_ptr<ResolvedDecl>> resolve_ast(bool partial, const Module& mod);
+
   void init_builtin_type_infos();
 
   void init_type_info(ResolvedStructDecl &decl);
 
   std::optional<DeclLookupResult> lookup_decl(std::string_view id, std::optional<const Type *> type = std::nullopt);
 
-  bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
+  bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>>& ast);
 
-  bool resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
+  bool resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>>& ast);
 
-  bool resolve_global_var_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial);
+  bool resolve_global_var_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>>& ast);
 
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
+
+  bool insert_decl_to_global_scope(ResolvedDecl& decl);
 
   std::optional<Type> resolve_type(Type parsed_type);
 
@@ -82,7 +90,7 @@ private:
 
   std::unique_ptr<ResolvedIfStmt> resolve_if_stmt(const IfStmt &stmt);
 
-  std::unique_ptr<ResolvedDeferStmt> resolve_defer_stmt(const DeferStmt& stmt);
+  std::unique_ptr<ResolvedDeferStmt> resolve_defer_stmt(const DeferStmt &stmt);
 
   std::unique_ptr<ResolvedWhileStmt> resolve_while_stmt(const WhileStmt &stmt);
 
@@ -112,8 +120,10 @@ private:
   bool check_return_on_all_paths(const ResolvedFuncDecl &fn, const CFG &cfg);
 
 private:
+  std::vector<std::unique_ptr<Module>> m_Modules;
   std::vector<std::unique_ptr<Decl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};
+  std::unordered_map<std::string, std::unique_ptr<ResolvedModule>> m_ResolvedModules{};
   std::unordered_map<std::string, TypeInfo> m_TypeInfos;
   ResolvedFuncDecl *m_CurrFunction{nullptr};
   ConstantExpressionEvaluator m_Cee;
