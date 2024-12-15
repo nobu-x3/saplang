@@ -93,6 +93,10 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
   eat_next_token(); // eat '{'
   std::vector<std::unique_ptr<Decl>> declarations;
   while (m_NextToken.kind != TokenKind::Rbrace) {
+    if (m_NextToken.kind != TokenKind::KwFn && m_NextToken.kind != TokenKind::KwEnum && m_NextToken.kind != TokenKind::KwStruct) {
+      report(m_NextToken.location, "expected declaration-specific keyword ('fn', 'enum', 'struct', 'union').");
+      return {};
+    }
     std::unique_ptr<Decl> decl = nullptr;
     std::string alias;
     // this is copied because we're expecting there not to be a block and
@@ -1175,7 +1179,7 @@ ParsingResult Parser::parse_source_file() {
   assert(m_NextToken.kind == TokenKind::Eof);
   std::filesystem::path source_filepath = m_Lexer->get_source_file_path();
   std::string filename = source_filepath.filename().replace_extension();
-  return {is_complete_ast, {std::move(filename), std::move(decls), std::move(imports)}};
+  return {is_complete_ast, std::make_unique<Module>(std::move(filename), std::move(decls), std::move(imports))};
 }
 
 void Parser::synchronize() {

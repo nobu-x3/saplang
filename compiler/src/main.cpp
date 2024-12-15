@@ -21,6 +21,7 @@ struct CompilerOptions {
   std::filesystem::path output;
   std::optional<std::string> input_string{std::nullopt};
   std::vector<std::string> import_paths{};
+  std::vector<std::string> extra_flags{};
   bool display_help{false};
   bool ast_dump{false};
   bool res_dump{false};
@@ -83,6 +84,8 @@ CompilerOptions parse_args(int argc, const char **argv) {
         options.llvm_dump = true;
       else if (arg == "-i")
         options.import_paths = split(argv[++idx], ';');
+      else if (arg == "-extra")
+        options.extra_flags = split(argv[++idx], ';');
       else
         error("unexpected argument '" + std::string{arg} + ".'\n");
     }
@@ -97,7 +100,42 @@ int main(int argc, const char **argv) {
     return 0;
   }
   if (options.import_paths.size() == 0) {
-    options.import_paths.push_back(std::filesystem::path{options.source}.parent_path());
+    std::filesystem::path src_path{options.source};
+    std::filesystem::path abs_src_path{std::filesystem::absolute(src_path)};
+    std::filesystem::path parent_path{abs_src_path.parent_path()};
+    options.import_paths.push_back(parent_path);
+  }
+  std::vector<std::unique_ptr<saplang::Module>> modules;
+  for (auto &&import_path : options.import_paths) {
+    for (const auto &file : std::filesystem::directory_iterator(import_path)) {
+      auto filepath = file.path();
+      if (filepath.extension() == ".sl") {
+        if (filepath.filename() == options.source)
+          continue;
+        std::stringstream buffer;
+        std::string source{filepath};
+        std::ifstream file{filepath};
+        if (!file) {
+          error("failed to open '" + options.source.string() + ".'");
+        }
+        buffer << file.rdbuf();
+        saplang::SourceFile src_file{source, buffer.str()};
+        saplang::Lexer lexer{src_file};
+        saplang::Parser parser{&lexer, {options.import_paths, true}};
+        auto module_parse_result = parser.parse_source_file();
+        if (options.ast_dump) {
+          std::stringstream ast_stream;
+          for (auto &&fn : module_parse_result.module->declarations) {
+            fn->dump_to_stream(ast_stream, 0);
+          }
+          std::cout << ast_stream.str();
+          continue;
+        }
+        if (!module_parse_result.is_complete_ast)
+          continue;
+        modules.emplace_back(std::move(module_parse_result.module));
+      }
+    }
   }
   std::stringstream buffer;
   if (!options.input_string.has_value()) {
@@ -115,22 +153,23 @@ int main(int argc, const char **argv) {
   saplang::SourceFile src_file{source, buffer.str()};
   saplang::Lexer lexer{src_file};
   saplang::Parser parser{&lexer, {options.import_paths, true}};
-  auto ast = parser.parse_source_file();
+  auto main_file_parse_result = parser.parse_source_file();
   if (options.ast_dump) {
     std::stringstream ast_stream;
-    for (auto &&fn : ast.module.declarations) {
+    for (auto &&fn : main_file_parse_result.module->declarations) {
       fn->dump_to_stream(ast_stream, 0);
     }
     std::cout << ast_stream.str();
     return 0;
   }
-  if (!ast.is_complete_ast)
+  if (!main_file_parse_result.is_complete_ast)
     return 1;
-  saplang::Sema sema{std::move(ast.module.declarations), true};
-  auto resolved_tree = sema.resolve_ast(options.res_dump);
+  modules.emplace_back(std::move(main_file_parse_result.module));
+  saplang::Sema sema{std::move(modules), true};
+  auto resolved_modules = sema.resolve_modules(options.res_dump);
   if (options.res_dump) {
     std::stringstream output_stream;
-    for (auto &&fn : resolved_tree) {
+    for (auto &&fn : resolved_modules) {
       fn->dump_to_stream(output_stream, 0);
     }
     std::cout << output_stream.str();
@@ -138,38 +177,42 @@ int main(int argc, const char **argv) {
   }
   if (options.cfg_dump) {
     std::stringstream output_stream;
-    for (auto &&decl : resolved_tree) {
-      if (const auto *fn = dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {
-        output_stream << decl->id << ":\n";
-        saplang::CFGBuilder().build(*fn).dump_to_stream(output_stream, 1);
-        std::cout << output_stream.str();
+    for (auto &&module : resolved_modules) {
+      for (auto &&decl : module->declarations) {
+        if (const auto *fn = dynamic_cast<const saplang::ResolvedFuncDecl *>(decl.get())) {
+          output_stream << decl->id << ":\n";
+          saplang::CFGBuilder().build(*fn).dump_to_stream(output_stream, 1);
+          std::cout << output_stream.str();
+        }
       }
     }
     return 0;
   }
-  if (resolved_tree.empty())
+  if (resolved_modules.empty())
     return 1;
-  saplang::Codegen codegen{std::move(resolved_tree), source};
-  auto llvm_ir = codegen.generate_ir();
-  if (options.llvm_dump) {
-    std::string output_string;
-    llvm::raw_string_ostream output_buffer{output_string};
-    llvm_ir->print(output_buffer, nullptr, true, true);
-    std::cout << output_string;
-    return 0;
-  }
-  std::stringstream path;
-  path << "tmp-" << std::filesystem::hash_value(options.source) << ".ll";
-  const std::string llvm_ir_path = path.str();
-  std::error_code error_code;
-  llvm::raw_fd_ostream f{llvm_ir_path, error_code};
-  llvm_ir->print(f, nullptr);
-  std::stringstream command;
-  command << "clang " << llvm_ir_path;
-  if (!options.output.empty())
-    command << " -o " << options.output;
-  command << " -g -O0 -ggdb -glldb -gsce -gdbx";
-  int ret = std::system(command.str().c_str());
-  // std::filesystem::remove(llvm_ir_path);
-  return ret;
+  /* saplang::Codegen codegen{std::move(resolved_modules), source}; */
+  /* auto llvm_ir = codegen.generate_ir(); */
+  /* if (options.llvm_dump) { */
+  /*   std::string output_string; */
+  /*   llvm::raw_string_ostream output_buffer{output_string}; */
+  /*   llvm_ir->print(output_buffer, nullptr, true, true); */
+  /*   std::cout << output_string; */
+  /*   return 0; */
+  /* } */
+  /* std::stringstream path; */
+  /* path << "tmp-" << std::filesystem::hash_value(options.source) << ".ll"; */
+  /* const std::string llvm_ir_path = path.str(); */
+  /* std::error_code error_code; */
+  /* llvm::raw_fd_ostream f{llvm_ir_path, error_code}; */
+  /* llvm_ir->print(f, nullptr); */
+  /* std::stringstream command; */
+  /* command << "clang " << llvm_ir_path; */
+  /* if (!options.output.empty()) */
+  /*   command << " -o " << options.output; */
+  /* command << " -g -O0 -ggdb -glldb -gsce -gdbx"; */
+  /* for (auto &&extra_flag : options.extra_flags) */
+  /*   command << extra_flag; */
+  /* int ret = std::system(command.str().c_str()); */
+  /* // std::filesystem::remove(llvm_ir_path); */
+  /* return ret; */
 }
