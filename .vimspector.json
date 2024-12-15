@@ -1,11 +1,30 @@
 {
   "configurations": {
-    "Launch": {
+    "Tests": {
       "adapter": "vscode-cpptools",
       "configuration": {
         "request": "launch",
         "program": "${workspaceFolder}/build/bin/saplang_tests",
         "args": [],
+        "cwd": "${workspaceFolder}/build/bin",
+        "environment": [],
+        "externalConsole": true,
+        "MIMode": "gdb",
+        "setupCommands": [
+          {
+            "description": "Enable pretty-printing for gdb",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+          }
+        ]
+      }
+    },
+    "Launch": {
+      "adapter": "vscode-cpptools",
+      "configuration": {
+        "request": "launch",
+        "program": "${workspaceFolder}/build/bin/compiler",
+        "args": ["test.sl", "-o"," test"],
         "cwd": "${workspaceFolder}/build/bin",
         "environment": [],
         "externalConsole": true,
