@@ -654,7 +654,6 @@ std::vector<std::unique_ptr<ResolvedModule>> Sema::resolve_modules(bool partial)
   std::vector<std::unique_ptr<ResolvedModule>> resolved_module_list{};
   resolved_module_list.reserve(m_Modules.size());
   for (auto &&_module : m_Modules) {
-    Scope global_scope{this};
     m_ResolvedModules[_module->name] = std::move(resolve_module(*_module, partial));
   }
   for (auto &&[_, mod] : m_ResolvedModules) {
@@ -667,6 +666,7 @@ std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool
   if (m_ResolvedModules.count(_module.name)) {
     return std::move(m_ResolvedModules[_module.name]);
   }
+  Scope global_scope{this};
   for (auto &&dep : _module.imports) {
     auto it = std::find_if(m_Modules.begin(), m_Modules.end(), [&](auto &&mod) { return mod->name == dep; });
     // We're assuming parser will notify the user and handle the error
@@ -675,6 +675,12 @@ std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool
     if (!resolved_dep)
       return nullptr;
     m_ResolvedModules[dep] = std::move(resolved_dep);
+  }
+  for (auto &&dep : _module.imports) {
+    const ResolvedModule &mod = *m_ResolvedModules[dep];
+    for (auto &&decl : mod.declarations) {
+      insert_decl_to_global_scope(*decl);
+    }
   }
   std::vector<std::unique_ptr<ResolvedDecl>> module_ast = resolve_ast(partial, _module);
   return std::make_unique<ResolvedModule>(_module.name, std::move(module_ast));
@@ -711,10 +717,10 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial, const
   }
   for (int i = 0; i < resolved_decls.size(); ++i) {
     Scope fn_scope{this};
-    if (auto *fn = dynamic_cast<const FunctionDecl *>(m_AST[i].get())) {
+    if (auto *fn = dynamic_cast<const FunctionDecl *>(mod.declarations[i].get())) {
       ResolvedDecl *resolved_decl = nullptr;
       for (auto &&decl : resolved_decls) {
-        if (m_AST[i]->id == decl->id) {
+        if (mod.declarations[i]->id == decl->id) {
           resolved_decl = decl.get();
           if (!dynamic_cast<ResolvedFuncDecl *>(resolved_decl))
             return {};

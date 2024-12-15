@@ -10,7 +10,7 @@ namespace saplang {
 
 struct ParsingResult {
   bool is_complete_ast;
-  Module module;
+  std::unique_ptr<Module> module;
 };
 
 struct ParserConfig {

@@ -17,6 +17,12 @@ Codegen::Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree, std::
   m_Module->setTargetTriple("x86-64");
 }
 
+Codegen::Codegen(std::vector<std::unique_ptr<ResolvedModule>> resolved_modules, std::string_view source_path)
+    : m_ResolvedModules{std::move(resolved_modules)}, m_Builder{m_Context}, m_Module{std::make_unique<llvm::Module>("<tu>", m_Context)} {
+  m_Module->setSourceFileName(source_path);
+  m_Module->setTargetTriple("x86-64");
+}
+
 std::unique_ptr<llvm::Module> Codegen::generate_ir() {
   for (auto &&decl : m_ResolvedTree) {
     if (const auto *func = dynamic_cast<const ResolvedFuncDecl *>(decl.get()))

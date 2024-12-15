@@ -25,6 +25,11 @@ public:
     init_builtin_type_infos();
   }
 
+  inline explicit Sema(std::vector<std::unique_ptr<Module>> modules, bool run_flow_sensitive_analysis = false)
+      : m_Modules(std::move(modules)), m_ShouldRunFlowSensitiveAnalysis(run_flow_sensitive_analysis) {
+    init_builtin_type_infos();
+  }
+
   std::vector<std::unique_ptr<ResolvedDecl>> resolve_ast(bool partial = false);
 
   std::vector<std::unique_ptr<ResolvedModule>> resolve_modules(bool partial = false);
@@ -34,7 +39,7 @@ public:
 private:
   std::unique_ptr<ResolvedModule> resolve_module(const Module &mod, bool partial);
 
-  std::vector<std::unique_ptr<ResolvedDecl>> resolve_ast(bool partial, const Module& mod);
+  std::vector<std::unique_ptr<ResolvedDecl>> resolve_ast(bool partial, const Module &mod);
 
   void init_builtin_type_infos();
 
@@ -42,15 +47,15 @@ private:
 
   std::optional<DeclLookupResult> lookup_decl(std::string_view id, std::optional<const Type *> type = std::nullopt);
 
-  bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>>& ast);
+  bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast);
 
-  bool resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>>& ast);
+  bool resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast);
 
-  bool resolve_global_var_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>>& ast);
+  bool resolve_global_var_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast);
 
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
-  bool insert_decl_to_global_scope(ResolvedDecl& decl);
+  bool insert_decl_to_global_scope(ResolvedDecl &decl);
 
   std::optional<Type> resolve_type(Type parsed_type);
 
@@ -121,6 +126,8 @@ private:
 
 private:
   std::vector<std::unique_ptr<Module>> m_Modules;
+  // @TODO: to refactor out
+  // @NOTE: deprecated
   std::vector<std::unique_ptr<Decl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};
   std::unordered_map<std::string, std::unique_ptr<ResolvedModule>> m_ResolvedModules{};

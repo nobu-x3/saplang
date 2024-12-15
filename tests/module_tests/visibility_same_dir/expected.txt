@@ -1,0 +1,1 @@
+test.sl:4:5 error: symbol 'print_hello' undefined.
