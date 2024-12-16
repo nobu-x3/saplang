@@ -195,16 +195,16 @@ int main(int argc, const char **argv) {
   if (options.llvm_dump) {
     std::string output_string;
     llvm::raw_string_ostream output_buffer{output_string};
-    for (auto &&mod : gened_modules)
+    for (auto &&[name, mod] : gened_modules)
       mod->print(output_buffer, nullptr, true, true);
     std::cout << output_string;
     return 0;
   }
   std::stringstream command;
   command << "clang ";
-  for (auto &&mod : gened_modules) {
+  for (auto &&[name, mod] : gened_modules) {
     std::stringstream path;
-    path << "tmp-" << mod->getName().str() << ".ll";
+    path << "tmp-" << name << ".ll";
     const std::string llvm_ir_path = path.str();
     std::error_code error_code;
     llvm::raw_fd_ostream f{llvm_ir_path, error_code};

@@ -14,7 +14,7 @@ public:
   explicit Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree, std::string_view source_path);
   explicit Codegen(std::vector<std::unique_ptr<ResolvedModule>> resolved_modules, std::string_view source_path);
   std::unique_ptr<llvm::Module> generate_ir();
-  std::vector<std::unique_ptr<llvm::Module>> generate_modules();
+  std::unordered_map<std::string, std::unique_ptr<llvm::Module>> generate_modules();
 
 private:
   struct CurrentFunction {
@@ -62,13 +62,13 @@ private:
 
   llvm::Value *gen_explicit_cast(const ResolvedExplicitCastExpr &cast, llvm::Module& mod);
 
-  llvm::Value *gen_array_decay(const Type &lhs_type, const ResolvedDeclRefExpr &rhs_dre);
+  llvm::Value *gen_array_decay(const Type &lhs_type, const ResolvedDeclRefExpr &rhs_dre, llvm::Module& mod);
 
   std::pair<llvm::Value *, Type> gen_unary_op(const ResolvedUnaryOperator &op, llvm::Module& mod);
 
   std::vector<llvm::Value *> get_index_accesses(const ResolvedExpr &expr, llvm::Value *loaded_ptr, llvm::Module& mod);
 
-  std::pair<llvm::Value *, Type> gen_dereference(const ResolvedDeclRefExpr &expr);
+  std::pair<llvm::Value *, Type> gen_dereference(const ResolvedDeclRefExpr &expr, llvm::Module& mod);
 
   llvm::Value *gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs);
 
@@ -102,7 +102,7 @@ private:
   CurrentFunction m_CurrentFunction;
   std::vector<std::unique_ptr<ResolvedDecl>> m_ResolvedTree{};
   std::vector<std::unique_ptr<ResolvedModule>> m_ResolvedModules{};
-  std::map<const ResolvedDecl *, llvm::Value *> m_Declarations{};
+  std::unordered_map<std:: string, std::map<const ResolvedDecl *, llvm::Value *>> m_Declarations{};
   std::map<std::string, llvm::Type *> m_CustomTypes{};
   llvm::Instruction *m_AllocationInsertPoint{nullptr};
   llvm::LLVMContext m_Context;

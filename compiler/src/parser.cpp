@@ -13,7 +13,11 @@
 
 namespace saplang {
 
-Parser::Parser(Lexer *lexer, ParserConfig cfg) : m_Lexer(lexer), m_Config(std::move(cfg)), m_NextToken(lexer->get_next_token()) {}
+Parser::Parser(Lexer *lexer, ParserConfig cfg) : m_Lexer(lexer), m_Config(std::move(cfg)), m_NextToken(lexer->get_next_token()) {
+  std::filesystem::path source_filepath = m_Lexer->get_source_file_path();
+  m_ModulePath = source_filepath;
+  m_ModuleName = source_filepath.filename().replace_extension();
+}
 
 // <funcDecl>
 // ::= 'fn' <type> <identifier> '(' (<parameterList>)* ')' <block>
@@ -42,7 +46,7 @@ std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
     return report(m_NextToken.location, "failed to parse function block.");
   }
   auto &&param_list = maybe_param_list_vll->first;
-  return std::make_unique<FunctionDecl>(location, function_identifier, *return_type, std::move(param_list), std::move(block), false);
+  return std::make_unique<FunctionDecl>(location, function_identifier, *return_type, m_ModuleName, std::move(param_list), std::move(block), false);
 }
 
 // <imports>
@@ -142,7 +146,7 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
       eat_next_token(); // eat ';'
       auto is_vll = maybe_param_list_vll->second;
       auto &&param_list = maybe_param_list_vll->first;
-      decl = std::make_unique<FunctionDecl>(location, function_identifier, *return_type, std::move(param_list), nullptr, is_vll, lib_name, alias);
+      decl = std::make_unique<FunctionDecl>(location, function_identifier, *return_type, m_ModuleName, std::move(param_list), nullptr, is_vll, lib_name, alias);
     }
     // @TODO: struct and enum decls
     /* if (m_NextToken.kind == TokenKind::KwStruct) */
@@ -344,13 +348,13 @@ std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const, bool is_global) {
       return report(loc, "const variable expected to have initializer.");
     if (is_global)
       return report(loc, "global variable expected to have initializer.");
-    return std::make_unique<VarDecl>(loc, id, *type, nullptr, is_const);
+    return std::make_unique<VarDecl>(loc, id, *type, m_ModuleName, nullptr, is_const);
   }
   eat_next_token(); // eat '='
   std::unique_ptr<Expr> initializer = parse_expr();
   if (!initializer)
     return nullptr;
-  return std::make_unique<VarDecl>(loc, id, *type, std::move(initializer), is_const);
+  return std::make_unique<VarDecl>(loc, id, *type, m_ModuleName, std::move(initializer), is_const);
 }
 
 // <structDeclStatement>
@@ -380,7 +384,7 @@ std::unique_ptr<StructDecl> Parser::parse_struct_decl() {
     fields.emplace_back(std::make_pair(*type, field_name));
   }
   eat_next_token(); // eat '}'
-  return std::make_unique<StructDecl>(loc, id, std::move(fields));
+  return std::make_unique<StructDecl>(loc, id, m_ModuleName, std::move(fields));
 }
 
 // <enumDecl>
@@ -430,7 +434,7 @@ std::unique_ptr<EnumDecl> Parser::parse_enum_decl() {
   }
   eat_next_token(); // eat '}'
   m_EnumTypes.insert(std::make_pair(id, underlying_type));
-  return std::make_unique<EnumDecl>(loc, std::move(id), underlying_type, std::move(name_values_map));
+  return std::make_unique<EnumDecl>(loc, std::move(id), underlying_type, m_ModuleName, std::move(name_values_map));
 }
 
 std::unique_ptr<Assignment> Parser::parse_assignment(std::unique_ptr<Expr> lhs) {
@@ -1177,9 +1181,7 @@ ParsingResult Parser::parse_source_file() {
     decls.emplace_back(std::move(decl));
   }
   assert(m_NextToken.kind == TokenKind::Eof);
-  std::filesystem::path source_filepath = m_Lexer->get_source_file_path();
-  std::string filename = source_filepath.filename().replace_extension();
-  return {is_complete_ast, std::make_unique<Module>(std::move(filename), std::move(source_filepath), std::move(decls), std::move(imports))};
+  return {is_complete_ast, std::make_unique<Module>(std::move(m_ModuleName), std::move(m_ModulePath), std::move(decls), std::move(imports))};
 }
 
 void Parser::synchronize() {
