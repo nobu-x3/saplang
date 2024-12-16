@@ -835,7 +835,8 @@ std::unique_ptr<ResolvedFuncDecl> Sema::resolve_func_decl(const FunctionDecl &fu
     resolved_params.emplace_back(std::move(resolved_param));
     ++param_index;
   }
-  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type, std::move(resolved_params), nullptr, func.is_vll, func.lib, func.og_name);
+  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type, func.module, std::move(resolved_params), nullptr, func.is_vll, func.lib,
+                                            func.og_name);
 }
 
 std::unique_ptr<ResolvedParamDecl> Sema::resolve_param_decl(const ParamDecl &decl, int index, const std::string function_name) {
@@ -963,7 +964,7 @@ std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
     }
     resolved_initializer->set_constant_value(m_Cee.evaluate(*resolved_initializer));
   }
-  return std::make_unique<ResolvedVarDecl>(decl.location, decl.id, decl.type, std::move(resolved_initializer), decl.is_const);
+  return std::make_unique<ResolvedVarDecl>(decl.location, decl.id, decl.type, decl.module, std::move(resolved_initializer), decl.is_const);
 }
 
 std::unique_ptr<ResolvedStructDecl> Sema::resolve_struct_decl(const StructDecl &decl) {
@@ -974,11 +975,11 @@ std::unique_ptr<ResolvedStructDecl> Sema::resolve_struct_decl(const StructDecl &
       return nullptr;
     types.emplace_back(std::make_pair(std::move(*resolved_type), std::move(id)));
   }
-  return std::make_unique<ResolvedStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), std::move(types));
+  return std::make_unique<ResolvedStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), decl.module, std::move(types));
 }
 
 std::unique_ptr<ResolvedEnumDecl> Sema::resolve_enum_decl(const EnumDecl &decl) {
-  return std::make_unique<ResolvedEnumDecl>(decl.location, decl.id, decl.underlying_type, decl.name_values_map);
+  return std::make_unique<ResolvedEnumDecl>(decl.location, decl.id, decl.underlying_type, decl.module, decl.name_values_map);
 }
 
 std::unique_ptr<ResolvedGroupingExpr> Sema::resolve_grouping_expr(const GroupingExpr &group) {

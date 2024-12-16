@@ -92,5 +92,7 @@ private:
   Lexer *m_Lexer;
   Token m_NextToken;
   bool m_IsCompleteAst{true};
+  std::string m_ModuleName;
+  std::string m_ModulePath;
 };
 } // namespace saplang

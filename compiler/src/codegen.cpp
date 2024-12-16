@@ -37,14 +37,14 @@ std::unique_ptr<llvm::Module> Codegen::generate_ir() {
   return std::move(m_Module);
 }
 
-std::vector<std::unique_ptr<llvm::Module>> Codegen::generate_modules() {
-  std::vector<std::unique_ptr<llvm::Module>> modules;
-  modules.reserve(m_ResolvedModules.size());
+std::unordered_map<std::string, std::unique_ptr<llvm::Module>> Codegen::generate_modules() {
+  m_Modules.reserve(m_ResolvedModules.size());
   for (auto &&mod : m_ResolvedModules) {
-      if(m_Modules.count(mod->name))
-          continue;
+    if (m_Modules.count(mod->name))
+      continue;
     std::unique_ptr<llvm::Module> current_module = std::make_unique<llvm::Module>(mod->name, m_Context);
-    current_module->setSourceFileName(mod->path);
+    current_module->setSourceFileName(mod->name);
+    current_module->setModuleIdentifier(mod->name);
     current_module->setTargetTriple("x86-64");
     for (auto &&decl : mod->declarations) {
       if (const auto *func = dynamic_cast<const ResolvedFuncDecl *>(decl.get()))
@@ -54,13 +54,15 @@ std::vector<std::unique_ptr<llvm::Module>> Codegen::generate_modules() {
       else if (const auto *global_var_decl = dynamic_cast<const ResolvedVarDecl *>(decl.get()))
         gen_global_var_decl(*global_var_decl, *current_module);
     }
+    m_Modules[mod->name] = std::move(current_module);
+  }
+  for (auto &&mod : m_ResolvedModules) {
     for (auto &&decl : mod->declarations) {
       if (const auto *func = dynamic_cast<const ResolvedFuncDecl *>(decl.get()))
-        gen_func_body(*func, *current_module);
+        gen_func_body(*func, *m_Modules[mod->name]);
     }
-    modules.push_back(std::move(current_module));
   }
-  return std::move(modules);
+  return std::move(m_Modules);
 }
 
 void Codegen::gen_func_decl(const ResolvedFuncDecl &decl, llvm::Module &mod) {
@@ -73,7 +75,7 @@ void Codegen::gen_func_decl(const ResolvedFuncDecl &decl, llvm::Module &mod) {
   auto *type = llvm::FunctionType::get(return_type, param_types, decl.is_vll);
   llvm::Value *value = llvm::Function::Create(type, llvm::Function::ExternalLinkage, decl.og_name.empty() ? decl.id : decl.og_name, mod);
   assert(value);
-  m_Declarations[&decl] = value;
+  m_Declarations[mod.getName().str()][&decl] = value;
 }
 
 void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl, llvm::Module &mod) {
@@ -94,7 +96,7 @@ void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl, llvm::Module &mod
   // If var_init == nullptr there's an error in sema
   assert(var_init && "unexpected global variable type");
   llvm::GlobalVariable *global_var = new llvm::GlobalVariable(mod, var_type, decl.is_const, llvm::GlobalVariable::ExternalLinkage, var_init, decl.id);
-  m_Declarations[&decl] = global_var;
+  m_Declarations[mod.getName().str()][&decl] = global_var;
 }
 
 llvm::Constant *Codegen::gen_global_struct_init(const ResolvedStructLiteralExpr &init, llvm::Module &mod) {
@@ -218,7 +220,7 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, llvm::Module &mod) {
     llvm::Value *var = alloc_stack_var(function, type, param_decl->id);
     assert(var);
     m_Builder.CreateStore(&arg, var);
-    m_Declarations[param_decl] = var;
+    m_Declarations[mod.getName().str()][param_decl] = var;
     ++idx;
   }
   gen_block(*decl.body, mod);
@@ -502,7 +504,7 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr, llvm::Module &mod) {
     return get_constant_number_value(*number);
   }
   if (const auto *dre = dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
-    llvm::Value *decl = m_Declarations[dre->decl];
+    llvm::Value *decl = m_Declarations[mod.getName().str()][dre->decl];
     assert(decl);
     auto *type = gen_type(dre->type);
     assert(type);
@@ -566,7 +568,7 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(const ResolvedStructLit
     } else if (const auto *unary_op = dynamic_cast<const ResolvedUnaryOperator *>(expr.get()); unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         if (unary_op->op == TokenKind::Amp) {
-          llvm::Value *expr = m_Declarations[dre->decl];
+          llvm::Value *expr = m_Declarations[mod.getName().str()][dre->decl];
           assert(expr);
           m_Builder.CreateStore(expr, memptr);
         }
@@ -667,7 +669,7 @@ llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess 
     return nullptr;
   llvm::Function *current_function = get_current_function();
   assert(current_function);
-  llvm::Value *decl = m_Declarations[access.decl];
+  llvm::Value *decl = m_Declarations[mod.getName().str()][access.decl];
   if (!decl)
     return report(access.location, "unknown declaration '" + access.decl->id + "'.");
   Type access_decl_type = access.decl->type;
@@ -820,7 +822,7 @@ llvm::Value *Codegen::gen_array_element_access(const ResolvedArrayElementAccess 
   assert(access.indices.size() >= 1 && "unknown index");
   llvm::Function *current_function = get_current_function();
   assert(current_function);
-  llvm::Value *decl = m_Declarations[access.decl];
+  llvm::Value *decl = m_Declarations[mod.getName().str()][access.decl];
   if (!decl)
     return report(access.location, "unknown declaration '" + access.decl->id + "'.");
   Type decl_type = access.decl->type;
@@ -875,7 +877,7 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast, ll
       var = gen_expr(*cast.rhs, mod);
     }
   }
-  var = decl_ref_expr ? m_Declarations[decl_ref_expr->decl] : var;
+  var = decl_ref_expr ? m_Declarations[mod.getName().str()][decl_ref_expr->decl] : var;
   if (!var)
     return nullptr;
   llvm::Type *type = gen_type(cast.type);
@@ -1097,8 +1099,8 @@ llvm::Value *Codegen::gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lh
   return bool_to_type(kind, ret_val);
 }
 
-std::pair<llvm::Value *, Type> Codegen::gen_dereference(const ResolvedDeclRefExpr &expr) {
-  llvm::Value *decl = m_Declarations[expr.decl];
+std::pair<llvm::Value *, Type> Codegen::gen_dereference(const ResolvedDeclRefExpr &expr, llvm::Module& mod) {
+  llvm::Value *decl = m_Declarations[mod.getName().str()][expr.decl];
   llvm::Value *ptr = m_Builder.CreateLoad(gen_type(expr.type), decl);
   assert(ptr);
   Type new_internal_type = expr.type;
@@ -1113,7 +1115,7 @@ std::pair<llvm::Value *, Type> Codegen::gen_dereference(const ResolvedDeclRefExp
 std::pair<llvm::Value *, Type> Codegen::gen_unary_op(const ResolvedUnaryOperator &op, llvm::Module &mod) {
   if (op.op == TokenKind::Asterisk) {
     if (auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(op.rhs.get())) {
-      return gen_dereference(*dre);
+      return gen_dereference(*dre, mod);
     } else if (auto *unop = dynamic_cast<ResolvedUnaryOperator *>(op.rhs.get())) {
       auto &&[rhs, type] = gen_unary_op(*unop, mod);
       assert(rhs);
@@ -1178,6 +1180,13 @@ void Codegen::gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_
 }
 
 llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, llvm::Module &mod) {
+  if (mod.getName() != call.decl->module) {
+    if (!m_Declarations[mod.getName().str()].count(call.decl)) {
+      auto *resolved_func_decl = dynamic_cast<const ResolvedFuncDecl *>(call.decl);
+      assert(resolved_func_decl);
+      gen_func_decl(*resolved_func_decl, mod);
+    }
+  }
   llvm::Function *callee = mod.getFunction(call.decl->og_name.empty() ? call.decl->id : call.decl->og_name);
   std::vector<llvm::Value *> args{};
   int param_index = -1;
@@ -1185,7 +1194,7 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, llvm::Module &
     ++param_index;
     if (const auto *unary_op = dynamic_cast<const ResolvedUnaryOperator *>(arg.get()); unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
-        llvm::Value *expr = m_Declarations[dre->decl];
+        llvm::Value *expr = m_Declarations[mod.getName().str()][dre->decl];
         assert(expr);
         args.emplace_back(expr);
         continue;
@@ -1193,7 +1202,7 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, llvm::Module &
     }
     if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(arg.get())) {
       if (const auto *func_decl = dynamic_cast<const ResolvedFuncDecl *>(call.decl)) {
-        llvm::Value *decay = gen_array_decay(func_decl->params[param_index]->type, *dre);
+        llvm::Value *decay = gen_array_decay(func_decl->params[param_index]->type, *dre, mod);
         if (decay) {
           args.emplace_back(decay);
           continue;
@@ -1204,7 +1213,7 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, llvm::Module &
   }
   // we're probably dealing with fn ptr
   if (!callee) {
-    callee = static_cast<llvm::Function *>(m_Declarations[call.decl]);
+    callee = static_cast<llvm::Function *>(m_Declarations[mod.getName().str()][call.decl]);
     llvm::Type *function_ret_type = gen_type(call.type);
     assert(function_ret_type);
     bool is_fn_ptr = call.type.fn_ptr_signature.has_value();
@@ -1234,7 +1243,7 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, llvm::Module &
       gen_struct_literal_expr_assignment(*struct_lit, var, mod);
     } else if (const auto *unary_op = dynamic_cast<const ResolvedUnaryOperator *>(init.get()); unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
-        llvm::Value *expr = m_Declarations[dre->decl];
+        llvm::Value *expr = m_Declarations[mod.getName().str()][dre->decl];
         assert(expr);
         if (unary_op->op == TokenKind::Amp) {
           m_Builder.CreateStore(expr, var);
@@ -1243,22 +1252,22 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, llvm::Module &
     } else if (const auto *array_lit = dynamic_cast<ResolvedArrayLiteralExpr *>(init.get())) {
       gen_array_literal_expr(*array_lit, var, mod);
     } else if (const auto *dre = dynamic_cast<const ResolvedDeclRefExpr *>(init.get())) {
-      llvm::Value *decay = gen_array_decay(decl->type, *dre);
+      llvm::Value *decay = gen_array_decay(decl->type, *dre, mod);
       m_Builder.CreateStore(decay ? decay : gen_expr(*init, mod), var);
     } else {
       m_Builder.CreateStore(gen_expr(*init, mod), var);
     }
   }
-  m_Declarations[decl] = var;
+  m_Declarations[mod.getName().str()][decl] = var;
   return nullptr;
 }
 
-llvm::Value *Codegen::gen_array_decay(const Type &lhs_type, const ResolvedDeclRefExpr &rhs_dre) {
+llvm::Value *Codegen::gen_array_decay(const Type &lhs_type, const ResolvedDeclRefExpr &rhs_dre, llvm::Module& mod) {
   if (rhs_dre.type.array_data) {
     if (is_same_array_decay(rhs_dre.type, lhs_type)) {
       std::vector<llvm::Value *> indices{llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 0)),
                                          llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 0))};
-      llvm::Value *decl = m_Declarations[rhs_dre.decl];
+      llvm::Value *decl = m_Declarations[mod.getName().str()][rhs_dre.decl];
       auto *type = gen_type(rhs_dre.type);
       assert(type);
       return m_Builder.CreateInBoundsGEP(type, decl, indices, "arraydecay");
@@ -1292,7 +1301,7 @@ llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
 }
 
 llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, llvm::Module &mod) {
-  llvm::Value *decl = m_Declarations[assignment.variable->decl];
+  llvm::Value *decl = m_Declarations[mod.getName().str()][assignment.variable->decl];
   Type member_type = Type::builtin_void(false);
   if (const auto *member_access = dynamic_cast<const ResolvedStructMemberAccess *>(assignment.variable.get())) {
     decl = gen_struct_member_access(*member_access, member_type, mod);
@@ -1311,7 +1320,7 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, llvm:
   // further to Codegen::gen_unary_op
   if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(assignment.expr.get()); unop && unop->op == TokenKind::Amp) {
     if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unop->rhs.get())) {
-      llvm::Value *expr = m_Declarations[dre->decl];
+      llvm::Value *expr = m_Declarations[mod.getName().str()][dre->decl];
       assert(expr);
       return m_Builder.CreateStore(expr, decl);
     }
