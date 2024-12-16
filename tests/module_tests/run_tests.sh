@@ -30,15 +30,24 @@ for TEST_DIR in $SCRIPT_DIR/*/; do
         TEST_FILE="${TEST_DIR}test.sl"
         RELATIVE_DIR=$(basename "$TEST_DIR")
         OUTPUT_FILE="${OUTPUT_DIR}/${RELATIVE_DIR}/test"
-        OUTPUT_TEXT_FILE="${OUTPUT_DIR}/${RELATIVE_DIR}/result.txt"
+        COMPILE_OUTPUT_TEXT_FILE="${OUTPUT_DIR}/${RELATIVE_DIR}/result_compile.txt"
+        EXEC_STDOUT_OUTPUT_FILE="${OUTPUT_DIR}/${RELATIVE_DIR}/result_out.txt"
         INCLUDE_DIR="${TEST_DIR%/}"
 
         echo "Running test for ${RELATIVE_DIR}..."
 
         mkdir ${OUTPUT_DIR}/${RELATIVE_DIR}
-        touch $OUTPUT_TEXT_FILE
+        touch $COMPILE_OUTPUT_TEXT_FILE
         #Run the Python script with the appropriate arguments
-        python3 "$PYTHON_SCRIPT" "$EXECUTABLE" "$OUTPUT_TEXT_FILE" "$TEST_FILE"  "-o" "$OUTPUT_FILE" "-i" "$INCLUDE_DIR"
+        python3 "$PYTHON_SCRIPT" "$EXECUTABLE" "$COMPILE_OUTPUT_TEXT_FILE" "$TEST_FILE"  "-o" "$OUTPUT_FILE" "-i" "$INCLUDE_DIR"
+        python3 "$PYTHON_SCRIPT" "$OUTPUT_FILE" "$EXEC_STDOUT_OUTPUT_FILE"
+
+        echo "$TEST_DIR/expected_out.txt"
+        if cmp -s "$EXEC_STDOUT_OUTPUT_FILE" "$TEST_DIR/expected_out.txt"; then
+            echo "$RELATIVE_DIR stdout test - SUCCESS"
+        else
+            echo "$RELATIVE_DIR stdout test - FAILURE"
+        fi
     else
         echo "No test.sl found in $TEST_DIR, skipping..."
     fi
