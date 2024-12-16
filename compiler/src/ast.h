@@ -223,10 +223,11 @@ struct Expr : public Stmt {
 
 struct Module : public IDumpable {
   std::string name;
+  std::string path;
   std::vector<std::unique_ptr<Decl>> declarations;
   std::vector<std::string> imports;
-  inline Module(std::string module_name, std::vector<std::unique_ptr<Decl>> declarations, std::vector<std::string> imports)
-      : name(std::move(module_name)), declarations(std::move(declarations)), imports(std::move(imports)) {}
+  inline Module(std::string module_name, std::string path, std::vector<std::unique_ptr<Decl>> declarations, std::vector<std::string> imports)
+      : name(std::move(module_name)), path(std::move(path)), declarations(std::move(declarations)), imports(std::move(imports)) {}
   DUMP_IMPL
 };
 
@@ -503,20 +504,22 @@ struct ResolvedBlock : public IDumpable {
 struct ResolvedDecl : public IDumpable {
   SourceLocation location;
   std::string id;
+  std::string module;
   Type type;
   std::string lib;
   std::string og_name;
   bool is_exported;
-  inline ResolvedDecl(SourceLocation loc, std::string id, Type &&type, std::string lib = "", std::string og_name = "")
-      : location(loc), id(std::move(id)), type(std::move(type)), lib(std::move(lib)), og_name(std::move(og_name)) {}
+  inline ResolvedDecl(SourceLocation loc, std::string id, Type &&type, std::string module, std::string lib = "", std::string og_name = "")
+      : location(loc), id(std::move(id)), type(std::move(type)), module(std::move(module)), lib(std::move(lib)), og_name(std::move(og_name)) {}
   virtual ~ResolvedDecl() = default;
 };
 
 struct ResolvedModule : public IDumpable {
   std::string name;
+  std::string path;
   std::vector<std::unique_ptr<ResolvedDecl>> declarations;
-  inline ResolvedModule(std::string module_name, std::vector<std::unique_ptr<ResolvedDecl>> decls)
-      : name(std::move(module_name)), declarations(std::move(decls)) {}
+  inline ResolvedModule(std::string module_name, std::string path, std::vector<std::unique_ptr<ResolvedDecl>> decls)
+      : name(std::move(module_name)), path(std::move(path)), declarations(std::move(decls)) {}
   DUMP_IMPL
 };
 
@@ -524,25 +527,25 @@ struct ResolvedVarDecl : public ResolvedDecl {
   std::unique_ptr<ResolvedExpr> initializer;
   bool is_const;
   bool is_global;
-  inline ResolvedVarDecl(SourceLocation loc, std::string id, Type type, std::unique_ptr<ResolvedExpr> init, bool is_const, bool is_global = false,
+  inline ResolvedVarDecl(SourceLocation loc, std::string id, Type type, std::string module, std::unique_ptr<ResolvedExpr> init, bool is_const, bool is_global = false,
                          std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(loc, id, std::move(type), std::move(lib), std::move(og_name)), initializer(std::move(init)), is_const(is_const), is_global(is_global) {}
+      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), initializer(std::move(init)), is_const(is_const), is_global(is_global) {}
   DUMP_IMPL
 };
 
 struct ResolvedStructDecl : public ResolvedDecl {
   std::vector<std::pair<Type, std::string>> members;
-  inline ResolvedStructDecl(SourceLocation loc, const std::string &id, Type type, std::vector<std::pair<Type, std::string>> types, std::string lib = "",
+  inline ResolvedStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::pair<Type, std::string>> types, std::string lib = "",
                             std::string og_name = "")
-      : ResolvedDecl(loc, id, std::move(type), std::move(lib), std::move(og_name)), members(std::move(types)) {}
+      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), members(std::move(types)) {}
   DUMP_IMPL
 };
 
 struct ResolvedEnumDecl : public ResolvedDecl {
   std::unordered_map<std::string, long> name_values_map;
-  inline ResolvedEnumDecl(SourceLocation loc, std::string id, Type underlying_type, std::unordered_map<std::string, long> name_values_map, std::string lib = "",
+  inline ResolvedEnumDecl(SourceLocation loc, std::string id, Type underlying_type, std::string module, std::unordered_map<std::string, long> name_values_map, std::string lib = "",
                           std::string og_name = "")
-      : ResolvedDecl(loc, std::move(id), std::move(underlying_type), std::move(lib), std::move(og_name)), name_values_map(std::move(name_values_map)) {}
+      : ResolvedDecl(loc, std::move(id), std::move(underlying_type), std::move(module), std::move(lib), std::move(og_name)), name_values_map(std::move(name_values_map)) {}
   DUMP_IMPL
 };
 
@@ -620,7 +623,7 @@ struct ResolvedUnaryOperator : public ResolvedExpr {
 struct ResolvedParamDecl : public ResolvedDecl {
   bool is_const;
   inline ResolvedParamDecl(SourceLocation loc, std::string id, Type &&type, bool is_const)
-      : ResolvedDecl(loc, std::move(id), std::move(type), "", ""), is_const(is_const) {}
+      : ResolvedDecl(loc, std::move(id), std::move(type), "", "", ""), is_const(is_const) {}
   DUMP_IMPL
 };
 
@@ -628,9 +631,9 @@ struct ResolvedFuncDecl : public ResolvedDecl {
   std::vector<std::unique_ptr<ResolvedParamDecl>> params;
   std::unique_ptr<ResolvedBlock> body;
   bool is_vll;
-  inline ResolvedFuncDecl(SourceLocation loc, std::string id, Type type, std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
+  inline ResolvedFuncDecl(SourceLocation loc, std::string id, Type type, std::string module, std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
                           std::unique_ptr<ResolvedBlock> body, bool is_vll, std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(loc, std::move(id), std::move(type), std::move(lib), std::move(og_name)), params(std::move(params)), body(std::move(body)),
+      : ResolvedDecl(loc, std::move(id), std::move(type), std::move(module), std::move(lib), std::move(og_name)), params(std::move(params)), body(std::move(body)),
         is_vll(is_vll) {}
   DUMP_IMPL
 };

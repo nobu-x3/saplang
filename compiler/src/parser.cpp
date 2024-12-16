@@ -1179,7 +1179,7 @@ ParsingResult Parser::parse_source_file() {
   assert(m_NextToken.kind == TokenKind::Eof);
   std::filesystem::path source_filepath = m_Lexer->get_source_file_path();
   std::string filename = source_filepath.filename().replace_extension();
-  return {is_complete_ast, std::make_unique<Module>(std::move(filename), std::move(decls), std::move(imports))};
+  return {is_complete_ast, std::make_unique<Module>(std::move(filename), std::move(source_filepath), std::move(decls), std::move(imports))};
 }
 
 void Parser::synchronize() {
