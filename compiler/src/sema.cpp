@@ -683,7 +683,7 @@ std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool
     }
   }
   std::vector<std::unique_ptr<ResolvedDecl>> module_ast = resolve_ast(partial, _module);
-  return std::make_unique<ResolvedModule>(_module.name, std::move(module_ast));
+  return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(module_ast));
 }
 
 std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial, const Module &mod) {

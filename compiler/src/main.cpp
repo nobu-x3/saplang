@@ -190,29 +190,33 @@ int main(int argc, const char **argv) {
   }
   if (resolved_modules.empty())
     return 1;
-  /* saplang::Codegen codegen{std::move(resolved_modules), source}; */
-  /* auto llvm_ir = codegen.generate_ir(); */
-  /* if (options.llvm_dump) { */
-  /*   std::string output_string; */
-  /*   llvm::raw_string_ostream output_buffer{output_string}; */
-  /*   llvm_ir->print(output_buffer, nullptr, true, true); */
-  /*   std::cout << output_string; */
-  /*   return 0; */
-  /* } */
-  /* std::stringstream path; */
-  /* path << "tmp-" << std::filesystem::hash_value(options.source) << ".ll"; */
-  /* const std::string llvm_ir_path = path.str(); */
-  /* std::error_code error_code; */
-  /* llvm::raw_fd_ostream f{llvm_ir_path, error_code}; */
-  /* llvm_ir->print(f, nullptr); */
-  /* std::stringstream command; */
-  /* command << "clang " << llvm_ir_path; */
-  /* if (!options.output.empty()) */
-  /*   command << " -o " << options.output; */
-  /* command << " -g -O0 -ggdb -glldb -gsce -gdbx"; */
-  /* for (auto &&extra_flag : options.extra_flags) */
-  /*   command << extra_flag; */
-  /* int ret = std::system(command.str().c_str()); */
-  /* // std::filesystem::remove(llvm_ir_path); */
-  /* return ret; */
+  saplang::Codegen codegen{std::move(resolved_modules), source};
+  auto gened_modules = codegen.generate_modules();
+  if (options.llvm_dump) {
+    std::string output_string;
+    llvm::raw_string_ostream output_buffer{output_string};
+    for (auto &&mod : gened_modules)
+      mod->print(output_buffer, nullptr, true, true);
+    std::cout << output_string;
+    return 0;
+  }
+  std::stringstream command;
+  command << "clang ";
+  for (auto &&mod : gened_modules) {
+    std::stringstream path;
+    path << "tmp-" << mod->getName().str() << ".ll";
+    const std::string llvm_ir_path = path.str();
+    std::error_code error_code;
+    llvm::raw_fd_ostream f{llvm_ir_path, error_code};
+    mod->print(f, nullptr);
+    command << path.str() << " ";
+  }
+  if (!options.output.empty())
+    command << " -o " << options.output;
+  command << " -g -O0 -ggdb -glldb -gsce -gdbx";
+  for (auto &&extra_flag : options.extra_flags)
+    command << extra_flag;
+  int ret = std::system(command.str().c_str());
+  // std::filesystem::remove(llvm_ir_path);
+  return ret;
 }
