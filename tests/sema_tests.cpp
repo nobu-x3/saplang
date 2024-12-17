@@ -152,8 +152,10 @@ fn void main() {}
   auto buf_str = output_buffer.str();
   REQUIRE(error_stream.str() == "sema_test:2:1 error: function 'foo' has invalid 'CustomType' type\n");
   REQUIRE(!buf_str.empty());
-  REQUIRE(buf_str.find("ResolvedFuncDecl:") == 0);
-  REQUIRE(buf_str.find("main") != std::string::npos);
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  REQUIRE(lines_it->find("ResolvedFuncDecl:") != std::string::npos);
+  REQUIRE(lines_it->find("main") != std::string::npos);
 }
 
 TEST_CASE("Number literal returns", "[sema]") {
