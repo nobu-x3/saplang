@@ -11,6 +11,7 @@
 #include <parser.h>
 #include <sema.h>
 #include <utils.h>
+#include <driver.h>
 
 #include <llvm/Support/raw_ostream.h>
 
