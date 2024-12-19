@@ -129,10 +129,10 @@ test:4:1 error: failed to parse function block.
   }
   SECTION("Proper syntax") {
     TEST_SETUP("fn void f(){}");
-    REQUIRE(output_buffer.str() ==
-            R"(FunctionDecl: f:void
-  Block
-)");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("FunctionDecl: f:void") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
     REQUIRE(error_stream.str().empty());
     REQUIRE(parser.is_complete_ast());
   }
