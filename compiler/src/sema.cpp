@@ -683,6 +683,8 @@ std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool
     }
   }
   std::vector<std::unique_ptr<ResolvedDecl>> module_ast = resolve_ast(partial, _module);
+  if (!module_ast.size())
+    return nullptr;
   return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(module_ast));
 }
 
@@ -964,7 +966,7 @@ std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
     }
     resolved_initializer->set_constant_value(m_Cee.evaluate(*resolved_initializer));
   }
-  return std::make_unique<ResolvedVarDecl>(decl.location, decl.id, decl.type, decl.module, std::move(resolved_initializer), decl.is_const);
+  return std::make_unique<ResolvedVarDecl>(decl.location, decl.id, *type, decl.module, std::move(resolved_initializer), decl.is_const);
 }
 
 std::unique_ptr<ResolvedStructDecl> Sema::resolve_struct_decl(const StructDecl &decl) {

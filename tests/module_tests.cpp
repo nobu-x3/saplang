@@ -6,7 +6,7 @@
 #define TEST_SETUP(test_name, include_string)                                                                                                                  \
   std::ostringstream compile_output_stream;                                                                                                                    \
   saplang::CompilerOptions compiler_options{"build/bin/module_tests/" + std::string(test_name) + "/test.sl",                                                   \
-                                            "build/bin/module_tests/" + std::string(test_name) + "/test"};                                                      \
+                                            "build/bin/module_tests/" + std::string(test_name) + "/test"};                                                     \
   if (std::string(include_string).size() > 0)                                                                                                                  \
     compiler_options.import_paths = saplang::split(include_string, ';');                                                                                       \
   saplang::Driver driver{compiler_options};                                                                                                                    \
@@ -14,11 +14,11 @@
   std::string compile_output = compile_output_stream.str();
 
 #define REQUIRE_COMPILE_SUCCESS                                                                                                                                \
-  REQUIRE(compile_result == 0);                                                                                                                                \
-  REQUIRE(compile_output == "");
+  REQUIRE(compile_output == "");                                                                                                                               \
+  REQUIRE(compile_result == 0);
 
 #define EXEC_COMPILED(test_name)                                                                                                                               \
-  std::string command = "touch build/bin/module_tests/" + std::string(test_name) + "test_output.txt && build/bin/module_tests/" + std::string(test_name) +     \
+  std::string command = "touch build/bin/module_tests/" + std::string(test_name) + "/test_output.txt && build/bin/module_tests/" + std::string(test_name) +    \
                         "/test >>build/bin/module_tests/" + std::string(test_name) + "/test_output.txt 2>&1";                                                  \
   int exec_result = std::system(command.c_str());                                                                                                              \
   REQUIRE(exec_result == 0);                                                                                                                                   \
@@ -41,4 +41,11 @@ TEST_CASE("visibility_other_dir", "[modules]") {
   REQUIRE_COMPILE_SUCCESS;
   EXEC_COMPILED("visibility_other_dir")
   REQUIRE(stdout_string == "hello world\n");
+}
+
+TEST_CASE("visibility_structs_and_enums", "[modules]") {
+  TEST_SETUP("visibility_structs_and_enums", "");
+  REQUIRE_COMPILE_SUCCESS;
+  EXEC_COMPILED("visibility_structs_and_enums")
+  REQUIRE(stdout_string == "TestStruct value: 32\nTestEnum value: 0\nTestEnum value: 0\n");
 }
