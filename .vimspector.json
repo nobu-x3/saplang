@@ -6,7 +6,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/build/bin/saplang_tests",
         "args": [],
-        "cwd": "${workspaceFolder}/build/bin",
+        "cwd": "${workspaceFolder}",
         "environment": [],
         "externalConsole": true,
         "MIMode": "gdb",
