@@ -97,12 +97,18 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
   eat_next_token(); // eat '{'
   std::vector<std::unique_ptr<Decl>> declarations;
   while (m_NextToken.kind != TokenKind::Rbrace) {
-    if (m_NextToken.kind != TokenKind::KwFn && m_NextToken.kind != TokenKind::KwEnum && m_NextToken.kind != TokenKind::KwStruct) {
+    if (m_NextToken.kind != TokenKind::KwExport && m_NextToken.kind != TokenKind::KwFn && m_NextToken.kind != TokenKind::KwEnum &&
+        m_NextToken.kind != TokenKind::KwStruct) {
       report(m_NextToken.location, "expected declaration-specific keyword ('fn', 'enum', 'struct', 'union').");
       return {};
     }
     std::unique_ptr<Decl> decl = nullptr;
     std::string alias;
+    bool is_exported = false;
+    if (m_NextToken.kind == TokenKind::KwExport) {
+      is_exported = true;
+      eat_next_token();
+    }
     // this is copied because we're expecting there not to be a block and
     // parse_function_decl() expects a block
     if (m_NextToken.kind == TokenKind::KwFn) {
@@ -146,7 +152,8 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
       eat_next_token(); // eat ';'
       auto is_vll = maybe_param_list_vll->second;
       auto &&param_list = maybe_param_list_vll->first;
-      decl = std::make_unique<FunctionDecl>(location, function_identifier, *return_type, m_ModuleName, std::move(param_list), nullptr, is_vll, lib_name, alias);
+      decl = std::make_unique<FunctionDecl>(location, function_identifier, *return_type, m_ModuleName, std::move(param_list), nullptr, is_vll, lib_name, alias,
+                                            is_exported);
     }
     // @TODO: struct and enum decls
     /* if (m_NextToken.kind == TokenKind::KwStruct) */

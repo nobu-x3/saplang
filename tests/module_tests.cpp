@@ -49,3 +49,10 @@ TEST_CASE("visibility_structs_and_enums", "[modules]") {
   EXEC_COMPILED("visibility_structs_and_enums")
   REQUIRE(stdout_string == "TestStruct value: 32\nTestEnum value: 0\nTestEnum value: 0\n");
 }
+
+TEST_CASE("visibility_extern", "[modules]") {
+  TEST_SETUP("visibility_extern", "");
+  REQUIRE_COMPILE_SUCCESS;
+  EXEC_COMPILED("visibility_extern")
+  REQUIRE(stdout_string == "hello world\n");
+}
