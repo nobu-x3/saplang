@@ -15,6 +15,7 @@ struct CompilerOptions {
   std::filesystem::path output;
   std::optional<std::string> input_string{std::nullopt};
   std::vector<std::string> import_paths{};
+  std::vector<std::string> library_paths{};
   std::vector<std::string> extra_flags{};
   bool display_help{false};
   bool ast_dump{false};

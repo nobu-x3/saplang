@@ -1518,7 +1518,7 @@ extern sapfire {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("FunctionDecl: alias libc::malloc allocate:ptr void") != std::string::npos);
+  REQUIRE(lines_it->find("FunctionDecl: alias c::malloc allocate:ptr void") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: lenght:i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: size:i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: alias sapfire::render_frame render:void");
@@ -1533,7 +1533,7 @@ extern {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("FunctionDecl: VLL alias libc::printf print:void") != std::string::npos);
+  REQUIRE(lines_it->find("FunctionDecl: VLL alias c::printf print:void") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: fmt:ptr char");
 }
 
