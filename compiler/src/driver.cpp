@@ -52,6 +52,8 @@ CompilerOptions::CompilerOptions(int argc, const char **argv) {
         llvm_dump = true;
       else if (arg == "-i")
         import_paths = split(argv[++idx], ';');
+      else if (arg == "-L")
+        library_paths = split(argv[++idx], ';');
       else if (arg == "-extra")
         extra_flags = split(argv[++idx], ';');
       else
@@ -104,6 +106,10 @@ int Driver::run(std::ostream &output_stream) {
         modules.emplace_back(std::move(module_parse_result.module));
       }
     }
+  }
+  std::set<std::string> libraries;
+  for (auto &&module : modules) {
+    libraries.merge(module->libraries);
   }
   std::stringstream buffer;
   if (!m_Options.input_string.has_value()) {
@@ -169,11 +175,14 @@ int Driver::run(std::ostream &output_stream) {
     return 0;
   }
   std::stringstream command;
+  std::vector<std::string> llvm_ir_paths;
+  llvm_ir_paths.reserve(gened_modules.size());
   command << "clang ";
   for (auto &&[name, mod] : gened_modules) {
     std::stringstream path;
     path << "tmp-" << name << ".ll";
     const std::string llvm_ir_path = path.str();
+    llvm_ir_paths.push_back(llvm_ir_path);
     std::error_code error_code;
     llvm::raw_fd_ostream f{llvm_ir_path, error_code};
     mod->print(f, nullptr);
@@ -181,11 +190,18 @@ int Driver::run(std::ostream &output_stream) {
   }
   if (!m_Options.output.empty())
     command << " -o " << m_Options.output;
+  for (auto &&path : m_Options.library_paths) {
+    command << " -L" << path;
+  }
+  for (auto &&lib : libraries) {
+    command << " -l" << lib;
+  }
   command << " -g -O0 -ggdb -glldb -gsce -gdbx";
   for (auto &&extra_flag : m_Options.extra_flags)
     command << extra_flag;
   int ret = std::system(command.str().c_str());
-  // std::filesystem::remove(llvm_ir_path);
+  for (auto &&llvm_ir_path : llvm_ir_paths)
+    std::filesystem::remove(llvm_ir_path);
   return ret;
 }
 
@@ -195,6 +211,7 @@ void Driver::display_help() {
             << "Options:\n"
             << "\t-h                            display this message.\n"
             << "\t-i \"IMP1;IMP2;...\"          import paths.\n"
+            << "\t-L \"PATH1;PATH2\"            library directories.\n"
             << "\t-string <input_string>        use <input_string> instead of "
                "<source_file>.\n"
             << "\t-o <file>                     write executable to <file>.\n"

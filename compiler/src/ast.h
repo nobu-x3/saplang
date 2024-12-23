@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <set>
 #include <vector>
 
 #include "lexer.h"
@@ -227,8 +228,12 @@ struct Module : public IDumpable {
   std::string path;
   std::vector<std::unique_ptr<Decl>> declarations;
   std::vector<std::string> imports;
-  inline Module(std::string module_name, std::string path, std::vector<std::unique_ptr<Decl>> declarations, std::vector<std::string> imports)
-      : name(std::move(module_name)), path(std::move(path)), declarations(std::move(declarations)), imports(std::move(imports)) {}
+  // Should not be used in further stages
+  std::set<std::string> libraries;
+  inline Module(std::string module_name, std::string path, std::vector<std::unique_ptr<Decl>> declarations, std::vector<std::string> imports,
+                std::set<std::string> libraries)
+      : name(std::move(module_name)), path(std::move(path)), declarations(std::move(declarations)), imports(std::move(imports)),
+        libraries(std::move(libraries)) {}
   DUMP_IMPL
 };
 

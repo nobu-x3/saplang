@@ -84,7 +84,7 @@ std::string Parser::parse_import() {
 std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
   assert(m_NextToken.kind == TokenKind::KwExtern && "expected 'extern' keyword.");
   eat_next_token(); // eat 'extern'
-  std::string lib_name = "libc";
+  std::string lib_name = "c";
   if (m_NextToken.kind == TokenKind::Identifier) {
     lib_name = *m_NextToken.value;
     eat_next_token(); // eat libname
@@ -1188,7 +1188,14 @@ ParsingResult Parser::parse_source_file() {
     decls.emplace_back(std::move(decl));
   }
   assert(m_NextToken.kind == TokenKind::Eof);
-  return {is_complete_ast, std::make_unique<Module>(std::move(m_ModuleName), std::move(m_ModulePath), std::move(decls), std::move(imports))};
+  std::set<std::string> libraries;
+  for (auto &&decl : decls) {
+    if (!decl->lib.empty()) {
+      libraries.insert(decl->lib);
+    }
+  }
+  return {is_complete_ast,
+          std::make_unique<Module>(std::move(m_ModuleName), std::move(m_ModulePath), std::move(decls), std::move(imports), std::move(libraries))};
 }
 
 void Parser::synchronize() {

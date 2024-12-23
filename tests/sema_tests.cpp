@@ -1885,7 +1885,7 @@ extern sapfire {
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
   REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
-  REQUIRE(lines_it->find(") alias libc::malloc allocate:") != std::string::npos);
+  REQUIRE(lines_it->find(") alias c::malloc allocate:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
   REQUIRE(lines_it->find(") lenght:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
@@ -1907,7 +1907,7 @@ fn void main() {
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
   REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
-  REQUIRE(lines_it->find(") VLL alias libc::printf print:") != std::string::npos);
+  REQUIRE(lines_it->find(") VLL alias c::printf print:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
   REQUIRE(lines_it->find(") fmt:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
