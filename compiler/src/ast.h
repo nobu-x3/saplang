@@ -469,6 +469,7 @@ struct FunctionDecl : public Decl {
 
 struct ResolvedStmt : public IDumpable {
   SourceLocation location;
+  int scope_line;
   inline ResolvedStmt(SourceLocation location) : location(location) {}
   virtual ~ResolvedStmt() = default;
 };
@@ -516,6 +517,7 @@ struct ResolvedDecl : public IDumpable {
   std::string lib;
   std::string og_name;
   bool is_exported;
+  int scope_line;
   inline ResolvedDecl(SourceLocation loc, std::string id, Type &&type, std::string module, std::string lib = "", std::string og_name = "")
       : location(loc), id(std::move(id)), type(std::move(type)), module(std::move(module)), lib(std::move(lib)), og_name(std::move(og_name)) {}
   virtual ~ResolvedDecl() = default;

@@ -17,6 +17,7 @@ struct CompilerOptions {
   std::vector<std::string> import_paths{};
   std::vector<std::string> library_paths{};
   std::vector<std::string> extra_flags{};
+  bool gen_debug{false};
   bool display_help{false};
   bool ast_dump{false};
   bool res_dump{false};

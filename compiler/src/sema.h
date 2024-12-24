@@ -36,6 +36,8 @@ public:
 
   void dump_type_infos_to_stream(std ::stringstream &stream, size_t indent = 0) const;
 
+  inline std::unordered_map<std::string, TypeInfo> &&move_type_infos() { return std::move(m_TypeInfos); }
+
 private:
   std::unique_ptr<ResolvedModule> resolve_module(const Module &mod, bool partial);
 
