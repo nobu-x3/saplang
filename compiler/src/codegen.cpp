@@ -2,23 +2,42 @@
 #include "ast.h"
 #include "lexer.h"
 
+#include <filesystem>
+#include <llvm-18/llvm/BinaryFormat/Dwarf.h>
+#include <llvm-18/llvm/IR/DIBuilder.h>
+#include <llvm-18/llvm/IR/DebugInfoMetadata.h>
 #include <llvm-18/llvm/IR/DerivedTypes.h>
 #include <llvm-18/llvm/IR/InstrTypes.h>
 #include <llvm-18/llvm/IR/LLVMContext.h>
+#include <llvm-18/llvm/IR/Metadata.h>
+#include <llvm-18/llvm/TargetParser/Triple.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
+#include <llvm-18/llvm/TargetParser/Host.h>
+#include <memory>
 #include <utility>
 
 namespace saplang {
 
 Codegen::Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree, std::string_view source_path)
-    : m_ResolvedTree{std::move(resolved_tree)}, m_Builder{m_Context}, m_Module{std::make_unique<llvm::Module>("<tu>", m_Context)} {
-  m_Module->setSourceFileName(source_path);
-  m_Module->setTargetTriple("x86-64");
+    : m_ResolvedTree{std::move(resolved_tree)}, m_Builder{m_Context} {
+  auto module = std::make_unique<llvm::Module>("<tu>", m_Context);
+  m_Module = std::make_unique<GeneratedModule>();
+  m_Module->module = std::move(module);
+  m_Module->module->setSourceFileName(source_path);
+  m_Module->module->setTargetTriple("x86-64");
+  if (m_ShouldGenDebug) {
+    m_Module->di_builder = std::make_unique<llvm::DIBuilder>(*m_Module->module);
+    m_Module->debug_info = std::make_unique<DebugInfo>();
+    std::filesystem::path path{source_path};
+    m_Module->debug_info->file = m_Module->di_builder->createFile(path.filename().string(), path.parent_path().string());
+    m_Module->debug_info->cu = m_Module->di_builder->createCompileUnit(llvm::dwarf::DW_LANG_C, m_Module->debug_info->file, "saplang compiler", false, "", 0);
+  }
 }
 
-Codegen::Codegen(std::vector<std::unique_ptr<ResolvedModule>> resolved_modules, std::string_view source_path)
-    : m_ResolvedModules{std::move(resolved_modules)}, m_Builder{m_Context} {}
+Codegen::Codegen(std::vector<std::unique_ptr<ResolvedModule>> resolved_modules, std::string_view source_path,
+                 std::unordered_map<std::string, TypeInfo> type_infos, bool should_gen_dbg)
+    : m_ResolvedModules{std::move(resolved_modules)}, m_Builder{m_Context}, m_TypeInfos(std::move(type_infos)), m_ShouldGenDebug(should_gen_dbg) {}
 
 std::unique_ptr<llvm::Module> Codegen::generate_ir() {
   for (auto &&decl : m_ResolvedTree) {
@@ -34,18 +53,32 @@ std::unique_ptr<llvm::Module> Codegen::generate_ir() {
       gen_func_body(*func, *m_Module);
   }
 
-  return std::move(m_Module);
+  return std::move(m_Module->module);
 }
 
-std::unordered_map<std::string, std::unique_ptr<llvm::Module>> Codegen::generate_modules() {
+std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::generate_modules() {
   m_Modules.reserve(m_ResolvedModules.size());
   for (auto &&mod : m_ResolvedModules) {
     if (m_Modules.count(mod->name))
       continue;
-    std::unique_ptr<llvm::Module> current_module = std::make_unique<llvm::Module>(mod->name, m_Context);
-    current_module->setSourceFileName(mod->name);
-    current_module->setModuleIdentifier(mod->name);
-    current_module->setTargetTriple("x86-64");
+    std::unique_ptr<llvm::Module> module = std::make_unique<llvm::Module>(mod->name, m_Context);
+    module->setSourceFileName(mod->name);
+    module->setModuleIdentifier(mod->name);
+    module->setTargetTriple("x86-64");
+    std::unique_ptr<GeneratedModule> current_module = std::make_unique<GeneratedModule>();
+    current_module->module = std::move(module);
+    if (m_ShouldGenDebug) {
+      current_module->module->addModuleFlag(llvm::Module::Warning, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
+      if(llvm::Triple(llvm::sys::getProcessTriple()).isOSDarwin()) {
+          current_module->module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
+      }
+      current_module->di_builder = std::make_unique<llvm::DIBuilder>(*current_module->module);
+      current_module->debug_info = std::make_unique<DebugInfo>();
+      auto abs_path = std::filesystem::absolute(mod->path);
+      current_module->debug_info->file = current_module->di_builder->createFile(abs_path.filename().string(), abs_path.parent_path().string());
+      current_module->debug_info->cu =
+          current_module->di_builder->createCompileUnit(llvm::dwarf::DW_LANG_C, current_module->debug_info->file, "saplang compiler", false, "", 0);
+    }
     for (auto &&decl : mod->declarations) {
       if (const auto *func = dynamic_cast<const ResolvedFuncDecl *>(decl.get()))
         gen_func_decl(*func, *current_module);
@@ -65,29 +98,71 @@ std::unordered_map<std::string, std::unique_ptr<llvm::Module>> Codegen::generate
   return std::move(m_Modules);
 }
 
-void Codegen::gen_func_decl(const ResolvedFuncDecl &decl, llvm::Module &mod) {
-  llvm::Type *return_type = gen_type(decl.type);
+llvm::DISubroutineType *Codegen::gen_debug_function_type(GeneratedModule &mod, const Type &ret_type,
+                                                         const std::vector<std::unique_ptr<ResolvedParamDecl>> &args) {
+  if (m_ShouldGenDebug) {
+    return nullptr;
+  }
+  std::vector<llvm::Metadata *> metadata;
+  metadata.reserve(args.size() + 1);
+  llvm::DIType *dbg_ret_type = gen_debug_type(ret_type, mod);
+  metadata.push_back(dbg_ret_type);
+  for (auto &&arg : args) {
+    llvm::DIType *dbg_arg_type = gen_debug_type(arg->type, mod);
+    metadata.push_back(dbg_arg_type);
+  }
+  auto &di_builder = mod.di_builder;
+  return di_builder->createSubroutineType(di_builder->getOrCreateTypeArray(metadata));
+}
+
+void Codegen::gen_func_decl(const ResolvedFuncDecl &decl, GeneratedModule &mod) {
+  llvm::Type *return_type = gen_type(decl.type, mod);
   assert(return_type);
   std::vector<llvm::Type *> param_types{};
   for (auto &&param : decl.params) {
-    param_types.emplace_back(gen_type(param->type));
+    param_types.emplace_back(gen_type(param->type, mod));
   }
   auto *type = llvm::FunctionType::get(return_type, param_types, decl.is_vll);
-  llvm::Value *value = llvm::Function::Create(type, llvm::Function::ExternalLinkage, decl.og_name.empty() ? decl.id : decl.og_name, mod);
+  const std::string &fn_name = decl.og_name.empty() ? decl.id : decl.og_name;
+  llvm::Function *current_function = llvm::Function::Create(type, llvm::Function::ExternalLinkage, fn_name, *mod.module);
+  assert(current_function);
+  /* emit_debug_location(decl.location, mod); */
+  /* if (m_ShouldGenDebug) { */
+  /*   /1* std::filesystem::path filepath = std::filesystem::absolute(decl.location.path); *1/ */
+  /*   /1* llvm::DIFile *unit = mod.di_builder->createFile(filepath.filename().string(), filepath.parent_path().string(), std::nullopt, filepath.string()); *1/ */
+  /*   llvm::DIFile *unit = mod.debug_info->file; */
+  /*   llvm::DIScope *fn_context = unit; */
+  /*   unsigned scope_line = decl.location.line; */
+  /*   auto flags = llvm::DISubprogram::DISPFlags::SPFlagZero; */
+  /*   auto node_type = llvm::DINode::FlagZero; */
+  /*   if (decl.body) { */
+  /*     flags |= llvm::DISubprogram::DISPFlags::SPFlagDefinition; */
+  /*     node_type = llvm::DINode::FlagPrototyped; */
+  /*   } else { */
+  /*     node_type = llvm::DINode::FlagFwdDecl; */
+  /*   } */
+  /*   llvm::DISubprogram *subprogram = mod.di_builder->createFunction(fn_context, fn_name, fn_name, unit, decl.location.line, */
+  /*                                                                   gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags); */
+  /*   current_function->setSubprogram(subprogram); */
+  /*   mod.debug_info->lexical_blocks.push_back(subprogram); */
+  /*   // unset location for prologue emission */
+  /*   /1* m_Builder.SetCurrentDebugLocation(llvm::DebugLoc()); *1/ */
+  /* } */
+  llvm::Value *value = current_function;
   assert(value);
-  m_Declarations[mod.getName().str()][&decl] = value;
+  m_Declarations[mod.module->getName().str()][&decl] = value;
 }
 
-void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl, llvm::Module &mod) {
-  llvm::Type *var_type = gen_type(decl.type);
+void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl, GeneratedModule &mod) {
+  llvm::Type *var_type = gen_type(decl.type, mod);
   assert(var_type);
   llvm::Constant *var_init = nullptr;
   if (const auto *numlit = dynamic_cast<const ResolvedNumberLiteral *>(decl.initializer.get())) {
-    var_init = get_constant_number_value(*numlit);
+    var_init = get_constant_number_value(*numlit, mod);
   } else if (const auto *struct_init = dynamic_cast<const ResolvedStructLiteralExpr *>(decl.initializer.get())) {
     var_init = gen_global_struct_init(*struct_init, mod);
   } else if (const auto *nullexpr = dynamic_cast<const ResolvedNullExpr *>(decl.initializer.get())) {
-    llvm::Type *type = gen_type(nullexpr->type);
+    llvm::Type *type = gen_type(nullexpr->type, mod);
     llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
     var_init = llvm::ConstantPointerNull::get(ptr_type);
   } else if (const auto *array_lit = dynamic_cast<const ResolvedArrayLiteralExpr *>(decl.initializer.get())) {
@@ -95,11 +170,22 @@ void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl, llvm::Module &mod
   }
   // If var_init == nullptr there's an error in sema
   assert(var_init && "unexpected global variable type");
-  llvm::GlobalVariable *global_var = new llvm::GlobalVariable(mod, var_type, decl.is_const, llvm::GlobalVariable::ExternalLinkage, var_init, decl.id);
-  m_Declarations[mod.getName().str()][&decl] = global_var;
+  llvm::GlobalVariable *global_var = new llvm::GlobalVariable(*mod.module, var_type, decl.is_const, llvm::GlobalVariable::ExternalLinkage, var_init, decl.id);
+  m_Declarations[mod.module->getName().str()][&decl] = global_var;
 }
 
-llvm::Constant *Codegen::gen_global_struct_init(const ResolvedStructLiteralExpr &init, llvm::Module &mod) {
+void Codegen::emit_debug_location(const SourceLocation &loc, GeneratedModule &mod) {
+  if (m_ShouldGenDebug) {
+    llvm::DIScope *scope = nullptr;
+    if (mod.debug_info->lexical_blocks.empty())
+      scope = mod.debug_info->cu;
+    else
+      scope = mod.debug_info->lexical_blocks.back();
+    m_Builder.SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), loc.line, loc.col, scope));
+  }
+}
+
+llvm::Constant *Codegen::gen_global_struct_init(const ResolvedStructLiteralExpr &init, GeneratedModule &mod) {
   llvm::StructType *struct_type = llvm::StructType::getTypeByName(m_Context, init.type.name);
   assert(struct_type);
   if (!struct_type)
@@ -108,7 +194,7 @@ llvm::Constant *Codegen::gen_global_struct_init(const ResolvedStructLiteralExpr 
   constants.reserve(init.field_initializers.size());
   for (auto &&[name, expr] : init.field_initializers) {
     if (const auto *numlit = dynamic_cast<const ResolvedNumberLiteral *>(expr.get())) {
-      constants.emplace_back(get_constant_number_value(*numlit));
+      constants.emplace_back(get_constant_number_value(*numlit, mod));
     } else if (const auto *struct_lit = dynamic_cast<const ResolvedStructLiteralExpr *>(expr.get())) {
       constants.emplace_back(gen_global_struct_init(*struct_lit, mod));
     } else if (const auto *array_lit = dynamic_cast<const ResolvedArrayLiteralExpr *>(expr.get()))
@@ -117,13 +203,13 @@ llvm::Constant *Codegen::gen_global_struct_init(const ResolvedStructLiteralExpr 
   return llvm::ConstantStruct::get(struct_type, constants);
 }
 
-llvm::Constant *Codegen::gen_global_array_init(const ResolvedArrayLiteralExpr &init, llvm::Module &mod) {
+llvm::Constant *Codegen::gen_global_array_init(const ResolvedArrayLiteralExpr &init, GeneratedModule &mod) {
   llvm::ArrayType *type = nullptr;
   if (init.type.array_data) {
     const auto &array_data = *init.type.array_data;
     Type de_arrayed_type = init.type;
     int dimension = de_array_type(de_arrayed_type, 1);
-    llvm::Type *underlying_type = gen_type(de_arrayed_type);
+    llvm::Type *underlying_type = gen_type(de_arrayed_type, mod);
     assert(underlying_type);
     if (dimension)
       type = llvm::ArrayType::get(underlying_type, dimension);
@@ -136,7 +222,7 @@ llvm::Constant *Codegen::gen_global_array_init(const ResolvedArrayLiteralExpr &i
   constants.reserve(init.expressions.size());
   for (auto &&expr : init.expressions) {
     if (const auto *numlit = dynamic_cast<const ResolvedNumberLiteral *>(expr.get())) {
-      constants.emplace_back(get_constant_number_value(*numlit));
+      constants.emplace_back(get_constant_number_value(*numlit, mod));
     } else if (const auto *struct_lit = dynamic_cast<const ResolvedStructLiteralExpr *>(expr.get())) {
       constants.emplace_back(gen_global_struct_init(*struct_lit, mod));
     } else if (const auto *array_lit = dynamic_cast<const ResolvedArrayLiteralExpr *>(expr.get()))
@@ -145,8 +231,8 @@ llvm::Constant *Codegen::gen_global_array_init(const ResolvedArrayLiteralExpr &i
   return llvm::ConstantArray::get(type, constants);
 }
 
-llvm::Constant *Codegen::get_constant_number_value(const ResolvedNumberLiteral &numlit) {
-  auto *type = gen_type(numlit.type);
+llvm::Constant *Codegen::get_constant_number_value(const ResolvedNumberLiteral &numlit, GeneratedModule &mod) {
+  auto *type = gen_type(numlit.type, mod);
   assert(type);
   switch (numlit.type.kind) {
   case Type::Kind::f32:
@@ -179,10 +265,10 @@ llvm::Constant *Codegen::get_constant_number_value(const ResolvedNumberLiteral &
   return nullptr;
 }
 
-void Codegen::gen_struct_decl(const ResolvedStructDecl &decl, llvm::Module &) {
+void Codegen::gen_struct_decl(const ResolvedStructDecl &decl, GeneratedModule &mod) {
   std::vector<llvm::Type *> member_types{};
   for (auto &&[type, name] : decl.members) {
-    member_types.emplace_back(gen_type(type));
+    member_types.emplace_back(gen_type(type, mod));
   }
   llvm::ArrayRef<llvm::Type *> array_ref{member_types};
   llvm::StructType *struct_type = llvm::StructType::create(m_Context, array_ref, decl.id);
@@ -190,19 +276,57 @@ void Codegen::gen_struct_decl(const ResolvedStructDecl &decl, llvm::Module &) {
   m_CustomTypes[decl.id] = struct_type;
 }
 
-void Codegen::gen_func_body(const ResolvedFuncDecl &decl, llvm::Module &mod) {
+void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) {
   if (!decl.body)
     return;
-  auto *function = mod.getFunction(decl.id);
+  auto *function = mod.module->getFunction(decl.id);
   assert(function);
   auto *entry_bb = llvm::BasicBlock::Create(m_Context, "entry", function);
   assert(entry_bb);
   m_Builder.SetInsertPoint(entry_bb);
+  const std::string &fn_name = decl.og_name.empty() ? decl.id : decl.og_name;
+  llvm::DIFile *unit = nullptr;
+  llvm::DISubprogram *subprogram = nullptr;
+  emit_debug_location(decl.location, mod);
+  if (m_ShouldGenDebug) {
+    /* unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory()); */
+    unit = mod.debug_info->file;
+
+    /* llvm::DIScope *fn_context = unit; */
+    /* unsigned scope_line = decl.location.line; */
+    /* auto flags = llvm::DISubprogram::SPFlagZero; */
+    /* /1* if (decl.module == mod.module->getName()) *1/ */
+    /* /1*   flags |= llvm::DISubprogram::SPFlagLocalToUnit; *1/ */
+    /* flags |= llvm::DISubprogram::SPFlagDefinition; */
+    /* subprogram = mod.di_builder->createFunction(fn_context, fn_name, fn_name, unit, decl.location.line, gen_debug_function_type(mod, decl.type, decl.params), */
+    /*                                             scope_line, llvm::DINode::FlagPrototyped, flags); */
+
+    llvm::DIFile *unit = mod.debug_info->file;
+    llvm::DIScope *fn_context = unit;
+    unsigned scope_line = decl.location.line;
+    auto flags = llvm::DISubprogram::DISPFlags::SPFlagZero;
+    auto node_type = llvm::DINode::FlagZero;
+    if (decl.body) {
+      flags |= llvm::DISubprogram::DISPFlags::SPFlagDefinition;
+      node_type = llvm::DINode::FlagPrototyped;
+    } else {
+      node_type = llvm::DINode::FlagFwdDecl;
+    }
+    llvm::DISubprogram *subprogram = mod.di_builder->createFunction(fn_context, fn_name, fn_name, unit, decl.location.line,
+                                                                    gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags);
+    function->setSubprogram(subprogram);
+    mod.debug_info->lexical_blocks.push_back(subprogram);
+    assert(subprogram);
+    function->setSubprogram(subprogram);
+    mod.debug_info->lexical_blocks.push_back(subprogram);
+    // unset location for prologue emission
+    m_Builder.SetCurrentDebugLocation(llvm::DebugLoc());
+  }
   llvm::Value *undef = llvm::UndefValue::get(m_Builder.getInt32Ty());
   assert(undef);
   m_AllocationInsertPoint = new llvm::BitCastInst(undef, undef->getType(), "alloca.placeholder", entry_bb);
   assert(m_AllocationInsertPoint);
-  m_CurrentFunction.return_type = gen_type(decl.type);
+  m_CurrentFunction.return_type = gen_type(decl.type, mod);
   assert(m_CurrentFunction.return_type);
   m_CurrentFunction.is_void = decl.type.kind == Type::Kind::Void;
   if (!m_CurrentFunction.is_void) {
@@ -214,13 +338,19 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, llvm::Module &mod) {
   for (auto &&arg : function->args()) {
     const auto *param_decl = decl.params[idx].get();
     assert(param_decl);
-    auto *type = gen_type(decl.params[idx]->type);
+    auto *type = gen_type(decl.params[idx]->type, mod);
     assert(type);
     arg.setName(param_decl->id);
     llvm::Value *var = alloc_stack_var(function, type, param_decl->id);
     assert(var);
+    if (m_ShouldGenDebug) {
+      llvm::DILocalVariable *dbg_var_info =
+          mod.di_builder->createParameterVariable(subprogram, arg.getName(), idx, unit, decl.location.line, gen_debug_type(decl.params[idx]->type, mod));
+      mod.di_builder->insertDeclare(var, dbg_var_info, mod.di_builder->createExpression(),
+                                    llvm::DILocation::get(subprogram->getContext(), decl.location.line, 0, subprogram), m_Builder.GetInsertBlock());
+    }
     m_Builder.CreateStore(&arg, var);
-    m_Declarations[mod.getName().str()][param_decl] = var;
+    m_Declarations[mod.module->getName().str()][param_decl] = var;
     ++idx;
   }
   gen_block(*decl.body, mod);
@@ -233,6 +363,9 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, llvm::Module &mod) {
   m_AllocationInsertPoint = nullptr;
   if (m_CurrentFunction.is_void) {
     m_Builder.CreateRetVoid();
+    if (m_ShouldGenDebug) {
+      mod.debug_info->lexical_blocks.pop_back();
+    }
     return;
   }
   if (m_CurrentFunction.deferred_stmts.size() == 0) {
@@ -240,14 +373,18 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, llvm::Module &mod) {
     assert(load_ret);
     m_Builder.CreateRet(load_ret);
   }
+  if (m_ShouldGenDebug) {
+    mod.debug_info->lexical_blocks.pop_back();
+    mod.di_builder->finalizeSubprogram(subprogram);
+  }
 }
 
-llvm::Type *Codegen::gen_type(const Type &type) {
+llvm::Type *Codegen::gen_type(const Type &type, GeneratedModule &mod) {
   if (type.array_data) {
     const auto &array_data = *type.array_data;
     Type de_arrayed_type = type;
     int dimension = de_array_type(de_arrayed_type, 1);
-    llvm::Type *underlying_type = gen_type(de_arrayed_type);
+    llvm::Type *underlying_type = gen_type(de_arrayed_type, mod);
     assert(underlying_type);
     if (!dimension)
       return underlying_type;
@@ -286,13 +423,72 @@ llvm::Type *Codegen::gen_type(const Type &type) {
   llvm_unreachable("unexpected type.");
 }
 
+llvm::DIType *Codegen::gen_debug_type(const Type &type, GeneratedModule &mod) {
+  if (m_ShouldGenDebug) {
+    return nullptr;
+  }
+  if (type.array_data) {
+    const auto &array_data = *type.array_data;
+    Type de_arrayed_type = type;
+    int dimension = de_array_type(de_arrayed_type, 1);
+    llvm::DIType *underlying_type = gen_debug_type(de_arrayed_type, mod);
+    assert(underlying_type);
+    if (!dimension)
+      return underlying_type;
+    return mod.di_builder->createArrayType(type.array_data->dimensions.back(), m_TypeInfos[type.name].alignment, underlying_type, llvm::DINodeArray());
+  }
+  if (type.pointer_depth) {
+    Type tmp_type = type;
+    --tmp_type.pointer_depth;
+    llvm::DIType *pointee_type = gen_debug_type(tmp_type, mod);
+    return mod.di_builder->createPointerType(pointee_type, platform_ptr_size());
+  }
+  unsigned encoding = 0;
+  switch (type.kind) {
+  case Type::Kind::u8:
+    encoding = llvm::dwarf::DW_ATE_unsigned_char;
+    break;
+  case Type::Kind::i8:
+    encoding = llvm::dwarf::DW_ATE_signed_char;
+    break;
+  case Type::Kind::i16:
+  case Type::Kind::i32:
+  case Type::Kind::i64:
+    encoding = llvm::dwarf::DW_ATE_signed;
+    break;
+  case Type::Kind::u16:
+  case Type::Kind::u32:
+  case Type::Kind::u64:
+    encoding = llvm::dwarf::DW_ATE_unsigned;
+    break;
+  case Type::Kind::f32:
+  case Type::Kind::f64:
+    encoding = llvm::dwarf::DW_ATE_float;
+    break;
+  case Type::Kind::Bool:
+    encoding = llvm::dwarf::DW_ATE_boolean;
+    break;
+  case Type::Kind::Void:
+    encoding = llvm::dwarf::DW_ATE_address;
+    break;
+  case Type::Kind::Custom:
+    return mod.di_builder->createStructType(mod.debug_info->lexical_blocks.back(), type.name, mod.debug_info->file, 0, m_TypeInfos[type.name].total_size,
+                                            m_TypeInfos[type.name].alignment, llvm::DINode::FlagPublic, nullptr, {});
+    break;
+  }
+  assert(encoding != 0);
+  auto *di_type = mod.di_builder->createBasicType(type.name, get_type_size(type.kind), encoding);
+  assert(di_type);
+  return di_type;
+}
+
 llvm::AllocaInst *Codegen::alloc_stack_var(llvm::Function *func, llvm::Type *type, std::string_view id) {
   llvm::IRBuilder<> tmp_builder{m_Context};
   tmp_builder.SetInsertPoint(m_AllocationInsertPoint);
   return tmp_builder.CreateAlloca(type, nullptr, id);
 }
 
-void Codegen::gen_block(const ResolvedBlock &body, llvm::Module &mod) {
+void Codegen::gen_block(const ResolvedBlock &body, GeneratedModule &mod) {
   const ResolvedReturnStmt *last_ret_stmt = nullptr;
   for (auto &&stmt : body.statements) {
     if (const auto *defer_stmt = dynamic_cast<const ResolvedDeferStmt *>(stmt.get())) {
@@ -314,11 +510,13 @@ void Codegen::gen_block(const ResolvedBlock &body, llvm::Module &mod) {
   }
 }
 
-llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt, llvm::Module &mod) {
+llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt, GeneratedModule &mod) {
+  emit_debug_location(stmt.location, mod);
   if (auto *assignment = dynamic_cast<const ResolvedAssignment *>(&stmt))
     return gen_assignment(*assignment, mod);
-  if (auto *expr = dynamic_cast<const ResolvedExpr *>(&stmt))
+  if (auto *expr = dynamic_cast<const ResolvedExpr *>(&stmt)) {
     return gen_expr(*expr, mod);
+  }
   if (auto *ifstmt = dynamic_cast<const ResolvedIfStmt *>(&stmt))
     return gen_if_stmt(*ifstmt, mod);
   if (auto *whilestmt = dynamic_cast<const ResolvedWhileStmt *>(&stmt))
@@ -333,7 +531,7 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt, llvm::Module &mod) {
   return nullptr;
 }
 
-llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt, llvm::Module &mod) {
+llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt, GeneratedModule &mod) {
   llvm::Function *function = get_current_function();
   assert(function);
   auto *true_bb = llvm::BasicBlock::Create(m_Context, "if.true");
@@ -362,7 +560,7 @@ llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt, llvm::Module &mod)
   return nullptr;
 }
 
-llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt, llvm::Module &mod) {
+llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt, GeneratedModule &mod) {
   llvm::Function *function = get_current_function();
   assert(function);
   llvm::BasicBlock *header = llvm::BasicBlock::Create(m_Context, "while.cond", function);
@@ -383,7 +581,7 @@ llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt, llvm::Module
   return nullptr;
 }
 
-llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt, llvm::Module &mod) {
+llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt, GeneratedModule &mod) {
   llvm::Function *function = get_current_function();
   assert(function);
   llvm::BasicBlock *counter_decl = llvm::BasicBlock::Create(m_Context, "for.counter_decl", function);
@@ -415,7 +613,7 @@ llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt, llvm::Module &mo
   return nullptr;
 }
 
-llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt, llvm::Module &mod) {
+llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt, GeneratedModule &mod) {
   bool defer_present = false;
   for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
     defer_present = true;
@@ -427,10 +625,15 @@ llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt, llvm::Modu
     assert(m_CurrentFunction.return_bb && "function with return stmt doesn't have a return block");
     return m_Builder.CreateBr(m_CurrentFunction.return_bb);
   }
-  if (m_CurrentFunction.is_void)
+  if (m_CurrentFunction.is_void) {
+    if (m_ShouldGenDebug)
+      mod.debug_info->lexical_blocks.pop_back();
     return m_Builder.CreateRetVoid();
+  }
   llvm::Value *load_ret = m_Builder.CreateLoad(m_CurrentFunction.return_type, m_CurrentFunction.return_value);
   assert(load_ret);
+  if (m_ShouldGenDebug)
+    mod.debug_info->lexical_blocks.pop_back();
   return m_Builder.CreateRet(load_ret);
 }
 
@@ -499,25 +702,25 @@ llvm::Instruction::BinaryOps get_math_binop_kind(TokenKind op, Type::Kind type) 
   llvm_unreachable("unknown expression encountered.");
 }
 
-llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr, llvm::Module &mod) {
+llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr, GeneratedModule &mod) {
   if (auto *number = dynamic_cast<const ResolvedNumberLiteral *>(&expr)) {
-    return get_constant_number_value(*number);
+    return get_constant_number_value(*number, mod);
   }
   if (const auto *dre = dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
-    llvm::Value *decl = m_Declarations[mod.getName().str()][dre->decl];
+    llvm::Value *decl = m_Declarations[mod.module->getName().str()][dre->decl];
     assert(decl);
-    auto *type = gen_type(dre->type);
+    auto *type = gen_type(dre->type, mod);
     assert(type);
     if (auto *member_access = dynamic_cast<const ResolvedStructMemberAccess *>(dre)) {
       Type member_type = Type::builtin_void(false);
       decl = gen_struct_member_access(*member_access, member_type, mod);
-      type = gen_type(member_type);
+      type = gen_type(member_type, mod);
       assert(type);
     } else if (auto *array_access = dynamic_cast<const ResolvedArrayElementAccess *>(dre)) {
       Type underlying_type = Type::builtin_void(false);
       decl = gen_array_element_access(*array_access, underlying_type, mod);
       assert(decl);
-      type = gen_type(underlying_type);
+      type = gen_type(underlying_type, mod);
       assert(type);
     }
     return m_Builder.CreateLoad(type, decl);
@@ -535,7 +738,7 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr, llvm::Module &mod) {
     return res;
   }
   if (const auto *nullexpr = dynamic_cast<const ResolvedNullExpr *>(&expr)) {
-    llvm::Type *type = gen_type(nullexpr->type);
+    llvm::Type *type = gen_type(nullexpr->type, mod);
     assert(type);
     llvm::PointerType *ptr_type = llvm::PointerType::get(type, 0);
     assert(ptr_type);
@@ -549,7 +752,7 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr, llvm::Module &mod) {
   return nullptr;
 }
 
-llvm::Value *Codegen::gen_struct_literal_expr_assignment(const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var, llvm::Module &mod) {
+llvm::Value *Codegen::gen_struct_literal_expr_assignment(const ResolvedStructLiteralExpr &struct_lit, llvm::Value *var, GeneratedModule &mod) {
   // @TODO: if fully const just memset or memcpy directly to variable
   int index = -1;
   for (auto &&[field_name, expr] : struct_lit.field_initializers) {
@@ -559,7 +762,7 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(const ResolvedStructLit
     llvm::Value *gened_expr = nullptr;
     std::vector<llvm::Value *> indices{llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
                                        llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), index))};
-    auto *type = gen_type(struct_lit.type);
+    auto *type = gen_type(struct_lit.type, mod);
     assert(type);
     llvm::Value *memptr = m_Builder.CreateInBoundsGEP(type, var, indices);
     assert(memptr);
@@ -568,7 +771,7 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(const ResolvedStructLit
     } else if (const auto *unary_op = dynamic_cast<const ResolvedUnaryOperator *>(expr.get()); unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         if (unary_op->op == TokenKind::Amp) {
-          llvm::Value *expr = m_Declarations[mod.getName().str()][dre->decl];
+          llvm::Value *expr = m_Declarations[mod.module->getName().str()][dre->decl];
           assert(expr);
           m_Builder.CreateStore(expr, memptr);
         }
@@ -582,11 +785,11 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(const ResolvedStructLit
   return var;
 }
 
-llvm::Value *Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit, llvm::Module &mod) {
+llvm::Value *Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit, GeneratedModule &mod) {
   // @TODO: if fully const just memset or memcpy directly to variable
   llvm::Function *current_function = get_current_function();
   assert(current_function);
-  llvm::Value *stack_var = alloc_stack_var(current_function, gen_type(struct_lit.type), "");
+  llvm::Value *stack_var = alloc_stack_var(current_function, gen_type(struct_lit.type, mod), "");
   assert(stack_var);
   int index = -1;
   for (auto &&[field_name, expr] : struct_lit.field_initializers) {
@@ -597,14 +800,14 @@ llvm::Value *Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &s
     assert(gened_expr);
     std::vector<llvm::Value *> indices{llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
                                        llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), index))};
-    llvm::Value *memptr = m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type), stack_var, indices);
+    llvm::Value *memptr = m_Builder.CreateInBoundsGEP(gen_type(struct_lit.type, mod), stack_var, indices);
     assert(memptr);
     m_Builder.CreateStore(gened_expr, memptr);
   }
   return stack_var;
 }
 
-llvm::Value *Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit, llvm::Value *p_array_value, llvm::Module &mod) {
+llvm::Value *Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit, llvm::Value *p_array_value, GeneratedModule &mod) {
   llvm::Function *current_function = get_current_function();
   assert(current_function);
   // @TODO: memcpy on if all constant
@@ -618,7 +821,7 @@ llvm::Value *Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &arr
   if (array_lit.expressions.size() > 0) {
     std::vector<llvm::Value *> indices{llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 0)),
                                        llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 0))};
-    auto *p_array_type = gen_type(array_lit.type);
+    auto *p_array_type = gen_type(array_lit.type, mod);
     assert(p_array_type);
     llvm::Value *p_array_element = m_Builder.CreateInBoundsGEP(p_array_type, p_array_value, indices, "arrayinit.begin");
     assert(p_array_element);
@@ -632,7 +835,7 @@ llvm::Value *Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &arr
     for (int i = 1; i < array_lit.expressions.size(); ++i) {
       auto &expr = array_lit.expressions[i];
       std::vector<llvm::Value *> indices{llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 1))};
-      p_array_element = m_Builder.CreateInBoundsGEP(gen_type(expr->type), p_array_element, indices, "arrayinit.element");
+      p_array_element = m_Builder.CreateInBoundsGEP(gen_type(expr->type, mod), p_array_element, indices, "arrayinit.element");
       assert(p_array_element);
       if (const auto *inner_array = dynamic_cast<const ResolvedArrayLiteralExpr *>(array_lit.expressions[i].get())) {
         gen_array_literal_expr(*inner_array, p_array_element, mod);
@@ -646,7 +849,7 @@ llvm::Value *Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &arr
   return nullptr;
 }
 
-llvm::Value *Codegen::gen_string_literal_expr(const ResolvedStringLiteralExpr &str_lit, llvm::Module &) {
+llvm::Value *Codegen::gen_string_literal_expr(const ResolvedStringLiteralExpr &str_lit, GeneratedModule &) {
   std::string reparsed_string;
   for (int i = 0; i < str_lit.val.size(); ++i) {
     if (str_lit.val[i] == '\\') {
@@ -664,29 +867,29 @@ llvm::Value *Codegen::gen_string_literal_expr(const ResolvedStringLiteralExpr &s
   return m_Builder.CreateGlobalString(reparsed_string, ".str");
 }
 
-llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access, Type &out_type, llvm::Module &mod) {
+llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access, Type &out_type, GeneratedModule &mod) {
   if (!access.inner_member_access)
     return nullptr;
   llvm::Function *current_function = get_current_function();
   assert(current_function);
-  llvm::Value *decl = m_Declarations[mod.getName().str()][access.decl];
+  llvm::Value *decl = m_Declarations[mod.module->getName().str()][access.decl];
   if (!decl)
     return report(access.location, "unknown declaration '" + access.decl->id + "'.");
   Type access_decl_type = access.decl->type;
   if (access_decl_type.pointer_depth > 0) {
-    decl = m_Builder.CreateLoad(gen_type(access_decl_type), decl);
+    decl = m_Builder.CreateLoad(gen_type(access_decl_type, mod), decl);
     --access_decl_type.pointer_depth;
   }
   std::vector<llvm::Value *> outer_indices{
       llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), 0)),
       llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_ptr_size()), access.inner_member_access->member_index))};
-  llvm::Type *last_gep_type = gen_type(access_decl_type);
+  llvm::Type *last_gep_type = gen_type(access_decl_type, mod);
   assert(last_gep_type);
   llvm::Value *last_gep = m_Builder.CreateInBoundsGEP(last_gep_type, decl, outer_indices);
   llvm::Value *tmp_gep = last_gep;
   assert(last_gep);
   if (access.params && access.inner_member_access->type.kind == Type::Kind::FnPtr) {
-    llvm::Type *function_ret_type = gen_type(access.inner_member_access->type.fn_ptr_signature->first[0]);
+    llvm::Type *function_ret_type = gen_type(access.inner_member_access->type.fn_ptr_signature->first[0], mod);
     assert(function_ret_type);
     bool is_vll = access.inner_member_access->type.fn_ptr_signature->second;
     auto *function_type = llvm::FunctionType::get(function_ret_type, is_vll);
@@ -720,10 +923,10 @@ llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess 
       out_type = current_chain->type;
       Type tmp_type = prev_chain->type;
       if (tmp_type.pointer_depth > 0 && current_chain->type.kind != Type::Kind::FnPtr) {
-        last_gep = m_Builder.CreateLoad(gen_type(tmp_type), last_gep);
+        last_gep = m_Builder.CreateLoad(gen_type(tmp_type, mod), last_gep);
         --tmp_type.pointer_depth;
       }
-      auto *type = gen_type(tmp_type);
+      auto *type = gen_type(tmp_type, mod);
       assert(type);
       last_gep = m_Builder.CreateInBoundsGEP(type, last_gep, inner_indices);
       assert(last_gep);
@@ -732,10 +935,10 @@ llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess 
         out_type = current_chain->type.fn_ptr_signature->first[0];
         Type tmp_type = prev_chain->type.fn_ptr_signature->first[0];
         if (tmp_type.pointer_depth > 0) {
-          last_gep = m_Builder.CreateLoad(gen_type(tmp_type), last_gep);
+          last_gep = m_Builder.CreateLoad(gen_type(tmp_type, mod), last_gep);
           --tmp_type.pointer_depth;
         }
-        llvm::Type *function_ret_type = gen_type(current_chain->type.fn_ptr_signature->first[0]);
+        llvm::Type *function_ret_type = gen_type(current_chain->type.fn_ptr_signature->first[0], mod);
         assert(function_ret_type);
         bool is_vll = current_chain->type.fn_ptr_signature->second;
         auto *function_type = llvm::FunctionType::get(function_ret_type, is_vll);
@@ -759,7 +962,7 @@ llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess 
   return last_gep;
 }
 
-std::vector<llvm::Value *> Codegen::get_index_accesses(const ResolvedExpr &expr, llvm::Value *loaded_ptr, llvm::Module &mod) {
+std::vector<llvm::Value *> Codegen::get_index_accesses(const ResolvedExpr &expr, llvm::Value *loaded_ptr, GeneratedModule &mod) {
   std::vector<llvm::Value *> inner_indices{};
   std::optional<ConstexprResult> constexpr_res = expr.get_constant_value();
   if (constexpr_res) {
@@ -805,9 +1008,9 @@ std::vector<llvm::Value *> Codegen::get_index_accesses(const ResolvedExpr &expr,
   } else {
     llvm::Value *expr_value = gen_expr(expr, mod);
     if (get_type_size(expr.type.kind) < platform_array_index_size()) { // extent
-      expr_value = m_Builder.CreateSExt(expr_value, gen_type(platform_ptr_type()), "idxprom");
+      expr_value = m_Builder.CreateSExt(expr_value, gen_type(platform_ptr_type(), mod), "idxprom");
     } else if (get_type_size(expr.type.kind) > platform_array_index_size()) { // trunc
-      expr_value = m_Builder.CreateTrunc(expr_value, gen_type(platform_ptr_type()), "idxtrunc");
+      expr_value = m_Builder.CreateTrunc(expr_value, gen_type(platform_ptr_type(), mod), "idxtrunc");
     }
     if (loaded_ptr) {
       inner_indices = {expr_value};
@@ -818,11 +1021,11 @@ std::vector<llvm::Value *> Codegen::get_index_accesses(const ResolvedExpr &expr,
   return std::move(inner_indices);
 }
 
-llvm::Value *Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access, Type &out_type, llvm::Module &mod) {
+llvm::Value *Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access, Type &out_type, GeneratedModule &mod) {
   assert(access.indices.size() >= 1 && "unknown index");
   llvm::Function *current_function = get_current_function();
   assert(current_function);
-  llvm::Value *decl = m_Declarations[mod.getName().str()][access.decl];
+  llvm::Value *decl = m_Declarations[mod.module->getName().str()][access.decl];
   if (!decl)
     return report(access.location, "unknown declaration '" + access.decl->id + "'.");
   Type decl_type = access.decl->type;
@@ -831,11 +1034,11 @@ llvm::Value *Codegen::gen_array_element_access(const ResolvedArrayElementAccess 
     return report(access.location, "trying to access element of a non-array non-pointer type.");
   bool is_decay = false;
   if (decl_type.pointer_depth > 0) {
-    decl = m_Builder.CreateLoad(gen_type(decl_type), decl);
+    decl = m_Builder.CreateLoad(gen_type(decl_type, mod), decl);
     --decl_type.pointer_depth;
     is_decay = true;
   }
-  auto *last_gep_type = gen_type(decl_type);
+  auto *last_gep_type = gen_type(decl_type, mod);
   assert(last_gep_type);
   std::vector<llvm::Value *> inner_indices = get_index_accesses(*access.indices[0], is_decay ? decl : nullptr, mod);
   llvm::Value *last_gep = m_Builder.CreateInBoundsGEP(last_gep_type, decl, inner_indices, "arrayidx");
@@ -846,7 +1049,7 @@ llvm::Value *Codegen::gen_array_element_access(const ResolvedArrayElementAccess 
   out_type = decl_type;
   for (int i = 1; i < access.indices.size(); ++i) {
     if (decl_type.pointer_depth > 0) {
-      auto *gened_decl_type = gen_type(decl_type);
+      auto *gened_decl_type = gen_type(decl_type, mod);
       assert(gened_decl_type);
       last_gep = m_Builder.CreateLoad(gened_decl_type, last_gep);
       assert(last_gep);
@@ -854,7 +1057,7 @@ llvm::Value *Codegen::gen_array_element_access(const ResolvedArrayElementAccess 
       is_decay = true;
     }
     std::vector<llvm::Value *> inner_indices = get_index_accesses(*access.indices[i], is_decay ? decl : nullptr, mod);
-    last_gep = m_Builder.CreateInBoundsGEP(gen_type(decl_type), last_gep, inner_indices, "arrayidx");
+    last_gep = m_Builder.CreateInBoundsGEP(gen_type(decl_type, mod), last_gep, inner_indices, "arrayidx");
     assert(last_gep);
     if (!is_decay)
       de_array_type(decl_type, 1);
@@ -863,7 +1066,7 @@ llvm::Value *Codegen::gen_array_element_access(const ResolvedArrayElementAccess 
   return last_gep;
 }
 
-llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast, llvm::Module &mod) {
+llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast, GeneratedModule &mod) {
   llvm::Value *var = nullptr;
   ResolvedExplicitCastExpr::CastType prev_cast_type = ResolvedExplicitCastExpr::CastType::Nop;
   const ResolvedDeclRefExpr *decl_ref_expr = dynamic_cast<const ResolvedDeclRefExpr *>(cast.rhs.get());
@@ -877,18 +1080,18 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast, ll
       var = gen_expr(*cast.rhs, mod);
     }
   }
-  var = decl_ref_expr ? m_Declarations[mod.getName().str()][decl_ref_expr->decl] : var;
+  var = decl_ref_expr ? m_Declarations[mod.module->getName().str()][decl_ref_expr->decl] : var;
   if (!var)
     return nullptr;
-  llvm::Type *type = gen_type(cast.type);
+  llvm::Type *type = gen_type(cast.type, mod);
   assert(type);
-  llvm::Type *rhs_type = gen_type(cast.rhs->type);
+  llvm::Type *rhs_type = gen_type(cast.rhs->type, mod);
   assert(rhs_type);
   switch (cast.cast_type) {
   case ResolvedExplicitCastExpr::CastType::IntToPtr: {
     if (get_type_size(cast.rhs->type.kind) < platform_array_index_size()) {
       llvm::Value *load = m_Builder.CreateLoad(rhs_type, var);
-      auto *gened_platform_ptr_type = gen_type(platform_ptr_type());
+      auto *gened_platform_ptr_type = gen_type(platform_ptr_type(), mod);
       assert(gened_platform_ptr_type);
       var = m_Builder.CreateSExt(load, gened_platform_ptr_type, "cast_sext");
     }
@@ -939,7 +1142,7 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast, ll
   }
 }
 
-llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop, llvm::Module &mod) {
+llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop, GeneratedModule &mod) {
   TokenKind op = binop.op;
   if (op == TokenKind::AmpAmp || op == TokenKind::PipePipe) {
     llvm::Function *function = get_current_function();
@@ -1099,20 +1302,20 @@ llvm::Value *Codegen::gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lh
   return bool_to_type(kind, ret_val);
 }
 
-std::pair<llvm::Value *, Type> Codegen::gen_dereference(const ResolvedDeclRefExpr &expr, llvm::Module& mod) {
-  llvm::Value *decl = m_Declarations[mod.getName().str()][expr.decl];
-  llvm::Value *ptr = m_Builder.CreateLoad(gen_type(expr.type), decl);
+std::pair<llvm::Value *, Type> Codegen::gen_dereference(const ResolvedDeclRefExpr &expr, GeneratedModule &mod) {
+  llvm::Value *decl = m_Declarations[mod.module->getName().str()][expr.decl];
+  llvm::Value *ptr = m_Builder.CreateLoad(gen_type(expr.type, mod), decl);
   assert(ptr);
   Type new_internal_type = expr.type;
   --new_internal_type.pointer_depth;
-  llvm::Type *dereferenced_type = gen_type(new_internal_type);
+  llvm::Type *dereferenced_type = gen_type(new_internal_type, mod);
   assert(dereferenced_type);
   auto *gened_load = m_Builder.CreateLoad(dereferenced_type, ptr);
   assert(gened_load);
   return std::make_pair(gened_load, new_internal_type);
 }
 
-std::pair<llvm::Value *, Type> Codegen::gen_unary_op(const ResolvedUnaryOperator &op, llvm::Module &mod) {
+std::pair<llvm::Value *, Type> Codegen::gen_unary_op(const ResolvedUnaryOperator &op, GeneratedModule &mod) {
   if (op.op == TokenKind::Asterisk) {
     if (auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(op.rhs.get())) {
       return gen_dereference(*dre, mod);
@@ -1120,7 +1323,7 @@ std::pair<llvm::Value *, Type> Codegen::gen_unary_op(const ResolvedUnaryOperator
       auto &&[rhs, type] = gen_unary_op(*unop, mod);
       assert(rhs);
       --type.pointer_depth;
-      llvm::Type *dereferenced_type = gen_type(type);
+      llvm::Type *dereferenced_type = gen_type(type, mod);
       assert(dereferenced_type);
       return std::make_pair(m_Builder.CreateLoad(dereferenced_type, rhs), type);
     } else {
@@ -1149,7 +1352,7 @@ std::pair<llvm::Value *, Type> Codegen::gen_unary_op(const ResolvedUnaryOperator
       return std::make_pair(m_Builder.CreateNot(rhs), op.type);
     }
     if (op.op == TokenKind::Tilda) {
-      return std::make_pair(m_Builder.CreateXor(rhs, llvm::ConstantInt::get(gen_type(op.type), -1), "not"), op.type);
+      return std::make_pair(m_Builder.CreateXor(rhs, llvm::ConstantInt::get(gen_type(op.type, mod), -1), "not"), op.type);
     }
     llvm_unreachable("unknown unary op.");
     return std::make_pair(nullptr, op.type);
@@ -1157,7 +1360,7 @@ std::pair<llvm::Value *, Type> Codegen::gen_unary_op(const ResolvedUnaryOperator
   assert(false);
 }
 
-void Codegen::gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_bb, llvm::BasicBlock *false_bb, llvm::Module &mod) {
+void Codegen::gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_bb, llvm::BasicBlock *false_bb, GeneratedModule &mod) {
   const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&op);
   if (binop && binop->op == TokenKind::PipePipe) {
     llvm::BasicBlock *next_bb = llvm::BasicBlock::Create(m_Context, "or.lhs.false", true_bb->getParent());
@@ -1179,22 +1382,22 @@ void Codegen::gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_
   m_Builder.CreateCondBr(val, true_bb, false_bb);
 }
 
-llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, llvm::Module &mod) {
-  if (mod.getName() != call.decl->module) {
-    if (!m_Declarations[mod.getName().str()].count(call.decl)) {
+llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, GeneratedModule &mod) {
+  if (mod.module->getName() != call.decl->module) {
+    if (!m_Declarations[mod.module->getName().str()].count(call.decl)) {
       auto *resolved_func_decl = dynamic_cast<const ResolvedFuncDecl *>(call.decl);
       assert(resolved_func_decl);
       gen_func_decl(*resolved_func_decl, mod);
     }
   }
-  llvm::Function *callee = mod.getFunction(call.decl->og_name.empty() ? call.decl->id : call.decl->og_name);
+  llvm::Function *callee = mod.module->getFunction(call.decl->og_name.empty() ? call.decl->id : call.decl->og_name);
   std::vector<llvm::Value *> args{};
   int param_index = -1;
   for (auto &&arg : call.args) {
     ++param_index;
     if (const auto *unary_op = dynamic_cast<const ResolvedUnaryOperator *>(arg.get()); unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
-        llvm::Value *expr = m_Declarations[mod.getName().str()][dre->decl];
+        llvm::Value *expr = m_Declarations[mod.module->getName().str()][dre->decl];
         assert(expr);
         args.emplace_back(expr);
         continue;
@@ -1213,8 +1416,8 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, llvm::Module &
   }
   // we're probably dealing with fn ptr
   if (!callee) {
-    callee = static_cast<llvm::Function *>(m_Declarations[mod.getName().str()][call.decl]);
-    llvm::Type *function_ret_type = gen_type(call.type);
+    callee = static_cast<llvm::Function *>(m_Declarations[mod.module->getName().str()][call.decl]);
+    llvm::Type *function_ret_type = gen_type(call.type, mod);
     assert(function_ret_type);
     bool is_fn_ptr = call.type.fn_ptr_signature.has_value();
     bool is_vll = false;
@@ -1222,19 +1425,21 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, llvm::Module &
       is_vll = call.type.fn_ptr_signature->second;
     auto *function_type = llvm::FunctionType::get(function_ret_type, is_vll);
     assert(function_type);
+    emit_debug_location(call.location, mod);
     llvm::Value *loaded_fn = m_Builder.CreateLoad(m_Builder.getPtrTy(), callee);
     assert(loaded_fn);
     return m_Builder.CreateCall(function_type, loaded_fn, args, call.decl->og_name.empty() ? call.decl->id : call.decl->og_name);
   }
+  emit_debug_location(call.location, mod);
   return m_Builder.CreateCall(callee, args);
 }
 
-llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, llvm::Module &mod) {
+llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, GeneratedModule &mod) {
   llvm::Function *function = get_current_function();
   assert(function);
   const auto *decl = stmt.var_decl.get();
   assert(decl);
-  llvm::Type *type = gen_type(decl->type);
+  llvm::Type *type = gen_type(decl->type, mod);
   assert(type);
   llvm::AllocaInst *var = alloc_stack_var(function, type, decl->id);
   assert(var);
@@ -1243,7 +1448,7 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, llvm::Module &
       gen_struct_literal_expr_assignment(*struct_lit, var, mod);
     } else if (const auto *unary_op = dynamic_cast<const ResolvedUnaryOperator *>(init.get()); unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
-        llvm::Value *expr = m_Declarations[mod.getName().str()][dre->decl];
+        llvm::Value *expr = m_Declarations[mod.module->getName().str()][dre->decl];
         assert(expr);
         if (unary_op->op == TokenKind::Amp) {
           m_Builder.CreateStore(expr, var);
@@ -1258,17 +1463,17 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, llvm::Module &
       m_Builder.CreateStore(gen_expr(*init, mod), var);
     }
   }
-  m_Declarations[mod.getName().str()][decl] = var;
+  m_Declarations[mod.module->getName().str()][decl] = var;
   return nullptr;
 }
 
-llvm::Value *Codegen::gen_array_decay(const Type &lhs_type, const ResolvedDeclRefExpr &rhs_dre, llvm::Module& mod) {
+llvm::Value *Codegen::gen_array_decay(const Type &lhs_type, const ResolvedDeclRefExpr &rhs_dre, GeneratedModule &mod) {
   if (rhs_dre.type.array_data) {
     if (is_same_array_decay(rhs_dre.type, lhs_type)) {
       std::vector<llvm::Value *> indices{llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 0)),
                                          llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 0))};
-      llvm::Value *decl = m_Declarations[mod.getName().str()][rhs_dre.decl];
-      auto *type = gen_type(rhs_dre.type);
+      llvm::Value *decl = m_Declarations[mod.module->getName().str()][rhs_dre.decl];
+      auto *type = gen_type(rhs_dre.type, mod);
       assert(type);
       return m_Builder.CreateInBoundsGEP(type, decl, indices, "arraydecay");
     }
@@ -1300,8 +1505,8 @@ llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
   llvm_unreachable("unexpected type cast from bool.");
 }
 
-llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, llvm::Module &mod) {
-  llvm::Value *decl = m_Declarations[mod.getName().str()][assignment.variable->decl];
+llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, GeneratedModule &mod) {
+  llvm::Value *decl = m_Declarations[mod.module->getName().str()][assignment.variable->decl];
   Type member_type = Type::builtin_void(false);
   if (const auto *member_access = dynamic_cast<const ResolvedStructMemberAccess *>(assignment.variable.get())) {
     decl = gen_struct_member_access(*member_access, member_type, mod);
@@ -1311,7 +1516,7 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, llvm:
   } else {
     Type derefed_type = assignment.variable->type;
     for (int i = 0; i < assignment.lhs_deref_count; ++i) {
-      decl = m_Builder.CreateLoad(gen_type(derefed_type), decl);
+      decl = m_Builder.CreateLoad(gen_type(derefed_type, mod), decl);
       --derefed_type.pointer_depth;
     }
   }
@@ -1320,7 +1525,7 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, llvm:
   // further to Codegen::gen_unary_op
   if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(assignment.expr.get()); unop && unop->op == TokenKind::Amp) {
     if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unop->rhs.get())) {
-      llvm::Value *expr = m_Declarations[mod.getName().str()][dre->decl];
+      llvm::Value *expr = m_Declarations[mod.module->getName().str()][dre->decl];
       assert(expr);
       return m_Builder.CreateStore(expr, decl);
     }
@@ -1329,11 +1534,11 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, llvm:
     assert(expr);
     if (const auto *struct_lit = dynamic_cast<const ResolvedStructLiteralExpr *>(assignment.expr.get())) {
       // expr is the stack variable
-      llvm::Type *var_type = gen_type(struct_lit->type);
+      llvm::Type *var_type = gen_type(struct_lit->type, mod);
       assert(var_type);
-      llvm::Type *decl_type = gen_type(assignment.variable->decl->type);
+      llvm::Type *decl_type = gen_type(assignment.variable->decl->type, mod);
       assert(decl_type);
-      const llvm::DataLayout &data_layout = mod.getDataLayout();
+      const llvm::DataLayout &data_layout = mod.module->getDataLayout();
       return m_Builder.CreateMemCpy(decl, data_layout.getPrefTypeAlign(decl_type), expr, data_layout.getPrefTypeAlign(var_type),
                                     data_layout.getTypeAllocSize(var_type));
     }

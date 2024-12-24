@@ -56,6 +56,8 @@ CompilerOptions::CompilerOptions(int argc, const char **argv) {
         library_paths = split(argv[++idx], ';');
       else if (arg == "-extra")
         extra_flags = split(argv[++idx], ';');
+      else if (arg == "-dbg")
+        gen_debug = true;
       else
         error("unexpected argument '" + std::string{arg} + ".'\n");
     }
@@ -164,13 +166,18 @@ int Driver::run(std::ostream &output_stream) {
   }
   if (resolved_modules.empty())
     return 1;
-  saplang::Codegen codegen{std::move(resolved_modules), source};
+  saplang::Codegen codegen{std::move(resolved_modules), source, sema.move_type_infos(), m_Options.gen_debug};
   auto gened_modules = codegen.generate_modules();
+  if (m_Options.gen_debug) {
+    for (auto &&[_, mod] : gened_modules) {
+      mod->di_builder->finalize();
+    }
+  }
   if (m_Options.llvm_dump) {
     std::string output_string;
     llvm::raw_string_ostream output_buffer{output_string};
     for (auto &&[name, mod] : gened_modules)
-      mod->print(output_buffer, nullptr, true, true);
+      mod->module->print(output_buffer, nullptr, true, true);
     output_stream << output_string;
     return 0;
   }
@@ -185,7 +192,7 @@ int Driver::run(std::ostream &output_stream) {
     llvm_ir_paths.push_back(llvm_ir_path);
     std::error_code error_code;
     llvm::raw_fd_ostream f{llvm_ir_path, error_code};
-    mod->print(f, nullptr);
+    mod->module->print(f, nullptr);
     command << path.str() << " ";
   }
   if (!m_Options.output.empty())
@@ -196,12 +203,13 @@ int Driver::run(std::ostream &output_stream) {
   for (auto &&lib : libraries) {
     command << " -l" << lib;
   }
-  command << " -g -O0 -ggdb -glldb -gsce -gdbx";
+  command << " -g -O0";
+      /* -ggdb -glldb -gsce -gdbx"; */
   for (auto &&extra_flag : m_Options.extra_flags)
-    command << extra_flag;
+    command << " " << extra_flag;
   int ret = std::system(command.str().c_str());
-  for (auto &&llvm_ir_path : llvm_ir_paths)
-    std::filesystem::remove(llvm_ir_path);
+  /* for (auto &&llvm_ir_path : llvm_ir_paths) */
+  /*   std::filesystem::remove(llvm_ir_path); */
   return ret;
 }
 
@@ -218,6 +226,7 @@ void Driver::display_help() {
             << "\t-ast-dump                     print ast.\n"
             << "\t-res-dump                     print resolved syntax tree.\n"
             << "\t-cfg-dump                     print control flow graph.\n"
+            << "\t-dbg                          output debug info.\n"
             << "\t-llvm-dump                    print the generated llvm module" << std::endl;
 }
 } // namespace saplang
