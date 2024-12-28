@@ -23,6 +23,7 @@ struct CompilerOptions {
   bool res_dump{false};
   bool cfg_dump{false};
   bool llvm_dump{false};
+  bool no_cleanup{false};
   CompilerOptions(int argc, const char **argv);
   CompilerOptions(std::filesystem::path source, std::filesystem::path output);
 };
