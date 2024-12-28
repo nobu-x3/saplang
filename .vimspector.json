@@ -24,7 +24,7 @@
       "configuration": {
         "request": "launch",
         "program": "${workspaceFolder}/build/bin/compiler",
-        "args": ["test.sl", "-o"," test"],
+        "args": ["test.sl", "-o"," test", "-dbg", "-i", "incl"],
         "cwd": "${workspaceFolder}/build/bin",
         "environment": [],
         "externalConsole": true,
