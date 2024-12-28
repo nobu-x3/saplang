@@ -87,7 +87,11 @@ int CFGBuilder::insert_stmt(const ResolvedStmt &stmt, int block) {
   if (auto *defer = dynamic_cast<const ResolvedDeferStmt *>(&stmt)) {
     // @TODO: atm don't do anything
     return m_CFG.basic_blocks.size() - 1;
-  } else {
+  }
+  if(auto* for_stmt = dynamic_cast<const ResolvedForStmt*>(&stmt)) {
+    return m_CFG.basic_blocks.size() - 1;
+  }
+  else {
     llvm_unreachable("unexpected expression.");
   }
 }
