@@ -100,7 +100,7 @@ std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::gener
 
 llvm::DISubroutineType *Codegen::gen_debug_function_type(GeneratedModule &mod, const Type &ret_type,
                                                          const std::vector<std::unique_ptr<ResolvedParamDecl>> &args) {
-  if (m_ShouldGenDebug) {
+  if (!m_ShouldGenDebug) {
     return nullptr;
   }
   std::vector<llvm::Metadata *> metadata;
@@ -126,28 +126,27 @@ void Codegen::gen_func_decl(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   const std::string &fn_name = decl.og_name.empty() ? decl.id : decl.og_name;
   llvm::Function *current_function = llvm::Function::Create(type, llvm::Function::ExternalLinkage, fn_name, *mod.module);
   assert(current_function);
-  /* emit_debug_location(decl.location, mod); */
-  /* if (m_ShouldGenDebug) { */
-  /*   /1* std::filesystem::path filepath = std::filesystem::absolute(decl.location.path); *1/ */
-  /*   /1* llvm::DIFile *unit = mod.di_builder->createFile(filepath.filename().string(), filepath.parent_path().string(), std::nullopt, filepath.string()); *1/ */
-  /*   llvm::DIFile *unit = mod.debug_info->file; */
-  /*   llvm::DIScope *fn_context = unit; */
-  /*   unsigned scope_line = decl.location.line; */
-  /*   auto flags = llvm::DISubprogram::DISPFlags::SPFlagZero; */
-  /*   auto node_type = llvm::DINode::FlagZero; */
-  /*   if (decl.body) { */
-  /*     flags |= llvm::DISubprogram::DISPFlags::SPFlagDefinition; */
-  /*     node_type = llvm::DINode::FlagPrototyped; */
-  /*   } else { */
-  /*     node_type = llvm::DINode::FlagFwdDecl; */
-  /*   } */
-  /*   llvm::DISubprogram *subprogram = mod.di_builder->createFunction(fn_context, fn_name, fn_name, unit, decl.location.line, */
-  /*                                                                   gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags); */
-  /*   current_function->setSubprogram(subprogram); */
-  /*   mod.debug_info->lexical_blocks.push_back(subprogram); */
-  /*   // unset location for prologue emission */
-  /*   /1* m_Builder.SetCurrentDebugLocation(llvm::DebugLoc()); *1/ */
-  /* } */
+  emit_debug_location(decl.location, mod);
+  if (m_ShouldGenDebug) {
+    std::filesystem::path filepath = std::filesystem::absolute(decl.location.path);
+    llvm::DIFile *unit = mod.di_builder->createFile(filepath.filename().string(), filepath.parent_path().string(), std::nullopt, filepath.string());
+    llvm::DIScope *fn_context = unit;
+    unsigned scope_line = 0;
+    auto flags = llvm::DISubprogram::DISPFlags::SPFlagZero;
+    auto node_type = llvm::DINode::FlagZero;
+    if (decl.body) {
+      flags |= llvm::DISubprogram::DISPFlags::SPFlagDefinition;
+      node_type = llvm::DINode::FlagPrototyped;
+    } else {
+      node_type = llvm::DINode::FlagFwdDecl;
+    }
+    llvm::DISubprogram *subprogram = mod.di_builder->createFunction(fn_context, fn_name, fn_name, unit, decl.location.line,
+                                                                    gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags);
+    current_function->setSubprogram(subprogram);
+    mod.debug_info->lexical_blocks.push_back(subprogram);
+    // unset location for prologue emission
+    m_Builder.SetCurrentDebugLocation(llvm::DebugLoc());
+  }
   llvm::Value *value = current_function;
   assert(value);
   m_Declarations[mod.module->getName().str()][&decl] = value;
@@ -289,30 +288,14 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   llvm::DISubprogram *subprogram = nullptr;
   emit_debug_location(decl.location, mod);
   if (m_ShouldGenDebug) {
-    /* unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory()); */
-    unit = mod.debug_info->file;
-
-    /* llvm::DIScope *fn_context = unit; */
-    /* unsigned scope_line = decl.location.line; */
-    /* auto flags = llvm::DISubprogram::SPFlagZero; */
-    /* /1* if (decl.module == mod.module->getName()) *1/ */
-    /* /1*   flags |= llvm::DISubprogram::SPFlagLocalToUnit; *1/ */
-    /* flags |= llvm::DISubprogram::SPFlagDefinition; */
-    /* subprogram = mod.di_builder->createFunction(fn_context, fn_name, fn_name, unit, decl.location.line, gen_debug_function_type(mod, decl.type, decl.params), */
-    /*                                             scope_line, llvm::DINode::FlagPrototyped, flags); */
-
-    llvm::DIFile *unit = mod.debug_info->file;
+    llvm::DIFile *unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory());
     llvm::DIScope *fn_context = unit;
-    unsigned scope_line = decl.location.line;
-    auto flags = llvm::DISubprogram::DISPFlags::SPFlagZero;
-    auto node_type = llvm::DINode::FlagZero;
-    if (decl.body) {
-      flags |= llvm::DISubprogram::DISPFlags::SPFlagDefinition;
-      node_type = llvm::DINode::FlagPrototyped;
-    } else {
-      node_type = llvm::DINode::FlagFwdDecl;
-    }
-    llvm::DISubprogram *subprogram = mod.di_builder->createFunction(fn_context, fn_name, fn_name, unit, decl.location.line,
+    unsigned scope_line = 0;
+    auto flags = llvm::DISubprogram::SPFlagDefinition;
+    if (decl.module == mod.module->getName())
+      flags |= llvm::DISubprogram::SPFlagLocalToUnit;
+    auto node_type = llvm::DINode::FlagPrototyped;
+    llvm::DISubprogram *subprogram = mod.di_builder->createFunction(fn_context, fn_name, llvm::StringRef(), unit, decl.location.line,
                                                                     gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags);
     function->setSubprogram(subprogram);
     mod.debug_info->lexical_blocks.push_back(subprogram);
@@ -346,8 +329,10 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
     if (m_ShouldGenDebug) {
       llvm::DILocalVariable *dbg_var_info =
           mod.di_builder->createParameterVariable(subprogram, arg.getName(), idx, unit, decl.location.line, gen_debug_type(decl.params[idx]->type, mod));
-      mod.di_builder->insertDeclare(var, dbg_var_info, mod.di_builder->createExpression(),
+      auto* call = mod.di_builder->insertDeclare(var, dbg_var_info, mod.di_builder->createExpression(),
                                     llvm::DILocation::get(subprogram->getContext(), decl.location.line, 0, subprogram), m_Builder.GetInsertBlock());
+      // @NOTE @DEBUG: potentially
+      /* call->setDebugLoc(llvm::DILocation::get(subprogram->getContext(), decl.location.line, 0, subprogram)); */
     }
     m_Builder.CreateStore(&arg, var);
     m_Declarations[mod.module->getName().str()][param_decl] = var;
@@ -375,7 +360,6 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   }
   if (m_ShouldGenDebug) {
     mod.debug_info->lexical_blocks.pop_back();
-    mod.di_builder->finalizeSubprogram(subprogram);
   }
 }
 
@@ -424,7 +408,7 @@ llvm::Type *Codegen::gen_type(const Type &type, GeneratedModule &mod) {
 }
 
 llvm::DIType *Codegen::gen_debug_type(const Type &type, GeneratedModule &mod) {
-  if (m_ShouldGenDebug) {
+  if (!m_ShouldGenDebug) {
     return nullptr;
   }
   if (type.array_data) {
