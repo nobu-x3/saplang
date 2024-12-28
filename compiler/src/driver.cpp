@@ -58,6 +58,8 @@ CompilerOptions::CompilerOptions(int argc, const char **argv) {
         extra_flags = split(argv[++idx], ';');
       else if (arg == "-dbg")
         gen_debug = true;
+      else if (arg == "-no-cleanup")
+        no_cleanup = true;
       else
         error("unexpected argument '" + std::string{arg} + ".'\n");
     }
@@ -204,12 +206,14 @@ int Driver::run(std::ostream &output_stream) {
     command << " -l" << lib;
   }
   command << " -g -O0";
-      /* -ggdb -glldb -gsce -gdbx"; */
+  /* -ggdb -glldb -gsce -gdbx"; */
   for (auto &&extra_flag : m_Options.extra_flags)
     command << " " << extra_flag;
   int ret = std::system(command.str().c_str());
-  /* for (auto &&llvm_ir_path : llvm_ir_paths) */
-  /*   std::filesystem::remove(llvm_ir_path); */
+  if (!m_Options.no_cleanup) {
+    for (auto &&llvm_ir_path : llvm_ir_paths)
+      std::filesystem::remove(llvm_ir_path);
+  }
   return ret;
 }
 
@@ -227,6 +231,7 @@ void Driver::display_help() {
             << "\t-res-dump                     print resolved syntax tree.\n"
             << "\t-cfg-dump                     print control flow graph.\n"
             << "\t-dbg                          output debug info.\n"
+            << "\t-no-cleanup                   do not remove temporary LLVMIR-files after compilation.\n"
             << "\t-llvm-dump                    print the generated llvm module" << std::endl;
 }
 } // namespace saplang
