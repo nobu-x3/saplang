@@ -340,10 +340,20 @@ Value construct_value(Type::Kind current_type, Type::Kind new_type, Value *old_v
   return ret_val;
 }
 
+bool is_void_ptr_cast(const Type &cast_from, const Type &cast_to) {
+  return cast_from.kind == Type::Kind::Void && cast_from.pointer_depth == cast_to.pointer_depth && cast_from.pointer_depth > 0;
+}
+
+bool float_to_int_cast(const Type &cast_from, const Type &cast_to) {
+  return cast_from.kind >= Type::Kind::FLOATS_START && cast_from.kind <= Type::Kind::FLOATS_END && cast_to.kind >= Type::Kind::INTEGERS_START &&
+         cast_to.kind <= Type::Kind::INTEGERS_END;
+}
+
 bool can_be_cast(Type cast_from, Type cast_to) {
   return (cast_to.kind != Type::Kind::Void && cast_from.kind != Type::Kind::Void && does_type_have_associated_size(cast_from.kind) &&
-          does_type_have_associated_size(cast_to.kind) && get_type_size(cast_from.kind) <= get_type_size(cast_to.kind)) ||
-         (cast_from.kind == Type::Kind::Void && cast_from.pointer_depth == cast_to.pointer_depth && cast_from.pointer_depth > 0);
+          does_type_have_associated_size(cast_to.kind) && get_type_size(cast_from.kind) <= get_type_size(cast_to.kind) &&
+          !float_to_int_cast(cast_from, cast_to)) ||
+         is_void_ptr_cast(cast_from, cast_to);
 }
 
 bool implicit_cast_numlit(ResolvedNumberLiteral *number_literal, Type cast_to) {
@@ -384,6 +394,8 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type, ConstantExpressionEvalu
       }
     } else if (const auto *groupexp = dynamic_cast<const ResolvedGroupingExpr *>(&expr)) {
       return try_cast_expr(*groupexp->expr, type, cee, is_array_decay);
+    } else if (auto *numlit = dynamic_cast<ResolvedNumberLiteral *>(&expr)) {
+      return numlit->type.pointer_depth == 0;
     }
     return false;
   }
@@ -415,8 +427,8 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type, ConstantExpressionEvalu
     if (implicit_cast_numlit(number_literal, type)) {
       number_literal->type = type;
       number_literal->set_constant_value(cee.evaluate(*number_literal));
+      return true;
     }
-    return true;
   } else if (auto *decl_ref = dynamic_cast<ResolvedDeclRefExpr *>(&expr)) {
     if (can_be_cast(decl_ref->type, type)) {
       if (!is_array_decay)
@@ -1011,6 +1023,14 @@ bool is_bitwise_op(TokenKind op) {
   }
 }
 
+std::string get_type_string(const Type &type) {
+  std::string type_string = type.name;
+  for (int i = 0; i < type.pointer_depth; ++i) {
+    type_string += "*";
+  }
+  return type_string;
+}
+
 std::unique_ptr<ResolvedExpr> Sema::resolve_binary_operator(const BinaryOperator &op) {
   auto resolved_lhs = resolve_expr(*op.lhs);
   assert(resolved_lhs);
@@ -1021,27 +1041,30 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_binary_operator(const BinaryOperator
   auto resolved_rhs = resolve_expr(*op.rhs, rhs_type);
   if (!resolved_lhs || !resolved_rhs)
     return nullptr;
+  if (!is_comp_op(op.op)) {
+    if (const auto *lhs = dynamic_cast<const ResolvedDeclRefExpr *>(resolved_lhs.get())) {
+      if (const auto *rhs = dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
+        bool is_array_decay;
+        if (!try_cast_expr(*resolved_rhs, lhs->type, m_Cee, is_array_decay)) {
+          return report(resolved_lhs->location, "cannot implicitly cast rhs to lhs - from type '" + get_type_string(resolved_rhs->type) + "' to type '" +
+                                                    get_type_string(resolved_lhs->type) + "'.");
+        }
+      }
+    }
+  }
   if (is_comp_op(op.op) && !is_same_type(resolved_lhs->type, resolved_rhs->type)) {
     bool is_array_decay;
     if (!try_cast_expr(*resolved_rhs, resolved_lhs->type, m_Cee, is_array_decay))
-      return report(resolved_lhs->location,
-                    "cannot implicitly cast rhs to lhs - from type '" + resolved_rhs->type.name + "' to type '" + resolved_lhs->type.name + "'.");
+      return report(resolved_lhs->location, "cannot implicitly cast rhs to lhs - from type '" + get_type_string(resolved_rhs->type) + "' to type '" +
+                                                get_type_string(resolved_lhs->type) + "'.");
   }
   if (is_bitwise_op(op.op) || op.op == TokenKind::Percent) {
     if (const auto *rhs = dynamic_cast<const ResolvedDeclRefExpr *>(resolved_rhs.get())) {
       if (const auto *lhs = dynamic_cast<const ResolvedNumberLiteral *>(resolved_lhs.get())) {
         bool is_array_decay;
         if (!try_cast_expr(*resolved_lhs, rhs->type, m_Cee, is_array_decay)) {
-          return report(resolved_lhs->location,
-                        "cannot implicitly cast lhs to rhs - from type '" + resolved_lhs->type.name + "' to type '" + resolved_rhs->type.name + "'.");
-        }
-      }
-    } else if (const auto *lhs = dynamic_cast<const ResolvedDeclRefExpr *>(resolved_lhs.get())) {
-      if (const auto *rhs = dynamic_cast<const ResolvedNumberLiteral *>(resolved_rhs.get())) {
-        bool is_array_decay;
-        if (!try_cast_expr(*resolved_rhs, lhs->type, m_Cee, is_array_decay)) {
-          return report(resolved_lhs->location,
-                        "cannot implicitly cast rhs to lhs - from type '" + resolved_rhs->type.name + "' to type '" + resolved_lhs->type.name + "'.");
+          return report(resolved_lhs->location, "cannot implicitly cast rhs to lhs - from type '" + get_type_string(resolved_rhs->type) + "' to type '" +
+                                                    get_type_string(resolved_lhs->type) + "'.");
         }
       }
     }
@@ -1629,8 +1652,15 @@ std::unique_ptr<ResolvedCallExpr> Sema::resolve_call_expr(const CallExpr &call) 
           bool is_array_decay;
           if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type, m_Cee, is_array_decay) &&
               !is_same_array_decay(resolved_arg->type, resolved_func_decl->params[i]->type)) {
-            return report(resolved_arg->location, "unexpected type '" + resolved_arg->type.name + "', expected '" + resolved_func_decl->params[i]->type.name +
-                                                      (resolved_func_decl->params[i]->type.pointer_depth > 0 ? "*" : "") + "'.");
+            std::string unexected_type_str = resolved_arg->type.name;
+            for (int i = 0; i < resolved_arg->type.pointer_depth; ++i) {
+              unexected_type_str += "*";
+            }
+            std::string expected_type_str = resolved_func_decl->params[i]->type.name;
+            for (int i = 0; i < resolved_func_decl->params[i]->type.pointer_depth; ++i) {
+              expected_type_str += "*";
+            }
+            return report(resolved_arg->location, "unexpected type '" + unexected_type_str + "', expected '" + expected_type_str + "'.");
           }
         }
       }
@@ -1658,8 +1688,15 @@ std::unique_ptr<ResolvedCallExpr> Sema::resolve_call_expr(const CallExpr &call) 
         if (!is_same_type(resolved_type, fn_sig[i + 1])) {
           bool is_array_decay;
           if (!try_cast_expr(*resolved_arg, fn_sig[i + 1], m_Cee, is_array_decay) && !is_same_array_decay(resolved_arg->type, fn_sig[i + 1])) {
-            return report(resolved_arg->location, "unexpected type '" + resolved_arg->type.name + "', expected '" + fn_sig[i + 1].name +
-                                                      (fn_sig[i + 1].pointer_depth > 0 ? "*" : "") + "'.");
+            std::string unexected_type_str = resolved_arg->type.name;
+            for (int i = 0; i < resolved_arg->type.pointer_depth; ++i) {
+              unexected_type_str += "*";
+            }
+            std::string expected_type_str = fn_sig[i + 1].name;
+            for (int i = 0; i < fn_sig[i + 1].pointer_depth; ++i) {
+              expected_type_str += "*";
+            }
+            return report(resolved_arg->location, "unexpected type '" + unexected_type_str + "', expected '" + expected_type_str + "'.");
           }
         }
       }

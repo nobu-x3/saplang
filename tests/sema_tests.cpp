@@ -93,7 +93,7 @@ fn void main() {
     REQUIRE(error_stream.str() ==
             R"(sema_test:7:6 error: argument count mismatch.
 sema_test:8:10 error: unexpected type 'void', expected 'i32'.
-sema_test:9:15 error: unexpected type 'void', expected 'i32'.
+sema_test:9:7 error: unexpected type 'f32', expected 'i32'.
 sema_test:10:6 error: argument count mismatch.
 sema_test:11:6 error: argument count mismatch.
 )");
@@ -453,7 +453,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") i:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
 }
 
@@ -1753,7 +1753,6 @@ TEST_CASE("dereferencing pointer array decay", "[sema]") {
 fn i32 bar(i32* arr) { return *(arr + 0); }
 )");
   REQUIRE(error_stream.str() == "");
-
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin() + 3;
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '*'");
@@ -2608,7 +2607,7 @@ fn void main() {
 TEST_CASE("defer stmts", "[sema]") {
   TEST_SETUP(R"(
 extern {
-  fn void* malloc(i32 size);
+  fn void* malloc(u64 size);
   fn void free(void* ptr);
 }
 fn void main() {
