@@ -1441,12 +1441,12 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") x") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBinaryOperator: '+'");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") x") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") x") != std::string::npos);
@@ -1454,7 +1454,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") x") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "u8(1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
   EXACT_CHECK_NEXT_REQUIRE(lines_it, "[0 (exit)]");
   EXACT_CHECK_NEXT_REQUIRE(lines_it, "  preds: 1 ");
   EXACT_CHECK_NEXT_REQUIRE(lines_it, "  succs: ");

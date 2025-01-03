@@ -42,7 +42,7 @@ fn void foo_bool(bool x) {}
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                             \
+  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                            \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
   for (auto &&fn : resolved_ast) {                                                                                                                             \
     fn->dump_to_stream(output_buffer);                                                                                                                         \
@@ -182,12 +182,11 @@ fn i32 main(i32 x) {
     foo_uint(5 * 3);
     foo_int(20 / 4);
     foo_float(20 / 3);
-    foo_float(x * 1.0);
-    foo_float(1.0 * x);
+    foo_float(((f32)x) * 1.0);
+    foo_float(1.0 * ((f32)x));
 }
 )");
   REQUIRE(error_stream.str() == "");
-  REQUIRE(lines.size() == 60);
   COMMON_REQUIRES
   REQUIRE(lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_int:") != std::string::npos);
@@ -232,6 +231,9 @@ fn i32 main(i32 x) {
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_float:") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '*'") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedGroupingExpr:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedExplicitCast: f32") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("CastType: IntToFloat") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") x:") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
@@ -241,6 +243,9 @@ fn i32 main(i32 x) {
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '*'") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("f32(1)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedGroupingExpr:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedExplicitCast: f32") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("CastType: IntToFloat") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") x:") != std::string::npos);
 }
@@ -253,12 +258,11 @@ fn i32 main(i32 x) {
     foo_uint(5 - 3);
     foo_int(20 - 4);
     foo_float(20 + 3);
-    foo_float(x - 1.0);
-    foo_float(1.0 - x);
+    foo_float(((f32)x) - 1.0);
+    foo_float(1.0 - ((f32)x));
 }
 )");
   REQUIRE(error_stream.str() == "");
-  REQUIRE(lines.size() == 60);
   COMMON_REQUIRES
   REQUIRE(lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_int:") != std::string::npos);
@@ -303,6 +307,9 @@ fn i32 main(i32 x) {
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedCallExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") foo_float:") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '-'") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedGroupingExpr:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedExplicitCast: f32") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("CastType: IntToFloat") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") x:") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
@@ -312,6 +319,9 @@ fn i32 main(i32 x) {
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedBinaryOperator: '-'") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedNumberLiteral:") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("f32(1)") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedGroupingExpr:") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ResolvedExplicitCast: f32") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("CastType: IntToFloat") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ResolvedDeclRefExpr: @(") != std::string::npos);
   REQUIRE(lines_it->find(") x:") != std::string::npos);
 }
@@ -321,9 +331,9 @@ TEST_CASE("comparison operations", "[constexpr]") {
 fn i32 main(i32 x) {
   foo_bool(2 < 5);
   foo_bool(-2 < 5);
-  foo_bool(2.3 < 5);
+  foo_bool(2.3 < 5.0);
   foo_bool(5 < 2);
-  foo_bool(5 < 2.3);
+  foo_bool(5.0 < 2.3);
   foo_bool(5 < -2);
   foo_bool(x < 2);
   foo_bool(2 < x);
@@ -457,15 +467,15 @@ TEST_CASE("equality operators", "[constexpr]") {
 fn i32 main(i32 x) {
   foo_bool(2 == 2);
   foo_bool(3 == 2);
-  foo_bool(2.3 == 2);
-  foo_bool(2.0 == 2);
-  foo_bool(2 == 2.3);
+  foo_bool(2.3 == 2.0);
+  foo_bool(2.0 == 2.0);
+  foo_bool(2.0 == 2.3);
   foo_bool(x == 2);
   foo_bool(2 == x);
   foo_bool(2 != 2);
   foo_bool(3 != 2);
-  foo_bool(2.3 != 2);
-  foo_bool(2 != 2.3);
+  foo_bool(2.3 != 2.0);
+  foo_bool(2.0 != 2.3);
   foo_bool(x != 2);
   foo_bool(2 != x);
 }

@@ -703,7 +703,7 @@ fn void foo() {
   CONTAINS_NEXT_REQUIRE(lines_it, "for.counter_op:");
   REQUIRE(lines_it->find("; preds = %for.body") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %i, align 4");
-  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = add i32 %2, i8 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = add i32 %2, 1");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %3, ptr %i, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %for.condition");
   CONTAINS_NEXT_REQUIRE(lines_it, "for.exit:");
@@ -2640,7 +2640,7 @@ TEST_CASE("defer stmts", "[codegen]") {
   TEST_SETUP(R"(
 extern {
     fn void print(const u8*, ...) alias printf;
-    fn void* malloc(i32 size);
+    fn void* malloc(u64 size);
     fn void free(void* ptr);
 }
 fn i32 main() {
