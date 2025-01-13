@@ -10,10 +10,10 @@
 #include <llvm-18/llvm/IR/InstrTypes.h>
 #include <llvm-18/llvm/IR/LLVMContext.h>
 #include <llvm-18/llvm/IR/Metadata.h>
+#include <llvm-18/llvm/TargetParser/Host.h>
 #include <llvm-18/llvm/TargetParser/Triple.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
-#include <llvm-18/llvm/TargetParser/Host.h>
 #include <memory>
 #include <utility>
 
@@ -69,8 +69,8 @@ std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::gener
     current_module->module = std::move(module);
     if (m_ShouldGenDebug) {
       current_module->module->addModuleFlag(llvm::Module::Warning, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
-      if(llvm::Triple(llvm::sys::getProcessTriple()).isOSDarwin()) {
-          current_module->module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
+      if (llvm::Triple(llvm::sys::getProcessTriple()).isOSDarwin()) {
+        current_module->module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
       }
       current_module->di_builder = std::make_unique<llvm::DIBuilder>(*current_module->module);
       current_module->debug_info = std::make_unique<DebugInfo>();
@@ -288,15 +288,15 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   llvm::DISubprogram *subprogram = nullptr;
   emit_debug_location(decl.location, mod);
   if (m_ShouldGenDebug) {
-    llvm::DIFile *unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory());
+    unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory());
     llvm::DIScope *fn_context = unit;
     unsigned scope_line = 0;
     auto flags = llvm::DISubprogram::SPFlagDefinition;
     if (decl.module == mod.module->getName())
       flags |= llvm::DISubprogram::SPFlagLocalToUnit;
     auto node_type = llvm::DINode::FlagPrototyped;
-    llvm::DISubprogram *subprogram = mod.di_builder->createFunction(fn_context, fn_name, llvm::StringRef(), unit, decl.location.line,
-                                                                    gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags);
+    subprogram = mod.di_builder->createFunction(fn_context, fn_name, llvm::StringRef(), unit, decl.location.line,
+                                                gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags);
     function->setSubprogram(subprogram);
     mod.debug_info->lexical_blocks.push_back(subprogram);
     assert(subprogram);
@@ -329,8 +329,9 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
     if (m_ShouldGenDebug) {
       llvm::DILocalVariable *dbg_var_info =
           mod.di_builder->createParameterVariable(subprogram, arg.getName(), idx, unit, decl.location.line, gen_debug_type(decl.params[idx]->type, mod));
-      auto* call = mod.di_builder->insertDeclare(var, dbg_var_info, mod.di_builder->createExpression(),
-                                    llvm::DILocation::get(subprogram->getContext(), decl.location.line, 0, subprogram), m_Builder.GetInsertBlock());
+      auto *call =
+          mod.di_builder->insertDeclare(var, dbg_var_info, mod.di_builder->createExpression(),
+                                        llvm::DILocation::get(subprogram->getContext(), decl.location.line, 0, subprogram), m_Builder.GetInsertBlock());
       // @NOTE @DEBUG: potentially
       /* call->setDebugLoc(llvm::DILocation::get(subprogram->getContext(), decl.location.line, 0, subprogram)); */
     }
@@ -1446,6 +1447,14 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, GeneratedModul
     } else {
       m_Builder.CreateStore(gen_expr(*init, mod), var);
     }
+  }
+  if (m_ShouldGenDebug) {
+    auto *subprogram = mod.debug_info->lexical_blocks.back();
+    auto *unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory());
+    llvm::DILocalVariable *dbg_var_info =
+        mod.di_builder->createParameterVariable(subprogram, decl->id, 0, unit, decl->location.line, gen_debug_type(decl->type, mod));
+    auto *call = mod.di_builder->insertDeclare(var, dbg_var_info, mod.di_builder->createExpression(),
+                                               llvm::DILocation::get(subprogram->getContext(), decl->location.line, 0, subprogram), m_Builder.GetInsertBlock());
   }
   m_Declarations[mod.module->getName().str()][decl] = var;
   return nullptr;
