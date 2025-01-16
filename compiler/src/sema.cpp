@@ -543,10 +543,12 @@ size_t align_to(size_t offset, size_t alignment) { return (offset + alignment - 
 void Sema::init_type_info(ResolvedStructDecl &decl) {
   TypeInfo type_info{};
   type_info.field_sizes.reserve(decl.members.size());
+  type_info.field_names.reserve(decl.members.size());
   size_t max_align = 0;
   for (auto &&field : decl.members) {
     const auto &ti = m_TypeInfos[field.first.pointer_depth ? "*" : field.first.name];
     type_info.field_sizes.push_back(ti.total_size);
+    type_info.field_names.push_back(field.second);
     type_info.total_size = align_to(type_info.total_size, ti.alignment);
     type_info.total_size += ti.total_size;
     max_align = std::max(max_align, ti.alignment);
