@@ -43,6 +43,7 @@ struct TypeInfo {
   unsigned long total_size;
   unsigned long alignment;
   std::vector<unsigned long> field_sizes;
+  std::vector<std::string> field_names;
 
   void dump_to_stream(std ::stringstream &stream, size_t indent = 0) const;
   inline void dump(size_t indent = 0) const {

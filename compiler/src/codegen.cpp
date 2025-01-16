@@ -408,6 +408,52 @@ llvm::Type *Codegen::gen_type(const Type &type, GeneratedModule &mod) {
   llvm_unreachable("unexpected type.");
 }
 
+llvm::DIType *get_debug_type_from_llvm_type(const llvm::Type *type, GeneratedModule &mod, std::unordered_map<std::string, TypeInfo> &type_infos) {
+  unsigned encoding = 0;
+  std::string type_name;
+  std::uint64_t size;
+  if (type->isIntegerTy(8)) {
+    encoding = llvm::dwarf::DW_ATE_unsigned_char;
+    type_name = "char";
+    size = 8;
+  } else if (type->isIntegerTy(1)) {
+    encoding = llvm::dwarf::DW_ATE_boolean;
+    type_name = "bool";
+    size = 1;
+  } else if (type->isIntegerTy()) {
+    encoding = llvm::dwarf::DW_ATE_signed;
+    type_name = "int";
+    size = 32;
+  } else if (type->isPointerTy() || type->isVoidTy()) {
+    encoding = llvm::dwarf::DW_ATE_address;
+    type_name = "ptr";
+    size = platform_ptr_size();
+  } else if (type->isFloatTy() || type->isDoubleTy()) {
+    encoding = llvm::dwarf::DW_ATE_float;
+    type_name = "float";
+    size = 32;
+  } else if (type->isStructTy()) {
+    std::vector<llvm::Metadata *> metadata;
+    std::uint64_t offset = 0;
+    const TypeInfo &type_info = type_infos[type->getStructName().str()];
+    llvm::DIScope *scope = mod.debug_info->lexical_blocks.back();
+    llvm::DIFile *file = mod.debug_info->file;
+    for (int i = 0; i < type->getStructNumElements(); ++i) {
+      llvm::Type *subtype = type->getStructElementType(i);
+      llvm::DIType *di_type = get_debug_type_from_llvm_type(subtype, mod, type_infos);
+      metadata.push_back(
+          mod.di_builder->createMemberType(scope, type_info.field_names[i], file, i, type_info.field_sizes[i], 0, offset, llvm::DINode::FlagZero, di_type));
+      offset += type_info.field_sizes[i];
+    }
+    return mod.di_builder->createStructType(scope, type->getStructName(), file, 0, type_info.total_size, type_info.alignment, llvm::DINode::FlagZero, nullptr,
+                                            mod.di_builder->getOrCreateArray(metadata));
+  }
+  assert(encoding != 0);
+  auto *di_type = mod.di_builder->createBasicType(type_name, size, encoding);
+  assert(di_type);
+  return di_type;
+}
+
 llvm::DIType *Codegen::gen_debug_type(const Type &type, GeneratedModule &mod) {
   if (!m_ShouldGenDebug) {
     return nullptr;
@@ -454,12 +500,15 @@ llvm::DIType *Codegen::gen_debug_type(const Type &type, GeneratedModule &mod) {
     encoding = llvm::dwarf::DW_ATE_boolean;
     break;
   case Type::Kind::Void:
+  case Type::Kind::FnPtr:
     encoding = llvm::dwarf::DW_ATE_address;
     break;
-  case Type::Kind::Custom:
-    return mod.di_builder->createStructType(mod.debug_info->lexical_blocks.back(), type.name, mod.debug_info->file, 0, m_TypeInfos[type.name].total_size,
-                                            m_TypeInfos[type.name].alignment, llvm::DINode::FlagPublic, nullptr, {});
-    break;
+  case Type::Kind::Custom: {
+    std::vector<llvm::Metadata *> members;
+    const TypeInfo &type_info = m_TypeInfos[type.name];
+    llvm::Type *struct_type = m_CustomTypes[type.name];
+    return get_debug_type_from_llvm_type(struct_type, mod, m_TypeInfos);
+  } break;
   }
   assert(encoding != 0);
   auto *di_type = mod.di_builder->createBasicType(type.name, get_type_size(type.kind), encoding);
@@ -1451,8 +1500,7 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, GeneratedModul
   if (m_ShouldGenDebug) {
     auto *subprogram = mod.debug_info->lexical_blocks.back();
     auto *unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory());
-    llvm::DILocalVariable *dbg_var_info =
-        mod.di_builder->createParameterVariable(subprogram, decl->id, 0, unit, decl->location.line, gen_debug_type(decl->type, mod));
+    llvm::DILocalVariable *dbg_var_info = mod.di_builder->createAutoVariable(subprogram, decl->id, unit, decl->location.line, gen_debug_type(decl->type, mod));
     auto *call = mod.di_builder->insertDeclare(var, dbg_var_info, mod.di_builder->createExpression(),
                                                llvm::DILocation::get(subprogram->getContext(), decl->location.line, 0, subprogram), m_Builder.GetInsertBlock());
   }
@@ -1514,16 +1562,18 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, Gener
     }
   }
   assert(decl);
+  llvm::Instruction *instruction = nullptr;
+  llvm::Value *expr = nullptr;
   // @TODO: this is super hacky. To refactor pass decl to Codegen::gen_expr and
   // further to Codegen::gen_unary_op
   if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(assignment.expr.get()); unop && unop->op == TokenKind::Amp) {
     if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unop->rhs.get())) {
-      llvm::Value *expr = m_Declarations[mod.module->getName().str()][dre->decl];
+      expr = m_Declarations[mod.module->getName().str()][dre->decl];
       assert(expr);
-      return m_Builder.CreateStore(expr, decl);
+      instruction = m_Builder.CreateStore(expr, decl);
     }
   } else {
-    llvm::Value *expr = expr = gen_expr(*assignment.expr, mod);
+    expr = gen_expr(*assignment.expr, mod);
     assert(expr);
     if (const auto *struct_lit = dynamic_cast<const ResolvedStructLiteralExpr *>(assignment.expr.get())) {
       // expr is the stack variable
@@ -1532,11 +1582,22 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, Gener
       llvm::Type *decl_type = gen_type(assignment.variable->decl->type, mod);
       assert(decl_type);
       const llvm::DataLayout &data_layout = mod.module->getDataLayout();
-      return m_Builder.CreateMemCpy(decl, data_layout.getPrefTypeAlign(decl_type), expr, data_layout.getPrefTypeAlign(var_type),
-                                    data_layout.getTypeAllocSize(var_type));
+      instruction = m_Builder.CreateMemCpy(decl, data_layout.getPrefTypeAlign(decl_type), expr, data_layout.getPrefTypeAlign(var_type),
+                                           data_layout.getTypeAllocSize(var_type));
     }
-    return m_Builder.CreateStore(expr, decl);
+    instruction = instruction ? instruction : m_Builder.CreateStore(expr, decl);
   }
-  assert(false);
+  assert(instruction);
+  assert(expr);
+  if (m_ShouldGenDebug) {
+    // @NOTE: dunno if I need assignment, seems to work without it
+    /* auto *subprogram = mod.debug_info->lexical_blocks.back(); */
+    /* const auto *location = llvm::DILocation::get(subprogram->getContext(), assignment.location.line, 0, subprogram); */
+    /* auto *unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory()); */
+    /* llvm::DILocalVariable *debug_var = mod.di_builder->createAutoVariable(subprogram, assignment.variable->decl->id, unit, assignment.location.line, */
+    /*                                                                       gen_debug_type(assignment.variable->type, mod)); */
+    /* mod.di_builder->insertDbgAssign(instruction, expr, debug_var, mod.di_builder->createExpression(), decl, mod.di_builder->createExpression(), location); */
+  }
+  return instruction;
 }
 } // namespace saplang

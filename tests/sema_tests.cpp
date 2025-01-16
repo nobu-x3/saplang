@@ -2218,23 +2218,23 @@ fn void main() {
   REQUIRE(lines_it->find("Type info - Type2:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 24");
-  CONTAINS_NEXT_REQUIRE(lines_it, "[8 1 8 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[p: 8; c: 1; x: 8; ]");
   CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type3:");
   CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 56");
-  CONTAINS_NEXT_REQUIRE(lines_it, "[16 16 24 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[type: 16; type1: 16; type3: 24; ]");
   CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type1:");
   CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 16");
-  CONTAINS_NEXT_REQUIRE(lines_it, "[8 1 2 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[p: 8; c: 1; x: 2; ]");
   CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type4:");
   CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 56");
-  CONTAINS_NEXT_REQUIRE(lines_it, "[24 16 16 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[type2: 24; type: 16; type1: 16; ]");
   CONTAINS_NEXT_REQUIRE(lines_it, "Type info - Type:");
   CONTAINS_NEXT_REQUIRE(lines_it, "Alignment: 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "Total Size: 16");
-  CONTAINS_NEXT_REQUIRE(lines_it, "[8 1 4 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "[p: 8; c: 1; x: 4; ]");
 }
 
 // TODO: support constexprs

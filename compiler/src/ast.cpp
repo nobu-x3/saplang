@@ -125,7 +125,7 @@ void TypeInfo::dump_to_stream(std::stringstream &stream, size_t indent_level) co
   stream << indent(indent_level) << "Total Size: " << total_size << '\n';
   stream << indent(indent_level) << '[';
   for (uint i = 0; i < field_sizes.size(); ++i) {
-    stream << field_sizes[i] << ' ';
+    stream << field_names[i] << ": " << field_sizes[i] << "; ";
   }
   stream << "]\n";
 }
