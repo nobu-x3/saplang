@@ -442,10 +442,10 @@ llvm::DIType *get_debug_type_from_llvm_type(const llvm::Type *type, GeneratedMod
       llvm::Type *subtype = type->getStructElementType(i);
       llvm::DIType *di_type = get_debug_type_from_llvm_type(subtype, mod, type_infos);
       metadata.push_back(
-          mod.di_builder->createMemberType(scope, type_info.field_names[i], file, i, type_info.field_sizes[i], 0, offset, llvm::DINode::FlagZero, di_type));
-      offset += type_info.field_sizes[i];
+          mod.di_builder->createMemberType(scope, type_info.field_names[i], file, i, type_info.field_sizes[i] * 8, di_type->getAlignInBits(), offset, llvm::DINode::FlagZero, di_type));
+      offset += type_info.field_sizes[i] * 8;
     }
-    return mod.di_builder->createStructType(scope, type->getStructName(), file, 0, type_info.total_size, type_info.alignment, llvm::DINode::FlagZero, nullptr,
+    return mod.di_builder->createStructType(scope, type->getStructName(), file, 0, type_info.total_size * 8, type_info.alignment * 8, llvm::DINode::FlagZero, nullptr,
                                             mod.di_builder->getOrCreateArray(metadata));
   }
   assert(encoding != 0);
@@ -511,7 +511,6 @@ llvm::DIType *Codegen::gen_debug_type(const Type &type, GeneratedModule &mod) {
     break;
   case Type::Kind::Custom: {
     std::vector<llvm::Metadata *> members;
-    const TypeInfo &type_info = m_TypeInfos[type.name];
     llvm::Type *struct_type = m_CustomTypes[type.name];
     return get_debug_type_from_llvm_type(struct_type, mod, m_TypeInfos);
   } break;
