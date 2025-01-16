@@ -461,12 +461,18 @@ llvm::DIType *Codegen::gen_debug_type(const Type &type, GeneratedModule &mod) {
   if (type.array_data) {
     const auto &array_data = *type.array_data;
     Type de_arrayed_type = type;
-    int dimension = de_array_type(de_arrayed_type, 1);
+    std::vector<llvm::Metadata*> metadata;
+    metadata.reserve(type.array_data->dimension_count);
+    int dimension = 0;
+    for(int i = 0; i < type.array_data->dimension_count; ++i) {
+        dimension = de_array_type(de_arrayed_type, 1);
+        metadata.push_back(mod.di_builder->getOrCreateSubrange(0, dimension));
+    }
     llvm::DIType *underlying_type = gen_debug_type(de_arrayed_type, mod);
     assert(underlying_type);
     if (!dimension)
       return underlying_type;
-    return mod.di_builder->createArrayType(type.array_data->dimensions.back(), m_TypeInfos[type.name].alignment, underlying_type, llvm::DINodeArray());
+    return mod.di_builder->createArrayType(type.array_data->dimensions.back(), m_TypeInfos[type.name].alignment, underlying_type, mod.di_builder->getOrCreateArray(metadata));
   }
   if (type.pointer_depth) {
     Type tmp_type = type;
