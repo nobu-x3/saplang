@@ -278,6 +278,17 @@ struct StructDecl : public Decl {
   DUMP_IMPL
 };
 
+struct GenericStructDecl : public Decl {
+  std::vector<std::string> placeholders;
+  std::vector<std::pair<Type, std::string>> members;
+  inline GenericStructDecl(SourceLocation loc, const std::string &id, std::string module, std::vector<std::string> placeholders,
+                           std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "", bool is_exported = false)
+      : Decl(loc, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), placeholders(std::move(placeholders)),
+        members(std::move(types)) {}
+  GenericStructDecl(std::vector<std::string> placeholders, std::unique_ptr<StructDecl> &&struct_decl);
+  DUMP_IMPL
+};
+
 struct EnumDecl : public Decl {
   std::unordered_map<std::string, long> name_values_map;
   Type underlying_type;
