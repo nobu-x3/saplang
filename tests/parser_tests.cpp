@@ -9,7 +9,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  for (auto &&fn : parse_result.module->declarations) {                                                                                                         \
+  for (auto &&fn : parse_result.module->declarations) {                                                                                                        \
     fn->dump_to_stream(output_buffer);                                                                                                                         \
   }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
@@ -22,7 +22,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  parse_result.module->dump_to_stream(output_buffer);                                                                                                           \
+  parse_result.module->dump_to_stream(output_buffer);                                                                                                          \
   const auto &error_stream = saplang::get_error_stream();
 
 TEST_CASE("Function declarations", "[parser]") {
@@ -1916,5 +1916,40 @@ TEST_CASE("exported decls", "[parser]") {
     CONTAINS_NEXT_REQUIRE(lines_it, "Block");
     CONTAINS_NEXT_REQUIRE(lines_it, "exported StructDecl: Test");
     CONTAINS_NEXT_REQUIRE(lines_it, "exported EnumDecl: i32(TestEnum)");
+  }
+}
+
+TEST_CASE("generic struct declarations", "[parser]") {
+  SECTION("Single generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+        struct<T> GenericType {
+            T first;
+            T* next;
+        }
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: GenericType<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr T(next)");
+  }
+  SECTION("Two generics") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+        struct<T, K> GenericType {
+            T first;
+            K second;
+            T* t_next;
+            K* k_next;
+        }
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: GenericType<T, K>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: K(second)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr T(t_next)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr K(k_next)");
   }
 }

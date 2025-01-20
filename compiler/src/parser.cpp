@@ -366,9 +366,7 @@ std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const, bool is_global) {
 
 // <structDeclStatement>
 // ::= 'struct' <identifier> '{' (<type> <identifier> ';') '}'
-std::unique_ptr<StructDecl> Parser::parse_struct_decl() {
-  SourceLocation loc = m_NextToken.location;
-  eat_next_token(); // eat 'struct'
+std::unique_ptr<StructDecl> Parser::parse_struct_decl(SourceLocation struct_token_loc) {
   if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
     return report(m_NextToken.location, "struct type declarations must have a name.");
   std::string id = *m_NextToken.value;
@@ -391,7 +389,27 @@ std::unique_ptr<StructDecl> Parser::parse_struct_decl() {
     fields.emplace_back(std::make_pair(*type, field_name));
   }
   eat_next_token(); // eat '}'
-  return std::make_unique<StructDecl>(loc, id, m_ModuleName, std::move(fields));
+  return std::make_unique<StructDecl>(struct_token_loc, id, m_ModuleName, std::move(fields));
+}
+
+// <genericStructDecl>
+// ::= 'struct' '<' (<identifier>(',')*)+ '>' <identifier> (<type> <identifier> ';') '}'
+std::unique_ptr<GenericStructDecl> Parser::parse_generic_struct_decl(SourceLocation struct_token_loc) {
+  if (m_NextToken.kind != TokenKind::LessThan)
+    return report(struct_token_loc, "expected '<' in generic struct placeholder list.");
+  eat_next_token(); // eat '<'
+  if (m_NextToken.kind != TokenKind::Identifier)
+    return report(m_NextToken.location, "expected placeholder identifier.");
+  std::vector<std::string> placeholders;
+  while (m_NextToken.kind != TokenKind::GreaterThan) {
+    placeholders.emplace_back(*m_NextToken.value);
+    eat_next_token(); // eat placeholder identifier
+    if (m_NextToken.kind == TokenKind::Comma)
+      eat_next_token(); // eat ','
+  }
+  eat_next_token(); // eat '>'
+  std::unique_ptr<StructDecl> struct_decl = parse_struct_decl(struct_token_loc);
+  return std::make_unique<GenericStructDecl>(std::move(placeholders), std::move(struct_decl));
 }
 
 // <enumDecl>
@@ -1125,7 +1143,7 @@ std::optional<Type> Parser::parse_type() {
 // ::= <module>
 //
 // <module>
-// ::= <imports> <structDeclStmt>* <varDeclStatement>* <funcDecl>* <externBlockDecl>*
+// ::= <imports> <structDeclStmt>* <genericStructDecl>* <varDeclStatement>* <funcDecl>* <externBlockDecl>*
 // <enumDecl>* EOF
 ParsingResult Parser::parse_source_file() {
   std::vector<std::unique_ptr<Decl>> decls;
@@ -1158,9 +1176,15 @@ ParsingResult Parser::parse_source_file() {
     }
     if (m_NextToken.kind == TokenKind::KwFn)
       decl = parse_function_decl();
-    else if (m_NextToken.kind == TokenKind::KwStruct)
-      decl = parse_struct_decl();
-    else if (m_NextToken.kind == TokenKind::KwVar || m_NextToken.kind == TokenKind::KwConst) {
+    else if (m_NextToken.kind == TokenKind::KwStruct) {
+      SourceLocation struct_token_loc = m_NextToken.location;
+      eat_next_token(); // eat 'struct'
+      if (m_NextToken.kind == TokenKind::LessThan) {
+        decl = parse_generic_struct_decl(struct_token_loc);
+      } else {
+        decl = parse_struct_decl(struct_token_loc);
+      }
+    } else if (m_NextToken.kind == TokenKind::KwVar || m_NextToken.kind == TokenKind::KwConst) {
       std::unique_ptr<DeclStmt> var_decl_stmt = parse_var_decl_stmt(true);
       if (var_decl_stmt) {
         decl = std::move(var_decl_stmt->var_decl);

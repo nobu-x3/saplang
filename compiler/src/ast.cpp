@@ -286,6 +286,33 @@ void StructDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) 
   }
 }
 
+GenericStructDecl::GenericStructDecl(std::vector<std::string> placeholders, std::unique_ptr<StructDecl> &&struct_decl)
+    : Decl(std::move(struct_decl->location), std::move(struct_decl->id), std::move(struct_decl->module), std::move(struct_decl->lib),
+           std::move(struct_decl->og_name), struct_decl->is_exported),
+      placeholders(std::move(placeholders)), members(std::move(struct_decl->members)) {}
+
+void GenericStructDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  std::string lib_og_name_resolve = "";
+  if (!lib.empty() && !og_name.empty()) {
+    lib_og_name_resolve = "alias " + lib + "::" + og_name;
+  } else if (!lib.empty())
+    lib_og_name_resolve = lib;
+  else if (!og_name.empty())
+    lib_og_name_resolve = "alias " + og_name;
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "GenericStructDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ")
+         << id << "<";
+  stream << placeholders.front();
+  for (int i = 1; i < placeholders.size(); ++i) {
+    stream << ", " << placeholders[i];
+  }
+  stream << ">\n";
+  for (auto &&[type, name] : members) {
+    stream << indent(indent_level + 1) << "MemberField: ";
+    type.dump_to_stream(stream, 0);
+    stream << "(" << name << ")\n";
+  }
+}
+
 void EnumDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   std::string lib_og_name_resolve = "";
   if (!lib.empty() && !og_name.empty()) {
