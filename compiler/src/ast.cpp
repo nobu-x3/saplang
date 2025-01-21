@@ -136,6 +136,16 @@ void Type::dump_to_stream(std::stringstream &stream, size_t indent_level) const 
     stream << "ptr ";
   }
   stream << name;
+  if (instance_types.size() > 0) {
+    stream << '<';
+    const auto &first_instance_type = instance_types.front();
+    first_instance_type.dump_to_stream(stream);
+    for (auto it = instance_types.begin() + 1; it != instance_types.end(); ++it) {
+      stream << ", ";
+      it->dump_to_stream(stream);
+    }
+    stream << '>';
+  }
   if (array_data) {
     for (uint i = 0; i < array_data->dimension_count; ++i) {
       stream << "[" << array_data->dimensions[i] << "]";

@@ -86,6 +86,7 @@ struct Type : public IDumpable {
   // casting, it's array decay
   std::optional<ArrayData> array_data;
   std::optional<FunctionSignature> fn_ptr_signature;
+  std::vector<Type> instance_types;
   Type(const Type &) = default;
   Type &operator=(const Type &) = default;
   Type(Type &&) noexcept = default;
@@ -115,8 +116,8 @@ struct Type : public IDumpable {
 
   static Type builtin_bool(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::Bool, "bool", pointer_depth, std::move(array_data)}; }
 
-  static Type custom(std::string name, uint pointer_depth, std::optional<ArrayData> array_data = {}) {
-    return {Kind::Custom, std::move(name), pointer_depth, std::move(array_data)};
+  static Type custom(std::string name, uint pointer_depth, std::optional<ArrayData> array_data = {}, std::vector<Type> instance_types = {}) {
+    return {Kind::Custom, std::move(name), pointer_depth, std::move(array_data), std::nullopt, std::move(instance_types)};
   }
 
   static Type fn_ptr(uint pointer_depth, std::optional<FunctionSignature> fn_signature = {}) {
@@ -131,8 +132,9 @@ struct Type : public IDumpable {
   DUMP_IMPL
 private:
   inline Type(Kind kind, std::string name, uint pointer_depth, std::optional<ArrayData> array_data = std::nullopt,
-              std::optional<FunctionSignature> fn_signature = std::nullopt)
-      : kind(kind), name(std::move(name)), pointer_depth(pointer_depth), array_data(std::move(array_data)), fn_ptr_signature(std::move(fn_signature)) {}
+              std::optional<FunctionSignature> fn_signature = std::nullopt, std::vector<Type> instance_types = {})
+      : kind(kind), name(std::move(name)), pointer_depth(pointer_depth), array_data(std::move(array_data)), fn_ptr_signature(std::move(fn_signature)),
+        instance_types(std::move(instance_types)) {}
 };
 
 // decreases array dimension by dearray_count, removes first dimension and
