@@ -38,14 +38,14 @@ std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
   eat_next_token(); // eat '('
   if (m_NextToken.kind != TokenKind::Lparent)
     return report(m_NextToken.location, "expected '('.");
-  auto maybe_param_list_vll = parse_parameter_list();
-  if (!maybe_param_list_vll)
+  auto maybe_param_list_vla = parse_parameter_list();
+  if (!maybe_param_list_vla)
     return nullptr;
   std::unique_ptr<Block> block = parse_block();
   if (!block) {
     return report(m_NextToken.location, "failed to parse function block.");
   }
-  auto &&param_list = maybe_param_list_vll->first;
+  auto &&param_list = maybe_param_list_vla->first;
   return std::make_unique<FunctionDecl>(location, function_identifier, *return_type, m_ModuleName, std::move(param_list), std::move(block), false);
 }
 
@@ -132,8 +132,8 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
         report(m_NextToken.location, "expected '('.");
         return std::nullopt;
       }
-      auto maybe_param_list_vll = parse_parameter_list();
-      if (!maybe_param_list_vll)
+      auto maybe_param_list_vla = parse_parameter_list();
+      if (!maybe_param_list_vla)
         return std::nullopt;
       if (m_NextToken.kind == TokenKind::KwAlias) {
         eat_next_token(); // eat 'alias'
@@ -150,9 +150,9 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
         return std::nullopt;
       }
       eat_next_token(); // eat ';'
-      auto is_vll = maybe_param_list_vll->second;
-      auto &&param_list = maybe_param_list_vll->first;
-      decl = std::make_unique<FunctionDecl>(location, function_identifier, *return_type, m_ModuleName, std::move(param_list), nullptr, is_vll, lib_name, alias,
+      auto is_vla = maybe_param_list_vla->second;
+      auto &&param_list = maybe_param_list_vla->first;
+      decl = std::make_unique<FunctionDecl>(location, function_identifier, *return_type, m_ModuleName, std::move(param_list), nullptr, is_vla, lib_name, alias,
                                             is_exported);
     }
     // @TODO: struct and enum decls
@@ -853,11 +853,11 @@ std::optional<ParameterList> Parser::parse_parameter_list() {
     eat_next_token(); // eat ')'
     return std::make_pair(std::move(param_decls), false);
   }
-  bool is_vll = false;
+  bool is_vla = false;
   while (true) {
-    if (m_NextToken.kind == TokenKind::VLL) {
+    if (m_NextToken.kind == TokenKind::vla) {
       eat_next_token(); // eat '...'
-      is_vll = true;
+      is_vla = true;
       break;
     }
     auto param_decl = parse_param_decl();
@@ -873,7 +873,7 @@ std::optional<ParameterList> Parser::parse_parameter_list() {
     return std::nullopt;
   }
   eat_next_token(); // eat ')'
-  return std::make_pair(std::move(param_decls), is_vll);
+  return std::make_pair(std::move(param_decls), is_vla);
 }
 
 std::unique_ptr<Expr> Parser::parse_expr() {
@@ -1039,8 +1039,18 @@ std::unique_ptr<EnumElementAccess> Parser::parse_enum_element_access(std::string
 
 // <type>
 // ::= 'void' ('*')*
-// |   <identifier> ('*')*
-// |   <identifier>'[' (<integer>)* ']'
+// |   <basicType>
+// |   <genericType>
+// |   <arrayType>
+//
+// <basicType>
+// ::= <identifier> ('*')*
+//
+// <arrayType>
+// ::= <identifier>'[' (<integer>)* ']'
+//
+// <genericType>
+// ::= <identifier> '<' (<basicType>)+ '>' ('*')*
 std::optional<Type> Parser::parse_type() {
   Token token = m_NextToken;
   bool is_fn_ptr = false;

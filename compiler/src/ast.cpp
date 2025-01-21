@@ -251,7 +251,7 @@ void FunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level
     lib_og_name_resolve = lib;
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
-  stream << indent(indent_level) << (is_exported ? "exported " : "") << "FunctionDecl: " << (is_vll ? "VLL " : "")
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "FunctionDecl: " << (is_vla ? "vla " : "")
          << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":";
   type.dump_to_stream(stream, 0);
   stream << '\n';
@@ -616,7 +616,7 @@ void ResolvedFuncDecl::dump_to_stream(std::stringstream &stream, size_t indent_l
     lib_og_name_resolve = lib;
   else if (!og_name.empty())
     lib_og_name_resolve = "alias " + og_name;
-  stream << indent(indent_level) << (is_exported ? "exported " : "") << "ResolvedFuncDecl: @(" << this << ") " << (is_vll ? "VLL " : "")
+  stream << indent(indent_level) << (is_exported ? "exported " : "") << "ResolvedFuncDecl: @(" << this << ") " << (is_vla ? "vla " : "")
          << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":\n";
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);

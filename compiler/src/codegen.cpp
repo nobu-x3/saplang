@@ -122,7 +122,7 @@ void Codegen::gen_func_decl(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   for (auto &&param : decl.params) {
     param_types.emplace_back(gen_type(param->type, mod));
   }
-  auto *type = llvm::FunctionType::get(return_type, param_types, decl.is_vll);
+  auto *type = llvm::FunctionType::get(return_type, param_types, decl.is_vla);
   const std::string &fn_name = decl.og_name.empty() ? decl.id : decl.og_name;
   llvm::Function *current_function = llvm::Function::Create(type, llvm::Function::ExternalLinkage, fn_name, *mod.module);
   assert(current_function);
@@ -930,8 +930,8 @@ llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess 
   if (access.params && access.inner_member_access->type.kind == Type::Kind::FnPtr) {
     llvm::Type *function_ret_type = gen_type(access.inner_member_access->type.fn_ptr_signature->first[0], mod);
     assert(function_ret_type);
-    bool is_vll = access.inner_member_access->type.fn_ptr_signature->second;
-    auto *function_type = llvm::FunctionType::get(function_ret_type, is_vll);
+    bool is_vla = access.inner_member_access->type.fn_ptr_signature->second;
+    auto *function_type = llvm::FunctionType::get(function_ret_type, is_vla);
     assert(function_type);
     llvm::Value *loaded_fn = m_Builder.CreateLoad(m_Builder.getPtrTy(), last_gep);
     assert(loaded_fn);
@@ -979,8 +979,8 @@ llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess 
         }
         llvm::Type *function_ret_type = gen_type(current_chain->type.fn_ptr_signature->first[0], mod);
         assert(function_ret_type);
-        bool is_vll = current_chain->type.fn_ptr_signature->second;
-        auto *function_type = llvm::FunctionType::get(function_ret_type, is_vll);
+        bool is_vla = current_chain->type.fn_ptr_signature->second;
+        auto *function_type = llvm::FunctionType::get(function_ret_type, is_vla);
         assert(function_type);
         std::vector<llvm::Value *> args;
         for (auto &&res_arg : *current_chain->params) {
@@ -1459,10 +1459,10 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, GeneratedModul
     llvm::Type *function_ret_type = gen_type(call.type, mod);
     assert(function_ret_type);
     bool is_fn_ptr = call.type.fn_ptr_signature.has_value();
-    bool is_vll = false;
+    bool is_vla = false;
     if (is_fn_ptr)
-      is_vll = call.type.fn_ptr_signature->second;
-    auto *function_type = llvm::FunctionType::get(function_ret_type, is_vll);
+      is_vla = call.type.fn_ptr_signature->second;
+    auto *function_type = llvm::FunctionType::get(function_ret_type, is_vla);
     assert(function_type);
     emit_debug_location(call.location, mod);
     llvm::Value *loaded_fn = m_Builder.CreateLoad(m_Builder.getPtrTy(), callee);

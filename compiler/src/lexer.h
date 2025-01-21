@@ -43,7 +43,7 @@ enum class TokenKind : char {
   LessThanOrEqual,
   Equal,
   ColonColon,
-  VLL,
+  vla,
   BitwiseShiftL = 80,
   BitwiseShiftR,
   Eof = single_char_tokens[0],

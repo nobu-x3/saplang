@@ -1871,7 +1871,7 @@ fn i32 main() {
 // @TODO: slices
 // @TODO: global and local redeclaration
 
-TEST_CASE("Extern function no VLL", "[sema]") {
+TEST_CASE("Extern function no vla", "[sema]") {
   TEST_SETUP(R"(
 extern {
     fn void* allocate(i32 lenght, i32 size) alias malloc;
@@ -1893,7 +1893,7 @@ extern sapfire {
   REQUIRE(lines_it->find(") alias sapfire::render_frame render:") != std::string::npos);
 }
 
-TEST_CASE("Extern function VLL", "[sema]") {
+TEST_CASE("Extern function vla", "[sema]") {
   TEST_SETUP(R"(
 extern {
     fn void print(u8* fmt, ...) alias printf;
@@ -1906,7 +1906,7 @@ fn void main() {
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
   REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
-  REQUIRE(lines_it->find(") VLL alias c::printf print:") != std::string::npos);
+  REQUIRE(lines_it->find(") vla alias c::printf print:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
   REQUIRE(lines_it->find(") fmt:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
