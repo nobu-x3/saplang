@@ -1921,7 +1921,7 @@ TEST_CASE("exported decls", "[parser]") {
 
 TEST_CASE("generic struct declarations", "[parser]") {
   SECTION("Single generic") {
-    TEST_SETUP_MODULE_SINGLE("test", R"(
+    TEST_SETUP(R"(
         struct<T> GenericType {
             T first;
             T* next;
@@ -1935,7 +1935,7 @@ TEST_CASE("generic struct declarations", "[parser]") {
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr T(next)");
   }
   SECTION("Two generics") {
-    TEST_SETUP_MODULE_SINGLE("test", R"(
+    TEST_SETUP(R"(
         struct<T, K> GenericType {
             T first;
             K second;
@@ -1956,7 +1956,7 @@ TEST_CASE("generic struct declarations", "[parser]") {
 
 TEST_CASE("generic type variable declaration", "[parser]") {
   SECTION("Single generic, no init") {
-    TEST_SETUP_MODULE_SINGLE("test", R"(
+    TEST_SETUP(R"(
         struct<T> GenericType {
             T first;
             T* next;
@@ -1971,7 +1971,7 @@ TEST_CASE("generic type variable declaration", "[parser]") {
     CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:GenericType<i32>");
   }
   SECTION("Two generics, no init") {
-    TEST_SETUP_MODULE_SINGLE("test", R"(
+    TEST_SETUP(R"(
         struct<T, K> GenericType {
             T first;
             K second;
