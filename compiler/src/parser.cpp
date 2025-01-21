@@ -1092,6 +1092,21 @@ std::optional<Type> Parser::parse_type() {
   if (token.kind == TokenKind::Identifier) {
     Token id_token = m_NextToken;
     eat_next_token();
+    std::vector<Type> instance_types;
+    if (m_NextToken.kind == TokenKind::LessThan) {
+      eat_next_token();
+      while (m_NextToken.kind != TokenKind::GreaterThan) {
+        std::optional<Type> parsed_type = parse_type();
+        if (!parsed_type) {
+          report(m_NextToken.location, "failed to parse generic type.");
+          return std::nullopt;
+        }
+        instance_types.emplace_back(std::move(*parsed_type));
+        if (m_NextToken.kind == TokenKind::Comma)
+          eat_next_token();
+      }
+      eat_next_token();
+    }
     uint ptr_depth = 0;
     while (m_NextToken.kind == TokenKind::Asterisk) {
       eat_next_token();
@@ -1142,7 +1157,7 @@ std::optional<Type> Parser::parse_type() {
     } else if (*id_token.value == "bool") {
       return Type::builtin_bool(ptr_depth, std::move(maybe_array_data));
     }
-    Type type = Type::custom(*id_token.value, ptr_depth, std::move(maybe_array_data));
+    Type type = Type::custom(*id_token.value, ptr_depth, std::move(maybe_array_data), std::move(instance_types));
     return type;
   }
   report(m_NextToken.location, "expected type specifier.");

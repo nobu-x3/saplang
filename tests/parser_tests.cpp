@@ -1953,3 +1953,38 @@ TEST_CASE("generic struct declarations", "[parser]") {
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr K(k_next)");
   }
 }
+
+TEST_CASE("generic type variable declaration", "[parser]") {
+  SECTION("Single generic, no init") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+        struct<T> GenericType {
+            T first;
+            T* next;
+        }
+        fn void foo() {
+            var GenericType<i32> test;
+        }
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 7;
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:GenericType<i32>");
+  }
+  SECTION("Two generics, no init") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+        struct<T, K> GenericType {
+            T first;
+            K second;
+            T* t_next;
+            K* k_next;
+        }
+        fn void foo() {
+            var GenericType<i32, f32> test;
+        }
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 9;
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:GenericType<i32, f32>");
+  }
+}
