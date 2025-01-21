@@ -851,7 +851,7 @@ std::unique_ptr<ResolvedFuncDecl> Sema::resolve_func_decl(const FunctionDecl &fu
     resolved_params.emplace_back(std::move(resolved_param));
     ++param_index;
   }
-  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type, func.module, std::move(resolved_params), nullptr, func.is_vll, func.lib,
+  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type, func.module, std::move(resolved_params), nullptr, func.is_vla, func.lib,
                                             func.og_name);
 }
 
@@ -1112,7 +1112,7 @@ std::unique_ptr<ResolvedUnaryOperator> Sema::resolve_unary_operator(const UnaryO
         for (auto &&param : fn->params) {
           fn_sig.push_back(param->type);
         }
-        resolved_rhs->type.fn_ptr_signature = std::make_pair(std::move(fn_sig), fn->is_vll);
+        resolved_rhs->type.fn_ptr_signature = std::make_pair(std::move(fn_sig), fn->is_vla);
       } else {
         ++resolved_rhs->type.pointer_depth;
       }
@@ -1638,7 +1638,7 @@ std::unique_ptr<ResolvedCallExpr> Sema::resolve_call_expr(const CallExpr &call) 
   // Normal function call
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
   if (const auto *resolved_func_decl = dynamic_cast<const ResolvedFuncDecl *>(resolved_callee->decl)) {
-    if (call.args.size() != resolved_func_decl->params.size() && !resolved_func_decl->is_vll)
+    if (call.args.size() != resolved_func_decl->params.size() && !resolved_func_decl->is_vla)
       return report(call.location, "argument count mismatch.");
     for (int i = 0; i < call.args.size(); ++i) {
       auto *decl_type = i < resolved_func_decl->params.size() ? &resolved_func_decl->params[i]->type : nullptr;
@@ -1673,10 +1673,10 @@ std::unique_ptr<ResolvedCallExpr> Sema::resolve_call_expr(const CallExpr &call) 
   } else { // could be function pointer
     if (!resolved_callee->type.fn_ptr_signature)
       return report(call.location, "calling non-function symbol.");
-    if (call.args.size() != resolved_callee->type.fn_ptr_signature->first.size() - 1 && !resolved_func_decl->is_vll)
+    if (call.args.size() != resolved_callee->type.fn_ptr_signature->first.size() - 1 && !resolved_func_decl->is_vla)
       return report(call.location, "argument count mismatch.");
     auto &fn_sig = resolved_callee->type.fn_ptr_signature->first;
-    bool is_vll = resolved_callee->type.fn_ptr_signature->second;
+    bool is_vla = resolved_callee->type.fn_ptr_signature->second;
     for (int i = 0; i < call.args.size(); ++i) {
       auto *decl_type = i < fn_sig.size() - 1 ? &fn_sig[i + 1] : nullptr;
       std::unique_ptr<ResolvedExpr> resolved_arg = resolve_expr(*call.args[i], decl_type);

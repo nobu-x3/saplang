@@ -363,7 +363,7 @@ struct ParamDecl : public Decl {
   DUMP_IMPL
 };
 
-// bool signifies whether there's a VLL
+// bool signifies whether there's a vla
 using ParameterList = std::pair<std::vector<std::unique_ptr<ParamDecl>>, bool>;
 
 struct MemberAccess : public DeclRefExpr {
@@ -471,11 +471,11 @@ struct FunctionDecl : public Decl {
   Type type;
   std::vector<std::unique_ptr<ParamDecl>> params;
   std::unique_ptr<Block> body;
-  bool is_vll;
+  bool is_vla;
   inline FunctionDecl(SourceLocation location, std::string id, Type type, std::string module, std::vector<std::unique_ptr<ParamDecl>> &&params,
-                      std::unique_ptr<Block> &&body, bool is_vll = false, std::string lib = "", std::string og_name = "", bool is_exported = false)
+                      std::unique_ptr<Block> &&body, bool is_vla = false, std::string lib = "", std::string og_name = "", bool is_exported = false)
       : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), type(std::move(type)), params(std::move(params)),
-        body(std::move(body)), is_vll(is_vll) {}
+        body(std::move(body)), is_vla(is_vla) {}
   DUMP_IMPL
 };
 
@@ -653,11 +653,11 @@ struct ResolvedParamDecl : public ResolvedDecl {
 struct ResolvedFuncDecl : public ResolvedDecl {
   std::vector<std::unique_ptr<ResolvedParamDecl>> params;
   std::unique_ptr<ResolvedBlock> body;
-  bool is_vll;
+  bool is_vla;
   inline ResolvedFuncDecl(SourceLocation loc, std::string id, Type type, std::string module, std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
-                          std::unique_ptr<ResolvedBlock> body, bool is_vll, std::string lib = "", std::string og_name = "")
+                          std::unique_ptr<ResolvedBlock> body, bool is_vla, std::string lib = "", std::string og_name = "")
       : ResolvedDecl(loc, std::move(id), std::move(type), std::move(module), std::move(lib), std::move(og_name)), params(std::move(params)),
-        body(std::move(body)), is_vll(is_vll) {}
+        body(std::move(body)), is_vla(is_vla) {}
   DUMP_IMPL
 };
 

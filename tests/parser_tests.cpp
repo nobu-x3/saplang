@@ -1506,7 +1506,7 @@ fn i32 main() {
   REQUIRE(error_stream.str() == "test:3:34 error: expected identifier in enum field access.\n");
 }
 
-TEST_CASE("Extern function no VLL", "[parser]") {
+TEST_CASE("Extern function no vla", "[parser]") {
   TEST_SETUP(R"(
 extern {
     fn void* allocate(i32 lenght, i32 size) alias malloc;
@@ -1524,7 +1524,7 @@ extern sapfire {
   CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: alias sapfire::render_frame render:void");
 }
 
-TEST_CASE("Extern function VLL", "[parser]") {
+TEST_CASE("Extern function vla", "[parser]") {
   TEST_SETUP(R"(
 extern {
     fn void print(char* fmt, ...) alias printf;
@@ -1533,7 +1533,7 @@ extern {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("FunctionDecl: VLL alias c::printf print:void") != std::string::npos);
+  REQUIRE(lines_it->find("FunctionDecl: vla alias c::printf print:void") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: fmt:ptr char");
 }
 
