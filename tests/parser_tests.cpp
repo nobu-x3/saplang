@@ -1929,8 +1929,8 @@ TEST_CASE("generic struct declarations", "[parser]") {
         )");
     REQUIRE(error_stream.str() == "");
     auto lines = break_by_line(output_buffer.str());
-    auto lines_it = lines.begin() + 1;
-    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: GenericType<T>");
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("GenericStructDecl: GenericType<T>") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(first)");
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr T(next)");
   }
@@ -1945,8 +1945,8 @@ TEST_CASE("generic struct declarations", "[parser]") {
         )");
     REQUIRE(error_stream.str() == "");
     auto lines = break_by_line(output_buffer.str());
-    auto lines_it = lines.begin() + 1;
-    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: GenericType<T, K>");
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("GenericStructDecl: GenericType<T, K>") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(first)");
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: K(second)");
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr T(t_next)");
@@ -1967,7 +1967,7 @@ TEST_CASE("generic type variable declaration", "[parser]") {
         )");
     REQUIRE(error_stream.str() == "");
     auto lines = break_by_line(output_buffer.str());
-    auto lines_it = lines.begin() + 7;
+    auto lines_it = lines.begin() + 5;
     CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:GenericType<i32>");
   }
   SECTION("Two generics, no init") {
@@ -1984,7 +1984,7 @@ TEST_CASE("generic type variable declaration", "[parser]") {
         )");
     REQUIRE(error_stream.str() == "");
     auto lines = break_by_line(output_buffer.str());
-    auto lines_it = lines.begin() + 9;
+    auto lines_it = lines.begin() + 7;
     CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:GenericType<i32, f32>");
   }
 }
