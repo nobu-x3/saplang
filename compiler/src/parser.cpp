@@ -408,8 +408,32 @@ std::unique_ptr<GenericStructDecl> Parser::parse_generic_struct_decl(SourceLocat
       eat_next_token(); // eat ','
   }
   eat_next_token(); // eat '>'
-  std::unique_ptr<StructDecl> struct_decl = parse_struct_decl(struct_token_loc);
-  return std::make_unique<GenericStructDecl>(std::move(placeholders), std::move(struct_decl));
+  if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
+    return report(m_NextToken.location, "struct type declarations must have a name.");
+  std::string id = *m_NextToken.value;
+  eat_next_token(); // eat identifier
+  if (m_NextToken.kind != TokenKind::Lbrace)
+    return report(m_NextToken.location, "struct type declarations must have a body.");
+  eat_next_token(); // eat '{'
+  std::vector<std::pair<Type, std::string>> fields{};
+  while (m_NextToken.kind != TokenKind::Rbrace) {
+    std::optional<Type> type = parse_type();
+    if (!type)
+      return nullptr;
+    auto placeholders_it = std::find(placeholders.begin(), placeholders.end(), type->name);
+    if (placeholders_it != placeholders.end())
+      type->kind = Type::Kind::Placeholder;
+    if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
+      return report(m_NextToken.location, "struct member field declarations must have a name.");
+    std::string field_name = *m_NextToken.value;
+    eat_next_token(); // eat field name
+    if (m_NextToken.kind != TokenKind::Semicolon)
+      return report(m_NextToken.location, "struct member field declarations must end with ';'.");
+    eat_next_token(); // eat ';'
+    fields.emplace_back(std::make_pair(*type, field_name));
+  }
+  eat_next_token(); // eat '}'
+  return std::make_unique<GenericStructDecl>(struct_token_loc, id, m_ModuleName, std::move(placeholders), std::move(fields));
 }
 
 // <enumDecl>

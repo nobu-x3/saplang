@@ -69,6 +69,7 @@ struct Type : public IDumpable {
     f64,
     Custom,
     FnPtr,
+    Placeholder,
     INTEGERS_START = u8,
     INTEGERS_END = i64,
     SIGNED_INT_START = i8,
@@ -122,6 +123,10 @@ struct Type : public IDumpable {
 
   static Type fn_ptr(uint pointer_depth, std::optional<FunctionSignature> fn_signature = {}) {
     return {Kind::FnPtr, "fn", pointer_depth, std::nullopt, std::move(fn_signature)};
+  }
+
+  static Type placeholder(std::string name, uint pointer_depth, std::optional<ArrayData> array_data = {}, std::optional<FunctionSignature> fn_signature = {}) {
+    return {Kind::Placeholder, std::move(name), pointer_depth, std::move(array_data), std::move(fn_signature)};
   }
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
@@ -287,7 +292,6 @@ struct GenericStructDecl : public Decl {
                            std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "", bool is_exported = false)
       : Decl(loc, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), placeholders(std::move(placeholders)),
         members(std::move(types)) {}
-  GenericStructDecl(std::vector<std::string> placeholders, std::unique_ptr<StructDecl> &&struct_decl);
   DUMP_IMPL
 };
 
@@ -537,12 +541,33 @@ struct ResolvedDecl : public IDumpable {
   virtual ~ResolvedDecl() = default;
 };
 
+struct ResolvedStructDecl : public ResolvedDecl {
+  std::vector<std::pair<Type, std::string>> members;
+  inline ResolvedStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::pair<Type, std::string>> types,
+                            std::string lib = "", std::string og_name = "")
+      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), members(std::move(types)) {}
+  DUMP_IMPL
+};
+
+struct ResolvedGenericStructDecl : public ResolvedDecl {
+  std::vector<std::string> placeholders;
+  std::vector<std::pair<Type, std::string>> members;
+  inline ResolvedGenericStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::string> placeholders,
+                                   std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "")
+      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), placeholders(std::move(placeholders)),
+        members(std::move(types)) {}
+  DUMP_IMPL
+};
+
+using GenericStructVec = std::vector<std::unique_ptr<ResolvedGenericStructDecl>>;
+
 struct ResolvedModule : public IDumpable {
   std::string name;
   std::string path;
   std::vector<std::unique_ptr<ResolvedDecl>> declarations;
-  inline ResolvedModule(std::string module_name, std::string path, std::vector<std::unique_ptr<ResolvedDecl>> decls)
-      : name(std::move(module_name)), path(std::move(path)), declarations(std::move(decls)) {}
+  GenericStructVec generic_structs;
+  inline ResolvedModule(std::string module_name, std::string path, std::vector<std::unique_ptr<ResolvedDecl>> decls, GenericStructVec generic_structs)
+      : name(std::move(module_name)), path(std::move(path)), declarations(std::move(decls)), generic_structs(std::move(generic_structs)) {}
   DUMP_IMPL
 };
 
@@ -554,14 +579,6 @@ struct ResolvedVarDecl : public ResolvedDecl {
                          bool is_global = false, std::string lib = "", std::string og_name = "")
       : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), initializer(std::move(init)), is_const(is_const),
         is_global(is_global) {}
-  DUMP_IMPL
-};
-
-struct ResolvedStructDecl : public ResolvedDecl {
-  std::vector<std::pair<Type, std::string>> members;
-  inline ResolvedStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::pair<Type, std::string>> types,
-                            std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), members(std::move(types)) {}
   DUMP_IMPL
 };
 

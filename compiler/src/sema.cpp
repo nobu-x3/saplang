@@ -517,6 +517,14 @@ bool is_leaf(const StructDecl *decl) {
   return true;
 }
 
+bool is_leaf(const GenericStructDecl *decl) {
+  for (auto &&[type, id] : decl->members) {
+    if (type.kind == Type::Kind::Custom)
+      return false;
+  }
+  return true;
+}
+
 bool Sema::resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast) {
   bool error = false;
   for (auto &&decl : ast) {
@@ -640,6 +648,87 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
   return true;
 }
 
+bool Sema::resolve_generic_struct_decls(std::vector<std::unique_ptr<ResolvedGenericStructDecl>> &resolved_decls, bool partial,
+                                        const std::vector<std::unique_ptr<Decl>> &ast) {
+  struct DeclToInspect {
+    const GenericStructDecl *decl{nullptr};
+    bool resolved{false};
+  };
+  std::vector<DeclToInspect> non_leaf_struct_decls{};
+  non_leaf_struct_decls.reserve(ast.size());
+  bool error = false;
+  for (const std::unique_ptr<Decl> &decl : ast) {
+    if (const auto *struct_decl = dynamic_cast<const GenericStructDecl *>(decl.get())) {
+      if (is_leaf(struct_decl)) {
+        std::unique_ptr<ResolvedGenericStructDecl> resolved_struct_decl = resolve_generic_struct_decl(*struct_decl);
+        bool insert_result = false;
+        if (resolved_struct_decl) {
+          bool is_exported = resolved_struct_decl->is_exported;
+          insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
+        }
+        if (!insert_result) {
+          error = true;
+          continue;
+        }
+        resolved_decls.emplace_back(std::move(resolved_struct_decl));
+      } else
+        non_leaf_struct_decls.push_back({struct_decl});
+    }
+  }
+  if (error && !partial)
+    return false;
+  if (non_leaf_struct_decls.empty())
+    return true;
+  bool decl_resolved_last_pass = true;
+  while (decl_resolved_last_pass) {
+    decl_resolved_last_pass = false;
+    for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+      bool can_now_resolve = true;
+      for (auto &&[type, id] : struct_decl->members) {
+        std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+        if (type.kind == Type::Kind::Custom && (!lookup_result || !lookup_result->decl))
+          can_now_resolve = false;
+        break;
+      }
+      if (!can_now_resolve)
+        continue;
+      std::unique_ptr<ResolvedGenericStructDecl> resolved_struct_decl = resolve_generic_struct_decl(*struct_decl);
+      bool insert_result = false;
+      if (resolved_struct_decl) {
+        bool is_exported = struct_decl->is_exported;
+        insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
+      }
+      if (!insert_result) {
+        error = true;
+        continue;
+      }
+      resolved = true;
+      resolved_decls.emplace_back(std::move(resolved_struct_decl));
+      decl_resolved_last_pass = true;
+      continue;
+    }
+    for (auto it = non_leaf_struct_decls.begin(); it != non_leaf_struct_decls.end();) {
+      if (it->resolved) {
+        non_leaf_struct_decls.erase(it);
+        --it;
+      }
+      ++it;
+    }
+  }
+  for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+    if (!resolved) {
+      for (auto &&[type, id] : struct_decl->members) {
+        std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+        if (!lookup_result)
+          report(struct_decl->location, "could not resolve type '" + type.name + "'.");
+      }
+    }
+  }
+  if (error && !partial)
+    return false;
+  return true;
+}
+
 bool Sema::resolve_global_var_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast) {
   bool error = false;
   for (const std::unique_ptr<Decl> &decl : ast) {
@@ -696,20 +785,24 @@ std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool
       insert_decl_to_global_scope(*decl);
     }
   }
-  std::vector<std::unique_ptr<ResolvedDecl>> module_ast = resolve_ast(partial, _module);
-  if (!module_ast.size())
+  AstResolveResult ast_resolution_result = resolve_ast(partial, _module);
+  if (!ast_resolution_result.resolved_ast.size() && !ast_resolution_result.resolved_generics.size())
     return nullptr;
-  return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(module_ast));
+  return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(ast_resolution_result.resolved_ast),
+                                          std::move(ast_resolution_result.resolved_generics));
 }
 
-std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial, const Module &mod) {
+Sema::AstResolveResult Sema::resolve_ast(bool partial, const Module &mod) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
+  GenericStructVec resolved_generics{};
   Scope module_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
   if (!resolve_enum_decls(resolved_decls, partial, mod.declarations))
     return {};
   if (!resolve_struct_decls(resolved_decls, partial, mod.declarations))
+    return {};
+  if (!resolve_generic_struct_decls(resolved_generics, partial, mod.declarations))
     return {};
   if (!resolve_global_var_decls(resolved_decls, partial, mod.declarations))
     return {};
@@ -763,8 +856,9 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial, const
   }
   if (error && !partial)
     return {};
-  return resolved_decls;
+  return {std::move(resolved_decls), std::move(resolved_generics)};
 }
+
 std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
   Scope global_scope(this);
@@ -992,6 +1086,17 @@ std::unique_ptr<ResolvedStructDecl> Sema::resolve_struct_decl(const StructDecl &
     types.emplace_back(std::make_pair(std::move(*resolved_type), std::move(id)));
   }
   return std::make_unique<ResolvedStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), decl.module, std::move(types));
+}
+
+std::unique_ptr<ResolvedGenericStructDecl> Sema::resolve_generic_struct_decl(const GenericStructDecl &decl) {
+  std::vector<std::pair<Type, std::string>> types;
+  for (auto &&[type, id] : decl.members) {
+    std::optional<Type> resolved_type = resolve_type(type);
+    if (!resolved_type)
+      return nullptr;
+    types.emplace_back(std::make_pair(std::move(*resolved_type), std::move(id)));
+  }
+  return std::make_unique<ResolvedGenericStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), decl.module, decl.placeholders, std::move(types));
 }
 
 std::unique_ptr<ResolvedEnumDecl> Sema::resolve_enum_decl(const EnumDecl &decl) {
