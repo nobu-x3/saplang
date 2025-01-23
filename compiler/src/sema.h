@@ -39,9 +39,13 @@ public:
   inline std::unordered_map<std::string, TypeInfo> &&move_type_infos() { return std::move(m_TypeInfos); }
 
 private:
+  struct AstResolveResult {
+        std::vector<std::unique_ptr<ResolvedDecl>> resolved_ast;
+        GenericStructVec resolved_generics;
+  };
   std::unique_ptr<ResolvedModule> resolve_module(const Module &mod, bool partial);
 
-  std::vector<std::unique_ptr<ResolvedDecl>> resolve_ast(bool partial, const Module &mod);
+  AstResolveResult resolve_ast(bool partial, const Module &mod);
 
   void init_builtin_type_infos();
 
@@ -50,6 +54,9 @@ private:
   std::optional<DeclLookupResult> lookup_decl(std::string_view id, std::optional<const Type *> type = std::nullopt);
 
   bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast);
+
+  bool resolve_generic_struct_decls(std::vector<std::unique_ptr<ResolvedGenericStructDecl>> &resolved_decls, bool partial,
+                                    const std::vector<std::unique_ptr<Decl>> &ast);
 
   bool resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast);
 
@@ -108,6 +115,8 @@ private:
   std::unique_ptr<ResolvedVarDecl> resolve_var_decl(const VarDecl &decl);
 
   std::unique_ptr<ResolvedStructDecl> resolve_struct_decl(const StructDecl &decl);
+
+  std::unique_ptr<ResolvedGenericStructDecl> resolve_generic_struct_decl(const GenericStructDecl &decl);
 
   std::unique_ptr<ResolvedEnumDecl> resolve_enum_decl(const EnumDecl &decl);
 

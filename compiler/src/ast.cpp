@@ -296,11 +296,6 @@ void StructDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) 
   }
 }
 
-GenericStructDecl::GenericStructDecl(std::vector<std::string> placeholders, std::unique_ptr<StructDecl> &&struct_decl)
-    : Decl(std::move(struct_decl->location), std::move(struct_decl->id), std::move(struct_decl->module), std::move(struct_decl->lib),
-           std::move(struct_decl->og_name), struct_decl->is_exported),
-      placeholders(std::move(placeholders)), members(std::move(struct_decl->members)) {}
-
 void GenericStructDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   std::string lib_og_name_resolve = "";
   if (!lib.empty() && !og_name.empty()) {
@@ -558,6 +553,9 @@ void ResolvedParamDecl::dump_to_stream(std::stringstream &stream, size_t indent_
 
 void ResolvedModule::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedModule(" << name << "):\n";
+  for (auto &&decl : generic_structs) {
+    decl->dump_to_stream(stream, indent_level + 1);
+  }
   for (auto &&decl : declarations) {
     decl->dump_to_stream(stream, indent_level + 1);
   }
@@ -589,6 +587,30 @@ void ResolvedStructDecl::dump_to_stream(std::stringstream &stream, size_t indent
     lib_og_name_resolve = "alias " + og_name;
   stream << indent(indent_level) << (is_exported ? "exported " : "") << "ResolvedStructDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ")
          << id << "\n";
+  int member_index = 0;
+  for (auto &&[type, name] : members) {
+    stream << indent(indent_level + 1) << member_index << ". ResolvedMemberField: ";
+    type.dump_to_stream(stream, 0);
+    stream << "(" << name << ")\n";
+    ++member_index;
+  }
+}
+
+void ResolvedGenericStructDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  std::string lib_og_name_resolve = "";
+  if (!lib.empty() && !og_name.empty()) {
+    lib_og_name_resolve = "alias " + lib + "::" + og_name;
+  } else if (!lib.empty())
+    lib_og_name_resolve = lib;
+  else if (!og_name.empty())
+    lib_og_name_resolve = "alias " + og_name;
+  stream << indent(indent_level) << (is_exported ? "exported " : "")
+         << "ResolvedGenericStructDecl: " << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << "<";
+  stream << placeholders.front();
+  for (int i = 1; i < placeholders.size(); ++i) {
+    stream << ", " << placeholders[i];
+  }
+  stream << ">\n";
   int member_index = 0;
   for (auto &&[type, name] : members) {
     stream << indent(indent_level + 1) << member_index << ". ResolvedMemberField: ";

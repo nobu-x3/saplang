@@ -9,7 +9,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                             \
+  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                            \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
   for (auto &&fn : resolved_ast) {                                                                                                                             \
     fn->dump_to_stream(output_buffer);                                                                                                                         \
@@ -24,7 +24,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                             \
+  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                            \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
   sema.dump_type_infos_to_stream(output_buffer, 0);                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
@@ -37,10 +37,27 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                             \
+  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                            \
   auto resolved_ast = sema.resolve_ast(true);                                                                                                                  \
   for (auto &&fn : resolved_ast) {                                                                                                                             \
     fn->dump_to_stream(output_buffer);                                                                                                                         \
+  }                                                                                                                                                            \
+  const auto &error_stream = saplang::get_error_stream();
+
+#define TEST_SETUP_MODULE_SINGLE(module_name, file_contents)                                                                                                   \
+  saplang::clear_error_stream();                                                                                                                               \
+  std::stringstream buffer{file_contents};                                                                                                                     \
+  std::stringstream output_buffer{};                                                                                                                           \
+  saplang::SourceFile src_file{module_name, buffer.str()};                                                                                                     \
+  saplang::Lexer lexer{src_file};                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
+  std::vector<std::unique_ptr<saplang::Module>> modules;                                                                                                       \
+  auto parse_result = parser.parse_source_file();                                                                                                              \
+  modules.emplace_back(std ::move(parse_result.module));                                                                                                       \
+  saplang ::Sema sema{std::move(modules)};                                                                                                                     \
+  auto resolved_modules = sema.resolve_modules();                                                                                                              \
+  for (auto &&mod : resolved_modules) {                                                                                                                        \
+    mod->dump_to_stream(output_buffer, 0);                                                                                                                     \
   }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
 
@@ -2678,4 +2695,17 @@ fn void main() {
   REQUIRE(lines_it->find(") free:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") ptr4:") != std::string::npos);
+}
+
+TEST_CASE("generic struct decl", "[sema]") {
+  TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic {
+    T value;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic<T>");
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: T(value)");
 }
