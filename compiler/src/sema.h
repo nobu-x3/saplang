@@ -40,8 +40,7 @@ public:
 
 private:
   struct AstResolveResult {
-        std::vector<std::unique_ptr<ResolvedDecl>> resolved_ast;
-        GenericStructVec resolved_generics;
+    std::vector<std::unique_ptr<ResolvedDecl>> resolved_ast;
   };
   std::unique_ptr<ResolvedModule> resolve_module(const Module &mod, bool partial);
 
@@ -55,8 +54,7 @@ private:
 
   bool resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast);
 
-  bool resolve_generic_struct_decls(std::vector<std::unique_ptr<ResolvedGenericStructDecl>> &resolved_decls, bool partial,
-                                    const std::vector<std::unique_ptr<Decl>> &ast);
+  bool resolve_generic_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast);
 
   bool resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast);
 
@@ -65,6 +63,8 @@ private:
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
   bool insert_decl_to_global_scope(ResolvedDecl &decl);
+
+  bool instantiate_generic_type(const DeclLookupResult &generic_decl, std::string_view instance_name, const std::vector<Type> &instance_types);
 
   std::optional<Type> resolve_type(Type parsed_type);
 
@@ -141,6 +141,7 @@ private:
   // @NOTE: deprecated
   std::vector<std::unique_ptr<Decl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};
+  std::vector<std::unique_ptr<ResolvedDecl>> m_GenericInstances{};
   std::unordered_map<std::string, std::unique_ptr<ResolvedModule>> m_ResolvedModules{};
   std::unordered_map<std::string, TypeInfo> m_TypeInfos;
   ResolvedFuncDecl *m_CurrFunction{nullptr};
