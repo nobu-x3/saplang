@@ -2709,3 +2709,31 @@ struct<T> Generic {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic<T>");
   CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: T(value)");
 }
+
+TEST_CASE("generic struct use", "[sema]") {
+  TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic {
+    T value;
+}
+fn void main() {
+    var Generic<i32> gen = .{69};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic<T>");
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: T(value)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") gen:__Generic_i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: __Generic_i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: value");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(69)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic_i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(value)");
+}

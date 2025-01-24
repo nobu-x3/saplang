@@ -648,7 +648,7 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
   return true;
 }
 
-bool Sema::resolve_generic_struct_decls(std::vector<std::unique_ptr<ResolvedGenericStructDecl>> &resolved_decls, bool partial,
+bool Sema::resolve_generic_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial,
                                         const std::vector<std::unique_ptr<Decl>> &ast) {
   struct DeclToInspect {
     const GenericStructDecl *decl{nullptr};
@@ -786,15 +786,13 @@ std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool
     }
   }
   AstResolveResult ast_resolution_result = resolve_ast(partial, _module);
-  if (!ast_resolution_result.resolved_ast.size() && !ast_resolution_result.resolved_generics.size())
+  if (!ast_resolution_result.resolved_ast.size())
     return nullptr;
-  return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(ast_resolution_result.resolved_ast),
-                                          std::move(ast_resolution_result.resolved_generics));
+  return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(ast_resolution_result.resolved_ast));
 }
 
 Sema::AstResolveResult Sema::resolve_ast(bool partial, const Module &mod) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
-  GenericStructVec resolved_generics{};
   Scope module_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
@@ -802,7 +800,7 @@ Sema::AstResolveResult Sema::resolve_ast(bool partial, const Module &mod) {
     return {};
   if (!resolve_struct_decls(resolved_decls, partial, mod.declarations))
     return {};
-  if (!resolve_generic_struct_decls(resolved_generics, partial, mod.declarations))
+  if (!resolve_generic_struct_decls(resolved_decls, partial, mod.declarations))
     return {};
   if (!resolve_global_var_decls(resolved_decls, partial, mod.declarations))
     return {};
@@ -854,9 +852,12 @@ Sema::AstResolveResult Sema::resolve_ast(bool partial, const Module &mod) {
       }
     }
   }
+  for (int i = 0; i < m_GenericInstances.size(); ++i) {
+    resolved_decls.emplace_back(std::move(m_GenericInstances[i]));
+  }
   if (error && !partial)
     return {};
-  return {std::move(resolved_decls), std::move(resolved_generics)};
+  return {std::move(resolved_decls)};
 }
 
 std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
@@ -925,9 +926,77 @@ std::optional<Type> Sema::resolve_type(Type parsed_type) {
       return std::nullopt;
     if (const auto *enum_decl = dynamic_cast<const ResolvedEnumDecl *>(decl->decl))
       return enum_decl->type;
+    if (const auto *generic_decl = dynamic_cast<const ResolvedGenericStructDecl *>(decl->decl)) {
+      if (!parsed_type.instance_types.size())
+        return std::nullopt;
+      std::string instance_name = "__" + parsed_type.name;
+      std::vector<Type> resolved_types{};
+      resolved_types.reserve(parsed_type.instance_types.size());
+      for (int i = 0; i < parsed_type.instance_types.size(); ++i) {
+        const Type &instance_type = parsed_type.instance_types[i];
+        auto resolved_instance_type = resolve_type(instance_type);
+        if (!resolved_instance_type)
+          return std::nullopt;
+        instance_name += "_" + resolved_instance_type->name;
+        resolved_types.emplace_back(std::move(*resolved_instance_type));
+      }
+      auto instance_decl = lookup_decl(instance_name);
+      // means we haven't instantiated the generic for given types, so do it
+      if (!instance_decl) {
+        if (!instantiate_generic_type(*decl, instance_name, resolved_types))
+          return std::nullopt;
+        instance_decl = lookup_decl(instance_name);
+        if (!instance_decl)
+          return std::nullopt;
+      }
+      return instance_decl->decl->type;
+    }
     return parsed_type;
   }
   return parsed_type;
+}
+
+bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::string_view instance_name, const std::vector<Type> &instance_types) {
+  if (!generic_decl.decl)
+    return false;
+  if (const ResolvedGenericStructDecl *generic_struct_decl = dynamic_cast<const ResolvedGenericStructDecl *>(generic_decl.decl)) {
+    const std::vector<std::string> &placeholders = generic_struct_decl->placeholders;
+    const std::vector<std::pair<Type, std::string>> &members = generic_struct_decl->members;
+    if (instance_types.size() != placeholders.size()) {
+      report(generic_decl.decl->location, "inconsistent number of types given to instantiation of a generic.");
+      return false;
+    }
+    int placeholder_index = 0;
+    std::vector<std::pair<Type, std::string>> resolved_instance_types;
+    for (int i = 0; i < members.size(); ++i) {
+      auto &&[type, name] = members.at(i);
+      auto maybe_type = resolve_type(type);
+      if (!maybe_type) {
+        report(generic_struct_decl->location, "could not resolved type '" + type.name + "'.");
+        return false;
+      }
+      Type resolved_type = *maybe_type;
+      if (resolved_type.kind == Type::Kind::Placeholder) {
+        resolved_type = instance_types[placeholder_index];
+        ++placeholder_index;
+      }
+      resolved_instance_types.push_back(std::make_pair(resolved_type, name));
+    }
+    std::string instance_name_copy{instance_name};
+    m_GenericInstances.emplace_back(std::make_unique<ResolvedStructDecl>(generic_struct_decl->location, instance_name_copy,
+                                                                         Type::custom(instance_name_copy, false), generic_struct_decl->module,
+                                                                         std::move(resolved_instance_types)));
+    auto struct_instance = dynamic_cast<ResolvedStructDecl *>(m_GenericInstances.back().get());
+    bool insert_result = false;
+    if (struct_instance) {
+      init_type_info(*struct_instance);
+      bool is_exported = struct_instance->is_exported;
+      insert_result = is_exported ? insert_decl_to_global_scope(*struct_instance) : insert_decl_to_current_scope(*struct_instance);
+    }
+    return insert_result;
+  }
+  assert(false);
+  return false;
 }
 
 std::unique_ptr<ResolvedFuncDecl> Sema::resolve_func_decl(const FunctionDecl &func) {

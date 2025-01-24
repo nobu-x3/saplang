@@ -565,9 +565,8 @@ struct ResolvedModule : public IDumpable {
   std::string name;
   std::string path;
   std::vector<std::unique_ptr<ResolvedDecl>> declarations;
-  GenericStructVec generic_structs;
-  inline ResolvedModule(std::string module_name, std::string path, std::vector<std::unique_ptr<ResolvedDecl>> decls, GenericStructVec generic_structs)
-      : name(std::move(module_name)), path(std::move(path)), declarations(std::move(decls)), generic_structs(std::move(generic_structs)) {}
+  inline ResolvedModule(std::string module_name, std::string path, std::vector<std::unique_ptr<ResolvedDecl>> decls)
+      : name(std::move(module_name)), path(std::move(path)), declarations(std::move(decls)) {}
   DUMP_IMPL
 };
 

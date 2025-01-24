@@ -553,9 +553,6 @@ void ResolvedParamDecl::dump_to_stream(std::stringstream &stream, size_t indent_
 
 void ResolvedModule::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedModule(" << name << "):\n";
-  for (auto &&decl : generic_structs) {
-    decl->dump_to_stream(stream, indent_level + 1);
-  }
   for (auto &&decl : declarations) {
     decl->dump_to_stream(stream, indent_level + 1);
   }
