@@ -2737,3 +2737,26 @@ fn void main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic_i32");
   CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(value)");
 }
+
+TEST_CASE("generic in struct", "[sema]") {
+  SECTION("1-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic {
+    T value;
+}
+
+struct Specific {
+    Generic<i32> generic;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: T(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: Specific");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: __Generic_i32(generic)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(value)");
+  }
+}

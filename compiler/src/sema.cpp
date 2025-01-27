@@ -568,7 +568,7 @@ void Sema::init_type_info(ResolvedStructDecl &decl) {
 
 bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast) {
   struct DeclToInspect {
-    const StructDecl *decl{nullptr};
+    const Decl *decl{nullptr};
     bool resolved{false};
   };
   std::vector<DeclToInspect> non_leaf_struct_decls{};
@@ -581,7 +581,8 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
         init_type_info(*resolved_struct_decl);
         bool insert_result = false;
         if (resolved_struct_decl) {
-          bool is_exported = resolved_struct_decl->is_exported;
+          bool is_exported = decl->is_exported;
+          resolved_struct_decl->is_exported = is_exported;
           insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
         }
         if (!insert_result) {
@@ -589,8 +590,26 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
           continue;
         }
         resolved_decls.emplace_back(std::move(resolved_struct_decl));
-      } else
+      } else {
         non_leaf_struct_decls.push_back({struct_decl});
+      }
+    } else if (const auto *generic_struct = dynamic_cast<const GenericStructDecl *>(decl.get())) {
+      if (is_leaf(generic_struct)) {
+        std::unique_ptr<ResolvedGenericStructDecl> resolved_gen_struct = resolve_generic_struct_decl(*generic_struct);
+        bool insert_result = false;
+        if (resolved_gen_struct) {
+          bool is_exported = decl->is_exported;
+          resolved_gen_struct->is_exported = is_exported;
+          insert_result = is_exported ? insert_decl_to_global_scope(*resolved_gen_struct) : insert_decl_to_current_scope(*resolved_gen_struct);
+        }
+        if (!insert_result) {
+          error = true;
+          continue;
+        }
+        resolved_decls.emplace_back(std::move(resolved_gen_struct));
+      } else {
+        non_leaf_struct_decls.push_back({generic_struct});
+      }
     }
   }
   if (error && !partial)
@@ -600,112 +619,60 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
   bool decl_resolved_last_pass = true;
   while (decl_resolved_last_pass) {
     decl_resolved_last_pass = false;
-    for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+    for (auto &&[decl, resolved] : non_leaf_struct_decls) {
       bool can_now_resolve = true;
-      for (auto &&[type, id] : struct_decl->members) {
-        std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
-        if (type.kind == Type::Kind::Custom && (!lookup_result || !lookup_result->decl))
-          can_now_resolve = false;
-        break;
-      }
-      if (!can_now_resolve)
-        continue;
-      std::unique_ptr<ResolvedStructDecl> resolved_struct_decl = resolve_struct_decl(*struct_decl);
-      bool insert_result = false;
-      if (resolved_struct_decl) {
-        bool is_exported = struct_decl->is_exported;
-        insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
-      }
-      if (!insert_result) {
-        error = true;
-        continue;
-      }
-      resolved = true;
-      init_type_info(*resolved_struct_decl);
-      resolved_decls.emplace_back(std::move(resolved_struct_decl));
-      decl_resolved_last_pass = true;
-      continue;
-    }
-    for (auto it = non_leaf_struct_decls.begin(); it != non_leaf_struct_decls.end();) {
-      if (it->resolved) {
-        non_leaf_struct_decls.erase(it);
-        --it;
-      }
-      ++it;
-    }
-  }
-  for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
-    if (!resolved) {
-      for (auto &&[type, id] : struct_decl->members) {
-        std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
-        if (!lookup_result)
-          report(struct_decl->location, "could not resolve type '" + type.name + "'.");
-      }
-    }
-  }
-  if (error && !partial)
-    return false;
-  return true;
-}
-
-bool Sema::resolve_generic_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial,
-                                        const std::vector<std::unique_ptr<Decl>> &ast) {
-  struct DeclToInspect {
-    const GenericStructDecl *decl{nullptr};
-    bool resolved{false};
-  };
-  std::vector<DeclToInspect> non_leaf_struct_decls{};
-  non_leaf_struct_decls.reserve(ast.size());
-  bool error = false;
-  for (const std::unique_ptr<Decl> &decl : ast) {
-    if (const auto *struct_decl = dynamic_cast<const GenericStructDecl *>(decl.get())) {
-      if (is_leaf(struct_decl)) {
-        std::unique_ptr<ResolvedGenericStructDecl> resolved_struct_decl = resolve_generic_struct_decl(*struct_decl);
+      if (const StructDecl *struct_decl = dynamic_cast<const StructDecl *>(decl)) {
+        for (auto &&[type, id] : struct_decl->members) {
+          std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+          if (type.kind == Type::Kind::Custom && (!lookup_result || !lookup_result->decl)) {
+            can_now_resolve = false;
+            break;
+          }
+        }
+        if (!can_now_resolve)
+          continue;
+        std::unique_ptr<ResolvedStructDecl> resolved_struct_decl = resolve_struct_decl(*struct_decl);
         bool insert_result = false;
         if (resolved_struct_decl) {
-          bool is_exported = resolved_struct_decl->is_exported;
+          bool is_exported = decl->is_exported;
+          resolved_struct_decl->is_exported = is_exported;
           insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
         }
         if (!insert_result) {
           error = true;
           continue;
         }
+        resolved = true;
+        init_type_info(*resolved_struct_decl);
         resolved_decls.emplace_back(std::move(resolved_struct_decl));
-      } else
-        non_leaf_struct_decls.push_back({struct_decl});
-    }
-  }
-  if (error && !partial)
-    return false;
-  if (non_leaf_struct_decls.empty())
-    return true;
-  bool decl_resolved_last_pass = true;
-  while (decl_resolved_last_pass) {
-    decl_resolved_last_pass = false;
-    for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
-      bool can_now_resolve = true;
-      for (auto &&[type, id] : struct_decl->members) {
-        std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
-        if (type.kind == Type::Kind::Custom && (!lookup_result || !lookup_result->decl))
-          can_now_resolve = false;
-        break;
-      }
-      if (!can_now_resolve)
+        decl_resolved_last_pass = true;
         continue;
-      std::unique_ptr<ResolvedGenericStructDecl> resolved_struct_decl = resolve_generic_struct_decl(*struct_decl);
-      bool insert_result = false;
-      if (resolved_struct_decl) {
-        bool is_exported = struct_decl->is_exported;
-        insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
-      }
-      if (!insert_result) {
-        error = true;
+      } else if (const GenericStructDecl *gen_struct_decl = dynamic_cast<const GenericStructDecl *>(decl)) {
+        for (auto &&[type, id] : gen_struct_decl->members) {
+          std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+          if (type.kind == Type::Kind::Custom && (!lookup_result || !lookup_result->decl)) {
+            can_now_resolve = false;
+            break;
+          }
+        }
+        if (!can_now_resolve)
+          continue;
+        std::unique_ptr<ResolvedGenericStructDecl> resolved_struct_decl = resolve_generic_struct_decl(*gen_struct_decl);
+        bool insert_result = false;
+        if (resolved_struct_decl) {
+          bool is_exported = decl->is_exported;
+          resolved_struct_decl->is_exported = is_exported;
+          insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
+        }
+        if (!insert_result) {
+          error = true;
+          continue;
+        }
+        resolved = true;
+        resolved_decls.emplace_back(std::move(resolved_struct_decl));
+        decl_resolved_last_pass = true;
         continue;
       }
-      resolved = true;
-      resolved_decls.emplace_back(std::move(resolved_struct_decl));
-      decl_resolved_last_pass = true;
-      continue;
     }
     for (auto it = non_leaf_struct_decls.begin(); it != non_leaf_struct_decls.end();) {
       if (it->resolved) {
@@ -715,12 +682,20 @@ bool Sema::resolve_generic_struct_decls(std::vector<std::unique_ptr<ResolvedDecl
       ++it;
     }
   }
-  for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+  for (auto &&[decl, resolved] : non_leaf_struct_decls) {
     if (!resolved) {
-      for (auto &&[type, id] : struct_decl->members) {
-        std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
-        if (!lookup_result)
-          report(struct_decl->location, "could not resolve type '" + type.name + "'.");
+      if (const StructDecl *struct_decl = dynamic_cast<const StructDecl *>(decl)) {
+        for (auto &&[type, id] : struct_decl->members) {
+          std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+          if (!lookup_result)
+            report(struct_decl->location, "could not resolve type '" + type.name + "'.");
+        }
+      } else if (const GenericStructDecl *struct_decl = dynamic_cast<const GenericStructDecl *>(decl)) {
+        for (auto &&[type, id] : struct_decl->members) {
+          std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+          if (!lookup_result)
+            report(struct_decl->location, "could not resolve type '" + type.name + "'.");
+        }
       }
     }
   }
@@ -799,8 +774,6 @@ Sema::AstResolveResult Sema::resolve_ast(bool partial, const Module &mod) {
   if (!resolve_enum_decls(resolved_decls, partial, mod.declarations))
     return {};
   if (!resolve_struct_decls(resolved_decls, partial, mod.declarations))
-    return {};
-  if (!resolve_generic_struct_decls(resolved_decls, partial, mod.declarations))
     return {};
   if (!resolve_global_var_decls(resolved_decls, partial, mod.declarations))
     return {};
@@ -972,7 +945,7 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
       auto &&[type, name] = members.at(i);
       auto maybe_type = resolve_type(type);
       if (!maybe_type) {
-        report(generic_struct_decl->location, "could not resolved type '" + type.name + "'.");
+        report(generic_struct_decl->location, "could not resolved generic type '" + type.name + "'.");
         return false;
       }
       Type resolved_type = *maybe_type;
@@ -990,7 +963,8 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
     bool insert_result = false;
     if (struct_instance) {
       init_type_info(*struct_instance);
-      bool is_exported = struct_instance->is_exported;
+      bool is_exported = generic_decl.decl->is_exported;
+      struct_instance->is_exported = is_exported;
       insert_result = is_exported ? insert_decl_to_global_scope(*struct_instance) : insert_decl_to_current_scope(*struct_instance);
     }
     return insert_result;
