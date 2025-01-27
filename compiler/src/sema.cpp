@@ -905,14 +905,21 @@ std::optional<Type> Sema::resolve_type(Type parsed_type) {
       std::string instance_name = "__" + parsed_type.name;
       std::vector<Type> resolved_types{};
       resolved_types.reserve(parsed_type.instance_types.size());
+      bool should_instantiate = true;
       for (int i = 0; i < parsed_type.instance_types.size(); ++i) {
         const Type &instance_type = parsed_type.instance_types[i];
         auto resolved_instance_type = resolve_type(instance_type);
         if (!resolved_instance_type)
           return std::nullopt;
+        if (instance_type.kind == Type::Kind::Placeholder && !instance_type.instance_types.size()) {
+          should_instantiate = false;
+          break;
+        }
         instance_name += "_" + resolved_instance_type->name;
         resolved_types.emplace_back(std::move(*resolved_instance_type));
       }
+      if (!should_instantiate)
+        return parsed_type;
       auto instance_decl = lookup_decl(instance_name);
       // means we haven't instantiated the generic for given types, so do it
       if (!instance_decl) {
@@ -942,7 +949,20 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
     int placeholder_index = 0;
     std::vector<std::pair<Type, std::string>> resolved_instance_types;
     for (int i = 0; i < members.size(); ++i) {
-      auto &&[type, name] = members.at(i);
+      auto &&[const_type, name] = members.at(i);
+      // Need to make a copy in case generic contains another generic
+      Type type = const_type;
+      if(type.kind == Type::Kind::Custom && type.instance_types.size()) {
+          for(int j = 0; j < type.instance_types.size(); ++j) {
+              int inner_placeholder_index = 0;
+              for(auto&& placeholder : placeholders) {
+                  if(placeholders[inner_placeholder_index] == type.instance_types[j].name) {
+                      type.instance_types[j] = instance_types[inner_placeholder_index];
+                  }
+                  ++inner_placeholder_index;
+              }
+          }
+      }
       auto maybe_type = resolve_type(type);
       if (!maybe_type) {
         report(generic_struct_decl->location, "could not resolved generic type '" + type.name + "'.");
@@ -951,6 +971,10 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
       Type resolved_type = *maybe_type;
       if (resolved_type.kind == Type::Kind::Placeholder) {
         resolved_type = instance_types[placeholder_index];
+        resolved_type.array_data = type.array_data;
+        resolved_type.fn_ptr_signature = type.fn_ptr_signature;
+        resolved_type.pointer_depth = type.pointer_depth;
+        resolved_type.dereference_counts = type.dereference_counts;
         ++placeholder_index;
       }
       resolved_instance_types.push_back(std::make_pair(resolved_type, name));

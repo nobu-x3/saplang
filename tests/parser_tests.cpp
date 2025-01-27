@@ -1988,3 +1988,50 @@ TEST_CASE("generic type variable declaration", "[parser]") {
     CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:GenericType<i32, f32>");
   }
 }
+
+TEST_CASE("generic in struct", "[parser]") {
+  SECTION("1-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic {
+    T value;
+}
+
+struct Specific {
+    Generic<i32> generic;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: Generic<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: Specific");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: Generic<i32>(generic)");
+  }
+  SECTION("2-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic1 {
+    T value;
+}
+
+struct<T> Generic2 {
+    Generic1<T> gen1;
+    T val2;
+}
+
+struct Specific {
+    Generic2<i32> generic;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: Generic1<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: Generic2<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: Generic1<T>(gen1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(val2)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: Specific");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: Generic2<i32>(generic)");
+  }
+}

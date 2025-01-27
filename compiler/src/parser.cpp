@@ -423,6 +423,12 @@ std::unique_ptr<GenericStructDecl> Parser::parse_generic_struct_decl(SourceLocat
     auto placeholders_it = std::find(placeholders.begin(), placeholders.end(), type->name);
     if (placeholders_it != placeholders.end())
       type->kind = Type::Kind::Placeholder;
+    for (auto &&inner_inst_type : type->instance_types) {
+      auto inner_placeholder_it = std::find(placeholders.begin(), placeholders.end(), inner_inst_type.name);
+      if (inner_placeholder_it != placeholders.end()) {
+        inner_inst_type.kind = Type::Kind::Placeholder;
+      }
+    }
     if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value)
       return report(m_NextToken.location, "struct member field declarations must have a name.");
     std::string field_name = *m_NextToken.value;
