@@ -543,6 +543,7 @@ struct ResolvedDecl : public IDumpable {
 
 struct ResolvedStructDecl : public ResolvedDecl {
   std::vector<std::pair<Type, std::string>> members;
+  bool is_leaf{false};
   inline ResolvedStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::pair<Type, std::string>> types,
                             std::string lib = "", std::string og_name = "")
       : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), members(std::move(types)) {}
@@ -552,6 +553,7 @@ struct ResolvedStructDecl : public ResolvedDecl {
 struct ResolvedGenericStructDecl : public ResolvedDecl {
   std::vector<std::string> placeholders;
   std::vector<std::pair<Type, std::string>> members;
+  bool is_leaf{false};
   inline ResolvedGenericStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::string> placeholders,
                                    std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "")
       : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), placeholders(std::move(placeholders)),

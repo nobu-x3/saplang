@@ -57,6 +57,10 @@ std::unique_ptr<llvm::Module> Codegen::generate_ir() {
 }
 
 std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::generate_modules() {
+  struct GenStructResult {
+    const ResolvedStructDecl *decl;
+    bool resolved{false};
+  };
   m_Modules.reserve(m_ResolvedModules.size());
   for (auto &&mod : m_ResolvedModules) {
     if (m_Modules.count(mod->name))
@@ -79,13 +83,33 @@ std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::gener
       current_module->debug_info->cu =
           current_module->di_builder->createCompileUnit(llvm::dwarf::DW_LANG_C, current_module->debug_info->file, "saplang compiler", false, "", 0);
     }
+    std::vector<GenStructResult> non_leaf_structs;
     for (auto &&decl : mod->declarations) {
       if (const auto *func = dynamic_cast<const ResolvedFuncDecl *>(decl.get()))
         gen_func_decl(*func, *current_module);
-      else if (const auto *struct_decl = dynamic_cast<const ResolvedStructDecl *>(decl.get()))
+      else if (const auto *struct_decl = dynamic_cast<const ResolvedStructDecl *>(decl.get())) {
+        if (!struct_decl->is_leaf) {
+          non_leaf_structs.push_back({struct_decl});
+          continue;
+        }
         gen_struct_decl(*struct_decl, *current_module);
-      else if (const auto *global_var_decl = dynamic_cast<const ResolvedVarDecl *>(decl.get()))
+      } else if (const auto *global_var_decl = dynamic_cast<const ResolvedVarDecl *>(decl.get()))
         gen_global_var_decl(*global_var_decl, *current_module);
+    }
+    bool decl_resolved_last_pass = true;
+    while (decl_resolved_last_pass) {
+      decl_resolved_last_pass = false;
+      for (auto &&struct_decl_res : non_leaf_structs) {
+        struct_decl_res.resolved = gen_struct_decl(*struct_decl_res.decl, *current_module);
+        decl_resolved_last_pass |= struct_decl_res.resolved;
+      }
+      for (auto it = non_leaf_structs.begin(); it != non_leaf_structs.end();) {
+        if (it->resolved) {
+          non_leaf_structs.erase(it);
+          --it;
+        }
+        ++it;
+      }
     }
     m_Modules[mod->name] = std::move(current_module);
   }
@@ -264,15 +288,20 @@ llvm::Constant *Codegen::get_constant_number_value(const ResolvedNumberLiteral &
   return nullptr;
 }
 
-void Codegen::gen_struct_decl(const ResolvedStructDecl &decl, GeneratedModule &mod) {
+bool Codegen::gen_struct_decl(const ResolvedStructDecl &decl, GeneratedModule &mod) {
   std::vector<llvm::Type *> member_types{};
   for (auto &&[type, name] : decl.members) {
-    member_types.emplace_back(gen_type(type, mod));
+    auto *gened_type = gen_type(type, mod);
+    if (!gened_type)
+      return false;
+    assert(gened_type);
+    member_types.emplace_back(gened_type);
   }
   llvm::ArrayRef<llvm::Type *> array_ref{member_types};
   llvm::StructType *struct_type = llvm::StructType::create(m_Context, array_ref, decl.id);
   assert(struct_type);
   m_CustomTypes[decl.id] = struct_type;
+  return true;
 }
 
 void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) {
@@ -441,12 +470,12 @@ llvm::DIType *get_debug_type_from_llvm_type(const llvm::Type *type, GeneratedMod
     for (int i = 0; i < type->getStructNumElements(); ++i) {
       llvm::Type *subtype = type->getStructElementType(i);
       llvm::DIType *di_type = get_debug_type_from_llvm_type(subtype, mod, type_infos);
-      metadata.push_back(
-          mod.di_builder->createMemberType(scope, type_info.field_names[i], file, i, type_info.field_sizes[i] * 8, di_type->getAlignInBits(), offset, llvm::DINode::FlagZero, di_type));
+      metadata.push_back(mod.di_builder->createMemberType(scope, type_info.field_names[i], file, i, type_info.field_sizes[i] * 8, di_type->getAlignInBits(),
+                                                          offset, llvm::DINode::FlagZero, di_type));
       offset += type_info.field_sizes[i] * 8;
     }
-    return mod.di_builder->createStructType(scope, type->getStructName(), file, 0, type_info.total_size * 8, type_info.alignment * 8, llvm::DINode::FlagZero, nullptr,
-                                            mod.di_builder->getOrCreateArray(metadata));
+    return mod.di_builder->createStructType(scope, type->getStructName(), file, 0, type_info.total_size * 8, type_info.alignment * 8, llvm::DINode::FlagZero,
+                                            nullptr, mod.di_builder->getOrCreateArray(metadata));
   }
   assert(encoding != 0);
   auto *di_type = mod.di_builder->createBasicType(type_name, size, encoding);
@@ -461,18 +490,19 @@ llvm::DIType *Codegen::gen_debug_type(const Type &type, GeneratedModule &mod) {
   if (type.array_data) {
     const auto &array_data = *type.array_data;
     Type de_arrayed_type = type;
-    std::vector<llvm::Metadata*> metadata;
+    std::vector<llvm::Metadata *> metadata;
     metadata.reserve(type.array_data->dimension_count);
     int dimension = 0;
-    for(int i = 0; i < type.array_data->dimension_count; ++i) {
-        dimension = de_array_type(de_arrayed_type, 1);
-        metadata.push_back(mod.di_builder->getOrCreateSubrange(0, dimension));
+    for (int i = 0; i < type.array_data->dimension_count; ++i) {
+      dimension = de_array_type(de_arrayed_type, 1);
+      metadata.push_back(mod.di_builder->getOrCreateSubrange(0, dimension));
     }
     llvm::DIType *underlying_type = gen_debug_type(de_arrayed_type, mod);
     assert(underlying_type);
     if (!dimension)
       return underlying_type;
-    return mod.di_builder->createArrayType(type.array_data->dimensions.back(), m_TypeInfos[type.name].alignment, underlying_type, mod.di_builder->getOrCreateArray(metadata));
+    return mod.di_builder->createArrayType(type.array_data->dimensions.back(), m_TypeInfos[type.name].alignment, underlying_type,
+                                           mod.di_builder->getOrCreateArray(metadata));
   }
   if (type.pointer_depth) {
     Type tmp_type = type;
