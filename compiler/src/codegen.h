@@ -46,7 +46,7 @@ private:
 
   void gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod);
 
-  void gen_struct_decl(const ResolvedStructDecl &decl, GeneratedModule &mod);
+  bool gen_struct_decl(const ResolvedStructDecl &decl, GeneratedModule &mod);
 
   void gen_global_var_decl(const ResolvedVarDecl &decl, GeneratedModule &mod);
 

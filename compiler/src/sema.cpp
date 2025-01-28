@@ -581,6 +581,7 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
         init_type_info(*resolved_struct_decl);
         bool insert_result = false;
         if (resolved_struct_decl) {
+          resolved_struct_decl->is_leaf = true;
           bool is_exported = decl->is_exported;
           resolved_struct_decl->is_exported = is_exported;
           insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
@@ -599,6 +600,7 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
         bool insert_result = false;
         if (resolved_gen_struct) {
           bool is_exported = decl->is_exported;
+          resolved_gen_struct->is_leaf = true;
           resolved_gen_struct->is_exported = is_exported;
           insert_result = is_exported ? insert_decl_to_global_scope(*resolved_gen_struct) : insert_decl_to_current_scope(*resolved_gen_struct);
         }
@@ -634,6 +636,7 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
         std::unique_ptr<ResolvedStructDecl> resolved_struct_decl = resolve_struct_decl(*struct_decl);
         bool insert_result = false;
         if (resolved_struct_decl) {
+          resolved_struct_decl->is_leaf = false;
           bool is_exported = decl->is_exported;
           resolved_struct_decl->is_exported = is_exported;
           insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
@@ -952,16 +955,16 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
       auto &&[const_type, name] = members.at(i);
       // Need to make a copy in case generic contains another generic
       Type type = const_type;
-      if(type.kind == Type::Kind::Custom && type.instance_types.size()) {
-          for(int j = 0; j < type.instance_types.size(); ++j) {
-              int inner_placeholder_index = 0;
-              for(auto&& placeholder : placeholders) {
-                  if(placeholders[inner_placeholder_index] == type.instance_types[j].name) {
-                      type.instance_types[j] = instance_types[inner_placeholder_index];
-                  }
-                  ++inner_placeholder_index;
-              }
+      if (type.kind == Type::Kind::Custom && type.instance_types.size()) {
+        for (int j = 0; j < type.instance_types.size(); ++j) {
+          int inner_placeholder_index = 0;
+          for (auto &&placeholder : placeholders) {
+            if (placeholders[inner_placeholder_index] == type.instance_types[j].name) {
+              type.instance_types[j] = instance_types[inner_placeholder_index];
+            }
+            ++inner_placeholder_index;
           }
+        }
       }
       auto maybe_type = resolve_type(type);
       if (!maybe_type) {
@@ -986,6 +989,7 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
     auto struct_instance = dynamic_cast<ResolvedStructDecl *>(m_GenericInstances.back().get());
     bool insert_result = false;
     if (struct_instance) {
+      struct_instance->is_leaf = generic_struct_decl->is_leaf;
       init_type_info(*struct_instance);
       bool is_exported = generic_decl.decl->is_exported;
       struct_instance->is_exported = is_exported;
