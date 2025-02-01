@@ -168,7 +168,7 @@ int Driver::run(std::ostream &output_stream) {
   }
   if (resolved_modules.empty())
     return 1;
-  saplang::Codegen codegen{std::move(resolved_modules), source, sema.move_type_infos(), m_Options.gen_debug};
+  saplang::Codegen codegen{std::move(resolved_modules), sema.move_type_infos(), m_Options.gen_debug};
   auto gened_modules = codegen.generate_modules();
   if (m_Options.gen_debug) {
     for (auto &&[_, mod] : gened_modules) {
