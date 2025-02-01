@@ -15,7 +15,7 @@ namespace saplang {
 struct DebugInfo {
   llvm::DICompileUnit *cu;
   std::vector<llvm::DIScope *> lexical_blocks;
-  llvm::DIFile * file;
+  llvm::DIFile *file;
 };
 
 struct GeneratedModule {
@@ -27,8 +27,8 @@ struct GeneratedModule {
 class Codegen {
 public:
   explicit Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree, std::string_view source_path);
-  explicit Codegen(std::vector<std::unique_ptr<ResolvedModule>> resolved_modules, std::string_view source_path,
-                   std::unordered_map<std::string, TypeInfo> type_infos, bool should_gen_dbg = false);
+  explicit Codegen(std::vector<std::unique_ptr<ResolvedModule>> resolved_modules, std::unordered_map<std::string, TypeInfo> type_infos,
+                   bool should_gen_dbg = false);
   std::unique_ptr<llvm::Module> generate_ir();
   std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> generate_modules();
 
@@ -56,7 +56,7 @@ private:
 
   llvm::Constant *gen_global_array_init(const ResolvedArrayLiteralExpr &init, GeneratedModule &mod);
 
-  llvm::Constant *get_constant_number_value(const ResolvedNumberLiteral &numlit, GeneratedModule& mod);
+  llvm::Constant *get_constant_number_value(const ResolvedNumberLiteral &numlit, GeneratedModule &mod);
 
   llvm::Type *gen_type(const Type &type, GeneratedModule &mod);
 

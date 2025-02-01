@@ -35,8 +35,7 @@ Codegen::Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree, std::
   }
 }
 
-Codegen::Codegen(std::vector<std::unique_ptr<ResolvedModule>> resolved_modules, std::string_view source_path,
-                 std::unordered_map<std::string, TypeInfo> type_infos, bool should_gen_dbg)
+Codegen::Codegen(std::vector<std::unique_ptr<ResolvedModule>> resolved_modules, std::unordered_map<std::string, TypeInfo> type_infos, bool should_gen_dbg)
     : m_ResolvedModules{std::move(resolved_modules)}, m_Builder{m_Context}, m_TypeInfos(std::move(type_infos)), m_ShouldGenDebug(should_gen_dbg) {}
 
 std::unique_ptr<llvm::Module> Codegen::generate_ir() {
