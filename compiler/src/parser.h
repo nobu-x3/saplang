@@ -25,6 +25,13 @@ public:
   inline bool is_complete_ast() const { return m_IsCompleteAst; }
 
 private:
+
+enum class Context {
+    Binop,
+    VarDecl,
+    Stmt,
+};
+
   inline void eat_next_token() { m_NextToken = m_Lexer->get_next_token(); }
   inline void go_back_to_prev_token() { m_NextToken = m_Lexer->get_prev_token(); }
 
@@ -43,7 +50,8 @@ private:
   }
 
   void synchronize();
-  std::unique_ptr<FunctionDecl> parse_function_decl();
+  std::unique_ptr<FunctionDecl> parse_function_decl(SourceLocation decl_loc, Type return_type, std::string function_identifier);
+  std::unique_ptr<GenericFunctionDecl> parse_generic_function_decl(SourceLocation decl_loc, Type return_type, std::string function_identifier);
 
   using MaybeExternBlock = std::optional<std::vector<std::unique_ptr<Decl>>>;
   MaybeExternBlock parse_extern_block();
@@ -52,13 +60,14 @@ private:
   std::unique_ptr<Block> parse_block();
   std::unique_ptr<Stmt> parse_stmt();
   std::unique_ptr<ReturnStmt> parse_return_stmt();
-  std::unique_ptr<Expr> parse_prefix_expr();
-  std::unique_ptr<Expr> parse_primary_expr();
+  std::unique_ptr<Expr> parse_prefix_expr(Context context);
+  std::unique_ptr<Expr> parse_primary_expr(Context context);
+  std::unique_ptr<Expr> parse_call_expr(SourceLocation location, std::unique_ptr<DeclRefExpr> decl_ref_expr);
   std::unique_ptr<ExplicitCast> parse_explicit_cast(Type type);
   std::unique_ptr<StructLiteralExpr> parse_struct_literal_expr();
   std::unique_ptr<ArrayLiteralExpr> parse_array_literal_expr();
   std::unique_ptr<StringLiteralExpr> parse_string_literal_expr();
-  std::unique_ptr<Expr> parse_expr();
+  std::unique_ptr<Expr> parse_expr(Context context);
   std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs, int precedence);
   std::unique_ptr<SizeofExpr> parse_sizeof_expr();
   std::unique_ptr<AlignofExpr> parse_alignof_expr();
@@ -83,7 +92,7 @@ private:
   std::unique_ptr<EnumDecl> parse_enum_decl();
   std::unique_ptr<MemberAccess> parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr, const std::string &var_id);
   std::unique_ptr<ArrayElementAccess> parse_array_element_access(std::string var_id);
-  std::unique_ptr<Stmt> parse_assignment_or_expr();
+  std::unique_ptr<Stmt> parse_assignment_or_expr(Context context);
   std::unique_ptr<Assignment> parse_assignment(std::unique_ptr<Expr> lhs);
   std::unique_ptr<Assignment> parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs, int lhs_deref_count);
 

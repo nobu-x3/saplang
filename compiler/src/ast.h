@@ -421,8 +421,9 @@ struct Assignment : public Stmt {
 struct CallExpr : public Expr {
   std::unique_ptr<DeclRefExpr> id;
   std::vector<std::unique_ptr<Expr>> args;
-  inline CallExpr(SourceLocation loc, std::unique_ptr<DeclRefExpr> &&id, std::vector<std::unique_ptr<Expr>> &&args)
-      : Expr(loc), id(std::move(id)), args(std::move(args)) {}
+  std::vector<Type> instance_types;
+  inline CallExpr(SourceLocation loc, std::unique_ptr<DeclRefExpr> &&id, std::vector<std::unique_ptr<Expr>> &&args, std::vector<Type>&& instance_types)
+      : Expr(loc), id(std::move(id)), args(std::move(args)), instance_types(std::move(instance_types)) {}
   DUMP_IMPL
 };
 
@@ -474,14 +475,28 @@ struct DeferStmt : public Stmt {
 };
 
 struct FunctionDecl : public Decl {
-  Type type;
+  Type return_type;
   std::vector<std::unique_ptr<ParamDecl>> params;
   std::unique_ptr<Block> body;
   bool is_vla;
   inline FunctionDecl(SourceLocation location, std::string id, Type type, std::string module, std::vector<std::unique_ptr<ParamDecl>> &&params,
                       std::unique_ptr<Block> &&body, bool is_vla = false, std::string lib = "", std::string og_name = "", bool is_exported = false)
-      : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), type(std::move(type)), params(std::move(params)),
-        body(std::move(body)), is_vla(is_vla) {}
+      : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), return_type(std::move(type)),
+        params(std::move(params)), body(std::move(body)), is_vla(is_vla) {}
+  DUMP_IMPL
+};
+
+struct GenericFunctionDecl : public Decl {
+  Type return_type;
+  std::vector<std::unique_ptr<ParamDecl>> params;
+  std::unique_ptr<Block> body;
+  bool is_vla;
+  std::vector<std::string> placeholders;
+  inline GenericFunctionDecl(SourceLocation location, std::string id, Type type, std::string module, std::vector<std::string> placeholders,
+                             std::vector<std::unique_ptr<ParamDecl>> &&params, std::unique_ptr<Block> &&body, bool is_vla = false, std::string lib = "",
+                             std::string og_name = "", bool is_exported = false)
+      : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), return_type(std::move(type)),
+        params(std::move(params)), body(std::move(body)), is_vla(is_vla), placeholders(std::move(placeholders)) {}
   DUMP_IMPL
 };
 

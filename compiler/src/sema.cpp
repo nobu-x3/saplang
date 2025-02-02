@@ -1002,9 +1002,9 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
 }
 
 std::unique_ptr<ResolvedFuncDecl> Sema::resolve_func_decl(const FunctionDecl &func) {
-  auto type = resolve_type(func.type);
+  auto type = resolve_type(func.return_type);
   if (!type) {
-    return report(func.location, "function '" + func.id + "' has invalid '" + func.type.name + "' type");
+    return report(func.location, "function '" + func.id + "' has invalid '" + func.return_type.name + "' type");
   }
   std::vector<std::unique_ptr<ResolvedParamDecl>> resolved_params{};
   Scope param_scope{this};
