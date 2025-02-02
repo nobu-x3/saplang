@@ -147,8 +147,8 @@ int Driver::run(std::ostream &output_stream) {
   auto resolved_modules = sema.resolve_modules(m_Options.res_dump);
   if (m_Options.res_dump) {
     std::stringstream output_stream;
-    for (auto &&fn : resolved_modules) {
-      fn->dump_to_stream(output_stream, 0);
+    for (auto &&mod : resolved_modules) {
+      mod->dump_to_stream(output_stream, 0);
     }
     output_stream << output_stream.str();
     return 0;
@@ -168,7 +168,7 @@ int Driver::run(std::ostream &output_stream) {
   }
   if (resolved_modules.empty())
     return 1;
-  saplang::Codegen codegen{std::move(resolved_modules), source, sema.move_type_infos(), m_Options.gen_debug};
+  saplang::Codegen codegen{std::move(resolved_modules), sema.move_type_infos(), m_Options.gen_debug};
   auto gened_modules = codegen.generate_modules();
   if (m_Options.gen_debug) {
     for (auto &&[_, mod] : gened_modules) {

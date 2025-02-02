@@ -39,9 +39,12 @@ public:
   inline std::unordered_map<std::string, TypeInfo> &&move_type_infos() { return std::move(m_TypeInfos); }
 
 private:
+  struct AstResolveResult {
+    std::vector<std::unique_ptr<ResolvedDecl>> resolved_ast;
+  };
   std::unique_ptr<ResolvedModule> resolve_module(const Module &mod, bool partial);
 
-  std::vector<std::unique_ptr<ResolvedDecl>> resolve_ast(bool partial, const Module &mod);
+  AstResolveResult resolve_ast(bool partial, const Module &mod);
 
   void init_builtin_type_infos();
 
@@ -58,6 +61,8 @@ private:
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
   bool insert_decl_to_global_scope(ResolvedDecl &decl);
+
+  bool instantiate_generic_type(const DeclLookupResult &generic_decl, std::string_view instance_name, const std::vector<Type> &instance_types);
 
   std::optional<Type> resolve_type(Type parsed_type);
 
@@ -109,6 +114,8 @@ private:
 
   std::unique_ptr<ResolvedStructDecl> resolve_struct_decl(const StructDecl &decl);
 
+  std::unique_ptr<ResolvedGenericStructDecl> resolve_generic_struct_decl(const GenericStructDecl &decl);
+
   std::unique_ptr<ResolvedEnumDecl> resolve_enum_decl(const EnumDecl &decl);
 
   std::unique_ptr<ResolvedAssignment> resolve_assignment(const Assignment &assignment);
@@ -132,6 +139,7 @@ private:
   // @NOTE: deprecated
   std::vector<std::unique_ptr<Decl>> m_AST;
   std::vector<std::vector<ResolvedDecl *>> m_Scopes{};
+  std::vector<std::unique_ptr<ResolvedDecl>> m_GenericInstances{};
   std::unordered_map<std::string, std::unique_ptr<ResolvedModule>> m_ResolvedModules{};
   std::unordered_map<std::string, TypeInfo> m_TypeInfos;
   ResolvedFuncDecl *m_CurrFunction{nullptr};

@@ -81,7 +81,7 @@ Token Lexer::get_next_token() {
   if (curr_char == '.' && peek_next_char() == '.' && peek_next_char(1) == '.') {
     eat_next_char();
     eat_next_char();
-    return Token{token_start_location, TokenKind::VLL, "..."};
+    return Token{token_start_location, TokenKind::vla, "..."};
   }
   if (curr_char == '|' && peek_next_char() == '|') {
     eat_next_char();

@@ -9,7 +9,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  for (auto &&fn : parse_result.module->declarations) {                                                                                                         \
+  for (auto &&fn : parse_result.module->declarations) {                                                                                                        \
     fn->dump_to_stream(output_buffer);                                                                                                                         \
   }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
@@ -22,7 +22,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  parse_result.module->dump_to_stream(output_buffer);                                                                                                           \
+  parse_result.module->dump_to_stream(output_buffer);                                                                                                          \
   const auto &error_stream = saplang::get_error_stream();
 
 TEST_CASE("Function declarations", "[parser]") {
@@ -1506,7 +1506,7 @@ fn i32 main() {
   REQUIRE(error_stream.str() == "test:3:34 error: expected identifier in enum field access.\n");
 }
 
-TEST_CASE("Extern function no VLL", "[parser]") {
+TEST_CASE("Extern function no vla", "[parser]") {
   TEST_SETUP(R"(
 extern {
     fn void* allocate(i32 lenght, i32 size) alias malloc;
@@ -1524,7 +1524,7 @@ extern sapfire {
   CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: alias sapfire::render_frame render:void");
 }
 
-TEST_CASE("Extern function VLL", "[parser]") {
+TEST_CASE("Extern function vla", "[parser]") {
   TEST_SETUP(R"(
 extern {
     fn void print(char* fmt, ...) alias printf;
@@ -1533,7 +1533,7 @@ extern {
   REQUIRE(error_stream.str() == "");
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
-  REQUIRE(lines_it->find("FunctionDecl: VLL alias c::printf print:void") != std::string::npos);
+  REQUIRE(lines_it->find("FunctionDecl: vla alias c::printf print:void") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: fmt:ptr char");
 }
 
@@ -1916,5 +1916,220 @@ TEST_CASE("exported decls", "[parser]") {
     CONTAINS_NEXT_REQUIRE(lines_it, "Block");
     CONTAINS_NEXT_REQUIRE(lines_it, "exported StructDecl: Test");
     CONTAINS_NEXT_REQUIRE(lines_it, "exported EnumDecl: i32(TestEnum)");
+  }
+}
+
+TEST_CASE("generic struct declarations", "[parser]") {
+  SECTION("Single generic") {
+    TEST_SETUP(R"(
+        struct<T> GenericType {
+            T first;
+            T* next;
+        }
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("GenericStructDecl: GenericType<T>") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr T(next)");
+  }
+  SECTION("Two generics") {
+    TEST_SETUP(R"(
+        struct<T, K> GenericType {
+            T first;
+            K second;
+            T* t_next;
+            K* k_next;
+        }
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    REQUIRE(lines_it->find("GenericStructDecl: GenericType<T, K>") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: K(second)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr T(t_next)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: ptr K(k_next)");
+  }
+}
+
+TEST_CASE("generic type variable declaration", "[parser]") {
+  SECTION("Single generic, no init") {
+    TEST_SETUP(R"(
+        struct<T> GenericType {
+            T first;
+            T* next;
+        }
+        fn void foo() {
+            var GenericType<i32> test;
+        }
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 5;
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:GenericType<i32>");
+  }
+  SECTION("Two generics, no init") {
+    TEST_SETUP(R"(
+        struct<T, K> GenericType {
+            T first;
+            K second;
+            T* t_next;
+            K* k_next;
+        }
+        fn void foo() {
+            var GenericType<i32, f32> test;
+        }
+        )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 7;
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:GenericType<i32, f32>");
+  }
+}
+
+TEST_CASE("generic in struct", "[parser]") {
+  SECTION("1-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic {
+    T value;
+}
+struct Specific {
+    Generic<i32> generic;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: Generic<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: Specific");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: Generic<i32>(generic)");
+  }
+  SECTION("2-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic1 {
+    T value;
+}
+struct<T> Generic2 {
+    Generic1<T> gen1;
+    T val2;
+}
+struct Specific {
+    Generic2<i32> generic;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: Generic1<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericStructDecl: Generic2<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: Generic1<T>(gen1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(val2)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: Specific");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: Generic2<i32>(generic)");
+  }
+}
+
+TEST_CASE("generic in function decl", "[parser]") {
+  SECTION("1-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn void gen_fun<T>(T* generic_param) {
+    generic_param.first = 0;
+}
+struct TestType {
+    i32 first;
+}
+fn i32 main() {
+    var TestType test = .{32};
+    gen_fun<TestType>(&test);
+    return test.first;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericFunctionDecl: gen_fun<T>:void");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: generic_param:ptr T");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: generic_param");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(32)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: gen_fun");
+    CONTAINS_NEXT_REQUIRE(lines_it, "InstanceTypes: <TestType>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ReturnStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
+  }
+  SECTION("2-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn void gen_fun<T>(T* generic_param) {
+    gen_fun1<T>(generic_param);
+}
+fn void gen_fun1<T>(T* generic_param) {
+    generic_param.first = 0;
+}
+struct TestType {
+    i32 first;
+}
+fn i32 main() {
+    var TestType test = .{32};
+    gen_fun<TestType>(&test);
+    return test.first;
+}
+  )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericFunctionDecl: gen_fun<T>:void");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: generic_param:ptr T");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: gen_fun1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "InstanceTypes: <T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: generic_param");
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericFunctionDecl: gen_fun1<T>:void");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: generic_param:ptr T");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: generic_param");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(32)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: gen_fun");
+    CONTAINS_NEXT_REQUIRE(lines_it, "InstanceTypes: <TestType>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ReturnStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
   }
 }

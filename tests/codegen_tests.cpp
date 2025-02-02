@@ -10,12 +10,34 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                             \
+  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                            \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
   saplang::Codegen codegen{std::move(resolved_ast), "codegen_tests"};                                                                                          \
   auto generated_code = codegen.generate_ir();                                                                                                                 \
   generated_code->print(output_buffer, nullptr, true, true);                                                                                                   \
   const auto &error_stream = saplang::get_error_stream();
+
+#define TEST_SETUP_MODULE_SINGLE(module_name, file_contents)                                                                                                   \
+  saplang::clear_error_stream();                                                                                                                               \
+  std::stringstream buffer{file_contents};                                                                                                                     \
+  std::stringstream output_buffer{};                                                                                                                           \
+  saplang::SourceFile src_file{module_name, buffer.str()};                                                                                                     \
+  saplang::Lexer lexer{src_file};                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
+  std::vector<std::unique_ptr<saplang::Module>> modules;                                                                                                       \
+  auto parse_result = parser.parse_source_file();                                                                                                              \
+  modules.emplace_back(std ::move(parse_result.module));                                                                                                       \
+  saplang ::Sema sema{std::move(modules)};                                                                                                                     \
+  auto resolved_modules = sema.resolve_modules();                                                                                                              \
+  const auto &error_stream = saplang::get_error_stream();                                                                                                      \
+  saplang ::Codegen codegen{std ::move(resolved_modules), sema.move_type_infos(), false}; \
+  auto gened_modules = codegen.generate_modules(); \
+  std ::string output_string; \
+  llvm ::raw_string_ostream codegen_output_buffer{output_string}; \
+  for (auto &&[name, mod] : gened_modules) { \
+    mod->module->print(codegen_output_buffer, nullptr, true, true); \
+  } \
+  output_buffer << output_string;
 
 TEST_CASE("single return", "[codegen]") {
   SECTION("return stmt 1 fn") {
@@ -2755,5 +2777,62 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%27 = load i32, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %27");
+  CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("generic structs", "[codegen]") {
+
+  TEST_SETUP_MODULE_SINGLE("codegen", R"(
+struct<T> Generic1 {
+    T* value;
+}
+struct<T, K> Generic2 {
+    Generic1<T> gen_t;
+    Generic1<K> gen_k;
+    T val;
+}
+struct Specific {
+    Generic2<i32, f32> generic;
+}
+fn i32 main() {
+    var i32 int = 69;
+    var f32 float = 69.0;
+    var Specific specific = .{.{.gen_t = .{&int}, .gen_k = .{&float}, .val = int}};
+    return specific.generic.val;
+}
+    )");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 2;
+  CONTAINS_NEXT_REQUIRE(lines_it, "%Specific = type { %__Generic2_i32_f32 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%__Generic2_i32_f32 = type { %__Generic1_i32, %__Generic1_f32, i32 }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%__Generic1_i32 = type { ptr }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%__Generic1_f32 = type { ptr }");
+  CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+  CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%int = alloca i32, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%float = alloca float, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%specific = alloca %Specific, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 69, ptr %int, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store float 6.900000e+01, ptr %float, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%0 = getelementptr inbounds %Specific, ptr %specific, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%1 = getelementptr inbounds %__Generic2_i32_f32, ptr %0, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%2 = getelementptr inbounds %__Generic1_i32, ptr %1, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %int, ptr %2, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%3 = getelementptr inbounds %__Generic2_i32_f32, ptr %0, i32 0, i32 1");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%4 = getelementptr inbounds %__Generic1_f32, ptr %3, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %float, ptr %4, align 8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%5 = getelementptr inbounds %__Generic2_i32_f32, ptr %0, i32 0, i32 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%6 = load i32, ptr %int, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %6, ptr %5, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%7 = getelementptr inbounds %Specific, ptr %specific, i32 0, i32 0");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%8 = getelementptr inbounds %__Generic2_i32_f32, ptr %7, i32 0, i32 2");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%9 = load i32, ptr %8, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %9, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+  CONTAINS_NEXT_REQUIRE(lines_it, "return:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%10 = load i32, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %10");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
 }

@@ -517,6 +517,14 @@ bool is_leaf(const StructDecl *decl) {
   return true;
 }
 
+bool is_leaf(const GenericStructDecl *decl) {
+  for (auto &&[type, id] : decl->members) {
+    if (type.kind == Type::Kind::Custom)
+      return false;
+  }
+  return true;
+}
+
 bool Sema::resolve_enum_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast) {
   bool error = false;
   for (auto &&decl : ast) {
@@ -560,7 +568,7 @@ void Sema::init_type_info(ResolvedStructDecl &decl) {
 
 bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &resolved_decls, bool partial, const std::vector<std::unique_ptr<Decl>> &ast) {
   struct DeclToInspect {
-    const StructDecl *decl{nullptr};
+    const Decl *decl{nullptr};
     bool resolved{false};
   };
   std::vector<DeclToInspect> non_leaf_struct_decls{};
@@ -573,7 +581,9 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
         init_type_info(*resolved_struct_decl);
         bool insert_result = false;
         if (resolved_struct_decl) {
-          bool is_exported = resolved_struct_decl->is_exported;
+          resolved_struct_decl->is_leaf = true;
+          bool is_exported = decl->is_exported;
+          resolved_struct_decl->is_exported = is_exported;
           insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
         }
         if (!insert_result) {
@@ -581,8 +591,27 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
           continue;
         }
         resolved_decls.emplace_back(std::move(resolved_struct_decl));
-      } else
+      } else {
         non_leaf_struct_decls.push_back({struct_decl});
+      }
+    } else if (const auto *generic_struct = dynamic_cast<const GenericStructDecl *>(decl.get())) {
+      if (is_leaf(generic_struct)) {
+        std::unique_ptr<ResolvedGenericStructDecl> resolved_gen_struct = resolve_generic_struct_decl(*generic_struct);
+        bool insert_result = false;
+        if (resolved_gen_struct) {
+          bool is_exported = decl->is_exported;
+          resolved_gen_struct->is_leaf = true;
+          resolved_gen_struct->is_exported = is_exported;
+          insert_result = is_exported ? insert_decl_to_global_scope(*resolved_gen_struct) : insert_decl_to_current_scope(*resolved_gen_struct);
+        }
+        if (!insert_result) {
+          error = true;
+          continue;
+        }
+        resolved_decls.emplace_back(std::move(resolved_gen_struct));
+      } else {
+        non_leaf_struct_decls.push_back({generic_struct});
+      }
     }
   }
   if (error && !partial)
@@ -592,31 +621,61 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
   bool decl_resolved_last_pass = true;
   while (decl_resolved_last_pass) {
     decl_resolved_last_pass = false;
-    for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+    for (auto &&[decl, resolved] : non_leaf_struct_decls) {
       bool can_now_resolve = true;
-      for (auto &&[type, id] : struct_decl->members) {
-        std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
-        if (type.kind == Type::Kind::Custom && (!lookup_result || !lookup_result->decl))
-          can_now_resolve = false;
-        break;
-      }
-      if (!can_now_resolve)
+      if (const StructDecl *struct_decl = dynamic_cast<const StructDecl *>(decl)) {
+        for (auto &&[type, id] : struct_decl->members) {
+          std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+          if (type.kind == Type::Kind::Custom && (!lookup_result || !lookup_result->decl)) {
+            can_now_resolve = false;
+            break;
+          }
+        }
+        if (!can_now_resolve)
+          continue;
+        std::unique_ptr<ResolvedStructDecl> resolved_struct_decl = resolve_struct_decl(*struct_decl);
+        bool insert_result = false;
+        if (resolved_struct_decl) {
+          resolved_struct_decl->is_leaf = false;
+          bool is_exported = decl->is_exported;
+          resolved_struct_decl->is_exported = is_exported;
+          insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
+        }
+        if (!insert_result) {
+          error = true;
+          continue;
+        }
+        resolved = true;
+        init_type_info(*resolved_struct_decl);
+        resolved_decls.emplace_back(std::move(resolved_struct_decl));
+        decl_resolved_last_pass = true;
         continue;
-      std::unique_ptr<ResolvedStructDecl> resolved_struct_decl = resolve_struct_decl(*struct_decl);
-      bool insert_result = false;
-      if (resolved_struct_decl) {
-        bool is_exported = struct_decl->is_exported;
-        insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
-      }
-      if (!insert_result) {
-        error = true;
+      } else if (const GenericStructDecl *gen_struct_decl = dynamic_cast<const GenericStructDecl *>(decl)) {
+        for (auto &&[type, id] : gen_struct_decl->members) {
+          std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+          if (type.kind == Type::Kind::Custom && (!lookup_result || !lookup_result->decl)) {
+            can_now_resolve = false;
+            break;
+          }
+        }
+        if (!can_now_resolve)
+          continue;
+        std::unique_ptr<ResolvedGenericStructDecl> resolved_struct_decl = resolve_generic_struct_decl(*gen_struct_decl);
+        bool insert_result = false;
+        if (resolved_struct_decl) {
+          bool is_exported = decl->is_exported;
+          resolved_struct_decl->is_exported = is_exported;
+          insert_result = is_exported ? insert_decl_to_global_scope(*resolved_struct_decl) : insert_decl_to_current_scope(*resolved_struct_decl);
+        }
+        if (!insert_result) {
+          error = true;
+          continue;
+        }
+        resolved = true;
+        resolved_decls.emplace_back(std::move(resolved_struct_decl));
+        decl_resolved_last_pass = true;
         continue;
       }
-      resolved = true;
-      init_type_info(*resolved_struct_decl);
-      resolved_decls.emplace_back(std::move(resolved_struct_decl));
-      decl_resolved_last_pass = true;
-      continue;
     }
     for (auto it = non_leaf_struct_decls.begin(); it != non_leaf_struct_decls.end();) {
       if (it->resolved) {
@@ -626,12 +685,20 @@ bool Sema::resolve_struct_decls(std::vector<std::unique_ptr<ResolvedDecl>> &reso
       ++it;
     }
   }
-  for (auto &&[struct_decl, resolved] : non_leaf_struct_decls) {
+  for (auto &&[decl, resolved] : non_leaf_struct_decls) {
     if (!resolved) {
-      for (auto &&[type, id] : struct_decl->members) {
-        std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
-        if (!lookup_result)
-          report(struct_decl->location, "could not resolve type '" + type.name + "'.");
+      if (const StructDecl *struct_decl = dynamic_cast<const StructDecl *>(decl)) {
+        for (auto &&[type, id] : struct_decl->members) {
+          std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+          if (!lookup_result)
+            report(struct_decl->location, "could not resolve type '" + type.name + "'.");
+        }
+      } else if (const GenericStructDecl *struct_decl = dynamic_cast<const GenericStructDecl *>(decl)) {
+        for (auto &&[type, id] : struct_decl->members) {
+          std::optional<DeclLookupResult> lookup_result = lookup_decl(type.name, &type);
+          if (!lookup_result)
+            report(struct_decl->location, "could not resolve type '" + type.name + "'.");
+        }
       }
     }
   }
@@ -696,13 +763,13 @@ std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool
       insert_decl_to_global_scope(*decl);
     }
   }
-  std::vector<std::unique_ptr<ResolvedDecl>> module_ast = resolve_ast(partial, _module);
-  if (!module_ast.size())
+  AstResolveResult ast_resolution_result = resolve_ast(partial, _module);
+  if (!ast_resolution_result.resolved_ast.size())
     return nullptr;
-  return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(module_ast));
+  return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(ast_resolution_result.resolved_ast));
 }
 
-std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial, const Module &mod) {
+Sema::AstResolveResult Sema::resolve_ast(bool partial, const Module &mod) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
   Scope module_scope(this);
   // Insert all global scope stuff, e.g. from other modules
@@ -761,10 +828,14 @@ std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial, const
       }
     }
   }
+  for (int i = 0; i < m_GenericInstances.size(); ++i) {
+    resolved_decls.emplace_back(std::move(m_GenericInstances[i]));
+  }
   if (error && !partial)
     return {};
-  return resolved_decls;
+  return {std::move(resolved_decls)};
 }
+
 std::vector<std::unique_ptr<ResolvedDecl>> Sema::resolve_ast(bool partial) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
   Scope global_scope(this);
@@ -831,15 +902,109 @@ std::optional<Type> Sema::resolve_type(Type parsed_type) {
       return std::nullopt;
     if (const auto *enum_decl = dynamic_cast<const ResolvedEnumDecl *>(decl->decl))
       return enum_decl->type;
+    if (const auto *generic_decl = dynamic_cast<const ResolvedGenericStructDecl *>(decl->decl)) {
+      if (!parsed_type.instance_types.size())
+        return std::nullopt;
+      std::string instance_name = "__" + parsed_type.name;
+      std::vector<Type> resolved_types{};
+      resolved_types.reserve(parsed_type.instance_types.size());
+      bool should_instantiate = true;
+      for (int i = 0; i < parsed_type.instance_types.size(); ++i) {
+        const Type &instance_type = parsed_type.instance_types[i];
+        auto resolved_instance_type = resolve_type(instance_type);
+        if (!resolved_instance_type)
+          return std::nullopt;
+        if (instance_type.kind == Type::Kind::Placeholder && !instance_type.instance_types.size()) {
+          should_instantiate = false;
+          break;
+        }
+        instance_name += "_" + resolved_instance_type->name;
+        resolved_types.emplace_back(std::move(*resolved_instance_type));
+      }
+      if (!should_instantiate)
+        return parsed_type;
+      auto instance_decl = lookup_decl(instance_name);
+      // means we haven't instantiated the generic for given types, so do it
+      if (!instance_decl) {
+        if (!instantiate_generic_type(*decl, instance_name, resolved_types))
+          return std::nullopt;
+        instance_decl = lookup_decl(instance_name);
+        if (!instance_decl)
+          return std::nullopt;
+      }
+      return instance_decl->decl->type;
+    }
     return parsed_type;
   }
   return parsed_type;
 }
 
+bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::string_view instance_name, const std::vector<Type> &instance_types) {
+  if (!generic_decl.decl)
+    return false;
+  if (const ResolvedGenericStructDecl *generic_struct_decl = dynamic_cast<const ResolvedGenericStructDecl *>(generic_decl.decl)) {
+    const std::vector<std::string> &placeholders = generic_struct_decl->placeholders;
+    const std::vector<std::pair<Type, std::string>> &members = generic_struct_decl->members;
+    if (instance_types.size() != placeholders.size()) {
+      report(generic_decl.decl->location, "inconsistent number of types given to instantiation of a generic.");
+      return false;
+    }
+    int placeholder_index = 0;
+    std::vector<std::pair<Type, std::string>> resolved_instance_types;
+    for (int i = 0; i < members.size(); ++i) {
+      auto &&[const_type, name] = members.at(i);
+      // Need to make a copy in case generic contains another generic
+      Type type = const_type;
+      if (type.kind == Type::Kind::Custom && type.instance_types.size()) {
+        for (int j = 0; j < type.instance_types.size(); ++j) {
+          int inner_placeholder_index = 0;
+          for (auto &&placeholder : placeholders) {
+            if (placeholders[inner_placeholder_index] == type.instance_types[j].name) {
+              type.instance_types[j] = instance_types[inner_placeholder_index];
+            }
+            ++inner_placeholder_index;
+          }
+        }
+      }
+      auto maybe_type = resolve_type(type);
+      if (!maybe_type) {
+        report(generic_struct_decl->location, "could not resolved generic type '" + type.name + "'.");
+        return false;
+      }
+      Type resolved_type = *maybe_type;
+      if (resolved_type.kind == Type::Kind::Placeholder) {
+        resolved_type = instance_types[placeholder_index];
+        resolved_type.array_data = type.array_data;
+        resolved_type.fn_ptr_signature = type.fn_ptr_signature;
+        resolved_type.pointer_depth = type.pointer_depth;
+        resolved_type.dereference_counts = type.dereference_counts;
+        ++placeholder_index;
+      }
+      resolved_instance_types.push_back(std::make_pair(resolved_type, name));
+    }
+    std::string instance_name_copy{instance_name};
+    m_GenericInstances.emplace_back(std::make_unique<ResolvedStructDecl>(generic_struct_decl->location, instance_name_copy,
+                                                                         Type::custom(instance_name_copy, false), generic_struct_decl->module,
+                                                                         std::move(resolved_instance_types)));
+    auto struct_instance = dynamic_cast<ResolvedStructDecl *>(m_GenericInstances.back().get());
+    bool insert_result = false;
+    if (struct_instance) {
+      struct_instance->is_leaf = generic_struct_decl->is_leaf;
+      init_type_info(*struct_instance);
+      bool is_exported = generic_decl.decl->is_exported;
+      struct_instance->is_exported = is_exported;
+      insert_result = is_exported ? insert_decl_to_global_scope(*struct_instance) : insert_decl_to_current_scope(*struct_instance);
+    }
+    return insert_result;
+  }
+  assert(false);
+  return false;
+}
+
 std::unique_ptr<ResolvedFuncDecl> Sema::resolve_func_decl(const FunctionDecl &func) {
-  auto type = resolve_type(func.type);
+  auto type = resolve_type(func.return_type);
   if (!type) {
-    return report(func.location, "function '" + func.id + "' has invalid '" + func.type.name + "' type");
+    return report(func.location, "function '" + func.id + "' has invalid '" + func.return_type.name + "' type");
   }
   std::vector<std::unique_ptr<ResolvedParamDecl>> resolved_params{};
   Scope param_scope{this};
@@ -851,7 +1016,7 @@ std::unique_ptr<ResolvedFuncDecl> Sema::resolve_func_decl(const FunctionDecl &fu
     resolved_params.emplace_back(std::move(resolved_param));
     ++param_index;
   }
-  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type, func.module, std::move(resolved_params), nullptr, func.is_vll, func.lib,
+  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type, func.module, std::move(resolved_params), nullptr, func.is_vla, func.lib,
                                             func.og_name);
 }
 
@@ -994,6 +1159,17 @@ std::unique_ptr<ResolvedStructDecl> Sema::resolve_struct_decl(const StructDecl &
   return std::make_unique<ResolvedStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), decl.module, std::move(types));
 }
 
+std::unique_ptr<ResolvedGenericStructDecl> Sema::resolve_generic_struct_decl(const GenericStructDecl &decl) {
+  std::vector<std::pair<Type, std::string>> types;
+  for (auto &&[type, id] : decl.members) {
+    std::optional<Type> resolved_type = resolve_type(type);
+    if (!resolved_type)
+      return nullptr;
+    types.emplace_back(std::make_pair(std::move(*resolved_type), std::move(id)));
+  }
+  return std::make_unique<ResolvedGenericStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), decl.module, decl.placeholders, std::move(types));
+}
+
 std::unique_ptr<ResolvedEnumDecl> Sema::resolve_enum_decl(const EnumDecl &decl) {
   return std::make_unique<ResolvedEnumDecl>(decl.location, decl.id, decl.underlying_type, decl.module, decl.name_values_map);
 }
@@ -1112,7 +1288,7 @@ std::unique_ptr<ResolvedUnaryOperator> Sema::resolve_unary_operator(const UnaryO
         for (auto &&param : fn->params) {
           fn_sig.push_back(param->type);
         }
-        resolved_rhs->type.fn_ptr_signature = std::make_pair(std::move(fn_sig), fn->is_vll);
+        resolved_rhs->type.fn_ptr_signature = std::make_pair(std::move(fn_sig), fn->is_vla);
       } else {
         ++resolved_rhs->type.pointer_depth;
       }
@@ -1638,7 +1814,7 @@ std::unique_ptr<ResolvedCallExpr> Sema::resolve_call_expr(const CallExpr &call) 
   // Normal function call
   std::vector<std::unique_ptr<ResolvedExpr>> resolved_args;
   if (const auto *resolved_func_decl = dynamic_cast<const ResolvedFuncDecl *>(resolved_callee->decl)) {
-    if (call.args.size() != resolved_func_decl->params.size() && !resolved_func_decl->is_vll)
+    if (call.args.size() != resolved_func_decl->params.size() && !resolved_func_decl->is_vla)
       return report(call.location, "argument count mismatch.");
     for (int i = 0; i < call.args.size(); ++i) {
       auto *decl_type = i < resolved_func_decl->params.size() ? &resolved_func_decl->params[i]->type : nullptr;
@@ -1673,10 +1849,10 @@ std::unique_ptr<ResolvedCallExpr> Sema::resolve_call_expr(const CallExpr &call) 
   } else { // could be function pointer
     if (!resolved_callee->type.fn_ptr_signature)
       return report(call.location, "calling non-function symbol.");
-    if (call.args.size() != resolved_callee->type.fn_ptr_signature->first.size() - 1 && !resolved_func_decl->is_vll)
+    if (call.args.size() != resolved_callee->type.fn_ptr_signature->first.size() - 1 && !resolved_func_decl->is_vla)
       return report(call.location, "argument count mismatch.");
     auto &fn_sig = resolved_callee->type.fn_ptr_signature->first;
-    bool is_vll = resolved_callee->type.fn_ptr_signature->second;
+    bool is_vla = resolved_callee->type.fn_ptr_signature->second;
     for (int i = 0; i < call.args.size(); ++i) {
       auto *decl_type = i < fn_sig.size() - 1 ? &fn_sig[i + 1] : nullptr;
       std::unique_ptr<ResolvedExpr> resolved_arg = resolve_expr(*call.args[i], decl_type);

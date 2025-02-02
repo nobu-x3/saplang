@@ -69,6 +69,7 @@ struct Type : public IDumpable {
     f64,
     Custom,
     FnPtr,
+    Placeholder,
     INTEGERS_START = u8,
     INTEGERS_END = i64,
     SIGNED_INT_START = i8,
@@ -86,6 +87,7 @@ struct Type : public IDumpable {
   // casting, it's array decay
   std::optional<ArrayData> array_data;
   std::optional<FunctionSignature> fn_ptr_signature;
+  std::vector<Type> instance_types;
   Type(const Type &) = default;
   Type &operator=(const Type &) = default;
   Type(Type &&) noexcept = default;
@@ -115,12 +117,16 @@ struct Type : public IDumpable {
 
   static Type builtin_bool(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::Bool, "bool", pointer_depth, std::move(array_data)}; }
 
-  static Type custom(std::string name, uint pointer_depth, std::optional<ArrayData> array_data = {}) {
-    return {Kind::Custom, std::move(name), pointer_depth, std::move(array_data)};
+  static Type custom(std::string name, uint pointer_depth, std::optional<ArrayData> array_data = {}, std::vector<Type> instance_types = {}) {
+    return {Kind::Custom, std::move(name), pointer_depth, std::move(array_data), std::nullopt, std::move(instance_types)};
   }
 
   static Type fn_ptr(uint pointer_depth, std::optional<FunctionSignature> fn_signature = {}) {
     return {Kind::FnPtr, "fn", pointer_depth, std::nullopt, std::move(fn_signature)};
+  }
+
+  static Type placeholder(std::string name, uint pointer_depth, std::optional<ArrayData> array_data = {}, std::optional<FunctionSignature> fn_signature = {}) {
+    return {Kind::Placeholder, std::move(name), pointer_depth, std::move(array_data), std::move(fn_signature)};
   }
 
   static inline bool is_builtin_type(Kind kind) { return kind != Kind::Custom; }
@@ -131,8 +137,9 @@ struct Type : public IDumpable {
   DUMP_IMPL
 private:
   inline Type(Kind kind, std::string name, uint pointer_depth, std::optional<ArrayData> array_data = std::nullopt,
-              std::optional<FunctionSignature> fn_signature = std::nullopt)
-      : kind(kind), name(std::move(name)), pointer_depth(pointer_depth), array_data(std::move(array_data)), fn_ptr_signature(std::move(fn_signature)) {}
+              std::optional<FunctionSignature> fn_signature = std::nullopt, std::vector<Type> instance_types = {})
+      : kind(kind), name(std::move(name)), pointer_depth(pointer_depth), array_data(std::move(array_data)), fn_ptr_signature(std::move(fn_signature)),
+        instance_types(std::move(instance_types)) {}
 };
 
 // decreases array dimension by dearray_count, removes first dimension and
@@ -278,6 +285,16 @@ struct StructDecl : public Decl {
   DUMP_IMPL
 };
 
+struct GenericStructDecl : public Decl {
+  std::vector<std::string> placeholders;
+  std::vector<std::pair<Type, std::string>> members;
+  inline GenericStructDecl(SourceLocation loc, const std::string &id, std::string module, std::vector<std::string> placeholders,
+                           std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "", bool is_exported = false)
+      : Decl(loc, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), placeholders(std::move(placeholders)),
+        members(std::move(types)) {}
+  DUMP_IMPL
+};
+
 struct EnumDecl : public Decl {
   std::unordered_map<std::string, long> name_values_map;
   Type underlying_type;
@@ -352,7 +369,7 @@ struct ParamDecl : public Decl {
   DUMP_IMPL
 };
 
-// bool signifies whether there's a VLL
+// bool signifies whether there's a vla
 using ParameterList = std::pair<std::vector<std::unique_ptr<ParamDecl>>, bool>;
 
 struct MemberAccess : public DeclRefExpr {
@@ -404,8 +421,9 @@ struct Assignment : public Stmt {
 struct CallExpr : public Expr {
   std::unique_ptr<DeclRefExpr> id;
   std::vector<std::unique_ptr<Expr>> args;
-  inline CallExpr(SourceLocation loc, std::unique_ptr<DeclRefExpr> &&id, std::vector<std::unique_ptr<Expr>> &&args)
-      : Expr(loc), id(std::move(id)), args(std::move(args)) {}
+  std::vector<Type> instance_types;
+  inline CallExpr(SourceLocation loc, std::unique_ptr<DeclRefExpr> &&id, std::vector<std::unique_ptr<Expr>> &&args, std::vector<Type>&& instance_types)
+      : Expr(loc), id(std::move(id)), args(std::move(args)), instance_types(std::move(instance_types)) {}
   DUMP_IMPL
 };
 
@@ -457,14 +475,28 @@ struct DeferStmt : public Stmt {
 };
 
 struct FunctionDecl : public Decl {
-  Type type;
+  Type return_type;
   std::vector<std::unique_ptr<ParamDecl>> params;
   std::unique_ptr<Block> body;
-  bool is_vll;
+  bool is_vla;
   inline FunctionDecl(SourceLocation location, std::string id, Type type, std::string module, std::vector<std::unique_ptr<ParamDecl>> &&params,
-                      std::unique_ptr<Block> &&body, bool is_vll = false, std::string lib = "", std::string og_name = "", bool is_exported = false)
-      : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), type(std::move(type)), params(std::move(params)),
-        body(std::move(body)), is_vll(is_vll) {}
+                      std::unique_ptr<Block> &&body, bool is_vla = false, std::string lib = "", std::string og_name = "", bool is_exported = false)
+      : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), return_type(std::move(type)),
+        params(std::move(params)), body(std::move(body)), is_vla(is_vla) {}
+  DUMP_IMPL
+};
+
+struct GenericFunctionDecl : public Decl {
+  Type return_type;
+  std::vector<std::unique_ptr<ParamDecl>> params;
+  std::unique_ptr<Block> body;
+  bool is_vla;
+  std::vector<std::string> placeholders;
+  inline GenericFunctionDecl(SourceLocation location, std::string id, Type type, std::string module, std::vector<std::string> placeholders,
+                             std::vector<std::unique_ptr<ParamDecl>> &&params, std::unique_ptr<Block> &&body, bool is_vla = false, std::string lib = "",
+                             std::string og_name = "", bool is_exported = false)
+      : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), return_type(std::move(type)),
+        params(std::move(params)), body(std::move(body)), is_vla(is_vla), placeholders(std::move(placeholders)) {}
   DUMP_IMPL
 };
 
@@ -524,6 +556,28 @@ struct ResolvedDecl : public IDumpable {
   virtual ~ResolvedDecl() = default;
 };
 
+struct ResolvedStructDecl : public ResolvedDecl {
+  std::vector<std::pair<Type, std::string>> members;
+  bool is_leaf{false};
+  inline ResolvedStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::pair<Type, std::string>> types,
+                            std::string lib = "", std::string og_name = "")
+      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), members(std::move(types)) {}
+  DUMP_IMPL
+};
+
+struct ResolvedGenericStructDecl : public ResolvedDecl {
+  std::vector<std::string> placeholders;
+  std::vector<std::pair<Type, std::string>> members;
+  bool is_leaf{false};
+  inline ResolvedGenericStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::string> placeholders,
+                                   std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "")
+      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), placeholders(std::move(placeholders)),
+        members(std::move(types)) {}
+  DUMP_IMPL
+};
+
+using GenericStructVec = std::vector<std::unique_ptr<ResolvedGenericStructDecl>>;
+
 struct ResolvedModule : public IDumpable {
   std::string name;
   std::string path;
@@ -541,14 +595,6 @@ struct ResolvedVarDecl : public ResolvedDecl {
                          bool is_global = false, std::string lib = "", std::string og_name = "")
       : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), initializer(std::move(init)), is_const(is_const),
         is_global(is_global) {}
-  DUMP_IMPL
-};
-
-struct ResolvedStructDecl : public ResolvedDecl {
-  std::vector<std::pair<Type, std::string>> members;
-  inline ResolvedStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::pair<Type, std::string>> types,
-                            std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), members(std::move(types)) {}
   DUMP_IMPL
 };
 
@@ -642,11 +688,11 @@ struct ResolvedParamDecl : public ResolvedDecl {
 struct ResolvedFuncDecl : public ResolvedDecl {
   std::vector<std::unique_ptr<ResolvedParamDecl>> params;
   std::unique_ptr<ResolvedBlock> body;
-  bool is_vll;
+  bool is_vla;
   inline ResolvedFuncDecl(SourceLocation loc, std::string id, Type type, std::string module, std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
-                          std::unique_ptr<ResolvedBlock> body, bool is_vll, std::string lib = "", std::string og_name = "")
+                          std::unique_ptr<ResolvedBlock> body, bool is_vla, std::string lib = "", std::string og_name = "")
       : ResolvedDecl(loc, std::move(id), std::move(type), std::move(module), std::move(lib), std::move(og_name)), params(std::move(params)),
-        body(std::move(body)), is_vll(is_vll) {}
+        body(std::move(body)), is_vla(is_vla) {}
   DUMP_IMPL
 };
 

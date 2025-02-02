@@ -9,7 +9,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                             \
+  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                            \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
   for (auto &&fn : resolved_ast) {                                                                                                                             \
     fn->dump_to_stream(output_buffer);                                                                                                                         \
@@ -24,7 +24,7 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                             \
+  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                            \
   auto resolved_ast = sema.resolve_ast();                                                                                                                      \
   sema.dump_type_infos_to_stream(output_buffer, 0);                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
@@ -37,10 +37,27 @@
   saplang::Lexer lexer{src_file};                                                                                                                              \
   saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
   auto parse_result = parser.parse_source_file();                                                                                                              \
-  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                             \
+  saplang::Sema sema{std::move(parse_result.module->declarations)};                                                                                            \
   auto resolved_ast = sema.resolve_ast(true);                                                                                                                  \
   for (auto &&fn : resolved_ast) {                                                                                                                             \
     fn->dump_to_stream(output_buffer);                                                                                                                         \
+  }                                                                                                                                                            \
+  const auto &error_stream = saplang::get_error_stream();
+
+#define TEST_SETUP_MODULE_SINGLE(module_name, file_contents)                                                                                                   \
+  saplang::clear_error_stream();                                                                                                                               \
+  std::stringstream buffer{file_contents};                                                                                                                     \
+  std::stringstream output_buffer{};                                                                                                                           \
+  saplang::SourceFile src_file{module_name, buffer.str()};                                                                                                     \
+  saplang::Lexer lexer{src_file};                                                                                                                              \
+  saplang::Parser parser(&lexer, {{}, false});                                                                                                                 \
+  std::vector<std::unique_ptr<saplang::Module>> modules;                                                                                                       \
+  auto parse_result = parser.parse_source_file();                                                                                                              \
+  modules.emplace_back(std ::move(parse_result.module));                                                                                                       \
+  saplang ::Sema sema{std::move(modules)};                                                                                                                     \
+  auto resolved_modules = sema.resolve_modules();                                                                                                              \
+  for (auto &&mod : resolved_modules) {                                                                                                                        \
+    mod->dump_to_stream(output_buffer, 0);                                                                                                                     \
   }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
 
@@ -1871,7 +1888,7 @@ fn i32 main() {
 // @TODO: slices
 // @TODO: global and local redeclaration
 
-TEST_CASE("Extern function no VLL", "[sema]") {
+TEST_CASE("Extern function no vla", "[sema]") {
   TEST_SETUP(R"(
 extern {
     fn void* allocate(i32 lenght, i32 size) alias malloc;
@@ -1893,7 +1910,7 @@ extern sapfire {
   REQUIRE(lines_it->find(") alias sapfire::render_frame render:") != std::string::npos);
 }
 
-TEST_CASE("Extern function VLL", "[sema]") {
+TEST_CASE("Extern function vla", "[sema]") {
   TEST_SETUP(R"(
 extern {
     fn void print(u8* fmt, ...) alias printf;
@@ -1906,7 +1923,7 @@ fn void main() {
   auto lines = break_by_line(output_buffer.str());
   auto lines_it = lines.begin();
   REQUIRE(lines_it->find("ResolvedFuncDecl: @(") != std::string::npos);
-  REQUIRE(lines_it->find(") VLL alias c::printf print:") != std::string::npos);
+  REQUIRE(lines_it->find(") vla alias c::printf print:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
   REQUIRE(lines_it->find(") fmt:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
@@ -2678,4 +2695,169 @@ fn void main() {
   REQUIRE(lines_it->find(") free:") != std::string::npos);
   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
   REQUIRE(lines_it->find(") ptr4:") != std::string::npos);
+}
+
+TEST_CASE("generic struct decl", "[sema]") {
+  TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic {
+    T value;
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic<T>");
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: T(value)");
+}
+
+TEST_CASE("generic struct use", "[sema]") {
+  TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic {
+    T value;
+}
+fn void main() {
+    var Generic<i32> gen = .{69};
+}
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic<T>");
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: T(value)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+  REQUIRE(lines_it->find(") main:") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") gen:__Generic_i32") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: __Generic_i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: value");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "i32(69)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic_i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(value)");
+}
+
+TEST_CASE("generic in struct", "[sema]") {
+  SECTION("1-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic {
+    T value;
+}
+struct Specific {
+    Generic<i32> generic;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: T(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: Specific");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: __Generic_i32(generic)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(value)");
+  }
+  SECTION("2-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic1 {
+    T value;
+}
+struct<T> Generic2 {
+    Generic1<T> gen1;
+    T val2;
+}
+struct Specific {
+    Generic2<i32> generic;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic1<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: T(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic2<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: Generic1<T>(gen1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: T(val2)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: Specific");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: __Generic2_i32(generic)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic1_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic2_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: __Generic1_i32(gen1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: i32(val2)");
+  }
+  SECTION("3-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic1 {
+    T value;
+}
+struct<T> Generic2 {
+    Generic1<T> gen1;
+    T val2;
+}
+struct<T> Generic3 {
+    Generic2<T> gen2;
+    T* val3;
+}
+struct Specific {
+    Generic3<i32> generic;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic1<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: T(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic2<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: Generic1<T>(gen1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: T(val2)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic3<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: Generic2<T>(gen2)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: ptr T(val3)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: Specific");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: __Generic3_i32(generic)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic1_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic2_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: __Generic1_i32(gen1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: i32(val2)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic3_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: __Generic2_i32(gen2)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: ptr i32(val3)");
+  }
+  SECTION("2-deep 2-type generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+struct<T> Generic1 {
+    T* value;
+}
+struct<T, K> Generic2 {
+    Generic1<T> gen_t;
+    Generic1<K> gen_k;
+    T* val2;
+}
+struct Specific {
+    Generic2<i32, f32> generic;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic1<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: ptr T(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericStructDecl: Generic2<T, K>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: Generic1<T>(gen_t)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: Generic1<K>(gen_k)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "2. ResolvedMemberField: ptr T(val2)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: Specific");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: __Generic2_i32_f32(generic)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic1_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: ptr i32(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic1_f32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: ptr f32(value)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __Generic2_i32_f32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: __Generic1_i32(gen_t)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "1. ResolvedMemberField: __Generic1_f32(gen_k)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "2. ResolvedMemberField: ptr i32(val2)");
+  }
 }
