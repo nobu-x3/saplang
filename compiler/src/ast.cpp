@@ -263,7 +263,32 @@ void FunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level
     lib_og_name_resolve = "alias " + og_name;
   stream << indent(indent_level) << (is_exported ? "exported " : "") << "FunctionDecl: " << (is_vla ? "vla " : "")
          << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << ":";
-  type.dump_to_stream(stream, 0);
+  return_type.dump_to_stream(stream, 0);
+  stream << '\n';
+  for (auto &&param : params) {
+    param->dump_to_stream(stream, indent_level + 1);
+  }
+  if (body)
+    body->dump_to_stream(stream, indent_level + 1);
+}
+
+void GenericFunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  std::string lib_og_name_resolve = "";
+  if (!lib.empty() && !og_name.empty()) {
+    lib_og_name_resolve = "alias " + lib + "::" + og_name;
+  } else if (!lib.empty())
+    lib_og_name_resolve = lib;
+  else if (!og_name.empty())
+    lib_og_name_resolve = "alias " + og_name;
+  stream << indent(indent_level) << (is_exported ? "exported " : "")
+         << "GenericFunctionDecl"
+            ": "
+         << (is_vla ? "vla " : "") << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << "<" << placeholders.front();
+  for (int i = 1; i < placeholders.size(); ++i) {
+    stream << ", " << placeholders[i];
+  }
+  stream << ">:";
+  return_type.dump_to_stream(stream, 0);
   stream << '\n';
   for (auto &&param : params) {
     param->dump_to_stream(stream, indent_level + 1);
@@ -499,6 +524,13 @@ void Assignment::dump_to_stream(std::stringstream &stream, size_t indent_level) 
 void CallExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "CallExpr:\n";
   id->dump_to_stream(stream, indent_level + 1);
+  if (instance_types.size()) {
+    stream << indent(indent_level + 1) << "InstanceTypes: <" << instance_types.front().name;
+    for (int i = 1; i < instance_types.size(); ++i) {
+      stream << ", " << instance_types[i].name;
+    }
+    stream << ">\n";
+  }
   for (auto &&arg : args) {
     arg->dump_to_stream(stream, indent_level + 1);
   }

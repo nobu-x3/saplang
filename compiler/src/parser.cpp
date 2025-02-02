@@ -21,21 +21,7 @@ Parser::Parser(Lexer *lexer, ParserConfig cfg) : m_Lexer(lexer), m_Config(std::m
 
 // <funcDecl>
 // ::= 'fn' <type> <identifier> '(' (<parameterList>)* ')' <block>
-std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
-  SourceLocation location = m_NextToken.location;
-  if (m_NextToken.kind != TokenKind::KwFn) {
-    return report(m_NextToken.location, "function declarations must start with 'fn'");
-  }
-  eat_next_token();
-  auto return_type = parse_type(); // eats the function identifier
-  if (!return_type) {
-    return nullptr;
-  }
-  if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value) {
-    return report(m_NextToken.location, "expected function identifier.");
-  }
-  std::string function_identifier = *m_NextToken.value;
-  eat_next_token(); // eat '('
+std::unique_ptr<FunctionDecl> Parser::parse_function_decl(SourceLocation decl_loc, Type return_type, std::string function_identifier) {
   if (m_NextToken.kind != TokenKind::Lparent)
     return report(m_NextToken.location, "expected '('.");
   auto maybe_param_list_vla = parse_parameter_list();
@@ -46,7 +32,35 @@ std::unique_ptr<FunctionDecl> Parser::parse_function_decl() {
     return report(m_NextToken.location, "failed to parse function block.");
   }
   auto &&param_list = maybe_param_list_vla->first;
-  return std::make_unique<FunctionDecl>(location, function_identifier, *return_type, m_ModuleName, std::move(param_list), std::move(block), false);
+  return std::make_unique<FunctionDecl>(decl_loc, std::move(function_identifier), std::move(return_type), m_ModuleName, std::move(param_list), std::move(block),
+                                        false);
+}
+
+// <genericFuncDecl>
+// ::= 'fn' <type> <identifier> '<' ((<type>)+ (',')*) '>' '(' (<parameterList>)* ')' <block>
+std::unique_ptr<GenericFunctionDecl> Parser::parse_generic_function_decl(SourceLocation decl_loc, Type return_type, std::string function_identifier) {
+  assert(m_NextToken.kind == TokenKind::LessThan);
+  eat_next_token();
+  std::vector<std::string> placeholders;
+  while (m_NextToken.kind != TokenKind::GreaterThan) {
+    placeholders.emplace_back(*m_NextToken.value);
+    eat_next_token(); // eat placeholder identifier
+    if (m_NextToken.kind == TokenKind::Comma)
+      eat_next_token(); // eat ','
+  }
+  eat_next_token(); // eat '>'
+  if (m_NextToken.kind != TokenKind::Lparent)
+    return report(m_NextToken.location, "expected '('.");
+  auto maybe_param_list_vla = parse_parameter_list();
+  if (!maybe_param_list_vla)
+    return nullptr;
+  std::unique_ptr<Block> block = parse_block();
+  if (!block) {
+    return report(m_NextToken.location, "failed to parse function block.");
+  }
+  auto &&param_list = maybe_param_list_vla->first;
+  return std::make_unique<GenericFunctionDecl>(decl_loc, std::move(function_identifier), std::move(return_type), m_ModuleName, std::move(placeholders),
+                                               std::move(param_list), std::move(block), false);
 }
 
 // <imports>
@@ -212,7 +226,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     return parse_defer_stmt();
   if (m_NextToken.kind == TokenKind::KwConst || m_NextToken.kind == TokenKind::KwVar)
     return parse_var_decl_stmt();
-  auto stmt = parse_assignment_or_expr();
+  auto stmt = parse_assignment_or_expr(Context::Stmt);
   if (auto *assignment = dynamic_cast<const Assignment *>(stmt.get())) {
     if (m_NextToken.kind != TokenKind::Semicolon)
       return report(m_NextToken.location, "expected ';' at the end of assignment.");
@@ -231,7 +245,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
 std::unique_ptr<IfStmt> Parser::parse_if_stmt() {
   SourceLocation location = m_NextToken.location;
   eat_next_token(); // eat 'if'
-  std::unique_ptr<Expr> condition = parse_expr();
+  std::unique_ptr<Expr> condition = parse_expr(Context::Binop);
   if (!condition)
     return nullptr;
   std::unique_ptr<Block> true_block = parse_block();
@@ -284,7 +298,7 @@ std::unique_ptr<DeferStmt> Parser::parse_defer_stmt() {
 std::unique_ptr<WhileStmt> Parser::parse_while_stmt() {
   SourceLocation location = m_NextToken.location;
   eat_next_token(); // eat 'while'
-  std::unique_ptr<Expr> condition = parse_expr();
+  std::unique_ptr<Expr> condition = parse_expr(Context::Binop);
   if (!condition)
     return nullptr;
   if (m_NextToken.kind != TokenKind::Lbrace)
@@ -305,13 +319,13 @@ std::unique_ptr<ForStmt> Parser::parse_for_stmt() {
   std::unique_ptr<DeclStmt> var_decl = parse_var_decl_stmt();
   if (!var_decl)
     return nullptr;
-  std::unique_ptr<Expr> condition = parse_expr();
+  std::unique_ptr<Expr> condition = parse_expr(Context::Binop);
   if (!condition)
     return nullptr;
   if (m_NextToken.kind != TokenKind::Semicolon)
     return report(m_NextToken.location, "expected ';' after for condition.");
   eat_next_token(); // eat ';'
-  std::unique_ptr<Stmt> increment_expr = parse_assignment_or_expr();
+  std::unique_ptr<Stmt> increment_expr = parse_assignment_or_expr(Context::Stmt);
   if (!increment_expr)
     return nullptr;
   if (m_NextToken.kind == TokenKind::Rparent)
@@ -358,7 +372,7 @@ std::unique_ptr<VarDecl> Parser::parse_var_decl(bool is_const, bool is_global) {
     return std::make_unique<VarDecl>(loc, id, *type, m_ModuleName, nullptr, is_const);
   }
   eat_next_token(); // eat '='
-  std::unique_ptr<Expr> initializer = parse_expr();
+  std::unique_ptr<Expr> initializer = parse_expr(Context::VarDecl);
   if (!initializer)
     return nullptr;
   return std::make_unique<VarDecl>(loc, id, *type, m_ModuleName, std::move(initializer), is_const);
@@ -512,8 +526,8 @@ std::unique_ptr<Assignment> Parser::parse_assignment(std::unique_ptr<Expr> lhs) 
   return parse_assignment_rhs(std::unique_ptr<DeclRefExpr>(dre), lhs_dereference_count);
 }
 
-std::unique_ptr<Stmt> Parser::parse_assignment_or_expr() {
-  std::unique_ptr<Expr> lhs = parse_prefix_expr();
+std::unique_ptr<Stmt> Parser::parse_assignment_or_expr(Context context) {
+  std::unique_ptr<Expr> lhs = parse_prefix_expr(context);
   if (!lhs)
     return nullptr;
   // Assignment
@@ -534,7 +548,7 @@ std::unique_ptr<Stmt> Parser::parse_assignment_or_expr() {
 std::unique_ptr<Assignment> Parser::parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs, int deref_count) {
   SourceLocation loc = m_NextToken.location;
   eat_next_token(); // eat '='
-  std::unique_ptr<Expr> rhs = parse_expr();
+  std::unique_ptr<Expr> rhs = parse_expr(Context::Stmt);
   if (!rhs)
     return nullptr;
   return std::make_unique<Assignment>(loc, std::move(lhs), std::move(rhs), deref_count);
@@ -547,7 +561,7 @@ std::unique_ptr<ReturnStmt> Parser::parse_return_stmt() {
   eat_next_token(); // eat 'return'
   std::unique_ptr<Expr> expr;
   if (m_NextToken.kind != TokenKind::Semicolon) {
-    expr = parse_expr();
+    expr = parse_expr(Context::Stmt);
     if (!expr)
       return nullptr;
   }
@@ -560,17 +574,44 @@ std::unique_ptr<ReturnStmt> Parser::parse_return_stmt() {
 
 // <prefixExpression>
 // ::= ('!' | '-' | '*' | '&')* <primaryExpr>
-std::unique_ptr<Expr> Parser::parse_prefix_expr() {
+std::unique_ptr<Expr> Parser::parse_prefix_expr(Context context) {
   Token token = m_NextToken;
   if (token.kind != TokenKind::Exclamation && token.kind != TokenKind::Minus && token.kind != TokenKind::Asterisk && token.kind != TokenKind::Amp &&
       token.kind != TokenKind::Tilda) {
-    return parse_primary_expr();
+    return parse_primary_expr(context);
   }
   eat_next_token(); // eat '!' or '-'
-  auto rhs = parse_prefix_expr();
+  auto rhs = parse_prefix_expr(context);
   if (!rhs)
     return nullptr;
   return std::make_unique<UnaryOperator>(token.location, std::move(rhs), token.kind);
+}
+
+std::unique_ptr<Expr> Parser::parse_call_expr(SourceLocation location, std::unique_ptr<DeclRefExpr> decl_ref_expr) {
+  std::vector<Type> generic_types;
+  if (m_NextToken.kind == TokenKind::LessThan) {
+    eat_next_token(); // eat '<'
+    while (m_NextToken.kind != TokenKind::GreaterThan) {
+      if (m_NextToken.kind != TokenKind::Identifier) {
+        go_back_to_prev_token();
+        eat_next_token(); // eat identifier @TODO: this is a hack, in case of expression in a call expr going back to prev token will go back to identifier
+                          // instead if LessThan
+        return std::move(decl_ref_expr);
+      }
+      auto maybe_type = parse_type();
+      if (!maybe_type)
+        return nullptr;
+      generic_types.emplace_back(std::move(*maybe_type));
+      if (m_NextToken.kind == TokenKind::Comma)
+        eat_next_token(); // eat ','
+    }
+    eat_next_token();
+  }
+  location = m_NextToken.location;
+  auto arg_list = parse_argument_list();
+  if (!arg_list)
+    return nullptr;
+  return std::make_unique<CallExpr>(location, std::move(decl_ref_expr), std::move(*arg_list), std::move(generic_types));
 }
 
 // <primaryExpression>
@@ -609,7 +650,7 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr() {
 //
 // <nullExpr>
 // ::= 'null'
-std::unique_ptr<Expr> Parser::parse_primary_expr() {
+std::unique_ptr<Expr> Parser::parse_primary_expr(Context context) {
   SourceLocation location = m_NextToken.location;
   if (m_NextToken.kind == TokenKind::Lparent) {
     eat_next_token(); // eat '('
@@ -627,7 +668,7 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
         go_back_to_prev_token(); // restore identifier
       }
     }
-    auto expr = parse_expr();
+    auto expr = parse_expr(context);
     if (!expr)
       return nullptr;
     if (m_NextToken.kind != TokenKind::Rparent)
@@ -673,6 +714,7 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
     std::string var_id = *m_NextToken.value;
     auto decl_ref_expr = std::make_unique<DeclRefExpr>(location, var_id);
     eat_next_token();
+    std::vector<Type> generic_types;
     if (m_NextToken.kind == TokenKind::ColonColon) {
       return parse_enum_element_access(std::move(var_id));
     }
@@ -682,14 +724,12 @@ std::unique_ptr<Expr> Parser::parse_primary_expr() {
         return parse_member_access(std::move(decl_ref_expr), var_id);
       } else if (m_NextToken.kind == TokenKind::Lbracket) {
         return parse_array_element_access(var_id);
+      } else if (m_NextToken.kind == TokenKind::LessThan && context != Context::Binop) {
+        return parse_call_expr(location, std::move(decl_ref_expr));
       }
       return decl_ref_expr;
     }
-    location = m_NextToken.location;
-    auto arg_list = parse_argument_list();
-    if (!arg_list)
-      return nullptr;
-    return std::make_unique<CallExpr>(location, std::move(decl_ref_expr), std::move(*arg_list));
+    return parse_call_expr(location, std::move(decl_ref_expr));
   }
   if (m_NextToken.kind == TokenKind::Dot) {
     eat_next_token(); // eat '.'
@@ -718,7 +758,7 @@ std::unique_ptr<ExplicitCast> Parser::parse_explicit_cast(Type type) {
   if (m_NextToken.kind != TokenKind::Rparent)
     return report(m_NextToken.location, "expected ')' after explicit cast type.");
   eat_next_token(); // eat ')'
-  std::unique_ptr<Expr> expr = parse_expr();
+  std::unique_ptr<Expr> expr = parse_expr(Context::Stmt);
   if (!expr)
     return nullptr;
   return std::make_unique<ExplicitCast>(type_loc, type, std::move(expr));
@@ -738,7 +778,7 @@ std::unique_ptr<MemberAccess> Parser::parse_member_access(std::unique_ptr<DeclRe
       eat_next_token(); // eat '('
       std::vector<std::unique_ptr<Expr>> tmp_params;
       while (m_NextToken.kind != TokenKind::Rparent) {
-        auto expr = parse_expr();
+        auto expr = parse_expr(Context::Stmt);
         if (!expr)
           return nullptr;
         tmp_params.emplace_back(std::move(expr));
@@ -763,7 +803,7 @@ std::unique_ptr<ArrayElementAccess> Parser::parse_array_element_access(std::stri
   std::vector<std::unique_ptr<Expr>> indices{};
   while (m_NextToken.kind == TokenKind::Lbracket) {
     eat_next_token(); // eat '['
-    auto expr = parse_expr();
+    auto expr = parse_expr(Context::Stmt);
     if (!expr)
       return nullptr;
     indices.emplace_back(std::move(expr));
@@ -805,7 +845,7 @@ std::unique_ptr<StructLiteralExpr> Parser::parse_struct_literal_expr() {
         eat_next_token(); // eat '='
       }
     }
-    std::unique_ptr<Expr> initializer = parse_expr();
+    std::unique_ptr<Expr> initializer = parse_expr(Context::Stmt);
     if (!initializer)
       return nullptr;
     field_initializers.emplace_back(std::make_pair(id, std::move(initializer)));
@@ -821,7 +861,7 @@ std::unique_ptr<ArrayLiteralExpr> Parser::parse_array_literal_expr() {
   eat_next_token(); // eat '['
   std::vector<std::unique_ptr<Expr>> expressions{};
   while (m_NextToken.kind != TokenKind::Rbracket) {
-    auto expr = parse_expr();
+    auto expr = parse_expr(Context::Stmt);
     if (!expr)
       return nullptr;
     expressions.emplace_back(std::move(expr));
@@ -854,7 +894,7 @@ std::optional<std::vector<std::unique_ptr<Expr>>> Parser::parse_argument_list() 
     return arg_list;
   }
   while (true) {
-    auto expr = parse_expr();
+    auto expr = parse_expr(Context::Stmt);
     if (!expr)
       return std::nullopt;
     arg_list.emplace_back(std::move(expr));
@@ -906,8 +946,8 @@ std::optional<ParameterList> Parser::parse_parameter_list() {
   return std::make_pair(std::move(param_decls), is_vla);
 }
 
-std::unique_ptr<Expr> Parser::parse_expr() {
-  auto lhs = parse_prefix_expr();
+std::unique_ptr<Expr> Parser::parse_expr(Context context) {
+  auto lhs = parse_prefix_expr(context);
   if (!lhs)
     return nullptr;
   return parse_expr_rhs(std::move(lhs), 0);
@@ -951,7 +991,7 @@ std::unique_ptr<Expr> Parser::parse_expr_rhs(std::unique_ptr<Expr> lhs, int prec
     if (cur_op_prec < precedence)
       return lhs;
     eat_next_token();
-    auto rhs = parse_prefix_expr();
+    auto rhs = parse_prefix_expr(Context::Binop);
     if (!rhs)
       return nullptr;
     if (cur_op_prec < get_tok_precedence(m_NextToken.kind)) {
@@ -1229,9 +1269,28 @@ ParsingResult Parser::parse_source_file() {
       is_exported = true;
       eat_next_token();
     }
-    if (m_NextToken.kind == TokenKind::KwFn)
-      decl = parse_function_decl();
-    else if (m_NextToken.kind == TokenKind::KwStruct) {
+    if (m_NextToken.kind == TokenKind::KwFn) {
+      SourceLocation decl_loc = m_NextToken.location;
+      eat_next_token(); // eat 'fn'
+      std::optional<Type> return_type = parse_type();
+      if (!return_type) {
+        is_complete_ast = false;
+        sync_on(sync_kinds);
+        continue;
+      }
+      if (m_NextToken.kind != TokenKind::Identifier || !m_NextToken.value) {
+        report(m_NextToken.location, "expected function identifier.");
+        is_complete_ast = false;
+        sync_on(sync_kinds);
+        continue;
+      }
+      std::string function_identifier = *m_NextToken.value;
+      eat_next_token(); // eat function identifier
+      if (m_NextToken.kind == TokenKind::LessThan)
+        decl = parse_generic_function_decl(decl_loc, std::move(*return_type), std::move(function_identifier));
+      else
+        decl = parse_function_decl(decl_loc, std::move(*return_type), std::move(function_identifier));
+    } else if (m_NextToken.kind == TokenKind::KwStruct) {
       SourceLocation struct_token_loc = m_NextToken.location;
       eat_next_token(); // eat 'struct'
       if (m_NextToken.kind == TokenKind::LessThan) {

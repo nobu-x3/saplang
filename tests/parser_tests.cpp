@@ -1995,7 +1995,6 @@ TEST_CASE("generic in struct", "[parser]") {
 struct<T> Generic {
     T value;
 }
-
 struct Specific {
     Generic<i32> generic;
 }
@@ -2013,12 +2012,10 @@ struct Specific {
 struct<T> Generic1 {
     T value;
 }
-
 struct<T> Generic2 {
     Generic1<T> gen1;
     T val2;
 }
-
 struct Specific {
     Generic2<i32> generic;
 }
@@ -2033,5 +2030,106 @@ struct Specific {
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: T(val2)");
     CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: Specific");
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: Generic2<i32>(generic)");
+  }
+}
+
+TEST_CASE("generic in function decl", "[parser]") {
+  SECTION("1-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn void gen_fun<T>(T* generic_param) {
+    generic_param.first = 0;
+}
+struct TestType {
+    i32 first;
+}
+fn i32 main() {
+    var TestType test = .{32};
+    gen_fun<TestType>(&test);
+    return test.first;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericFunctionDecl: gen_fun<T>:void");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: generic_param:ptr T");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: generic_param");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(32)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: gen_fun");
+    CONTAINS_NEXT_REQUIRE(lines_it, "InstanceTypes: <TestType>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ReturnStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
+  }
+  SECTION("2-deep generic") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn void gen_fun<T>(T* generic_param) {
+    gen_fun1<T>(generic_param);
+}
+fn void gen_fun1<T>(T* generic_param) {
+    generic_param.first = 0;
+}
+struct TestType {
+    i32 first;
+}
+fn i32 main() {
+    var TestType test = .{32};
+    gen_fun<TestType>(&test);
+    return test.first;
+}
+  )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericFunctionDecl: gen_fun<T>:void");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: generic_param:ptr T");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: gen_fun1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "InstanceTypes: <T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: generic_param");
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericFunctionDecl: gen_fun1<T>:void");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: generic_param:ptr T");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: generic_param");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(32)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: gen_fun");
+    CONTAINS_NEXT_REQUIRE(lines_it, "InstanceTypes: <TestType>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ReturnStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
   }
 }
