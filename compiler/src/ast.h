@@ -323,6 +323,7 @@ struct DeclStmt : public Stmt {
   inline DeclStmt(SourceLocation loc, std::unique_ptr<VarDecl> var) : Stmt(loc), var_decl(std::move(var)) {}
   DUMP_IMPL;
   std::unique_ptr<Stmt> clone() const override { return std::make_unique<DeclStmt>(location, var_decl->clone()); }
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
 };
 
 struct NumberLiteral : public Expr {
@@ -406,7 +407,7 @@ struct ParamDecl : public Decl {
   Type type;
   bool is_const;
   inline ParamDecl(SourceLocation loc, std::string id, Type type, bool is_const) : Decl(loc, id, ""), type(std::move(type)), is_const(is_const) {}
-  DUMP_IMPL
+  DUMP_IMPL;
   bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
 };
 
@@ -620,6 +621,7 @@ struct FunctionDecl : public Decl {
       : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), return_type(std::move(type)),
         params(std::move(params)), body(std::move(body)), is_vla(is_vla) {}
   DUMP_IMPL;
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
 };
 
 struct GenericFunctionDecl : public Decl {

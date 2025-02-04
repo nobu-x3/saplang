@@ -1134,7 +1134,11 @@ std::unique_ptr<ResolvedFuncDecl> Sema::resolve_func_decl(const FunctionDecl &fu
 }
 
 std::unique_ptr<ResolvedGenericFunctionDecl> Sema::resolve_generic_func_decl(const GenericFunctionDecl &func) {
-  auto type = resolve_type(func.return_type);
+  Type return_type = func.return_type;
+  auto placeholder_it = std::find(func.placeholders.begin(), func.placeholders.end(), return_type.name);
+  if (placeholder_it != func.placeholders.end())
+    return_type.kind = Type::Kind::Placeholder;
+  auto type = resolve_type(return_type);
   if (!type) {
     return report(func.location, "function '" + func.id + "' has invalid '" + func.return_type.name + "' type");
   }
