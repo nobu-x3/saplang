@@ -1,41 +1,29 @@
 {
   "configurations": {
     "Tests": {
-      "adapter": "vscode-cpptools",
+      "adapter": "CodeLLDB",
       "configuration": {
         "request": "launch",
         "program": "${workspaceFolder}/build/bin/saplang_tests",
         "args": [],
         "cwd": "${workspaceFolder}",
         "environment": [],
-        "externalConsole": true,
-        "MIMode": "gdb",
-        "setupCommands": [
-          {
-            "description": "Enable pretty-printing for gdb",
-            "text": "-enable-pretty-printing",
-            "ignoreFailures": true
-          }
-        ]
+        "stopOnEntry": false,
+        "terminal": "integrated",
+        "targetArchitecture": "x86_64"
       }
     },
     "Launch": {
-      "adapter": "vscode-cpptools",
+      "adapter": "CodeLLDB",
       "configuration": {
         "request": "launch",
         "program": "${workspaceFolder}/build/bin/compiler",
         "args": ["test.sl", "-o"," test", "-dbg", "-i", "incl"],
         "cwd": "${workspaceFolder}/build/bin",
         "environment": [],
-        "externalConsole": true,
-        "MIMode": "gdb",
-        "setupCommands": [
-          {
-            "description": "Enable pretty-printing for gdb",
-            "text": "-enable-pretty-printing",
-            "ignoreFailures": true
-          }
-        ]
+        "stopOnEntry": false,
+        "terminal": "integrated",
+        "targetArchitecture": "x86_64"
       }
     }
 }
