@@ -219,12 +219,15 @@ struct Decl : public IDumpable {
   inline Decl(SourceLocation location, std::string id, std::string module, std::string lib = "", std::string og_name = "", bool is_exported = false)
       : location(location), id(std::move(id)), module(std::move(module)), lib(std::move(lib)), og_name(std::move(og_name)), is_exported(is_exported) {}
   virtual ~Decl() = default;
+  virtual bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) { return true; };
 };
 
 struct Stmt : public IDumpable {
   SourceLocation location;
   inline Stmt(SourceLocation loc) : location(loc) {}
   virtual ~Stmt() = default;
+  virtual bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) { return true; }
+  virtual std::unique_ptr<Stmt> clone() const = 0;
 };
 
 struct Expr : public Stmt {
@@ -242,7 +245,7 @@ struct Module : public IDumpable {
                 std::set<std::string> libraries)
       : name(std::move(module_name)), path(std::move(path)), declarations(std::move(declarations)), imports(std::move(imports)),
         libraries(std::move(libraries)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
 };
 
 struct SizeofExpr : public Expr {
@@ -251,19 +254,22 @@ struct SizeofExpr : public Expr {
   unsigned long array_element_count;
   inline explicit SizeofExpr(SourceLocation loc, std::string type_name, bool is_ptr, unsigned long array_element_count)
       : Expr(loc), type_name(std::move(type_name)), is_ptr(is_ptr), array_element_count(array_element_count) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<SizeofExpr>(location, type_name, is_ptr, array_element_count); };
 };
 
 struct AlignofExpr : public Expr {
   std::string type_name;
   bool is_ptr;
   inline explicit AlignofExpr(SourceLocation loc, std::string type_name, bool is_ptr) : Expr(loc), type_name(std::move(type_name)), is_ptr(is_ptr) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<AlignofExpr>(location, type_name, is_ptr); };
 };
 
 struct NullExpr : public Expr {
   inline NullExpr(SourceLocation loc) : Expr(loc) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<NullExpr>(location); };
 };
 
 struct VarDecl : public Decl {
@@ -274,15 +280,22 @@ struct VarDecl : public Decl {
                  std::string og_name = "", bool is_exported = false)
       : Decl(loc, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), type(type), initializer(std::move(init)),
         is_const(is_const) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
+  std::unique_ptr<VarDecl> clone() const {
+    std::unique_ptr<Stmt> stmt_copy = initializer->clone();
+    std::unique_ptr<Expr> init_copy = std::unique_ptr<Expr>(static_cast<Expr *>(stmt_copy.release()));
+    return std::make_unique<VarDecl>(location, id, type, module, std::move(init_copy), is_const, lib, og_name, is_exported);
+  }
 };
 
+// I'm not adding replace_placeholders because I already handled it in sema... This is so cursed.......
 struct StructDecl : public Decl {
   std::vector<std::pair<Type, std::string>> members;
   inline StructDecl(SourceLocation loc, const std::string &id, std::string module, std::vector<std::pair<Type, std::string>> types, std::string lib = "",
                     std::string og_name = "", bool is_exported = false)
       : Decl(loc, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), members(std::move(types)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
 };
 
 struct GenericStructDecl : public Decl {
@@ -292,7 +305,7 @@ struct GenericStructDecl : public Decl {
                            std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "", bool is_exported = false)
       : Decl(loc, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), placeholders(std::move(placeholders)),
         members(std::move(types)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
 };
 
 struct EnumDecl : public Decl {
@@ -302,13 +315,14 @@ struct EnumDecl : public Decl {
                   std::string lib = "", std::string og_name = "", bool is_exported = false)
       : Decl(loc, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), underlying_type(underlying_type),
         name_values_map(std::move(name_values_map)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
 };
 
 struct DeclStmt : public Stmt {
   std::unique_ptr<VarDecl> var_decl;
   inline DeclStmt(SourceLocation loc, std::unique_ptr<VarDecl> var) : Stmt(loc), var_decl(std::move(var)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<DeclStmt>(location, var_decl->clone()); }
 };
 
 struct NumberLiteral : public Expr {
@@ -316,7 +330,8 @@ struct NumberLiteral : public Expr {
   NumberType type;
   std::string value;
   inline NumberLiteral(SourceLocation loc, NumberType type, std::string value) : Expr(loc), type(type), value(std::move(value)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<NumberLiteral>(location, type, value); };
 };
 
 struct EnumElementAccess : public Expr {
@@ -324,13 +339,19 @@ struct EnumElementAccess : public Expr {
   std::string member_id;
   inline EnumElementAccess(SourceLocation loc, std::string enum_id, std::string member_id)
       : Expr(loc), enum_id(std::move(enum_id)), member_id(std::move(member_id)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<EnumElementAccess>(location, enum_id, member_id); };
 };
 
 struct GroupingExpr : public Expr {
   std::unique_ptr<Expr> expr;
   inline explicit GroupingExpr(SourceLocation loc, std::unique_ptr<Expr> expr) : Expr(loc), expr(std::move(expr)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    std::unique_ptr<Stmt> stmt_copy = expr->clone();
+    std::unique_ptr<Expr> expr_copy = std::unique_ptr<Expr>(static_cast<Expr *>(stmt_copy.release()));
+    return std::make_unique<GroupingExpr>(location, std::move(expr_copy));
+  };
 };
 
 struct BinaryOperator : public Expr {
@@ -339,27 +360,46 @@ struct BinaryOperator : public Expr {
   TokenKind op;
   inline BinaryOperator(SourceLocation loc, std ::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, TokenKind op)
       : Expr(loc), lhs(std::move(lhs)), rhs(std::move(rhs)), op(op) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    std::unique_ptr<Stmt> lhs_stmt_copy = lhs->clone();
+    std::unique_ptr<Expr> lhs_expr_copy = std::unique_ptr<Expr>(static_cast<Expr *>(lhs_stmt_copy.release()));
+    std::unique_ptr<Stmt> rhs_stmt_copy = rhs->clone();
+    std::unique_ptr<Expr> rhs_expr_copy = std::unique_ptr<Expr>(static_cast<Expr *>(rhs_stmt_copy.release()));
+    return std::make_unique<BinaryOperator>(location, std::move(lhs_expr_copy), std::move(rhs_expr_copy), op);
+  };
 };
 
 struct UnaryOperator : public Expr {
   std::unique_ptr<Expr> rhs;
   TokenKind op;
   inline UnaryOperator(SourceLocation loc, std::unique_ptr<Expr> rhs, TokenKind op) : Expr(loc), rhs(std::move(rhs)), op(op) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    std::unique_ptr<Stmt> rhs_stmt_copy = rhs->clone();
+    std::unique_ptr<Expr> rhs_expr_copy = std::unique_ptr<Expr>(static_cast<Expr *>(rhs_stmt_copy.release()));
+    return std::make_unique<UnaryOperator>(location, std::move(rhs_expr_copy), op);
+  };
 };
 
 struct ExplicitCast : public Expr {
   Type type;
   std::unique_ptr<Expr> rhs;
   inline ExplicitCast(SourceLocation loc, Type type, std::unique_ptr<Expr> rhs) : Expr(loc), type(type), rhs(std::move(rhs)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
+  std::unique_ptr<Stmt> clone() const override {
+    std::unique_ptr<Stmt> rhs_stmt_copy = rhs->clone();
+    std::unique_ptr<Expr> rhs_expr_copy = std::unique_ptr<Expr>(static_cast<Expr *>(rhs_stmt_copy.release()));
+    return std::make_unique<ExplicitCast>(location, type, std::move(rhs_expr_copy));
+  };
 };
 
 struct DeclRefExpr : public Expr {
   std::string id;
   inline DeclRefExpr(SourceLocation loc, std::string id) : Expr(loc), id(std::move(id)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<DeclRefExpr>(location, id); };
 };
 
 struct ParamDecl : public Decl {
@@ -367,6 +407,7 @@ struct ParamDecl : public Decl {
   bool is_const;
   inline ParamDecl(SourceLocation loc, std::string id, Type type, bool is_const) : Decl(loc, id, ""), type(std::move(type)), is_const(is_const) {}
   DUMP_IMPL
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
 };
 
 // bool signifies whether there's a vla
@@ -379,34 +420,79 @@ struct MemberAccess : public DeclRefExpr {
   inline explicit MemberAccess(SourceLocation loc, std::string var_id, std::string field, std::unique_ptr<DeclRefExpr> inner_decl_ref_expr,
                                std::optional<std::vector<std::unique_ptr<Expr>>> params)
       : DeclRefExpr(loc, std::move(var_id)), field(std::move(field)), params(std::move(params)), inner_decl_ref_expr(std::move(inner_decl_ref_expr)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    std::optional<std::vector<std::unique_ptr<Expr>>> params_copy;
+    if (params) {
+      params_copy->reserve(params->size());
+      for (auto &&param : *params) {
+        auto param_stmt_copy = param->clone();
+        auto param_expr_copy = std::unique_ptr<Expr>(static_cast<Expr *>(param_stmt_copy.release()));
+        params_copy->push_back(std::move(param_expr_copy));
+      }
+    }
+    auto inner_decl_stmt = inner_decl_ref_expr ? inner_decl_ref_expr->clone() : nullptr;
+    auto inner_decl_expr = inner_decl_stmt ? std::unique_ptr<DeclRefExpr>(static_cast<DeclRefExpr *>(inner_decl_stmt.release())) : nullptr;
+    return std::make_unique<MemberAccess>(location, id, field, std::move(inner_decl_expr), std::move(params_copy));
+  };
 };
 
 struct ArrayElementAccess : public DeclRefExpr {
   std::vector<std::unique_ptr<Expr>> indices;
   inline explicit ArrayElementAccess(SourceLocation loc, std::string var_id, std::vector<std::unique_ptr<Expr>> indices)
       : DeclRefExpr(loc, std::move(var_id)), indices(std::move(indices)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    std::vector<std::unique_ptr<Expr>> indices_copy;
+    indices_copy.reserve(indices.size());
+    for (auto &&index : indices) {
+      auto index_stmt_copy = index->clone();
+      auto index_expr_copy = std::unique_ptr<Expr>(static_cast<Expr *>(index_stmt_copy.release()));
+      indices_copy.push_back(std::move(index_expr_copy));
+    }
+    return std::make_unique<ArrayElementAccess>(location, id, std::move(indices_copy));
+  };
 };
 
 using FieldInitializer = std::pair<std::string, std::unique_ptr<Expr>>;
 struct StructLiteralExpr : public Expr {
   std::vector<FieldInitializer> field_initializers;
   inline StructLiteralExpr(SourceLocation loc, std::vector<FieldInitializer> initializers) : Expr(loc), field_initializers(std::move(initializers)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    std::vector<FieldInitializer> init_copy;
+    init_copy.reserve(field_initializers.size());
+    for (auto &&[str, expr] : field_initializers) {
+      auto expr_stmt_copy = expr->clone();
+      auto expr_copy = std::unique_ptr<Expr>(static_cast<Expr *>(expr_stmt_copy.release()));
+      init_copy.push_back(std::make_pair(str, std::move(expr_copy)));
+    }
+    return std::make_unique<StructLiteralExpr>(location, std::move(init_copy));
+  };
 };
 
 struct ArrayLiteralExpr : public Expr {
   std::vector<std::unique_ptr<Expr>> element_initializers;
   inline ArrayLiteralExpr(SourceLocation loc, std::vector<std::unique_ptr<Expr>> el_initializers)
       : Expr(loc), element_initializers(std::move(el_initializers)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    std::vector<std::unique_ptr<Expr>> init_copy;
+    init_copy.reserve(element_initializers.size());
+    for (auto &&init : element_initializers) {
+      auto init_stmt_copy = init->clone();
+      auto init_expr_copy = std::unique_ptr<Expr>(static_cast<Expr *>(init_stmt_copy.release()));
+      init_copy.push_back(std::move(init_expr_copy));
+    }
+    return std::make_unique<ArrayLiteralExpr>(location, std::move(init_copy));
+  };
 };
 
 struct StringLiteralExpr : public Expr {
   std::string val;
   inline StringLiteralExpr(SourceLocation loc, std::string val) : Expr(loc), val(std::move(val)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<StringLiteralExpr>(location, val); }
 };
 
 struct Assignment : public Stmt {
@@ -415,29 +501,62 @@ struct Assignment : public Stmt {
   int lhs_deref_count;
   inline Assignment(SourceLocation loc, std::unique_ptr<DeclRefExpr> var, std::unique_ptr<Expr> expr, int lhs_deref_count)
       : Stmt(loc), variable(std::move(var)), expr(std::move(expr)), lhs_deref_count(lhs_deref_count) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    auto var_stmt = variable->clone();
+    auto var_expr = std::unique_ptr<DeclRefExpr>(static_cast<DeclRefExpr *>(var_stmt.release()));
+    auto expr_stmt = expr->clone();
+    auto expr_expr = std::unique_ptr<Expr>(static_cast<Expr *>(expr_stmt.release()));
+    return std::make_unique<Assignment>(location, std::move(var_expr), std::move(expr_expr), lhs_deref_count);
+  }
 };
 
 struct CallExpr : public Expr {
   std::unique_ptr<DeclRefExpr> id;
   std::vector<std::unique_ptr<Expr>> args;
   std::vector<Type> instance_types;
-  inline CallExpr(SourceLocation loc, std::unique_ptr<DeclRefExpr> &&id, std::vector<std::unique_ptr<Expr>> &&args, std::vector<Type>&& instance_types)
+  inline CallExpr(SourceLocation loc, std::unique_ptr<DeclRefExpr> &&id, std::vector<std::unique_ptr<Expr>> &&args, std::vector<Type> &&instance_types)
       : Expr(loc), id(std::move(id)), args(std::move(args)), instance_types(std::move(instance_types)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
+  std::unique_ptr<Stmt> clone() const override {
+    auto id_stmt = id->clone();
+    auto id_expr = std::unique_ptr<DeclRefExpr>(static_cast<DeclRefExpr *>(id_stmt.release()));
+    std::vector<std::unique_ptr<Expr>> args_copy;
+    args_copy.reserve(args.size());
+    for (auto &&arg : args) {
+      auto expr_stmt = arg->clone();
+      auto expr_expr = std::unique_ptr<Expr>(static_cast<Expr *>(expr_stmt.release()));
+      args_copy.push_back(std::move(expr_expr));
+    }
+    auto instance_types_copy = instance_types;
+    return std::make_unique<CallExpr>(location, std::move(id_expr), std::move(args_copy), std::move(instance_types_copy));
+  }
 };
 
 struct ReturnStmt : public Stmt {
   std::unique_ptr<Expr> expr;
   inline ReturnStmt(SourceLocation loc, std::unique_ptr<Expr> &&expr = nullptr) : Stmt(loc), expr(std::move(expr)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    auto expr_stmt = expr ? expr->clone() : nullptr;
+    auto expr_expr = expr_stmt ? std::unique_ptr<Expr>(static_cast<Expr *>(expr_stmt.release())) : nullptr;
+    return std::make_unique<ReturnStmt>(location, std::move(expr_expr));
+  }
 };
 
 struct Block : public IDumpable {
   SourceLocation location;
   std::vector<std::unique_ptr<Stmt>> statements;
   inline Block(SourceLocation location, std::vector<std::unique_ptr<Stmt>> &&statements) : location(location), statements(std::move(statements)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
+  void replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types);
+  Block(const Block &other) : location(other.location) {
+    statements.reserve(other.statements.size());
+    for (auto &&stmt : other.statements) {
+      statements.push_back(stmt->clone());
+    }
+  }
 };
 
 struct WhileStmt : public Stmt {
@@ -446,6 +565,11 @@ struct WhileStmt : public Stmt {
   inline WhileStmt(SourceLocation loc, std::unique_ptr<Expr> cond, std::unique_ptr<Block> body)
       : Stmt(loc), condition(std::move(cond)), body(std::move(body)) {}
   DUMP_IMPL
+  std::unique_ptr<Stmt> clone() const override {
+    auto cond_st = condition->clone();
+    auto cond_ex = std::unique_ptr<Expr>(static_cast<Expr *>(cond_st.release()));
+    return std::make_unique<WhileStmt>(location, std::move(cond_ex), std::make_unique<Block>(*body));
+  }
 };
 
 struct ForStmt : public Stmt {
@@ -457,6 +581,12 @@ struct ForStmt : public Stmt {
                  std::unique_ptr<Block> body)
       : Stmt(loc), counter_variable(std::move(var)), condition(std::move(condition)), increment_expr(std::move(increment)), body(std::move(body)) {}
   DUMP_IMPL
+  std::unique_ptr<Stmt> clone() const override {
+    auto cond_st = condition->clone();
+    auto cond_ex = std::unique_ptr<Expr>(static_cast<Expr *>(cond_st.release()));
+    auto counter_copy = std::unique_ptr<DeclStmt>(static_cast<DeclStmt *>(counter_variable->clone().release()));
+    return std::make_unique<ForStmt>(location, std::move(counter_copy), std::move(cond_ex), std::move(increment_expr->clone()), std::make_unique<Block>(*body));
+  }
 };
 
 struct IfStmt : public Stmt {
@@ -466,12 +596,18 @@ struct IfStmt : public Stmt {
   inline IfStmt(SourceLocation location, std::unique_ptr<Expr> cond, std::unique_ptr<Block> true_block, std::unique_ptr<Block> false_block)
       : Stmt(location), condition(std::move(cond)), true_block(std::move(true_block)), false_block(std::move(false_block)) {}
   DUMP_IMPL
+  std::unique_ptr<Stmt> clone() const override {
+    auto cond_st = condition->clone();
+    auto cond_ex = std::unique_ptr<Expr>(static_cast<Expr *>(cond_st.release()));
+    return std::make_unique<IfStmt>(location, std::move(cond_ex), std::make_unique<Block>(*true_block), std::make_unique<Block>(*false_block));
+  }
 };
 
 struct DeferStmt : public Stmt {
   std::unique_ptr<Block> block;
   inline explicit DeferStmt(SourceLocation loc, std::unique_ptr<Block> block) : Stmt(loc), block(std::move(block)) {}
   DUMP_IMPL
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<DeferStmt>(location, std::make_unique<Block>(*block)); }
 };
 
 struct FunctionDecl : public Decl {
@@ -483,7 +619,7 @@ struct FunctionDecl : public Decl {
                       std::unique_ptr<Block> &&body, bool is_vla = false, std::string lib = "", std::string og_name = "", bool is_exported = false)
       : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), return_type(std::move(type)),
         params(std::move(params)), body(std::move(body)), is_vla(is_vla) {}
-  DUMP_IMPL
+  DUMP_IMPL;
 };
 
 struct GenericFunctionDecl : public Decl {
@@ -497,7 +633,7 @@ struct GenericFunctionDecl : public Decl {
                              std::string og_name = "", bool is_exported = false)
       : Decl(location, std::move(id), std::move(module), std::move(lib), std::move(og_name), is_exported), return_type(std::move(type)),
         params(std::move(params)), body(std::move(body)), is_vla(is_vla), placeholders(std::move(placeholders)) {}
-  DUMP_IMPL
+  DUMP_IMPL;
 };
 
 struct ResolvedStmt : public IDumpable {
@@ -693,6 +829,19 @@ struct ResolvedFuncDecl : public ResolvedDecl {
                           std::unique_ptr<ResolvedBlock> body, bool is_vla, std::string lib = "", std::string og_name = "")
       : ResolvedDecl(loc, std::move(id), std::move(type), std::move(module), std::move(lib), std::move(og_name)), params(std::move(params)),
         body(std::move(body)), is_vla(is_vla) {}
+  DUMP_IMPL
+};
+
+struct ResolvedGenericFunctionDecl : public ResolvedDecl {
+  std::vector<std::unique_ptr<ResolvedParamDecl>> params;
+  const Block *generic_block;
+  bool is_vla;
+  std::vector<std::string> placeholders;
+  inline ResolvedGenericFunctionDecl(SourceLocation location, std::string id, Type type, std::string module, std::vector<std::string> placeholders,
+                                     std::vector<std::unique_ptr<ResolvedParamDecl>> &&params, const Block *generic_block, bool is_vla = false,
+                                     std::string lib = "", std::string og_name = "")
+      : ResolvedDecl(location, std::move(id), std::move(type), std::move(module), std::move(lib), std::move(og_name)), params(std::move(params)),
+        generic_block(generic_block), is_vla(is_vla), placeholders(std::move(placeholders)) {}
   DUMP_IMPL
 };
 

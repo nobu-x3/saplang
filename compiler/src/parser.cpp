@@ -51,7 +51,7 @@ std::unique_ptr<GenericFunctionDecl> Parser::parse_generic_function_decl(SourceL
   eat_next_token(); // eat '>'
   if (m_NextToken.kind != TokenKind::Lparent)
     return report(m_NextToken.location, "expected '('.");
-  auto maybe_param_list_vla = parse_parameter_list();
+  auto maybe_param_list_vla = parse_parameter_list_of_generic_fn(placeholders);
   if (!maybe_param_list_vla)
     return nullptr;
   std::unique_ptr<Block> block = parse_block();
@@ -933,6 +933,43 @@ std::optional<ParameterList> Parser::parse_parameter_list() {
     auto param_decl = parse_param_decl();
     if (!param_decl)
       return std::nullopt;
+    param_decls.emplace_back(std::move(param_decl));
+    if (m_NextToken.kind != TokenKind::Comma)
+      break;
+    eat_next_token(); // eat ','
+  }
+  if (m_NextToken.kind != TokenKind::Rparent) {
+    report(m_NextToken.location, "expected ')'.");
+    return std::nullopt;
+  }
+  eat_next_token(); // eat ')'
+  return std::make_pair(std::move(param_decls), is_vla);
+}
+
+std::optional<ParameterList> Parser::parse_parameter_list_of_generic_fn(const std::vector<std::string> &placeholders) {
+  if (m_NextToken.kind != TokenKind::Lparent) {
+    report(m_NextToken.location, "expected '('");
+    return std::nullopt;
+  }
+  eat_next_token(); // eat '('
+  std::vector<std::unique_ptr<ParamDecl>> param_decls;
+  if (m_NextToken.kind == TokenKind::Rparent) {
+    eat_next_token(); // eat ')'
+    return std::make_pair(std::move(param_decls), false);
+  }
+  bool is_vla = false;
+  while (true) {
+    if (m_NextToken.kind == TokenKind::vla) {
+      eat_next_token(); // eat '...'
+      is_vla = true;
+      break;
+    }
+    auto param_decl = parse_param_decl();
+    if (!param_decl)
+      return std::nullopt;
+    auto placeholder_it = std::find(placeholders.begin(), placeholders.end(), param_decl->type.name);
+    if (placeholder_it != placeholders.end())
+      param_decl->type.kind = Type::Kind::Placeholder;
     param_decls.emplace_back(std::move(param_decl));
     if (m_NextToken.kind != TokenKind::Comma)
       break;
