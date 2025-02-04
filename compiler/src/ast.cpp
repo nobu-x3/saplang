@@ -9,6 +9,22 @@
 
 namespace saplang {
 
+int find_placeholder_index(std::string_view placeholder_name, const std::vector<std::string> &placeholders) {
+  int placeholder_index = 0;
+  bool found = false;
+  for (auto &&placeholder : placeholders) {
+    if (placeholder == placeholder_name) {
+      found = true;
+      break;
+    }
+    ++placeholder_index;
+  }
+  if (!found) {
+    return -1;
+  }
+  return placeholder_index;
+}
+
 // Type Type::get_builtin_type(Kind kind) {
 //   static std::unordered_map<Kind, Type> s_TypeMap{
 //       {Kind::Bool, {Type::builtin_bool()}},
@@ -278,6 +294,27 @@ void FunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level
     body->dump_to_stream(stream, indent_level + 1);
 }
 
+bool FunctionDecl::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  if (return_type.kind == Type::Kind::Placeholder) {
+    int placeholder_index = find_placeholder_index(return_type.name, placeholders);
+    if (placeholder_index == -1) {
+      report(location, "could not find placeholder of type '" + return_type.name + '.');
+      return false;
+    }
+    return_type = instance_types[placeholder_index];
+  } else if (return_type.kind == Type::Kind::Custom) {
+    int placeholder_index = find_placeholder_index(return_type.name, placeholders);
+    if (placeholder_index != -1) {
+      return_type = instance_types[placeholder_index];
+    }
+  }
+  for (auto &&param : params) {
+    param->replace_placeholders(placeholders, instance_types);
+  }
+  body->replace_placeholders(placeholders, instance_types);
+  return true;
+}
+
 void GenericFunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   std::string lib_og_name_resolve = "";
   if (!lib.empty() && !og_name.empty()) {
@@ -379,22 +416,6 @@ void VarDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) con
     initializer->dump_to_stream(stream, indent_level + 1);
 }
 
-int find_placeholder_index(std::string_view placeholder_name, const std::vector<std::string> &placeholders) {
-  int placeholder_index = 0;
-  bool found = false;
-  for (auto &&placeholder : placeholders) {
-    if (placeholder == placeholder_name) {
-      found = true;
-      break;
-    }
-    ++placeholder_index;
-  }
-  if (!found) {
-    return -1;
-  }
-  return placeholder_index;
-}
-
 bool VarDecl::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
   if (type.kind == Type::Kind::Placeholder) {
     int placeholder_index = find_placeholder_index(type.name, placeholders);
@@ -403,6 +424,11 @@ bool VarDecl::replace_placeholders(const std::vector<std::string> &placeholders,
       return false;
     }
     type = instance_types[placeholder_index];
+  } else if (type.kind == Type::Kind::Custom) {
+    int placeholder_index = find_placeholder_index(type.name, placeholders);
+    if (placeholder_index != -1) {
+      type = instance_types[placeholder_index];
+    }
   }
   return true;
 }
@@ -410,6 +436,10 @@ bool VarDecl::replace_placeholders(const std::vector<std::string> &placeholders,
 void DeclStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "DeclStmt:\n";
   var_decl->dump_to_stream(stream, indent_level + 1);
+}
+
+bool DeclStmt::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  return var_decl->replace_placeholders(placeholders, instance_types);
 }
 
 void MemberAccess::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
@@ -517,6 +547,11 @@ bool ExplicitCast::replace_placeholders(const std::vector<std::string> &placehol
       return false;
     }
     type = instance_types[placeholder_index];
+  } else if (type.kind == Type::Kind::Custom) {
+    int placeholder_index = find_placeholder_index(type.name, placeholders);
+    if (placeholder_index != -1) {
+      type = instance_types[placeholder_index];
+    }
   }
   return rhs->replace_placeholders(placeholders, instance_types);
 }
@@ -591,6 +626,12 @@ bool CallExpr::replace_placeholders(const std::vector<std::string> &placeholders
         return false;
       }
       type = _instance_types[placeholder_index];
+    } else if (type.kind == Type::Kind::Custom) {
+      int placeholder_index = find_placeholder_index(type.name, placeholders);
+      if (placeholder_index == -1) {
+        continue;
+      }
+      type = _instance_types[placeholder_index];
     }
   }
   bool success = true;
@@ -616,6 +657,12 @@ bool ParamDecl::replace_placeholders(const std::vector<std::string> &placeholder
       return false;
     }
     type = instance_types[placeholder_index];
+  }
+  if (type.kind == Type::Kind::Custom) {
+    int placeholder_index = find_placeholder_index(type.name, placeholders);
+    if (placeholder_index == -1) {
+      type = instance_types[placeholder_index];
+    }
   }
   return true;
 }
