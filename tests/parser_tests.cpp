@@ -2132,4 +2132,49 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
     CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
   }
+  SECTION("Generic var decl and return") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn T gen_fun<T>() {
+    var T generic_inst = .{69};
+    return generic_inst;
+}
+struct TestType {
+    i32 first;
+}
+fn i32 main() {
+    gen_fun<TestType>();
+    return test.first;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    REQUIRE(output_buffer.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "GenericFunctionDecl: gen_fun<T>:void");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ParamDecl: generic_param:ptr T");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: generic_param");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(0)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructDecl: TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberField: i32(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test:TestType");
+    CONTAINS_NEXT_REQUIRE(lines_it, "StructLiteralExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "FieldInitializer:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(32)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: gen_fun");
+    CONTAINS_NEXT_REQUIRE(lines_it, "InstanceTypes: <TestType>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ReturnStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
+  }
 }

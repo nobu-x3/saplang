@@ -222,6 +222,12 @@ void Block::dump_to_stream(std::stringstream &stream, size_t indent_level) const
   }
 }
 
+void Block::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  for (auto &&stmt : statements) {
+    stmt->replace_placeholders(placeholders, instance_types);
+  }
+}
+
 void ForStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ForStmt:\n";
   counter_variable->dump_to_stream(stream, indent_level + 1);
@@ -373,6 +379,34 @@ void VarDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) con
     initializer->dump_to_stream(stream, indent_level + 1);
 }
 
+int find_placeholder_index(std::string_view placeholder_name, const std::vector<std::string> &placeholders) {
+  int placeholder_index = 0;
+  bool found = false;
+  for (auto &&placeholder : placeholders) {
+    if (placeholder == placeholder_name) {
+      found = true;
+      break;
+    }
+    ++placeholder_index;
+  }
+  if (!found) {
+    return -1;
+  }
+  return placeholder_index;
+}
+
+bool VarDecl::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  if (type.kind == Type::Kind::Placeholder) {
+    int placeholder_index = find_placeholder_index(type.name, placeholders);
+    if (placeholder_index == -1) {
+      report(location, "could not find placeholder of type '" + type.name + '.');
+      return false;
+    }
+    type = instance_types[placeholder_index];
+  }
+  return true;
+}
+
 void DeclStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "DeclStmt:\n";
   var_decl->dump_to_stream(stream, indent_level + 1);
@@ -475,6 +509,18 @@ void ExplicitCast::dump_to_stream(std::stringstream &stream, size_t indent_level
   rhs->dump_to_stream(stream, indent_level + 1);
 }
 
+bool ExplicitCast::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  if (type.kind == Type::Kind::Placeholder) {
+    int placeholder_index = find_placeholder_index(type.name, placeholders);
+    if (placeholder_index == -1) {
+      report(location, "could not find placeholder of type '" + type.name + '.');
+      return false;
+    }
+    type = instance_types[placeholder_index];
+  }
+  return rhs->replace_placeholders(placeholders, instance_types);
+}
+
 void UnaryOperator::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "UnaryOperator: '";
   dump_op(stream, op);
@@ -536,10 +582,42 @@ void CallExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) co
   }
 }
 
+bool CallExpr::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &_instance_types) {
+  for (auto &&type : instance_types) {
+    if (type.kind == Type::Kind::Placeholder) {
+      int placeholder_index = find_placeholder_index(type.name, placeholders);
+      if (placeholder_index == -1) {
+        report(location, "could not find placeholder of type '" + type.name + '.');
+        return false;
+      }
+      type = _instance_types[placeholder_index];
+    }
+  }
+  bool success = true;
+  for (auto &&expr : args) {
+    success &= expr->replace_placeholders(placeholders, _instance_types);
+    if (!success)
+      break;
+  }
+  return success;
+}
+
 void ParamDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ParamDecl: " << id << ":" << (is_const ? "const " : "");
   type.dump_to_stream(stream, 0);
   stream << '\n';
+}
+
+bool ParamDecl::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  if (type.kind == Type::Kind::Placeholder) {
+    int placeholder_index = find_placeholder_index(type.name, placeholders);
+    if (placeholder_index == -1) {
+      report(location, "could not find placeholder of type '" + type.name + '.');
+      return false;
+    }
+    type = instance_types[placeholder_index];
+  }
+  return true;
 }
 
 void ResolvedBlock::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
@@ -684,6 +762,29 @@ void ResolvedFuncDecl::dump_to_stream(std::stringstream &stream, size_t indent_l
   }
   if (body)
     body->dump_to_stream(stream, indent_level + 1);
+}
+
+void ResolvedGenericFunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  std::string lib_og_name_resolve = "";
+  if (!lib.empty() && !og_name.empty()) {
+    lib_og_name_resolve = "alias " + lib + "::" + og_name;
+  } else if (!lib.empty())
+    lib_og_name_resolve = lib;
+  else if (!og_name.empty())
+    lib_og_name_resolve = "alias " + og_name;
+  stream << indent(indent_level) << (is_exported ? "exported " : "")
+         << "ResolvedGenericFunctionDecl"
+            ": "
+         << (is_vla ? "vla " : "") << (lib_og_name_resolve.empty() ? "" : lib_og_name_resolve + " ") << id << "<" << placeholders.front();
+  for (int i = 1; i < placeholders.size(); ++i) {
+    stream << ", " << placeholders[i];
+  }
+  stream << ">:";
+  type.dump_to_stream(stream, 0);
+  stream << '\n';
+  for (auto &&param : params) {
+    param->dump_to_stream(stream, indent_level + 1);
+  }
 }
 
 void ResolvedDeclRefExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {

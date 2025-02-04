@@ -14,8 +14,8 @@ struct ParsingResult {
 };
 
 struct ParserConfig {
-    const std::vector<std::string>& include_paths;
-    bool check_paths;
+  const std::vector<std::string> &include_paths;
+  bool check_paths;
 };
 
 class Parser {
@@ -25,12 +25,11 @@ public:
   inline bool is_complete_ast() const { return m_IsCompleteAst; }
 
 private:
-
-enum class Context {
+  enum class Context {
     Binop,
     VarDecl,
     Stmt,
-};
+  };
 
   inline void eat_next_token() { m_NextToken = m_Lexer->get_next_token(); }
   inline void go_back_to_prev_token() { m_NextToken = m_Lexer->get_prev_token(); }
@@ -80,6 +79,8 @@ enum class Context {
   std::optional<ArgumentList> parse_argument_list();
 
   std::optional<ParameterList> parse_parameter_list();
+
+  std::optional<ParameterList> parse_parameter_list_of_generic_fn(const std::vector<std::string> &placeholders);
 
   std::unique_ptr<IfStmt> parse_if_stmt();
   std::unique_ptr<WhileStmt> parse_while_stmt();
