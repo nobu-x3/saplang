@@ -689,17 +689,18 @@ struct ResolvedDecl : public IDumpable {
   std::string og_name;
   bool is_exported;
   int scope_line;
-  inline ResolvedDecl(SourceLocation loc, std::string id, Type &&type, std::string module, std::string lib = "", std::string og_name = "")
-      : location(loc), id(std::move(id)), type(std::move(type)), module(std::move(module)), lib(std::move(lib)), og_name(std::move(og_name)) {}
+  inline ResolvedDecl(SourceLocation loc, std::string id, Type &&type, std::string module, bool is_exported, std::string lib = "", std::string og_name = "")
+      : location(loc), id(std::move(id)), type(std::move(type)), module(std::move(module)), lib(std::move(lib)), og_name(std::move(og_name)),
+        is_exported(is_exported) {}
   virtual ~ResolvedDecl() = default;
 };
 
 struct ResolvedStructDecl : public ResolvedDecl {
   std::vector<std::pair<Type, std::string>> members;
   bool is_leaf{false};
-  inline ResolvedStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::pair<Type, std::string>> types,
-                            std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), members(std::move(types)) {}
+  inline ResolvedStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, bool is_exported,
+                            std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "")
+      : ResolvedDecl(loc, id, std::move(type), std::move(module), is_exported, std::move(lib), std::move(og_name)), members(std::move(types)) {}
   DUMP_IMPL
 };
 
@@ -707,9 +708,10 @@ struct ResolvedGenericStructDecl : public ResolvedDecl {
   std::vector<std::string> placeholders;
   std::vector<std::pair<Type, std::string>> members;
   bool is_leaf{false};
-  inline ResolvedGenericStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, std::vector<std::string> placeholders,
-                                   std::vector<std::pair<Type, std::string>> types, std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), placeholders(std::move(placeholders)),
+  inline ResolvedGenericStructDecl(SourceLocation loc, const std::string &id, Type type, std::string module, bool is_exported,
+                                   std::vector<std::string> placeholders, std::vector<std::pair<Type, std::string>> types, std::string lib = "",
+                                   std::string og_name = "")
+      : ResolvedDecl(loc, id, std::move(type), std::move(module), is_exported, std::move(lib), std::move(og_name)), placeholders(std::move(placeholders)),
         members(std::move(types)) {}
   DUMP_IMPL
 };
@@ -729,18 +731,18 @@ struct ResolvedVarDecl : public ResolvedDecl {
   std::unique_ptr<ResolvedExpr> initializer;
   bool is_const;
   bool is_global;
-  inline ResolvedVarDecl(SourceLocation loc, std::string id, Type type, std::string module, std::unique_ptr<ResolvedExpr> init, bool is_const,
+  inline ResolvedVarDecl(SourceLocation loc, std::string id, Type type, std::string module, bool is_exported, std::unique_ptr<ResolvedExpr> init, bool is_const,
                          bool is_global = false, std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(loc, id, std::move(type), std::move(module), std::move(lib), std::move(og_name)), initializer(std::move(init)), is_const(is_const),
-        is_global(is_global) {}
+      : ResolvedDecl(loc, id, std::move(type), std::move(module), is_exported, std::move(lib), std::move(og_name)), initializer(std::move(init)),
+        is_const(is_const), is_global(is_global) {}
   DUMP_IMPL
 };
 
 struct ResolvedEnumDecl : public ResolvedDecl {
   std::unordered_map<std::string, long> name_values_map;
-  inline ResolvedEnumDecl(SourceLocation loc, std::string id, Type underlying_type, std::string module, std::unordered_map<std::string, long> name_values_map,
-                          std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(loc, std::move(id), std::move(underlying_type), std::move(module), std::move(lib), std::move(og_name)),
+  inline ResolvedEnumDecl(SourceLocation loc, std::string id, Type underlying_type, std::string module, bool is_exported,
+                          std::unordered_map<std::string, long> name_values_map, std::string lib = "", std::string og_name = "")
+      : ResolvedDecl(loc, std::move(id), std::move(underlying_type), std::move(module), is_exported, std::move(lib), std::move(og_name)),
         name_values_map(std::move(name_values_map)) {}
   DUMP_IMPL
 };
@@ -827,9 +829,10 @@ struct ResolvedFuncDecl : public ResolvedDecl {
   std::vector<std::unique_ptr<ResolvedParamDecl>> params;
   std::unique_ptr<ResolvedBlock> body;
   bool is_vla;
-  inline ResolvedFuncDecl(SourceLocation loc, std::string id, Type type, std::string module, std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
-                          std::unique_ptr<ResolvedBlock> body, bool is_vla, std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(loc, std::move(id), std::move(type), std::move(module), std::move(lib), std::move(og_name)), params(std::move(params)),
+  inline ResolvedFuncDecl(SourceLocation loc, std::string id, Type type, std::string module, bool is_exported,
+                          std::vector<std::unique_ptr<ResolvedParamDecl>> &&params, std::unique_ptr<ResolvedBlock> body, bool is_vla, std::string lib = "",
+                          std::string og_name = "")
+      : ResolvedDecl(loc, std::move(id), std::move(type), std::move(module), is_exported, std::move(lib), std::move(og_name)), params(std::move(params)),
         body(std::move(body)), is_vla(is_vla) {}
   DUMP_IMPL
 };
@@ -839,10 +842,10 @@ struct ResolvedGenericFunctionDecl : public ResolvedDecl {
   const Block *generic_block;
   bool is_vla;
   std::vector<std::string> placeholders;
-  inline ResolvedGenericFunctionDecl(SourceLocation location, std::string id, Type type, std::string module, std::vector<std::string> placeholders,
-                                     std::vector<std::unique_ptr<ResolvedParamDecl>> &&params, const Block *generic_block, bool is_vla = false,
-                                     std::string lib = "", std::string og_name = "")
-      : ResolvedDecl(location, std::move(id), std::move(type), std::move(module), std::move(lib), std::move(og_name)), params(std::move(params)),
+  inline ResolvedGenericFunctionDecl(SourceLocation location, std::string id, Type type, std::string module, bool is_exported,
+                                     std::vector<std::string> placeholders, std::vector<std::unique_ptr<ResolvedParamDecl>> &&params,
+                                     const Block *generic_block, bool is_vla = false, std::string lib = "", std::string og_name = "")
+      : ResolvedDecl(location, std::move(id), std::move(type), std::move(module), is_exported, std::move(lib), std::move(og_name)), params(std::move(params)),
         generic_block(generic_block), is_vla(is_vla), placeholders(std::move(placeholders)) {}
   DUMP_IMPL
 };
