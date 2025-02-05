@@ -1002,7 +1002,7 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
     std::string instance_name_copy{instance_name};
     m_GenericInstances.emplace_back(std::make_unique<ResolvedStructDecl>(generic_struct_decl->location, instance_name_copy,
                                                                          Type::custom(instance_name_copy, false), generic_struct_decl->module,
-                                                                         std::move(resolved_instance_types)));
+                                                                         generic_struct_decl->is_exported, std::move(resolved_instance_types)));
     auto struct_instance = dynamic_cast<ResolvedStructDecl *>(m_GenericInstances.back().get());
     bool insert_result = false;
     if (struct_instance) {
@@ -1101,8 +1101,8 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
       postfix += "_" + type.name;
     }
     m_GenericInstances.emplace_back(std::make_unique<ResolvedFuncDecl>(gen_func->location, gen_func->id + postfix, resolved_return_type, gen_func->module,
-                                                                       std::move(resolved_params), std::move(resolved_block), gen_func->is_vla, gen_func->lib,
-                                                                       gen_func->og_name));
+                                                                       gen_func->is_exported, std::move(resolved_params), std::move(resolved_block),
+                                                                       gen_func->is_vla, gen_func->lib, gen_func->og_name));
     auto func_instance = dynamic_cast<ResolvedFuncDecl *>(m_GenericInstances.back().get());
     bool insert_result = false;
     if (func_instance) {
@@ -1129,8 +1129,8 @@ std::unique_ptr<ResolvedFuncDecl> Sema::resolve_func_decl(const FunctionDecl &fu
     resolved_params.emplace_back(std::move(resolved_param));
     ++param_index;
   }
-  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type, func.module, std::move(resolved_params), nullptr, func.is_vla, func.lib,
-                                            func.og_name);
+  return std::make_unique<ResolvedFuncDecl>(func.location, func.id, *type, func.module, func.is_exported, std::move(resolved_params), nullptr, func.is_vla,
+                                            func.lib, func.og_name);
 }
 
 std::unique_ptr<ResolvedGenericFunctionDecl> Sema::resolve_generic_func_decl(const GenericFunctionDecl &func) {
@@ -1152,8 +1152,8 @@ std::unique_ptr<ResolvedGenericFunctionDecl> Sema::resolve_generic_func_decl(con
     resolved_params.emplace_back(std::move(resolved_param));
     ++param_index;
   }
-  return std::make_unique<ResolvedGenericFunctionDecl>(func.location, func.id, *type, func.module, func.placeholders, std::move(resolved_params),
-                                                       func.body.get(), func.is_vla, func.lib, func.og_name);
+  return std::make_unique<ResolvedGenericFunctionDecl>(func.location, func.id, *type, func.module, func.is_exported, func.placeholders,
+                                                       std::move(resolved_params), func.body.get(), func.is_vla, func.lib, func.og_name);
 }
 
 std::unique_ptr<ResolvedParamDecl> Sema::resolve_param_decl(const ParamDecl &decl, int index, const std::string function_name) {
@@ -1281,7 +1281,7 @@ std::unique_ptr<ResolvedVarDecl> Sema::resolve_var_decl(const VarDecl &decl) {
     }
     resolved_initializer->set_constant_value(m_Cee.evaluate(*resolved_initializer));
   }
-  return std::make_unique<ResolvedVarDecl>(decl.location, decl.id, *type, decl.module, std::move(resolved_initializer), decl.is_const);
+  return std::make_unique<ResolvedVarDecl>(decl.location, decl.id, *type, decl.module, decl.is_exported, std::move(resolved_initializer), decl.is_const);
 }
 
 std::unique_ptr<ResolvedStructDecl> Sema::resolve_struct_decl(const StructDecl &decl) {
@@ -1292,7 +1292,7 @@ std::unique_ptr<ResolvedStructDecl> Sema::resolve_struct_decl(const StructDecl &
       return nullptr;
     types.emplace_back(std::make_pair(std::move(*resolved_type), std::move(id)));
   }
-  return std::make_unique<ResolvedStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), decl.module, std::move(types));
+  return std::make_unique<ResolvedStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), decl.module, decl.is_exported, std::move(types));
 }
 
 std::unique_ptr<ResolvedGenericStructDecl> Sema::resolve_generic_struct_decl(const GenericStructDecl &decl) {
@@ -1303,11 +1303,12 @@ std::unique_ptr<ResolvedGenericStructDecl> Sema::resolve_generic_struct_decl(con
       return nullptr;
     types.emplace_back(std::make_pair(std::move(*resolved_type), std::move(id)));
   }
-  return std::make_unique<ResolvedGenericStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), decl.module, decl.placeholders, std::move(types));
+  return std::make_unique<ResolvedGenericStructDecl>(decl.location, decl.id, Type::custom(decl.id, false), decl.module, decl.is_exported, decl.placeholders,
+                                                     std::move(types));
 }
 
 std::unique_ptr<ResolvedEnumDecl> Sema::resolve_enum_decl(const EnumDecl &decl) {
-  return std::make_unique<ResolvedEnumDecl>(decl.location, decl.id, decl.underlying_type, decl.module, decl.name_values_map);
+  return std::make_unique<ResolvedEnumDecl>(decl.location, decl.id, decl.underlying_type, decl.module, decl.is_exported, decl.name_values_map);
 }
 
 std::unique_ptr<ResolvedGroupingExpr> Sema::resolve_grouping_expr(const GroupingExpr &group) {
