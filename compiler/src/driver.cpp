@@ -83,8 +83,18 @@ int Driver::run(std::ostream &output_stream) {
   for (auto &&import_path : m_Options.import_paths) {
     for (const auto &file : std::filesystem::directory_iterator(import_path)) {
       auto filepath = file.path();
+      std::string filepath_string = filepath;
       if (filepath.extension() == ".sl") {
-        if (filepath.filename() == m_Options.source)
+        if (filepath_string.find(m_Options.source) != std::string::npos || m_Options.source.string().find(filepath_string) != std::string::npos)
+          continue;
+        bool module_already_visited = false;
+        for (auto &&mod : modules) {
+          if (mod->path.find(filepath_string) != std::string::npos || filepath_string.find(mod->path) != std::string::npos) {
+            module_already_visited = true;
+            break;
+          }
+        }
+        if (module_already_visited)
           continue;
         std::stringstream buffer;
         std::string source{filepath};
