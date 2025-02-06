@@ -1117,7 +1117,8 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
 std::unique_ptr<ResolvedFuncDecl> Sema::resolve_func_decl(const FunctionDecl &func) {
   auto type = resolve_type(func.return_type);
   if (!type) {
-    return report(func.location, "function '" + func.id + "' has invalid '" + func.return_type.name + "' type");
+    std::string ret_type_full = func.return_type.name;
+    return report(func.location, "function '" + func.id + "' has invalid '" + func.return_type.full_name() + "' type");
   }
   std::vector<std::unique_ptr<ResolvedParamDecl>> resolved_params{};
   Scope param_scope{this};
@@ -1138,9 +1139,14 @@ std::unique_ptr<ResolvedGenericFunctionDecl> Sema::resolve_generic_func_decl(con
   auto placeholder_it = std::find(func.placeholders.begin(), func.placeholders.end(), return_type.name);
   if (placeholder_it != func.placeholders.end())
     return_type.kind = Type::Kind::Placeholder;
+  for (auto &&inst_type : return_type.instance_types) {
+    placeholder_it = std::find(func.placeholders.begin(), func.placeholders.end(), inst_type.name);
+    if (placeholder_it != func.placeholders.end())
+      inst_type.kind = Type::Kind::Placeholder;
+  }
   auto type = resolve_type(return_type);
   if (!type) {
-    return report(func.location, "function '" + func.id + "' has invalid '" + func.return_type.name + "' type");
+    return report(func.location, "generic function '" + func.id + "' has invalid '" + func.return_type.full_name() + "' type");
   }
   std::vector<std::unique_ptr<ResolvedParamDecl>> resolved_params{};
   Scope param_scope{this};

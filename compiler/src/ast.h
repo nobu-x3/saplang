@@ -93,6 +93,21 @@ struct Type : public IDumpable {
   Type(Type &&) noexcept = default;
   Type &operator=(Type &&) noexcept = default;
 
+  std::string full_name() const {
+    std::string full_name{name};
+    if (instance_types.size()) {
+      full_name += '<' + instance_types.front().name;
+      for (int i = 1; i < instance_types.size(); ++i) {
+        full_name += ',' + instance_types[i].name;
+      }
+      full_name += '>';
+    }
+    for (int i = 0; i < pointer_depth; ++i) {
+      full_name += '*';
+    }
+    return full_name;
+  }
+
   static Type builtin_void(uint pointer_depth) { return {Kind::Void, "void", pointer_depth}; }
 
   static Type builtin_i8(uint pointer_depth, std::optional<ArrayData> array_data = {}) { return {Kind::i8, "i8", pointer_depth, array_data}; }
