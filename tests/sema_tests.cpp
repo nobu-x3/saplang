@@ -3026,4 +3026,52 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
     REQUIRE(lines_it->find(") generic_inst:") != std::string::npos);
   }
+  SECTION("Generic struct in generic fn") {
+    TEST_SETUP_MODULE_SINGLE("generic_struct_in_generic_fn", R"(
+struct<T> GenericStruct {
+    T first;
+}
+fn GenericStruct<T> gen_fun<T>() {
+    var GenericStruct<T> generic_inst = .{69};
+    return generic_inst;
+}
+fn i32 main() {
+    var GenericStruct<i32> test = gen_fun<i32>();
+    return test.first;
+}
+    )");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 2;
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGenericFunctionDecl: gen_fun<T>:GenericStruct<T>");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+    REQUIRE(lines_it->find(") main:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+    REQUIRE(lines_it->find(") test:__GenericStruct_i32") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
+    REQUIRE(lines_it->find(") gen_fun_i32:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") test:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __GenericStruct_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(first)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+    REQUIRE(lines_it->find(") gen_fun_i32:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+    REQUIRE(lines_it->find(") generic_inst:__GenericStruct_i32") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructLiteralExpr: __GenericStruct_i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFieldInitializer: first");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(69)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") generic_inst:") != std::string::npos);
+  }
 }
