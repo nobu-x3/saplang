@@ -499,6 +499,16 @@ bool Sema::insert_decl_to_current_scope(ResolvedDecl &decl) {
   return true;
 }
 
+bool Sema::insert_decl_to_module_scope(ResolvedDecl &decl) {
+  std::optional<DeclLookupResult> lookup_result = lookup_decl(decl.id, &decl.type);
+  if (lookup_result && lookup_result->index == 0) {
+    report(decl.location, "redeclaration of '" + decl.id + "\'.");
+    return false;
+  }
+  m_Scopes.at(m_ModuleScopeId).emplace_back(&decl);
+  return true;
+}
+
 bool Sema::insert_decl_to_global_scope(ResolvedDecl &decl) {
   std::optional<DeclLookupResult> lookup_result = lookup_decl(decl.id, &decl.type);
   if (lookup_result && lookup_result->index == 0) {
@@ -771,6 +781,7 @@ std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool
 
 Sema::AstResolveResult Sema::resolve_ast(bool partial, const Module &mod) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
+  m_ModuleScopeId = m_Scopes.size();
   Scope module_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
@@ -943,9 +954,10 @@ std::optional<Type> Sema::resolve_type(Type parsed_type) {
       auto instance_decl = lookup_decl(instance_name);
       // means we haven't instantiated the generic for given types, so do it
       if (!instance_decl) {
-        if (!instantiate_generic_type(*decl, instance_name, resolved_types))
+        std::string inserted_name;
+        if (!instantiate_generic_type(*decl, instance_name, resolved_types, inserted_name))
           return std::nullopt;
-        instance_decl = lookup_decl(instance_name);
+        instance_decl = lookup_decl(inserted_name);
         if (!instance_decl)
           return std::nullopt;
       }
@@ -961,7 +973,8 @@ std::optional<Type> Sema::resolve_type(Type parsed_type) {
   return parsed_type;
 }
 
-bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::string_view instance_name, const std::vector<Type> &instance_types) {
+bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::string_view instance_name, const std::vector<Type> &instance_types,
+                                    std::string &out_name) {
   if (!generic_decl.decl)
     return false;
   if (const ResolvedGenericStructDecl *generic_struct_decl = dynamic_cast<const ResolvedGenericStructDecl *>(generic_decl.decl)) {
@@ -1010,10 +1023,10 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
       }
       resolved_instance_types.push_back(std::make_pair(resolved_type, name));
     }
-    std::string instance_name_copy{instance_name};
-    m_GenericInstances.emplace_back(std::make_unique<ResolvedStructDecl>(generic_struct_decl->location, instance_name_copy,
-                                                                         Type::custom(instance_name_copy, false), generic_struct_decl->module,
-                                                                         generic_struct_decl->is_exported, std::move(resolved_instance_types)));
+    out_name = instance_name;
+    m_GenericInstances.emplace_back(std::make_unique<ResolvedStructDecl>(generic_struct_decl->location, out_name, Type::custom(out_name, false),
+                                                                         generic_struct_decl->module, generic_struct_decl->is_exported,
+                                                                         std::move(resolved_instance_types)));
     auto struct_instance = dynamic_cast<ResolvedStructDecl *>(m_GenericInstances.back().get());
     bool insert_result = false;
     if (struct_instance) {
@@ -1021,7 +1034,7 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
       init_type_info(*struct_instance);
       bool is_exported = generic_decl.decl->is_exported;
       struct_instance->is_exported = is_exported;
-      insert_result = is_exported ? insert_decl_to_global_scope(*struct_instance) : insert_decl_to_current_scope(*struct_instance);
+      insert_result = is_exported ? insert_decl_to_global_scope(*struct_instance) : insert_decl_to_module_scope(*struct_instance);
     }
     return insert_result;
   } else if (const auto *gen_func = dynamic_cast<const ResolvedGenericFunctionDecl *>(generic_decl.decl)) {
@@ -1126,23 +1139,26 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
     for (auto &&param : resolved_params) {
       insert_decl_to_current_scope(*param);
     }
+    out_name = "__" + gen_func->id;
+    for (auto &&inst_type : instance_types) {
+      out_name += "_" + inst_type.name;
+    }
+    std::unique_ptr<ResolvedFuncDecl> resolved_func_decl =
+        std::make_unique<ResolvedFuncDecl>(gen_func->location, out_name, resolved_return_type, gen_func->module, gen_func->is_exported,
+                                           std::move(resolved_params), nullptr, gen_func->is_vla, gen_func->lib, gen_func->og_name);
+    m_CurrFunction = resolved_func_decl.get();
     // Resolve body of function
     std::unique_ptr<Block> parsed_block_copy = std::make_unique<Block>(*gen_func->generic_block);
     parsed_block_copy->replace_placeholders(placeholders, instance_types);
     std::unique_ptr<ResolvedBlock> resolved_block = resolve_block(*parsed_block_copy);
     if (!resolved_block)
       return false;
-    std::string fn_instance_name = "__" + gen_func->id;
-    for (auto &&inst_type : instance_types) {
-      fn_instance_name += "_" + inst_type.name;
-    }
-    m_GenericInstances.emplace_back(std::make_unique<ResolvedFuncDecl>(gen_func->location, fn_instance_name, resolved_return_type, gen_func->module,
-                                                                       gen_func->is_exported, std::move(resolved_params), std::move(resolved_block),
-                                                                       gen_func->is_vla, gen_func->lib, gen_func->og_name));
+    resolved_func_decl->body = std::move(resolved_block);
+    m_GenericInstances.emplace_back(std::move(resolved_func_decl));
     auto func_instance = dynamic_cast<ResolvedFuncDecl *>(m_GenericInstances.back().get());
     bool insert_result = false;
     if (func_instance) {
-      insert_result = gen_func->is_exported ? insert_decl_to_global_scope(*func_instance) : insert_decl_to_current_scope(*func_instance);
+      insert_result = gen_func->is_exported ? insert_decl_to_global_scope(*func_instance) : insert_decl_to_module_scope(*func_instance);
     }
     return insert_result;
   }
@@ -1649,29 +1665,37 @@ std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {
   if (const auto *string_lit = dynamic_cast<const StringLiteralExpr *>(&expr))
     return resolve_string_literal_expr(*string_lit);
   if (const auto *sizeof_expr = dynamic_cast<const SizeofExpr *>(&expr)) {
+    auto type = resolve_type(sizeof_expr->type);
+    if (!type) {
+      return report(sizeof_expr->location, "unknown type " + sizeof_expr->type.full_name() + ".");
+    }
     if (sizeof_expr->is_ptr) {
       Value value;
       value.u64 = m_TypeInfos["*"].total_size * sizeof_expr->array_element_count;
       return std::make_unique<ResolvedNumberLiteral>(sizeof_expr->location, Type::builtin_u64(0), value);
-    } else if (m_TypeInfos.count(sizeof_expr->type_name)) {
+    } else if (m_TypeInfos.count(type->name)) {
       Value value;
-      value.u64 = m_TypeInfos[sizeof_expr->type_name].total_size * sizeof_expr->array_element_count;
+      value.u64 = m_TypeInfos[type->demangled_name()].total_size * sizeof_expr->array_element_count;
       return std::make_unique<ResolvedNumberLiteral>(sizeof_expr->location, Type::builtin_u64(0), value);
     } else {
-      return report(sizeof_expr->location, "unknown type " + sizeof_expr->type_name + ".");
+      return report(sizeof_expr->location, "unknown type " + sizeof_expr->type.full_name() + ".");
     }
   }
   if (const auto *alignof_expr = dynamic_cast<const AlignofExpr *>(&expr)) {
+    auto type = resolve_type(alignof_expr->type);
+    if (!type) {
+      return report(alignof_expr->location, "unknown type " + alignof_expr->type.full_name() + ".");
+    }
     if (alignof_expr->is_ptr) {
       Value value;
       value.u64 = m_TypeInfos["*"].alignment;
       return std::make_unique<ResolvedNumberLiteral>(alignof_expr->location, Type::builtin_u64(0), value);
-    } else if (m_TypeInfos.count(alignof_expr->type_name)) {
+    } else if (m_TypeInfos.count(type->demangled_name())) {
       Value value;
-      value.u64 = m_TypeInfos[alignof_expr->type_name].alignment;
+      value.u64 = m_TypeInfos[type->demangled_name()].alignment;
       return std::make_unique<ResolvedNumberLiteral>(alignof_expr->location, Type::builtin_u64(0), value);
     } else {
-      return report(alignof_expr->location, "unknown type " + alignof_expr->type_name + ".");
+      return report(alignof_expr->location, "unknown type " + alignof_expr->type.full_name() + ".");
     }
   }
   if (type) {
@@ -2087,11 +2111,16 @@ std::unique_ptr<ResolvedCallExpr> Sema::resolve_call_expr(const CallExpr &call) 
       if (!lookup_res) {
         return nullptr;
       }
-      if (!instantiate_generic_type(*lookup_res, instance_name, call.instance_types)) {
+      std::string instanced_fn_name;
+      auto *tmp_curr_fn = m_CurrFunction;
+      if (!instantiate_generic_type(*lookup_res, instance_name, call.instance_types, instanced_fn_name)) {
         report(call.location, "failed to instantiate generic function.");
         return report(lookup_res->decl->location, "definition here.");
       }
-      const ResolvedFuncDecl *resolved_gen_fn_instance = dynamic_cast<const ResolvedFuncDecl *>(m_GenericInstances.back().get());
+      m_CurrFunction = tmp_curr_fn;
+      auto fn_lookup_res = lookup_decl(instanced_fn_name);
+      assert(fn_lookup_res);
+      const ResolvedFuncDecl *resolved_gen_fn_instance = dynamic_cast<const ResolvedFuncDecl *>(fn_lookup_res->decl);
       assert(resolved_gen_fn_instance);
       for (int i = 0; i < call.args.size(); ++i) {
         auto *decl_type = i < resolved_gen_fn_instance->params.size() ? &resolved_gen_fn_instance->params[i]->type : nullptr;

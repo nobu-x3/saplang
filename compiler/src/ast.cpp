@@ -194,6 +194,27 @@ void Type::replace_placeholders(const std::vector<std::string> &placeholders, co
       inner_type.pointer_depth = copy.pointer_depth;
       inner_type.fn_ptr_signature = copy.fn_ptr_signature;
       inner_type.dereference_counts = copy.dereference_counts;
+    } else if (inner_type.kind == Kind::Custom) {
+      int placeholder_index = find_index(inner_type.name, placeholders);
+      if (placeholder_index != -1) {
+        inner_type = types[placeholder_index];
+        inner_type.array_data = copy.array_data;
+        inner_type.pointer_depth = copy.pointer_depth;
+        inner_type.fn_ptr_signature = copy.fn_ptr_signature;
+        inner_type.dereference_counts = copy.dereference_counts;
+      } else {
+        for (auto &&inst_type : inner_type.instance_types) {
+          Type inst_copy = inst_type;
+          placeholder_index = find_index(inst_type.name, placeholders);
+          if (placeholder_index != -1) {
+            inst_type = types[placeholder_index];
+            inst_type.array_data = inst_copy.array_data;
+            inst_type.fn_ptr_signature = inst_copy.fn_ptr_signature;
+            inst_type.pointer_depth = inst_copy.pointer_depth;
+            inst_type.dereference_counts = inst_copy.dereference_counts;
+          }
+        }
+      }
     }
   }
 }
@@ -238,11 +259,68 @@ void Module::dump_to_stream(std::stringstream &stream, size_t indent_level) cons
 }
 
 void SizeofExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
-  stream << indent(indent_level) << "Sizeof(" << type_name << (is_ptr ? "*" : "") << " x" << array_element_count << ")\n";
+  stream << indent(indent_level) << "Sizeof(" << type.full_name() << " x" << array_element_count << ")\n";
+}
+
+bool SizeofExpr::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  Type copy = type;
+  if (type.kind == Type::Kind::Placeholder) {
+    int placeholder_index = find_index(type.name, placeholders);
+    if (placeholder_index == -1) {
+      report(location, "could not find placeholder of type '" + type.name + '.');
+      return false;
+    }
+    type = instance_types[placeholder_index];
+  } else if (type.kind == Type::Kind::Custom) {
+    int placeholder_index = find_index(type.name, placeholders);
+    if (placeholder_index != -1) {
+      type = instance_types[placeholder_index];
+    }
+  }
+  type.replace_placeholders(placeholders, instance_types);
+  type.array_data = copy.array_data;
+  type.fn_ptr_signature = copy.fn_ptr_signature;
+  type.pointer_depth = copy.pointer_depth;
+  type.dereference_counts = copy.dereference_counts;
+  return true;
 }
 
 void AlignofExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
-  stream << indent(indent_level) << "Alignof(" << type_name << (is_ptr ? "*" : "") << ")\n";
+  stream << indent(indent_level) << "Alignof(" << type.full_name() << ")\n";
+}
+
+bool AlignofExpr::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  Type copy = type;
+  if (type.kind == Type::Kind::Placeholder) {
+    int placeholder_index = find_index(type.name, placeholders);
+    if (placeholder_index == -1) {
+      report(location, "could not find placeholder of type '" + type.name + '.');
+      return false;
+    }
+    type = instance_types[placeholder_index];
+  } else if (type.kind == Type::Kind::Custom) {
+    int placeholder_index = find_index(type.name, placeholders);
+    if (placeholder_index != -1) {
+      type = instance_types[placeholder_index];
+    } else {
+      for (auto &&inst_type : type.instance_types) {
+        Type inst_copy = inst_type;
+        placeholder_index = find_index(inst_type.name, placeholders);
+        if (placeholder_index != -1) {
+          inst_type = instance_types[placeholder_index];
+          inst_type.array_data = inst_copy.array_data;
+          inst_type.fn_ptr_signature = inst_copy.fn_ptr_signature;
+          inst_type.pointer_depth = inst_copy.pointer_depth;
+          inst_type.dereference_counts = inst_copy.dereference_counts;
+        }
+      }
+    }
+  }
+  type.array_data = copy.array_data;
+  type.fn_ptr_signature = copy.fn_ptr_signature;
+  type.pointer_depth = copy.pointer_depth;
+  type.dereference_counts = copy.dereference_counts;
+  return true;
 }
 
 void NullExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const { stream << indent(indent_level) << "Null\n"; }
@@ -468,6 +546,8 @@ bool VarDecl::replace_placeholders(const std::vector<std::string> &placeholders,
   type.fn_ptr_signature = copy.fn_ptr_signature;
   type.pointer_depth = copy.pointer_depth;
   type.dereference_counts = copy.dereference_counts;
+  if (initializer)
+    initializer->replace_placeholders(placeholders, instance_types);
   return true;
 }
 
@@ -643,6 +723,14 @@ void Assignment::dump_to_stream(std::stringstream &stream, size_t indent_level) 
   }
   variable->dump_to_stream(stream, indent_level + 1);
   expr->dump_to_stream(stream, indent_level + 1);
+}
+
+bool Assignment::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  if (variable)
+    variable->replace_placeholders(placeholders, instance_types);
+  if (expr)
+    expr->replace_placeholders(placeholders, instance_types);
+  return true;
 }
 
 void CallExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {

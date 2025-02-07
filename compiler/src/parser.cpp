@@ -1058,30 +1058,22 @@ std::unique_ptr<SizeofExpr> Parser::parse_sizeof_expr() {
   eat_next_token();
   if (m_NextToken.kind != TokenKind::Identifier)
     return report(m_NextToken.location, "Name of type expected.");
-  std::string type_name = *m_NextToken.value;
-  eat_next_token();
-  bool is_ptr = false;
-  if (m_NextToken.kind == TokenKind::Asterisk) {
-    is_ptr = true;
-    eat_next_token();
+  auto type = parse_type();
+  if(!type) {
+      return nullptr;
   }
+  bool is_ptr = type->pointer_depth > 0;
   unsigned long array_element_count{1};
-  if (m_NextToken.kind == TokenKind::Lbracket) {
-    eat_next_token();
-    if (m_NextToken.kind != TokenKind::Integer) {
-      return report(m_NextToken.location, "expected integer in sizeof array.");
-    }
-    array_element_count = std::stoul(*m_NextToken.value);
-    eat_next_token();
-    if (m_NextToken.kind != TokenKind::Rbracket) {
-      return report(m_NextToken.location, "expected ']'.");
-    }
-    eat_next_token();
+  if(type->array_data) {
+      array_element_count = 0;
+      for(auto&& dim : type->array_data->dimensions) {
+          array_element_count += dim;
+      }
   }
   if (m_NextToken.kind != TokenKind::Rparent)
     return report(m_NextToken.location, "sizeof() is a function. ')' expected after type.");
   eat_next_token();
-  return std::make_unique<SizeofExpr>(loc, std::move(type_name), is_ptr, array_element_count);
+  return std::make_unique<SizeofExpr>(loc, std::move(*type), is_ptr, array_element_count);
 }
 
 // <alignOfExpr>
@@ -1095,13 +1087,8 @@ std::unique_ptr<AlignofExpr> Parser::parse_alignof_expr() {
   eat_next_token();
   if (m_NextToken.kind != TokenKind::Identifier)
     return report(m_NextToken.location, "Name of type expected.");
-  std::string type_name = *m_NextToken.value;
-  eat_next_token();
-  bool is_ptr = false;
-  if (m_NextToken.kind == TokenKind::Asterisk) {
-    is_ptr = true;
-    eat_next_token();
-  }
+  auto type = parse_type();
+  bool is_ptr = type->pointer_depth > 0;
   if (m_NextToken.kind == TokenKind::Lbracket) {
     eat_next_token();
     if (m_NextToken.kind != TokenKind::Integer) {
@@ -1116,7 +1103,7 @@ std::unique_ptr<AlignofExpr> Parser::parse_alignof_expr() {
   if (m_NextToken.kind != TokenKind::Rparent)
     return report(m_NextToken.location, "alignof() is a function. ')' expected after type.");
   eat_next_token();
-  return std::make_unique<AlignofExpr>(loc, std::move(type_name), is_ptr);
+  return std::make_unique<AlignofExpr>(loc, std::move(*type), is_ptr);
 }
 // <paramDecl>
 // ::= <type> <identifier>
