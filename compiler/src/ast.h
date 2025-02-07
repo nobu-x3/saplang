@@ -148,6 +148,8 @@ struct Type : public IDumpable {
 
   bool operator==(const Type &other) const;
 
+  void replace_placeholders(const std::vector<std::string>& placeholders, const std::vector<Type> types);
+
   // @NOTE: does not insert '\n' when done
   DUMP_IMPL
 private:

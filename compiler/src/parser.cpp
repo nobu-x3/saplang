@@ -970,6 +970,13 @@ std::optional<ParameterList> Parser::parse_parameter_list_of_generic_fn(const st
     auto placeholder_it = std::find(placeholders.begin(), placeholders.end(), param_decl->type.name);
     if (placeholder_it != placeholders.end())
       param_decl->type.kind = Type::Kind::Placeholder;
+    if (param_decl->type.kind == Type::Kind::Custom) {
+      for (auto &&inst_type : param_decl->type.instance_types) {
+        placeholder_it = std::find(placeholders.begin(), placeholders.end(), inst_type.name);
+        if (placeholder_it != placeholders.end())
+          inst_type.kind = Type::Kind::Placeholder;
+      }
+    }
     param_decls.emplace_back(std::move(param_decl));
     if (m_NextToken.kind != TokenKind::Comma)
       break;

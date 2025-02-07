@@ -182,6 +182,22 @@ void Type::dump_to_stream(std::stringstream &stream, size_t indent_level) const 
   }
 }
 
+void Type::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> types) {
+  for (auto &&inner_type : instance_types) {
+    Type copy = inner_type;
+    if (inner_type.kind == Kind::Placeholder) {
+      int placeholder_index = find_index(inner_type.name, placeholders);
+      if (placeholder_index == -1)
+        break;
+      inner_type = types[placeholder_index];
+      inner_type.array_data = copy.array_data;
+      inner_type.pointer_depth = copy.pointer_depth;
+      inner_type.fn_ptr_signature = copy.fn_ptr_signature;
+      inner_type.dereference_counts = copy.dereference_counts;
+    }
+  }
+}
+
 bool is_equal(const Type &a, const Type &b) {
   bool _is_equal = a.kind == b.kind && a.pointer_depth == b.pointer_depth && a.dereference_counts == b.dereference_counts;
   _is_equal &= (a.array_data && b.array_data) || (!a.array_data && !b.array_data);
@@ -295,6 +311,7 @@ void FunctionDecl::dump_to_stream(std::stringstream &stream, size_t indent_level
 }
 
 bool FunctionDecl::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  Type copy = return_type;
   if (return_type.kind == Type::Kind::Placeholder) {
     int placeholder_index = find_index(return_type.name, placeholders);
     if (placeholder_index == -1) {
@@ -308,6 +325,10 @@ bool FunctionDecl::replace_placeholders(const std::vector<std::string> &placehol
       return_type = instance_types[placeholder_index];
     }
   }
+  return_type.dereference_counts = copy.dereference_counts;
+  return_type.pointer_depth = copy.pointer_depth;
+  return_type.fn_ptr_signature = copy.fn_ptr_signature;
+  return_type.array_data = copy.array_data;
   for (auto &&param : params) {
     param->replace_placeholders(placeholders, instance_types);
   }
@@ -417,6 +438,7 @@ void VarDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) con
 }
 
 bool VarDecl::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  Type copy = type;
   if (type.kind == Type::Kind::Placeholder) {
     int placeholder_index = find_index(type.name, placeholders);
     if (placeholder_index == -1) {
@@ -429,14 +451,23 @@ bool VarDecl::replace_placeholders(const std::vector<std::string> &placeholders,
     if (placeholder_index != -1) {
       type = instance_types[placeholder_index];
     } else {
-        for(auto&& inst_type : type.instance_types) {
-            placeholder_index = find_index(inst_type.name, placeholders);
-            if(placeholder_index != -1) {
-                inst_type = instance_types[placeholder_index];
-            }
+      for (auto &&inst_type : type.instance_types) {
+        Type inst_copy = inst_type;
+        placeholder_index = find_index(inst_type.name, placeholders);
+        if (placeholder_index != -1) {
+          inst_type = instance_types[placeholder_index];
+          inst_type.array_data = inst_copy.array_data;
+          inst_type.fn_ptr_signature = inst_copy.fn_ptr_signature;
+          inst_type.pointer_depth = inst_copy.pointer_depth;
+          inst_type.dereference_counts = inst_copy.dereference_counts;
         }
+      }
     }
   }
+  type.array_data = copy.array_data;
+  type.fn_ptr_signature = copy.fn_ptr_signature;
+  type.pointer_depth = copy.pointer_depth;
+  type.dereference_counts = copy.dereference_counts;
   return true;
 }
 
@@ -547,6 +578,7 @@ void ExplicitCast::dump_to_stream(std::stringstream &stream, size_t indent_level
 }
 
 bool ExplicitCast::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  Type copy = type;
   if (type.kind == Type::Kind::Placeholder) {
     int placeholder_index = find_index(type.name, placeholders);
     if (placeholder_index == -1) {
@@ -560,6 +592,10 @@ bool ExplicitCast::replace_placeholders(const std::vector<std::string> &placehol
       type = instance_types[placeholder_index];
     }
   }
+  type.array_data = copy.array_data;
+  type.fn_ptr_signature = copy.fn_ptr_signature;
+  type.pointer_depth = copy.pointer_depth;
+  type.dereference_counts = copy.dereference_counts;
   return rhs->replace_placeholders(placeholders, instance_types);
 }
 
@@ -626,6 +662,7 @@ void CallExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) co
 
 bool CallExpr::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &_instance_types) {
   for (auto &&type : instance_types) {
+    Type copy = type;
     if (type.kind == Type::Kind::Placeholder) {
       int placeholder_index = find_index(type.name, placeholders);
       if (placeholder_index == -1) {
@@ -640,6 +677,10 @@ bool CallExpr::replace_placeholders(const std::vector<std::string> &placeholders
       }
       type = _instance_types[placeholder_index];
     }
+    type.array_data = copy.array_data;
+    type.fn_ptr_signature = copy.fn_ptr_signature;
+    type.pointer_depth = copy.pointer_depth;
+    type.dereference_counts = copy.dereference_counts;
   }
   bool success = true;
   for (auto &&expr : args) {
@@ -657,6 +698,7 @@ void ParamDecl::dump_to_stream(std::stringstream &stream, size_t indent_level) c
 }
 
 bool ParamDecl::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  Type copy = type;
   if (type.kind == Type::Kind::Placeholder) {
     int placeholder_index = find_index(type.name, placeholders);
     if (placeholder_index == -1) {
@@ -671,6 +713,10 @@ bool ParamDecl::replace_placeholders(const std::vector<std::string> &placeholder
       type = instance_types[placeholder_index];
     }
   }
+  type.pointer_depth = copy.pointer_depth;
+  type.array_data = copy.array_data;
+  type.dereference_counts = copy.dereference_counts;
+  type.fn_ptr_signature = copy.fn_ptr_signature;
   return true;
 }
 

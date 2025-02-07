@@ -2894,7 +2894,10 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
     CONTAINS_NEXT_REQUIRE(lines_it, "i32(32)");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
-    REQUIRE(lines_it->find(") gen_fun_TestType:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun_TestType:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") test:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
@@ -2902,7 +2905,7 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(first)");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
-    REQUIRE(lines_it->find(") gen_fun_TestType:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun_TestType:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
     REQUIRE(lines_it->find(") generic_param:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
@@ -2952,7 +2955,10 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
     CONTAINS_NEXT_REQUIRE(lines_it, "i32(32)");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
-    REQUIRE(lines_it->find(") gen_fun_TestType:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun_TestType:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '&'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") test:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
@@ -2960,7 +2966,7 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(first)");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
-    REQUIRE(lines_it->find(") gen_fun1_TestType:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun1_TestType:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
     REQUIRE(lines_it->find(") generic_param:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
@@ -2973,12 +2979,12 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
     CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
-    REQUIRE(lines_it->find(") gen_fun_TestType:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun_TestType:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedParamDecl: @(");
     REQUIRE(lines_it->find(") generic_param:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
-    REQUIRE(lines_it->find(") gen_fun1_TestType:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun1_TestType:") != std::string::npos);
   }
   SECTION("Generic var decl and return") {
     TEST_SETUP_MODULE_SINGLE("generic_var_decl_and_return", R"(
@@ -3005,7 +3011,7 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
     REQUIRE(lines_it->find(") test:TestType") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
-    REQUIRE(lines_it->find(") gen_fun_TestType:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun_TestType:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
@@ -3013,7 +3019,7 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberIndex: 0");
     CONTAINS_NEXT_REQUIRE(lines_it, "MemberID:i32(first)");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
-    REQUIRE(lines_it->find(") gen_fun_TestType:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun_TestType:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
@@ -3051,7 +3057,7 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
     REQUIRE(lines_it->find(") test:__GenericStruct_i32") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedCallExpr: @(");
-    REQUIRE(lines_it->find(") gen_fun_i32:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun_i32:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructMemberAccess:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
@@ -3061,7 +3067,7 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedStructDecl: __GenericStruct_i32");
     CONTAINS_NEXT_REQUIRE(lines_it, "0. ResolvedMemberField: i32(first)");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
-    REQUIRE(lines_it->find(") gen_fun_i32:") != std::string::npos);
+    REQUIRE(lines_it->find(") __gen_fun_i32:") != std::string::npos);
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");

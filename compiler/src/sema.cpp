@@ -949,7 +949,12 @@ std::optional<Type> Sema::resolve_type(Type parsed_type) {
         if (!instance_decl)
           return std::nullopt;
       }
-      return instance_decl->decl->type;
+      Type copy = instance_decl->decl->type;
+      copy.pointer_depth = parsed_type.pointer_depth;
+      copy.dereference_counts = parsed_type.dereference_counts;
+      copy.array_data = parsed_type.array_data;
+      copy.fn_ptr_signature = parsed_type.fn_ptr_signature;
+      return copy;
     }
     return parsed_type;
   }
@@ -977,7 +982,13 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
           int inner_placeholder_index = 0;
           for (auto &&placeholder : placeholders) {
             if (placeholders[inner_placeholder_index] == type.instance_types[j].name) {
-              type.instance_types[j] = instance_types[inner_placeholder_index];
+              Type &inst_type = type.instance_types[j];
+              Type copy = inst_type;
+              inst_type = instance_types[inner_placeholder_index];
+              inst_type.fn_ptr_signature = copy.fn_ptr_signature;
+              inst_type.dereference_counts = copy.dereference_counts;
+              inst_type.pointer_depth = copy.pointer_depth;
+              inst_type.array_data = copy.array_data;
             }
             ++inner_placeholder_index;
           }
@@ -1021,6 +1032,7 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
     }
     // Resolve return type
     Type func_return_type = gen_func->type;
+    Type ret_type_copy = func_return_type;
     if (gen_func->type.kind == Type::Kind::Placeholder) {
       bool found = false;
       int placeholder_index = 0;
@@ -1041,7 +1053,19 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
         return false;
       }
       func_return_type = *maybe_res_type;
+    } else if (gen_func->type.kind == Type::Kind::Custom && gen_func->type.instance_types.size()) {
+      func_return_type.replace_placeholders(placeholders, instance_types);
+      auto maybe_res_type = resolve_type(func_return_type);
+      if (!maybe_res_type) {
+        report(gen_func->location, "could not resolve return type of type '" + gen_func->type.full_name() + "'.");
+        return false;
+      }
+      func_return_type = *maybe_res_type;
     }
+    func_return_type.array_data = ret_type_copy.array_data;
+    func_return_type.pointer_depth = ret_type_copy.pointer_depth;
+    func_return_type.dereference_counts = ret_type_copy.dereference_counts;
+    func_return_type.fn_ptr_signature = ret_type_copy.fn_ptr_signature;
     // @NOTE: this is inefficient because we're potentially re-resolving already resolved type
     auto maybe_resolved_return_type = resolve_type(func_return_type);
     if (!maybe_resolved_return_type) {
@@ -1055,6 +1079,7 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
     for (int i = 0; i < gen_func->params.size(); ++i) {
       const auto &current_param = gen_func->params[i];
       Type param_type = current_param->type;
+      Type copy = param_type;
       if (current_param->type.kind == Type::Kind::Placeholder) {
         int placeholder_index = 0;
         bool found = false;
@@ -1075,7 +1100,18 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
           return false;
         }
         param_type = *maybe_resolved_type;
+      } else if (current_param->type.kind == Type::Kind::Custom && current_param->type.instance_types.size()) {
+        param_type.replace_placeholders(placeholders, instance_types);
+        auto maybe_res_type = resolve_type(param_type);
+        if (!maybe_res_type) {
+          report(gen_func->location, "could not resolve return type of type '" + param_type.full_name() + "'.");
+          return false;
+        }
       }
+      param_type.array_data = copy.array_data;
+      param_type.pointer_depth = copy.pointer_depth;
+      param_type.dereference_counts = copy.dereference_counts;
+      param_type.fn_ptr_signature = copy.fn_ptr_signature;
       // @NOTE: this is inefficient because we're potentially re-resolving already resolved type
       auto maybe_resolved_type = resolve_type(param_type);
       if (!maybe_resolved_type) {
@@ -1096,11 +1132,11 @@ bool Sema::instantiate_generic_type(const DeclLookupResult &generic_decl, std::s
     std::unique_ptr<ResolvedBlock> resolved_block = resolve_block(*parsed_block_copy);
     if (!resolved_block)
       return false;
-    std::string postfix;
-    for (auto &&type : instance_types) {
-      postfix += "_" + type.name;
+    std::string fn_instance_name = "__" + gen_func->id;
+    for (auto &&inst_type : instance_types) {
+      fn_instance_name += "_" + inst_type.name;
     }
-    m_GenericInstances.emplace_back(std::make_unique<ResolvedFuncDecl>(gen_func->location, gen_func->id + postfix, resolved_return_type, gen_func->module,
+    m_GenericInstances.emplace_back(std::make_unique<ResolvedFuncDecl>(gen_func->location, fn_instance_name, resolved_return_type, gen_func->module,
                                                                        gen_func->is_exported, std::move(resolved_params), std::move(resolved_block),
                                                                        gen_func->is_vla, gen_func->lib, gen_func->og_name));
     auto func_instance = dynamic_cast<ResolvedFuncDecl *>(m_GenericInstances.back().get());
@@ -2015,15 +2051,77 @@ std::unique_ptr<ResolvedCallExpr> Sema::resolve_call_expr(const CallExpr &call) 
       instance_name += "_" + resolved_instance_type->name;
       resolved_types.emplace_back(std::move(*resolved_instance_type));
     }
-    if (!should_instantiate)
+    if (!should_instantiate) {
+      for (int i = 0; i < call.args.size(); ++i) {
+        auto *decl_type = i < resolved_func_decl->params.size() ? &resolved_func_decl->params[i]->type : nullptr;
+        std::unique_ptr<ResolvedExpr> resolved_arg = resolve_expr(*call.args[i], decl_type);
+        if (!resolved_arg)
+          return nullptr;
+        Type resolved_type = resolved_arg->type;
+        if (const auto *member_access = dynamic_cast<const ResolvedStructMemberAccess *>(resolved_arg.get())) {
+          resolved_type = member_access->type;
+        }
+        if (i < resolved_func_decl->params.size()) {
+          if (!is_same_type(resolved_type, resolved_func_decl->params[i]->type)) {
+            bool is_array_decay;
+            if (!try_cast_expr(*resolved_arg, resolved_func_decl->params[i]->type, m_Cee, is_array_decay) &&
+                !is_same_array_decay(resolved_arg->type, resolved_func_decl->params[i]->type)) {
+              std::string unexected_type_str = resolved_arg->type.name;
+              for (int i = 0; i < resolved_arg->type.pointer_depth; ++i) {
+                unexected_type_str += "*";
+              }
+              std::string expected_type_str = resolved_func_decl->params[i]->type.name;
+              for (int i = 0; i < resolved_func_decl->params[i]->type.pointer_depth; ++i) {
+                expected_type_str += "*";
+              }
+              return report(resolved_arg->location, "unexpected type '" + unexected_type_str + "', expected '" + expected_type_str + "'.");
+            }
+          }
+        }
+        resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
+        resolved_args.emplace_back(std::move(resolved_arg));
+      }
       return std::make_unique<ResolvedCallExpr>(call.location, resolved_callee->decl, std::move(resolved_args));
-    else {
+    } else {
       auto lookup_res = lookup_decl(resolved_gen_fn_decl->id, &resolved_gen_fn_decl->type);
       if (!lookup_res) {
         return nullptr;
       }
-      if (!instantiate_generic_type(*lookup_res, instance_name, call.instance_types))
-        return nullptr;
+      if (!instantiate_generic_type(*lookup_res, instance_name, call.instance_types)) {
+        report(call.location, "failed to instantiate generic function.");
+        return report(lookup_res->decl->location, "definition here.");
+      }
+      const ResolvedFuncDecl *resolved_gen_fn_instance = dynamic_cast<const ResolvedFuncDecl *>(m_GenericInstances.back().get());
+      assert(resolved_gen_fn_instance);
+      for (int i = 0; i < call.args.size(); ++i) {
+        auto *decl_type = i < resolved_gen_fn_instance->params.size() ? &resolved_gen_fn_instance->params[i]->type : nullptr;
+        std::unique_ptr<ResolvedExpr> resolved_arg = resolve_expr(*call.args[i], decl_type);
+        if (!resolved_arg)
+          return nullptr;
+        Type resolved_type = resolved_arg->type;
+        if (const auto *member_access = dynamic_cast<const ResolvedStructMemberAccess *>(resolved_arg.get())) {
+          resolved_type = member_access->type;
+        }
+        if (i < resolved_gen_fn_instance->params.size()) {
+          if (!is_same_type(resolved_type, resolved_gen_fn_instance->params[i]->type)) {
+            bool is_array_decay;
+            if (!try_cast_expr(*resolved_arg, resolved_gen_fn_instance->params[i]->type, m_Cee, is_array_decay) &&
+                !is_same_array_decay(resolved_arg->type, resolved_gen_fn_instance->params[i]->type)) {
+              std::string unexected_type_str = resolved_arg->type.name;
+              for (int i = 0; i < resolved_arg->type.pointer_depth; ++i) {
+                unexected_type_str += "*";
+              }
+              std::string expected_type_str = resolved_gen_fn_instance->params[i]->type.name;
+              for (int i = 0; i < resolved_gen_fn_instance->params[i]->type.pointer_depth; ++i) {
+                expected_type_str += "*";
+              }
+              return report(resolved_arg->location, "unexpected type '" + unexected_type_str + "', expected '" + expected_type_str + "'.");
+            }
+          }
+        }
+        resolved_arg->set_constant_value(m_Cee.evaluate(*resolved_arg));
+        resolved_args.emplace_back(std::move(resolved_arg));
+      }
       // At this point the declaration should be the last one in m_GenericInstances
       return std::make_unique<ResolvedCallExpr>(call.location, m_GenericInstances.back().get(), std::move(resolved_args));
     }
