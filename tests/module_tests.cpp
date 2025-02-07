@@ -4,6 +4,7 @@
 #include <sstream>
 
 #define TEST_SETUP(test_name, include_string)                                                                                                                  \
+  saplang::clear_error_stream();                                                                                                                               \
   std::ostringstream compile_output_stream;                                                                                                                    \
   saplang::CompilerOptions compiler_options{"build/bin/module_tests/" + std::string(test_name) + "/test.sl",                                                   \
                                             "build/bin/module_tests/" + std::string(test_name) + "/test"};                                                     \
@@ -55,4 +56,11 @@ TEST_CASE("visibility_extern", "[modules]") {
   REQUIRE_COMPILE_SUCCESS;
   EXEC_COMPILED("visibility_extern")
   REQUIRE(stdout_string == "hello world\n");
+}
+
+TEST_CASE("visibility_generics", "[modules]") {
+  TEST_SETUP("visibility_generics", "");
+  REQUIRE_COMPILE_SUCCESS;
+  EXEC_COMPILED("visibility_generics");
+  REQUIRE(stdout_string == "69\n0\n");
 }
