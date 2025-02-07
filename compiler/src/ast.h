@@ -93,6 +93,18 @@ struct Type : public IDumpable {
   Type(Type &&) noexcept = default;
   Type &operator=(Type &&) noexcept = default;
 
+  std::string demangled_name() const {
+    std::string demangled_name;
+    if (instance_types.size()) {
+      demangled_name = "__";
+    }
+    demangled_name += name;
+    for (auto &&type : instance_types) {
+      demangled_name += type.demangled_name();
+    }
+    return demangled_name;
+  }
+
   std::string full_name() const {
     std::string full_name{name};
     if (instance_types.size()) {
@@ -148,7 +160,7 @@ struct Type : public IDumpable {
 
   bool operator==(const Type &other) const;
 
-  void replace_placeholders(const std::vector<std::string>& placeholders, const std::vector<Type> types);
+  void replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> types);
 
   // @NOTE: does not insert '\n' when done
   DUMP_IMPL
@@ -266,21 +278,23 @@ struct Module : public IDumpable {
 };
 
 struct SizeofExpr : public Expr {
-  std::string type_name;
+  Type type;
   bool is_ptr;
   unsigned long array_element_count;
-  inline explicit SizeofExpr(SourceLocation loc, std::string type_name, bool is_ptr, unsigned long array_element_count)
-      : Expr(loc), type_name(std::move(type_name)), is_ptr(is_ptr), array_element_count(array_element_count) {}
+  inline explicit SizeofExpr(SourceLocation loc, Type type, bool is_ptr, unsigned long array_element_count)
+      : Expr(loc), type(std::move(type)), is_ptr(is_ptr), array_element_count(array_element_count) {}
   DUMP_IMPL;
-  std::unique_ptr<Stmt> clone() const override { return std::make_unique<SizeofExpr>(location, type_name, is_ptr, array_element_count); };
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<SizeofExpr>(location, type, is_ptr, array_element_count); };
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
 };
 
 struct AlignofExpr : public Expr {
-  std::string type_name;
+  Type type;
   bool is_ptr;
-  inline explicit AlignofExpr(SourceLocation loc, std::string type_name, bool is_ptr) : Expr(loc), type_name(std::move(type_name)), is_ptr(is_ptr) {}
+  inline explicit AlignofExpr(SourceLocation loc, Type type, bool is_ptr) : Expr(loc), type(std::move(type)), is_ptr(is_ptr) {}
   DUMP_IMPL;
-  std::unique_ptr<Stmt> clone() const override { return std::make_unique<AlignofExpr>(location, type_name, is_ptr); };
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<AlignofExpr>(location, type, is_ptr); };
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
 };
 
 struct NullExpr : public Expr {
@@ -527,6 +541,7 @@ struct Assignment : public Stmt {
     auto expr_expr = std::unique_ptr<Expr>(static_cast<Expr *>(expr_stmt.release()));
     return std::make_unique<Assignment>(location, std::move(var_expr), std::move(expr_expr), lhs_deref_count);
   }
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
 };
 
 struct CallExpr : public Expr {

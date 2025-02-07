@@ -60,9 +60,12 @@ private:
 
   bool insert_decl_to_current_scope(ResolvedDecl &decl);
 
+  bool insert_decl_to_module_scope(ResolvedDecl& decl);
+
   bool insert_decl_to_global_scope(ResolvedDecl &decl);
 
-  bool instantiate_generic_type(const DeclLookupResult &generic_decl, std::string_view instance_name, const std::vector<Type> &instance_types);
+  bool instantiate_generic_type(const DeclLookupResult &generic_decl, std::string_view instance_name, const std::vector<Type> &instance_types,
+                                std::string &out_name);
 
   std::optional<Type> resolve_type(Type parsed_type);
 
@@ -146,6 +149,7 @@ private:
   std::unordered_map<std::string, TypeInfo> m_TypeInfos;
   ResolvedFuncDecl *m_CurrFunction{nullptr};
   ConstantExpressionEvaluator m_Cee;
+  int m_ModuleScopeId{0};
   bool m_ShouldRunFlowSensitiveAnalysis;
 
 private:
