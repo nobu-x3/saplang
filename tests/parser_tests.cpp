@@ -61,7 +61,7 @@ TEST_CASE("Function declarations", "[parser]") {
     REQUIRE(output_buffer.str().empty());
     REQUIRE(error_stream.str() ==
             R"(test:1:16 error: expected '{' at the beginning of a block.
-test:1:16 error: failed to parse function block.
+test:1:1 error: failed to parse function block.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
@@ -69,8 +69,8 @@ test:1:16 error: failed to parse function block.
     TEST_SETUP(R"(fn int f(int a){)");
     REQUIRE(output_buffer.str().empty());
     REQUIRE(error_stream.str() ==
-            R"(test:1:17 error: expected '}' at the end of a block.
-test:1:17 error: failed to parse function block.
+            R"(test:1:16 error: expected '}' at the end of a block.
+test:1:1 error: failed to parse function block.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
@@ -79,7 +79,7 @@ test:1:17 error: failed to parse function block.
     REQUIRE(output_buffer.str().empty());
     REQUIRE(error_stream.str() ==
             R"(test:1:16 error: expected '{' at the beginning of a block.
-test:1:16 error: failed to parse function block.
+test:1:1 error: failed to parse function block.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
@@ -120,10 +120,10 @@ fn void main(){
 )");
     REQUIRE(output_buffer.str().empty());
     REQUIRE(error_stream.str() ==
-            R"(test:3:1 error: expected '}' at the end of a block.
+            R"(test:2:14 error: expected '}' at the end of a block.
+test:2:1 error: failed to parse function block.
+test:3:15 error: expected '}' at the end of a block.
 test:3:1 error: failed to parse function block.
-test:4:1 error: expected '}' at the end of a block.
-test:4:1 error: failed to parse function block.
 )");
     REQUIRE(!parser.is_complete_ast());
   }
@@ -147,8 +147,8 @@ fn void main() {
     0.;
 }
 )");
-    REQUIRE(error_stream.str() == "test:3:6 error: expected '{' in struct literal initialization.\ntest:4:5 error: expected '}' at the end of a "
-                                  "block.\ntest:4:5 error: failed to parse function block.\n");
+    REQUIRE(error_stream.str() == "test:3:6 error: expected '{' in struct literal initialization.\ntest:2:16 error: expected '}' at the end of a "
+                                  "block.\ntest:2:1 error: failed to parse function block.\n");
     REQUIRE(!parser.is_complete_ast());
   }
   SECTION("Correct number literals") {
@@ -365,8 +365,8 @@ fn int pass() {
   REQUIRE(error_stream.str() ==
           R"(test:2:9 error: expected function identifier.
 test:10:15 error: expected type specifier.
-test:17:1 error: expected '}' at the end of a block.
-test:17:1 error: failed to parse function block.
+test:14:17 error: expected '}' at the end of a block.
+test:14:1 error: failed to parse function block.
 )");
   REQUIRE(output_buffer.str() == R"(FunctionDecl: main:int
   Block

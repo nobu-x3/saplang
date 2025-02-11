@@ -29,7 +29,7 @@ std::unique_ptr<FunctionDecl> Parser::parse_function_decl(SourceLocation decl_lo
     return nullptr;
   std::unique_ptr<Block> block = parse_block();
   if (!block) {
-    return report(m_NextToken.location, "failed to parse function block.");
+    return report(decl_loc, "failed to parse function block.");
   }
   auto &&param_list = maybe_param_list_vla->first;
   return std::make_unique<FunctionDecl>(decl_loc, std::move(function_identifier), std::move(return_type), m_ModuleName, std::move(param_list), std::move(block),
@@ -191,7 +191,7 @@ std::unique_ptr<Block> Parser::parse_block() {
     if (m_NextToken.kind == TokenKind::Rbrace)
       break;
     if (m_NextToken.kind == TokenKind::Eof || m_NextToken.kind == TokenKind::KwFn) {
-      return report(m_NextToken.location, "expected '}' at the end of a block.");
+      return report(location, "expected '}' at the end of a block.");
     }
     auto stmt = parse_stmt();
     if (!stmt) {
@@ -348,7 +348,7 @@ std::unique_ptr<DeclStmt> Parser::parse_var_decl_stmt(bool is_global) {
   if (!var_decl)
     return nullptr;
   if (m_NextToken.kind != TokenKind::Semicolon)
-    return report(m_NextToken.location, "expected ';' at the end of declaration.");
+    return report(loc, "expected ';' at the end of declaration.");
   eat_next_token(); // eat ';'
   return std::make_unique<DeclStmt>(loc, std::move(var_decl));
 }
@@ -1059,16 +1059,16 @@ std::unique_ptr<SizeofExpr> Parser::parse_sizeof_expr() {
   if (m_NextToken.kind != TokenKind::Identifier)
     return report(m_NextToken.location, "Name of type expected.");
   auto type = parse_type();
-  if(!type) {
-      return nullptr;
+  if (!type) {
+    return nullptr;
   }
   bool is_ptr = type->pointer_depth > 0;
   unsigned long array_element_count{1};
-  if(type->array_data) {
-      array_element_count = 0;
-      for(auto&& dim : type->array_data->dimensions) {
-          array_element_count += dim;
-      }
+  if (type->array_data) {
+    array_element_count = 0;
+    for (auto &&dim : type->array_data->dimensions) {
+      array_element_count += dim;
+    }
   }
   if (m_NextToken.kind != TokenKind::Rparent)
     return report(m_NextToken.location, "sizeof() is a function. ')' expected after type.");
