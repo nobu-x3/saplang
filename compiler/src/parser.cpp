@@ -213,6 +213,7 @@ std::unique_ptr<Block> Parser::parse_block() {
 // | <varDeclStatement>
 // | <assignment>
 // | <deferStmt>
+// ! <switchStmt>
 std::unique_ptr<Stmt> Parser::parse_stmt() {
   if (m_NextToken.kind == TokenKind::KwWhile)
     return parse_while_stmt();
@@ -220,6 +221,8 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     return parse_for_stmt();
   if (m_NextToken.kind == TokenKind::KwIf)
     return parse_if_stmt();
+  if (m_NextToken.kind == TokenKind::KwSwitch)
+    return parse_switch_stmt();
   if (m_NextToken.kind == TokenKind::KwReturn)
     return parse_return_stmt();
   if (m_NextToken.kind == TokenKind::KwDefer)
@@ -271,6 +274,137 @@ std::unique_ptr<IfStmt> Parser::parse_if_stmt() {
   if (!false_block)
     return nullptr;
   return std::make_unique<IfStmt>(location, std::move(condition), std::move(true_block), std::move(false_block));
+}
+
+// <switchStmt>
+// ::= 'switch' '('* <declRefExpr> ')'* '{' <caseBlock>* <defaultBlock>+ '}'
+//
+// <caseBlock>
+// ::= 'case' <expr> ':' (<block>)*
+//
+// <defaultBlock>
+// ::= 'default' ':' (<block>)*
+std::unique_ptr<SwitchStmt> Parser::parse_switch_stmt() {
+  assert(m_NextToken.kind == TokenKind::KwSwitch);
+  SourceLocation loc = m_NextToken.location;
+  eat_next_token(); // eat 'switch'
+  std::unique_ptr<DeclRefExpr> eval_expr = nullptr;
+  if (m_NextToken.kind == TokenKind::Lparent)
+    eat_next_token(); // eat '('
+  if (m_NextToken.kind == TokenKind::Identifier) {
+    std::string var_id = *m_NextToken.value;
+    eval_expr = std::make_unique<DeclRefExpr>(m_NextToken.location, var_id);
+    eat_next_token();
+  }
+  if (!eval_expr)
+    return report(loc, "missing switch evaluation expression.");
+  if (m_NextToken.kind == TokenKind::Rparent)
+    eat_next_token(); // eat ')'
+  if (m_NextToken.kind != TokenKind::Lbrace)
+    return report(m_NextToken.location, "expected '{' in the beginning of switch block.");
+  eat_next_token(); // eat '{'
+  int default_block_index = SWITCH_DEFAULT_BLOCK_INDEX;
+  bool has_been_default = false;
+  std::vector<std::unique_ptr<Block>> blocks;
+  if (m_NextToken.kind == TokenKind::KwDefault) {
+    eat_next_token(); // eat 'default'
+    if (m_NextToken.kind != TokenKind::Colon) {
+      return report(m_NextToken.location, "expected ':'.");
+    }
+    eat_next_token(); // eat ':'
+    if (m_NextToken.kind == TokenKind::Lbrace) {
+      auto block = parse_block();
+      if (block) {
+        has_been_default = true;
+        default_block_index = blocks.size();
+        blocks.emplace_back(std::move(block));
+      }
+    }
+  }
+  CaseBlock cases;
+  while (m_NextToken.kind == TokenKind::KwCase) {
+    eat_next_token(); // eat 'case'
+    std::unique_ptr<Expr> condition = parse_expr(Context::Stmt);
+    if (!condition)
+      return nullptr;
+    if (m_NextToken.kind != TokenKind::Colon) {
+      return report(m_NextToken.location, "expected ':' in case block.");
+    }
+    eat_next_token(); // eat ':'
+    std::unique_ptr<Block> block = nullptr;
+    if (m_NextToken.kind == TokenKind::Lbrace) {
+      block = parse_block();
+    }
+    int block_index = SWITCH_FALLTHROUGH_INDEX;
+    if (block) {
+      block_index = blocks.size();
+      // Fill in previous cases that fell through
+      for (auto reverse_it = cases.rbegin(); reverse_it != cases.rend(); ++reverse_it) {
+        if (reverse_it->second == SWITCH_FALLTHROUGH_INDEX) {
+          reverse_it->second = block_index;
+        } else
+          break;
+      }
+      if (default_block_index == SWITCH_DEFAULT_BLOCK_INDEX)
+        default_block_index = blocks.size();
+      blocks.emplace_back(std::move(block));
+    }
+    cases.emplace_back(std::make_pair(std::move(condition), block_index));
+    // We can have default block in the middle of the switch
+    if (m_NextToken.kind == TokenKind::KwDefault) {
+      has_been_default = true;
+      if (default_block_index > SWITCH_DEFAULT_BLOCK_INDEX)
+        return report(m_NextToken.location, "duplicate of default block.");
+      eat_next_token(); // eat 'default'
+      if (m_NextToken.kind != TokenKind::Colon) {
+        return report(m_NextToken.location, "expected ':'.");
+      }
+      eat_next_token(); // eat ':'
+      if (m_NextToken.kind == TokenKind::Lbrace) {
+        auto default_block = parse_block();
+        // Assign fallthrough in case there is no body, that way we'll assign the default index to the next block index
+        default_block_index = SWITCH_FALLTHROUGH_INDEX;
+        if (default_block) {
+          default_block_index = blocks.size();
+          blocks.emplace_back(std::move(default_block));
+          for (auto reverse_it = cases.rbegin(); reverse_it != cases.rend(); ++reverse_it) {
+            if (reverse_it->second == SWITCH_FALLTHROUGH_INDEX) {
+              reverse_it->second = default_block_index;
+            } else
+              break;
+          }
+        }
+      }
+    }
+  }
+  if (m_NextToken.kind == TokenKind::KwDefault) {
+    has_been_default = true;
+    if (default_block_index > SWITCH_DEFAULT_BLOCK_INDEX)
+      return report(m_NextToken.location, "duplicate of default block.");
+    eat_next_token(); // eat 'default'
+    if (m_NextToken.kind != TokenKind::Colon) {
+      return report(m_NextToken.location, "expected ':'.");
+    }
+    eat_next_token(); // eat ':'
+    if (m_NextToken.kind == TokenKind::Lbrace) {
+      SourceLocation loc = m_NextToken.location;
+      auto default_block = parse_block();
+      if (!default_block)
+        return report(loc, "failed to parse default block.");
+      default_block_index = blocks.size();
+      blocks.emplace_back(std::move(default_block));
+      for (auto reverse_it = cases.rbegin(); reverse_it != cases.rend(); ++reverse_it) {
+        if (reverse_it->second == SWITCH_FALLTHROUGH_INDEX) {
+          reverse_it->second = default_block_index;
+        } else
+          break;
+      }
+    }
+  }
+  eat_next_token(); // eat switche's '}'
+  if (default_block_index <= SWITCH_DEFAULT_BLOCK_INDEX || !has_been_default)
+    return report(loc, "missing default block.");
+  return std::make_unique<SwitchStmt>(loc, std::move(eval_expr), std::move(cases), std::move(blocks), default_block_index);
 }
 
 // <deferStmt>

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <set>
 #include <vector>
@@ -633,6 +634,37 @@ struct IfStmt : public Stmt {
     auto cond_st = condition->clone();
     auto cond_ex = std::unique_ptr<Expr>(static_cast<Expr *>(cond_st.release()));
     return std::make_unique<IfStmt>(location, std::move(cond_ex), std::make_unique<Block>(*true_block), std::make_unique<Block>(*false_block));
+  }
+};
+
+#define SWITCH_DEFAULT_BLOCK_INDEX -1
+#define SWITCH_FALLTHROUGH_INDEX -2
+using CaseBlock = std::vector<std::pair<std::unique_ptr<Expr>, int>>;
+struct SwitchStmt : public Stmt {
+  std::unique_ptr<DeclRefExpr> eval_expr;
+  std::vector<std::unique_ptr<Block>> blocks;
+  CaseBlock cases;
+  int default_block_index;
+  inline SwitchStmt(SourceLocation location, std::unique_ptr<DeclRefExpr> eval_expr, CaseBlock cases, std::vector<std::unique_ptr<Block>> blocks,
+                    int default_block_index)
+      : Stmt(location), eval_expr(std::move(eval_expr)), cases(std::move(cases)), blocks(std::move(blocks)), default_block_index(default_block_index) {}
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override {
+    auto eval_stmt = eval_expr->clone();
+    auto ev_expr = std::unique_ptr<DeclRefExpr>(static_cast<DeclRefExpr *>(eval_stmt.release()));
+    CaseBlock _cases;
+    _cases.reserve(cases.size());
+    std::vector<std::unique_ptr<Block>> _blocks;
+    _blocks.reserve(blocks.size());
+    for (auto &&[expr, index] : cases) {
+      auto expr_stmt = expr->clone();
+      _cases.emplace_back(std::make_pair(std::unique_ptr<Expr>(static_cast<Expr *>(expr_stmt.release())), index));
+    }
+    for (auto &&block : blocks) {
+      auto block_clone = std::make_unique<Block>(*block);
+      _blocks.emplace_back(std::move(block_clone));
+    }
+    return std::make_unique<SwitchStmt>(location, std::move(ev_expr), std::move(_cases), std::move(_blocks), default_block_index);
   }
 };
 

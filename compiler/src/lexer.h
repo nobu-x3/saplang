@@ -69,6 +69,9 @@ enum class TokenKind : char {
   Hat = single_char_tokens[20],
   Pipe = single_char_tokens[21],
   Percent = single_char_tokens[22],
+  KwSwitch,
+  KwCase,
+  KwDefault,
 };
 
 const std::unordered_map<std::string_view, TokenKind> keywords = {
@@ -76,7 +79,8 @@ const std::unordered_map<std::string_view, TokenKind> keywords = {
     {"return", TokenKind::KwReturn}, {"fn", TokenKind::KwFn},         {"if", TokenKind::KwIf},           {"else", TokenKind::KwElse},
     {"while", TokenKind::KwWhile},   {"for", TokenKind::KwFor},       {"const", TokenKind::KwConst},     {"var", TokenKind::KwVar},
     {"struct", TokenKind::KwStruct}, {"null", TokenKind::KwNull},     {"enum", TokenKind::KwEnum},       {"extern", TokenKind::KwExtern},
-    {"alias", TokenKind::KwAlias},   {"sizeof", TokenKind::KwSizeof}, {"alignof", TokenKind::KwAlignof}, {"import", TokenKind::KwImport}};
+    {"alias", TokenKind::KwAlias},   {"sizeof", TokenKind::KwSizeof}, {"alignof", TokenKind::KwAlignof}, {"import", TokenKind::KwImport},
+    {"switch", TokenKind::KwSwitch}, {"case", TokenKind::KwCase},     {"default", TokenKind::KwDefault}};
 
 struct Token {
   SourceLocation location;

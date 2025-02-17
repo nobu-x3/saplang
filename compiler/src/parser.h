@@ -83,6 +83,7 @@ private:
   std::optional<ParameterList> parse_parameter_list_of_generic_fn(const std::vector<std::string> &placeholders);
 
   std::unique_ptr<IfStmt> parse_if_stmt();
+  std::unique_ptr<SwitchStmt> parse_switch_stmt();
   std::unique_ptr<WhileStmt> parse_while_stmt();
   std::unique_ptr<ForStmt> parse_for_stmt();
 

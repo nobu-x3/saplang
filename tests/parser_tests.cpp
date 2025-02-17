@@ -2171,3 +2171,125 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "Field: first");
   }
 }
+
+TEST_CASE("switch stmt", "[parser]") {
+  SECTION("some empty, only default") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+enum TestEnum {
+    Zero,
+    One,
+    Two
+}
+fn i32 main() {
+    var TestEnum test_enum;
+    var i32 int = -1;
+    switch(test_enum) {
+        case TestEnum::Zero:
+        case TestEnum::One:
+        default: {
+            int = (i32)test_enum;
+        }
+    }
+    return int;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 5;
+    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test_enum:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: int:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '-'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "SwitchStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test_enum");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Cases:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "EnumElementAccess: TestEnum::Zero");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "EnumElementAccess: TestEnum::One");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DefaultBlockIndex: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Blocks:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ExplicitCast: i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test_enum");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ReturnStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
+  }
+  SECTION("out of order default") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+enum TestEnum {
+    Zero,
+    One,
+    Two
+}
+fn i32 main() {
+    var TestEnum test_enum;
+    var i32 int = -1;
+    switch(test_enum) {
+        case TestEnum::Zero:
+        default:
+        case TestEnum::One:{
+            int = (i32)test_enum;
+        }
+    }
+    return int;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 5;
+    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: test_enum:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: int:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "UnaryOperator: '-'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "SwitchStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test_enum");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Cases:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "EnumElementAccess: TestEnum::Zero");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "EnumElementAccess: TestEnum::One");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DefaultBlockIndex: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Blocks:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Assignment:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ExplicitCast: i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: test_enum");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ReturnStmt");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
+  }
+  SECTION("Missing default") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+enum TestEnum {
+    Zero,
+    One,
+    Two
+}
+fn i32 main() {
+    var TestEnum test_enum;
+    var i32 int = -1;
+    switch(test_enum) {
+        case TestEnum::Zero:
+        case TestEnum::One: {
+            int = (i32)test_enum;
+        }
+    }
+    return int;
+}
+)");
+    REQUIRE(error_stream.str() == "test:10:5 error: missing default block.\n");
+  }
+}

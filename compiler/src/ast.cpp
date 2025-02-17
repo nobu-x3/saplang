@@ -355,12 +355,29 @@ void WhileStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) c
 void IfStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "IfStmt\n";
   condition->dump_to_stream(stream, indent_level + 1);
-
   stream << indent(indent_level + 1) << "IfBlock\n";
   true_block->dump_to_stream(stream, indent_level + 2);
   if (false_block) {
     stream << indent(indent_level + 1) << "ElseBlock\n";
     false_block->dump_to_stream(stream, indent_level + 2);
+  }
+}
+
+void SwitchStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "SwitchStmt:\n";
+  eval_expr->dump_to_stream(stream, indent_level + 1);
+  stream << indent(indent_level + 1) << "Cases:\n";
+  for (auto &&[expr, index] : cases) {
+    expr->dump_to_stream(stream, indent_level + 2);
+    stream << indent(indent_level + 2) << "Index: " << index << "\n";
+  }
+  stream << indent(indent_level + 1) << "DefaultBlockIndex: " << default_block_index << "\n";
+  stream << indent(indent_level + 1) << "Blocks:\n";
+  int index = 0;
+  for (auto &&block : blocks) {
+    stream << indent(indent_level + 2) << index << ":\n";
+    block->dump_to_stream(stream, indent_level + 3);
+    ++index;
   }
 }
 
