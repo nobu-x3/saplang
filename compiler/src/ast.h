@@ -920,6 +920,18 @@ struct ResolvedDeclRefExpr : public ResolvedExpr {
   DUMP_IMPL
 };
 
+using ResolvedCaseBlocks = std::vector<std::pair<std::unique_ptr<ResolvedExpr>, int>>;
+struct ResolvedSwitchStmt : public ResolvedStmt {
+  std::unique_ptr<ResolvedDeclRefExpr> eval_expr;
+  std::vector<std::unique_ptr<ResolvedBlock>> blocks;
+  ResolvedCaseBlocks cases;
+  int default_block_index;
+  inline ResolvedSwitchStmt(SourceLocation location, std::unique_ptr<ResolvedDeclRefExpr> eval_expr, ResolvedCaseBlocks cases, std::vector<std::unique_ptr<ResolvedBlock>> blocks,
+                    int default_block_index)
+      : ResolvedStmt(location), eval_expr(std::move(eval_expr)), cases(std::move(cases)), blocks(std::move(blocks)), default_block_index(default_block_index) {}
+  DUMP_IMPL;
+};
+
 struct ResolvedNullExpr : public ResolvedExpr {
   inline ResolvedNullExpr(SourceLocation loc, Type type) : ResolvedExpr(loc, type) { type.pointer_depth = 1; }
   DUMP_IMPL

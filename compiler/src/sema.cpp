@@ -470,6 +470,30 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
   return std::make_unique<ResolvedIfStmt>(stmt.location, std::move(condition), std::move(true_block), std::move(false_block));
 }
 
+std::unique_ptr<ResolvedSwitchStmt> Sema::resolve_switch_stmt(const SwitchStmt &stmt) {
+  std::unique_ptr<ResolvedDeclRefExpr> eval_expr = resolve_decl_ref_expr(*stmt.eval_expr);
+  if (!eval_expr) {
+    return report(stmt.eval_expr->location, "failed to evaluate switch expression.");
+  }
+  std::vector<std::unique_ptr<ResolvedBlock>> resolved_blocks;
+  resolved_blocks.reserve(stmt.blocks.size());
+  for (auto &&parsed_block : stmt.blocks) {
+    auto resolved_block = resolve_block(*parsed_block);
+    if (!resolved_block)
+      return report(parsed_block->location, "failed to evaluate block inside switch statement.");
+    resolved_blocks.emplace_back(std::move(resolved_block));
+  }
+  ResolvedCaseBlocks cases;
+  cases.reserve(stmt.cases.size());
+  for (auto &&[expr, ind] : stmt.cases) {
+    auto resolved_expr = resolve_expr(*expr);
+    if (!resolved_expr)
+      return report(expr->location, "failed to evaluate expression inside switch statement.");
+    cases.emplace_back(std::make_pair(std::move(resolved_expr), ind));
+  }
+  return std::make_unique<ResolvedSwitchStmt>(stmt.location, std::move(eval_expr), std::move(cases), std::move(resolved_blocks), stmt.default_block_index);
+}
+
 std::unique_ptr<ResolvedDeferStmt> Sema::resolve_defer_stmt(const DeferStmt &stmt) {
   auto block = resolve_block(*stmt.block);
   assert(block && "failed to resolve defer block.");
@@ -1254,6 +1278,8 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
     return resolve_expr(*expr);
   if (auto *return_stmt = dynamic_cast<const ReturnStmt *>(&stmt))
     return resolve_return_stmt(*return_stmt);
+  if (auto *switch_stmt = dynamic_cast<const SwitchStmt *>(&stmt))
+    return resolve_switch_stmt(*switch_stmt);
   if (auto *if_stmt = dynamic_cast<const IfStmt *>(&stmt))
     return resolve_if_stmt(*if_stmt);
   if (auto *defer_stmt = dynamic_cast<const DeferStmt *>(&stmt))
