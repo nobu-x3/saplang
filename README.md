@@ -1,3 +1,5 @@
+Please use the [Discord](https://discord.gg/8nqP7npDhV) to get in contact with me.
+
 # !DISCLAIMER
 This is not a C-KILLER. I have no aspirations for this language to become popular or even used by other people. I'm developing it for my own projects and according to my tastes and needs. USE AT YOUR OWN RISK!
 
