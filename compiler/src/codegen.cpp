@@ -4,10 +4,12 @@
 
 #include <filesystem>
 #include <llvm-18/llvm/BinaryFormat/Dwarf.h>
+#include <llvm-18/llvm/IR/BasicBlock.h>
 #include <llvm-18/llvm/IR/DIBuilder.h>
 #include <llvm-18/llvm/IR/DebugInfoMetadata.h>
 #include <llvm-18/llvm/IR/DerivedTypes.h>
 #include <llvm-18/llvm/IR/InstrTypes.h>
+#include <llvm-18/llvm/IR/Instructions.h>
 #include <llvm-18/llvm/IR/LLVMContext.h>
 #include <llvm-18/llvm/IR/Metadata.h>
 #include <llvm-18/llvm/TargetParser/Host.h>
@@ -587,6 +589,8 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt, GeneratedModule &mod) {
   }
   if (auto *ifstmt = dynamic_cast<const ResolvedIfStmt *>(&stmt))
     return gen_if_stmt(*ifstmt, mod);
+  if (auto *switchstmt = dynamic_cast<const ResolvedSwitchStmt *>(&stmt))
+    return gen_switch_stmt(*switchstmt, mod);
   if (auto *whilestmt = dynamic_cast<const ResolvedWhileStmt *>(&stmt))
     return gen_while_stmt(*whilestmt, mod);
   if (auto *return_stmt = dynamic_cast<const ResolvedReturnStmt *>(&stmt))
@@ -625,6 +629,43 @@ llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt, GeneratedModule &m
   }
   exit_bb->insertInto(function);
   m_Builder.SetInsertPoint(exit_bb);
+  return nullptr;
+}
+
+llvm::Value *Codegen::gen_switch_stmt(const ResolvedSwitchStmt &stmt, GeneratedModule &mod) {
+  llvm::Function *function = get_current_function();
+  assert(function);
+  llvm::BasicBlock *default_block = llvm::BasicBlock::Create(m_Context, "sw.default", function);
+  assert(default_block);
+  llvm::Value *switch_expr = gen_expr(*stmt.eval_expr, mod);
+  assert(switch_expr);
+  llvm::SwitchInst *switch_inst = m_Builder.CreateSwitch(switch_expr, default_block, stmt.blocks.size());
+  std::vector<llvm::BasicBlock *> blocks;
+  blocks.reserve(stmt.blocks.size());
+  for (auto &&resolved_block : stmt.blocks) {
+    llvm::BasicBlock *gened_block = llvm::BasicBlock::Create(m_Context, "sw.bb", function);
+    assert(gened_block);
+    m_Builder.SetInsertPoint(gened_block);
+    gen_block(*resolved_block, mod);
+    blocks.push_back(gened_block);
+  }
+  for (auto &&[expr, ind] : stmt.cases) {
+    llvm::Constant *constant = get_constant_number_value(*expr, mod);
+    assert(constant);
+    llvm::ConstantInt *constant_int = llvm::dyn_cast<llvm::ConstantInt>(constant);
+    assert(constant_int);
+    switch_inst->addCase(constant_int, blocks[ind]);
+  }
+  m_Builder.SetInsertPoint(default_block);
+  m_Builder.CreateBr(blocks[stmt.default_block_index]);
+  // Easier to read LLVM-IR if the rest of the code is the last block of the switch
+  llvm::BasicBlock *epilog = llvm::BasicBlock::Create(m_Context, "sw.epilog", function);
+  assert(epilog);
+  for (auto *block : blocks) {
+    m_Builder.SetInsertPoint(block);
+    m_Builder.CreateBr(epilog);
+  }
+  m_Builder.SetInsertPoint(epilog);
   return nullptr;
 }
 

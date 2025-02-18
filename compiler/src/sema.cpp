@@ -489,7 +489,10 @@ std::unique_ptr<ResolvedSwitchStmt> Sema::resolve_switch_stmt(const SwitchStmt &
     auto resolved_expr = resolve_expr(*expr);
     if (!resolved_expr)
       return report(expr->location, "failed to evaluate expression inside switch statement.");
-    cases.emplace_back(std::make_pair(std::move(resolved_expr), ind));
+    auto num_lit = std::unique_ptr<ResolvedNumberLiteral>(dynamic_cast<ResolvedNumberLiteral *>(resolved_expr.release()));
+    if (!num_lit)
+      return report(resolved_expr->location, "switch case expression must evaluate to a constant integer.");
+    cases.emplace_back(std::make_pair(std::move(num_lit), ind));
   }
   return std::make_unique<ResolvedSwitchStmt>(stmt.location, std::move(eval_expr), std::move(cases), std::move(resolved_blocks), stmt.default_block_index);
 }
