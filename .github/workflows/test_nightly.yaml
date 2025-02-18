@@ -73,7 +73,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.check-commit.outputs.current_sha }}
+            ref: ${{ needs.check-commit.outputs.current_sha }}
+
+      - name: Install LLVM and Clang
+        uses: jhchundev/install-llvm-action@v1.0.0
+        with:
+          version: "18.1.8"
 
       - name: Setup CMake
         uses: lukka/get-cmake@latest
