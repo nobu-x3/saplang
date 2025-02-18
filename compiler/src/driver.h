@@ -10,6 +10,8 @@ namespace saplang {
 
 std::vector<std::string> split(const std::string &s, char delim);
 
+enum class OptimizationConfig { Debug, Release, ReleaseWithDebugInfo };
+
 struct CompilerOptions {
   std::filesystem::path source;
   std::filesystem::path output;
@@ -24,15 +26,16 @@ struct CompilerOptions {
   bool cfg_dump{false};
   bool llvm_dump{false};
   bool no_cleanup{false};
+  OptimizationConfig optimization_config{OptimizationConfig::ReleaseWithDebugInfo};
   CompilerOptions(int argc, const char **argv);
   CompilerOptions(std::filesystem::path source, std::filesystem::path output);
 };
 
 class Driver {
 public:
-  inline Driver(int argc, const char **argv) : m_Options(argc, argv){}
-  inline Driver(const CompilerOptions& options) : m_Options(options){}
-  int run(std::ostream& output_stream);
+  inline Driver(int argc, const char **argv) : m_Options(argc, argv) {}
+  inline Driver(const CompilerOptions &options) : m_Options(options) {}
+  int run(std::ostream &output_stream);
   static void display_help();
 
 private:

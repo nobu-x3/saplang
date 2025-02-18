@@ -39,7 +39,17 @@ CompilerOptions::CompilerOptions(int argc, const char **argv) {
         display_help = true;
       else if (arg == "-o")
         output = idx + 1 >= argc ? "" : argv[++idx];
-      else if (arg == "-string") {
+      else if (arg == "-config") {
+        std::string config = idx + 1 >= argc ? "" : argv[++idx];
+        if (config == "Debug")
+          optimization_config = OptimizationConfig::Debug;
+        else if (config == "Release")
+          optimization_config = OptimizationConfig::Release;
+        else if (config == "ReleaseWithDebugInfo")
+          optimization_config = OptimizationConfig::ReleaseWithDebugInfo;
+        else
+          error("unexpected argument '" + std::string{arg} + ".'\n");
+      } else if (arg == "-string") {
         input_string = idx + 1 >= argc ? "" : argv[++idx];
         source = "input_string.sl";
       } else if (arg == "-ast-dump")
@@ -178,6 +188,18 @@ int Driver::run(std::ostream &output_stream) {
   }
   if (resolved_modules.empty())
     return 1;
+  std::string optimization;
+  switch (m_Options.optimization_config) {
+  case OptimizationConfig::Debug:
+    optimization = "-O0";
+    break;
+  case OptimizationConfig::Release:
+    optimization = "-O3";
+    break;
+  case OptimizationConfig::ReleaseWithDebugInfo:
+    optimization = "-O3";
+    m_Options.gen_debug = true;
+  }
   saplang::Codegen codegen{std::move(resolved_modules), sema.move_type_infos(), m_Options.gen_debug};
   auto gened_modules = codegen.generate_modules();
   if (m_Options.gen_debug) {
@@ -215,7 +237,7 @@ int Driver::run(std::ostream &output_stream) {
   for (auto &&lib : libraries) {
     command << " -l" << lib;
   }
-  command << " -g -O0";
+  command << " -g " << optimization;
   /* -ggdb -glldb -gsce -gdbx"; */
   for (auto &&extra_flag : m_Options.extra_flags)
     command << " " << extra_flag;
@@ -237,6 +259,8 @@ void Driver::display_help() {
             << "\t-string <input_string>        use <input_string> instead of "
                "<source_file>.\n"
             << "\t-o <file>                     write executable to <file>.\n"
+            << "\t-config [Debug|Rel...]        optimization config that's fed to clang. Options: Debug | ReleaseWithDebugInfo | Release. Corresponds to -O0, "
+               "-O3 and -O3 with debug symbols.\n"
             << "\t-ast-dump                     print ast.\n"
             << "\t-res-dump                     print resolved syntax tree.\n"
             << "\t-cfg-dump                     print control flow graph.\n"
