@@ -87,15 +87,15 @@ int Driver::run(std::ostream &output_stream) {
     std::filesystem::path src_path{m_Options.source};
     std::filesystem::path abs_src_path{std::filesystem::absolute(src_path)};
     std::filesystem::path parent_path{abs_src_path.parent_path()};
-    m_Options.import_paths.push_back(parent_path);
+    m_Options.import_paths.push_back(parent_path.string());
   }
   std::vector<std::unique_ptr<saplang::Module>> modules;
   for (auto &&import_path : m_Options.import_paths) {
     for (const auto &file : std::filesystem::directory_iterator(import_path)) {
       auto filepath = file.path();
-      std::string filepath_string = filepath;
+      std::string filepath_string = filepath.string();
       if (filepath.extension() == ".sl") {
-        if (filepath_string.find(m_Options.source) != std::string::npos || m_Options.source.string().find(filepath_string) != std::string::npos)
+        if (filepath_string.find(m_Options.source.string()) != std::string::npos || m_Options.source.string().find(filepath_string) != std::string::npos)
           continue;
         bool module_already_visited = false;
         for (auto &&mod : modules) {
@@ -107,7 +107,7 @@ int Driver::run(std::ostream &output_stream) {
         if (module_already_visited)
           continue;
         std::stringstream buffer;
-        std::string source{filepath};
+        std::string source{filepath.string()};
         std::ifstream file{filepath};
         if (!file) {
           error("failed to open '" + m_Options.source.string() + ".'");
