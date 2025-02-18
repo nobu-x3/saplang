@@ -857,6 +857,24 @@ void ResolvedIfStmt::dump_to_stream(std::stringstream &stream, size_t indent_lev
   }
 }
 
+void ResolvedSwitchStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "ResolvedSwitchStmt:\n";
+  eval_expr->dump_to_stream(stream, indent_level + 1);
+  stream << indent(indent_level + 1) << "Cases:\n";
+  for (auto &&[expr, index] : cases) {
+    expr->dump_to_stream(stream, indent_level + 2);
+    stream << indent(indent_level + 2) << "Index: " << index << "\n";
+  }
+  stream << indent(indent_level + 1) << "DefaultBlockIndex: " << default_block_index << "\n";
+  stream << indent(indent_level + 1) << "Blocks:\n";
+  int index = 0;
+  for (auto &&block : blocks) {
+    stream << indent(indent_level + 2) << index << ":\n";
+    block->dump_to_stream(stream, indent_level + 3);
+    ++index;
+  }
+}
+
 void ResolvedDeferStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "ResolvedDeferStmt:\n";
   block->dump_to_stream(stream, indent_level + 1);

@@ -3081,3 +3081,67 @@ fn i32 main() {
     REQUIRE(lines_it->find(") generic_inst:") != std::string::npos);
   }
 }
+
+TEST_CASE("switch stmt", "[sema]") {
+  SECTION("some empty, only default") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+enum TestEnum {
+    Zero,
+    One,
+    Two
+}
+fn i32 main() {
+    var TestEnum test_enum;
+    var i32 int = -1;
+    switch(test_enum) {
+        case TestEnum::Zero:
+        case TestEnum::One:
+        default: {
+            int = (i32)test_enum;
+        }
+    }
+    return int;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 4;
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+    REQUIRE(lines_it->find(") main:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+    REQUIRE(lines_it->find(") test_enum:i32") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+    REQUIRE(lines_it->find(") int:i32") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '-'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(-1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedSwitchStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") test_enum") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "Cases:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DefaultBlockIndex: 0");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Blocks:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "0:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") int:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CastType: Nop");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") test_enum:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") int:") != std::string::npos);
+  }
+}
