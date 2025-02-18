@@ -76,7 +76,7 @@ jobs:
           ref: ${{ needs.check-commit.outputs.current_sha }}
 
       - name: Setup CMake
-        uses: actions/install-cmake@v0.1.0
+        uses: Symbitic/install-cmake@v0.1.0
 
       - name: Configure build
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
