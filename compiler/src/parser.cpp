@@ -15,8 +15,8 @@ namespace saplang {
 
 Parser::Parser(Lexer *lexer, ParserConfig cfg) : m_Lexer(lexer), m_Config(std::move(cfg)), m_NextToken(lexer->get_next_token()) {
   std::filesystem::path source_filepath = m_Lexer->get_source_file_path();
-  m_ModulePath = source_filepath;
-  m_ModuleName = source_filepath.filename().replace_extension();
+  m_ModulePath = source_filepath.string();
+  m_ModuleName = source_filepath.filename().replace_extension().string();
 }
 
 // <funcDecl>
@@ -83,7 +83,7 @@ std::string Parser::parse_import() {
   eat_next_token();
   if (m_Config.check_paths) {
     for (auto &&incl_path : m_Config.include_paths) {
-      if (!std::filesystem::exists(incl_path + std::filesystem::path::preferred_separator + import_name + ".sl")) {
+      if (!std::filesystem::exists(incl_path + std::to_string(std::filesystem::path::preferred_separator) + import_name + ".sl")) {
         report(loc, "referenced module '" + import_name + "' not found on any specified include paths.");
         return "";
       }

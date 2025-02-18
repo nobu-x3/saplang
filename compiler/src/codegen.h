@@ -1,6 +1,6 @@
 #pragma once
 
-#include <llvm-18/llvm/IR/DebugInfoMetadata.h>
+#include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/IRBuilder.h>
 

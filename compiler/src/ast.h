@@ -8,6 +8,7 @@
 #include "lexer.h"
 #include "utils.h"
 
+#define uint unsigned int
 #define PLATFORM_PTR_SIZE 8
 #define PLATFORM_PTR_ALIGNMENT alignof(signed long)
 
