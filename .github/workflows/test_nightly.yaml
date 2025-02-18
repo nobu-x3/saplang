@@ -6,7 +6,7 @@ on:
 jobs:
 
   check-commit:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ARM, linux]
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
       current_sha: ${{ steps.get-sha.outputs.sha }}
