@@ -920,7 +920,7 @@ struct ResolvedDeclRefExpr : public ResolvedExpr {
   DUMP_IMPL
 };
 
-using ResolvedCaseBlocks = std::vector<std::pair<std::unique_ptr<ResolvedExpr>, int>>;
+using ResolvedCaseBlocks = std::vector<std::pair<std::unique_ptr<ResolvedNumberLiteral>, int>>;
 struct ResolvedSwitchStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedDeclRefExpr> eval_expr;
   std::vector<std::unique_ptr<ResolvedBlock>> blocks;

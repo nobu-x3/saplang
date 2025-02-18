@@ -78,6 +78,9 @@ int CFGBuilder::insert_stmt(const ResolvedStmt &stmt, int block) {
     return insert_while_stmt(*while_stmt, block);
   if (auto *expr = dynamic_cast<const ResolvedExpr *>(&stmt))
     return insert_expr(*expr, block);
+  if (auto *switch_stmt = dynamic_cast<const ResolvedSwitchStmt *>(&stmt))
+    // @TODO: atm don't do anything
+    return m_CFG.basic_blocks.size() - 1;
   if (auto *ret_stmt = dynamic_cast<const ResolvedReturnStmt *>(&stmt))
     return insert_return_stmt(*ret_stmt, block);
   if (auto *decl_stmt = dynamic_cast<const ResolvedDeclStmt *>(&stmt))
@@ -88,10 +91,9 @@ int CFGBuilder::insert_stmt(const ResolvedStmt &stmt, int block) {
     // @TODO: atm don't do anything
     return m_CFG.basic_blocks.size() - 1;
   }
-  if(auto* for_stmt = dynamic_cast<const ResolvedForStmt*>(&stmt)) {
+  if (auto *for_stmt = dynamic_cast<const ResolvedForStmt *>(&stmt)) {
     return m_CFG.basic_blocks.size() - 1;
-  }
-  else {
+  } else {
     llvm_unreachable("unexpected expression.");
   }
 }

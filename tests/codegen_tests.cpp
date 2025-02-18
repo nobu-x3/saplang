@@ -30,13 +30,13 @@
   saplang ::Sema sema{std::move(modules)};                                                                                                                     \
   auto resolved_modules = sema.resolve_modules();                                                                                                              \
   const auto &error_stream = saplang::get_error_stream();                                                                                                      \
-  saplang ::Codegen codegen{std ::move(resolved_modules), sema.move_type_infos(), false}; \
-  auto gened_modules = codegen.generate_modules(); \
-  std ::string output_string; \
-  llvm ::raw_string_ostream codegen_output_buffer{output_string}; \
-  for (auto &&[name, mod] : gened_modules) { \
-    mod->module->print(codegen_output_buffer, nullptr, true, true); \
-  } \
+  saplang ::Codegen codegen{std ::move(resolved_modules), sema.move_type_infos(), false};                                                                      \
+  auto gened_modules = codegen.generate_modules();                                                                                                             \
+  std ::string output_string;                                                                                                                                  \
+  llvm ::raw_string_ostream codegen_output_buffer{output_string};                                                                                              \
+  for (auto &&[name, mod] : gened_modules) {                                                                                                                   \
+    mod->module->print(codegen_output_buffer, nullptr, true, true);                                                                                            \
+  }                                                                                                                                                            \
   output_buffer << output_string;
 
 TEST_CASE("single return", "[codegen]") {
@@ -2835,4 +2835,88 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%10 = load i32, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %10");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
+}
+
+TEST_CASE("switch stmt", "[codegen]") {
+  SECTION("some empty, only default") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+enum TestEnum {
+    Zero,
+    One,
+    Two
+}
+fn i32 main() {
+    var TestEnum test_enum;
+    var i32 int = -1;
+    switch(test_enum) {
+        case TestEnum::Zero:
+        case TestEnum::One:
+        default: {
+            int = (i32)test_enum;
+        }
+    }
+    return int;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 2;
+    /*
+define i32 @main() {
+  entry:
+    %retval = alloca i32, align 4
+    %test_enum = alloca i32, align 4
+    %int = alloca i32, align 4
+    store i32 -1, ptr %int, align 4
+    %0 = load i32, ptr %test_enum, align 4
+    switch i32 %0, label %sw.default [
+      i32 0, label %sw.bb
+      i32 1, label %sw.bb
+    ]
+
+sw.default:                                       ; preds = %entry
+    br label %sw.bb
+
+sw.bb:                                            ; preds = %sw.default,
+  %entry, %entry
+    %1 = load i32, ptr %test_enum, align 4
+    store i32 %1, ptr %int, align 4
+    br label %sw.epilog
+
+sw.epilog:                                        ; preds = %sw.bb
+    %2 = load i32, ptr %int, align 4
+    store i32 %2, ptr %retval, align 4
+    br label %return
+
+return:                                           ; preds = <null operand!>,
+  %sw.epilog
+    %3 = load i32, ptr %retval, align 4
+    ret i32 %3
+  }
+     * */
+    CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+    CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%test_enum = alloca i32, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%int = alloca i32, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 -1, ptr %int, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load i32, ptr %test_enum, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "switch i32 %0, label %sw.default [");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32 0, label %sw.bb");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32 1, label %sw.bb");
+    CONTAINS_NEXT_REQUIRE(lines_it, "]");
+    CONTAINS_NEXT_REQUIRE(lines_it, "sw.default:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br label %sw.bb");
+    CONTAINS_NEXT_REQUIRE(lines_it, "sw.bb:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %test_enum, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %1, ptr %int, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br label %sw.epilog");
+    CONTAINS_NEXT_REQUIRE(lines_it, "sw.epilog:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %int, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 %2, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+    CONTAINS_NEXT_REQUIRE(lines_it, "return:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %3");
+  }
 }

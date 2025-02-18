@@ -72,6 +72,8 @@ private:
 
   llvm::Value *gen_if_stmt(const ResolvedIfStmt &stmt, GeneratedModule &mod);
 
+  llvm::Value* gen_switch_stmt(const ResolvedSwitchStmt& stmt, GeneratedModule& mod);
+
   llvm::Value *gen_while_stmt(const ResolvedWhileStmt &stmt, GeneratedModule &mod);
 
   llvm::Value *gen_for_stmt(const ResolvedForStmt &stmt, GeneratedModule &mod);
