@@ -1,0 +1,158 @@
+name: Nightly Build and Release
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+jobs:
+
+  check-commit:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      current_sha: ${{ steps.get-sha.outputs.sha }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Get current SHA
+        id: get-sha
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Restore last successful SHA
+        uses: actions/cache@v3
+        id: cache-last-successful
+        with:
+          path: .last_successful_sha
+          key: last-successful-sha-main
+
+      - name: Get last successful SHA
+        id: last-successful
+        run: |
+          if [ -f .last_successful_sha ]; then
+            echo "last_successful_sha=$(cat .last_successful_sha)" >> $GITHUB_OUTPUT
+          else
+            echo "last_successful_sha=none" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Restore last nightly SHA
+        uses: actions/cache@v3
+        id: cache-last-nightly
+        with:
+          path: .last_nightly_sha
+          key: last-nightly-sha-main
+
+      - name: Get last nightly SHA
+        id: last-nightly
+        run: |
+          if [ -f .last_nightly_sha ]; then
+            echo "last_nightly_sha=$(cat .last_nightly_sha)" >> $GITHUB_OUTPUT
+          else
+            echo "last_nightly_sha=none" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check build condition
+        id: check
+        run: |
+          if [ "${{ steps.last-successful.outputs.last_successful_sha }}" != "${{ steps.last-nightly.outputs.last_nightly_sha }}" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check-commit
+    if: ${{ needs.check-commit.outputs.should_build == 'true' }}
+    strategy:
+      matrix:
+        include:
+          - name: 'Linux (ARM64)'
+            os: ubuntu-22.04-arm64
+            arch: arm64
+            runs-on: [self-hosted, ARM, linux]
+          - name: 'Linux (x64)'
+            os: ubuntu-latest
+            arch: x64
+            runs-on: ubuntu-latest
+          - name: 'Windows (x64)'
+            os: windows-latest
+            arch: x64
+            runs-on: windows-latest
+
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-commit.outputs.current_sha }}
+
+      - name: Setup CMake
+        uses: actions/setup-cmake@v3
+
+      - name: Configure build
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build project
+        run: cmake --build build --config Release --parallel
+
+      - name: Package artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" -C build .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: nightly-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*.tar.gz
+
+  create-release:
+    needs: [check-commit, build]
+    if: ${{ needs.check-commit.outputs.should_build == 'true' && needs.build.result == 'success' }}
+    runs-on: [self-hosted, ARM, linux]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Get current date
+        id: get-date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: nightly-${{ steps.get-date.outputs.date }}
+          name: "Nightly Build (${{ steps.get-date.outputs.date }})"
+          body: |
+            ## Nightly Build ${{ steps.get-date.outputs.date }}
+            **Commit:** [${{ needs.check-commit.outputs.current_sha }}](https://github.com/${{ github.repository }}/commit/${{ needs.check-commit.outputs.current_sha }})
+            **Build Date:** ${{ steps.get-date.outputs.date }}
+
+            ### Artifacts:
+            - Linux ARM64
+            - Linux x64
+            - Windows x64
+            - Windows ARM64
+          prerelease: true
+          files: |
+            artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  save-sha:
+    needs: [check-commit, build, create-release]
+    runs-on: ubuntu-latest
+    if: ${{ always() && needs.build.result == 'success' && needs.check-commit.outputs.should_build == 'true' && needs.create-release.result == 'success' }}
+    steps:
+      - name: Save nightly SHA
+        run: echo ${{ needs.check-commit.outputs.current_sha }} > .last_nightly_sha
+
+      - name: Cache nightly SHA
+        uses: actions/cache@v3
+        with:
+          path: .last_nightly_sha
+          key: last-nightly-sha-main
