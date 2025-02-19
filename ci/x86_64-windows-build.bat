@@ -8,4 +8,4 @@ mkdir "build\nightly\x86_64-windows"
 "C:\Program Files\CMake\bin\cmake.EXE" --build c:/Users/domin/saplang/build --config Release --target all
 
 mkdir "build\nightly\x86_64-windows\Release"
-mv "build\bin\compiler.exe" "build\nightly\x86_64-windows\Release\saplangc.exe"
+mv "bin\compiler.exe" "build\nightly\x86_64-windows\Release\saplangc.exe"
