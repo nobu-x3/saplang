@@ -58,6 +58,7 @@ jobs:
           - name: 'Linux (ARM64)'
             arch: arm64
             os: linux
+            os: linux
             runs-on: [self-hosted, ARM, linux]
           - name: 'Linux (x64)'
             arch: x86_64
@@ -76,7 +77,7 @@ jobs:
             ref: ${{ needs.check-commit.outputs.current_sha }}
 
       - name: Build project
-        run: sh ${PWD}/ci/${{ matrix.arch }}-${{ matrix.os }}-build.sh
+        run: sh ci/${{ matrix.arch }}-${{ matrix.os }}-build.sh
 
       - name: Package artifacts
         shell: bash
