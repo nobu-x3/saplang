@@ -6,7 +6,7 @@ on:
 jobs:
 
   check-commit:
-    runs-on: [self-hosted, ARM, linux]
+    runs-on: [self-hosted, ARM64, linux]
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
       current_sha: ${{ steps.get-sha.outputs.sha }}
@@ -84,7 +84,7 @@ jobs:
           - name: 'Linux (ARM64)'
             arch: arm64
             os: linux
-            runs-on: [self-hosted, ARM, linux]
+            runs-on: [self-hosted, ARM64, linux]
           - name: 'Linux (x64)'
             arch: x86_64
             os: linux
