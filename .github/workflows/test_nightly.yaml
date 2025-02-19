@@ -105,7 +105,7 @@ jobs:
   create-release:
     needs: [check-commit, build]
     if: ${{ needs.check-commit.outputs.should_build == 'true' && needs.build.result == 'success' }}
-    runs-on: [self-hosted, ARM, linux]
+    runs-on: [self-hosted, X64, linux]
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
