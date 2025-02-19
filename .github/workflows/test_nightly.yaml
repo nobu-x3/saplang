@@ -63,7 +63,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Build project (Windows)
-        run: ci\x86_64-windows.bat
+        run: .\ci\x86_64-windows.bat
 
       - name: Package artifacts (Windows)
         run: |
