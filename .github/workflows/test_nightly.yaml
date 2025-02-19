@@ -76,7 +76,7 @@ jobs:
             ref: ${{ needs.check-commit.outputs.current_sha }}
 
       - name: Build project
-        run: sh ci/${{ matrix.arch }}-${{ matrix.os }}-build.sh
+        run: sh ${PWD}/ci/${{ matrix.arch }}-${{ matrix.os }}-build.sh
 
       - name: Package artifacts
         shell: bash
