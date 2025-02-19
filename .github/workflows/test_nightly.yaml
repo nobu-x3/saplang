@@ -68,7 +68,7 @@ jobs:
       - name: Package artifacts (Windows)
         run: |
           mkdir dist
-          7z a "dist/saplang-windows-x86_64.zip" saplang-windows-x86_64
+          7z a "dist/saplang-windows-x86_64.zip" build/nightly/x86_64-windows/Release
 
       - name: Upload artifact (Windows)
         uses: actions/upload-artifact@v4
@@ -109,13 +109,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-debug.tar.gz" -C build/nightly/saplang-${{ matrix.os }}-${{ matrix.arch }}/Debug .
+          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-debug.tar.gz" -C build/nightly/${{ matrix.arch }}-${{ matrix.os }}/Debug .
 
       - name: Package artifacts Release (Linux)
         shell: bash
         run: |
           mkdir -p dist
-          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-release.tar.gz" -C build/nightly/saplang-${{ matrix.os }}-${{ matrix.arch }}/Release .
+          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-release.tar.gz" -C build/nightly/${{ matrix.arch }}-${{ matrix.os }}/Release .
 
       - name: Upload artifact Debug (Linux)
         uses: actions/upload-artifact@v4
@@ -131,8 +131,8 @@ jobs:
           
 
   update-sha:
-    needs: [check-commit, build-linux]
-    if: ${{ always() && needs.build-linux.result == 'success' }}
+    needs: [check-commit, build-linux, build-windows]
+    if: ${{ always() && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Store new SHA
@@ -143,8 +143,8 @@ jobs:
           key: last-nightly-sha
 
   create-release:
-    needs: [check-commit, build-linux]
-    if: ${{ needs.check-commit.outputs.should_build == 'true' && needs.build-linux.result == 'success' }}
+    needs: [check-commit, build-linux, build-windows]
+    if: ${{ needs.check-commit.outputs.should_build == 'true'  && needs.build-windows.result == 'success' }}
     runs-on: [self-hosted, X64, linux]
     steps:
       - name: Download all artifacts
