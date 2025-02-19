@@ -1,3 +1,6 @@
+[![Nightly Build and Release](https://github.com/nobu-x3/saplang/actions/workflows/nightly.yaml/badge.svg?branch=main)](https://github.com/nobu-x3/saplang/actions/workflows/nightly.yaml)
+[![tests](https://github.com/nobu-x3/saplang/actions/workflows/tests.yaml/badge.svg?branch=main)](https://github.com/nobu-x3/saplang/actions/workflows/tests.yaml)
+
 Please use the [Discord](https://discord.gg/8nqP7npDhV) to get in contact with me.
 
 # !DISCLAIMER
