@@ -15,7 +15,7 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: autobuilder
 
       - name: Get current SHA (Debug)
         id: get-sha
@@ -63,10 +63,10 @@ jobs:
             arch: x86_64
             os: linux
             runs-on: [self-hosted, x64, linux]
-          # - name: 'Windows (x64)'
-          #   os: windows-latest
-          #   arch: x64
-          #   runs-on: windows-latest
+          - name: 'Windows (x64)'
+            os: windows-latest
+            arch: x86_64
+            runs-on: [self-hosted, x64, windows]
 
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -75,20 +75,46 @@ jobs:
         with:
             ref: ${{ needs.check-commit.outputs.current_sha }}
 
-      - name: Build project
+      - name: Build project (Linux)
+        if: ${{ matrix.os == 'linux'}}
         run: sh ci/${{ matrix.arch }}-${{ matrix.os }}-build.sh
 
-      - name: Package artifacts
+      - name: Package artifacts (Linux)
+        if: ${{ matrix.os == 'linux'}}
         shell: bash
         run: |
           mkdir -p dist
-          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" -C build .
+          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" -C build/nightly/saplang-${{ matrix.os }}-${{ matrix.arch }} .
 
-      - name: Upload artifact
+      - name: Upload artifact (Linux)
         uses: actions/upload-artifact@v4
+        if: ${{ matrix.os == 'linux'}}
         with:
           name: nightly-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/*.tar.gz
+
+      - name: Get Dev Console (Windows)
+        if: ${{ matrix.os == 'windows'}}
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build project (Windows)
+        if: ${{ matrix.os == 'windows'}}
+        run: ci\x86_64-windows.bat
+
+      - name: Package artifacts (Windows)
+        if: ${{ matrix.os == 'windows'}}
+        shell: bash
+        run: |
+          mkdir dist
+          7z a "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}.zip" saplang-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Upload artifact (Windows)
+        uses: actions/upload-artifact@v4
+        if: ${{ matrix.os == 'windows'}}
+        with:
+          name: nightly-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*.zip
+          
 
   update-sha:
     needs: [check-commit, build]
