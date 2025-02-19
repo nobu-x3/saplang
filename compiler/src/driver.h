@@ -26,7 +26,7 @@ struct CompilerOptions {
   bool cfg_dump{false};
   bool llvm_dump{false};
   bool no_cleanup{false};
-  OptimizationConfig optimization_config{OptimizationConfig::ReleaseWithDebugInfo};
+  OptimizationConfig optimization_config{OptimizationConfig::Debug};
   CompilerOptions(int argc, const char **argv);
   CompilerOptions(std::filesystem::path source, std::filesystem::path output);
 };
