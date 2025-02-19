@@ -56,17 +56,15 @@ jobs:
       matrix:
         include:
           - name: 'Linux (ARM64)'
-            os: ubuntu-22.04-arm64
             arch: arm64
             runs-on: [self-hosted, ARM, linux]
           - name: 'Linux (x64)'
-            os: ubuntu-latest
             arch: x64
-            runs-on: ubuntu-latest
-          - name: 'Windows (x64)'
-            os: windows-latest
-            arch: x64
-            runs-on: windows-latest
+            runs-on: [self-hosted, x64, linux]
+          # - name: 'Windows (x64)'
+          #   os: windows-latest
+          #   arch: x64
+          #   runs-on: windows-latest
 
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -75,19 +73,8 @@ jobs:
         with:
             ref: ${{ needs.check-commit.outputs.current_sha }}
 
-      - name: Install LLVM and Clang
-        uses: jhchundev/install-llvm-action@v1.0.0
-        with:
-          version: "18.1.8"
-
-      - name: Setup CMake
-        uses: lukka/get-cmake@latest
-
-      - name: Configure build
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
-
       - name: Build project
-        run: cmake --build build --config Release --parallel
+        run: ci/${{ matrix.arch }}_${{ matrix.os }}_build.sh
 
       - name: Package artifacts
         shell: bash
