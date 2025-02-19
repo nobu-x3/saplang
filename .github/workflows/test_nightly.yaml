@@ -68,7 +68,7 @@ jobs:
       - name: Package artifacts (Windows)
         run: |
           mkdir dist
-          7z a "dist/saplang-windows-x86_64.zip" build/nightly/x86_64-windows/Release
+          7z a "dist/saplang-windows-x86_64-release.zip" build/nightly/x86_64-windows/Release
 
       - name: Upload artifact (Windows)
         uses: actions/upload-artifact@v4
@@ -109,25 +109,25 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-debug.tar.gz" -C build/nightly/${{ matrix.arch }}-${{ matrix.os }}/Debug .
+          tar -czf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-debug.tar.gz" -C build/nightly/${{ matrix.arch }}-${{ matrix.os }}/Debug .
 
       - name: Package artifacts Release (Linux)
         shell: bash
         run: |
           mkdir -p dist
-          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-release.tar.gz" -C build/nightly/${{ matrix.arch }}-${{ matrix.os }}/Release .
+          tar -czf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-release.tar.gz" -C build/nightly/${{ matrix.arch }}-${{ matrix.os }}/Release .
 
       - name: Upload artifact Debug (Linux)
         uses: actions/upload-artifact@v4
         with:
           name: nightly-${{ matrix.os }}-${{ matrix.arch }}-debug
-          path: saplang-${{ matrix.os }}-${{ matrix.arch }}-debug.tar.gz
+          path: dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-debug.tar.gz
 
       - name: Upload artifact Release (Linux)
         uses: actions/upload-artifact@v4
         with:
           name: nightly-${{ matrix.os }}-${{ matrix.arch }}-release
-          path: saplang-${{ matrix.os }}-${{ matrix.arch }}-release.tar.gz
+          path: dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-release.tar.gz
           
 
   update-sha:
