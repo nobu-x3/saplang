@@ -3,6 +3,8 @@
 set -x
 set -e
 
+rm -rf build
+
 # Get latest
 git fetch --unshallow || true
 git fetch --tags
@@ -10,7 +12,7 @@ git fetch --tags
 git clean -fd
 
 mkdir build
-mkdir bulid/nightly
+mkdir build/nightly
 mkdir build/nightly/x86_64-linux
 
 ARCH="$(uname -m)"
