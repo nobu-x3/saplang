@@ -192,6 +192,7 @@ int Driver::run(std::ostream &output_stream) {
   switch (m_Options.optimization_config) {
   case OptimizationConfig::Debug:
     optimization = "-O0";
+    m_Options.gen_debug = true;
     break;
   case OptimizationConfig::Release:
     optimization = "-O3";
