@@ -49,7 +49,34 @@ jobs:
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
 
-  build:
+  build-windows:
+    runs-on: [self-hosted, x64, windows]
+    needs: check-commit
+    if: ${{ needs.check-commit.outputs.should_build == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+            ref: ${{ needs.check-commit.outputs.current_sha }}
+
+      - name: Get Dev Console (Windows)
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build project (Windows)
+        run: ci\x86_64-windows.bat
+
+      - name: Package artifacts (Windows)
+        run: |
+          mkdir dist
+          7z a "dist/saplang-windows-x86_64.zip" saplang-windows-x86_64
+
+      - name: Upload artifact (Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-windows-x86_64-release
+          path: dist/*.zip
+
+  build-linux:
     needs: check-commit
     if: ${{ needs.check-commit.outputs.should_build == 'true' }}
     strategy:
@@ -63,10 +90,10 @@ jobs:
             arch: x86_64
             os: linux
             runs-on: [self-hosted, x64, linux]
-          - name: 'Windows (x64)'
-            os: windows-latest
-            arch: x86_64
-            runs-on: [self-hosted, x64, windows]
+          # - name: 'Windows (x64)'
+            # os: windows-latest
+            # arch: x86_64
+            # runs-on: [self-hosted, x64, windows]
 
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -76,49 +103,36 @@ jobs:
             ref: ${{ needs.check-commit.outputs.current_sha }}
 
       - name: Build project (Linux)
-        if: ${{ matrix.os == 'linux'}}
         run: sh ci/${{ matrix.arch }}-${{ matrix.os }}-build.sh
 
-      - name: Package artifacts (Linux)
-        if: ${{ matrix.os == 'linux'}}
+      - name: Package artifacts Debug (Linux)
         shell: bash
         run: |
           mkdir -p dist
-          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" -C build/nightly/saplang-${{ matrix.os }}-${{ matrix.arch }} .
+          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-debug.tar.gz" -C build/nightly/saplang-${{ matrix.os }}-${{ matrix.arch }}/Debug .
 
-      - name: Upload artifact (Linux)
-        uses: actions/upload-artifact@v4
-        if: ${{ matrix.os == 'linux'}}
-        with:
-          name: nightly-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/*.tar.gz
-
-      - name: Get Dev Console (Windows)
-        if: ${{ matrix.os == 'windows'}}
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Build project (Windows)
-        if: ${{ matrix.os == 'windows'}}
-        run: ci\x86_64-windows.bat
-
-      - name: Package artifacts (Windows)
-        if: ${{ matrix.os == 'windows'}}
+      - name: Package artifacts Release (Linux)
         shell: bash
         run: |
-          mkdir dist
-          7z a "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}.zip" saplang-${{ matrix.os }}-${{ matrix.arch }}
+          mkdir -p dist
+          tar -czvf "dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-release.tar.gz" -C build/nightly/saplang-${{ matrix.os }}-${{ matrix.arch }}/Release .
 
-      - name: Upload artifact (Windows)
+      - name: Upload artifact Debug (Linux)
         uses: actions/upload-artifact@v4
-        if: ${{ matrix.os == 'windows'}}
         with:
-          name: nightly-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/*.zip
+          name: nightly-${{ matrix.os }}-${{ matrix.arch }}-debug
+          path: saplang-${{ matrix.os }}-${{ matrix.arch }}-debug.tar.gz
+
+      - name: Upload artifact Release (Linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ matrix.os }}-${{ matrix.arch }}-release
+          path: saplang-${{ matrix.os }}-${{ matrix.arch }}-release.tar.gz
           
 
   update-sha:
-    needs: [check-commit, build]
-    if: ${{ always() && needs.build.result == 'success' }}
+    needs: [check-commit, build-linux]
+    if: ${{ always() && needs.build-linux.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Store new SHA
@@ -129,8 +143,8 @@ jobs:
           key: last-nightly-sha
 
   create-release:
-    needs: [check-commit, build]
-    if: ${{ needs.check-commit.outputs.should_build == 'true' && needs.build.result == 'success' }}
+    needs: [check-commit, build-linux]
+    if: ${{ needs.check-commit.outputs.should_build == 'true' && needs.build-linux.result == 'success' }}
     runs-on: [self-hosted, X64, linux]
     steps:
       - name: Download all artifacts
@@ -146,7 +160,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          dry_run: true
           tag_name: nightly-${{ steps.get-date.outputs.date }}
           name: "Nightly Build (${{ steps.get-date.outputs.date }})"
           body: |
