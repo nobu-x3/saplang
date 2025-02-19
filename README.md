@@ -2,6 +2,10 @@
 [![tests](https://github.com/nobu-x3/saplang/actions/workflows/tests.yaml/badge.svg?branch=main)](https://github.com/nobu-x3/saplang/actions/workflows/tests.yaml)
 
 Please use the [Discord](https://discord.gg/8nqP7npDhV) to get in contact with me.
+Check out the [wiki](https://github.com/nobu-x3/saplang/wiki) to get started with the language.
+
+# Requirements
+Pretty much the only requirement to be able to compile code using this compiler is having `clang v18.1.8` installed on your system. You might not need this exact version but it's the only one I'm actively testing on, so use other versions at your own risk.
 
 # !DISCLAIMER
 This is not a C-KILLER. I have no aspirations for this language to become popular or even used by other people. I'm developing it for my own projects and according to my tastes and needs. USE AT YOUR OWN RISK!
