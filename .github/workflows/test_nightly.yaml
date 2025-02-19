@@ -58,7 +58,6 @@ jobs:
           - name: 'Linux (ARM64)'
             arch: arm64
             os: linux
-            os: linux
             runs-on: [self-hosted, ARM, linux]
           - name: 'Linux (x64)'
             arch: x86_64
