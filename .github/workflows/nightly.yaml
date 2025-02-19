@@ -128,7 +128,7 @@ jobs:
   update-sha:
     needs: [check-commit, build-linux, build-windows]
     if: ${{ always() && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ARM64, linux]
     steps:
       - name: Store new SHA
         run: echo "${{ needs.check-commit.outputs.current_sha }}" > .last_nightly
@@ -140,7 +140,7 @@ jobs:
   create-release:
     needs: [check-commit, build-linux, build-windows]
     if: ${{ needs.check-commit.outputs.should_build == 'true'  && needs.build-windows.result == 'success' }}
-    runs-on: [self-hosted, X64, linux]
+    runs-on: [self-hosted, ARM64, linux]
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
