@@ -10,17 +10,23 @@ bool is_num(char c) { return ('0' <= c && c <= '9'); }
 
 bool is_alphanum(char c) { return is_alpha(c) || is_num(c); }
 
+bool is_special(char c) {
+  for (auto &&character : single_char_tokens) {
+    if (c == character)
+      return true;
+  }
+  return false;
+}
+
+bool is_keyword(TokenKind kind) {
+  return (kind >= TokenKind::KwExport && kind <= TokenKind::KwAlignof) || (kind >= TokenKind::KwSwitch && kind <= TokenKind::KwDefault);
+}
+
 Lexer::Lexer(const SourceFile &source) : m_Source(&source) {}
 
-Token Lexer::get_prev_token() {
-  char curr_char = go_back_char();
-  while (!is_space(curr_char))
-    curr_char = go_back_char();
-  while (!is_alphanum(curr_char))
-    curr_char = go_back_char();
-  while (is_alphanum(curr_char))
-    curr_char = go_back_char();
-  eat_next_char();
+Token Lexer::get_prev_token(const Token &token) {
+  while (m_Idx != token.location.id - 1)
+    go_back_char();
   return get_next_token();
 }
 
@@ -28,7 +34,7 @@ Token Lexer::get_next_token() {
   char curr_char = eat_next_char();
   while (is_space(curr_char))
     curr_char = eat_next_char();
-  SourceLocation token_start_location{m_Source->path, m_Line, m_Column};
+  SourceLocation token_start_location{m_Source->path, m_Line, m_Column, m_Idx};
   if (curr_char == '!' && peek_next_char() == '=') {
     eat_next_char();
     return Token{token_start_location, TokenKind::ExclamationEqual, "!="};
