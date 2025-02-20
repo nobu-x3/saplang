@@ -8,14 +8,14 @@
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Function.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Metadata.h>
+#include <llvm/IR/Module.h>
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/Module.h>
 #include <memory>
 #include <utility>
 
@@ -466,7 +466,7 @@ llvm::DIType *get_debug_type_from_llvm_type(const llvm::Type *type, GeneratedMod
     std::vector<llvm::Metadata *> metadata;
     std::uint64_t offset = 0;
     const TypeInfo &type_info = type_infos[type->getStructName().str()];
-    llvm::DIScope *scope = mod.debug_info->lexical_blocks.back();
+    llvm::DIScope *scope = mod.debug_info->lexical_blocks.size() > 0 ? mod.debug_info->lexical_blocks.back() : mod.debug_info->cu;
     llvm::DIFile *file = mod.debug_info->file;
     for (int i = 0; i < type->getStructNumElements(); ++i) {
       llvm::Type *subtype = type->getStructElementType(i);
@@ -616,7 +616,7 @@ llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt, GeneratedModule &m
   }
   llvm::Value *cond = gen_expr(*stmt.condition, mod);
   assert(cond);
-  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, cond), true_bb, else_bb);
+  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type, cond), true_bb, else_bb);
   true_bb->insertInto(function);
   m_Builder.SetInsertPoint(true_bb);
   gen_block(*stmt.true_block, mod);
@@ -682,7 +682,7 @@ llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt, GeneratedMod
   m_Builder.SetInsertPoint(header);
   llvm::Value *condition = gen_expr(*stmt.condition, mod);
   assert(condition);
-  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, condition), body, exit);
+  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type, condition), body, exit);
   m_Builder.SetInsertPoint(body);
   gen_block(*stmt.body, mod);
   m_Builder.CreateBr(header);
@@ -710,7 +710,7 @@ llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt, GeneratedModule 
   m_Builder.SetInsertPoint(header);
   llvm::Value *condition = gen_expr(*stmt.condition, mod);
   assert(condition);
-  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type.kind, condition), body, exit);
+  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type, condition), body, exit);
   m_Builder.SetInsertPoint(body);
   gen_block(*stmt.body, mod);
   m_Builder.CreateBr(counter_op);
@@ -1229,7 +1229,7 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast, Ge
   case ResolvedExplicitCastExpr::CastType::Ptr:
     return var;
   case ResolvedExplicitCastExpr::CastType::Extend: {
-    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop) {
+    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop && var->getType()->isPtrOrPtrVectorTy()) {
       var = m_Builder.CreateLoad(rhs_type, var);
     }
     assert(var);
@@ -1238,7 +1238,7 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast, Ge
     return m_Builder.CreateSExt(var, type, "cast_sext");
   }
   case ResolvedExplicitCastExpr::CastType::Truncate: {
-    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop) {
+    if (prev_cast_type == ResolvedExplicitCastExpr::CastType::Nop && var->getType()->isPtrOrPtrVectorTy()) {
       var = m_Builder.CreateLoad(rhs_type, var);
     }
     assert(var);
@@ -1267,7 +1267,7 @@ llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop, Generat
     auto *false_bb = is_or ? rhs_bb : merge_bb;
     gen_conditional_op(*binop.lhs, true_bb, false_bb, mod);
     m_Builder.SetInsertPoint(rhs_bb);
-    llvm::Value *rhs = type_to_bool(binop.type.kind, gen_expr(*binop.rhs, mod));
+    llvm::Value *rhs = type_to_bool(binop.type, gen_expr(*binop.rhs, mod));
     assert(rhs);
     m_Builder.CreateBr(merge_bb);
     rhs_bb = m_Builder.GetInsertBlock();
@@ -1281,7 +1281,7 @@ llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop, Generat
       else
         phi->addIncoming(m_Builder.getInt1(is_or), *it);
     }
-    return bool_to_type(binop.type.kind, phi);
+    return bool_to_type(binop.type, phi);
   }
   llvm::Value *lhs = gen_expr(*binop.lhs, mod);
   assert(lhs);
@@ -1289,126 +1289,144 @@ llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop, Generat
   assert(rhs);
   if (op == TokenKind::LessThan || op == TokenKind::GreaterThan || op == TokenKind::EqualEqual || op == TokenKind::ExclamationEqual ||
       op == TokenKind::GreaterThanOrEqual || op == TokenKind::LessThanOrEqual)
-    return bool_to_type(binop.type.kind, gen_comp_op(op, binop.type.kind, lhs, rhs));
+    return bool_to_type(binop.type, gen_comp_op(op, binop.type, lhs, rhs));
   return m_Builder.CreateBinOp(get_math_binop_kind(op, binop.type.kind), lhs, rhs);
 }
 
-llvm::Value *gen_lt_expr(llvm::IRBuilder<> *builder, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs) {
+llvm::Value *gen_lt_expr(llvm::IRBuilder<> *builder, const Type &type, llvm::Value *lhs, llvm::Value *rhs) {
   assert(builder);
   assert(rhs);
   assert(lhs);
-  if (kind >= Type::Kind::SIGNED_INT_START && kind <= Type::Kind::SIGNED_INT_END) {
+  if (type.kind >= Type::Kind::SIGNED_INT_START && type.kind <= Type::Kind::SIGNED_INT_END) {
     return builder->CreateICmpSLT(lhs, rhs);
   }
-  if ((kind >= Type::Kind::UNSIGNED_INT_START && kind <= Type::Kind::UNSIGNED_INT_END) || kind == Type::Kind::Bool) {
+  if ((type.kind >= Type::Kind::UNSIGNED_INT_START && type.kind <= Type::Kind::UNSIGNED_INT_END) || type.kind == Type::Kind::Bool) {
     return builder->CreateICmpULT(lhs, rhs);
   }
-  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+  if ((type.kind == Type::Kind::Custom || type.kind == Type::Kind::FnPtr) && type.pointer_depth) {
+    return builder->CreateICmpULT(lhs, rhs);
+  }
+  if (type.kind >= Type::Kind::FLOATS_START && type.kind <= Type::Kind::FLOATS_END) {
     return builder->CreateFCmpOLT(lhs, rhs);
   }
   llvm_unreachable("unexpected type.");
 }
 
-llvm::Value *gen_gt_expr(llvm::IRBuilder<> *builder, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs) {
+llvm::Value *gen_gt_expr(llvm::IRBuilder<> *builder, const Type &type, llvm::Value *lhs, llvm::Value *rhs) {
   assert(builder);
   assert(rhs);
   assert(lhs);
-  if (kind >= Type::Kind::SIGNED_INT_START && kind <= Type::Kind::SIGNED_INT_END) {
+  if (type.kind >= Type::Kind::SIGNED_INT_START && type.kind <= Type::Kind::SIGNED_INT_END) {
     return builder->CreateICmpSGT(lhs, rhs);
   }
-  if ((kind >= Type::Kind::UNSIGNED_INT_START && kind <= Type::Kind::UNSIGNED_INT_END) || kind == Type::Kind::Bool) {
+  if ((type.kind >= Type::Kind::UNSIGNED_INT_START && type.kind <= Type::Kind::UNSIGNED_INT_END) || type.kind == Type::Kind::Bool) {
     return builder->CreateICmpUGT(lhs, rhs);
   }
-  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+  if ((type.kind == Type::Kind::Custom || type.kind == Type::Kind::FnPtr) && type.pointer_depth) {
+    return builder->CreateICmpUGT(lhs, rhs);
+  }
+  if (type.kind >= Type::Kind::FLOATS_START && type.kind <= Type::Kind::FLOATS_END) {
     return builder->CreateFCmpOGT(lhs, rhs);
   }
   llvm_unreachable("unexpected type.");
 }
 
-llvm::Value *gen_eq_expr(llvm::IRBuilder<> *builder, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs) {
+llvm::Value *gen_eq_expr(llvm::IRBuilder<> *builder, const Type &type, llvm::Value *lhs, llvm::Value *rhs) {
   assert(builder);
   assert(rhs);
   assert(lhs);
-  if ((kind >= Type::Kind::INTEGERS_START && kind <= Type::Kind::INTEGERS_END) || kind == Type::Kind::Bool) {
+  if ((type.kind >= Type::Kind::INTEGERS_START && type.kind <= Type::Kind::INTEGERS_END) || type.kind == Type::Kind::Bool) {
     return builder->CreateICmpEQ(lhs, rhs);
   }
-  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+  if ((type.kind == Type::Kind::Custom || type.kind == Type::Kind::FnPtr) && type.pointer_depth) {
+    return builder->CreateICmpEQ(lhs, rhs);
+  }
+  if (type.kind >= Type::Kind::FLOATS_START && type.kind <= Type::Kind::FLOATS_END) {
     return builder->CreateFCmpOEQ(lhs, rhs);
   }
   llvm_unreachable("unexpected type.");
 }
 
-llvm::Value *gen_neq_expr(llvm::IRBuilder<> *builder, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs) {
+llvm::Value *gen_neq_expr(llvm::IRBuilder<> *builder, const Type &type, llvm::Value *lhs, llvm::Value *rhs) {
   assert(builder);
   assert(rhs);
   assert(lhs);
-  if ((kind >= Type::Kind::INTEGERS_START && kind <= Type::Kind::INTEGERS_END) || kind == Type::Kind::Bool) {
+  if ((type.kind >= Type::Kind::INTEGERS_START && type.kind <= Type::Kind::INTEGERS_END) || type.kind == Type::Kind::Bool) {
     return builder->CreateICmpNE(lhs, rhs);
   }
-  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+  if ((type.kind == Type::Kind::Custom || type.kind == Type::Kind::FnPtr) && type.pointer_depth) {
+    return builder->CreateICmpNE(lhs, rhs);
+  }
+  if (type.kind >= Type::Kind::FLOATS_START && type.kind <= Type::Kind::FLOATS_END) {
     return builder->CreateFCmpONE(lhs, rhs);
   }
   llvm_unreachable("unexpected type.");
 }
 
-llvm::Value *gen_gte_expr(llvm::IRBuilder<> *builder, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs) {
+llvm::Value *gen_gte_expr(llvm::IRBuilder<> *builder, const Type &type, llvm::Value *lhs, llvm::Value *rhs) {
   assert(builder);
   assert(rhs);
   assert(lhs);
-  if (kind >= Type::Kind::SIGNED_INT_START && kind <= Type::Kind::SIGNED_INT_END) {
+  if (type.kind >= Type::Kind::SIGNED_INT_START && type.kind <= Type::Kind::SIGNED_INT_END) {
     return builder->CreateICmpSGE(lhs, rhs);
   }
-  if ((kind >= Type::Kind::UNSIGNED_INT_START && kind <= Type::Kind::UNSIGNED_INT_END) || kind == Type::Kind::Bool) {
+  if ((type.kind >= Type::Kind::UNSIGNED_INT_START && type.kind <= Type::Kind::UNSIGNED_INT_END) || type.kind == Type::Kind::Bool) {
     return builder->CreateICmpUGE(lhs, rhs);
   }
-  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+  if ((type.kind == Type::Kind::Custom || type.kind == Type::Kind::FnPtr) && type.pointer_depth) {
+    return builder->CreateICmpUGE(lhs, rhs);
+  }
+  if (type.kind >= Type::Kind::FLOATS_START && type.kind <= Type::Kind::FLOATS_END) {
     return builder->CreateFCmpOGE(lhs, rhs);
   }
   llvm_unreachable("unexpected type.");
 }
 
-llvm::Value *gen_lte_expr(llvm::IRBuilder<> *builder, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs) {
+llvm::Value *gen_lte_expr(llvm::IRBuilder<> *builder, const Type &type, llvm::Value *lhs, llvm::Value *rhs) {
   assert(builder);
   assert(rhs);
   assert(lhs);
-  if (kind >= Type::Kind::SIGNED_INT_START && kind <= Type::Kind::SIGNED_INT_END) {
+  if (type.kind >= Type::Kind::SIGNED_INT_START && type.kind <= Type::Kind::SIGNED_INT_END) {
     return builder->CreateICmpSLE(lhs, rhs);
   }
-  if ((kind >= Type::Kind::UNSIGNED_INT_START && kind <= Type::Kind::UNSIGNED_INT_END) || kind == Type::Kind::Bool) {
+  if ((type.kind >= Type::Kind::UNSIGNED_INT_START && type.kind <= Type::Kind::UNSIGNED_INT_END) || type.kind == Type::Kind::Bool) {
     return builder->CreateICmpULE(lhs, rhs);
   }
-  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END) {
+  if ((type.kind == Type::Kind::Custom || type.kind == Type::Kind::FnPtr) && type.pointer_depth) {
+    return builder->CreateICmpULE(lhs, rhs);
+  }
+  if (type.kind >= Type::Kind::FLOATS_START && type.kind <= Type::Kind::FLOATS_END) {
     return builder->CreateFCmpOLE(lhs, rhs);
   }
   llvm_unreachable("unexpected type.");
 }
 
-llvm::Value *Codegen::gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs) {
+llvm::Value *Codegen::gen_comp_op(TokenKind op, const Type &type, llvm::Value *lhs, llvm::Value *rhs) {
   assert(rhs);
   assert(lhs);
   llvm::Value *ret_val;
   switch (op) {
   case TokenKind::LessThan: {
-    ret_val = gen_lt_expr(&m_Builder, kind, lhs, rhs);
+    ret_val = gen_lt_expr(&m_Builder, type, lhs, rhs);
   } break;
   case TokenKind::GreaterThan: {
-    ret_val = gen_gt_expr(&m_Builder, kind, lhs, rhs);
+    ret_val = gen_gt_expr(&m_Builder, type, lhs, rhs);
   } break;
   case TokenKind::EqualEqual: {
-    ret_val = gen_eq_expr(&m_Builder, kind, lhs, rhs);
+    ret_val = gen_eq_expr(&m_Builder, type, lhs, rhs);
   } break;
   case TokenKind::ExclamationEqual: {
-    ret_val = gen_neq_expr(&m_Builder, kind, lhs, rhs);
+    ret_val = gen_neq_expr(&m_Builder, type, lhs, rhs);
   } break;
   case TokenKind::LessThanOrEqual: {
-    ret_val = gen_lte_expr(&m_Builder, kind, lhs, rhs);
+    ret_val = gen_lte_expr(&m_Builder, type, lhs, rhs);
   } break;
   case TokenKind::GreaterThanOrEqual: {
-    ret_val = gen_gte_expr(&m_Builder, kind, lhs, rhs);
+    ret_val = gen_gte_expr(&m_Builder, type, lhs, rhs);
   } break;
   }
   assert(ret_val);
-  return bool_to_type(kind, ret_val);
+  return bool_to_type(type, ret_val);
 }
 
 std::pair<llvm::Value *, Type> Codegen::gen_dereference(const ResolvedDeclRefExpr &expr, GeneratedModule &mod) {
@@ -1486,7 +1504,7 @@ void Codegen::gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_
     gen_conditional_op(*binop->rhs, true_bb, false_bb, mod);
     return;
   }
-  llvm::Value *val = type_to_bool(op.type.kind, gen_expr(op, mod));
+  llvm::Value *val = type_to_bool(op.type, gen_expr(op, mod));
   assert(val);
   m_Builder.CreateCondBr(val, true_bb, false_bb);
 }
@@ -1599,24 +1617,29 @@ llvm::Value *Codegen::gen_array_decay(const Type &lhs_type, const ResolvedDeclRe
 
 llvm::Function *Codegen::get_current_function() { return m_Builder.GetInsertBlock()->getParent(); }
 
-llvm::Value *Codegen::type_to_bool(Type::Kind kind, llvm::Value *value) {
+llvm::Value *Codegen::type_to_bool(const Type &type, llvm::Value *value) {
   assert(value);
-  if (kind >= Type::Kind::INTEGERS_START && kind <= Type::Kind::INTEGERS_END)
+  if (type.kind >= Type::Kind::INTEGERS_START && type.kind <= Type::Kind::INTEGERS_END)
     return m_Builder.CreateICmpNE(value, llvm::ConstantInt::getBool(m_Context, false), "to.bool");
-  if (kind >= Type::Kind::FLOATS_START && kind <= Type::Kind::FLOATS_END)
+  if ((type.kind == Type::Kind::Custom) && type.pointer_depth) {
+    return m_Builder.CreateICmpNE(value, llvm::ConstantInt::getBool(m_Context, false), "to.bool");
+  }
+  if (type.kind >= Type::Kind::FLOATS_START && type.kind <= Type::Kind::FLOATS_END)
     return m_Builder.CreateFCmpONE(value, llvm::ConstantFP::get(m_Builder.getDoubleTy(), 0.0), "to.bool");
-  if (kind == Type::Kind::Bool)
+  if (type.kind == Type::Kind::Bool)
     return value;
   llvm_unreachable("unexpected type cast to bool.");
 }
 
-llvm::Value *Codegen::bool_to_type(Type::Kind kind, llvm::Value *value) {
+llvm::Value *Codegen::bool_to_type(const Type &type, llvm::Value *value) {
   assert(value);
-  if ((kind >= Type::Kind::INTEGERS_START && kind <= Type::Kind::INTEGERS_END) || kind == Type::Kind::Bool)
+  if ((type.kind >= Type::Kind::INTEGERS_START && type.kind <= Type::Kind::INTEGERS_END) || type.kind == Type::Kind::Bool)
     return value;
-  if (kind == Type::Kind::f32)
+  if ((type.kind == Type::Kind::Custom) && type.pointer_depth)
+    return value;
+  if (type.kind == Type::Kind::f32)
     return m_Builder.CreateUIToFP(value, m_Builder.getFloatTy(), "to.float");
-  if (kind == Type::Kind::f64)
+  if (type.kind == Type::Kind::f64)
     return m_Builder.CreateUIToFP(value, m_Builder.getDoubleTy(), "to.double");
   llvm_unreachable("unexpected type cast from bool.");
 }
