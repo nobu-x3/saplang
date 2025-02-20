@@ -1,7 +1,7 @@
 #pragma once
 
-#include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/DIBuilder.h>
+#include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/IRBuilder.h>
 
 #include <map>
@@ -72,7 +72,7 @@ private:
 
   llvm::Value *gen_if_stmt(const ResolvedIfStmt &stmt, GeneratedModule &mod);
 
-  llvm::Value* gen_switch_stmt(const ResolvedSwitchStmt& stmt, GeneratedModule& mod);
+  llvm::Value *gen_switch_stmt(const ResolvedSwitchStmt &stmt, GeneratedModule &mod);
 
   llvm::Value *gen_while_stmt(const ResolvedWhileStmt &stmt, GeneratedModule &mod);
 
@@ -94,7 +94,7 @@ private:
 
   std::pair<llvm::Value *, Type> gen_dereference(const ResolvedDeclRefExpr &expr, GeneratedModule &mod);
 
-  llvm::Value *gen_comp_op(TokenKind op, Type::Kind kind, llvm::Value *lhs, llvm::Value *rhs);
+  llvm::Value *gen_comp_op(TokenKind op, const Type &type, llvm::Value *lhs, llvm::Value *rhs);
 
   void gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_bb, llvm::BasicBlock *false_bb, GeneratedModule &mod);
 
@@ -118,9 +118,9 @@ private:
 
   llvm::Function *get_current_function();
 
-  llvm::Value *type_to_bool(Type::Kind kind, llvm::Value *value);
+  llvm::Value *type_to_bool(const Type& type, llvm::Value *value);
 
-  llvm::Value *bool_to_type(Type::Kind kind, llvm::Value *value);
+  llvm::Value *bool_to_type(const Type &type, llvm::Value *value);
 
 private:
   CurrentFunction m_CurrentFunction;

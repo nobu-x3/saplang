@@ -13,12 +13,12 @@
 
 namespace saplang {
 
-  #if defined(WIN32) || defined(_WIN32) 
-  #define PATH_SEPARATOR "\\" 
-  #else 
-  #define PATH_SEPARATOR "/" 
-  #endif 
-  
+#if defined(WIN32) || defined(_WIN32)
+#define PATH_SEPARATOR "\\"
+#else
+#define PATH_SEPARATOR "/"
+#endif
+
 Parser::Parser(Lexer *lexer, ParserConfig cfg) : m_Lexer(lexer), m_Config(std::move(cfg)), m_NextToken(lexer->get_next_token()) {
   std::filesystem::path source_filepath = m_Lexer->get_source_file_path();
   m_ModulePath = source_filepath.string();
@@ -177,9 +177,17 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
                                             is_exported);
     }
     // @TODO: struct and enum decls
-    /* if (m_NextToken.kind == TokenKind::KwStruct) */
-    /* { */
-    /* } */
+    if (m_NextToken.kind == TokenKind::KwStruct) {
+      eat_next_token();
+      SourceLocation location = m_NextToken.location;
+      decl = parse_struct_decl(location);
+      decl->is_exported = is_exported;
+    }
+    if (m_NextToken.kind == TokenKind::KwEnum) {
+      eat_next_token();
+      decl = parse_enum_decl();
+      decl->is_exported = is_exported;
+    }
     declarations.emplace_back(std::move(decl));
   }
   eat_next_token(); // eat '}'
