@@ -616,7 +616,11 @@ llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt, GeneratedModule &m
   }
   llvm::Value *cond = gen_expr(*stmt.condition, mod);
   assert(cond);
-  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type, cond), true_bb, else_bb);
+  // @TODO: this is pretty bad cuz string search
+  if (cond->getName().find("to.is_null") == std::string::npos) {
+    cond = type_to_bool(stmt.condition->type, cond);
+  }
+  m_Builder.CreateCondBr(cond, true_bb, else_bb);
   true_bb->insertInto(function);
   m_Builder.SetInsertPoint(true_bb);
   gen_block(*stmt.true_block, mod);
@@ -1468,15 +1472,18 @@ std::pair<llvm::Value *, Type> Codegen::gen_unary_op(const ResolvedUnaryOperator
   } else {
     llvm::Value *rhs = gen_expr(*op.rhs, mod);
     assert(rhs);
+    if (op.op == TokenKind::Exclamation) {
+      if (rhs->getType()->isPtrOrPtrVectorTy()) {
+        return std::make_pair(m_Builder.CreateIsNull(rhs, "to.is_null"), op.type);
+      }
+      return std::make_pair(m_Builder.CreateNot(rhs), op.type);
+    }
     SimpleNumType type = get_simple_type(op.rhs->type.kind);
     if (op.op == TokenKind::Minus) {
       if (type == SimpleNumType::SINT || type == SimpleNumType::UINT)
         return std::make_pair(m_Builder.CreateNeg(rhs), op.type);
       else if (type == SimpleNumType::FLOAT)
         return std::make_pair(m_Builder.CreateFNeg(rhs), op.type);
-    }
-    if (op.op == TokenKind::Exclamation) {
-      return std::make_pair(m_Builder.CreateNot(rhs), op.type);
     }
     if (op.op == TokenKind::Tilda) {
       return std::make_pair(m_Builder.CreateXor(rhs, llvm::ConstantInt::get(gen_type(op.type, mod), -1), "not"), op.type);
@@ -1617,13 +1624,13 @@ llvm::Value *Codegen::gen_array_decay(const Type &lhs_type, const ResolvedDeclRe
 
 llvm::Function *Codegen::get_current_function() { return m_Builder.GetInsertBlock()->getParent(); }
 
-llvm::Value *Codegen::type_to_bool(const Type &type, llvm::Value *value) {
+llvm::Value *Codegen::type_to_bool(const Type &type, llvm::Value *value, std::optional<TokenKind> op) {
   assert(value);
+  if (type.pointer_depth) {
+    return m_Builder.CreateIsNotNull(value, "to.is_not_null");
+  }
   if (type.kind >= Type::Kind::INTEGERS_START && type.kind <= Type::Kind::INTEGERS_END)
     return m_Builder.CreateICmpNE(value, llvm::ConstantInt::getBool(m_Context, false), "to.bool");
-  if ((type.kind == Type::Kind::Custom) && type.pointer_depth) {
-    return m_Builder.CreateICmpNE(value, llvm::ConstantInt::getBool(m_Context, false), "to.bool");
-  }
   if (type.kind >= Type::Kind::FLOATS_START && type.kind <= Type::Kind::FLOATS_END)
     return m_Builder.CreateFCmpONE(value, llvm::ConstantFP::get(m_Builder.getDoubleTy(), 0.0), "to.bool");
   if (type.kind == Type::Kind::Bool)

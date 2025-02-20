@@ -3146,55 +3146,72 @@ fn i32 main() {
   }
 }
 
-/* TEST_CASE("implicit nullptr comparisons", "[sema]") { */
-/*   TEST_SETUP_MODULE_SINGLE("test", R"( */
-/* fn i32 main() { */
-/*     var i32* i = null; */
-/*     if(i) { */
-/*         return 1; */
-/*     } */
-/*     return 0; */
-/* } */
-/* )"); */
-/*   REQUIRE(error_stream.str() == ""); */
-/*   REQUIRE(output_buffer.str() == ""); */
-/*   auto lines = break_by_line(output_buffer.str()); */
-/*   auto lines_it = lines.begin() + 4; */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @("); */
-/*   REQUIRE(lines_it->find(") main:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
-/*   REQUIRE(lines_it->find(") test_enum:i32") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
-/*   REQUIRE(lines_it->find(") int:i32") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '-'"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(-1)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedSwitchStmt:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") test_enum") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "Cases:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "DefaultBlockIndex: 0"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "Blocks:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "0:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") int:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: i32"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "CastType: Nop"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") test_enum:") != std::string::npos); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:"); */
-/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
-/*   REQUIRE(lines_it->find(") int:") != std::string::npos); */
-/* } */
+TEST_CASE("implicit nullptr comparisons", "[sema]") {
+  SECTION("is not null") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn i32 main() {
+    var i32* i = null;
+    if(i) {
+        return 1;
+    }
+    return 0;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+    REQUIRE(lines_it->find(") main:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+    REQUIRE(lines_it->find(") i:ptr i32") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGroupingExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") i:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  }
+  SECTION("is null") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn i32 main() {
+    var i32* i = null;
+    if(!i) {
+        return 1;
+    }
+    return 0;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+    REQUIRE(lines_it->find(") main:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+    REQUIRE(lines_it->find(") i:ptr i32") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "Null");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedGroupingExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '!'");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @(");
+    REQUIRE(lines_it->find(") i:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedIfBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  }
+}

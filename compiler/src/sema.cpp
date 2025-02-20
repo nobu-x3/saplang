@@ -382,7 +382,6 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type, ConstantExpressionEvalu
     }
     return false;
   }
-  // @TODO: NULLPTR COMPARISONS
   if (type.pointer_depth != expr.type.pointer_depth) {
     if (const auto *binop = dynamic_cast<const ResolvedBinaryOperator *>(&expr)) {
       if (const auto *null_expr_rhs = dynamic_cast<const ResolvedNullExpr *>(binop->rhs.get())) {
@@ -396,6 +395,10 @@ bool try_cast_expr(ResolvedExpr &expr, const Type &type, ConstantExpressionEvalu
       return try_cast_expr(*groupexp->expr, type, cee, is_array_decay);
     } else if (auto *numlit = dynamic_cast<ResolvedNumberLiteral *>(&expr)) {
       return numlit->type.pointer_depth == 0;
+    } else if (auto *decl_ref_expr = dynamic_cast<ResolvedDeclRefExpr *>(&expr))
+      return decl_ref_expr->type.pointer_depth > 0;
+    else if (auto *unop = dynamic_cast<ResolvedUnaryOperator *>(&expr)) {
+      return try_cast_expr(*unop->rhs, type, cee, is_array_decay);
     }
     return false;
   }
