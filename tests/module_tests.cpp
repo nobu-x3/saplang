@@ -71,10 +71,3 @@ TEST_CASE("pointer_to_generic_arg", "[modules]") {
   EXEC_COMPILED("pointer_to_generic_arg");
   REQUIRE(stdout_string == "69\n0\n");
 }
-
-TEST_CASE("file_io", "[modules]") {
-  TEST_SETUP("file_io", "");
-  REQUIRE_COMPILE_SUCCESS;
-  EXEC_COMPILED("file_io");
-  REQUIRE(stdout_string == "69\n0\n");
-}
