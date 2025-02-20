@@ -1494,7 +1494,7 @@ fn i32 main() {
   return a;
 }
     )");
-  REQUIRE(error_stream.str() == "sema_test:11:16 error: expected ')'.\nsema_test:12:26 error: "
+  REQUIRE(error_stream.str() == "sema_test:11:3 error: expected ';' at the end of declaration.\nsema_test:12:26 error: "
                                 "pointer depths must me equal.\n");
   REQUIRE(output_buffer.str() == "");
 }
@@ -3145,3 +3145,56 @@ fn i32 main() {
     REQUIRE(lines_it->find(") int:") != std::string::npos);
   }
 }
+
+/* TEST_CASE("implicit nullptr comparisons", "[sema]") { */
+/*   TEST_SETUP_MODULE_SINGLE("test", R"( */
+/* fn i32 main() { */
+/*     var i32* i = null; */
+/*     if(i) { */
+/*         return 1; */
+/*     } */
+/*     return 0; */
+/* } */
+/* )"); */
+/*   REQUIRE(error_stream.str() == ""); */
+/*   REQUIRE(output_buffer.str() == ""); */
+/*   auto lines = break_by_line(output_buffer.str()); */
+/*   auto lines_it = lines.begin() + 4; */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @("); */
+/*   REQUIRE(lines_it->find(") main:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
+/*   REQUIRE(lines_it->find(") test_enum:i32") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @("); */
+/*   REQUIRE(lines_it->find(") int:i32") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedUnaryOperator: '-'"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(-1)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedSwitchStmt:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") test_enum") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "Cases:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "i32(1)"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "Index: 0"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "DefaultBlockIndex: 0"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "Blocks:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "0:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedAssignment:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") int:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedExplicitCast: i32"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "CastType: Nop"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") test_enum:") != std::string::npos); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:"); */
+/*   CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclRefExpr: @("); */
+/*   REQUIRE(lines_it->find(") int:") != std::string::npos); */
+/* } */

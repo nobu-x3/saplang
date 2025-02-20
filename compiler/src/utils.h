@@ -22,6 +22,7 @@ struct SourceLocation {
   std::string_view path;
   int line;
   int col;
+  size_t id;
 };
 
 class IDumpable {

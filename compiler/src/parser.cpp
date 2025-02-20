@@ -738,13 +738,12 @@ std::unique_ptr<Expr> Parser::parse_prefix_expr(Context context) {
 
 std::unique_ptr<Expr> Parser::parse_call_expr(SourceLocation location, std::unique_ptr<DeclRefExpr> decl_ref_expr) {
   std::vector<Type> generic_types;
+  Token current_token = m_NextToken;
   if (m_NextToken.kind == TokenKind::LessThan) {
     eat_next_token(); // eat '<'
     while (m_NextToken.kind != TokenKind::GreaterThan) {
       if (m_NextToken.kind != TokenKind::Identifier) {
-        go_back_to_prev_token();
-        eat_next_token(); // eat identifier @TODO: this is a hack, in case of expression in a call expr going back to prev token will go back to identifier
-                          // instead if LessThan
+        go_back_to_prev_token(current_token);
         return std::move(decl_ref_expr);
       }
       auto maybe_type = parse_type();
@@ -803,6 +802,7 @@ std::unique_ptr<Expr> Parser::parse_primary_expr(Context context) {
   SourceLocation location = m_NextToken.location;
   if (m_NextToken.kind == TokenKind::Lparent) {
     eat_next_token(); // eat '('
+    Token current_token = m_NextToken;
     if (m_NextToken.kind == TokenKind::Identifier) {
       std::optional<Type> maybe_type = parse_type();
       if (maybe_type) {
@@ -812,9 +812,9 @@ std::unique_ptr<Expr> Parser::parse_primary_expr(Context context) {
         if (is_explicit_cast) {
           return parse_explicit_cast(*maybe_type);
         }
-        go_back_to_prev_token(); // restore identifier
+        go_back_to_prev_token(current_token); // restore identifier
       } else {
-        go_back_to_prev_token(); // restore identifier
+        go_back_to_prev_token(current_token); // restore identifier
       }
     }
     auto expr = parse_expr(context);

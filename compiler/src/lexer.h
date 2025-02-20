@@ -92,7 +92,7 @@ class Lexer {
 public:
   explicit Lexer(const SourceFile &source);
   Token get_next_token();
-  Token get_prev_token();
+  Token get_prev_token(const Token &token);
   std::string get_string_literal();
   inline std::string get_source_file_path() const { return std::string{m_Source->path}; }
 
