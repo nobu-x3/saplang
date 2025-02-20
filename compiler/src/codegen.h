@@ -118,7 +118,7 @@ private:
 
   llvm::Function *get_current_function();
 
-  llvm::Value *type_to_bool(const Type& type, llvm::Value *value);
+  llvm::Value *type_to_bool(const Type& type, llvm::Value *value, std::optional<TokenKind> op = std::nullopt);
 
   llvm::Value *bool_to_type(const Type &type, llvm::Value *value);
 

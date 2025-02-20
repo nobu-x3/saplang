@@ -2703,8 +2703,8 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %0, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load ptr, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%2 = icmp eq ptr %1, null");
-  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool = icmp ne i1 %2, false");
-  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool, label %if.true, label %if.exit");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_not_null");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_not_null, label %if.true, label %if.exit");
   CONTAINS_NEXT_REQUIRE(lines_it, "if.true:");
   CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load ptr, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %3)");
@@ -2717,8 +2717,8 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %5, ptr %ptr2, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%6 = load ptr, ptr %ptr2, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%7 = icmp eq ptr %6, null");
-  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool1 = icmp ne i1 %7, false");
-  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool1, label %if.true2, label %if.exit3");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_not_null1 = icmp ne i1 %7, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_not_null1, label %if.true2, label %if.exit3");
   CONTAINS_NEXT_REQUIRE(lines_it, "if.true2:");
   CONTAINS_NEXT_REQUIRE(lines_it, "%8 = load ptr, ptr %ptr2, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %8)");
@@ -2736,17 +2736,17 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %12, ptr %ptr4, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%13 = load ptr, ptr %ptr3, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%14 = icmp eq ptr %13, null");
-  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool4 = icmp ne i1 %14, false");
-  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool4, label %or.merge, label %or.rhs");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_not_null4 = icmp ne i1 %14, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_not_null4, label %or.merge, label %or.rhs");
   CONTAINS_NEXT_REQUIRE(lines_it, "or.rhs:");
   CONTAINS_NEXT_REQUIRE(lines_it, "%15 = load ptr, ptr %ptr4, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "%16 = icmp eq ptr %15, null");
-  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool5 = icmp ne i1 %16, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_not_null5 = icmp ne i1 %16, false");
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %or.merge");
   CONTAINS_NEXT_REQUIRE(lines_it, "or.merge:");
-  CONTAINS_NEXT_REQUIRE(lines_it, "%17 = phi i1 [ %to.bool5, %or.rhs ], [ true, %if.exit3 ]");
-  CONTAINS_NEXT_REQUIRE(lines_it, "%to.bool6 = icmp ne i1 %17, false");
-  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.bool6, label %if.true7, label %if.exit8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%17 = phi i1 [ %to.is_not_null5, %or.rhs ], [ true, %if.exit3 ]");
+  CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_not_null6 = icmp ne i1 %17, false");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_not_null6, label %if.true7, label %if.exit8");
   CONTAINS_NEXT_REQUIRE(lines_it, "if.true7:");
   CONTAINS_NEXT_REQUIRE(lines_it, "%18 = load ptr, ptr %ptr3, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %18)");
@@ -2861,39 +2861,6 @@ fn i32 main() {
     REQUIRE(error_stream.str() == "");
     auto lines = break_by_line(output_buffer.str());
     auto lines_it = lines.begin() + 2;
-    /*
-define i32 @main() {
-  entry:
-    %retval = alloca i32, align 4
-    %test_enum = alloca i32, align 4
-    %int = alloca i32, align 4
-    store i32 -1, ptr %int, align 4
-    %0 = load i32, ptr %test_enum, align 4
-    switch i32 %0, label %sw.default [
-      i32 0, label %sw.bb
-      i32 1, label %sw.bb
-    ]
-
-sw.default:                                       ; preds = %entry
-    br label %sw.bb
-
-sw.bb:                                            ; preds = %sw.default,
-  %entry, %entry
-    %1 = load i32, ptr %test_enum, align 4
-    store i32 %1, ptr %int, align 4
-    br label %sw.epilog
-
-sw.epilog:                                        ; preds = %sw.bb
-    %2 = load i32, ptr %int, align 4
-    store i32 %2, ptr %retval, align 4
-    br label %return
-
-return:                                           ; preds = <null operand!>,
-  %sw.epilog
-    %3 = load i32, ptr %retval, align 4
-    ret i32 %3
-  }
-     * */
     CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
     CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
     CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
@@ -2918,5 +2885,70 @@ return:                                           ; preds = <null operand!>,
     CONTAINS_NEXT_REQUIRE(lines_it, "return:");
     CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load i32, ptr %retval, align 4");
     CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %3");
+  }
+}
+
+TEST_CASE("implicit nullptr comparisons", "[codegen]") {
+  SECTION("is not null") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn i32 main() {
+    var i32* i = null;
+    if(i) {
+        return 1;
+    }
+    return 0;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 2;
+    CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+    CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%i = alloca ptr, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store ptr null, ptr %i, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load ptr, ptr %i, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_not_null = icmp ne ptr %0, null");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_not_null, label %if.true, label %if.exit");
+    CONTAINS_NEXT_REQUIRE(lines_it, "if.true:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+    CONTAINS_NEXT_REQUIRE(lines_it, "if.exit:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+    CONTAINS_NEXT_REQUIRE(lines_it, "return:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %1");
+  }
+  SECTION("is null") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn i32 main() {
+    var i32* i = null;
+    if(!i) {
+        return 1;
+    }
+    return 0;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 2;
+    CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+    CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%i = alloca ptr, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store ptr null, ptr %i, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%0 = load ptr, ptr %i, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_null = icmp eq ptr %0, null");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_null, label %if.true, label %if.exit");
+    CONTAINS_NEXT_REQUIRE(lines_it, "if.true:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+    CONTAINS_NEXT_REQUIRE(lines_it, "if.exit:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+    CONTAINS_NEXT_REQUIRE(lines_it, "return:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %1");
   }
 }
