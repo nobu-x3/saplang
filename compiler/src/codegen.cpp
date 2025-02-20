@@ -686,7 +686,10 @@ llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt, GeneratedMod
   m_Builder.SetInsertPoint(header);
   llvm::Value *condition = gen_expr(*stmt.condition, mod);
   assert(condition);
-  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type, condition), body, exit);
+  if (condition->getName().find("to.is_null") == std::string::npos) {
+    condition = type_to_bool(stmt.condition->type, condition);
+  }
+  m_Builder.CreateCondBr(condition, body, exit);
   m_Builder.SetInsertPoint(body);
   gen_block(*stmt.body, mod);
   m_Builder.CreateBr(header);
@@ -714,7 +717,10 @@ llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt, GeneratedModule 
   m_Builder.SetInsertPoint(header);
   llvm::Value *condition = gen_expr(*stmt.condition, mod);
   assert(condition);
-  m_Builder.CreateCondBr(type_to_bool(stmt.condition->type, condition), body, exit);
+  if (condition->getName().find("to.is_null") == std::string::npos) {
+    condition = type_to_bool(stmt.condition->type, condition);
+  }
+  m_Builder.CreateCondBr(condition, body, exit);
   m_Builder.SetInsertPoint(body);
   gen_block(*stmt.body, mod);
   m_Builder.CreateBr(counter_op);
