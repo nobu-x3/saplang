@@ -797,22 +797,24 @@ std::unique_ptr<ResolvedModule> Sema::resolve_module(const Module &_module, bool
       return nullptr;
     m_ResolvedModules[dep] = std::move(resolved_dep);
   }
-  for (auto &&dep : _module.imports) {
-    const ResolvedModule &mod = *m_ResolvedModules[dep];
-    for (auto &&decl : mod.declarations) {
-      insert_decl_to_global_scope(*decl);
+  {
+    m_ModuleScopeId = m_Scopes.size();
+    Scope module_scope(this);
+    for (auto &&dep : _module.imports) {
+      const ResolvedModule &mod = *m_ResolvedModules[dep];
+      for (auto &&decl : mod.declarations) {
+        insert_decl_to_global_scope(*decl);
+      }
     }
+    AstResolveResult ast_resolution_result = resolve_ast(partial, _module);
+    if (!ast_resolution_result.resolved_ast.size())
+      return nullptr;
+    return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(ast_resolution_result.resolved_ast));
   }
-  AstResolveResult ast_resolution_result = resolve_ast(partial, _module);
-  if (!ast_resolution_result.resolved_ast.size())
-    return nullptr;
-  return std::make_unique<ResolvedModule>(_module.name, _module.path, std::move(ast_resolution_result.resolved_ast));
 }
 
 Sema::AstResolveResult Sema::resolve_ast(bool partial, const Module &mod) {
   std::vector<std::unique_ptr<ResolvedDecl>> resolved_decls{};
-  m_ModuleScopeId = m_Scopes.size();
-  Scope module_scope(this);
   // Insert all global scope stuff, e.g. from other modules
   bool error = false;
   if (!resolve_enum_decls(resolved_decls, partial, mod.declarations))
