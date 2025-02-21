@@ -1298,6 +1298,8 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
     return resolve_assignment(*assignment);
   if (auto *for_stmt = dynamic_cast<const ForStmt *>(&stmt))
     return resolve_for_stmt(*for_stmt);
+  if (auto *block = dynamic_cast<const Block *>(&stmt))
+    return resolve_block(*block);
   assert(false && "unexpected expression.");
   return nullptr;
 }
