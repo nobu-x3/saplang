@@ -64,9 +64,9 @@ std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::gener
   };
   m_Modules.reserve(m_ResolvedModules.size());
   for (auto &&mod : m_ResolvedModules) {
-    if (m_Modules.count(mod->name))
-      continue;
     if (!mod)
+      continue;
+    if (m_Modules.count(mod->name))
       continue;
     std::unique_ptr<llvm::Module> module = std::make_unique<llvm::Module>(mod->name, m_Context);
     module->setSourceFileName(mod->name);
@@ -562,7 +562,7 @@ llvm::AllocaInst *Codegen::alloc_stack_var(llvm::Function *func, llvm::Type *typ
   return tmp_builder.CreateAlloca(type, nullptr, id);
 }
 
-void Codegen::gen_block(const ResolvedBlock &body, GeneratedModule &mod) {
+llvm::Value *Codegen::gen_block(const ResolvedBlock &body, GeneratedModule &mod) {
   const ResolvedReturnStmt *last_ret_stmt = nullptr;
   for (auto &&stmt : body.statements) {
     if (const auto *defer_stmt = dynamic_cast<const ResolvedDeferStmt *>(stmt.get())) {
@@ -582,6 +582,7 @@ void Codegen::gen_block(const ResolvedBlock &body, GeneratedModule &mod) {
       break;
     }
   }
+  return nullptr;
 }
 
 llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt, GeneratedModule &mod) {
@@ -603,6 +604,8 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt, GeneratedModule &mod) {
     return gen_decl_stmt(*decl_stmt, mod);
   if (auto *for_stmt = dynamic_cast<const ResolvedForStmt *>(&stmt))
     return gen_for_stmt(*for_stmt, mod);
+  if (auto *block = dynamic_cast<const ResolvedBlock *>(&stmt))
+    return gen_block(*block, mod);
   llvm_unreachable("unknown statememt.");
   return nullptr;
 }

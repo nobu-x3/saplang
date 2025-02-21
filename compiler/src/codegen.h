@@ -66,7 +66,7 @@ private:
 
   llvm::AllocaInst *alloc_stack_var(llvm::Function *func, llvm::Type *type, std::string_view id);
 
-  void gen_block(const ResolvedBlock &body, GeneratedModule &mod);
+  llvm::Value* gen_block(const ResolvedBlock &body, GeneratedModule &mod);
 
   llvm::Value *gen_stmt(const ResolvedStmt &stmt, GeneratedModule &mod);
 
