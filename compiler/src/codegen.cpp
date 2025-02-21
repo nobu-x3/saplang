@@ -66,6 +66,8 @@ std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::gener
   for (auto &&mod : m_ResolvedModules) {
     if (m_Modules.count(mod->name))
       continue;
+    if (!mod)
+      continue;
     std::unique_ptr<llvm::Module> module = std::make_unique<llvm::Module>(mod->name, m_Context);
     module->setSourceFileName(mod->name);
     module->setModuleIdentifier(mod->name);
@@ -115,6 +117,8 @@ std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::gener
     m_Modules[mod->name] = std::move(current_module);
   }
   for (auto &&mod : m_ResolvedModules) {
+    if (!mod)
+      continue;
     for (auto &&decl : mod->declarations) {
       if (const auto *func = dynamic_cast<const ResolvedFuncDecl *>(decl.get()))
         gen_func_body(*func, *m_Modules[mod->name]);
