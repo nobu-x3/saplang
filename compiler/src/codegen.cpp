@@ -64,9 +64,9 @@ std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::gener
   };
   m_Modules.reserve(m_ResolvedModules.size());
   for (auto &&mod : m_ResolvedModules) {
-    if (m_Modules.count(mod->name))
-      continue;
     if (!mod)
+      continue;
+    if (m_Modules.count(mod->name))
       continue;
     std::unique_ptr<llvm::Module> module = std::make_unique<llvm::Module>(mod->name, m_Context);
     module->setSourceFileName(mod->name);
