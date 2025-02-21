@@ -35,7 +35,8 @@
   std ::string output_string;                                                                                                                                  \
   llvm ::raw_string_ostream codegen_output_buffer{output_string};                                                                                              \
   for (auto &&[name, mod] : gened_modules) {                                                                                                                   \
-    mod->module->print(codegen_output_buffer, nullptr, true, true);                                                                                            \
+    if (mod && mod->module)                                                                                                                                    \
+      mod->module->print(codegen_output_buffer, nullptr, true, true);                                                                                          \
   }                                                                                                                                                            \
   output_buffer << output_string;
 
@@ -2950,5 +2951,27 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "return:");
     CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %retval, align 4");
     CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %1");
+  }
+}
+
+TEST_CASE("empty file segfault", "[codegen]") {
+  SECTION("empty file") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+)");
+    REQUIRE(error_stream.str() == "");
+    REQUIRE(output_string == "");
+  }
+  SECTION("commented out file") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+//fn i32 main() {
+//    var i32* i = null;
+//    if(!i) {
+//        return 1;
+//    }
+//    return 0;
+//}
+)");
+    REQUIRE(error_stream.str() == "");
+    REQUIRE(output_string == "");
   }
 }
