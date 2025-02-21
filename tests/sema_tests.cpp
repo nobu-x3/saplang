@@ -57,7 +57,8 @@
   saplang ::Sema sema{std::move(modules)};                                                                                                                     \
   auto resolved_modules = sema.resolve_modules();                                                                                                              \
   for (auto &&mod : resolved_modules) {                                                                                                                        \
-    mod->dump_to_stream(output_buffer, 0);                                                                                                                     \
+    if (mod)                                                                                                                                                   \
+      mod->dump_to_stream(output_buffer, 0);                                                                                                                   \
   }                                                                                                                                                            \
   const auto &error_stream = saplang::get_error_stream();
 
@@ -3213,5 +3214,57 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
     CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
     CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  }
+}
+
+TEST_CASE("Blocks inside blocks", "[sema]") {
+  SECTION("simple example") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn i32 main() {
+    {
+        var i32 int = 0;
+    }
+    {
+        var i32 int = 0;
+    }
+    return 0;
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin();
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedFuncDecl: @(");
+    REQUIRE(lines_it->find(") main:") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+    REQUIRE(lines_it->find(") int:i32") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedBlock:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedDeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+    REQUIRE(lines_it->find(") int:i32") != std::string::npos);
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedReturnStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "i32(0)");
+  }
+  SECTION("visibility") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+fn i32 main() {
+    {
+        var i32 int = 0;
+    }
+    {
+        var i32 int = 0;
+    }
+    return int;
+}
+)");
+    REQUIRE(output_buffer.str().empty());
+    REQUIRE(error_stream.str() == "test:9:12 error: symbol 'int' undefined.\n");
   }
 }

@@ -738,10 +738,9 @@ struct ResolvedStringLiteralExpr : public ResolvedExpr {
   DUMP_IMPL
 };
 
-struct ResolvedBlock : public IDumpable {
-  SourceLocation location;
+struct ResolvedBlock : public ResolvedStmt {
   std::vector<std::unique_ptr<ResolvedStmt>> statements;
-  inline ResolvedBlock(SourceLocation loc, std::vector<std::unique_ptr<ResolvedStmt>> &&statements) : location(loc), statements(std::move(statements)) {}
+  inline ResolvedBlock(SourceLocation loc, std::vector<std::unique_ptr<ResolvedStmt>> &&statements) : ResolvedStmt(loc), statements(std::move(statements)) {}
   virtual ~ResolvedBlock() = default;
   DUMP_IMPL
 };
