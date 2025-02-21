@@ -332,10 +332,12 @@ void Block::dump_to_stream(std::stringstream &stream, size_t indent_level) const
   }
 }
 
-void Block::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+bool Block::replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) {
+  bool success = true;
   for (auto &&stmt : statements) {
-    stmt->replace_placeholders(placeholders, instance_types);
+    success &= stmt->replace_placeholders(placeholders, instance_types);
   }
+  return success;
 }
 
 void ForStmt::dump_to_stream(std::stringstream &stream, size_t indent_level) const {

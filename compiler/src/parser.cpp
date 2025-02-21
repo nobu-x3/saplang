@@ -244,6 +244,8 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     return parse_defer_stmt();
   if (m_NextToken.kind == TokenKind::KwConst || m_NextToken.kind == TokenKind::KwVar)
     return parse_var_decl_stmt();
+  if (m_NextToken.kind == TokenKind::Lbrace)
+    return parse_block();
   auto stmt = parse_assignment_or_expr(Context::Stmt);
   if (auto *assignment = dynamic_cast<const Assignment *>(stmt.get())) {
     if (m_NextToken.kind != TokenKind::Semicolon)

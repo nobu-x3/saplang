@@ -580,13 +580,14 @@ struct ReturnStmt : public Stmt {
   }
 };
 
-struct Block : public IDumpable {
+struct Block : public Stmt {
   SourceLocation location;
   std::vector<std::unique_ptr<Stmt>> statements;
-  inline Block(SourceLocation location, std::vector<std::unique_ptr<Stmt>> &&statements) : location(location), statements(std::move(statements)) {}
+  inline Block(SourceLocation location, std::vector<std::unique_ptr<Stmt>> &&statements) : Stmt(location), statements(std::move(statements)) {}
   DUMP_IMPL;
-  void replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types);
-  Block(const Block &other) : location(other.location) {
+  bool replace_placeholders(const std::vector<std::string> &placeholders, const std::vector<Type> &instance_types) override;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<Block>(*this); }
+  Block(const Block &other) : Stmt(other.location) {
     statements.reserve(other.statements.size());
     for (auto &&stmt : other.statements) {
       statements.push_back(stmt->clone());
@@ -927,8 +928,8 @@ struct ResolvedSwitchStmt : public ResolvedStmt {
   std::vector<std::unique_ptr<ResolvedBlock>> blocks;
   ResolvedCaseBlocks cases;
   int default_block_index;
-  inline ResolvedSwitchStmt(SourceLocation location, std::unique_ptr<ResolvedDeclRefExpr> eval_expr, ResolvedCaseBlocks cases, std::vector<std::unique_ptr<ResolvedBlock>> blocks,
-                    int default_block_index)
+  inline ResolvedSwitchStmt(SourceLocation location, std::unique_ptr<ResolvedDeclRefExpr> eval_expr, ResolvedCaseBlocks cases,
+                            std::vector<std::unique_ptr<ResolvedBlock>> blocks, int default_block_index)
       : ResolvedStmt(location), eval_expr(std::move(eval_expr)), cases(std::move(cases)), blocks(std::move(blocks)), default_block_index(default_block_index) {}
   DUMP_IMPL;
 };
