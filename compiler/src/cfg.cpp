@@ -91,6 +91,9 @@ int CFGBuilder::insert_stmt(const ResolvedStmt &stmt, int block) {
     // @TODO: atm don't do anything
     return m_CFG.basic_blocks.size() - 1;
   }
+  if (auto *resolved_block = dynamic_cast<const ResolvedBlock *>(&stmt)) {
+    return insert_block(*resolved_block, block);
+  }
   if (auto *for_stmt = dynamic_cast<const ResolvedForStmt *>(&stmt)) {
     return m_CFG.basic_blocks.size() - 1;
   } else {
