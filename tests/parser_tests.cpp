@@ -2293,3 +2293,45 @@ fn i32 main() {
     REQUIRE(error_stream.str() == "test:10:5 error: missing default block.\n");
   }
 }
+
+TEST_CASE("Blocks inside blocks", "[parser]") {
+  TEST_SETUP_MODULE_SINGLE("test", R"(
+fn i32 main() {
+    {
+        var i32* int = malloc(sizeof(i32));
+        defer free(int);
+    }
+    {
+        var i32* int = malloc(sizeof(i32));
+        defer free(int);
+    }
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 1;
+    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: int:ptr i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: malloc");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i32 x1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeferStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: free");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: int:ptr i32");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: malloc");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i32 x1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeferStmt:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: free");
+    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
+  }
