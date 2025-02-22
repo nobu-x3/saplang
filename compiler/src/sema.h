@@ -77,9 +77,9 @@ private:
 
   std::unique_ptr<ResolvedParamDecl> resolve_param_decl(const ParamDecl &decl, int index, const std::string function_name);
 
-  std::unique_ptr<ResolvedBlock> resolve_block(const Block &block);
+  std::unique_ptr<ResolvedBlock> resolve_block(const Block &block, bool is_inner_block = false);
 
-  std::unique_ptr<ResolvedStmt> resolve_stmt(const Stmt &stmt);
+  std::unique_ptr<ResolvedStmt> resolve_stmt(const Stmt &stmt, bool is_inner_block = false);
 
   std::unique_ptr<ResolvedNumberLiteral> resolve_enum_access(const EnumElementAccess &access);
 
@@ -97,7 +97,7 @@ private:
 
   std::unique_ptr<ResolvedStringLiteralExpr> resolve_string_literal_expr(const StringLiteralExpr &lit);
 
-  std::unique_ptr<ResolvedReturnStmt> resolve_return_stmt(const ReturnStmt &stmt);
+  std::unique_ptr<ResolvedReturnStmt> resolve_return_stmt(const ReturnStmt &stmt, bool is_inner_block = false);
 
   std::unique_ptr<ResolvedExpr> resolve_expr(const Expr &expr, Type *type = nullptr);
 

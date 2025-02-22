@@ -37,6 +37,14 @@ std::unique_ptr<FunctionDecl> Parser::parse_function_decl(SourceLocation decl_lo
   if (!block) {
     return report(decl_loc, "failed to parse function block.");
   }
+  // We want to insert an artificial return void statement in case we have not already for defer statements to work properly
+  /* if (return_type.kind == Type::Kind::Void) { */
+  /*   if (block->statements.size()) { // safety check */
+  /*     if (!dynamic_cast<ReturnStmt *>(block->statements.back().get())) { */
+  /*       block->statements.emplace_back(std::make_unique<ReturnStmt>(block->statements.back()->location)); */
+  /*     } */
+  /*   } */
+  /* } */
   auto &&param_list = maybe_param_list_vla->first;
   return std::make_unique<FunctionDecl>(decl_loc, std::move(function_identifier), std::move(return_type), m_ModuleName, std::move(param_list), std::move(block),
                                         false);
