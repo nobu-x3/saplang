@@ -460,12 +460,12 @@ std::unique_ptr<ResolvedIfStmt> Sema::resolve_if_stmt(const IfStmt &stmt) {
     if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee, is_array_decay))
       return report(condition->location, "condition is expected to evaluate to bool.");
   }
-  std::unique_ptr<ResolvedBlock> true_block = resolve_block(*stmt.true_block);
+  std::unique_ptr<ResolvedBlock> true_block = resolve_block(*stmt.true_block, true);
   if (!true_block)
     return nullptr;
   std::unique_ptr<ResolvedBlock> false_block;
   if (stmt.false_block) {
-    false_block = resolve_block(*stmt.false_block);
+    false_block = resolve_block(*stmt.false_block, true);
     if (!false_block)
       return nullptr;
   }
@@ -481,7 +481,7 @@ std::unique_ptr<ResolvedSwitchStmt> Sema::resolve_switch_stmt(const SwitchStmt &
   std::vector<std::unique_ptr<ResolvedBlock>> resolved_blocks;
   resolved_blocks.reserve(stmt.blocks.size());
   for (auto &&parsed_block : stmt.blocks) {
-    auto resolved_block = resolve_block(*parsed_block);
+    auto resolved_block = resolve_block(*parsed_block, true);
     if (!resolved_block)
       return report(parsed_block->location, "failed to evaluate block inside switch statement.");
     resolved_blocks.emplace_back(std::move(resolved_block));
@@ -501,7 +501,7 @@ std::unique_ptr<ResolvedSwitchStmt> Sema::resolve_switch_stmt(const SwitchStmt &
 }
 
 std::unique_ptr<ResolvedDeferStmt> Sema::resolve_defer_stmt(const DeferStmt &stmt) {
-  auto block = resolve_block(*stmt.block);
+  auto block = resolve_block(*stmt.block, true);
   assert(block && "failed to resolve defer block.");
   return std::make_unique<ResolvedDeferStmt>(stmt.location, std::move(block));
 }
@@ -1258,13 +1258,13 @@ std::unique_ptr<ResolvedParamDecl> Sema::resolve_param_decl(const ParamDecl &dec
   return std::make_unique<ResolvedParamDecl>(decl.location, std::move(id), std::move(*type), decl.is_const);
 }
 
-std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block) {
+std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block, bool is_inner_block) {
   std::vector<std::unique_ptr<ResolvedStmt>> resolved_stmts{};
   bool error = false;
   Scope block_scope{this};
   int unreachable_count = 0;
   for (auto &&stmt : block.statements) {
-    auto resolved_stmt = resolve_stmt(*stmt);
+    auto resolved_stmt = resolve_stmt(*stmt, is_inner_block);
     error |= !resolved_stmts.emplace_back(std::move(resolved_stmt));
     if (error)
       continue;
@@ -1281,11 +1281,11 @@ std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block) {
   return std::make_unique<ResolvedBlock>(block.location, std::move(resolved_stmts));
 }
 
-std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
+std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt, bool is_inner_block) {
   if (auto *expr = dynamic_cast<const Expr *>(&stmt))
     return resolve_expr(*expr);
   if (auto *return_stmt = dynamic_cast<const ReturnStmt *>(&stmt))
-    return resolve_return_stmt(*return_stmt);
+    return resolve_return_stmt(*return_stmt, is_inner_block);
   if (auto *switch_stmt = dynamic_cast<const SwitchStmt *>(&stmt))
     return resolve_switch_stmt(*switch_stmt);
   if (auto *if_stmt = dynamic_cast<const IfStmt *>(&stmt))
@@ -1301,7 +1301,7 @@ std::unique_ptr<ResolvedStmt> Sema::resolve_stmt(const Stmt &stmt) {
   if (auto *for_stmt = dynamic_cast<const ForStmt *>(&stmt))
     return resolve_for_stmt(*for_stmt);
   if (auto *block = dynamic_cast<const Block *>(&stmt))
-    return resolve_block(*block);
+    return resolve_block(*block, true);
   assert(false && "unexpected expression.");
   return nullptr;
 }
@@ -1598,7 +1598,7 @@ std::unique_ptr<ResolvedWhileStmt> Sema::resolve_while_stmt(const WhileStmt &stm
     if (!try_cast_expr(*condition, Type::builtin_bool(false), m_Cee, is_array_decay))
       return report(condition->location, "condition is expected to evaluate to bool.");
   }
-  std::unique_ptr<ResolvedBlock> body = resolve_block(*stmt.body);
+  std::unique_ptr<ResolvedBlock> body = resolve_block(*stmt.body, true);
   if (!body)
     return nullptr;
   condition->set_constant_value(m_Cee.evaluate(*condition));
@@ -1616,7 +1616,7 @@ std::unique_ptr<ResolvedForStmt> Sema::resolve_for_stmt(const ForStmt &stmt) {
   std::unique_ptr<ResolvedStmt> increment_expr = resolve_stmt(*stmt.increment_expr);
   if (!increment_expr)
     return nullptr;
-  std::unique_ptr<ResolvedBlock> body = resolve_block(*stmt.body);
+  std::unique_ptr<ResolvedBlock> body = resolve_block(*stmt.body, true);
   if (!body)
     return nullptr;
   return std::make_unique<ResolvedForStmt>(stmt.location, std::move(counter_variable), std::move(condition), std::move(increment_expr), std::move(body));
@@ -1659,13 +1659,13 @@ bool Sema::check_return_on_all_paths(const ResolvedFuncDecl &fn, const CFG &cfg)
   return exit_reached || return_count == 0;
 }
 
-std::unique_ptr<ResolvedReturnStmt> Sema::resolve_return_stmt(const ReturnStmt &stmt) {
+std::unique_ptr<ResolvedReturnStmt> Sema::resolve_return_stmt(const ReturnStmt &stmt, bool is_inner_block) {
   assert(m_CurrFunction && "return statement outside of function.");
   if (m_CurrFunction->type.kind == Type::Kind::Void && stmt.expr)
     return report(stmt.location, "unexpected return value in void function.");
   if (m_CurrFunction->type.kind != Type::Kind::Void && !stmt.expr)
     return report(stmt.location, "expected return value.");
-  std::unique_ptr<ResolvedExpr> resolved_expr;
+  std::unique_ptr<ResolvedExpr> resolved_expr = nullptr;
   if (stmt.expr) {
     resolved_expr = resolve_expr(*stmt.expr, &m_CurrFunction->type);
     if (!resolved_expr)
@@ -1678,7 +1678,7 @@ std::unique_ptr<ResolvedReturnStmt> Sema::resolve_return_stmt(const ReturnStmt &
     }
     resolved_expr->set_constant_value(m_Cee.evaluate(*resolved_expr));
   }
-  return std::make_unique<ResolvedReturnStmt>(stmt.location, std::move(resolved_expr));
+  return std::make_unique<ResolvedReturnStmt>(stmt.location, std::move(resolved_expr), is_inner_block);
 }
 
 std::unique_ptr<ResolvedExpr> Sema::resolve_expr(const Expr &expr, Type *type) {

@@ -989,7 +989,8 @@ struct ResolvedArrayElementAccess : public ResolvedDeclRefExpr {
 
 struct ResolvedReturnStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedExpr> expr;
-  inline ResolvedReturnStmt(SourceLocation loc, std::unique_ptr<ResolvedExpr> expr) : ResolvedStmt(loc), expr(std::move(expr)) {}
+  bool is_early_return;
+  inline ResolvedReturnStmt(SourceLocation loc, std::unique_ptr<ResolvedExpr> expr, bool is_early_return) : ResolvedStmt(loc), expr(std::move(expr)), is_early_return(is_early_return) {}
   DUMP_IMPL
 };
 

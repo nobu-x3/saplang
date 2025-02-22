@@ -314,6 +314,7 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
     return;
   auto *function = mod.module->getFunction(decl.id);
   assert(function);
+  m_CurrentFunction.current_function = function;
   auto *entry_bb = llvm::BasicBlock::Create(m_Context, "entry", function);
   assert(entry_bb);
   m_Builder.SetInsertPoint(entry_bb);
@@ -382,20 +383,24 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   m_AllocationInsertPoint->eraseFromParent();
   m_AllocationInsertPoint = nullptr;
   if (m_CurrentFunction.is_void) {
+    // In case it's a void function, there will not be a return stmt at the end, so we want to gen defer statements
+    for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
+      gen_block(*(*rit)->block, mod);
+    }
     m_Builder.CreateRetVoid();
     if (m_ShouldGenDebug) {
       mod.debug_info->lexical_blocks.pop_back();
     }
+    m_CurrentFunction.deferred_stmts.clear();
     return;
   }
-  if (m_CurrentFunction.deferred_stmts.size() == 0) {
-    llvm::Value *load_ret = m_Builder.CreateLoad(m_CurrentFunction.return_type, m_CurrentFunction.return_value);
-    assert(load_ret);
-    m_Builder.CreateRet(load_ret);
-  }
+  llvm::Value *load_ret = m_Builder.CreateLoad(m_CurrentFunction.return_type, m_CurrentFunction.return_value);
+  assert(load_ret);
+  m_Builder.CreateRet(load_ret);
   if (m_ShouldGenDebug) {
     mod.debug_info->lexical_blocks.pop_back();
   }
+  m_CurrentFunction.deferred_stmts.clear();
 }
 
 llvm::Type *Codegen::gen_type(const Type &type, GeneratedModule &mod) {
@@ -563,21 +568,18 @@ llvm::AllocaInst *Codegen::alloc_stack_var(llvm::Function *func, llvm::Type *typ
 }
 
 llvm::Value *Codegen::gen_block(const ResolvedBlock &body, GeneratedModule &mod) {
-  const ResolvedReturnStmt *last_ret_stmt = nullptr;
   for (auto &&stmt : body.statements) {
     if (const auto *defer_stmt = dynamic_cast<const ResolvedDeferStmt *>(stmt.get())) {
       m_CurrentFunction.deferred_stmts.push_back(defer_stmt);
     } else {
       gen_stmt(*stmt, mod);
     }
-    // @TODO: defer statements
     // After a return statement we clear the insertion point, so that
     // no other instructions are inserted into the current block and break.
     // The break ensures that no other instruction is generated that will be
     // inserted regardless of there is no insertion point and crash (e.g.:
     // CreateStore, CreateLoad).
     if (auto *ret_stmt = dynamic_cast<const ResolvedReturnStmt *>(stmt.get())) {
-      last_ret_stmt = ret_stmt;
       m_Builder.ClearInsertionPoint();
       break;
     }
@@ -611,7 +613,7 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt, GeneratedModule &mod) {
 }
 
 llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt, GeneratedModule &mod) {
-  llvm::Function *function = get_current_function();
+  llvm::Function *function = m_CurrentFunction.current_function;
   assert(function);
   auto *true_bb = llvm::BasicBlock::Create(m_Context, "if.true");
   assert(true_bb);
@@ -644,7 +646,7 @@ llvm::Value *Codegen::gen_if_stmt(const ResolvedIfStmt &stmt, GeneratedModule &m
 }
 
 llvm::Value *Codegen::gen_switch_stmt(const ResolvedSwitchStmt &stmt, GeneratedModule &mod) {
-  llvm::Function *function = get_current_function();
+  llvm::Function *function = m_CurrentFunction.current_function;
   assert(function);
   llvm::BasicBlock *default_block = llvm::BasicBlock::Create(m_Context, "sw.default", function);
   assert(default_block);
@@ -681,7 +683,7 @@ llvm::Value *Codegen::gen_switch_stmt(const ResolvedSwitchStmt &stmt, GeneratedM
 }
 
 llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt, GeneratedModule &mod) {
-  llvm::Function *function = get_current_function();
+  llvm::Function *function = m_CurrentFunction.current_function;
   assert(function);
   llvm::BasicBlock *header = llvm::BasicBlock::Create(m_Context, "while.cond", function);
   assert(header);
@@ -705,7 +707,7 @@ llvm::Value *Codegen::gen_while_stmt(const ResolvedWhileStmt &stmt, GeneratedMod
 }
 
 llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt, GeneratedModule &mod) {
-  llvm::Function *function = get_current_function();
+  llvm::Function *function = m_CurrentFunction.current_function;
   assert(function);
   llvm::BasicBlock *counter_decl = llvm::BasicBlock::Create(m_Context, "for.counter_decl", function);
   assert(counter_decl);
@@ -740,17 +742,17 @@ llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt, GeneratedModule 
 }
 
 llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt, GeneratedModule &mod) {
-  bool defer_present = false;
   for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
-    defer_present = true;
     gen_block(*(*rit)->block, mod);
   }
   if (stmt.expr)
     m_Builder.CreateStore(gen_expr(*stmt.expr, mod), m_CurrentFunction.return_value);
-  if (!defer_present) {
+  // if it's not an early return, br into return block where all registered defer statements will execute
+  if (!stmt.is_early_return) {
     assert(m_CurrentFunction.return_bb && "function with return stmt doesn't have a return block");
     return m_Builder.CreateBr(m_CurrentFunction.return_bb);
   }
+  // early returns
   if (m_CurrentFunction.is_void) {
     if (m_ShouldGenDebug)
       mod.debug_info->lexical_blocks.pop_back();
@@ -913,7 +915,7 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(const ResolvedStructLit
 
 llvm::Value *Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &struct_lit, GeneratedModule &mod) {
   // @TODO: if fully const just memset or memcpy directly to variable
-  llvm::Function *current_function = get_current_function();
+  llvm::Function *current_function = m_CurrentFunction.current_function;
   assert(current_function);
   llvm::Value *stack_var = alloc_stack_var(current_function, gen_type(struct_lit.type, mod), "");
   assert(stack_var);
@@ -934,7 +936,7 @@ llvm::Value *Codegen::gen_struct_literal_expr(const ResolvedStructLiteralExpr &s
 }
 
 llvm::Value *Codegen::gen_array_literal_expr(const ResolvedArrayLiteralExpr &array_lit, llvm::Value *p_array_value, GeneratedModule &mod) {
-  llvm::Function *current_function = get_current_function();
+  llvm::Function *current_function = m_CurrentFunction.current_function;
   assert(current_function);
   // @TODO: memcpy on if all constant
   bool all_constant = true;
@@ -996,7 +998,7 @@ llvm::Value *Codegen::gen_string_literal_expr(const ResolvedStringLiteralExpr &s
 llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess &access, Type &out_type, GeneratedModule &mod) {
   if (!access.inner_member_access)
     return nullptr;
-  llvm::Function *current_function = get_current_function();
+  llvm::Function *current_function = m_CurrentFunction.current_function;
   assert(current_function);
   llvm::Value *decl = m_Declarations[mod.module->getName().str()][access.decl];
   if (!decl)
@@ -1149,7 +1151,7 @@ std::vector<llvm::Value *> Codegen::get_index_accesses(const ResolvedExpr &expr,
 
 llvm::Value *Codegen::gen_array_element_access(const ResolvedArrayElementAccess &access, Type &out_type, GeneratedModule &mod) {
   assert(access.indices.size() >= 1 && "unknown index");
-  llvm::Function *current_function = get_current_function();
+  llvm::Function *current_function = m_CurrentFunction.current_function;
   assert(current_function);
   llvm::Value *decl = m_Declarations[mod.module->getName().str()][access.decl];
   if (!decl)
@@ -1271,7 +1273,7 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast, Ge
 llvm::Value *Codegen::gen_binary_op(const ResolvedBinaryOperator &binop, GeneratedModule &mod) {
   TokenKind op = binop.op;
   if (op == TokenKind::AmpAmp || op == TokenKind::PipePipe) {
-    llvm::Function *function = get_current_function();
+    llvm::Function *function = m_CurrentFunction.current_function;
     assert(function);
     bool is_or = op == TokenKind::PipePipe;
     const char *rhs_tag = is_or ? "or.rhs" : "and.rhs";
@@ -1582,7 +1584,7 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, GeneratedModul
 }
 
 llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, GeneratedModule &mod) {
-  llvm::Function *function = get_current_function();
+  llvm::Function *function = m_CurrentFunction.current_function;
   assert(function);
   const auto *decl = stmt.var_decl.get();
   assert(decl);
@@ -1634,8 +1636,6 @@ llvm::Value *Codegen::gen_array_decay(const Type &lhs_type, const ResolvedDeclRe
   }
   return nullptr;
 }
-
-llvm::Function *Codegen::get_current_function() { return m_Builder.GetInsertBlock()->getParent(); }
 
 llvm::Value *Codegen::type_to_bool(const Type &type, llvm::Value *value, std::optional<TokenKind> op) {
   assert(value);

@@ -66,7 +66,7 @@ private:
 
   llvm::AllocaInst *alloc_stack_var(llvm::Function *func, llvm::Type *type, std::string_view id);
 
-  llvm::Value* gen_block(const ResolvedBlock &body, GeneratedModule &mod);
+  llvm::Value *gen_block(const ResolvedBlock &body, GeneratedModule &mod);
 
   llvm::Value *gen_stmt(const ResolvedStmt &stmt, GeneratedModule &mod);
 
@@ -118,7 +118,7 @@ private:
 
   llvm::Function *get_current_function();
 
-  llvm::Value *type_to_bool(const Type& type, llvm::Value *value, std::optional<TokenKind> op = std::nullopt);
+  llvm::Value *type_to_bool(const Type &type, llvm::Value *value, std::optional<TokenKind> op = std::nullopt);
 
   llvm::Value *bool_to_type(const Type &type, llvm::Value *value);
 
