@@ -3268,3 +3268,20 @@ fn i32 main() {
     REQUIRE(error_stream.str() == "test:9:12 error: symbol 'int' undefined.\n");
   }
 }
+
+TEST_CASE("nested defers", "[sema]") {
+  TEST_SETUP_MODULE_SINGLE("test", R"(
+fn i32 main() {
+    var i32 i = 0;
+    defer {
+        i = 1;
+        defer {
+            i = 2;
+        }
+    }
+    return i;
+}
+)");
+  REQUIRE(error_stream.str() == "test:6:9 error: nested defer statements are not allowed.\n");
+  REQUIRE(output_buffer.str() == "");
+}
