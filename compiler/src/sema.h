@@ -77,7 +77,7 @@ private:
 
   std::unique_ptr<ResolvedParamDecl> resolve_param_decl(const ParamDecl &decl, int index, const std::string function_name);
 
-  std::unique_ptr<ResolvedBlock> resolve_block(const Block &block, bool is_inner_block = false);
+  std::unique_ptr<ResolvedBlock> resolve_block(const Block &block, bool is_inner_block = false, bool is_defer_block = false);
 
   std::unique_ptr<ResolvedStmt> resolve_stmt(const Stmt &stmt, bool is_inner_block = false);
 

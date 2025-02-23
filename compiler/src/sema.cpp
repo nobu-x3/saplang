@@ -501,8 +501,9 @@ std::unique_ptr<ResolvedSwitchStmt> Sema::resolve_switch_stmt(const SwitchStmt &
 }
 
 std::unique_ptr<ResolvedDeferStmt> Sema::resolve_defer_stmt(const DeferStmt &stmt) {
-  auto block = resolve_block(*stmt.block, true);
-  assert(block && "failed to resolve defer block.");
+  auto block = resolve_block(*stmt.block, true, true);
+  if (!block)
+    return nullptr;
   return std::make_unique<ResolvedDeferStmt>(stmt.location, std::move(block));
 }
 
@@ -1258,12 +1259,17 @@ std::unique_ptr<ResolvedParamDecl> Sema::resolve_param_decl(const ParamDecl &dec
   return std::make_unique<ResolvedParamDecl>(decl.location, std::move(id), std::move(*type), decl.is_const);
 }
 
-std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block, bool is_inner_block) {
+std::unique_ptr<ResolvedBlock> Sema::resolve_block(const Block &block, bool is_inner_block, bool is_defer_block) {
   std::vector<std::unique_ptr<ResolvedStmt>> resolved_stmts{};
   bool error = false;
   Scope block_scope{this};
   int unreachable_count = 0;
   for (auto &&stmt : block.statements) {
+    if (is_defer_block && dynamic_cast<const DeferStmt *>(stmt.get())) {
+      report(stmt->location, "nested defer statements are not allowed.");
+      error = true;
+      continue;
+    }
     auto resolved_stmt = resolve_stmt(*stmt, is_inner_block);
     error |= !resolved_stmts.emplace_back(std::move(resolved_stmt));
     if (error)
