@@ -383,15 +383,17 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   m_AllocationInsertPoint->eraseFromParent();
   m_AllocationInsertPoint = nullptr;
   if (m_CurrentFunction.is_void) {
-    // In case it's a void function, there will not be a return stmt at the end, so we want to gen defer statements
-    for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
-      gen_block(*(*rit)->block, mod);
-    }
     m_Builder.CreateRetVoid();
     if (m_ShouldGenDebug) {
       mod.debug_info->lexical_blocks.pop_back();
     }
-    m_CurrentFunction.deferred_stmts.clear();
+    assert(m_CurrentFunction.deferred_stmts.size() == 0);
+    return;
+  }
+  // We're assuming all returns are handled in scope blocks
+  const auto *current_insert_block = m_Builder.GetInsertBlock();
+  if (!current_insert_block || (current_insert_block && current_insert_block->getName().find("scope_block") != std::string::npos)) {
+    assert(m_CurrentFunction.deferred_stmts.size() == 0);
     return;
   }
   llvm::Value *load_ret = m_Builder.CreateLoad(m_CurrentFunction.return_type, m_CurrentFunction.return_value);
@@ -400,7 +402,7 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   if (m_ShouldGenDebug) {
     mod.debug_info->lexical_blocks.pop_back();
   }
-  m_CurrentFunction.deferred_stmts.clear();
+  assert(m_CurrentFunction.deferred_stmts.size() == 0);
 }
 
 llvm::Type *Codegen::gen_type(const Type &type, GeneratedModule &mod) {
@@ -567,12 +569,30 @@ llvm::AllocaInst *Codegen::alloc_stack_var(llvm::Function *func, llvm::Type *typ
   return tmp_builder.CreateAlloca(type, nullptr, id);
 }
 
-llvm::Value *Codegen::gen_block(const ResolvedBlock &body, GeneratedModule &mod) {
+llvm::Value *Codegen::gen_block(const ResolvedBlock &body, GeneratedModule &mod, bool is_defer_block) {
+  int deferred_stmts_count = 0;
+  int index = 0;
   for (auto &&stmt : body.statements) {
     if (const auto *defer_stmt = dynamic_cast<const ResolvedDeferStmt *>(stmt.get())) {
       m_CurrentFunction.deferred_stmts.push_back(defer_stmt);
+      ++deferred_stmts_count;
+    } else if (const auto *return_stmt = dynamic_cast<const ResolvedReturnStmt *>(stmt.get())) {
+      if (!is_defer_block) {
+        for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
+          gen_block(*(*rit)->block, mod, true);
+        }
+      }
+      gen_return_stmt(*return_stmt, mod);
     } else {
       gen_stmt(*stmt, mod);
+    }
+    // End of block, so we want to insert all deferred statements here
+    if (!is_defer_block && index == body.statements.size() - 1) {
+      if (!dynamic_cast<const ResolvedReturnStmt *>(body.statements.back().get())) {
+        for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
+          gen_block(*(*rit)->block, mod, true);
+        }
+      }
     }
     // After a return statement we clear the insertion point, so that
     // no other instructions are inserted into the current block and break.
@@ -583,6 +603,11 @@ llvm::Value *Codegen::gen_block(const ResolvedBlock &body, GeneratedModule &mod)
       m_Builder.ClearInsertionPoint();
       break;
     }
+    ++index;
+  }
+  for (int i = 0; i < deferred_stmts_count; ++i) {
+    assert(m_CurrentFunction.deferred_stmts.size());
+    m_CurrentFunction.deferred_stmts.pop_back();
   }
   return nullptr;
 }
@@ -606,8 +631,13 @@ llvm::Value *Codegen::gen_stmt(const ResolvedStmt &stmt, GeneratedModule &mod) {
     return gen_decl_stmt(*decl_stmt, mod);
   if (auto *for_stmt = dynamic_cast<const ResolvedForStmt *>(&stmt))
     return gen_for_stmt(*for_stmt, mod);
-  if (auto *block = dynamic_cast<const ResolvedBlock *>(&stmt))
+  if (auto *block = dynamic_cast<const ResolvedBlock *>(&stmt)) {
+    llvm::BasicBlock *bb = llvm::BasicBlock::Create(m_Context, "scope_block");
+    m_Builder.CreateBr(bb);
+    bb->insertInto(m_CurrentFunction.current_function);
+    m_Builder.SetInsertPoint(bb);
     return gen_block(*block, mod);
+  }
   llvm_unreachable("unknown statememt.");
   return nullptr;
 }
@@ -742,17 +772,12 @@ llvm::Value *Codegen::gen_for_stmt(const ResolvedForStmt &stmt, GeneratedModule 
 }
 
 llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt, GeneratedModule &mod) {
-  for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
-    gen_block(*(*rit)->block, mod);
-  }
-  // if it's not an early return, br into return block where all registered defer statements will execute
   if (!stmt.is_early_return) {
     if (stmt.expr)
       m_Builder.CreateStore(gen_expr(*stmt.expr, mod), m_CurrentFunction.return_value);
     assert(m_CurrentFunction.return_bb && "function with return stmt doesn't have a return block");
     return m_Builder.CreateBr(m_CurrentFunction.return_bb);
   }
-  // early returns
   if (m_CurrentFunction.is_void) {
     if (m_ShouldGenDebug)
       mod.debug_info->lexical_blocks.pop_back();

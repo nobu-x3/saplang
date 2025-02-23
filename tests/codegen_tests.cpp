@@ -3074,51 +3074,103 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "%9 = load i32, ptr %retval, align 4");
     CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %9");
   }
-  /* SECTION("in scope blocks") { */
-  /*   TEST_SETUP_MODULE_SINGLE("test", R"( */
-/* extern { */
-  /*   export struct FILE { */
-  /*       i8*   _ptr; */
-  /*       i32 _cnt; */
-  /*       i8*   _base; */
-  /*       i32 _flag; */
-  /*       i32 _file; */
-  /*       i32 _charbuf; */
-  /*       i32 _bufsiz; */
-  /*       i8*   _tmpfname; */
-  /*   } */
-  /*   export fn FILE* fopen(const u8* filename, const u8* mode); */
-  /*   export fn i32 fclose(FILE* file); */
-  /*   export fn void printf(const u8*, ...); */
-  /*   export fn i32 fgetc(FILE* stream); */
-  /*   export fn i32 fputc(i32 ch, FILE* stream); */
-/* } */
-/* fn i32 main() { */
-  /*   { */
-  /*       var FILE* file = fopen("tmp.txt", "w"); */
-  /*       const bool opened = file != null; */
-  /*       printf("opened: %d\n", opened); */
-  /*       if(!opened) { */
-  /*           printf("unknown file\n"); */
-  /*           return; */
-  /*       } */
-  /*       defer fclose(file); */
-  /*       fputc(8, file); */
-  /*   } */
-  /*   { */
-  /*       var FILE* file = fopen("tmp.txt", "r"); */
-  /*       if(file == null) { */
-  /*           printf("unknown file\n"); */
-  /*           return 1; */
-  /*       } */
-  /*       defer fclose(file); */
-  /*       var i8 char = (i8)fgetc(file); */
-  /*       printf("%d\n", char); */
-  /*       return 0; */
-  /*   } */
-/* } */
-/* )"); */
-  /*   REQUIRE(error_stream.str() == ""); */
-  /*   REQUIRE(output_string == ""); */
-  /* } */
+  SECTION("in scope blocks") {
+    TEST_SETUP_MODULE_SINGLE("test", R"(
+extern {
+    export struct FILE {
+        i8*   _ptr;
+        i32 _cnt;
+        i8*   _base;
+        i32 _flag;
+        i32 _file;
+        i32 _charbuf;
+        i32 _bufsiz;
+        i8*   _tmpfname;
+    }
+    export fn FILE* fopen(const u8* filename, const u8* mode);
+    export fn i32 fclose(FILE* file);
+    export fn void printf(const u8*, ...);
+    export fn i32 fgetc(FILE* stream);
+    export fn i32 fputc(i32 ch, FILE* stream);
+}
+fn i32 main() {
+    {
+        var FILE* file = fopen("tmp.txt", "w");
+        const bool opened = file != null;
+        printf("opened: %d\n", opened);
+        if(!opened) {
+            printf("unknown file\n");
+            return 1;
+        }
+        defer fclose(file);
+        fputc(8, file);
+    }
+    {
+        var FILE* file = fopen("tmp.txt", "r");
+        if(file == null) {
+            printf("unknown file\n");
+            return 1;
+        }
+        defer fclose(file);
+        var i8 char = (i8)fgetc(file);
+        printf("%d\n", char);
+        return 0;
+    }
+}
+)");
+    REQUIRE(error_stream.str() == "");
+    auto lines = break_by_line(output_buffer.str());
+    auto lines_it = lines.begin() + 15;
+    CONTAINS_NEXT_REQUIRE(lines_it, "define i32 @main() {");
+    CONTAINS_NEXT_REQUIRE(lines_it, "entry:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%retval = alloca i32, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%file = alloca ptr, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%opened = alloca i1, align 1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%file2 = alloca ptr, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%char = alloca i8, align 1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br label %scope_block");
+    CONTAINS_NEXT_REQUIRE(lines_it, "scope_block:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%0 = call ptr @fopen(ptr @.str, ptr @.str.1)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %0, ptr %file, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load ptr, ptr %file, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%2 = icmp ne ptr %1, null");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store i1 %2, ptr %opened, align 1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load i1, ptr %opened, align 1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.2, i1 %3)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load i1, ptr %opened, align 1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%5 = xor i1 %4, true");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %5, label %if.true, label %if.exit");
+    CONTAINS_NEXT_REQUIRE(lines_it, "if.true:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.3)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%6 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %6");
+    CONTAINS_NEXT_REQUIRE(lines_it, "if.exit:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%7 = load ptr, ptr %file, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%8 = call i32 @fputc(i32 8, ptr %7)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%9 = load ptr, ptr %file, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%10 = call i32 @fclose(ptr %9)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br label %scope_block1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "scope_block1:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%11 = call ptr @fopen(ptr @.str.4, ptr @.str.5)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store ptr %11, ptr %file2, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%12 = load ptr, ptr %file2, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%13 = icmp eq ptr %12, null");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_not_null = icmp ne i1 %13, false");
+    CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_not_null, label %if.true3, label %if.exit4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "if.true3:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.6)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%14 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %14");
+    CONTAINS_NEXT_REQUIRE(lines_it, "if.exit4:");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%15 = load ptr, ptr %file2, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%16 = call i32 @fgetc(ptr %15)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%cast_trunc = trunc i32 %16 to i8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "store i8 %cast_trunc, ptr %char, align 1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%17 = load i8, ptr %char, align 1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.7, i8 %17)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%18 = load ptr, ptr %file2, align 8");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%19 = call i32 @fclose(ptr %18)");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%20 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %20");
+  }
 }
