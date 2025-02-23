@@ -745,10 +745,10 @@ llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt, GeneratedM
   for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
     gen_block(*(*rit)->block, mod);
   }
-  if (stmt.expr)
-    m_Builder.CreateStore(gen_expr(*stmt.expr, mod), m_CurrentFunction.return_value);
   // if it's not an early return, br into return block where all registered defer statements will execute
   if (!stmt.is_early_return) {
+    if (stmt.expr)
+      m_Builder.CreateStore(gen_expr(*stmt.expr, mod), m_CurrentFunction.return_value);
     assert(m_CurrentFunction.return_bb && "function with return stmt doesn't have a return block");
     return m_Builder.CreateBr(m_CurrentFunction.return_bb);
   }

@@ -601,12 +601,9 @@ TEST_CASE("simple while loop return", "[codegen]") {
   NEXT_REQUIRE(lines_it, lines_it->find("br i1 %0, label %while.body, label %while.exit") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("while.body:") != std::string::npos);
   REQUIRE(lines_it->find("; preds = %while.cond") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("br label %return") != std::string::npos);
+  NEXT_REQUIRE(lines_it, lines_it->find("ret void") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("while.exit:") != std::string::npos);
   REQUIRE(lines_it->find("; preds = %while.cond") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("br label %return") != std::string::npos);
-  NEXT_REQUIRE(lines_it, lines_it->find("return:") != std::string::npos);
-  REQUIRE(lines_it->find("; preds = %while.exit, %while.body") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("ret void") != std::string::npos);
   NEXT_REQUIRE(lines_it, lines_it->find("}") != std::string::npos);
 }
@@ -2710,7 +2707,6 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load ptr, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %3)");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str)");
-  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%4 = load i32, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %4");
   CONTAINS_NEXT_REQUIRE(lines_it, "if.exit:");
@@ -2727,7 +2723,6 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%9 = load ptr, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %9)");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.2)");
-  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%10 = load i32, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %10");
   CONTAINS_NEXT_REQUIRE(lines_it, "if.exit3:");
@@ -2760,7 +2755,6 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "%21 = load ptr, ptr %ptr, align 8");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %21)");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.5)");
-  CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "%22 = load i32, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %22");
   CONTAINS_NEXT_REQUIRE(lines_it, "if.exit8:");
@@ -2776,6 +2770,8 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "call void @free(ptr %26)");
   CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.8)");
   CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
+  CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+  CONTAINS_NEXT_REQUIRE(lines_it, "return:");
   CONTAINS_NEXT_REQUIRE(lines_it, "%27 = load i32, ptr %retval, align 4");
   CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %27");
   CONTAINS_NEXT_REQUIRE(lines_it, "}");
@@ -2912,14 +2908,14 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_not_null = icmp ne ptr %0, null");
     CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_not_null, label %if.true, label %if.exit");
     CONTAINS_NEXT_REQUIRE(lines_it, "if.true:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
-    CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %1");
     CONTAINS_NEXT_REQUIRE(lines_it, "if.exit:");
     CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
     CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
     CONTAINS_NEXT_REQUIRE(lines_it, "return:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %retval, align 4");
-    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %2");
   }
   SECTION("is null") {
     TEST_SETUP_MODULE_SINGLE("test", R"(
@@ -2943,14 +2939,14 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "%to.is_null = icmp eq ptr %0, null");
     CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_null, label %if.true, label %if.exit");
     CONTAINS_NEXT_REQUIRE(lines_it, "if.true:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
-    CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %1");
     CONTAINS_NEXT_REQUIRE(lines_it, "if.exit:");
     CONTAINS_NEXT_REQUIRE(lines_it, "store i32 0, ptr %retval, align 4");
     CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
     CONTAINS_NEXT_REQUIRE(lines_it, "return:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "%1 = load i32, ptr %retval, align 4");
-    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %1");
+    CONTAINS_NEXT_REQUIRE(lines_it, "%2 = load i32, ptr %retval, align 4");
+    CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %2");
   }
 }
 
@@ -3061,7 +3057,6 @@ fn i32 main() {
     CONTAINS_NEXT_REQUIRE(lines_it, "br i1 %to.is_not_null, label %if.true, label %if.exit");
     CONTAINS_NEXT_REQUIRE(lines_it, "if.true:");
     CONTAINS_NEXT_REQUIRE(lines_it, "call void (ptr, ...) @printf(ptr @.str.6)");
-    CONTAINS_NEXT_REQUIRE(lines_it, "store i32 1, ptr %retval, align 4");
     CONTAINS_NEXT_REQUIRE(lines_it, "%3 = load i32, ptr %retval, align 4");
     CONTAINS_NEXT_REQUIRE(lines_it, "ret i32 %3");
     CONTAINS_NEXT_REQUIRE(lines_it, "if.exit:");
