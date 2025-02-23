@@ -706,7 +706,6 @@ struct GenericFunctionDecl : public Decl {
 
 struct ResolvedStmt : public IDumpable {
   SourceLocation location;
-  int scope_line;
   inline ResolvedStmt(SourceLocation location) : location(location) {}
   virtual ~ResolvedStmt() = default;
 };
@@ -990,7 +989,8 @@ struct ResolvedArrayElementAccess : public ResolvedDeclRefExpr {
 struct ResolvedReturnStmt : public ResolvedStmt {
   std::unique_ptr<ResolvedExpr> expr;
   bool is_early_return;
-  inline ResolvedReturnStmt(SourceLocation loc, std::unique_ptr<ResolvedExpr> expr, bool is_early_return) : ResolvedStmt(loc), expr(std::move(expr)), is_early_return(is_early_return) {}
+  inline ResolvedReturnStmt(SourceLocation loc, std::unique_ptr<ResolvedExpr> expr, bool is_early_return)
+      : ResolvedStmt(loc), expr(std::move(expr)), is_early_return(is_early_return) {}
   DUMP_IMPL
 };
 
