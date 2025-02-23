@@ -71,7 +71,7 @@ std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::gener
     std::unique_ptr<llvm::Module> module = std::make_unique<llvm::Module>(mod->name, m_Context);
     module->setSourceFileName(mod->name);
     module->setModuleIdentifier(mod->name);
-    module->setTargetTriple("x86-64");
+    module->setTargetTriple(llvm::sys::getDefaultTargetTriple());
     std::unique_ptr<GeneratedModule> current_module = std::make_unique<GeneratedModule>();
     current_module->module = std::move(module);
     if (m_ShouldGenDebug) {
