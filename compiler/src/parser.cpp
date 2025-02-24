@@ -184,7 +184,6 @@ std::optional<std::vector<std::unique_ptr<Decl>>> Parser::parse_extern_block() {
       decl = std::make_unique<FunctionDecl>(location, function_identifier, *return_type, m_ModuleName, std::move(param_list), nullptr, is_vla, lib_name, alias,
                                             is_exported);
     }
-    // @TODO: struct and enum decls
     if (m_NextToken.kind == TokenKind::KwStruct) {
       eat_next_token();
       SourceLocation location = m_NextToken.location;
