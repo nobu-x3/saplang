@@ -2177,7 +2177,6 @@ fn i32 main() {
   CONTAINS_NEXT_REQUIRE(lines_it, "br label %return");
 }
 
-// @TODO: array pointer decay
 TEST_CASE("Array pointer decay", "[codegen]") {
   TEST_SETUP(R"(
 fn i32 foo(i32* arr) { return arr[0]; }
@@ -2346,7 +2345,6 @@ TEST_CASE("Global arrays", "[codegen]") {
 }
 
 // @TODO: array literal function parameters
-// @TODO: slices
 
 TEST_CASE("String literals", "[codegen]") {
   TEST_SETUP(R"(

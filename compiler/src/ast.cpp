@@ -131,7 +131,6 @@ void dump_constant(std::stringstream &stream, size_t indent_level, Value value, 
     stream << indent(indent_level + 1) << "bool(" << value.b8 << ")";
     break;
   default:
-    // @TODO: implement rest
     break;
   }
 }
@@ -1143,7 +1142,6 @@ ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc, NumberLiteral::
       value.b8 = false;
     break;
   default:
-    // @TODO: implement rest
     break;
   }
 }

@@ -76,6 +76,7 @@ std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> Codegen::gener
     current_module->module = std::move(module);
     if (m_ShouldGenDebug) {
       current_module->module->addModuleFlag(llvm::Module::Warning, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
+      // @NOTE: This will not be used until Mac OS builds
       if (llvm::Triple(llvm::sys::getProcessTriple()).isOSDarwin()) {
         current_module->module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
       }
@@ -590,6 +591,7 @@ llvm::Value *Codegen::gen_block(const ResolvedBlock &body, GeneratedModule &mod,
     if (!is_defer_block && index == body.statements.size() - 1) {
       if (!dynamic_cast<const ResolvedReturnStmt *>(body.statements.back().get())) {
         for (auto &&rit = m_CurrentFunction.deferred_stmts.rbegin(); rit != m_CurrentFunction.deferred_stmts.rend(); ++rit) {
+          emit_debug_location((*rit)->location, mod);
           gen_block(*(*rit)->block, mod, true);
         }
       }

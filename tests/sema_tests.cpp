@@ -1886,7 +1886,6 @@ fn i32 main() {
 }
 // @TODO: prohibit array operations on const vars
 // @TODO: prohibit struct ops on const vars
-// @TODO: slices
 // @TODO: global and local redeclaration
 
 TEST_CASE("Extern function no vla", "[sema]") {
