@@ -21,6 +21,35 @@
 
 namespace saplang {
 
+bool is_decl_in_given_module(const ResolvedDecl &decl, const GeneratedModule &mod) { return decl.module == mod.module->getName(); }
+
+bool is_decl_in_given_module(const Type &type, const GeneratedModule &mod, const std::vector<std::unique_ptr<ResolvedModule>> &resolved_modules) {
+  // If it's custom, we need to check if it's declared in the current module, otherwise we don't generate debug info
+  bool is_in_current_module = true;
+  if (type.kind == Type::Kind::Custom) {
+    is_in_current_module = false;
+    std::string mod_name = mod.module->getName().str();
+    auto resolved_mod_it = resolved_modules.begin();
+    for (; resolved_mod_it != resolved_modules.end(); ++resolved_mod_it) {
+      if (!(*resolved_mod_it))
+        continue;
+      if (mod_name == (*resolved_mod_it)->name) {
+        std::string type_name = type.demangled_name();
+        for (auto &&decl : (*resolved_mod_it)->declarations) {
+          if (decl->id == type_name) {
+            is_in_current_module = true;
+            break;
+          }
+        }
+        // we're just checked the correct module but found no definition of this type, so not defined in this module
+        if (is_in_current_module)
+          break;
+      }
+    }
+  }
+  return is_in_current_module;
+}
+
 Codegen::Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree, std::string_view source_path)
     : m_ResolvedTree{std::move(resolved_tree)}, m_Builder{m_Context} {
   auto module = std::make_unique<llvm::Module>("<tu>", m_Context);
@@ -133,6 +162,19 @@ llvm::DISubroutineType *Codegen::gen_debug_function_type(GeneratedModule &mod, c
   if (!m_ShouldGenDebug) {
     return nullptr;
   }
+  std::string mod_name = mod.module->getName().str();
+  auto mod_it = m_ModuleNameToModuleDeclarationsMap.find(mod_name);
+  if (mod_it == m_ModuleNameToModuleDeclarationsMap.end())
+    return nullptr;
+  bool is_in_current_module = false;
+  for (auto &&[decl, val] : mod_it->second) {
+    if (decl->module == mod_name) {
+      is_in_current_module = true;
+      break;
+    }
+  }
+  if (!is_in_current_module)
+    return nullptr;
   std::vector<llvm::Metadata *> metadata;
   metadata.reserve(args.size() + 1);
   llvm::DIType *dbg_ret_type = gen_debug_type(ret_type, mod);
@@ -156,8 +198,10 @@ void Codegen::gen_func_decl(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   const std::string &fn_name = decl.og_name.empty() ? decl.id : decl.og_name;
   llvm::Function *current_function = llvm::Function::Create(type, llvm::Function::ExternalLinkage, fn_name, *mod.module);
   assert(current_function);
-  emit_debug_location(decl.location, mod);
-  if (m_ShouldGenDebug) {
+  // Want to check if the declaration is in current module, otherwise we don't want to generate debug info
+  bool is_in_current_module = is_decl_in_given_module(decl, mod);
+  if (m_ShouldGenDebug && is_in_current_module) {
+    emit_debug_location(decl.location, mod);
     std::filesystem::path filepath = std::filesystem::absolute(decl.location.path);
     llvm::DIFile *unit = mod.di_builder->createFile(filepath.filename().string(), filepath.parent_path().string(), std::nullopt, filepath.string());
     llvm::DIScope *fn_context = unit;
@@ -179,7 +223,7 @@ void Codegen::gen_func_decl(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   }
   llvm::Value *value = current_function;
   assert(value);
-  m_Declarations[mod.module->getName().str()][&decl] = value;
+  m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][&decl] = value;
 }
 
 void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl, GeneratedModule &mod) {
@@ -200,7 +244,7 @@ void Codegen::gen_global_var_decl(const ResolvedVarDecl &decl, GeneratedModule &
   // If var_init == nullptr there's an error in sema
   assert(var_init && "unexpected global variable type");
   llvm::GlobalVariable *global_var = new llvm::GlobalVariable(*mod.module, var_type, decl.is_const, llvm::GlobalVariable::ExternalLinkage, var_init, decl.id);
-  m_Declarations[mod.module->getName().str()][&decl] = global_var;
+  m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][&decl] = global_var;
 }
 
 void Codegen::emit_debug_location(const SourceLocation &loc, GeneratedModule &mod) {
@@ -322,8 +366,8 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   const std::string &fn_name = decl.og_name.empty() ? decl.id : decl.og_name;
   llvm::DIFile *unit = nullptr;
   llvm::DISubprogram *subprogram = nullptr;
-  emit_debug_location(decl.location, mod);
   if (m_ShouldGenDebug) {
+    emit_debug_location(decl.location, mod);
     unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory());
     llvm::DIScope *fn_context = unit;
     unsigned scope_line = 0;
@@ -362,7 +406,8 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
     arg.setName(param_decl->id);
     llvm::Value *var = alloc_stack_var(function, type, param_decl->id);
     assert(var);
-    if (m_ShouldGenDebug) {
+    bool is_in_current_module = is_decl_in_given_module(decl, mod);
+    if (m_ShouldGenDebug && is_in_current_module) {
       llvm::DILocalVariable *dbg_var_info =
           mod.di_builder->createParameterVariable(subprogram, arg.getName(), idx, unit, decl.location.line, gen_debug_type(decl.params[idx]->type, mod));
       auto *call =
@@ -372,7 +417,7 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
       /* call->setDebugLoc(llvm::DILocation::get(subprogram->getContext(), decl.location.line, 0, subprogram)); */
     }
     m_Builder.CreateStore(&arg, var);
-    m_Declarations[mod.module->getName().str()][param_decl] = var;
+    m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][param_decl] = var;
     ++idx;
   }
   gen_block(*decl.body, mod);
@@ -387,6 +432,7 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
     m_Builder.CreateRetVoid();
     if (m_ShouldGenDebug) {
       mod.debug_info->lexical_blocks.pop_back();
+      m_Builder.SetCurrentDebugLocation(llvm::DebugLoc());
     }
     assert(m_CurrentFunction.deferred_stmts.size() == 0);
     return;
@@ -862,7 +908,7 @@ llvm::Value *Codegen::gen_expr(const ResolvedExpr &expr, GeneratedModule &mod) {
     return get_constant_number_value(*number, mod);
   }
   if (const auto *dre = dynamic_cast<const ResolvedDeclRefExpr *>(&expr)) {
-    llvm::Value *decl = m_Declarations[mod.module->getName().str()][dre->decl];
+    llvm::Value *decl = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][dre->decl];
     assert(decl);
     auto *type = gen_type(dre->type, mod);
     assert(type);
@@ -926,7 +972,7 @@ llvm::Value *Codegen::gen_struct_literal_expr_assignment(const ResolvedStructLit
     } else if (const auto *unary_op = dynamic_cast<const ResolvedUnaryOperator *>(expr.get()); unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
         if (unary_op->op == TokenKind::Amp) {
-          llvm::Value *expr = m_Declarations[mod.module->getName().str()][dre->decl];
+          llvm::Value *expr = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][dre->decl];
           assert(expr);
           m_Builder.CreateStore(expr, memptr);
         }
@@ -1027,7 +1073,7 @@ llvm::Value *Codegen::gen_struct_member_access(const ResolvedStructMemberAccess 
     return nullptr;
   llvm::Function *current_function = m_CurrentFunction.current_function;
   assert(current_function);
-  llvm::Value *decl = m_Declarations[mod.module->getName().str()][access.decl];
+  llvm::Value *decl = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][access.decl];
   if (!decl)
     return report(access.location, "unknown declaration '" + access.decl->id + "'.");
   Type access_decl_type = access.decl->type;
@@ -1180,7 +1226,7 @@ llvm::Value *Codegen::gen_array_element_access(const ResolvedArrayElementAccess 
   assert(access.indices.size() >= 1 && "unknown index");
   llvm::Function *current_function = m_CurrentFunction.current_function;
   assert(current_function);
-  llvm::Value *decl = m_Declarations[mod.module->getName().str()][access.decl];
+  llvm::Value *decl = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][access.decl];
   if (!decl)
     return report(access.location, "unknown declaration '" + access.decl->id + "'.");
   Type decl_type = access.decl->type;
@@ -1235,7 +1281,7 @@ llvm::Value *Codegen::gen_explicit_cast(const ResolvedExplicitCastExpr &cast, Ge
       var = gen_expr(*cast.rhs, mod);
     }
   }
-  var = decl_ref_expr ? m_Declarations[mod.module->getName().str()][decl_ref_expr->decl] : var;
+  var = decl_ref_expr ? m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][decl_ref_expr->decl] : var;
   if (!var)
     return nullptr;
   llvm::Type *type = gen_type(cast.type, mod);
@@ -1476,7 +1522,7 @@ llvm::Value *Codegen::gen_comp_op(TokenKind op, const Type &type, llvm::Value *l
 }
 
 std::pair<llvm::Value *, Type> Codegen::gen_dereference(const ResolvedDeclRefExpr &expr, GeneratedModule &mod) {
-  llvm::Value *decl = m_Declarations[mod.module->getName().str()][expr.decl];
+  llvm::Value *decl = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][expr.decl];
   llvm::Value *ptr = m_Builder.CreateLoad(gen_type(expr.type, mod), decl);
   assert(ptr);
   Type new_internal_type = expr.type;
@@ -1560,7 +1606,7 @@ void Codegen::gen_conditional_op(const ResolvedExpr &op, llvm::BasicBlock *true_
 
 llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, GeneratedModule &mod) {
   if (mod.module->getName() != call.decl->module) {
-    if (!m_Declarations[mod.module->getName().str()].count(call.decl)) {
+    if (!m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()].count(call.decl)) {
       auto *resolved_func_decl = dynamic_cast<const ResolvedFuncDecl *>(call.decl);
       assert(resolved_func_decl);
       gen_func_decl(*resolved_func_decl, mod);
@@ -1573,7 +1619,7 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, GeneratedModul
     ++param_index;
     if (const auto *unary_op = dynamic_cast<const ResolvedUnaryOperator *>(arg.get()); unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
-        llvm::Value *expr = m_Declarations[mod.module->getName().str()][dre->decl];
+        llvm::Value *expr = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][dre->decl];
         assert(expr);
         args.emplace_back(expr);
         continue;
@@ -1592,7 +1638,7 @@ llvm::Value *Codegen::gen_call_expr(const ResolvedCallExpr &call, GeneratedModul
   }
   // we're probably dealing with fn ptr
   if (!callee) {
-    callee = static_cast<llvm::Function *>(m_Declarations[mod.module->getName().str()][call.decl]);
+    callee = static_cast<llvm::Function *>(m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][call.decl]);
     llvm::Type *function_ret_type = gen_type(call.type, mod);
     assert(function_ret_type);
     bool is_fn_ptr = call.type.fn_ptr_signature.has_value();
@@ -1624,7 +1670,7 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, GeneratedModul
       gen_struct_literal_expr_assignment(*struct_lit, var, mod);
     } else if (const auto *unary_op = dynamic_cast<const ResolvedUnaryOperator *>(init.get()); unary_op && (unary_op->op == TokenKind::Amp)) {
       if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unary_op->rhs.get())) {
-        llvm::Value *expr = m_Declarations[mod.module->getName().str()][dre->decl];
+        llvm::Value *expr = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][dre->decl];
         assert(expr);
         if (unary_op->op == TokenKind::Amp) {
           m_Builder.CreateStore(expr, var);
@@ -1639,14 +1685,15 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, GeneratedModul
       m_Builder.CreateStore(gen_expr(*init, mod), var);
     }
   }
-  if (m_ShouldGenDebug) {
+  bool is_in_current_module = is_decl_in_given_module(decl->type, mod, m_ResolvedModules);
+  if (m_ShouldGenDebug && is_in_current_module) {
     auto *subprogram = mod.debug_info->lexical_blocks.back();
     auto *unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory());
     llvm::DILocalVariable *dbg_var_info = mod.di_builder->createAutoVariable(subprogram, decl->id, unit, decl->location.line, gen_debug_type(decl->type, mod));
     auto *call = mod.di_builder->insertDeclare(var, dbg_var_info, mod.di_builder->createExpression(),
                                                llvm::DILocation::get(subprogram->getContext(), decl->location.line, 0, subprogram), m_Builder.GetInsertBlock());
   }
-  m_Declarations[mod.module->getName().str()][decl] = var;
+  m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][decl] = var;
   return nullptr;
 }
 
@@ -1655,7 +1702,7 @@ llvm::Value *Codegen::gen_array_decay(const Type &lhs_type, const ResolvedDeclRe
     if (is_same_array_decay(rhs_dre.type, lhs_type)) {
       std::vector<llvm::Value *> indices{llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 0)),
                                          llvm::ConstantInt::get(m_Context, llvm::APInt(static_cast<unsigned>(platform_array_index_size()), 0))};
-      llvm::Value *decl = m_Declarations[mod.module->getName().str()][rhs_dre.decl];
+      llvm::Value *decl = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][rhs_dre.decl];
       auto *type = gen_type(rhs_dre.type, mod);
       assert(type);
       return m_Builder.CreateInBoundsGEP(type, decl, indices, "arraydecay");
@@ -1692,7 +1739,7 @@ llvm::Value *Codegen::bool_to_type(const Type &type, llvm::Value *value) {
 }
 
 llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, GeneratedModule &mod) {
-  llvm::Value *decl = m_Declarations[mod.module->getName().str()][assignment.variable->decl];
+  llvm::Value *decl = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][assignment.variable->decl];
   Type member_type = Type::builtin_void(false);
   if (const auto *member_access = dynamic_cast<const ResolvedStructMemberAccess *>(assignment.variable.get())) {
     decl = gen_struct_member_access(*member_access, member_type, mod);
@@ -1713,7 +1760,7 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, Gener
   // further to Codegen::gen_unary_op
   if (const auto *unop = dynamic_cast<const ResolvedUnaryOperator *>(assignment.expr.get()); unop && unop->op == TokenKind::Amp) {
     if (const auto *dre = dynamic_cast<ResolvedDeclRefExpr *>(unop->rhs.get())) {
-      expr = m_Declarations[mod.module->getName().str()][dre->decl];
+      expr = m_ModuleNameToModuleDeclarationsMap[mod.module->getName().str()][dre->decl];
       assert(expr);
       instruction = m_Builder.CreateStore(expr, decl);
     }
@@ -1741,7 +1788,8 @@ llvm::Value *Codegen::gen_assignment(const ResolvedAssignment &assignment, Gener
     /* auto *unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory()); */
     /* llvm::DILocalVariable *debug_var = mod.di_builder->createAutoVariable(subprogram, assignment.variable->decl->id, unit, assignment.location.line, */
     /*                                                                       gen_debug_type(assignment.variable->type, mod)); */
-    /* mod.di_builder->insertDbgAssign(instruction, expr, debug_var, mod.di_builder->createExpression(), decl, mod.di_builder->createExpression(), location); */
+    /* mod.di_builder->insertDbgAssign(instruction, expr, debug_var, mod.di_builder->createExpression(), decl, mod.di_builder->createExpression(), location);
+     */
   }
   return instruction;
 }

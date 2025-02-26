@@ -127,7 +127,7 @@ private:
   std::vector<std::unique_ptr<ResolvedDecl>> m_ResolvedTree{};
   std::vector<std::unique_ptr<ResolvedModule>> m_ResolvedModules{};
   std::unordered_map<std::string, TypeInfo> m_TypeInfos{};
-  std::unordered_map<std::string, std::map<const ResolvedDecl *, llvm::Value *>> m_Declarations{};
+  std::unordered_map<std::string, std::map<const ResolvedDecl *, llvm::Value *>> m_ModuleNameToModuleDeclarationsMap{};
   std::map<std::string, llvm::Type *> m_CustomTypes{};
   llvm::Instruction *m_AllocationInsertPoint{nullptr};
   llvm::LLVMContext m_Context;
