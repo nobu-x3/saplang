@@ -60,6 +60,8 @@ private:
 
   llvm::Type *gen_type(const Type &type, GeneratedModule &mod);
 
+  llvm::DIType *get_debug_type_from_llvm_type(const Type &saplang_type, const llvm::Type *type, GeneratedModule &mod, bool is_in_this_module);
+
   llvm::DIType *gen_debug_type(const Type &type, GeneratedModule &mod);
 
   llvm::DISubroutineType *gen_debug_function_type(GeneratedModule &mod, const Type &ret_type, const std::vector<std::unique_ptr<ResolvedParamDecl>> &args);
