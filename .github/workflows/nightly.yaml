@@ -6,7 +6,7 @@ on:
 jobs:
 
   check-commit:
-    runs-on: [self-hosted, ARM64, linux]
+    runs-on: [self-hosted, x64, linux]
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
       current_sha: ${{ steps.get-sha.outputs.sha }}
@@ -47,7 +47,7 @@ jobs:
             echo "No new commits - skip build"
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
-  
+
   build-windows:
     runs-on: [self-hosted, x64, windows]
     needs: check-commit
@@ -123,7 +123,7 @@ jobs:
         with:
           name: nightly-${{ matrix.os }}-${{ matrix.arch }}-release
           path: dist/saplang-${{ matrix.os }}-${{ matrix.arch }}-release.tar.gz
-          
+
 
   update-sha:
     needs: [check-commit, build-linux, build-windows]
