@@ -6,6 +6,7 @@
 #include <climits>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 
 namespace saplang {
 
@@ -734,6 +735,10 @@ void StringLiteralExpr::dump_to_stream(std::stringstream &stream, size_t indent_
   stream << indent(indent_level) << "StringLiteralExpr: \"" << val << "\"\n";
 }
 
+void CharacterLiteralExpr::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
+  stream << indent(indent_level) << "CharacterLiteralExpr: \"" << str_representation << "\" (" << static_cast<int>(val) << ")\n";
+}
+
 void Assignment::dump_to_stream(std::stringstream &stream, size_t indent_level) const {
   stream << indent(indent_level) << "Assignment:\n";
   if (lhs_deref_count > 0) {
@@ -1074,7 +1079,15 @@ void ResolvedReturnStmt::dump_to_stream(std::stringstream &stream, size_t indent
 ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc, NumberLiteral::NumberType num_type, const std::string &value_str)
     : ResolvedExpr(loc, Type::builtin_void(false)) {
   if (num_type == NumberLiteral::NumberType::Integer) {
-    std::int64_t wide_type = std::stoll(value_str);
+    std::int64_t wide_type = 0;
+    try {
+      wide_type = std::stoll(value_str);
+    } catch (std::invalid_argument &) {
+      if (value_str.size() != 1)
+        report(loc, "could not convert character literal to number.");
+      else
+        wide_type = value_str[0];
+    }
     if (wide_type > 0) {
       if (wide_type <= CHAR_MAX)
         type = Type::builtin_u8(false);
@@ -1106,7 +1119,14 @@ ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc, NumberLiteral::
   }
   switch (type.kind) {
   case Type::Kind::i8:
-    value.i8 = static_cast<std::int8_t>(std::stoi(value_str));
+    try {
+      value.i8 = static_cast<std::int8_t>(std::stoi(value_str));
+    } catch (std::invalid_argument &) {
+      if (value_str.size() != 1)
+        report(loc, "could not convert character literal to number.");
+      else
+        value.i8 = value_str[0];
+    }
     break;
   case Type::Kind::i16:
     value.i16 = static_cast<std::int16_t>(std::stoi(value_str));
@@ -1118,7 +1138,14 @@ ResolvedNumberLiteral::ResolvedNumberLiteral(SourceLocation loc, NumberLiteral::
     value.i64 = static_cast<std::int64_t>(std::stoll(value_str));
     break;
   case Type::Kind::u8:
-    value.u8 = static_cast<std::uint8_t>(std::stoi(value_str));
+    try {
+      value.u8 = static_cast<std::uint8_t>(std::stoi(value_str));
+    } catch (std::invalid_argument &) {
+      if (value_str.size() != 1)
+        report(loc, "could not convert character literal to number.");
+      else
+        value.u8 = value_str[0];
+    }
     break;
   case Type::Kind::u16:
     value.u16 = static_cast<std::uint16_t>(std::stoi(value_str));

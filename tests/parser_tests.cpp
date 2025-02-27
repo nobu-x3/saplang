@@ -2307,31 +2307,46 @@ fn i32 main() {
     }
 }
 )");
-    REQUIRE(error_stream.str() == "");
-    auto lines = break_by_line(output_buffer.str());
-    auto lines_it = lines.begin() + 1;
-    CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
-    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
-    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: int:ptr i32");
-    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: malloc");
-    CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i32 x1)");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeferStmt:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
-    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: free");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
-    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: int:ptr i32");
-    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: malloc");
-    CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i32 x1)");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeferStmt:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "Block");
-    CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: free");
-    CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
-  }
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 1;
+  CONTAINS_NEXT_REQUIRE(lines_it, "FunctionDecl: main:i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: int:ptr i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: malloc");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i32 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeferStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: free");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: int:ptr i32");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: malloc");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Sizeof(i32 x1)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeferStmt:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "Block");
+  CONTAINS_NEXT_REQUIRE(lines_it, "CallExpr:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: free");
+  CONTAINS_NEXT_REQUIRE(lines_it, "DeclRefExpr: int");
+}
+
+TEST_CASE("Character literals", "[parser]") {
+  TEST_SETUP_MODULE_SINGLE("test", R"(
+var u8 char_a = 'a';
+var u8 newline = '\n';
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin() + 1;
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: char_a:u8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(a)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "VarDecl: newline:u8");
+  CONTAINS_NEXT_REQUIRE(lines_it, "NumberLiteral: integer(");
+  CONTAINS_NEXT_REQUIRE(lines_it, ")");
+}

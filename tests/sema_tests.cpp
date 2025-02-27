@@ -3284,3 +3284,21 @@ fn i32 main() {
   REQUIRE(error_stream.str() == "test:6:9 error: nested defer statements are not allowed.\n");
   REQUIRE(output_buffer.str() == "");
 }
+
+TEST_CASE("Character literals", "[sema]") {
+  TEST_SETUP_MODULE_SINGLE("test", R"(
+var u8 char_a = 'a';
+var u8 newline = '\n';
+)");
+  REQUIRE(error_stream.str() == "");
+  auto lines = break_by_line(output_buffer.str());
+  auto lines_it = lines.begin();
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") char_a:global u8") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(97)");
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedVarDecl: @(");
+  REQUIRE(lines_it->find(") newline:global u8") != std::string::npos);
+  CONTAINS_NEXT_REQUIRE(lines_it, "ResolvedNumberLiteral:");
+  CONTAINS_NEXT_REQUIRE(lines_it, "u8(10)");
+}

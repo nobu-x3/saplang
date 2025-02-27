@@ -529,6 +529,15 @@ struct StringLiteralExpr : public Expr {
   std::unique_ptr<Stmt> clone() const override { return std::make_unique<StringLiteralExpr>(location, val); }
 };
 
+struct CharacterLiteralExpr : public Expr {
+  std::string str_representation;
+  char val;
+  inline CharacterLiteralExpr(SourceLocation loc, std::string str_representation, char val)
+      : Expr(loc), str_representation(std::move(str_representation)), val(val) {}
+  DUMP_IMPL;
+  std::unique_ptr<Stmt> clone() const override { return std::make_unique<CharacterLiteralExpr>(location, str_representation, val); }
+};
+
 struct Assignment : public Stmt {
   std::unique_ptr<DeclRefExpr> variable;
   std::unique_ptr<Expr> expr;
