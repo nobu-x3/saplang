@@ -50,6 +50,28 @@ bool is_decl_in_given_module(const Type &type, const GeneratedModule &mod, const
   return is_in_current_module;
 }
 
+std::string find_types_home_module(const Type &type, const std::vector<std::unique_ptr<ResolvedModule>> &resolved_modules) {
+  auto resolved_mod_it = resolved_modules.begin();
+  for (; resolved_mod_it != resolved_modules.end(); ++resolved_mod_it) {
+    bool is_in_current_module = false;
+    if (!(*resolved_mod_it))
+      continue;
+    std::string type_name = type.demangled_name();
+    for (auto &&decl : (*resolved_mod_it)->declarations) {
+      if (decl->id == type_name) {
+        return (*resolved_mod_it)->name;
+      }
+    }
+  }
+  return "";
+}
+
+GeneratedModule *find_types_home_generated_module(const Type &type, const std::vector<std::unique_ptr<ResolvedModule>> &resolved_module,
+                                                  const std::unordered_map<std::string, std::unique_ptr<GeneratedModule>> &generated_modules) {
+  std::string key = find_types_home_module(type, resolved_module);
+  return generated_modules.at(key).get();
+}
+
 Codegen::Codegen(std::vector<std::unique_ptr<ResolvedDecl>> resolved_tree, std::string_view source_path)
     : m_ResolvedTree{std::move(resolved_tree)}, m_Builder{m_Context} {
   auto module = std::make_unique<llvm::Module>("<tu>", m_Context);
@@ -217,7 +239,6 @@ void Codegen::gen_func_decl(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
     llvm::DISubprogram *subprogram = mod.di_builder->createFunction(fn_context, fn_name, fn_name, unit, decl.location.line,
                                                                     gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags);
     current_function->setSubprogram(subprogram);
-    mod.debug_info->lexical_blocks.push_back(subprogram);
     // unset location for prologue emission
     m_Builder.SetCurrentDebugLocation(llvm::DebugLoc());
   }
@@ -367,8 +388,8 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
   llvm::DIFile *unit = nullptr;
   llvm::DISubprogram *subprogram = nullptr;
   if (m_ShouldGenDebug) {
-    emit_debug_location(decl.location, mod);
-    unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory());
+    unit = mod.debug_info->file;
+    /* unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory()); */
     llvm::DIScope *fn_context = unit;
     unsigned scope_line = 0;
     auto flags = llvm::DISubprogram::SPFlagDefinition;
@@ -376,14 +397,10 @@ void Codegen::gen_func_body(const ResolvedFuncDecl &decl, GeneratedModule &mod) 
       flags |= llvm::DISubprogram::SPFlagLocalToUnit;
     auto node_type = llvm::DINode::FlagPrototyped;
     subprogram = mod.di_builder->createFunction(fn_context, fn_name, llvm::StringRef(), unit, decl.location.line,
-                                                gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags);
-    function->setSubprogram(subprogram);
-    mod.debug_info->lexical_blocks.push_back(subprogram);
+                                            gen_debug_function_type(mod, decl.type, decl.params), scope_line, node_type, flags);
     assert(subprogram);
     function->setSubprogram(subprogram);
     mod.debug_info->lexical_blocks.push_back(subprogram);
-    // unset location for prologue emission
-    m_Builder.SetCurrentDebugLocation(llvm::DebugLoc());
   }
   llvm::Value *undef = llvm::UndefValue::get(m_Builder.getInt32Ty());
   assert(undef);
@@ -496,7 +513,7 @@ llvm::Type *Codegen::gen_type(const Type &type, GeneratedModule &mod) {
   llvm_unreachable("unexpected type.");
 }
 
-llvm::DIType *get_debug_type_from_llvm_type(const llvm::Type *type, GeneratedModule &mod, std::unordered_map<std::string, TypeInfo> &type_infos) {
+llvm::DIType *Codegen::get_debug_type_from_llvm_type(const Type &saplang_type, const llvm::Type *type, GeneratedModule &mod, bool is_in_this_module) {
   unsigned encoding = 0;
   std::string type_name;
   std::uint64_t size;
@@ -523,12 +540,21 @@ llvm::DIType *get_debug_type_from_llvm_type(const llvm::Type *type, GeneratedMod
   } else if (type->isStructTy()) {
     std::vector<llvm::Metadata *> metadata;
     std::uint64_t offset = 0;
-    const TypeInfo &type_info = type_infos[type->getStructName().str()];
-    llvm::DIScope *scope = mod.debug_info->lexical_blocks.size() > 0 ? mod.debug_info->lexical_blocks.back() : mod.debug_info->cu;
-    llvm::DIFile *file = mod.debug_info->file;
+    llvm::DIScope *scope = nullptr;
+    llvm::DIFile *file = nullptr;
+    const TypeInfo &type_info = m_TypeInfos[type->getStructName().str()];
+    if (!is_in_this_module) {
+      GeneratedModule *generated_module = find_types_home_generated_module(saplang_type, m_ResolvedModules, m_Modules);
+      assert(generated_module);
+      scope = generated_module->debug_info->lexical_blocks.size() > 0 ? generated_module->debug_info->lexical_blocks.back() : generated_module->debug_info->cu;
+      file = generated_module->debug_info->file;
+    } else {
+      scope = mod.debug_info->lexical_blocks.size() > 0 ? mod.debug_info->lexical_blocks.back() : mod.debug_info->cu;
+      file = mod.debug_info->file;
+    }
     for (int i = 0; i < type->getStructNumElements(); ++i) {
       llvm::Type *subtype = type->getStructElementType(i);
-      llvm::DIType *di_type = get_debug_type_from_llvm_type(subtype, mod, type_infos);
+      llvm::DIType *di_type = get_debug_type_from_llvm_type(saplang_type, subtype, mod, is_in_this_module);
       metadata.push_back(mod.di_builder->createMemberType(scope, type_info.field_names[i], file, i, type_info.field_sizes[i] * 8, di_type->getAlignInBits(),
                                                           offset, llvm::DINode::FlagZero, di_type));
       offset += type_info.field_sizes[i] * 8;
@@ -601,7 +627,8 @@ llvm::DIType *Codegen::gen_debug_type(const Type &type, GeneratedModule &mod) {
   case Type::Kind::Custom: {
     std::vector<llvm::Metadata *> members;
     llvm::Type *struct_type = m_CustomTypes[type.name];
-    return get_debug_type_from_llvm_type(struct_type, mod, m_TypeInfos);
+    bool is_in_this_module = is_decl_in_given_module(type, mod, m_ResolvedModules);
+    return get_debug_type_from_llvm_type(type, struct_type, mod, is_in_this_module);
   } break;
   }
   assert(encoding != 0);
@@ -827,14 +854,10 @@ llvm::Value *Codegen::gen_return_stmt(const ResolvedReturnStmt &stmt, GeneratedM
     return m_Builder.CreateBr(m_CurrentFunction.return_bb);
   }
   if (m_CurrentFunction.is_void) {
-    if (m_ShouldGenDebug)
-      mod.debug_info->lexical_blocks.pop_back();
     return m_Builder.CreateRetVoid();
   }
   llvm::Value *load_ret = m_Builder.CreateLoad(m_CurrentFunction.return_type, m_CurrentFunction.return_value);
   assert(load_ret);
-  if (m_ShouldGenDebug)
-    mod.debug_info->lexical_blocks.pop_back();
   return m_Builder.CreateRet(load_ret);
 }
 
@@ -1685,10 +1708,21 @@ llvm::Value *Codegen::gen_decl_stmt(const ResolvedDeclStmt &stmt, GeneratedModul
       m_Builder.CreateStore(gen_expr(*init, mod), var);
     }
   }
-  bool is_in_current_module = is_decl_in_given_module(decl->type, mod, m_ResolvedModules);
-  if (m_ShouldGenDebug && is_in_current_module) {
-    auto *subprogram = mod.debug_info->lexical_blocks.back();
-    auto *unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory());
+  bool is_type_in_current_module = is_decl_in_given_module(decl->type, mod, m_ResolvedModules);
+  bool is_decl_in_current_module = is_decl_in_given_module(*decl, mod);
+  if (m_ShouldGenDebug) {
+    llvm::DIScope *subprogram = function->getSubprogram();
+    /* llvm::DIFile *unit = mod.di_builder->createFile(mod.debug_info->cu->getFilename(), mod.debug_info->cu->getDirectory()); */
+    llvm::DIFile *unit = mod.debug_info->file;
+    /* if (is_in_current_module) { */
+    /*   subprogram = ; */
+    /*   unit = ; */
+    /* } else { */
+    /*   GeneratedModule *gened_module = find_types_home_generated_module(decl->type, m_ResolvedModules, m_Modules); */
+    /*   assert(gened_module); */
+    /*   subprogram = gened_module->debug_info->lexical_blocks.back(); */
+    /*   unit = gened_module->debug_info->file; */
+    /* } */
     llvm::DILocalVariable *dbg_var_info = mod.di_builder->createAutoVariable(subprogram, decl->id, unit, decl->location.line, gen_debug_type(decl->type, mod));
     auto *call = mod.di_builder->insertDeclare(var, dbg_var_info, mod.di_builder->createExpression(),
                                                llvm::DILocation::get(subprogram->getContext(), decl->location.line, 0, subprogram), m_Builder.GetInsertBlock());
