@@ -782,6 +782,7 @@ std::unique_ptr<Expr> Parser::parse_call_expr(SourceLocation location, std::uniq
 // | <enumElementAccess>
 // | <alignOfExpr>
 // | <sizeOfExpr>
+// | <characterLiteral>
 //
 // <arrayInitializer>
 // ::= '[' (<primaryExpression> (',')*)* ']'
@@ -807,8 +808,21 @@ std::unique_ptr<Expr> Parser::parse_call_expr(SourceLocation location, std::uniq
 //
 // <nullExpr>
 // ::= 'null'
+//
+// <characterLiteral>
+// ::= ''' <identifier> '''
 std::unique_ptr<Expr> Parser::parse_primary_expr(Context context) {
   SourceLocation location = m_NextToken.location;
+  if (m_NextToken.kind == TokenKind::SingleQuote) {
+    char value = m_Lexer->get_character_literal();
+    eat_next_token();
+    if (m_NextToken.kind != TokenKind::SingleQuote) {
+      return report(m_NextToken.location, "expected single character literal.");
+    }
+    eat_next_token();
+    /* return std::make_unique<CharacterLiteralExpr>(location, std::move(value), std::string{value}); */
+    return std::make_unique<NumberLiteral>(location, NumberLiteral::NumberType::Integer, std::string{value});
+  }
   if (m_NextToken.kind == TokenKind::Lparent) {
     eat_next_token(); // eat '('
     Token current_token = m_NextToken;

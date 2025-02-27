@@ -5,7 +5,7 @@
 #include <unordered_map>
 
 namespace saplang {
-constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':', ';', ',', '+', '-', '*', '<', '>', '!', '.', '&', '[', ']', '"', '~', '^', '|', '%'};
+constexpr char single_char_tokens[] = {'\0', '(', ')', '{', '}', ':', ';', ',', '+', '-', '*', '<', '>', '!', '.', '&', '[', ']', '"', '~', '^', '|', '%', '\''};
 
 enum class TokenKind : char {
   Unknown = 0,
@@ -69,6 +69,7 @@ enum class TokenKind : char {
   Hat = single_char_tokens[20],
   Pipe = single_char_tokens[21],
   Percent = single_char_tokens[22],
+  SingleQuote = single_char_tokens[23],
   KwSwitch,
   KwCase,
   KwDefault,
@@ -94,6 +95,7 @@ public:
   Token get_next_token();
   Token get_prev_token(const Token &token);
   std::string get_string_literal();
+  char get_character_literal();
   inline std::string get_source_file_path() const { return std::string{m_Source->path}; }
 
 private:

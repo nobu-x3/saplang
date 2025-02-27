@@ -152,6 +152,30 @@ std::string Lexer::get_string_literal() {
   return stream.str();
 }
 
+char Lexer::get_character_literal() {
+  is_reading_string = true;
+  char curr_char = eat_next_char(); // should eat single quote
+  if (curr_char == '\\') {
+    curr_char = eat_next_char();
+    switch (curr_char) {
+    case 'n':
+      return '\n';
+    case 't':
+      return '\t';
+    case 'r':
+      return '\r';
+    case '\\':
+      return '\\';
+    case '\'':
+      return '\'';
+    case '"':
+      return '"';
+    }
+  }
+  is_reading_string = false;
+  return curr_char;
+}
+
 char Lexer::peek_next_char(size_t count) const { return m_Source->buffer[m_Idx + count]; }
 
 char Lexer::eat_next_char() {
