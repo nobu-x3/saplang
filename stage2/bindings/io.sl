@@ -10,6 +10,7 @@ extern {
         i8*   _tmpfname;
     }
 
+ 
     export fn FILE* fopen(const i8* filename, const i8* mode);
 
     // returns 0 if closed, EOF otherwise
@@ -18,4 +19,8 @@ extern {
     export const i32 EOF = -1;
 
     export fn i32 fprintf(FILE* stream, const i8* format, ...);
+
+    export fn void printf(const i8*, ...);
+
+    export fn i32 fgetc(FILE* stream);
 }
