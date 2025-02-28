@@ -32,7 +32,7 @@ private:
   };
 
   inline void eat_next_token() { m_NextToken = m_Lexer->get_next_token(); }
-  inline void go_back_to_prev_token(const Token& token) { m_NextToken = m_Lexer->get_prev_token(token); }
+  inline void go_back_to_prev_token(const Token &token) { m_NextToken = m_Lexer->get_prev_token(token); }
 
   inline void sync_on(const std::vector<TokenKind> &kinds) {
     m_IsCompleteAst = false;
@@ -107,4 +107,5 @@ private:
   std::string m_ModuleName;
   std::string m_ModulePath;
 };
+
 } // namespace saplang
