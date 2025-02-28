@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstring>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -1563,5 +1564,4 @@ void Parser::synchronize() {
     eat_next_token();
   }
 }
-
 } // namespace saplang

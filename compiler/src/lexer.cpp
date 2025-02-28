@@ -93,11 +93,13 @@ Token Lexer::get_next_token() {
     eat_next_char();
     return Token{token_start_location, TokenKind::PipePipe, "||"};
   }
+  int index = 0;
   for (auto &&c : single_char_tokens) {
     // TODO: manually write it out to avoid branching for better performance.
     if (c == curr_char) {
-      return Token{token_start_location, static_cast<TokenKind>(c), std::string{c}};
+      return Token{token_start_location, static_cast<TokenKind>(static_cast<int>(TokenKind::SINGLE_CHAR_TOKENS_START) + index), std::string{c}};
     }
+    ++index;
   }
   std::string value{curr_char};
   if (is_alpha(curr_char)) {
