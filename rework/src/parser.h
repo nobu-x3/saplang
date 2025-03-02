@@ -33,7 +33,18 @@ typedef struct Parser {
   Token current_token;
 } Parser;
 
-typedef enum { AST_VAR_DECL, AST_STRUCT_DECL, AST_FUNC_DECL, AST_FIELD_DECL, AST_PARAM_DECL, AST_BLOCK, AST_EXPR_LITERAL, AST_EXPR_IDENT } ASTNodeType;
+typedef enum {
+  AST_VAR_DECL,
+  AST_STRUCT_DECL,
+  AST_FUNC_DECL,
+  AST_FIELD_DECL,
+  AST_PARAM_DECL,
+  AST_BLOCK,
+  AST_EXPR_LITERAL,
+  AST_EXPR_IDENT,
+  AST_RETURN,
+  AST_BINARY_EXPR
+} ASTNodeType;
 
 typedef struct ASTNode {
   ASTNodeType type;
@@ -85,15 +96,25 @@ typedef struct ASTNode {
     struct {
       char name[64];
     } ident;
+    // Return statement
+    struct {
+      struct ASTNode *return_expr;
+    } ret;
+    // Binary expression
+    struct {
+        char op;
+        struct ASTNode* left;
+        struct ASTNode* right;
+    } binary_op;
   } data;
 } ASTNode;
 
-CompilerResult parser_init(Parser* parser, Scanner scanner, Symbol* optional_table);
+CompilerResult parser_init(Parser *parser, Scanner scanner, Symbol *optional_table);
 
 CompilerResult parser_deinit(Parser *parser);
 
-CompilerResult symbol_table_print(Symbol *table, char* string);
+CompilerResult symbol_table_print(Symbol *table, char *string);
 
-ASTNode* parse_input();
+ASTNode *parse_input();
 
-CompilerResult ast_print(ASTNode *node, int indent, char* string);
+CompilerResult ast_print(ASTNode *node, int indent, char *string);

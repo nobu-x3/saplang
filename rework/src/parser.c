@@ -81,8 +81,8 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
       }
       print(string, "VarDecl: %s %s %s", is_const, node->data.var_decl.type_name, node->data.var_decl.name);
       if (node->data.var_decl.init) {
-        print(string, " = ");
-        ast_print(node->data.var_decl.init, 0, string);
+        print(string, ":\n");
+        ast_print(node->data.var_decl.init, indent + 1, string);
       } else {
         print(string, "\n");
       }
@@ -128,6 +128,15 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
     case AST_EXPR_IDENT:
       print(string, "Ident: %s\n", node->data.ident.name);
       break;
+    case AST_RETURN:
+      print(string, "Return: ");
+      ast_print(node->data.ret.return_expr, 0, string);
+      break;
+    case AST_BINARY_EXPR:
+      print(string, "Binary Expression: %c\n", node->data.binary_op.op);
+      ast_print(node->data.binary_op.left, indent + 1, string);
+      ast_print(node->data.binary_op.right, indent + 1, string);
+      break;
     default: {
       print(string, "Unknown AST Node\n");
     } break;
@@ -144,6 +153,24 @@ ASTNode *new_ast_node(ASTNodeType type) {
   }
   node->type = type;
   node->next = NULL;
+  return node;
+}
+
+ASTNode *new_binary_expr_node(char op, ASTNode *left, ASTNode *right) {
+  ASTNode *node = new_ast_node(AST_BINARY_EXPR);
+  if (!node)
+    return NULL;
+  node->data.binary_op.op = op;
+  node->data.binary_op.left = left;
+  node->data.binary_op.right = right;
+  return node;
+}
+
+ASTNode *new_return_node(ASTNode *expr) {
+  ASTNode *node = new_ast_node(AST_RETURN);
+  if (!node)
+    return NULL;
+  node->data.ret.return_expr = expr;
   return node;
 }
 
@@ -271,7 +298,45 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
   return RESULT_SUCCESS;
 }
 
+ASTNode *parse_primary(Parser *parser);
+
+ASTNode *parse_term(Parser *parser) {
+  ASTNode *node = parse_primary(parser);
+  while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH) {
+    char op = parser->current_token.text[0];
+    parser->current_token = next_token(&parser->scanner);
+    ASTNode *right = parse_primary(parser);
+    node = new_binary_expr_node(op, node, right);
+  }
+  return node;
+}
+
 ASTNode *parse_expr(Parser *parser) {
+  // I split it like that because of operator precedence
+  ASTNode *node = parse_term(parser);
+  while (parser->current_token.type == TOK_MINUS || parser->current_token.type == TOK_PLUS) {
+    char op = parser->current_token.text[0];
+    parser->current_token = next_token(&parser->scanner);
+    ASTNode *right = parse_primary(parser);
+    node = new_binary_expr_node(op, node, right);
+  }
+  return node;
+}
+
+ASTNode *parse_return_stmt(Parser *parser) {
+  parser->current_token = next_token(&parser->scanner); // consume 'return'
+  ASTNode *expr = parse_expr(parser);
+
+  if (parser->current_token.type != TOK_SEMICOLON) {
+    report(parser->current_token.location, "expected ';' after return statement.", 0);
+  }
+
+  parser->current_token = next_token(&parser->scanner); // consume ';'
+
+  return new_return_node(expr);
+}
+
+ASTNode *parse_primary(Parser *parser) {
   // @TODO: add array and struct literals
   if (parser->current_token.type == TOK_NUMBER) {
     if (strchr(parser->current_token.text, '.') != NULL) {
@@ -294,6 +359,15 @@ ASTNode *parse_expr(Parser *parser) {
     strncpy(ident_name, parser->current_token.text, sizeof(ident_name));
     parser->current_token = next_token(&parser->scanner);
     return new_ident_node(ident_name);
+  } else if (parser->current_token.type == TOK_LPAREN) {
+    parser->current_token = next_token(&parser->scanner);
+    ASTNode *expr = parse_expr(parser);
+    if (!expr)
+      return NULL;
+    if (parser->current_token.type != TOK_RPAREN)
+      return report(parser->current_token.location, "expected ')'.", 0);
+    parser->current_token = next_token(&parser->scanner);
+    return expr;
   } else {
     char expr[128];
     sprintf(expr, "unexpected token in expression: %s", parser->current_token.text);
@@ -337,6 +411,10 @@ ASTNode *parse_var_decl(Parser *parser) {
 }
 
 ASTNode *parse_stmt(Parser *parser) {
+  if (parser->current_token.type == TOK_RETURN) {
+    return parse_return_stmt(parser);
+  }
+
   if (parser->current_token.type == TOK_I8 || parser->current_token.type == TOK_I16 || parser->current_token.type == TOK_I32 ||
       parser->current_token.type == TOK_I64 || parser->current_token.type == TOK_U8 || parser->current_token.type == TOK_U16 ||
       parser->current_token.type == TOK_U32 || parser->current_token.type == TOK_U64 || parser->current_token.type == TOK_F32 ||
