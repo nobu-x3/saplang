@@ -170,25 +170,41 @@ void test_FunctionDeclaration(void) {
 //---------------------------------------------------------------------
 void test_CombinedDeclarations(void) {
 SETUP_TEST("i32 x = 42; "
-          "f64 y = 3.14; "
-          "const bool flag = true; "
-          "struct Point { i32 x; i32 y; }; "
-          "fn i32 add(i32 a, i32 b) { i32 result = a + b; return result; }");
-  const char *expected = "VarDecl: i32 x = ...\n"
-                         "VarDecl: f64 y = ...\n"
-                         "VarDecl: const bool flag = ...\n"
-                         "StructDecl: Point\n"
-                         "  FieldDecl: i32 x\n"
-                         "  FieldDecl: i32 y\n"
-                         "FuncDecl: add\n"
-                         "  Params:\n"
-                         "    ParamDecl: i32 a\n"
-                         "    ParamDecl: i32 b\n"
-                         "  Body:\n"
-                         "    VarDecl: i32 result = ...\n"
-                         "    Return:\n"
-                         "      Ident: result\n";
-
+          "const f64 y = 3.14; "
+          "bool flag = true; "
+          "i32 a;"
+          "struct Point { i32 x; i32 y; } "
+          "fn i32 add(i32 a, i32 b) {"
+          " i32 result = a + b * 2;"
+          " return result - 1;"
+          "}");
+  const char *expected =
+      "VarDecl:  i32 x:\n"
+      "  Literal Int: 42\n"
+      "VarDecl: const f64 y:\n"
+      "  Literal Float: 3.140000\n"
+      "VarDecl:  bool flag:\n"
+      "  Literal Bool: true\n"
+      "VarDecl:  i32 a\n"
+      "StructDecl: Point\n"
+      "  FieldDecl: i32 x\n"
+      "  FieldDecl: i32 y\n"
+      "FuncDecl: add\n"
+      "  Params:\n"
+      "    ParamDecl: i32 a\n"
+      "    ParamDecl: i32 b\n"
+      "  Body:\n"
+      "    Block with 2 statement(s):\n"
+      "      VarDecl:  i32 result:\n"
+      "        Binary Expression: +\n"
+      "          Ident: a\n"
+      "          Binary Expression: *\n"
+      "            Ident: b\n"
+      "            Literal Int: 2\n"
+      "      Return:\n"
+      "        Binary Expression: -\n"
+      "          Ident: result\n"
+      "          Literal Int: 1\n";
   TEST_ASSERT_EQUAL_STRING(expected, output);
   free(output);
 }
