@@ -71,6 +71,7 @@ typedef struct ASTNode {
     struct {
       struct ASTNode **statements;
       int count;
+      int capacity;
     } block;
     // Literal expression: integer, float, or bool
     struct {

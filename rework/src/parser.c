@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "scanner.h"
 #include "util.h"
+#include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -173,6 +174,16 @@ ASTNode *new_var_decl_node(const char *type_name, const char *name, int is_const
   return node;
 }
 
+ASTNode *new_block_node(ASTNode **stmts, int count, int capacity) {
+  ASTNode *node = new_ast_node(AST_BLOCK);
+  if (!node)
+    return NULL;
+  node->data.block.statements = stmts;
+  node->data.block.count = count;
+  node->data.block.capacity = capacity;
+  return node;
+}
+
 ASTNode *new_param_decl_node(const char *type_name, const char *name) {
   ASTNode *node = new_ast_node(AST_PARAM_DECL);
   if (!node)
@@ -325,6 +336,36 @@ ASTNode *parse_var_decl(Parser *parser) {
   return new_var_decl_node(type_name, var_name, is_const, init_expr);
 }
 
+ASTNode *parse_stmt(Parser *parser) {
+  if (parser->current_token.type == TOK_I8 || parser->current_token.type == TOK_I16 || parser->current_token.type == TOK_I32 ||
+      parser->current_token.type == TOK_I64 || parser->current_token.type == TOK_U8 || parser->current_token.type == TOK_U16 ||
+      parser->current_token.type == TOK_U32 || parser->current_token.type == TOK_U64 || parser->current_token.type == TOK_F32 ||
+      parser->current_token.type == TOK_F64 || parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_IDENTIFIER) {
+    // peek ahead
+    // @TODO: redo this when reworking scanner to work with indices
+    char *save = parser->scanner.source.buffer;
+    Token temp = parser->current_token;
+    char type_name[64];
+    parse_type_name(parser, type_name);
+    if (parser->current_token.type == TOK_IDENTIFIER) {
+      // most likely var decl, restore state and reparse
+      parser->scanner.source.buffer = save;
+      parser->current_token = temp;
+      return parse_var_decl(parser);
+    }
+    // restore and parse expression
+    parser->scanner.source.buffer = save;
+    parser->current_token = temp;
+  }
+
+  ASTNode *expr = parse_expr(parser);
+  if (parser->current_token.type != TOK_SEMICOLON) {
+    return report(parser->current_token.location, "expected ';' after expression statement.", 0);
+  }
+  parser->current_token = next_token(&parser->scanner);
+  return expr;
+}
+
 // <fieldDecl>
 // ::= <type> <identifier> ;
 ASTNode *parse_field_declaration(Parser *parser) {
@@ -425,7 +466,46 @@ ASTNode *parse_parameter_list(Parser *parser) {
 }
 
 // @TODO: implement
-ASTNode *parse_block(Parser *parser) { return NULL; }
+// <block>
+// ::= '{' (<statement>)* '}'
+ASTNode *parse_block(Parser *parser) {
+  if (parser->current_token.type != TOK_LCURLY) {
+    return report(parser->current_token.location, "expected '{' to start block.", 0);
+  }
+  parser->current_token = next_token(&parser->scanner); // consume '{'
+
+  int capacity = 8, count = 0;
+  ASTNode **stmts = malloc(capacity * sizeof(ASTNode *));
+  assert(stmts);
+
+  while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
+    ASTNode *stmt = parse_stmt(parser);
+    if (!stmt) {
+      for (int i = 0; i < capacity; ++i) {
+        free(stmts[i]);
+      }
+      free(stmts);
+      return NULL;
+    }
+    if (count >= capacity) {
+      capacity *= 2;
+      stmts = realloc(stmts, capacity * sizeof(ASTNode *));
+      assert(stmts);
+    }
+    stmts[count++] = stmt;
+  }
+
+  if (parser->current_token.type != TOK_RCURLY) {
+    for (int i = 0; i < capacity; ++i) {
+      free(stmts[i]);
+    }
+    free(stmts);
+    return report(parser->current_token.location, "expected '}' to end the block.", 0);
+  }
+
+  parser->current_token = next_token(&parser->scanner);
+  return new_block_node(stmts, count, capacity);
+}
 
 // <functionDecl>
 // ::= <genericFuncDecl>

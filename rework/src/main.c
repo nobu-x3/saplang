@@ -10,10 +10,11 @@ int main() {
                       "bool flag = true; "
                       "i32 a;"
                       "struct Point { i32 x; i32 y; } "
-      /* "fn i32 add(i32 a, i32 b) {" */
-      /* " i32 result = a + b;" */
-      /* " return result;" */
-      /* "}"*/;
+                      "fn i32 add(i32 a, i32 b) {"
+                      /* " i32 result = a + b;" */
+                      " i32 result = a;"
+                      " return result;"
+                      "}";
   const char *path = "test";
 
   Scanner scanner;
@@ -23,6 +24,8 @@ int main() {
   CHK(parser_init(&parser, scanner, NULL));
 
   ASTNode *ast = parse_input(&parser);
+  if (!ast)
+    return -1;
 
   printf("\n --- AST ---\n");
   CHK(ast_print(ast, 0, NULL));
