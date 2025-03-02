@@ -1,4 +1,5 @@
 #pragma once
+#include "util.h"
 #include <stdlib.h>
 
 typedef enum {
@@ -28,30 +29,25 @@ typedef enum {
   TOK_BOOL,
   TOK_TRUE,
   TOK_FALSE,
+  TOKENS_BUILTIN_TYPE_BEGIN = TOK_I8,
+  TOKENS_BUILTIN_TYPE_END = TOK_BOOL,
 } TokenType;
 
 typedef struct {
   TokenType type;
   char text[64];
+  SourceLocation location;
 } Token;
 
 typedef struct {
-  const char *path;
-  const char *buffer;
-} SourceFile;
-
-typedef struct {
-  const char *path;
-  int line;
-  int col;
-  size_t id;
-} SourceLocation;
-
-typedef struct {
-  SourceFile *source;
+  SourceFile source;
   size_t id;
   int line;
   int col;
 } Scanner;
+
+CompilerResult scanner_init(Scanner* scanner, const char* path, const char* input);
+
+CompilerResult scanner_deinit(Scanner* scanner);
 
 Token next_token(Scanner *scanner);

@@ -4,7 +4,7 @@
       "adapter": "CodeLLDB",
       "configuration": {
         "request": "launch",
-        "program": "${workspaceFolder}/build/bin/saplang_tests",
+        "program": "${workspaceFolder}/build/bin/saplangc",
         "args": [],
         "cwd": "${workspaceFolder}",
         "environment": [],
