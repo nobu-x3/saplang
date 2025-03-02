@@ -56,6 +56,8 @@ Token next_token(Scanner *scanner) {
       current_token.type = TOK_FALSE;
     else if (strcmp(current_token.text, "const") == 0)
       current_token.type = TOK_CONST;
+    else if (strcmp(current_token.text, "return") == 0)
+      current_token.type = TOK_RETURN;
     else {
       current_token.type = TOK_IDENTIFIER;
     }
@@ -115,6 +117,26 @@ Token next_token(Scanner *scanner) {
     strcpy(current_token.text, ",");
     scanner->source.buffer++;
     break;
+  case '+':
+    current_token.type = TOK_PLUS;
+    strcpy(current_token.text, "+");
+    scanner->source.buffer++;
+    break;
+  case '-':
+    current_token.type = TOK_MINUS;
+    strcpy(current_token.text, "-");
+    scanner->source.buffer++;
+    break;
+  case '*':
+    current_token.type = TOK_ASTERISK;
+    strcpy(current_token.text, "*");
+    scanner->source.buffer++;
+    break;
+  case '/':
+    current_token.type = TOK_SLASH;
+    strcpy(current_token.text, "/");
+    scanner->source.buffer++;
+    break;
   default:
     current_token.type = TOK_UNKNOWN;
     current_token.text[0] = *scanner->source.buffer;
@@ -151,12 +173,12 @@ CompilerResult scanner_init(Scanner *scanner, const char *path, const char *inpu
 }
 
 CompilerResult scanner_deinit(Scanner *scanner) {
-    if(!scanner)
-        return RESULT_PASSED_NULL_PTR;
+  if (!scanner)
+    return RESULT_PASSED_NULL_PTR;
 
-    // @TODO: instead of moving the buffer ptr when getting tokens, increment the index, otherwise leaking memory
-    /* free(scanner->source.buffer); */
-    free(scanner->source.path);
+  // @TODO: instead of moving the buffer ptr when getting tokens, increment the index, otherwise leaking memory
+  /* free(scanner->source.buffer); */
+  free(scanner->source.path);
 
-    return RESULT_SUCCESS;
+  return RESULT_SUCCESS;
 }

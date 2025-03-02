@@ -11,8 +11,7 @@ int main() {
                       "i32 a;"
                       "struct Point { i32 x; i32 y; } "
                       "fn i32 add(i32 a, i32 b) {"
-                      /* " i32 result = a + b;" */
-                      " i32 result = a;"
+                      " i32 result = a + b;"
                       " return result;"
                       "}";
   const char *path = "test";

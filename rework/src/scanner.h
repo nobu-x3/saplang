@@ -15,6 +15,11 @@ typedef enum {
   TOK_RPAREN,     // ')'
   TOK_COMMA,      // ','
   TOK_CONST,      // 'const'
+  TOK_RETURN, // 'return'
+  TOK_PLUS,
+  TOK_MINUS,
+  TOK_ASTERISK,
+  TOK_SLASH,
   TOK_EOF,
   TOK_UNKNOWN,
   TOK_I8,
