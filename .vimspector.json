@@ -1,6 +1,6 @@
 {
   "configurations": {
-    "Tests": {
+    "Launch": {
       "adapter": "CodeLLDB",
       "configuration": {
         "request": "launch",
@@ -13,13 +13,26 @@
         "targetArchitecture": "x86_64"
       }
     },
-    "Launch": {
+    "Complie & Run": {
       "adapter": "CodeLLDB",
       "configuration": {
         "request": "launch",
         "program": "${workspaceFolder}/build/bin/compiler",
         "args": ["test.sl", "-o"," test", "-dbg", "-i", "incl"],
         "cwd": "${workspaceFolder}/build/bin",
+        "environment": [],
+        "stopOnEntry": false,
+        "terminal": "integrated",
+        "targetArchitecture": "x86_64"
+      }
+    },
+    "Tests": {
+      "adapter": "CodeLLDB",
+      "configuration": {
+        "request": "launch",
+        "program": "${workspaceFolder}/build/bin/saplangc_tests",
+        "args": [],
+        "cwd": "${workspaceFolder}",
         "environment": [],
         "stopOnEntry": false,
         "terminal": "integrated",
