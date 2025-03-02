@@ -129,8 +129,8 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
       print(string, "Ident: %s\n", node->data.ident.name);
       break;
     case AST_RETURN:
-      print(string, "Return: ");
-      ast_print(node->data.ret.return_expr, 0, string);
+      print(string, "Return:\n");
+      ast_print(node->data.ret.return_expr, indent + 1, string);
       break;
     case AST_BINARY_EXPR:
       print(string, "Binary Expression: %c\n", node->data.binary_op.op);
@@ -290,7 +290,7 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
     break;
   default: {
     char msg[128];
-    sprintf(msg, "expected type name, get '%s'.", parser->current_token.text);
+    sprintf(msg, "expected type name, got '%s'.", parser->current_token.text);
     report(parser->current_token.location, msg, 0);
     return RESULT_PARSING_ERROR;
   }
@@ -317,7 +317,7 @@ ASTNode *parse_expr(Parser *parser) {
   while (parser->current_token.type == TOK_MINUS || parser->current_token.type == TOK_PLUS) {
     char op = parser->current_token.text[0];
     parser->current_token = next_token(&parser->scanner);
-    ASTNode *right = parse_primary(parser);
+    ASTNode *right = parse_term(parser);
     node = new_binary_expr_node(op, node, right);
   }
   return node;
