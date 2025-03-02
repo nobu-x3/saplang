@@ -9,3 +9,4 @@ build
 .vs
 CMakeSettings.json
 .vscode
+rework_tests/.runners
