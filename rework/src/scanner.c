@@ -1,25 +1,25 @@
 #include "scanner.h"
+#include "util.h"
 #include <ctype.h>
 #include <string.h>
 
 Token next_token(Scanner *scanner) {
-  const char *input = scanner->source->buffer;
   Token current_token = {};
   // Skip whitespace.
-  while (*input && isspace(*input))
-    input++;
+  while (*scanner->source.buffer && isspace(*scanner->source.buffer))
+    scanner->source.buffer++;
 
-  if (*input == '\0') {
+  if (*scanner->source.buffer == '\0') {
     current_token.type = TOK_EOF;
     return current_token;
   }
 
   // If letter: read identifier/keyword.
-  if (isalpha(*input)) {
+  if (isalpha(*scanner->source.buffer)) {
     int i = 0;
-    while (*input && (isalnum(*input) || *input == '_')) {
-      current_token.text[i++] = *input;
-      input++;
+    while (*scanner->source.buffer && (isalnum(*scanner->source.buffer) || *scanner->source.buffer == '_')) {
+      current_token.text[i++] = *scanner->source.buffer;
+      scanner->source.buffer++;
     }
     current_token.text[i] = '\0';
 
@@ -61,15 +61,15 @@ Token next_token(Scanner *scanner) {
   }
 
   // If digit: read a number (supporting potential decimal point).
-  if (isdigit(*input)) {
+  if (isdigit(*scanner->source.buffer)) {
     int i = 0;
     int hasDot = 0;
-    while (*input && (isdigit(*input) || (*input == '.' && !hasDot))) {
-      if (*input == '.') {
+    while (*scanner->source.buffer && (isdigit(*scanner->source.buffer) || (*scanner->source.buffer == '.' && !hasDot))) {
+      if (*scanner->source.buffer == '.') {
         hasDot = 1;
       }
-      current_token.text[i++] = *input;
-      input++;
+      current_token.text[i++] = *scanner->source.buffer;
+      scanner->source.buffer++;
     }
     current_token.text[i] = '\0';
     current_token.type = TOK_NUMBER;
@@ -77,48 +77,84 @@ Token next_token(Scanner *scanner) {
   }
 
   // Single-character tokens.
-  switch (*input) {
+  switch (*scanner->source.buffer) {
   case '=':
     current_token.type = TOK_ASSIGN;
     strcpy(current_token.text, "=");
-    input++;
+    scanner->source.buffer++;
     break;
   case ';':
     current_token.type = TOK_SEMICOLON;
     strcpy(current_token.text, ";");
-    input++;
+    scanner->source.buffer++;
     break;
   case '{':
     current_token.type = TOK_LCURLY;
     strcpy(current_token.text, "{");
-    input++;
+    scanner->source.buffer++;
     break;
   case '}':
     current_token.type = TOK_RCURLY;
     strcpy(current_token.text, "}");
-    input++;
+    scanner->source.buffer++;
     break;
   case '(':
     current_token.type = TOK_LPAREN;
     strcpy(current_token.text, "(");
-    input++;
+    scanner->source.buffer++;
     break;
   case ')':
     current_token.type = TOK_RPAREN;
     strcpy(current_token.text, ")");
-    input++;
+    scanner->source.buffer++;
     break;
   case ',':
     current_token.type = TOK_COMMA;
     strcpy(current_token.text, ",");
-    input++;
+    scanner->source.buffer++;
     break;
   default:
     current_token.type = TOK_UNKNOWN;
-    current_token.text[0] = *input;
+    current_token.text[0] = *scanner->source.buffer;
     current_token.text[1] = '\0';
-    input++;
+    scanner->source.buffer++;
     break;
   }
   return current_token;
+}
+
+CompilerResult scanner_init(Scanner *scanner, const char *path, const char *input) {
+  if (!scanner)
+    return RESULT_PASSED_NULL_PTR;
+
+  memset(scanner, 0, sizeof(Scanner));
+
+  SourceFile src_file = {0};
+
+  int path_len = strlen(path);
+  src_file.path = malloc(path_len);
+  if (!src_file.path)
+    return RESULT_MEMORY_ERROR;
+  strcpy(src_file.path, path);
+
+  int input_lenght = strlen(input);
+  src_file.buffer = malloc(input_lenght);
+  if (!src_file.buffer)
+    return RESULT_MEMORY_ERROR;
+  strcpy(src_file.buffer, input);
+
+  scanner->source = src_file;
+
+  return RESULT_SUCCESS;
+}
+
+CompilerResult scanner_deinit(Scanner *scanner) {
+    if(!scanner)
+        return RESULT_PASSED_NULL_PTR;
+
+    // @TODO: instead of moving the buffer ptr when getting tokens, increment the index, otherwise leaking memory
+    /* free(scanner->source.buffer); */
+    free(scanner->source.path);
+
+    return RESULT_SUCCESS;
 }

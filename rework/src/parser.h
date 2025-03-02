@@ -1,5 +1,6 @@
 #pragma once
 #include "scanner.h"
+#include "util.h"
 
 typedef enum {
   SYMB_VAR,
@@ -23,24 +24,14 @@ typedef struct Symbol {
   char name[64];
   SymbolKind kind;
   char type[64];
-  unsigned long value;   // initial value
-  Field *fields;         // for structs
-  Parameter *parameters; // for fns
   struct Symbol *next;
 } Symbol;
 
 typedef struct Parser {
-  Scanner *scanner;
+  Scanner scanner;
   Symbol *symbol_table;
   Token current_token;
 } Parser;
-
-void add_var_symbol(Symbol *table, const char *name, const char *type, unsigned long value);
-void add_struct_symbol(Symbol *table, const char *name, Field *fields);
-void add_fn_symbol(Symbol *table, const char *name, const char *return_type, Parameter *params);
-void free_parser(Parser *parser);
-
-void print_symbol_table(Symbol *table, char* string);
 
 typedef enum { AST_VAR_DECL, AST_STRUCT_DECL, AST_FUNC_DECL, AST_FIELD_DECL, AST_PARAM_DECL, AST_BLOCK, AST_EXPR_LITERAL, AST_EXPR_IDENT } ASTNodeType;
 
@@ -53,23 +44,24 @@ typedef struct ASTNode {
       char type_name[64];
       char name[64];
       struct ASTNode *init; // Expression node
-    } varDecl;
+      int is_const;
+    } var_decl;
     // Struct declaration: struct Name { fields }
     struct {
       char name[64];
       struct ASTNode *fields; // Linked list of field declarations
-    } structDecl;
+    } struct_decl;
     // Function declaration: func name(params) { body }
     struct {
       char name[64];
       struct ASTNode *params; // Linked list of parameter declarations
       struct ASTNode *body;   // Block node
-    } funcDecl;
+    } func_decl;
     // Field declaration inside struct: <type> name;
     struct {
       char type_name[64];
       char name[64];
-    } fieldDecl;
+    } field_decl;
     // Parameter declaration: <type> name
     struct {
       char type_name[64];
@@ -94,3 +86,13 @@ typedef struct ASTNode {
     } ident;
   } data;
 } ASTNode;
+
+CompilerResult parser_init(Parser* parser, Scanner scanner, Symbol* optional_table);
+
+CompilerResult parser_deinit(Parser *parser);
+
+CompilerResult symbol_table_print(Symbol *table, char* string);
+
+ASTNode* parse_input();
+
+CompilerResult ast_print(ASTNode *node, int indent, char* string);
