@@ -14,6 +14,7 @@ typedef enum {
   TOK_LPAREN,     // '('
   TOK_RPAREN,     // ')'
   TOK_COMMA,      // ','
+  TOK_CONST,      // 'const'
   TOK_EOF,
   TOK_UNKNOWN,
   TOK_I8,
@@ -46,8 +47,8 @@ typedef struct {
   int col;
 } Scanner;
 
-CompilerResult scanner_init(Scanner* scanner, const char* path, const char* input);
+CompilerResult scanner_init(Scanner *scanner, const char *path, const char *input);
 
-CompilerResult scanner_deinit(Scanner* scanner);
+CompilerResult scanner_deinit(Scanner *scanner);
 
 Token next_token(Scanner *scanner);

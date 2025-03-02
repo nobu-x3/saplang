@@ -73,9 +73,20 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
       print(string, "  ");
     }
     switch (node->type) {
-    case AST_VAR_DECL:
-      print(string, "VarDecl: %s %s = ...\n", node->data.var_decl.type_name, node->data.var_decl.name);
+    case AST_VAR_DECL: {
+      char is_const[6] = {0};
+      if (node->data.var_decl.is_const) {
+        strncpy(is_const, "const", sizeof(is_const));
+      }
+      print(string, "VarDecl: %s %s %s", is_const, node->data.var_decl.type_name, node->data.var_decl.name);
+      if (node->data.var_decl.init) {
+        print(string, " = ");
+        ast_print(node->data.var_decl.init, 0, string);
+      } else {
+        print(string, "\n");
+      }
       break;
+    }
     case AST_STRUCT_DECL:
       print(string, "StructDecl: %s\n", node->data.struct_decl.name);
       ast_print(node->data.struct_decl.fields, indent + 1, string);
@@ -181,6 +192,44 @@ ASTNode *new_func_decl_node(const char *name, ASTNode *params, ASTNode *body) {
   return node;
 }
 
+ASTNode *new_literal_node_long(long value) {
+  ASTNode *node = new_ast_node(AST_EXPR_LITERAL);
+  if (!node)
+    return NULL;
+  node->data.literal.long_value = value;
+  node->data.literal.is_bool = 0;
+  node->data.literal.is_float = 0;
+  return node;
+}
+
+ASTNode *new_literal_node_float(double value) {
+  ASTNode *node = new_ast_node(AST_EXPR_LITERAL);
+  if (!node)
+    return NULL;
+  node->data.literal.float_value = value;
+  node->data.literal.is_bool = 0;
+  node->data.literal.is_float = 1;
+  return node;
+}
+
+ASTNode *new_literal_node_bool(int value) {
+  ASTNode *node = new_ast_node(AST_EXPR_LITERAL);
+  if (!node)
+    return NULL;
+  node->data.literal.bool_value = value;
+  node->data.literal.is_bool = 1;
+  node->data.literal.is_float = 0;
+  return node;
+}
+
+ASTNode *new_ident_node(const char *name) {
+  ASTNode *node = new_ast_node(AST_EXPR_IDENT);
+  if (!node)
+    return NULL;
+  strncpy(node->data.ident.name, name, sizeof(node->data.ident.name));
+  return node;
+}
+
 CompilerResult parse_type_name(Parser *parser, char *buffer) {
   switch (parser->current_token.type) {
   case TOK_I8:
@@ -209,6 +258,71 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
   }
   }
   return RESULT_SUCCESS;
+}
+
+ASTNode *parse_expr(Parser *parser) {
+  // @TODO: add array and struct literals
+  if (parser->current_token.type == TOK_NUMBER) {
+    if (strchr(parser->current_token.text, '.') != NULL) {
+      double value = atof(parser->current_token.text);
+      parser->current_token = next_token(&parser->scanner);
+      return new_literal_node_float(value);
+    } else {
+      long value = atol(parser->current_token.text);
+      parser->current_token = next_token(&parser->scanner);
+      return new_literal_node_long(value);
+    }
+  } else if (parser->current_token.type == TOK_TRUE) {
+    parser->current_token = next_token(&parser->scanner);
+    return new_literal_node_bool(1);
+  } else if (parser->current_token.type == TOK_FALSE) {
+    parser->current_token = next_token(&parser->scanner);
+    return new_literal_node_bool(0);
+  } else if (parser->current_token.type == TOK_IDENTIFIER) {
+    char ident_name[64];
+    strncpy(ident_name, parser->current_token.text, sizeof(ident_name));
+    parser->current_token = next_token(&parser->scanner);
+    return new_ident_node(ident_name);
+  } else {
+    char expr[128];
+    sprintf(expr, "unexpected token in expression: %s", parser->current_token.text);
+    return report(parser->current_token.location, expr, 0);
+  }
+}
+
+// <varDecl>
+// ::= ('const')? <type> <identifier> ('=' <expression>)? ';'
+ASTNode *parse_var_decl(Parser *parser) {
+  int is_const = 0;
+  if (parser->current_token.type == TOK_CONST) {
+    is_const = 1;
+    parser->current_token = next_token(&parser->scanner); // consume 'const'
+  }
+
+  char type_name[64];
+  parse_type_name(parser, type_name);
+
+  if (parser->current_token.type != TOK_IDENTIFIER) {
+    return report(parser->current_token.location, "expected identifier in variable declaration.", 0);
+  }
+
+  char var_name[64];
+  strncpy(var_name, parser->current_token.text, sizeof(var_name));
+  parser->current_token = next_token(&parser->scanner); // consume identifier
+
+  ASTNode *init_expr = NULL;
+  if (parser->current_token.type == TOK_ASSIGN) {
+    parser->current_token = next_token(&parser->scanner); // consume '='
+    init_expr = parse_expr(parser);
+  }
+
+  if (parser->current_token.type != TOK_SEMICOLON)
+    return report(parser->current_token.location, "expected ';' after variable declaration.", 0);
+
+  parser->current_token = next_token(&parser->scanner); // consume ';'
+
+  add_symbol(&parser->symbol_table, var_name, SYMB_VAR, type_name);
+  return new_var_decl_node(type_name, var_name, is_const, init_expr);
 }
 
 // <fieldDecl>
@@ -365,9 +479,9 @@ ASTNode *parse_global_decl(Parser *parser) {
   } else if (parser->current_token.type == TOK_FUNC) {
     return parse_function_decl(parser);
   } // @TODO: extern blocks, enums
-  /* else { */
-  /*   return parse_var_decl(parser); */
-  /* } */
+  else {
+    return parse_var_decl(parser);
+  }
   return NULL;
 }
 

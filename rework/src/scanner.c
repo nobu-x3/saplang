@@ -54,6 +54,8 @@ Token next_token(Scanner *scanner) {
       current_token.type = TOK_TRUE;
     else if (strcmp(current_token.text, "false") == 0)
       current_token.type = TOK_FALSE;
+    else if (strcmp(current_token.text, "const") == 0)
+      current_token.type = TOK_CONST;
     else {
       current_token.type = TOK_IDENTIFIER;
     }
