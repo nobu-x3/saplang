@@ -27,4 +27,14 @@ if(BUILD_OLD)
 endif(BUILD_OLD)
 
 include_directories(rework/src "${LLVM_INCLUDE_DIR}")
+
+if(BUILD_TESTS)
+    enable_testing()
+    add_compile_definitions(BUILD_TESTS)
+endif(BUILD_TESTS)
+
 add_subdirectory(rework)
+
+if(BUILD_TESTS)
+    add_subdirectory(rework_tests)
+endif(BUILD_TESTS)
