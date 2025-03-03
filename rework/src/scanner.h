@@ -50,6 +50,7 @@ typedef struct {
   size_t id;
   int line;
   int col;
+  int is_reading_string;
 } Scanner;
 
 CompilerResult scanner_init(Scanner *scanner, const char *path, const char *input);
