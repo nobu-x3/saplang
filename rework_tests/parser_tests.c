@@ -166,7 +166,7 @@ void test_FunctionDeclaration(void) {
 // Input includes variable declarations (with various types), a struct, and a function.
 //---------------------------------------------------------------------
 void test_CombinedDeclarations(void) {
-  SETUP_TEST("i32 x = 42; "
+  SETUP_TEST("i32 x = 42;\n"
              "const f64 y = 3.14; "
              "bool flag = true; "
              "i32 a;"

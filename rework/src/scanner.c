@@ -7,13 +7,22 @@
 
 #define _INDEX scanner->id
 
+char eat_next_char(Scanner *scanner) {
+  ++scanner->col;
+  if (_INPUT[_INDEX] == '\n' && !scanner->is_reading_string) {
+    ++scanner->line;
+    scanner->col = 0;
+  }
+  return _INPUT[_INDEX++];
+}
+
 Token next_token(Scanner *scanner) {
   Token current_token = {0};
   current_token.location.path = scanner->source.path;
   // Skip whitespace.
   while (_INPUT[_INDEX] && isspace(_INPUT[_INDEX])) {
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
   }
 
   if (_INPUT[_INDEX] == '\0') {
@@ -26,8 +35,7 @@ Token next_token(Scanner *scanner) {
     int i = 0;
     while (_INPUT[_INDEX] && (isalnum(_INPUT[_INDEX]) || _INPUT[_INDEX] == '_')) {
       current_token.text[i++] = _INPUT[_INDEX];
-      ++_INDEX;
-      ++scanner->col;
+      eat_next_char(scanner);
     }
     current_token.text[i] = '\0';
 
@@ -84,8 +92,8 @@ Token next_token(Scanner *scanner) {
         hasDot = 1;
       }
       current_token.text[i++] = _INPUT[_INDEX];
-      ++_INDEX;
-      ++scanner->col;
+      eat_next_char(scanner);
+
     }
     current_token.text[i] = '\0';
     current_token.type = TOK_NUMBER;
@@ -100,75 +108,75 @@ Token next_token(Scanner *scanner) {
   case '=':
     current_token.type = TOK_ASSIGN;
     strcpy(current_token.text, "=");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case ';':
     current_token.type = TOK_SEMICOLON;
     strcpy(current_token.text, ";");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case '{':
     current_token.type = TOK_LCURLY;
     strcpy(current_token.text, "{");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case '}':
     current_token.type = TOK_RCURLY;
     strcpy(current_token.text, "}");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case '(':
     current_token.type = TOK_LPAREN;
     strcpy(current_token.text, "(");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case ')':
     current_token.type = TOK_RPAREN;
     strcpy(current_token.text, ")");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case ',':
     current_token.type = TOK_COMMA;
     strcpy(current_token.text, ",");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case '+':
     current_token.type = TOK_PLUS;
     strcpy(current_token.text, "+");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case '-':
     current_token.type = TOK_MINUS;
     strcpy(current_token.text, "-");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case '*':
     current_token.type = TOK_ASTERISK;
     strcpy(current_token.text, "*");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   case '/':
     current_token.type = TOK_SLASH;
     strcpy(current_token.text, "/");
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   default:
     current_token.type = TOK_UNKNOWN;
     current_token.text[0] = _INPUT[_INDEX];
     current_token.text[1] = '\0';
-    ++_INDEX;
-    ++scanner->col;
+    eat_next_char(scanner);
+
     break;
   }
   current_token.location.id = _INDEX;
