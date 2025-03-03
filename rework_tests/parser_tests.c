@@ -46,14 +46,14 @@ static char *capture_ast_output(ASTNode *ast) {
   return buffer;
 }
 
-#define SETUP_TEST(input_string) \
-  const char *input = input_string; \
-  const char *path = "test"; \
-  Scanner scanner; \
-  scanner_init(&scanner, path, input); \
-  Parser parser; \
-  parser_init(&parser, scanner, NULL); \
-  ASTNode *ast = parse_input(&parser); \
+#define SETUP_TEST(input_string)                                                                                                                               \
+  const char *input = input_string;                                                                                                                            \
+  char path[5] = "test\0";                                                                                                                                     \
+  Scanner scanner;                                                                                                                                             \
+  scanner_init(&scanner, path, input);                                                                                                                         \
+  Parser parser;                                                                                                                                               \
+  parser_init(&parser, scanner, NULL);                                                                                                                         \
+  ASTNode *ast = parse_input(&parser);                                                                                                                         \
   char *output = capture_ast_output(ast);
 
 //---------------------------------------------------------------------
@@ -65,11 +65,10 @@ static char *capture_ast_output(ASTNode *ast) {
 
 //---------------------------------------------------------------------
 void test_VariableDeclaration(void) {
-    SETUP_TEST(R"(i32 x = 42;)");
+  SETUP_TEST("i32 x = 42;");
 
-  const char *expected =
-      "VarDecl:  i32 x:\n"
-      "  Literal Int: 42\n";
+  const char *expected = "VarDecl:  i32 x:\n"
+                         "  Literal Int: 42\n";
   TEST_ASSERT_EQUAL_STRING(expected, output);
   free(output);
   parser_deinit(&parser);
@@ -88,14 +87,13 @@ void test_VariableDeclaration(void) {
 
 //---------------------------------------------------------------------
 void test_ArithmeticExpression(void) {
-  SETUP_TEST(R"(i32 x = 1 + 2 * 3;)");;
-  const char *expected =
-    "VarDecl:  i32 x:\n"
-    "  Binary Expression: +\n"
-    "    Literal Int: 1\n"
-    "    Binary Expression: *\n"
-    "      Literal Int: 2\n"
-    "      Literal Int: 3\n";
+  SETUP_TEST("i32 x = 1 + 2 * 3;");
+  const char *expected = "VarDecl:  i32 x:\n"
+                         "  Binary Expression: +\n"
+                         "    Literal Int: 1\n"
+                         "    Binary Expression: *\n"
+                         "      Literal Int: 2\n"
+                         "      Literal Int: 3\n";
 
   TEST_ASSERT_EQUAL_STRING(expected, output);
   free(output);
@@ -142,23 +140,22 @@ void test_StructDeclaration(void) {
 //---------------------------------------------------------------------
 void test_FunctionDeclaration(void) {
   SETUP_TEST("fn i32 add(i32 a, i32 b) { i32 result = a + b * 2; return result - 1; }");
-  const char *expected =
-      "FuncDecl: add\n"
-      "  Params:\n"
-      "    ParamDecl: i32 a\n"
-      "    ParamDecl: i32 b\n"
-      "  Body:\n"
-      "    Block with 2 statement(s):\n"
-      "      VarDecl:  i32 result:\n"
-      "        Binary Expression: +\n"
-      "          Ident: a\n"
-      "          Binary Expression: *\n"
-      "            Ident: b\n"
-      "            Literal Int: 2\n"
-      "      Return:\n"
-      "        Binary Expression: -\n"
-      "          Ident: result\n"
-      "          Literal Int: 1\n";
+  const char *expected = "FuncDecl: add\n"
+                         "  Params:\n"
+                         "    ParamDecl: i32 a\n"
+                         "    ParamDecl: i32 b\n"
+                         "  Body:\n"
+                         "    Block with 2 statement(s):\n"
+                         "      VarDecl:  i32 result:\n"
+                         "        Binary Expression: +\n"
+                         "          Ident: a\n"
+                         "          Binary Expression: *\n"
+                         "            Ident: b\n"
+                         "            Literal Int: 2\n"
+                         "      Return:\n"
+                         "        Binary Expression: -\n"
+                         "          Ident: result\n"
+                         "          Literal Int: 1\n";
 
   TEST_ASSERT_EQUAL_STRING(expected, output);
   free(output);
@@ -169,42 +166,41 @@ void test_FunctionDeclaration(void) {
 // Input includes variable declarations (with various types), a struct, and a function.
 //---------------------------------------------------------------------
 void test_CombinedDeclarations(void) {
-SETUP_TEST("i32 x = 42; "
-          "const f64 y = 3.14; "
-          "bool flag = true; "
-          "i32 a;"
-          "struct Point { i32 x; i32 y; } "
-          "fn i32 add(i32 a, i32 b) {"
-          " i32 result = a + b * 2;"
-          " return result - 1;"
-          "}");
-  const char *expected =
-      "VarDecl:  i32 x:\n"
-      "  Literal Int: 42\n"
-      "VarDecl: const f64 y:\n"
-      "  Literal Float: 3.140000\n"
-      "VarDecl:  bool flag:\n"
-      "  Literal Bool: true\n"
-      "VarDecl:  i32 a\n"
-      "StructDecl: Point\n"
-      "  FieldDecl: i32 x\n"
-      "  FieldDecl: i32 y\n"
-      "FuncDecl: add\n"
-      "  Params:\n"
-      "    ParamDecl: i32 a\n"
-      "    ParamDecl: i32 b\n"
-      "  Body:\n"
-      "    Block with 2 statement(s):\n"
-      "      VarDecl:  i32 result:\n"
-      "        Binary Expression: +\n"
-      "          Ident: a\n"
-      "          Binary Expression: *\n"
-      "            Ident: b\n"
-      "            Literal Int: 2\n"
-      "      Return:\n"
-      "        Binary Expression: -\n"
-      "          Ident: result\n"
-      "          Literal Int: 1\n";
+  SETUP_TEST("i32 x = 42; "
+             "const f64 y = 3.14; "
+             "bool flag = true; "
+             "i32 a;"
+             "struct Point { i32 x; i32 y; } "
+             "fn i32 add(i32 a, i32 b) {"
+             " i32 result = a + b * 2;"
+             " return result - 1;"
+             "}");
+  const char *expected = "VarDecl:  i32 x:\n"
+                         "  Literal Int: 42\n"
+                         "VarDecl: const f64 y:\n"
+                         "  Literal Float: 3.140000\n"
+                         "VarDecl:  bool flag:\n"
+                         "  Literal Bool: true\n"
+                         "VarDecl:  i32 a\n"
+                         "StructDecl: Point\n"
+                         "  FieldDecl: i32 x\n"
+                         "  FieldDecl: i32 y\n"
+                         "FuncDecl: add\n"
+                         "  Params:\n"
+                         "    ParamDecl: i32 a\n"
+                         "    ParamDecl: i32 b\n"
+                         "  Body:\n"
+                         "    Block with 2 statement(s):\n"
+                         "      VarDecl:  i32 result:\n"
+                         "        Binary Expression: +\n"
+                         "          Ident: a\n"
+                         "          Binary Expression: *\n"
+                         "            Ident: b\n"
+                         "            Literal Int: 2\n"
+                         "      Return:\n"
+                         "        Binary Expression: -\n"
+                         "          Ident: result\n"
+                         "          Literal Int: 1\n";
   TEST_ASSERT_EQUAL_STRING(expected, output);
   free(output);
 }

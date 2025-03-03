@@ -421,18 +421,18 @@ ASTNode *parse_stmt(Parser *parser) {
       parser->current_token.type == TOK_F64 || parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_IDENTIFIER) {
     // peek ahead
     // @TODO: redo this when reworking scanner to work with indices
-    char *save = parser->scanner.source.buffer;
+    int save = parser->scanner.id;
     Token temp = parser->current_token;
     char type_name[64];
     parse_type_name(parser, type_name);
     if (parser->current_token.type == TOK_IDENTIFIER) {
       // most likely var decl, restore state and reparse
-      parser->scanner.source.buffer = save;
+      parser->scanner.id = save;
       parser->current_token = temp;
       return parse_var_decl(parser);
     }
     // restore and parse expression
-    parser->scanner.source.buffer = save;
+    parser->scanner.id = save;
     parser->current_token = temp;
   }
 
@@ -543,7 +543,6 @@ ASTNode *parse_parameter_list(Parser *parser) {
   return param_list;
 }
 
-// @TODO: implement
 // <block>
 // ::= '{' (<statement>)* '}'
 ASTNode *parse_block(Parser *parser) {
@@ -649,6 +648,8 @@ ASTNode *parse_input(Parser *parser) {
   parser->current_token = next_token(&parser->scanner);
   while (parser->current_token.type != TOK_EOF) {
     ASTNode *decl = parse_global_decl(parser);
+    if(!decl)
+        return NULL;
     if (!global_list) {
       global_list = last = decl;
     } else {

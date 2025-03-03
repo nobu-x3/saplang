@@ -3,23 +3,31 @@
 #include <ctype.h>
 #include <string.h>
 
-Token next_token(Scanner *scanner) {
-  Token current_token = {};
-  // Skip whitespace.
-  while (*scanner->source.buffer && isspace(*scanner->source.buffer))
-    scanner->source.buffer++;
+#define _INPUT scanner->source.buffer
 
-  if (*scanner->source.buffer == '\0') {
+#define _INDEX scanner->id
+
+Token next_token(Scanner *scanner) {
+  Token current_token = {0};
+  current_token.location.path = scanner->source.path;
+  // Skip whitespace.
+  while (_INPUT[_INDEX] && isspace(_INPUT[_INDEX])) {
+    ++_INDEX;
+    ++scanner->col;
+  }
+
+  if (_INPUT[_INDEX] == '\0') {
     current_token.type = TOK_EOF;
     return current_token;
   }
 
   // If letter: read identifier/keyword.
-  if (isalpha(*scanner->source.buffer)) {
+  if (isalpha(_INPUT[_INDEX])) {
     int i = 0;
-    while (*scanner->source.buffer && (isalnum(*scanner->source.buffer) || *scanner->source.buffer == '_')) {
-      current_token.text[i++] = *scanner->source.buffer;
-      scanner->source.buffer++;
+    while (_INPUT[_INDEX] && (isalnum(_INPUT[_INDEX]) || _INPUT[_INDEX] == '_')) {
+      current_token.text[i++] = _INPUT[_INDEX];
+      ++_INDEX;
+      ++scanner->col;
     }
     current_token.text[i] = '\0';
 
@@ -61,89 +69,111 @@ Token next_token(Scanner *scanner) {
     else {
       current_token.type = TOK_IDENTIFIER;
     }
+    current_token.location.id = _INDEX;
+    current_token.location.col = scanner->col;
+    current_token.location.line = scanner->line;
     return current_token;
   }
 
   // If digit: read a number (supporting potential decimal point).
-  if (isdigit(*scanner->source.buffer)) {
+  if (isdigit(_INPUT[_INDEX])) {
     int i = 0;
     int hasDot = 0;
-    while (*scanner->source.buffer && (isdigit(*scanner->source.buffer) || (*scanner->source.buffer == '.' && !hasDot))) {
-      if (*scanner->source.buffer == '.') {
+    while (_INPUT[_INDEX] && (isdigit(_INPUT[_INDEX]) || (_INPUT[_INDEX] == '.' && !hasDot))) {
+      if (_INPUT[_INDEX] == '.') {
         hasDot = 1;
       }
-      current_token.text[i++] = *scanner->source.buffer;
-      scanner->source.buffer++;
+      current_token.text[i++] = _INPUT[_INDEX];
+      ++_INDEX;
+      ++scanner->col;
     }
     current_token.text[i] = '\0';
     current_token.type = TOK_NUMBER;
+    current_token.location.id = _INDEX;
+    current_token.location.col = scanner->col;
+    current_token.location.line = scanner->line;
     return current_token;
   }
 
   // Single-character tokens.
-  switch (*scanner->source.buffer) {
+  switch (_INPUT[_INDEX]) {
   case '=':
     current_token.type = TOK_ASSIGN;
     strcpy(current_token.text, "=");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case ';':
     current_token.type = TOK_SEMICOLON;
     strcpy(current_token.text, ";");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case '{':
     current_token.type = TOK_LCURLY;
     strcpy(current_token.text, "{");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case '}':
     current_token.type = TOK_RCURLY;
     strcpy(current_token.text, "}");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case '(':
     current_token.type = TOK_LPAREN;
     strcpy(current_token.text, "(");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case ')':
     current_token.type = TOK_RPAREN;
     strcpy(current_token.text, ")");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case ',':
     current_token.type = TOK_COMMA;
     strcpy(current_token.text, ",");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case '+':
     current_token.type = TOK_PLUS;
     strcpy(current_token.text, "+");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case '-':
     current_token.type = TOK_MINUS;
     strcpy(current_token.text, "-");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case '*':
     current_token.type = TOK_ASTERISK;
     strcpy(current_token.text, "*");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   case '/':
     current_token.type = TOK_SLASH;
     strcpy(current_token.text, "/");
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   default:
     current_token.type = TOK_UNKNOWN;
-    current_token.text[0] = *scanner->source.buffer;
+    current_token.text[0] = _INPUT[_INDEX];
     current_token.text[1] = '\0';
-    scanner->source.buffer++;
+    ++_INDEX;
+    ++scanner->col;
     break;
   }
+  current_token.location.id = _INDEX;
+  current_token.location.col = scanner->col;
+  current_token.location.line = scanner->line;
   return current_token;
 }
 
