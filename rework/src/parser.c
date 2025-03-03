@@ -137,6 +137,10 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			ast_print(node->data.binary_op.left, indent + 1, string);
 			ast_print(node->data.binary_op.right, indent + 1, string);
 			break;
+		case AST_UNARY_EXPR:
+			print(string, "Unary Expression: %c\n", node->data.unary_op.op);
+			ast_print(node->data.unary_op.operand, indent + 1, string);
+			break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -163,6 +167,15 @@ ASTNode *new_binary_expr_node(char op, ASTNode *left, ASTNode *right) {
 	node->data.binary_op.op = op;
 	node->data.binary_op.left = left;
 	node->data.binary_op.right = right;
+	return node;
+}
+
+ASTNode *new_unary_expr_node(char op, ASTNode *operand) {
+	ASTNode *node = new_ast_node(AST_UNARY_EXPR);
+	if (!node)
+		return NULL;
+	node->data.unary_op.op = op;
+	node->data.unary_op.operand = operand;
 	return node;
 }
 
@@ -299,13 +312,14 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 }
 
 ASTNode *parse_primary(Parser *parser);
+ASTNode *parse_unary(Parser *parser);
 
 ASTNode *parse_term(Parser *parser) {
-	ASTNode *node = parse_primary(parser);
+	ASTNode *node = parse_unary(parser);
 	while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH) {
 		char op = parser->current_token.text[0];
 		parser->current_token = next_token(&parser->scanner);
-		ASTNode *right = parse_primary(parser);
+		ASTNode *right = parse_unary(parser);
 		node = new_binary_expr_node(op, node, right);
 	}
 	return node;
@@ -336,6 +350,12 @@ ASTNode *parse_return_stmt(Parser *parser) {
 	return new_return_node(expr);
 }
 
+// numbers, bools, identifiers, grouping expressions
+// <primaryExpr>
+// ::= <number>
+//  | <bool>
+//  | <identifier>
+//  | <groupingExpr>
 ASTNode *parse_primary(Parser *parser) {
 	// @TODO: add array and struct literals
 	if (parser->current_token.type == TOK_NUMBER) {
@@ -373,6 +393,19 @@ ASTNode *parse_primary(Parser *parser) {
 		sprintf(expr, "unexpected token in expression: %s", parser->current_token.text);
 		return report(parser->current_token.location, expr, 0);
 	}
+}
+
+// <unaryExpr>
+// ::= ('*' | '!' | '&') <expr>
+ASTNode *parse_unary(Parser *parser) {
+	TokenType type = parser->current_token.type;
+	if (type == TOK_EXCLAMATION || type == TOK_AMPERSAND || type == TOK_ASTERISK) {
+		char op = parser->current_token.text[0];
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *operand = parse_unary(parser);
+		return new_unary_expr_node(op, operand);
+	}
+	return parse_primary(parser);
 }
 
 // <varDecl>
