@@ -56,14 +56,6 @@ static char *capture_ast_output(ASTNode *ast) {
 	ASTNode *ast = parse_input(&parser);                                                                                                                                                                                                       \
 	char *output = capture_ast_output(ast);
 
-//---------------------------------------------------------------------
-// Test Case 1: Simple Variable Declaration
-// Input: "i32 x = 42;"
-// Expected AST (as printed by the existing printAST function):
-//      VarDecl:  i32 x:
-//          Literal Int: 42;
-
-//---------------------------------------------------------------------
 void test_VariableDeclaration(void) {
 	SETUP_TEST("i32 x = 42;");
 
@@ -74,18 +66,6 @@ void test_VariableDeclaration(void) {
 	parser_deinit(&parser);
 }
 
-//---------------------------------------------------------------------
-// Test Case 2: Arithmetic Expression in a Variable Declaration
-// Input: "i32 x = 1 + 2 * 3;"
-// Expected AST:
-//    VarDecl:  i32 x:
-//      Binary Expression: +
-//        Literal Int: 1
-//        Binary Expression: *
-//          Literal Int: 2
-//          Literal Int: 3;
-
-//---------------------------------------------------------------------
 void test_ArithmeticExpression(void) {
 	SETUP_TEST("i32 x = 1 + 2 * 3;");
 	const char *expected = "VarDecl:  i32 x:\n"
@@ -99,14 +79,6 @@ void test_ArithmeticExpression(void) {
 	free(output);
 }
 
-//---------------------------------------------------------------------
-// Test Case 3: Struct Declaration
-// Input: "struct Point { i32 x; i32 y; };"
-// Expected AST (with indenting as produced by printAST):
-//   StructDecl: Point
-//     FieldDecl: i32 x
-//     FieldDecl: i32 y
-//---------------------------------------------------------------------
 void test_StructDeclaration(void) {
 	SETUP_TEST("struct Point { i32 x; i32 y; }");
 	const char *expected = "StructDecl: Point\n"
@@ -117,27 +89,6 @@ void test_StructDeclaration(void) {
 	free(output);
 }
 
-//---------------------------------------------------------------------
-// Test Case 4: Function Declaration with Return Statement and Arithmetic
-// Input: "func add(i32 a, i32 b) { i32 result = a + b * 2; return result - 1; }"
-// Expected AST:
-//      FuncDecl: add
-//        Params:
-//          ParamDecl: i32 a
-//          ParamDecl: i32 b
-//        Body:
-//          Block with 2 statement(s):
-//            VarDecl:  i32 result:
-//              Binary Expression: +
-//                Ident: a
-//                Binary Expression: *
-//                  Ident: b
-//                  Literal Int: 2
-//            Return:
-//              Binary Expression: -
-//                Ident: result
-//                Literal Int: 1;
-//---------------------------------------------------------------------
 void test_FunctionDeclaration(void) {
 	SETUP_TEST("fn i32 add(i32 a, i32 b) { i32 result = a + b * 2; return result - 1; }");
 	const char *expected = "FuncDecl: add\n"
@@ -161,10 +112,6 @@ void test_FunctionDeclaration(void) {
 	free(output);
 }
 
-//---------------------------------------------------------------------
-// Test Case 5: Combined Global Declarations
-// Input includes variable declarations (with various types), a struct, and a function.
-//---------------------------------------------------------------------
 void test_CombinedDeclarations(void) {
 	SETUP_TEST("i32 x = 42;\n"
 			   "const f64 y = 3.14; "
@@ -203,4 +150,49 @@ void test_CombinedDeclarations(void) {
 						   "          Literal Int: 1\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
+}
+
+void test_UnaryExpression_Exclamation(void) {
+    SETUP_TEST("fn bool test() { return !false; }");
+    const char *expected =
+        "FuncDecl: test\n"
+        "  Params:\n"
+        "  Body:\n"
+        "    Block with 1 statement(s):\n"
+        "      Return:\n"
+        "        Unary Expression: !\n"
+        "          Literal Bool: false\n";
+
+    TEST_ASSERT_EQUAL_STRING(expected, output);
+    free(output);
+}
+
+void test_UnaryExpression_Dereference(void) {
+    SETUP_TEST("fn i32 test2(i32 x) { return *x; }");
+    const char *expected =
+        "FuncDecl: test2\n"
+        "  Params:\n"
+        "    ParamDecl: i32 x\n"
+        "  Body:\n"
+        "    Block with 1 statement(s):\n"
+        "      Return:\n"
+        "        Unary Expression: *\n"
+        "          Ident: x\n";
+    TEST_ASSERT_EQUAL_STRING(expected, output);
+    free(output);
+}
+
+void test_UnaryExpression_AddressOf(void) {
+    SETUP_TEST("fn i32 test2(i32 x) { return &x; }");
+    const char *expected =
+        "FuncDecl: test2\n"
+        "  Params:\n"
+        "    ParamDecl: i32 x\n"
+        "  Body:\n"
+        "    Block with 1 statement(s):\n"
+        "      Return:\n"
+        "        Unary Expression: &\n"
+        "          Ident: x\n";
+    TEST_ASSERT_EQUAL_STRING(expected, output);
+    free(output);
 }

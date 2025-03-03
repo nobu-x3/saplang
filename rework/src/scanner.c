@@ -169,6 +169,18 @@ Token next_token(Scanner *scanner) {
 		eat_next_char(scanner);
 
 		break;
+	case '&':
+		current_token.type = TOK_AMPERSAND;
+		strcpy(current_token.text, "&");
+		eat_next_char(scanner);
+
+		break;
+	case '!':
+		current_token.type = TOK_EXCLAMATION;
+		strcpy(current_token.text, "!");
+		eat_next_char(scanner);
+
+		break;
 	default:
 		current_token.type = TOK_UNKNOWN;
 		current_token.text[0] = _INPUT[_INDEX];

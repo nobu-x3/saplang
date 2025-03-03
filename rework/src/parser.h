@@ -33,7 +33,19 @@ typedef struct Parser {
 	Token current_token;
 } Parser;
 
-typedef enum { AST_VAR_DECL, AST_STRUCT_DECL, AST_FUNC_DECL, AST_FIELD_DECL, AST_PARAM_DECL, AST_BLOCK, AST_EXPR_LITERAL, AST_EXPR_IDENT, AST_RETURN, AST_BINARY_EXPR } ASTNodeType;
+typedef enum {
+	AST_VAR_DECL,
+	AST_STRUCT_DECL,
+	AST_FUNC_DECL,
+	AST_FIELD_DECL,
+	AST_PARAM_DECL,
+	AST_BLOCK,
+	AST_EXPR_LITERAL,
+	AST_EXPR_IDENT,
+	AST_RETURN,
+	AST_BINARY_EXPR,
+	AST_UNARY_EXPR,
+} ASTNodeType;
 
 typedef struct ASTNode {
 	ASTNodeType type;
@@ -95,6 +107,10 @@ typedef struct ASTNode {
 			struct ASTNode *left;
 			struct ASTNode *right;
 		} binary_op;
+		struct {
+			char op;
+			struct ASTNode *operand;
+		} unary_op;
 	} data;
 } ASTNode;
 
