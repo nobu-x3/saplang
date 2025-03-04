@@ -282,6 +282,7 @@ ASTNode *new_ident_node(const char *name) {
 }
 
 CompilerResult parse_type_name(Parser *parser, char *buffer) {
+	char base_type[64];
 	switch (parser->current_token.type) {
 	case TOK_I8:
 	case TOK_I16:
@@ -294,11 +295,11 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 	case TOK_F32:
 	case TOK_F64:
 	case TOK_BOOL:
-		strncpy(buffer, parser->current_token.text, 64);
+		strncpy(base_type, parser->current_token.text, 64);
 		parser->current_token = next_token(&parser->scanner);
 		break;
 	case TOK_IDENTIFIER:
-		strncpy(buffer, parser->current_token.text, 64);
+		strncpy(base_type, parser->current_token.text, 64);
 		parser->current_token = next_token(&parser->scanner);
 		break;
 	default: {
@@ -308,6 +309,12 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 		return RESULT_PARSING_ERROR;
 	}
 	}
+	char ptr_prefix[64] = "";
+	while (parser->current_token.type == TOK_ASTERISK) {
+		strcat(ptr_prefix, "*");
+		parser->current_token = next_token(&parser->scanner);
+	}
+	snprintf(buffer, 64, "%s%s", ptr_prefix, base_type);
 	return RESULT_SUCCESS;
 }
 
@@ -629,8 +636,7 @@ ASTNode *parse_function_decl(Parser *parser) {
 		return report(parser->current_token.location, "expected return type.", 0);
 
 	char type[64];
-	strncpy(type, parser->current_token.text, sizeof(type));
-	parser->current_token = next_token(&parser->scanner); // consume return type
+    parse_type_name(parser, type);
 
 	if (parser->current_token.type != TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected function identifier.", 0);
