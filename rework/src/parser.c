@@ -146,7 +146,17 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			for (int i = 0; i < node->data.array_literal.count; ++i) {
 				ast_print(node->data.array_literal.elements[i], indent + 1, string);
 			}
-            break;
+			break;
+		case AST_ARRAY_ACCESS:
+			print(string, "Array access:\n");
+			ast_print(node->data.array_access.base, indent + 1, string);
+			ast_print(node->data.array_access.index, indent + 1, string);
+			break;
+		case AST_ASSIGNMENT:
+			print(string, "Assignment:\n");
+			ast_print(node->data.assignment.lvalue, indent + 1, string);
+			ast_print(node->data.assignment.rvalue, indent + 1, string);
+			break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -163,6 +173,15 @@ ASTNode *new_ast_node(ASTNodeType type) {
 	}
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_assignment_node(ASTNode *lvalue, ASTNode *rvalue) {
+	ASTNode *node = new_ast_node(AST_ASSIGNMENT);
+	if (!node)
+		return NULL;
+	node->data.assignment.lvalue = lvalue;
+	node->data.assignment.rvalue = rvalue;
 	return node;
 }
 
@@ -279,6 +298,15 @@ ASTNode *new_literal_node_bool(int value) {
 	return node;
 }
 
+ASTNode *new_array_access_node(ASTNode *base, ASTNode *index) {
+	ASTNode *node = new_ast_node(AST_ARRAY_ACCESS);
+	if (!node)
+		return NULL;
+	node->data.array_access.base = base;
+	node->data.array_access.index = index;
+	return node;
+}
+
 ASTNode *new_ident_node(const char *name) {
 	ASTNode *node = new_ast_node(AST_EXPR_IDENT);
 	if (!node)
@@ -367,6 +395,41 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 ASTNode *parse_primary(Parser *parser);
 ASTNode *parse_unary(Parser *parser);
 ASTNode *parse_expr(Parser *parser);
+
+ASTNode *parse_assignment(Parser *parser) {
+	ASTNode *node = parse_expr(parser);
+	if (!node)
+		return NULL;
+
+	if (parser->current_token.type == TOK_ASSIGN) {
+		parser->current_token = next_token(&parser->scanner);
+		// Right-associative
+		ASTNode *right = parse_assignment(parser);
+		node = new_assignment_node(node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_postfix(Parser *parser) {
+	ASTNode *node = parse_primary(parser);
+	while (parser->current_token.type == TOK_LBRACKET) {
+		parser->current_token = next_token(&parser->scanner);
+
+		ASTNode *index_expr = parse_expr(parser);
+		if (!index_expr)
+			return NULL;
+
+		if (parser->current_token.type != TOK_RBRACKET) {
+			char msg[128];
+			sprintf(msg, "expected ']' after array size, got '%s'.", parser->current_token.text);
+			return report(parser->current_token.location, msg, 0);
+		}
+		parser->current_token = next_token(&parser->scanner);
+
+		node = new_array_access_node(node, index_expr);
+	}
+	return node;
+}
 
 // <arrayLiteral>
 // ::= '[' (<expression>)* (',')* ']'
@@ -499,7 +562,7 @@ ASTNode *parse_unary(Parser *parser) {
 		ASTNode *operand = parse_unary(parser);
 		return new_unary_expr_node(op, operand);
 	}
-	return parse_primary(parser);
+	return parse_postfix(parser);
 }
 
 // <varDecl>
@@ -562,7 +625,7 @@ ASTNode *parse_stmt(Parser *parser) {
 		parser->current_token = temp;
 	}
 
-	ASTNode *expr = parse_expr(parser);
+	ASTNode *expr = parse_assignment(parser);
 	if (parser->current_token.type != TOK_SEMICOLON) {
 		return report(parser->current_token.location, "expected ';' after expression statement.", 0);
 	}
