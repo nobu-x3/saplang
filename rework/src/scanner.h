@@ -36,6 +36,7 @@ typedef enum {
 	TOK_U64,
 	TOK_F32,
 	TOK_F64,
+    TOK_VOID,
 	TOK_BOOL,
 	TOK_TRUE,
 	TOK_FALSE,

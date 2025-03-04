@@ -47,7 +47,8 @@ typedef enum {
 	AST_UNARY_EXPR,
 	AST_ARRAY_LITERAL,
 	AST_ARRAY_ACCESS,
-    AST_ASSIGNMENT
+	AST_ASSIGNMENT,
+	AST_FUNC_CALL,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -86,7 +87,6 @@ typedef struct ASTNode {
 		struct {
 			struct ASTNode **statements;
 			int count;
-			int capacity;
 		} block;
 		// Literal expression: integer, float, or bool
 		struct {
@@ -116,16 +116,21 @@ typedef struct ASTNode {
 		} unary_op;
 		struct {
 			struct ASTNode **elements;
-			int count, capacity;
+			int count;
 		} array_literal;
 		struct {
 			struct ASTNode *base;
 			struct ASTNode *index;
 		} array_access;
+		struct {
+			struct ASTNode *lvalue;
+			struct ASTNode *rvalue;
+		} assignment;
         struct {
-            struct ASTNode* lvalue;
-            struct ASTNode* rvalue;
-        } assignment;
+            struct ASTNode* callee;
+            struct ASTNode** args;
+            int arg_count;
+        } func_call;
 	} data;
 } ASTNode;
 

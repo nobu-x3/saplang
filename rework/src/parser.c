@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+// @TODO: fix memleaks on return NULL
+
 #define print(string, format, ...)                                                                                                                                                                                                             \
 	if (string) {                                                                                                                                                                                                                              \
 		sprintf(string, format, ##__VA_ARGS__);                                                                                                                                                                                                \
@@ -157,6 +159,13 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			ast_print(node->data.assignment.lvalue, indent + 1, string);
 			ast_print(node->data.assignment.rvalue, indent + 1, string);
 			break;
+		case AST_FUNC_CALL:
+			print(string, "Function call with %d args:\n", node->data.func_call.arg_count);
+			ast_print(node->data.func_call.callee, indent + 1, string);
+			for (int i = 0; i < node->data.func_call.arg_count; ++i) {
+				ast_print(node->data.func_call.args[i], indent + 1, string);
+			}
+			break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -173,6 +182,16 @@ ASTNode *new_ast_node(ASTNodeType type) {
 	}
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_function_call(ASTNode *callee, ASTNode **args, int arg_count) {
+	ASTNode *node = new_ast_node(AST_FUNC_CALL);
+	if (!node)
+		return NULL;
+	node->data.func_call.callee = callee;
+	node->data.func_call.args = args;
+	node->data.func_call.arg_count = arg_count;
 	return node;
 }
 
@@ -239,13 +258,12 @@ ASTNode *new_var_decl_node(const char *type_name, const char *name, int is_const
 	return node;
 }
 
-ASTNode *new_block_node(ASTNode **stmts, int count, int capacity) {
+ASTNode *new_block_node(ASTNode **stmts, int count) {
 	ASTNode *node = new_ast_node(AST_BLOCK);
 	if (!node)
 		return NULL;
 	node->data.block.statements = stmts;
 	node->data.block.count = count;
-	node->data.block.capacity = capacity;
 	return node;
 }
 
@@ -315,13 +333,12 @@ ASTNode *new_ident_node(const char *name) {
 	return node;
 }
 
-ASTNode *new_array_literal_node(ASTNode **elements, int count, int capacity) {
+ASTNode *new_array_literal_node(ASTNode **elements, int count) {
 	ASTNode *node = new_ast_node(AST_ARRAY_LITERAL);
 	if (!node)
 		return NULL;
 	node->data.array_literal.elements = elements;
 	node->data.array_literal.count = count;
-	node->data.array_literal.capacity = capacity;
 	return node;
 }
 
@@ -338,6 +355,7 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 	case TOK_U64:
 	case TOK_F32:
 	case TOK_F64:
+	case TOK_VOID:
 	case TOK_BOOL:
 		strncpy(base_type, parser->current_token.text, 64);
 		parser->current_token = next_token(&parser->scanner);
@@ -412,21 +430,56 @@ ASTNode *parse_assignment(Parser *parser) {
 
 ASTNode *parse_postfix(Parser *parser) {
 	ASTNode *node = parse_primary(parser);
-	while (parser->current_token.type == TOK_LBRACKET) {
-		parser->current_token = next_token(&parser->scanner);
+	while (parser->current_token.type == TOK_LPAREN || parser->current_token.type == TOK_LBRACKET) {
+		if (parser->current_token.type == TOK_LPAREN) {
+			parser->current_token = next_token(&parser->scanner);
+			int capacity = 4, count = 0;
+			ASTNode **args = malloc(capacity * sizeof(ASTNode *));
+			if (!args)
+				return NULL;
 
-		ASTNode *index_expr = parse_expr(parser);
-		if (!index_expr)
-			return NULL;
+			if (parser->current_token.type != TOK_RPAREN) {
+				while (1) {
+					ASTNode *arg = parse_assignment(parser);
+					if (count >= capacity) {
+						capacity *= 2;
+						args = realloc(args, capacity * sizeof(ASTNode *));
+						if (!args) {
+							free(args);
+							return NULL;
+						}
+					}
+					args[count++] = arg;
 
-		if (parser->current_token.type != TOK_RBRACKET) {
-			char msg[128];
-			sprintf(msg, "expected ']' after array size, got '%s'.", parser->current_token.text);
-			return report(parser->current_token.location, msg, 0);
+					if (parser->current_token.type == TOK_COMMA) {
+						parser->current_token = next_token(&parser->scanner);
+					} else
+						break;
+				}
+			}
+			if (parser->current_token.type != TOK_RPAREN) {
+				char msg[128];
+				sprintf(msg, "expected ')' in function call, got '%s'.", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+			parser->current_token = next_token(&parser->scanner);
+			node = new_function_call(node, args, count);
+		} else if (parser->current_token.type == TOK_LBRACKET) {
+			parser->current_token = next_token(&parser->scanner);
+
+			ASTNode *index_expr = parse_expr(parser);
+			if (!index_expr)
+				return NULL;
+
+			if (parser->current_token.type != TOK_RBRACKET) {
+				char msg[128];
+				sprintf(msg, "expected ']' after array size, got '%s'.", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+			parser->current_token = next_token(&parser->scanner);
+
+			node = new_array_access_node(node, index_expr);
 		}
-		parser->current_token = next_token(&parser->scanner);
-
-		node = new_array_access_node(node, index_expr);
 	}
 	return node;
 }
@@ -437,7 +490,7 @@ ASTNode *parse_array_literal(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume '['
 
 	int capacity = 4, count = 0;
-	ASTNode **elements = malloc(capacity * sizeof(ASTNode));
+	ASTNode **elements = malloc(capacity * sizeof(ASTNode *));
 	if (!elements)
 		return NULL;
 
@@ -465,7 +518,7 @@ ASTNode *parse_array_literal(Parser *parser) {
 	}
 
 	parser->current_token = next_token(&parser->scanner); // consume ']'
-	return new_array_literal_node(elements, count, capacity);
+	return new_array_literal_node(elements, count);
 }
 
 ASTNode *parse_term(Parser *parser) {
@@ -607,7 +660,7 @@ ASTNode *parse_stmt(Parser *parser) {
 
 	if (parser->current_token.type == TOK_I8 || parser->current_token.type == TOK_I16 || parser->current_token.type == TOK_I32 || parser->current_token.type == TOK_I64 || parser->current_token.type == TOK_U8 ||
 		parser->current_token.type == TOK_U16 || parser->current_token.type == TOK_U32 || parser->current_token.type == TOK_U64 || parser->current_token.type == TOK_F32 || parser->current_token.type == TOK_F64 ||
-		parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_IDENTIFIER) {
+		parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_VOID || parser->current_token.type == TOK_IDENTIFIER) {
 		// peek ahead
 		// @TODO: redo this when reworking scanner to work with indices
 		int save = parser->scanner.id;
@@ -770,7 +823,7 @@ ASTNode *parse_block(Parser *parser) {
 	}
 
 	parser->current_token = next_token(&parser->scanner);
-	return new_block_node(stmts, count, capacity);
+	return new_block_node(stmts, count);
 }
 
 // <functionDecl>

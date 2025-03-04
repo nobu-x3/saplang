@@ -266,8 +266,98 @@ void test_ArrayAccessAssignment(void) {
 						   "      Return:\n"
 						   "        Array access:\n"
 						   "          Ident: arr\n"
+						   "          Literal Int: 0\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FunctionCallsWithLiteralArguments(void) {
+	SETUP_TEST("fn void foo(i32 a, i32 b) {}"
+			   "fn i32 test() {"
+			   "   foo(1, 2 + 3);"
+			   "   return 0;"
+			   "}");
+	const char *expected = "FuncDecl: foo\n"
+						   "  Params:\n"
+						   "    ParamDecl: i32 a\n"
+						   "    ParamDecl: i32 b\n"
+						   "  Body:\n"
+						   "    Block with 0 statement(s):\n"
+						   "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 2 statement(s):\n"
+						   "      Function call with 2 args:\n"
+						   "        Ident: foo\n"
+						   "        Literal Int: 1\n"
+						   "        Binary Expression: +\n"
+						   "          Literal Int: 2\n"
+						   "          Literal Int: 3\n"
+						   "      Return:\n"
+						   "        Literal Int: 0\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FunctionCallsWithExprArguments(void) {
+	SETUP_TEST("fn void foo(i32 a, i32 b) {}"
+			   "fn i32 test() {"
+			   "    i32[4] arr1 = [0, 1, 2, 3];"
+			   "   foo(arr[0], arr[1] + arr[2]);"
+			   "   return 0;"
+			   "}");
+	const char *expected = "FuncDecl: foo\n"
+						   "  Params:\n"
+						   "    ParamDecl: i32 a\n"
+						   "    ParamDecl: i32 b\n"
+						   "  Body:\n"
+						   "    Block with 0 statement(s):\n"
+						   "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 3 statement(s):\n"
+						   "      VarDecl:  [4]i32 arr1:\n"
+						   "        Array literal of size 4:\n"
 						   "          Literal Int: 0\n"
-		;
+						   "          Literal Int: 1\n"
+						   "          Literal Int: 2\n"
+						   "          Literal Int: 3\n"
+						   "      Function call with 2 args:\n"
+						   "        Ident: foo\n"
+						   "        Array access:\n"
+						   "          Ident: arr\n"
+						   "          Literal Int: 0\n"
+						   "        Binary Expression: +\n"
+						   "          Array access:\n"
+						   "            Ident: arr\n"
+						   "            Literal Int: 1\n"
+						   "          Array access:\n"
+						   "            Ident: arr\n"
+						   "            Literal Int: 2\n"
+						   "      Return:\n"
+						   "        Literal Int: 0\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FunctionCallsNoArguments(void) {
+	SETUP_TEST("fn void foo() {}"
+			   "fn i32 test() {"
+			   "   foo();"
+			   "   return 0;"
+			   "}");
+	const char *expected = "FuncDecl: foo\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 0 statement(s):\n"
+						   "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 2 statement(s):\n"
+						   "      Function call with 0 args:\n"
+						   "        Ident: foo\n"
+						   "      Return:\n"
+						   "        Literal Int: 0\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
