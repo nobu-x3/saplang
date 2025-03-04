@@ -166,6 +166,10 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 				ast_print(node->data.func_call.args[i], indent + 1, string);
 			}
 			break;
+		case AST_MEMBER_ACCESS:
+			print(string, "Member access: %s\n", node->data.member_access.member);
+			ast_print(node->data.member_access.base, indent + 1, string);
+			break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -182,6 +186,15 @@ ASTNode *new_ast_node(ASTNodeType type) {
 	}
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_member_access_node(ASTNode *base, const char *member_name) {
+	ASTNode *node = new_ast_node(AST_MEMBER_ACCESS);
+	if (!node)
+		return NULL;
+	node->data.member_access.base = base;
+	strncpy(node->data.member_access.member, member_name, sizeof(node->data.member_access.member));
 	return node;
 }
 
@@ -430,9 +443,12 @@ ASTNode *parse_assignment(Parser *parser) {
 
 ASTNode *parse_postfix(Parser *parser) {
 	ASTNode *node = parse_primary(parser);
-	while (parser->current_token.type == TOK_LPAREN || parser->current_token.type == TOK_LBRACKET) {
+	while (parser->current_token.type == TOK_LPAREN || parser->current_token.type == TOK_LBRACKET || parser->current_token.type == TOK_DOT) {
+
 		if (parser->current_token.type == TOK_LPAREN) {
+
 			parser->current_token = next_token(&parser->scanner);
+
 			int capacity = 4, count = 0;
 			ASTNode **args = malloc(capacity * sizeof(ASTNode *));
 			if (!args)
@@ -457,13 +473,16 @@ ASTNode *parse_postfix(Parser *parser) {
 						break;
 				}
 			}
+
 			if (parser->current_token.type != TOK_RPAREN) {
 				char msg[128];
 				sprintf(msg, "expected ')' in function call, got '%s'.", parser->current_token.text);
 				return report(parser->current_token.location, msg, 0);
 			}
+
 			parser->current_token = next_token(&parser->scanner);
 			node = new_function_call(node, args, count);
+
 		} else if (parser->current_token.type == TOK_LBRACKET) {
 			parser->current_token = next_token(&parser->scanner);
 
@@ -479,6 +498,22 @@ ASTNode *parse_postfix(Parser *parser) {
 			parser->current_token = next_token(&parser->scanner);
 
 			node = new_array_access_node(node, index_expr);
+
+		} else if (parser->current_token.type == TOK_DOT) {
+			parser->current_token = next_token(&parser->scanner);
+
+			if (parser->current_token.type != TOK_IDENTIFIER) {
+				char msg[128];
+				sprintf(msg, "expected identifier after '.', got '%s'.", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+
+			char member_name[64];
+			strncpy(member_name, parser->current_token.text, sizeof(member_name));
+
+			parser->current_token = next_token(&parser->scanner);
+
+			node = new_member_access_node(node, member_name);
 		}
 	}
 	return node;

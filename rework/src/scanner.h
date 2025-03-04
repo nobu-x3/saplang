@@ -19,6 +19,7 @@ typedef enum {
 	TOK_CONST,		// 'const'
 	TOK_RETURN,		// 'return'
 	TOK_PLUS,
+    TOK_DOT,
 	TOK_MINUS,
 	TOK_ASTERISK,
 	TOK_SLASH,
