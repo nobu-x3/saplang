@@ -45,6 +45,7 @@ typedef enum {
 	AST_RETURN,
 	AST_BINARY_EXPR,
 	AST_UNARY_EXPR,
+	AST_ARRAY_LITERAL,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -111,6 +112,10 @@ typedef struct ASTNode {
 			char op;
 			struct ASTNode *operand;
 		} unary_op;
+		struct {
+			struct ASTNode **elements;
+			int count, capacity;
+		} array_literal;
 	} data;
 } ASTNode;
 

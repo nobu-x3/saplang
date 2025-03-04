@@ -141,6 +141,12 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "Unary Expression: %c\n", node->data.unary_op.op);
 			ast_print(node->data.unary_op.operand, indent + 1, string);
 			break;
+		case AST_ARRAY_LITERAL:
+			print(string, "Array literal of size %d:\n", node->data.array_literal.count);
+			for (int i = 0; i < node->data.array_literal.count; ++i) {
+				ast_print(node->data.array_literal.elements[i], indent + 1, string);
+			}
+            break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -281,6 +287,16 @@ ASTNode *new_ident_node(const char *name) {
 	return node;
 }
 
+ASTNode *new_array_literal_node(ASTNode **elements, int count, int capacity) {
+	ASTNode *node = new_ast_node(AST_ARRAY_LITERAL);
+	if (!node)
+		return NULL;
+	node->data.array_literal.elements = elements;
+	node->data.array_literal.count = count;
+	node->data.array_literal.capacity = capacity;
+	return node;
+}
+
 CompilerResult parse_type_name(Parser *parser, char *buffer) {
 	char base_type[64];
 	switch (parser->current_token.type) {
@@ -309,17 +325,85 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 		return RESULT_PARSING_ERROR;
 	}
 	}
+
 	char ptr_prefix[64] = "";
 	while (parser->current_token.type == TOK_ASTERISK) {
 		strcat(ptr_prefix, "*");
 		parser->current_token = next_token(&parser->scanner);
 	}
-	snprintf(buffer, 64, "%s%s", ptr_prefix, base_type);
+
+	char array_suffix[64] = "";
+	while (parser->current_token.type == TOK_LBRACKET) {
+		parser->current_token = next_token(&parser->scanner); // consume '['
+
+		if (parser->current_token.type != TOK_NUMBER) {
+			char msg[128];
+			sprintf(msg, "expected array size number, got '%s'.", parser->current_token.text);
+			report(parser->current_token.location, msg, 0);
+			return RESULT_PARSING_ERROR;
+		}
+
+		char size_text[32];
+		strncpy(size_text, parser->current_token.text, sizeof(size_text));
+		parser->current_token = next_token(&parser->scanner); // consume number
+
+		if (parser->current_token.type != TOK_RBRACKET) {
+			char msg[128];
+			sprintf(msg, "expected ']' after array size, got '%s'.", parser->current_token.text);
+			report(parser->current_token.location, msg, 0);
+			return RESULT_PARSING_ERROR;
+		}
+
+		parser->current_token = next_token(&parser->scanner); // consume ']'
+		strcat(array_suffix, "[");
+		strcat(array_suffix, size_text);
+		strcat(array_suffix, "]");
+	}
+
+	snprintf(buffer, 64, "%s%s%s", array_suffix, ptr_prefix, base_type);
 	return RESULT_SUCCESS;
 }
 
 ASTNode *parse_primary(Parser *parser);
 ASTNode *parse_unary(Parser *parser);
+ASTNode *parse_expr(Parser *parser);
+
+// <arrayLiteral>
+// ::= '[' (<expression>)* (',')* ']'
+ASTNode *parse_array_literal(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner); // consume '['
+
+	int capacity = 4, count = 0;
+	ASTNode **elements = malloc(capacity * sizeof(ASTNode));
+	if (!elements)
+		return NULL;
+
+	if (parser->current_token.type != TOK_RBRACKET) {
+		while (1) {
+			ASTNode *expr = parse_expr(parser);
+			if (!expr)
+				return NULL;
+
+			elements[count++] = expr;
+
+			if (parser->current_token.type == TOK_COMMA) {
+				parser->current_token = next_token(&parser->scanner); // consume ','
+				if (parser->current_token.type == TOK_RBRACKET)
+					break;
+			} else
+				break;
+		}
+	}
+
+	if (parser->current_token.type != TOK_RBRACKET) {
+		char msg[128];
+		sprintf(msg, "expected ']' after array size, got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume ']'
+	return new_array_literal_node(elements, count, capacity);
+}
 
 ASTNode *parse_term(Parser *parser) {
 	ASTNode *node = parse_unary(parser);
@@ -363,6 +447,7 @@ ASTNode *parse_return_stmt(Parser *parser) {
 //  | <bool>
 //  | <identifier>
 //  | <groupingExpr>
+//  | <arrayLiteral>
 ASTNode *parse_primary(Parser *parser) {
 	// @TODO: add array and struct literals
 	if (parser->current_token.type == TOK_NUMBER) {
@@ -395,6 +480,8 @@ ASTNode *parse_primary(Parser *parser) {
 			return report(parser->current_token.location, "expected ')'.", 0);
 		parser->current_token = next_token(&parser->scanner);
 		return expr;
+	} else if (parser->current_token.type == TOK_LBRACKET) {
+		return parse_array_literal(parser);
 	} else {
 		char expr[128];
 		sprintf(expr, "unexpected token in expression: %s", parser->current_token.text);
@@ -636,7 +723,7 @@ ASTNode *parse_function_decl(Parser *parser) {
 		return report(parser->current_token.location, "expected return type.", 0);
 
 	char type[64];
-    parse_type_name(parser, type);
+	parse_type_name(parser, type);
 
 	if (parser->current_token.type != TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected function identifier.", 0);
