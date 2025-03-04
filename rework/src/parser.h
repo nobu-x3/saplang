@@ -49,6 +49,7 @@ typedef enum {
 	AST_ARRAY_ACCESS,
 	AST_ASSIGNMENT,
 	AST_FUNC_CALL,
+    AST_MEMBER_ACCESS,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -131,6 +132,10 @@ typedef struct ASTNode {
             struct ASTNode** args;
             int arg_count;
         } func_call;
+        struct {
+            struct ASTNode* base;
+            char member[64];
+        } member_access;
 	} data;
 } ASTNode;
 

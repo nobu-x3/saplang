@@ -361,3 +361,64 @@ void test_FunctionCallsNoArguments(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_MemberAccessSingle_Value(void) {
+	SETUP_TEST("struct MyStruct { i32* field; }"
+			   "MyStruct my_struct; "
+			   "fn void test() { my_struct.field = 0; }");
+	const char *expected = "StructDecl: MyStruct\n"
+						   "  FieldDecl: *i32 field\n"
+						   "VarDecl:  MyStruct my_struct\n"
+						   "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      Assignment:\n"
+						   "        Member access: field\n"
+						   "          Ident: my_struct\n"
+						   "        Literal Int: 0\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_MemberAccessSingle_Pointer(void) {
+	SETUP_TEST("struct MyStruct { i32* field; }"
+			   "MyStruct* my_struct; "
+			   "fn void test() { my_struct.field = 0; }");
+	const char *expected = "StructDecl: MyStruct\n"
+						   "  FieldDecl: *i32 field\n"
+						   "VarDecl:  *MyStruct my_struct\n"
+						   "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      Assignment:\n"
+						   "        Member access: field\n"
+						   "          Ident: my_struct\n"
+						   "        Literal Int: 0\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_MemberAccessMulti_Pointer(void) {
+	SETUP_TEST("struct MyStruct1 { i32 int_field; }"
+			   "struct MyStruct2 { MyStruct1 field; }"
+			   "MyStruct2 my_struct2; "
+			   "fn void test() { my_struct2.field.int_field = 0; }");
+	const char *expected = "StructDecl: MyStruct1\n"
+						   "  FieldDecl: i32 int_field\n"
+						   "StructDecl: MyStruct2\n"
+						   "  FieldDecl: MyStruct1 field\n"
+						   "VarDecl:  MyStruct2 my_struct2\n"
+						   "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      Assignment:\n"
+						   "        Member access: int_field\n"
+						   "          Member access: field\n"
+						   "            Ident: my_struct2\n"
+						   "        Literal Int: 0\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
