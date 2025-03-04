@@ -46,6 +46,8 @@ typedef enum {
 	AST_BINARY_EXPR,
 	AST_UNARY_EXPR,
 	AST_ARRAY_LITERAL,
+	AST_ARRAY_ACCESS,
+    AST_ASSIGNMENT
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -116,6 +118,14 @@ typedef struct ASTNode {
 			struct ASTNode **elements;
 			int count, capacity;
 		} array_literal;
+		struct {
+			struct ASTNode *base;
+			struct ASTNode *index;
+		} array_access;
+        struct {
+            struct ASTNode* lvalue;
+            struct ASTNode* rvalue;
+        } assignment;
 	} data;
 } ASTNode;
 
