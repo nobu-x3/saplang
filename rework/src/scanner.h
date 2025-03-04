@@ -13,6 +13,8 @@ typedef enum {
 	TOK_RCURLY,		// '}'
 	TOK_LPAREN,		// '('
 	TOK_RPAREN,		// ')'
+	TOK_LBRACKET,	// '['
+	TOK_RBRACKET,	// ']'
 	TOK_COMMA,		// ','
 	TOK_CONST,		// 'const'
 	TOK_RETURN,		// 'return'
@@ -20,8 +22,8 @@ typedef enum {
 	TOK_MINUS,
 	TOK_ASTERISK,
 	TOK_SLASH,
-    TOK_AMPERSAND,
-    TOK_EXCLAMATION,
+	TOK_AMPERSAND,
+	TOK_EXCLAMATION,
 	TOK_EOF,
 	TOK_UNKNOWN,
 	TOK_I8,

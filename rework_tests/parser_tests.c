@@ -217,3 +217,27 @@ void test_CustomTypePointer(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_ArrayLiterals(void) {
+	SETUP_TEST("i32[4] arr1 = [0, 1, 2, 3];"
+			   "i32[2][3] arr2 = [[1,2,3], [4,5,6]];");
+	const char *expected =
+    "VarDecl:  [4]i32 arr1:\n"
+        "  Array literal of size 4:\n"
+        "    Literal Int: 0\n"
+        "    Literal Int: 1\n"
+        "    Literal Int: 2\n"
+        "    Literal Int: 3\n"
+        "VarDecl:  [2][3]i32 arr2:\n"
+        "  Array literal of size 2:\n"
+        "    Array literal of size 3:\n"
+        "      Literal Int: 1\n"
+        "      Literal Int: 2\n"
+        "      Literal Int: 3\n"
+        "    Array literal of size 3:\n"
+        "      Literal Int: 4\n"
+        "      Literal Int: 5\n"
+        "      Literal Int: 6\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
