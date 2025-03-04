@@ -61,6 +61,8 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_F64;
 		else if (strcmp(current_token.text, "bool") == 0)
 			current_token.type = TOK_BOOL;
+		else if (strcmp(current_token.text, "void") == 0)
+			current_token.type = TOK_VOID;
 		else if (strcmp(current_token.text, "struct") == 0)
 			current_token.type = TOK_STRUCT;
 		else if (strcmp(current_token.text, "fn") == 0)
