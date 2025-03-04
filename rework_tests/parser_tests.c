@@ -153,46 +153,67 @@ void test_CombinedDeclarations(void) {
 }
 
 void test_UnaryExpression_Exclamation(void) {
-    SETUP_TEST("fn bool test() { return !false; }");
-    const char *expected =
-        "FuncDecl: test\n"
-        "  Params:\n"
-        "  Body:\n"
-        "    Block with 1 statement(s):\n"
-        "      Return:\n"
-        "        Unary Expression: !\n"
-        "          Literal Bool: false\n";
+	SETUP_TEST("fn bool test() { return !false; }");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      Return:\n"
+						   "        Unary Expression: !\n"
+						   "          Literal Bool: false\n";
 
-    TEST_ASSERT_EQUAL_STRING(expected, output);
-    free(output);
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
 }
 
 void test_UnaryExpression_Dereference(void) {
-    SETUP_TEST("fn i32 test2(i32 x) { return *x; }");
-    const char *expected =
-        "FuncDecl: test2\n"
-        "  Params:\n"
-        "    ParamDecl: i32 x\n"
-        "  Body:\n"
-        "    Block with 1 statement(s):\n"
-        "      Return:\n"
-        "        Unary Expression: *\n"
-        "          Ident: x\n";
-    TEST_ASSERT_EQUAL_STRING(expected, output);
-    free(output);
+	SETUP_TEST("fn i32 test(i32* x) { return *x; }");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "    ParamDecl: *i32 x\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      Return:\n"
+						   "        Unary Expression: *\n"
+						   "          Ident: x\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
 }
 
 void test_UnaryExpression_AddressOf(void) {
-    SETUP_TEST("fn i32 test2(i32 x) { return &x; }");
-    const char *expected =
-        "FuncDecl: test2\n"
-        "  Params:\n"
-        "    ParamDecl: i32 x\n"
-        "  Body:\n"
-        "    Block with 1 statement(s):\n"
-        "      Return:\n"
-        "        Unary Expression: &\n"
-        "          Ident: x\n";
-    TEST_ASSERT_EQUAL_STRING(expected, output);
-    free(output);
+	SETUP_TEST("fn i32* test(i32 x) { return &x; }");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "    ParamDecl: i32 x\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      Return:\n"
+						   "        Unary Expression: &\n"
+						   "          Ident: x\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SinglePointer(void) {
+	SETUP_TEST("i32* x = 42;");
+	const char *expected = "VarDecl:  *i32 x:\n"
+						   "  Literal Int: 42\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_MultiPointer(void) {
+	SETUP_TEST("i32** x = 42;");
+	const char *expected = "VarDecl:  **i32 x:\n"
+						   "  Literal Int: 42\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_CustomTypePointer(void) {
+	SETUP_TEST("MyStruct** x = 42;");
+	const char *expected = "VarDecl:  **MyStruct x:\n"
+						   "  Literal Int: 42\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
 }
