@@ -48,7 +48,7 @@ static char *capture_ast_output(ASTNode *ast) {
 
 #define SETUP_TEST(input_string)                                                                                                                                                                                                               \
 	const char *input = input_string;                                                                                                                                                                                                          \
-	char path[5] = "test\0";                                                                                                                                                                                                                   \
+	const char path[5] = "test";                                                                                                                                                                                                               \
 	Scanner scanner;                                                                                                                                                                                                                           \
 	scanner_init(&scanner, path, input);                                                                                                                                                                                                       \
 	Parser parser;                                                                                                                                                                                                                             \
@@ -419,6 +419,66 @@ void test_MemberAccessMulti_Pointer(void) {
 						   "          Member access: field\n"
 						   "            Ident: my_struct2\n"
 						   "        Literal Int: 0\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteral_FullyUnnamed(void) {
+	SETUP_TEST("ThreeIntStruct my_struct = {0, 1, 2};");
+	const char *expected = "VarDecl:  ThreeIntStruct my_struct:\n"
+						   "  StructLiteral with 3 initializer(s):\n"
+						   "    Literal Int: 0\n"
+						   "    Literal Int: 1\n"
+						   "    Literal Int: 2\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteral_FullyNamed(void) {
+	SETUP_TEST("ThreeIntStruct my_struct = {.second = 1, .first = 0, .third = 2};");
+	const char *expected = "VarDecl:  ThreeIntStruct my_struct:\n"
+						   "  StructLiteral with 3 initializer(s):\n"
+						   "    Designated, field 'second':\n"
+						   "      Literal Int: 1\n"
+						   "    Designated, field 'first':\n"
+						   "      Literal Int: 0\n"
+						   "    Designated, field 'third':\n"
+						   "      Literal Int: 2\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteral_Mixed(void) {
+	SETUP_TEST("ThreeIntStruct my_struct = {.second = 1, 2, .first = 0};");
+	const char *expected = "VarDecl:  ThreeIntStruct my_struct:\n"
+						   "  StructLiteral with 3 initializer(s):\n"
+						   "    Designated, field 'second':\n"
+						   "      Literal Int: 1\n"
+						   "    Literal Int: 2\n"
+						   "    Designated, field 'first':\n"
+						   "      Literal Int: 0\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteral_Nested(void) {
+	SETUP_TEST("struct Inner { i32 x; i32 y; }"
+			   "struct Outer { Inner a; Inner b; } "
+			   "Outer outer = { {0, 1}, {2, 3} };");
+	const char *expected = "StructDecl: Inner\n"
+						   "  FieldDecl: i32 x\n"
+						   "  FieldDecl: i32 y\n"
+						   "StructDecl: Outer\n"
+						   "  FieldDecl: Inner a\n"
+						   "  FieldDecl: Inner b\n"
+						   "VarDecl:  Outer outer:\n"
+						   "  StructLiteral with 2 initializer(s):\n"
+						   "    StructLiteral with 2 initializer(s):\n"
+						   "      Literal Int: 0\n"
+						   "      Literal Int: 1\n"
+						   "    StructLiteral with 2 initializer(s):\n"
+						   "      Literal Int: 2\n"
+						   "      Literal Int: 3\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }

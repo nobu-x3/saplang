@@ -8,6 +8,7 @@
 #include <string.h>
 
 // @TODO: fix memleaks on return NULL
+// @TODO: implement AST deinit
 
 #define print(string, format, ...)                                                                                                                                                                                                             \
 	if (string) {                                                                                                                                                                                                                              \
@@ -47,6 +48,15 @@ CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, con
 	return RESULT_SUCCESS;
 }
 
+CompilerResult deinit_symbol_table(Symbol *table) {
+	for (Symbol *sym = table; sym != NULL;) {
+		Symbol *next = sym->next;
+		free(sym);
+		sym = next;
+	}
+	return RESULT_SUCCESS;
+}
+
 CompilerResult parser_init(Parser *parser, Scanner scanner, Symbol *optional_table) {
 	if (!parser)
 		return RESULT_PASSED_NULL_PTR;
@@ -64,7 +74,7 @@ CompilerResult parser_deinit(Parser *parser) {
 		return RESULT_PASSED_NULL_PTR;
 
 	scanner_deinit(&parser->scanner);
-	// @TODO: free symbol table
+	deinit_symbol_table(parser->symbol_table);
 	return RESULT_SUCCESS;
 }
 
@@ -72,7 +82,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 	if (!node)
 		return RESULT_PASSED_NULL_PTR;
 	while (node) {
-		for (int i = 0; i < indent; i++) {
+		for (int i = 0; i < indent; ++i) {
 			print(string, "  ");
 		}
 		switch (node->type) {
@@ -170,6 +180,20 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "Member access: %s\n", node->data.member_access.member);
 			ast_print(node->data.member_access.base, indent + 1, string);
 			break;
+		case AST_STRUCT_LITERAL:
+			print(string, "StructLiteral with %d initializer(s):\n", node->data.struct_literal.count);
+			for (int i = 0; i < node->data.struct_literal.count; ++i) {
+				if (node->data.struct_literal.inits[i]->is_designated) {
+					char prefix[128] = "";
+					for (int i = 0; i < indent + 1; ++i) {
+						print(string, "  ");
+					}
+					sprintf(prefix, "Designated, field '%s':", node->data.struct_literal.inits[i]->field);
+					print(string, "%s\n", prefix);
+				}
+				ast_print(node->data.struct_literal.inits[i]->expr, indent + 1 + node->data.struct_literal.inits[i]->is_designated, string);
+			}
+			break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -179,6 +203,22 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 	return RESULT_SUCCESS;
 }
 
+//////////////////// HELPER FUNCTIONS /////////////////////////////////////////
+FieldInitializer *new_field_initializer(const char *field_name, int is_designated, ASTNode *expr) {
+	FieldInitializer *init = malloc(sizeof(FieldInitializer));
+	if (!init)
+		return NULL;
+
+	if (is_designated && field_name) {
+		strncpy(init->field, field_name, sizeof(init->field));
+	} else {
+		init->field[0] = '\0';
+	}
+	init->is_designated = is_designated;
+	init->expr = expr;
+	return init;
+}
+
 ASTNode *new_ast_node(ASTNodeType type) {
 	ASTNode *node = malloc(sizeof(ASTNode));
 	if (!node) {
@@ -186,6 +226,15 @@ ASTNode *new_ast_node(ASTNodeType type) {
 	}
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_struct_literal_node(FieldInitializer **inits, int count) {
+	ASTNode *node = new_ast_node(AST_STRUCT_LITERAL);
+	if (!node)
+		return NULL;
+	node->data.struct_literal.inits = inits;
+	node->data.struct_literal.count = count;
 	return node;
 }
 
@@ -355,6 +404,8 @@ ASTNode *new_array_literal_node(ASTNode **elements, int count) {
 	return node;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
 CompilerResult parse_type_name(Parser *parser, char *buffer) {
 	char base_type[64];
 	switch (parser->current_token.type) {
@@ -439,6 +490,73 @@ ASTNode *parse_assignment(Parser *parser) {
 		node = new_assignment_node(node, right);
 	}
 	return node;
+}
+
+ASTNode *parse_struct_literal(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner); // consume '{'
+	int capacity = 4, count = 0;
+	FieldInitializer **inits = malloc(capacity * sizeof(FieldInitializer *));
+	if (!inits)
+		return NULL;
+
+	while (parser->current_token.type != TOK_RCURLY) {
+		FieldInitializer *init = NULL;
+
+		if (parser->current_token.type == TOK_DOT) {
+			parser->current_token = next_token(&parser->scanner); // consume '.'
+
+			if (parser->current_token.type != TOK_IDENTIFIER) {
+				char msg[128];
+				sprintf(msg, "expected named field after '.' in named struct initialization, got '%s'.", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+
+			char field_name[64];
+			strncpy(field_name, parser->current_token.text, sizeof(field_name));
+
+			parser->current_token = next_token(&parser->scanner); // consume '.'
+			if (parser->current_token.type != TOK_ASSIGN) {
+				char msg[128];
+				sprintf(msg, "expected '=' after field name in named struct initialization, got '%s'.", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+
+			parser->current_token = next_token(&parser->scanner); // consume '='
+
+			ASTNode *expr = parse_assignment(parser);
+			init = new_field_initializer(field_name, 1, expr);
+		} else {
+			ASTNode *expr = parse_assignment(parser);
+			init = new_field_initializer("", 0, expr);
+		}
+
+		if (count >= capacity) {
+			capacity *= 2;
+			inits = realloc(inits, capacity * sizeof(FieldInitializer *));
+			if (!inits)
+				return NULL;
+		}
+
+		inits[count++] = init;
+
+		if (parser->current_token.type == TOK_COMMA) {
+			parser->current_token = next_token(&parser->scanner); // consume ','
+
+			if (parser->current_token.type == TOK_RCURLY)
+				break; // allowing trailing commas
+		} else {
+			break;
+		}
+	}
+
+	if (parser->current_token.type != TOK_RCURLY) {
+		char msg[128];
+		sprintf(msg, "expected '}' at the end of struct initialization, got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume '}'
+
+	return new_struct_literal_node(inits, count);
 }
 
 ASTNode *parse_postfix(Parser *parser) {
@@ -599,6 +717,7 @@ ASTNode *parse_return_stmt(Parser *parser) {
 //  | <identifier>
 //  | <groupingExpr>
 //  | <arrayLiteral>
+//  | <structLiteral>
 ASTNode *parse_primary(Parser *parser) {
 	// @TODO: add array and struct literals
 	if (parser->current_token.type == TOK_NUMBER) {
@@ -633,6 +752,8 @@ ASTNode *parse_primary(Parser *parser) {
 		return expr;
 	} else if (parser->current_token.type == TOK_LBRACKET) {
 		return parse_array_literal(parser);
+	} else if (parser->current_token.type == TOK_LCURLY) {
+		return parse_struct_literal(parser);
 	} else {
 		char expr[128];
 		sprintf(expr, "unexpected token in expression: %s", parser->current_token.text);
