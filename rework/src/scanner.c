@@ -107,97 +107,97 @@ Token next_token(Scanner *scanner) {
 	switch (_INPUT[_INDEX]) {
 	case '=':
 		current_token.type = TOK_ASSIGN;
-		strcpy(current_token.text, "=");
+		strncpy(current_token.text, "=", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case ';':
 		current_token.type = TOK_SEMICOLON;
-		strcpy(current_token.text, ";");
+		strncpy(current_token.text, ";", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '{':
 		current_token.type = TOK_LCURLY;
-		strcpy(current_token.text, "{");
+		strncpy(current_token.text, "{", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '}':
 		current_token.type = TOK_RCURLY;
-		strcpy(current_token.text, "}");
+		strncpy(current_token.text, "}", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '(':
 		current_token.type = TOK_LPAREN;
-		strcpy(current_token.text, "(");
+		strncpy(current_token.text, "(", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case ')':
 		current_token.type = TOK_RPAREN;
-		strcpy(current_token.text, ")");
+		strncpy(current_token.text, ")", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case ',':
 		current_token.type = TOK_COMMA;
-		strcpy(current_token.text, ",");
+		strncpy(current_token.text, ",", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '+':
 		current_token.type = TOK_PLUS;
-		strcpy(current_token.text, "+");
+		strncpy(current_token.text, "+", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '-':
 		current_token.type = TOK_MINUS;
-		strcpy(current_token.text, "-");
+		strncpy(current_token.text, "-", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '*':
 		current_token.type = TOK_ASTERISK;
-		strcpy(current_token.text, "*");
+		strncpy(current_token.text, "*", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '/':
 		current_token.type = TOK_SLASH;
-		strcpy(current_token.text, "/");
+		strncpy(current_token.text, "/", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '&':
 		current_token.type = TOK_AMPERSAND;
-		strcpy(current_token.text, "&");
+		strncpy(current_token.text, "&", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '!':
 		current_token.type = TOK_EXCLAMATION;
-		strcpy(current_token.text, "!");
+		strncpy(current_token.text, "!", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '[':
 		current_token.type = TOK_LBRACKET;
-		strcpy(current_token.text, "[");
+		strncpy(current_token.text, "[", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case ']':
 		current_token.type = TOK_RBRACKET;
-		strcpy(current_token.text, "]");
+		strncpy(current_token.text, "]", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
 	case '.':
 		current_token.type = TOK_DOT;
-		strcpy(current_token.text, ".");
+		strncpy(current_token.text, ".", sizeof(current_token.text));
 		eat_next_char(scanner);
 
 		break;
@@ -221,21 +221,15 @@ CompilerResult scanner_init(Scanner *scanner, const char *path, const char *inpu
 
 	memset(scanner, 0, sizeof(Scanner));
 
-	SourceFile src_file = {0};
-
-	int path_len = strlen(path);
-	src_file.path = malloc(path_len);
-	if (!src_file.path)
+	scanner->source.path = strdup(path);
+	if (!scanner->source.path)
 		return RESULT_MEMORY_ERROR;
-	strcpy(src_file.path, path);
 
-	int input_lenght = strlen(input);
-	src_file.buffer = malloc(input_lenght);
-	if (!src_file.buffer)
+	scanner->source.buffer = strdup(input);
+	if (!scanner->source.buffer)
 		return RESULT_MEMORY_ERROR;
-	strcpy(src_file.buffer, input);
 
-	scanner->source = src_file;
+	scanner->source = scanner->source;
 
 	return RESULT_SUCCESS;
 }
@@ -244,9 +238,7 @@ CompilerResult scanner_deinit(Scanner *scanner) {
 	if (!scanner)
 		return RESULT_PASSED_NULL_PTR;
 
-	// @TODO: instead of moving the buffer ptr when getting tokens, increment the
-	// index, otherwise leaking memory
-	/* free(scanner->source.buffer); */
+	free(scanner->source.buffer);
 	free(scanner->source.path);
 
 	return RESULT_SUCCESS;

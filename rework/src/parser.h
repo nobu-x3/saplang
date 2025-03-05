@@ -8,17 +8,11 @@ typedef enum {
 	SYMB_FN,
 } SymbolKind;
 
-typedef struct Field {
-	char name[64];
-	char type[64];
-	struct Field *next;
-} Field;
-
-typedef struct Parameter {
-	char name[64];
-	char type[64];
-	struct Parameter *next;
-} Parameter;
+typedef struct {
+	char field[64]; // if designated, holds field name, otherwise empty
+	int is_designated;
+	struct ASTNode *expr;
+} FieldInitializer;
 
 typedef struct Symbol {
 	char name[64];
@@ -49,7 +43,8 @@ typedef enum {
 	AST_ARRAY_ACCESS,
 	AST_ASSIGNMENT,
 	AST_FUNC_CALL,
-    AST_MEMBER_ACCESS,
+	AST_MEMBER_ACCESS,
+    AST_STRUCT_LITERAL,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -127,15 +122,19 @@ typedef struct ASTNode {
 			struct ASTNode *lvalue;
 			struct ASTNode *rvalue;
 		} assignment;
-        struct {
-            struct ASTNode* callee;
-            struct ASTNode** args;
-            int arg_count;
-        } func_call;
-        struct {
-            struct ASTNode* base;
-            char member[64];
-        } member_access;
+		struct {
+			struct ASTNode *callee;
+			struct ASTNode **args;
+			int arg_count;
+		} func_call;
+		struct {
+			struct ASTNode *base;
+			char member[64];
+		} member_access;
+		struct {
+            FieldInitializer** inits;
+            int count;
+		} struct_literal;
 	} data;
 } ASTNode;
 
