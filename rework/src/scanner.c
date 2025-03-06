@@ -75,6 +75,8 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_CONST;
 		else if (strcmp(current_token.text, "return") == 0)
 			current_token.type = TOK_RETURN;
+		else if (strcmp(current_token.text, "enum") == 0)
+			current_token.type = TOK_ENUM;
 		else {
 			current_token.type = TOK_IDENTIFIER;
 		}
@@ -115,6 +117,17 @@ Token next_token(Scanner *scanner) {
 		current_token.type = TOK_SEMICOLON;
 		strncpy(current_token.text, ";", sizeof(current_token.text));
 		eat_next_char(scanner);
+
+		break;
+	case ':':
+		current_token.type = TOK_COLON;
+		strncpy(current_token.text, ":", sizeof(current_token.text));
+		eat_next_char(scanner);
+		if (_INPUT[_INDEX] == ':') {
+			current_token.type = TOK_COLONCOLON;
+			strncpy(current_token.text, "::", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 
 		break;
 	case '{':

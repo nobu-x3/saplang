@@ -482,3 +482,28 @@ void test_StructLiteral_Nested(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_EnumDecl_WithReference(void) {
+	SETUP_TEST("enum EnumType : u8 { First, Second = 234, Third, EVEN = Second }");
+	const char *expected = "EnumDecl with 4 member(s) - EnumType : u8:\n"
+						   "  First : 0\n"
+						   "  Second : 234\n"
+						   "  Third : 235\n"
+						   "  EVEN : 234\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_EnumDecl_VariableDeclaration(void) {
+	SETUP_TEST("enum EnumType { First, Second = 234, Third, EVEN = Second }"
+			   "EnumType enum_var = EnumType::Second; ");
+	const char *expected = "EnumDecl with 4 member(s) - EnumType : i32:\n"
+						   "  First : 0\n"
+						   "  Second : 234\n"
+						   "  Third : 235\n"
+						   "  EVEN : 234\n"
+						   "VarDecl:  EnumType enum_var:\n"
+						   "  EnumValue: EnumType::Second";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
