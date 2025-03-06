@@ -184,15 +184,29 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "StructLiteral with %d initializer(s):\n", node->data.struct_literal.count);
 			for (int i = 0; i < node->data.struct_literal.count; ++i) {
 				if (node->data.struct_literal.inits[i]->is_designated) {
-					char prefix[128] = "";
 					for (int i = 0; i < indent + 1; ++i) {
 						print(string, "  ");
 					}
+					char prefix[128] = "";
 					sprintf(prefix, "Designated, field '%s':", node->data.struct_literal.inits[i]->field);
 					print(string, "%s\n", prefix);
 				}
 				ast_print(node->data.struct_literal.inits[i]->expr, indent + 1 + node->data.struct_literal.inits[i]->is_designated, string);
 			}
+			break;
+		case AST_ENUM_DECL:
+			print(string, "EnumDecl with %d member(s) - %s : %s:\n", node->data.enum_decl.member_count, node->data.enum_decl.name, node->data.enum_decl.base_type);
+			for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
+				for (int i = 0; i < indent + 1; ++i) {
+					print(string, "  ");
+				}
+				char prefix[128] = "";
+				sprintf(prefix, "%s : %ld", node->data.enum_decl.members[i]->name, node->data.enum_decl.members[i]->value);
+				print(string, "%s\n", prefix);
+			}
+			break;
+		case AST_ENUM_VALUE:
+			print(string, "EnumValue: %s::%s", node->data.enum_value.enum_type, node->data.enum_value.member);
 			break;
 		default: {
 			print(string, "Unknown AST Node\n");
@@ -226,6 +240,26 @@ ASTNode *new_ast_node(ASTNodeType type) {
 	}
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_enum_decl_node(const char *name, const char *base_type, EnumMember **members, int member_count) {
+	ASTNode *node = new_ast_node(AST_ENUM_DECL);
+	if (!node)
+		return NULL;
+	strncpy(node->data.enum_decl.name, name, sizeof(node->data.enum_decl.name));
+	strncpy(node->data.enum_decl.base_type, base_type, sizeof(node->data.enum_decl.base_type));
+	node->data.enum_decl.members = members;
+	node->data.enum_decl.member_count = member_count;
+	return node;
+}
+
+ASTNode *new_enum_value_node(const char *enum_type, const char *member) {
+	ASTNode *node = new_ast_node(AST_ENUM_VALUE);
+	if (!node)
+		return NULL;
+	strncpy(node->data.enum_value.enum_type, enum_type, sizeof(node->data.enum_value.enum_type));
+	strncpy(node->data.enum_value.member, member, sizeof(node->data.enum_value.member));
 	return node;
 }
 
@@ -492,6 +526,107 @@ ASTNode *parse_assignment(Parser *parser) {
 	return node;
 }
 
+ASTNode *parse_enum_decl(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner); // consume 'enum'
+	if (parser->current_token.type != TOK_IDENTIFIER) {
+		char msg[128];
+		sprintf(msg, "expected enum name after 'enum', got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	char enum_name[64];
+	strncpy(enum_name, parser->current_token.text, sizeof(enum_name));
+	parser->current_token = next_token(&parser->scanner); // consume enum name
+
+	char base_type[64] = "";
+	if (parser->current_token.type == TOK_COLON) {
+		parser->current_token = next_token(&parser->scanner); // consume ':'
+        parse_type_name(parser, base_type);
+	} else {
+		strncpy(base_type, "i32", sizeof(base_type));
+	}
+
+	if (parser->current_token.type != TOK_LCURLY) {
+		char msg[128];
+		sprintf(msg, "expected '{' in enum declaration, got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume '{'
+	int capacity = 4, count = 0;
+	EnumMember **members = malloc(capacity * sizeof(EnumMember *));
+	if (!members)
+		return NULL;
+
+	int next_value = 0;
+	while (parser->current_token.type != TOK_RCURLY) {
+		if (parser->current_token.type != TOK_IDENTIFIER) {
+			char msg[128];
+			sprintf(msg, "expected identifier in enum member declaration, got '%s'.", parser->current_token.text);
+			return report(parser->current_token.location, msg, 0);
+		}
+		EnumMember *member = malloc(sizeof(EnumMember));
+		if (!member) // @TODO: leaks
+			return NULL;
+		strncpy(member->name, parser->current_token.text, sizeof(member->name));
+		parser->current_token = next_token(&parser->scanner); // consume identifier
+
+		if (parser->current_token.type == TOK_ASSIGN) {
+			parser->current_token = next_token(&parser->scanner); // consume '='
+			if (parser->current_token.type == TOK_NUMBER) {
+				member->value = atoi(parser->current_token.text);
+				next_value = member->value + 1;
+				parser->current_token = next_token(&parser->scanner); // consume number
+			} else if (parser->current_token.type == TOK_IDENTIFIER) {
+				int found = 0;
+				for (int i = 0; i < count; ++i) {
+					if (strcmp(members[i]->name, parser->current_token.text) == 0) {
+						member->value = members[i]->value;
+						next_value = member->value + 1;
+						found = 1;
+						parser->current_token = next_token(&parser->scanner); // consume identifier
+						break;
+					}
+				}
+				if (!found) {
+					char msg[128];
+					sprintf(msg, "enum member '%s' not found for initializer.", parser->current_token.text);
+					return report(parser->current_token.location, msg, 0);
+				}
+			} else {
+				char msg[128];
+				sprintf(msg, "expected number or identifier after '=' in enum member declaration, got '%s'.", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+		} else {
+			member->value = next_value++;
+		}
+
+		if (count >= capacity) {
+			capacity *= 2;
+			members = realloc(members, capacity * sizeof(EnumMember *));
+			if (!members) {
+				return NULL;
+			}
+		}
+		members[count++] = member;
+
+		if (parser->current_token.type == TOK_COMMA) {
+			parser->current_token = next_token(&parser->scanner); // consume ','
+		} else {
+			break;
+		}
+	}
+
+	if (parser->current_token.type != TOK_RCURLY) {
+		char msg[128];
+		sprintf(msg, "expected '}' at the end of enum declaration, got '%s'.", parser->current_token.text);
+		report(parser->current_token.location, msg, 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume '}'
+	return new_enum_decl_node(enum_name, base_type, members, count);
+}
+
 ASTNode *parse_struct_literal(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 	int capacity = 4, count = 0;
@@ -739,7 +874,21 @@ ASTNode *parse_primary(Parser *parser) {
 	} else if (parser->current_token.type == TOK_IDENTIFIER) {
 		char ident_name[64];
 		strncpy(ident_name, parser->current_token.text, sizeof(ident_name));
-		parser->current_token = next_token(&parser->scanner);
+		parser->current_token = next_token(&parser->scanner); // consume identifier
+
+		if (parser->current_token.type == TOK_COLONCOLON) {
+			parser->current_token = next_token(&parser->scanner); // consume '::'
+			if (parser->current_token.type != TOK_IDENTIFIER) {
+				char msg[128];
+				sprintf(msg, "expected identifier after '::', got '%s'.", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+
+			char member_name[64];
+			strncpy(member_name, parser->current_token.text, sizeof(member_name));
+			parser->current_token = next_token(&parser->scanner); // consume identifier
+			return new_enum_value_node(ident_name, member_name);
+		}
 		return new_ident_node(ident_name);
 	} else if (parser->current_token.type == TOK_LPAREN) {
 		parser->current_token = next_token(&parser->scanner);
@@ -1031,8 +1180,9 @@ ASTNode *parse_global_decl(Parser *parser) {
 		return parse_struct_decl(parser);
 	} else if (parser->current_token.type == TOK_FUNC) {
 		return parse_function_decl(parser);
-	} // @TODO: extern blocks, enums
-	else {
+	} else if (parser->current_token.type == TOK_ENUM) {
+		return parse_enum_decl(parser);
+	} else { // @TODO: extern blocks
 		return parse_var_decl(parser);
 	}
 	return NULL;

@@ -14,6 +14,11 @@ typedef struct {
 	struct ASTNode *expr;
 } FieldInitializer;
 
+typedef struct {
+    char name[64];
+    long value;
+} EnumMember;
+
 typedef struct Symbol {
 	char name[64];
 	SymbolKind kind;
@@ -45,6 +50,8 @@ typedef enum {
 	AST_FUNC_CALL,
 	AST_MEMBER_ACCESS,
     AST_STRUCT_LITERAL,
+    AST_ENUM_DECL,
+    AST_ENUM_VALUE,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -135,6 +142,16 @@ typedef struct ASTNode {
             FieldInitializer** inits;
             int count;
 		} struct_literal;
+        struct {
+            char name[64];
+            char base_type[64]; // i32 by default
+            EnumMember** members; // Dynamic array of members
+            int member_count;
+        } enum_decl;
+        struct {
+            char enum_type[64];
+            char member[64];
+        } enum_value;
 	} data;
 } ASTNode;
 
