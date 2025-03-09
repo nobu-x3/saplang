@@ -606,3 +606,20 @@ void test_ExportedDecls(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_Imports(void) {
+	SETUP_TEST("import io;"
+			   "import print;"
+			   "enum EnumType { First, Second = 234, Third, EVEN = Second }"
+			   "import some_module;");
+	const char *expected = "Import: io\n"
+						   "Import: print\n"
+						   "Import: some_module\n"
+						   "EnumDecl with 4 member(s) - EnumType : i32:\n"
+						   "  First : 0\n"
+						   "  Second : 234\n"
+						   "  Third : 235\n"
+						   "  EVEN : 234\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
