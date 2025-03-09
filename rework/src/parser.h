@@ -32,6 +32,11 @@ typedef struct Parser {
 	Token current_token;
 } Parser;
 
+typedef struct {
+	char **data;
+	int capacity, count;
+} ImportList;
+
 typedef enum {
 	AST_VAR_DECL,
 	AST_STRUCT_DECL,
@@ -58,6 +63,7 @@ typedef enum {
 
 typedef struct ASTNode {
 	ASTNodeType type;
+	ImportList import_list;
 	struct ASTNode *next; // For linked lists (e.g. global declarations, fields, params)
 	union {
 		// Variable declaration: <type> name = init;

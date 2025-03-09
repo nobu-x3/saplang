@@ -81,6 +81,8 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_EXTERN;
 		else if (strcmp(current_token.text, "export") == 0)
 			current_token.type = TOK_EXPORT;
+		else if (strcmp(current_token.text, "import") == 0)
+			current_token.type = TOK_IMPORT;
 		else {
 			current_token.type = TOK_IDENTIFIER;
 		}

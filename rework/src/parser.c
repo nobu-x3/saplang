@@ -108,6 +108,9 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 	if (!node)
 		return RESULT_PASSED_NULL_PTR;
 	while (node) {
+		for (int i = 0; i < node->import_list.count; ++i) {
+			print(string, "Import: %s\n", node->import_list.data[i]);
+		}
 		for (int i = 0; i < indent; ++i) {
 			print(string, "  ");
 		}
@@ -277,6 +280,9 @@ ASTNode *new_ast_node(ASTNodeType type) {
 	if (!node) {
 		return NULL;
 	}
+	node->import_list.data = NULL;
+	node->import_list.capacity = 0;
+	node->import_list.count = 0;
 	node->type = type;
 	node->next = NULL;
 	return node;
@@ -1319,11 +1325,43 @@ ASTNode *parse_global_decl(Parser *parser) {
 	return decl;
 }
 
+char *parse_import(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner); // consume 'import'
+	if (parser->current_token.type != TOK_IDENTIFIER) {
+		char msg[128];
+		sprintf(msg, "expected identifier in import, got %s", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+	char *import_name = strdup(parser->current_token.text);
+	parser->current_token = next_token(&parser->scanner); // consume import name
+	if (parser->current_token.type != TOK_SEMICOLON) {
+		char msg[128];
+		sprintf(msg, "expected ';' after import's identifier, got %s", parser->current_token.text);
+		free(import_name);
+		return report(parser->current_token.location, msg, 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume ';'
+	return import_name;
+}
+
 // <globalDecl>* <EOF>
 ASTNode *parse_input(Parser *parser) {
 	ASTNode *global_list = NULL, *last = NULL;
+
+	ImportList import_list;
+	da_init(import_list, 4);
+
 	parser->current_token = next_token(&parser->scanner);
 	while (parser->current_token.type != TOK_EOF) {
+		if (parser->current_token.type == TOK_IMPORT) {
+			char *import_name = parse_import(parser);
+			if (!import_name) {
+				free(import_list.data);
+				return NULL;
+			}
+			da_push(import_list, import_name);
+			continue;
+		}
 		ASTNode *decl = parse_global_decl(parser);
 		if (!decl)
 			return NULL;
@@ -1334,5 +1372,6 @@ ASTNode *parse_input(Parser *parser) {
 			last = decl;
 		}
 	}
+	global_list->import_list = import_list;
 	return global_list;
 }
