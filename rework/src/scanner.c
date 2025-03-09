@@ -30,7 +30,7 @@ Token next_token(Scanner *scanner) {
 	}
 
 	// If letter: read identifier/keyword.
-	if (isalpha(_INPUT[_INDEX])) {
+	if (isalpha(_INPUT[_INDEX]) || _INPUT[_INDEX] == '_') {
 		int i = 0;
 		while (_INPUT[_INDEX] && (isalnum(_INPUT[_INDEX]) || _INPUT[_INDEX] == '_')) {
 			current_token.text[i++] = _INPUT[_INDEX];
@@ -77,6 +77,8 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_RETURN;
 		else if (strcmp(current_token.text, "enum") == 0)
 			current_token.type = TOK_ENUM;
+		else if (strcmp(current_token.text, "extern") == 0)
+			current_token.type = TOK_EXTERN;
 		else {
 			current_token.type = TOK_IDENTIFIER;
 		}
@@ -210,16 +212,22 @@ Token next_token(Scanner *scanner) {
 		break;
 	case '.':
 		current_token.type = TOK_DOT;
-		strncpy(current_token.text, ".", sizeof(current_token.text));
-		eat_next_char(scanner);
-
+		if (_INPUT[_INDEX + 1] && _INPUT[_INDEX + 1] == '.' && _INPUT[_INDEX + 2] && _INPUT[_INDEX + 2] == '.') {
+			current_token.type = TOK_DOTDOTDOT;
+			strncpy(current_token.text, "...", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else {
+			strncpy(current_token.text, ".", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 		break;
 	default:
 		current_token.type = TOK_UNKNOWN;
 		current_token.text[0] = _INPUT[_INDEX];
 		current_token.text[1] = '\0';
 		eat_next_char(scanner);
-
 		break;
 	}
 	current_token.location.id = _INDEX;
