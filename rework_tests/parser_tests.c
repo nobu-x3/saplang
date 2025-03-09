@@ -107,7 +107,6 @@ void test_FunctionDeclaration(void) {
 						   "        Binary Expression: -\n"
 						   "          Ident: result\n"
 						   "          Literal Int: 1\n";
-
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
@@ -504,6 +503,56 @@ void test_EnumDecl_VariableDeclaration(void) {
 						   "  EVEN : 234\n"
 						   "VarDecl:  EnumType enum_var:\n"
 						   "  EnumValue: EnumType::Second";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ExternBlocks_FullIO(void) {
+	SETUP_TEST("extern {"
+			   "struct FILE {"
+			   "        i8*   _ptr;"
+			   "        i32 _cnt;"
+			   "        i8*   _base;"
+			   "        i32 _flag;"
+			   "        i32 _file;"
+			   "        i32 _charbuf;"
+			   "        i32 _bufsiz;"
+			   "        i8*   _tmpfname;"
+			   "    }"
+			   "    fn FILE* fopen(const u8* filename, const u8* mode);"
+			   "    fn i32 fclose(FILE* file);"
+			   "    fn void printf(const u8* str, ...);"
+			   "    fn i32 fgetc(FILE* stream);"
+			   "    fn i32 fputc(i32 ch, FILE* stream);"
+			   "}");
+	const char *expected = "ExternBlock from lib c:\n"
+						   "  StructDecl: FILE\n"
+						   "    FieldDecl: *i8 _ptr\n"
+						   "    FieldDecl: i32 _cnt\n"
+						   "    FieldDecl: *i8 _base\n"
+						   "    FieldDecl: i32 _flag\n"
+						   "    FieldDecl: i32 _file\n"
+						   "    FieldDecl: i32 _charbuf\n"
+						   "    FieldDecl: i32 _bufsiz\n"
+						   "    FieldDecl: *i8 _tmpfname\n"
+						   "  Extern FuncDecl fopen:\n"
+						   "    Params:\n"
+						   "      ParamDecl: const *u8 filename\n"
+						   "      ParamDecl: const *u8 mode\n"
+						   "  Extern FuncDecl fclose:\n"
+						   "    Params:\n"
+						   "      ParamDecl: *FILE file\n"
+						   "  Extern FuncDecl printf:\n"
+						   "    Params:\n"
+						   "      ParamDecl: const *u8 str\n"
+						   "      ParamDecl: ...\n"
+						   "  Extern FuncDecl fgetc:\n"
+						   "    Params:\n"
+						   "      ParamDecl: *FILE stream\n"
+						   "  Extern FuncDecl fputc:\n"
+						   "    Params:\n"
+						   "      ParamDecl: i32 ch\n"
+						   "      ParamDecl: *FILE stream\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }

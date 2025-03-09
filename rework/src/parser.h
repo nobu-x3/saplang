@@ -15,8 +15,8 @@ typedef struct {
 } FieldInitializer;
 
 typedef struct {
-    char name[64];
-    long value;
+	char name[64];
+	long value;
 } EnumMember;
 
 typedef struct Symbol {
@@ -49,9 +49,11 @@ typedef enum {
 	AST_ASSIGNMENT,
 	AST_FUNC_CALL,
 	AST_MEMBER_ACCESS,
-    AST_STRUCT_LITERAL,
-    AST_ENUM_DECL,
-    AST_ENUM_VALUE,
+	AST_STRUCT_LITERAL,
+	AST_ENUM_DECL,
+	AST_ENUM_VALUE,
+	AST_EXTERN_BLOCK,
+	AST_EXTERN_FUNC_DECL,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -83,9 +85,11 @@ typedef struct ASTNode {
 		} field_decl;
 		// Parameter declaration: <type> name
 		struct {
+			int is_const;
+			int is_va;
 			char type_name[64];
 			char name[64];
-		} paramDecl;
+		} param_decl;
 		// Block: a list of statements
 		struct {
 			struct ASTNode **statements;
@@ -139,19 +143,28 @@ typedef struct ASTNode {
 			char member[64];
 		} member_access;
 		struct {
-            FieldInitializer** inits;
-            int count;
+			FieldInitializer **inits;
+			int count;
 		} struct_literal;
-        struct {
-            char name[64];
-            char base_type[64]; // i32 by default
-            EnumMember** members; // Dynamic array of members
-            int member_count;
-        } enum_decl;
-        struct {
-            char enum_type[64];
-            char member[64];
-        } enum_value;
+		struct {
+			char name[64];
+			char base_type[64];	  // i32 by default
+			EnumMember **members; // Dynamic array of members
+			int member_count;
+		} enum_decl;
+		struct {
+			char enum_type[64];
+			char member[64];
+		} enum_value;
+		struct {
+			char lib_name[64];
+			struct ASTNode **block;
+			int count;
+		} extern_block;
+		struct {
+			char name[64];
+			struct ASTNode *params; // Linked list of parameter declarations
+		} extern_func;
 	} data;
 } ASTNode;
 

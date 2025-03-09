@@ -10,6 +10,32 @@
 // @TODO: fix memleaks on return NULL
 // @TODO: implement AST deinit
 
+typedef struct {
+	ASTNode **data;
+	int capacity;
+	int count;
+} NodeList;
+
+#define da_push(xs, x)                                                                                                                                                                                                                         \
+	do {                                                                                                                                                                                                                                       \
+		if (xs.count >= xs.capacity) {                                                                                                                                                                                                         \
+			xs.capacity *= 2;                                                                                                                                                                                                                  \
+			xs.data = realloc(xs.data, xs.capacity * sizeof(*xs.data));                                                                                                                                                                        \
+			if (!xs.data)                                                                                                                                                                                                                      \
+				return NULL;                                                                                                                                                                                                                   \
+		}                                                                                                                                                                                                                                      \
+		xs.data[xs.count++] = x;                                                                                                                                                                                                               \
+	} while (0)
+
+#define da_init(xs, cap)                                                                                                                                                                                                                       \
+	do {                                                                                                                                                                                                                                       \
+		xs.count = 0;                                                                                                                                                                                                                          \
+		xs.capacity = cap;                                                                                                                                                                                                                     \
+		xs.data = malloc(xs.capacity * sizeof(*xs.data));                                                                                                                                                                                      \
+		if (!xs.data)                                                                                                                                                                                                                          \
+			return NULL;                                                                                                                                                                                                                       \
+	} while (0)
+
 #define print(string, format, ...)                                                                                                                                                                                                             \
 	if (string) {                                                                                                                                                                                                                              \
 		sprintf(string, format, ##__VA_ARGS__);                                                                                                                                                                                                \
@@ -120,7 +146,11 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "FieldDecl: %s %s\n", node->data.field_decl.type_name, node->data.field_decl.name);
 			break;
 		case AST_PARAM_DECL:
-			print(string, "ParamDecl: %s %s\n", node->data.paramDecl.type_name, node->data.paramDecl.name);
+			if (node->data.param_decl.is_va) {
+				print(string, "ParamDecl: ...\n");
+			} else {
+				print(string, "ParamDecl: %s%s %s\n", node->data.param_decl.is_const ? "const " : "", node->data.param_decl.type_name, node->data.param_decl.name);
+			}
 			break;
 		case AST_BLOCK:
 			print(string, "Block with %d statement(s):\n", node->data.block.count);
@@ -207,6 +237,19 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			break;
 		case AST_ENUM_VALUE:
 			print(string, "EnumValue: %s::%s", node->data.enum_value.enum_type, node->data.enum_value.member);
+			break;
+		case AST_EXTERN_BLOCK:
+			print(string, "ExternBlock from lib %s:\n", node->data.extern_block.lib_name);
+			for (int i = 0; i < node->data.extern_block.count; ++i) {
+				ast_print(node->data.extern_block.block[i], indent + 1, string);
+			}
+			break;
+		case AST_EXTERN_FUNC_DECL:
+			print(string, "Extern FuncDecl %s:\n", node->data.extern_func.name);
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Params:\n");
+			ast_print(node->data.extern_func.params, indent + 2, string);
 			break;
 		default: {
 			print(string, "Unknown AST Node\n");
@@ -363,12 +406,14 @@ ASTNode *new_block_node(ASTNode **stmts, int count) {
 	return node;
 }
 
-ASTNode *new_param_decl_node(const char *type_name, const char *name) {
+ASTNode *new_param_decl_node(const char *type_name, const char *name, int is_const, int is_va) {
 	ASTNode *node = new_ast_node(AST_PARAM_DECL);
 	if (!node)
 		return NULL;
-	strncpy(node->data.paramDecl.type_name, type_name, sizeof(node->data.paramDecl.type_name));
-	strncpy(node->data.paramDecl.name, name, sizeof(node->data.paramDecl.name));
+	strncpy(node->data.param_decl.type_name, type_name, sizeof(node->data.param_decl.type_name));
+	strncpy(node->data.param_decl.name, name, sizeof(node->data.param_decl.name));
+	node->data.param_decl.is_const = is_const;
+	node->data.param_decl.is_va = is_va;
 	return node;
 }
 
@@ -379,6 +424,25 @@ ASTNode *new_func_decl_node(const char *name, ASTNode *params, ASTNode *body) {
 	strncpy(node->data.func_decl.name, name, sizeof(node->data.func_decl.name));
 	node->data.func_decl.params = params;
 	node->data.func_decl.body = body;
+	return node;
+}
+
+ASTNode *new_extern_func_decl_node(const char *name, ASTNode *params) {
+	ASTNode *node = new_ast_node(AST_EXTERN_FUNC_DECL);
+	if (!node)
+		return NULL;
+	strncpy(node->data.extern_func.name, name, sizeof(node->data.extern_func.name));
+	node->data.extern_func.params = params;
+	return node;
+}
+
+ASTNode *new_extern_block_node(const char *libname, ASTNode **decls, int count) {
+	ASTNode *node = new_ast_node(AST_EXTERN_BLOCK);
+	if (!node)
+		return NULL;
+	strncpy(node->data.extern_block.lib_name, libname, sizeof(node->data.extern_block.lib_name));
+	node->data.extern_block.block = decls;
+	node->data.extern_block.count = count;
 	return node;
 }
 
@@ -455,11 +519,11 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 	case TOK_F64:
 	case TOK_VOID:
 	case TOK_BOOL:
-		strncpy(base_type, parser->current_token.text, 64);
+		strncpy(base_type, parser->current_token.text, sizeof(base_type));
 		parser->current_token = next_token(&parser->scanner);
 		break;
 	case TOK_IDENTIFIER:
-		strncpy(base_type, parser->current_token.text, 64);
+		strncpy(base_type, parser->current_token.text, sizeof(base_type));
 		parser->current_token = next_token(&parser->scanner);
 		break;
 	default: {
@@ -541,7 +605,7 @@ ASTNode *parse_enum_decl(Parser *parser) {
 	char base_type[64] = "";
 	if (parser->current_token.type == TOK_COLON) {
 		parser->current_token = next_token(&parser->scanner); // consume ':'
-        parse_type_name(parser, base_type);
+		parse_type_name(parser, base_type);
 	} else {
 		strncpy(base_type, "i32", sizeof(base_type));
 	}
@@ -553,10 +617,14 @@ ASTNode *parse_enum_decl(Parser *parser) {
 	}
 
 	parser->current_token = next_token(&parser->scanner); // consume '{'
-	int capacity = 4, count = 0;
-	EnumMember **members = malloc(capacity * sizeof(EnumMember *));
-	if (!members)
-		return NULL;
+	typedef struct {
+		EnumMember **data;
+		int count;
+		int capacity;
+	} enum_member_list;
+
+	enum_member_list members;
+	da_init(members, 4);
 
 	int next_value = 0;
 	while (parser->current_token.type != TOK_RCURLY) {
@@ -579,9 +647,9 @@ ASTNode *parse_enum_decl(Parser *parser) {
 				parser->current_token = next_token(&parser->scanner); // consume number
 			} else if (parser->current_token.type == TOK_IDENTIFIER) {
 				int found = 0;
-				for (int i = 0; i < count; ++i) {
-					if (strcmp(members[i]->name, parser->current_token.text) == 0) {
-						member->value = members[i]->value;
+				for (int i = 0; i < members.count; ++i) {
+					if (strcmp(members.data[i]->name, parser->current_token.text) == 0) {
+						member->value = members.data[i]->value;
 						next_value = member->value + 1;
 						found = 1;
 						parser->current_token = next_token(&parser->scanner); // consume identifier
@@ -602,14 +670,7 @@ ASTNode *parse_enum_decl(Parser *parser) {
 			member->value = next_value++;
 		}
 
-		if (count >= capacity) {
-			capacity *= 2;
-			members = realloc(members, capacity * sizeof(EnumMember *));
-			if (!members) {
-				return NULL;
-			}
-		}
-		members[count++] = member;
+		da_push(members, member);
 
 		if (parser->current_token.type == TOK_COMMA) {
 			parser->current_token = next_token(&parser->scanner); // consume ','
@@ -624,15 +685,19 @@ ASTNode *parse_enum_decl(Parser *parser) {
 		report(parser->current_token.location, msg, 0);
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '}'
-	return new_enum_decl_node(enum_name, base_type, members, count);
+	return new_enum_decl_node(enum_name, base_type, members.data, members.count);
 }
 
 ASTNode *parse_struct_literal(Parser *parser) {
+	typedef struct {
+		FieldInitializer **data;
+		int capacity;
+		int count;
+	} field_init_list;
+
 	parser->current_token = next_token(&parser->scanner); // consume '{'
-	int capacity = 4, count = 0;
-	FieldInitializer **inits = malloc(capacity * sizeof(FieldInitializer *));
-	if (!inits)
-		return NULL;
+	field_init_list inits;
+	da_init(inits, 4);
 
 	while (parser->current_token.type != TOK_RCURLY) {
 		FieldInitializer *init = NULL;
@@ -665,14 +730,7 @@ ASTNode *parse_struct_literal(Parser *parser) {
 			init = new_field_initializer("", 0, expr);
 		}
 
-		if (count >= capacity) {
-			capacity *= 2;
-			inits = realloc(inits, capacity * sizeof(FieldInitializer *));
-			if (!inits)
-				return NULL;
-		}
-
-		inits[count++] = init;
+		da_push(inits, init);
 
 		if (parser->current_token.type == TOK_COMMA) {
 			parser->current_token = next_token(&parser->scanner); // consume ','
@@ -691,7 +749,7 @@ ASTNode *parse_struct_literal(Parser *parser) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '}'
 
-	return new_struct_literal_node(inits, count);
+	return new_struct_literal_node(inits.data, inits.count);
 }
 
 ASTNode *parse_postfix(Parser *parser) {
@@ -702,23 +760,12 @@ ASTNode *parse_postfix(Parser *parser) {
 
 			parser->current_token = next_token(&parser->scanner);
 
-			int capacity = 4, count = 0;
-			ASTNode **args = malloc(capacity * sizeof(ASTNode *));
-			if (!args)
-				return NULL;
-
+			NodeList args;
+			da_init(args, 4);
 			if (parser->current_token.type != TOK_RPAREN) {
 				while (1) {
 					ASTNode *arg = parse_assignment(parser);
-					if (count >= capacity) {
-						capacity *= 2;
-						args = realloc(args, capacity * sizeof(ASTNode *));
-						if (!args) {
-							free(args);
-							return NULL;
-						}
-					}
-					args[count++] = arg;
+					da_push(args, arg);
 
 					if (parser->current_token.type == TOK_COMMA) {
 						parser->current_token = next_token(&parser->scanner);
@@ -734,7 +781,7 @@ ASTNode *parse_postfix(Parser *parser) {
 			}
 
 			parser->current_token = next_token(&parser->scanner);
-			node = new_function_call(node, args, count);
+			node = new_function_call(node, args.data, args.count);
 
 		} else if (parser->current_token.type == TOK_LBRACKET) {
 			parser->current_token = next_token(&parser->scanner);
@@ -777,10 +824,8 @@ ASTNode *parse_postfix(Parser *parser) {
 ASTNode *parse_array_literal(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume '['
 
-	int capacity = 4, count = 0;
-	ASTNode **elements = malloc(capacity * sizeof(ASTNode *));
-	if (!elements)
-		return NULL;
+	NodeList elements;
+	da_init(elements, 4);
 
 	if (parser->current_token.type != TOK_RBRACKET) {
 		while (1) {
@@ -788,7 +833,7 @@ ASTNode *parse_array_literal(Parser *parser) {
 			if (!expr)
 				return NULL;
 
-			elements[count++] = expr;
+			da_push(elements, expr);
 
 			if (parser->current_token.type == TOK_COMMA) {
 				parser->current_token = next_token(&parser->scanner); // consume ','
@@ -806,7 +851,7 @@ ASTNode *parse_array_literal(Parser *parser) {
 	}
 
 	parser->current_token = next_token(&parser->scanner); // consume ']'
-	return new_array_literal_node(elements, count);
+	return new_array_literal_node(elements.data, elements.count);
 }
 
 ASTNode *parse_term(Parser *parser) {
@@ -1058,16 +1103,27 @@ ASTNode *parse_struct_decl(Parser *parser) {
 // <parameterDecl>
 // ::= (<type> <identifier>)*
 ASTNode *parse_parameter_declaration(Parser *parser) {
+	if (parser->current_token.type == TOK_DOTDOTDOT) {
+		parser->current_token = next_token(&parser->scanner); // consume name
+		return new_param_decl_node("", "", 0, 1);
+	}
+	int is_const = 0;
+	if (parser->current_token.type == TOK_CONST) {
+		is_const = 1;
+		parser->current_token = next_token(&parser->scanner); // consume name
+	}
 	char type_name[64];
 	if (parse_type_name(parser, type_name) != RESULT_SUCCESS)
 		return NULL;
 	if (parser->current_token.type != TOK_IDENTIFIER) {
-		return report(parser->current_token.location, "expected identifier in parameter declaration.", 0);
+		char msg[128];
+		sprintf(msg, "expected identifier in parameter declaration, got %s.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
 	}
 	char param_name[64];
 	strncpy(param_name, parser->current_token.text, sizeof(param_name));
 	parser->current_token = next_token(&parser->scanner); // consume name
-	return new_param_decl_node(type_name, param_name);
+	return new_param_decl_node(type_name, param_name, is_const, 0);
 }
 
 ASTNode *parse_parameter_list(Parser *parser) {
@@ -1098,37 +1154,24 @@ ASTNode *parse_block(Parser *parser) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
-	int capacity = 8, count = 0;
-	ASTNode **stmts = malloc(capacity * sizeof(ASTNode *));
-	assert(stmts);
+	NodeList stmts;
+	da_init(stmts, 4);
 
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *stmt = parse_stmt(parser);
-		if (!stmt) {
-			for (int i = 0; i < capacity; ++i) {
-				free(stmts[i]);
-			}
-			free(stmts);
-			return NULL;
-		}
-		if (count >= capacity) {
-			capacity *= 2;
-			stmts = realloc(stmts, capacity * sizeof(ASTNode *));
-			assert(stmts);
-		}
-		stmts[count++] = stmt;
+		da_push(stmts, stmt);
 	}
 
 	if (parser->current_token.type != TOK_RCURLY) {
-		for (int i = 0; i < capacity; ++i) {
-			free(stmts[i]);
-		}
-		free(stmts);
+		/* for (int i = 0; i < capacity; ++i) { */
+		/* 	free(stmts[i]); */
+		/* } */
+		/* free(stmts); */
 		return report(parser->current_token.location, "expected '}' to end the block.", 0);
 	}
 
 	parser->current_token = next_token(&parser->scanner);
-	return new_block_node(stmts, count);
+	return new_block_node(stmts.data, stmts.count);
 }
 
 // <functionDecl>
@@ -1169,6 +1212,77 @@ ASTNode *parse_function_decl(Parser *parser) {
 	return new_func_decl_node(func_name, params, body);
 }
 
+ASTNode *parse_extern_func_decl(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner); // consume 'fn'
+	if ((parser->current_token.type < TOKENS_BUILTIN_TYPE_BEGIN || parser->current_token.type > TOKENS_BUILTIN_TYPE_END) && parser->current_token.type != TOK_IDENTIFIER)
+		return report(parser->current_token.location, "expected return type.", 0);
+
+	char type[64];
+	parse_type_name(parser, type);
+
+	if (parser->current_token.type != TOK_IDENTIFIER)
+		return report(parser->current_token.location, "expected function identifier.", 0);
+
+	char func_name[64];
+	strncpy(func_name, parser->current_token.text, sizeof(func_name));
+	parser->current_token = next_token(&parser->scanner); // consume function name
+
+	if (parser->current_token.type != TOK_LPAREN) {
+		return report(parser->current_token.location, "expected '(' after function name.", 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume '('
+
+	ASTNode *params = parse_parameter_list(parser);
+	if (parser->current_token.type != TOK_RPAREN) {
+		return report(parser->current_token.location, "expected ')' after parameter list.", 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume ')'
+
+	if (parser->current_token.type != TOK_SEMICOLON) {
+		char msg[128];
+		sprintf(msg, "expected ';' after extern function declaration, got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume ')'
+
+	add_symbol(&parser->symbol_table, func_name, SYMB_FN, type);
+	return new_extern_func_decl_node(func_name, params);
+}
+
+ASTNode *parse_extern_block(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner); // consume 'extern'
+	char lib_name[64] = "c";
+
+	if (parser->current_token.type == TOK_IDENTIFIER) {
+		strncpy(lib_name, parser->current_token.text, sizeof(lib_name));
+		parser->current_token = next_token(&parser->scanner); // consume libname
+	}
+	if (parser->current_token.type != TOK_LCURLY) {
+		char msg[128];
+		sprintf(msg, "expected '{' in the beginning of extern block, got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume '{'
+	NodeList decls;
+	da_init(decls, 4);
+	while (parser->current_token.type != TOK_RCURLY) {
+		ASTNode *decl = NULL;
+		if (parser->current_token.type == TOK_STRUCT) {
+			decl = parse_struct_decl(parser);
+		} else if (parser->current_token.type == TOK_FUNC) {
+			decl = parse_extern_func_decl(parser);
+		} else if (parser->current_token.type == TOK_ENUM) {
+			decl = parse_enum_decl(parser);
+		} else {
+			decl = parse_var_decl(parser);
+		}
+		assert(decl);
+		da_push(decls, decl);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume '}'
+	return new_extern_block_node(lib_name, decls.data, decls.count);
+}
+
 // <globalDecl>
 // ::= <varDecl>
 //  | <funcDecl>
@@ -1182,7 +1296,9 @@ ASTNode *parse_global_decl(Parser *parser) {
 		return parse_function_decl(parser);
 	} else if (parser->current_token.type == TOK_ENUM) {
 		return parse_enum_decl(parser);
-	} else { // @TODO: extern blocks
+	} else if (parser->current_token.type == TOK_EXTERN) {
+		return parse_extern_block(parser);
+	} else {
 		return parse_var_decl(parser);
 	}
 	return NULL;
