@@ -113,11 +113,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 		}
 		switch (node->type) {
 		case AST_VAR_DECL: {
-			char is_const[6] = {0};
-			if (node->data.var_decl.is_const) {
-				strncpy(is_const, "const", sizeof(is_const));
-			}
-			print(string, "VarDecl: %s %s %s", is_const, node->data.var_decl.type_name, node->data.var_decl.name);
+			print(string, "VarDecl: %s%s%s %s", node->data.var_decl.is_exported ? "exported " : "", node->data.var_decl.is_const ? "const " : "", node->data.var_decl.type_name, node->data.var_decl.name);
 			if (node->data.var_decl.init) {
 				print(string, ":\n");
 				ast_print(node->data.var_decl.init, indent + 1, string);
@@ -127,11 +123,11 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			break;
 		}
 		case AST_STRUCT_DECL:
-			print(string, "StructDecl: %s\n", node->data.struct_decl.name);
+			print(string, "StructDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.struct_decl.name);
 			ast_print(node->data.struct_decl.fields, indent + 1, string);
 			break;
 		case AST_FUNC_DECL:
-			print(string, "FuncDecl: %s\n", node->data.func_decl.name);
+			print(string, "FuncDecl: %s%s\n", node->data.func_decl.is_exported ? "exported " : "", node->data.func_decl.name);
 			for (int i = 0; i < indent + 1; i++) {
 				print(string, "  ");
 			}
@@ -225,7 +221,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			}
 			break;
 		case AST_ENUM_DECL:
-			print(string, "EnumDecl with %d member(s) - %s : %s:\n", node->data.enum_decl.member_count, node->data.enum_decl.name, node->data.enum_decl.base_type);
+			print(string, "EnumDecl with %d member(s) - %s%s : %s:\n", node->data.enum_decl.member_count, node->data.enum_decl.is_exported ? "exported " : "", node->data.enum_decl.name, node->data.enum_decl.base_type);
 			for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
 				for (int i = 0; i < indent + 1; ++i) {
 					print(string, "  ");
@@ -245,7 +241,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			}
 			break;
 		case AST_EXTERN_FUNC_DECL:
-			print(string, "Extern FuncDecl %s:\n", node->data.extern_func.name);
+			print(string, "Extern FuncDecl %s%s:\n", node->data.extern_func.is_exported ? "exported " : "", node->data.extern_func.name);
 			for (int i = 0; i < indent + 1; i++)
 				print(string, "  ");
 			print(string, "Params:\n");
@@ -1267,14 +1263,23 @@ ASTNode *parse_extern_block(Parser *parser) {
 	da_init(decls, 4);
 	while (parser->current_token.type != TOK_RCURLY) {
 		ASTNode *decl = NULL;
+		int is_exported = 0;
+		if (parser->current_token.type == TOK_EXPORT) {
+			is_exported = 1;
+			parser->current_token = next_token(&parser->scanner);
+		}
 		if (parser->current_token.type == TOK_STRUCT) {
 			decl = parse_struct_decl(parser);
+			decl->data.struct_decl.is_exported = is_exported;
 		} else if (parser->current_token.type == TOK_FUNC) {
 			decl = parse_extern_func_decl(parser);
+			decl->data.extern_func.is_exported = is_exported;
 		} else if (parser->current_token.type == TOK_ENUM) {
 			decl = parse_enum_decl(parser);
+			decl->data.enum_decl.is_exported = is_exported;
 		} else {
 			decl = parse_var_decl(parser);
+			decl->data.var_decl.is_exported = is_exported;
 		}
 		assert(decl);
 		da_push(decls, decl);
@@ -1290,18 +1295,28 @@ ASTNode *parse_extern_block(Parser *parser) {
 //  | <enumDecl>
 //  | <externBlock>
 ASTNode *parse_global_decl(Parser *parser) {
-	if (parser->current_token.type == TOK_STRUCT) {
-		return parse_struct_decl(parser);
-	} else if (parser->current_token.type == TOK_FUNC) {
-		return parse_function_decl(parser);
-	} else if (parser->current_token.type == TOK_ENUM) {
-		return parse_enum_decl(parser);
-	} else if (parser->current_token.type == TOK_EXTERN) {
-		return parse_extern_block(parser);
-	} else {
-		return parse_var_decl(parser);
+	int is_exported = 0;
+	if (parser->current_token.type == TOK_EXPORT) {
+		is_exported = 1;
+		parser->current_token = next_token(&parser->scanner);
 	}
-	return NULL;
+	ASTNode *decl = NULL;
+	if (parser->current_token.type == TOK_STRUCT) {
+		decl = parse_struct_decl(parser);
+		decl->data.struct_decl.is_exported = is_exported;
+	} else if (parser->current_token.type == TOK_FUNC) {
+		decl = parse_function_decl(parser);
+		decl->data.func_decl.is_exported = is_exported;
+	} else if (parser->current_token.type == TOK_ENUM) {
+		decl = parse_enum_decl(parser);
+		decl->data.enum_decl.is_exported = is_exported;
+	} else if (parser->current_token.type == TOK_EXTERN) {
+		decl = parse_extern_block(parser);
+	} else {
+		decl = parse_var_decl(parser);
+		decl->data.var_decl.is_exported = is_exported;
+	}
+	return decl;
 }
 
 // <globalDecl>* <EOF>

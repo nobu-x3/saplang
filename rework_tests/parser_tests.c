@@ -59,7 +59,7 @@ static char *capture_ast_output(ASTNode *ast) {
 void test_VariableDeclaration(void) {
 	SETUP_TEST("i32 x = 42;");
 
-	const char *expected = "VarDecl:  i32 x:\n"
+	const char *expected = "VarDecl: i32 x:\n"
 						   "  Literal Int: 42\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
@@ -68,7 +68,7 @@ void test_VariableDeclaration(void) {
 
 void test_ArithmeticExpression(void) {
 	SETUP_TEST("i32 x = 1 + 2 * 3;");
-	const char *expected = "VarDecl:  i32 x:\n"
+	const char *expected = "VarDecl: i32 x:\n"
 						   "  Binary Expression: +\n"
 						   "    Literal Int: 1\n"
 						   "    Binary Expression: *\n"
@@ -97,7 +97,7 @@ void test_FunctionDeclaration(void) {
 						   "    ParamDecl: i32 b\n"
 						   "  Body:\n"
 						   "    Block with 2 statement(s):\n"
-						   "      VarDecl:  i32 result:\n"
+						   "      VarDecl: i32 result:\n"
 						   "        Binary Expression: +\n"
 						   "          Ident: a\n"
 						   "          Binary Expression: *\n"
@@ -121,13 +121,13 @@ void test_CombinedDeclarations(void) {
 			   " i32 result = a + b * 2;"
 			   " return result - 1;"
 			   "}");
-	const char *expected = "VarDecl:  i32 x:\n"
+	const char *expected = "VarDecl: i32 x:\n"
 						   "  Literal Int: 42\n"
 						   "VarDecl: const f64 y:\n"
 						   "  Literal Float: 3.140000\n"
-						   "VarDecl:  bool flag:\n"
+						   "VarDecl: bool flag:\n"
 						   "  Literal Bool: true\n"
-						   "VarDecl:  i32 a\n"
+						   "VarDecl: i32 a\n"
 						   "StructDecl: Point\n"
 						   "  FieldDecl: i32 x\n"
 						   "  FieldDecl: i32 y\n"
@@ -137,7 +137,7 @@ void test_CombinedDeclarations(void) {
 						   "    ParamDecl: i32 b\n"
 						   "  Body:\n"
 						   "    Block with 2 statement(s):\n"
-						   "      VarDecl:  i32 result:\n"
+						   "      VarDecl: i32 result:\n"
 						   "        Binary Expression: +\n"
 						   "          Ident: a\n"
 						   "          Binary Expression: *\n"
@@ -195,7 +195,7 @@ void test_UnaryExpression_AddressOf(void) {
 
 void test_SinglePointer(void) {
 	SETUP_TEST("i32* x = 42;");
-	const char *expected = "VarDecl:  *i32 x:\n"
+	const char *expected = "VarDecl: *i32 x:\n"
 						   "  Literal Int: 42\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
@@ -203,7 +203,7 @@ void test_SinglePointer(void) {
 
 void test_MultiPointer(void) {
 	SETUP_TEST("i32** x = 42;");
-	const char *expected = "VarDecl:  **i32 x:\n"
+	const char *expected = "VarDecl: **i32 x:\n"
 						   "  Literal Int: 42\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
@@ -211,7 +211,7 @@ void test_MultiPointer(void) {
 
 void test_CustomTypePointer(void) {
 	SETUP_TEST("MyStruct** x = 42;");
-	const char *expected = "VarDecl:  **MyStruct x:\n"
+	const char *expected = "VarDecl: **MyStruct x:\n"
 						   "  Literal Int: 42\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
@@ -220,13 +220,13 @@ void test_CustomTypePointer(void) {
 void test_ArrayLiterals(void) {
 	SETUP_TEST("i32[4] arr1 = [0, 1, 2, 3];"
 			   "i32[2][3] arr2 = [[1,2,3], [4,5,6]];");
-	const char *expected = "VarDecl:  [4]i32 arr1:\n"
+	const char *expected = "VarDecl: [4]i32 arr1:\n"
 						   "  Array literal of size 4:\n"
 						   "    Literal Int: 0\n"
 						   "    Literal Int: 1\n"
 						   "    Literal Int: 2\n"
 						   "    Literal Int: 3\n"
-						   "VarDecl:  [2][3]i32 arr2:\n"
+						   "VarDecl: [2][3]i32 arr2:\n"
 						   "  Array literal of size 2:\n"
 						   "    Array literal of size 3:\n"
 						   "      Literal Int: 1\n"
@@ -251,7 +251,7 @@ void test_ArrayAccessAssignment(void) {
 						   "  Params:\n"
 						   "  Body:\n"
 						   "    Block with 3 statement(s):\n"
-						   "      VarDecl:  [4]i32 arr1:\n"
+						   "      VarDecl: [4]i32 arr1:\n"
 						   "        Array literal of size 4:\n"
 						   "          Literal Int: 0\n"
 						   "          Literal Int: 1\n"
@@ -315,7 +315,7 @@ void test_FunctionCallsWithExprArguments(void) {
 						   "  Params:\n"
 						   "  Body:\n"
 						   "    Block with 3 statement(s):\n"
-						   "      VarDecl:  [4]i32 arr1:\n"
+						   "      VarDecl: [4]i32 arr1:\n"
 						   "        Array literal of size 4:\n"
 						   "          Literal Int: 0\n"
 						   "          Literal Int: 1\n"
@@ -367,7 +367,7 @@ void test_MemberAccessSingle_Value(void) {
 			   "fn void test() { my_struct.field = 0; }");
 	const char *expected = "StructDecl: MyStruct\n"
 						   "  FieldDecl: *i32 field\n"
-						   "VarDecl:  MyStruct my_struct\n"
+						   "VarDecl: MyStruct my_struct\n"
 						   "FuncDecl: test\n"
 						   "  Params:\n"
 						   "  Body:\n"
@@ -386,7 +386,7 @@ void test_MemberAccessSingle_Pointer(void) {
 			   "fn void test() { my_struct.field = 0; }");
 	const char *expected = "StructDecl: MyStruct\n"
 						   "  FieldDecl: *i32 field\n"
-						   "VarDecl:  *MyStruct my_struct\n"
+						   "VarDecl: *MyStruct my_struct\n"
 						   "FuncDecl: test\n"
 						   "  Params:\n"
 						   "  Body:\n"
@@ -408,7 +408,7 @@ void test_MemberAccessMulti_Pointer(void) {
 						   "  FieldDecl: i32 int_field\n"
 						   "StructDecl: MyStruct2\n"
 						   "  FieldDecl: MyStruct1 field\n"
-						   "VarDecl:  MyStruct2 my_struct2\n"
+						   "VarDecl: MyStruct2 my_struct2\n"
 						   "FuncDecl: test\n"
 						   "  Params:\n"
 						   "  Body:\n"
@@ -424,7 +424,7 @@ void test_MemberAccessMulti_Pointer(void) {
 
 void test_StructLiteral_FullyUnnamed(void) {
 	SETUP_TEST("ThreeIntStruct my_struct = {0, 1, 2};");
-	const char *expected = "VarDecl:  ThreeIntStruct my_struct:\n"
+	const char *expected = "VarDecl: ThreeIntStruct my_struct:\n"
 						   "  StructLiteral with 3 initializer(s):\n"
 						   "    Literal Int: 0\n"
 						   "    Literal Int: 1\n"
@@ -435,7 +435,7 @@ void test_StructLiteral_FullyUnnamed(void) {
 
 void test_StructLiteral_FullyNamed(void) {
 	SETUP_TEST("ThreeIntStruct my_struct = {.second = 1, .first = 0, .third = 2};");
-	const char *expected = "VarDecl:  ThreeIntStruct my_struct:\n"
+	const char *expected = "VarDecl: ThreeIntStruct my_struct:\n"
 						   "  StructLiteral with 3 initializer(s):\n"
 						   "    Designated, field 'second':\n"
 						   "      Literal Int: 1\n"
@@ -449,7 +449,7 @@ void test_StructLiteral_FullyNamed(void) {
 
 void test_StructLiteral_Mixed(void) {
 	SETUP_TEST("ThreeIntStruct my_struct = {.second = 1, 2, .first = 0};");
-	const char *expected = "VarDecl:  ThreeIntStruct my_struct:\n"
+	const char *expected = "VarDecl: ThreeIntStruct my_struct:\n"
 						   "  StructLiteral with 3 initializer(s):\n"
 						   "    Designated, field 'second':\n"
 						   "      Literal Int: 1\n"
@@ -470,7 +470,7 @@ void test_StructLiteral_Nested(void) {
 						   "StructDecl: Outer\n"
 						   "  FieldDecl: Inner a\n"
 						   "  FieldDecl: Inner b\n"
-						   "VarDecl:  Outer outer:\n"
+						   "VarDecl: Outer outer:\n"
 						   "  StructLiteral with 2 initializer(s):\n"
 						   "    StructLiteral with 2 initializer(s):\n"
 						   "      Literal Int: 0\n"
@@ -501,7 +501,7 @@ void test_EnumDecl_VariableDeclaration(void) {
 						   "  Second : 234\n"
 						   "  Third : 235\n"
 						   "  EVEN : 234\n"
-						   "VarDecl:  EnumType enum_var:\n"
+						   "VarDecl: EnumType enum_var:\n"
 						   "  EnumValue: EnumType::Second";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
@@ -550,6 +550,56 @@ void test_ExternBlocks_FullIO(void) {
 						   "    Params:\n"
 						   "      ParamDecl: *FILE stream\n"
 						   "  Extern FuncDecl fputc:\n"
+						   "    Params:\n"
+						   "      ParamDecl: i32 ch\n"
+						   "      ParamDecl: *FILE stream\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ExportedDecls(void) {
+	SETUP_TEST("extern {"
+			   "export struct FILE {"
+			   "        i8*   _ptr;"
+			   "        i32 _cnt;"
+			   "        i8*   _base;"
+			   "        i32 _flag;"
+			   "        i32 _file;"
+			   "        i32 _charbuf;"
+			   "        i32 _bufsiz;"
+			   "        i8*   _tmpfname;"
+			   "    }"
+			   "    export fn FILE* fopen(const u8* filename, const u8* mode);"
+			   "    export fn i32 fclose(FILE* file);"
+			   "    export fn void printf(const u8* str, ...);"
+			   "    export fn i32 fgetc(FILE* stream);"
+			   "    export fn i32 fputc(i32 ch, FILE* stream);"
+			   "}");
+	const char *expected = "ExternBlock from lib c:\n"
+						   "  StructDecl: exported FILE\n"
+						   "    FieldDecl: *i8 _ptr\n"
+						   "    FieldDecl: i32 _cnt\n"
+						   "    FieldDecl: *i8 _base\n"
+						   "    FieldDecl: i32 _flag\n"
+						   "    FieldDecl: i32 _file\n"
+						   "    FieldDecl: i32 _charbuf\n"
+						   "    FieldDecl: i32 _bufsiz\n"
+						   "    FieldDecl: *i8 _tmpfname\n"
+						   "  Extern FuncDecl exported fopen:\n"
+						   "    Params:\n"
+						   "      ParamDecl: const *u8 filename\n"
+						   "      ParamDecl: const *u8 mode\n"
+						   "  Extern FuncDecl exported fclose:\n"
+						   "    Params:\n"
+						   "      ParamDecl: *FILE file\n"
+						   "  Extern FuncDecl exported printf:\n"
+						   "    Params:\n"
+						   "      ParamDecl: const *u8 str\n"
+						   "      ParamDecl: ...\n"
+						   "  Extern FuncDecl exported fgetc:\n"
+						   "    Params:\n"
+						   "      ParamDecl: *FILE stream\n"
+						   "  Extern FuncDecl exported fputc:\n"
 						   "    Params:\n"
 						   "      ParamDecl: i32 ch\n"
 						   "      ParamDecl: *FILE stream\n";
