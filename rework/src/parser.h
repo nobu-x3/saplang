@@ -64,17 +64,20 @@ typedef struct ASTNode {
 		struct {
 			char type_name[64];
 			char name[64];
-			struct ASTNode *init; // Expression node
 			int is_const;
+			int is_exported;
+			struct ASTNode *init; // Expression node
 		} var_decl;
 		// Struct declaration: struct Name { fields }
 		struct {
 			char name[64];
+			int is_exported;
 			struct ASTNode *fields; // Linked list of field declarations
 		} struct_decl;
 		// Function declaration: func name(params) { body }
 		struct {
 			char name[64];
+			int is_exported;
 			struct ASTNode *params; // Linked list of parameter declarations
 			struct ASTNode *body;	// Block node
 		} func_decl;
@@ -150,6 +153,7 @@ typedef struct ASTNode {
 			char name[64];
 			char base_type[64];	  // i32 by default
 			EnumMember **members; // Dynamic array of members
+			int is_exported;
 			int member_count;
 		} enum_decl;
 		struct {
@@ -163,6 +167,7 @@ typedef struct ASTNode {
 		} extern_block;
 		struct {
 			char name[64];
+			int is_exported;
 			struct ASTNode *params; // Linked list of parameter declarations
 		} extern_func;
 	} data;
