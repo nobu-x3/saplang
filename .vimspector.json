@@ -5,7 +5,7 @@
       "configuration": {
         "request": "launch",
         "program": "${workspaceFolder}/build/bin/saplangc",
-        "args": [],
+        "args": ["test.sl", "-o"," test", "-dbg", "-i", "incl;incl2;incl3", "-L", "test_lib.so", "-show-timings", "-ast-dump", "-res-dump", "-cfg-dump", "-llvm-dump", "-no-cleanup"],
         "cwd": "${workspaceFolder}",
         "environment": [],
         "stopOnEntry": false,
