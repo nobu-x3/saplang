@@ -14,8 +14,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(unity)
 
 file(GLOB tests_src CONFIGURE_DEPENDS "*.c")
-file(GLOB tests_runners CONFIGURE_DEPENDS ".runners/*.c")
-list(APPEND tests_src ${tests_runners})
+# file(GLOB tests_runners CONFIGURE_DEPENDS ".runner/runner.c")
+# list(APPEND tests_src ${tests_runners})
 
 add_executable(saplangc_tests ${tests_src})
 target_link_libraries(saplangc_tests PRIVATE unity saplangc_lib)
