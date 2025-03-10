@@ -1,9 +1,7 @@
+#pragma once
+
 #include <parser.h>
 #include <unity.h>
-
-void setUp() {}
-
-void tearDown() {}
 
 //---------------------------------------------------------------------
 // Helper function: Capture the output of printAST() into a string.
