@@ -246,9 +246,7 @@ CompilerResult scanner_init(Scanner *scanner, const char *path, const char *inpu
 
 	memset(scanner, 0, sizeof(Scanner));
 
-	scanner->source.path = strdup(path);
-	if (!scanner->source.path)
-		return RESULT_MEMORY_ERROR;
+	strncpy(scanner->source.path, path, sizeof(scanner->source.path));
 
 	scanner->source.buffer = strdup(input);
 	if (!scanner->source.buffer)
@@ -264,7 +262,6 @@ CompilerResult scanner_deinit(Scanner *scanner) {
 		return RESULT_PASSED_NULL_PTR;
 
 	free(scanner->source.buffer);
-	free(scanner->source.path);
 
 	return RESULT_SUCCESS;
 }

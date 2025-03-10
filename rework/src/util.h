@@ -7,16 +7,19 @@ typedef enum {
 	RESULT_MEMORY_ERROR,
 	RESULT_FAILURE,
 	RESULT_PARSING_ERROR,
+	RESULT_DIRECTORY_NOT_FOUND,
 } CompilerResult;
 
-#define CHK(res)                                                                                                                                                                                                                               \
+#define CHK(res, deinit_seq)                                                                                                                                                                                                                   \
 	if (res != RESULT_SUCCESS) {                                                                                                                                                                                                               \
 		printf("%s:%d: Failure code: %d\n", __FILE__, __LINE__, res);                                                                                                                                                                          \
+		deinit_seq;                                                                                                                                                                                                                            \
 		return res;                                                                                                                                                                                                                            \
 	}
 
 typedef struct {
-	char *path;
+	char name[64];
+	char path[128];
 	char *buffer;
 } SourceFile;
 
