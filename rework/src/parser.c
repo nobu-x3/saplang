@@ -1454,7 +1454,8 @@ Module *parse_input(Parser *parser) {
 			last = decl;
 		}
 	}
-	global_list->import_list = import_list;
+    if(global_list)
+        global_list->import_list = import_list;
 	Module *module = malloc(sizeof(Module));
 	module->ast = global_list;
 	module->symbol_table = parser->symbol_table;

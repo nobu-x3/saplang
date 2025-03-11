@@ -206,7 +206,7 @@ typedef struct DependencyGraphNode {
 	Parser parser;
 	DependencyGraphNodeList dependencies;
 	DependencyGraphNode *next;
-    Module* module;
+	Module *module;
 } DependencyGraphNode;
 
 typedef struct {
@@ -415,6 +415,16 @@ CompilerResult build_dependency_graph(SourceFile input_file, DependencyGraphNode
 	return RESULT_SUCCESS;
 }
 
+void parsing_task(void *arg) {
+	DependencyGraphNode *node = (DependencyGraphNode *)arg;
+	// @TODO: make this thread safe
+	/* fprintf(stderr, "incorrect argument int parse_task - could not cast to DependencyGraphNode*.\n"); */
+	if (!node)
+		return;
+	// Assume scanner is in 0 pos.
+	node->module = parse_input(&node->parser);
+}
+
 CompilerResult driver_run() {
 	if (driver.options.display_help) {
 		return RESULT_SUCCESS;
@@ -441,12 +451,19 @@ CompilerResult driver_run() {
 	////////////////////////////////////////////////////////
 	////////////////////////// PARSING
 	before = get_time();
-    // Issue parsing tasks
+	// Issue parsing tasks
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
-
+		threadpool_submit_task(thread_pool, parsing_task, current);
 	}
+	threadpool_wait_all(thread_pool);
 	if (driver.options.show_timings) {
 		time_comp = (get_time() - before);
+	}
+	if (driver.options.ast_dump) {
+		for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+			printf("%s:\n", current->name);
+			ast_print(current->module->ast, 0, NULL);
+		}
 	}
 	///////////////////////////////////////////////////////
 	////////////////////////// SEMA
@@ -473,6 +490,7 @@ CompilerResult driver_run() {
 			   time_gen);
 	}
 	/////////////////////////////////////////////////////
+	threadpool_destroy(thread_pool);
 
 	return RESULT_SUCCESS;
 }
