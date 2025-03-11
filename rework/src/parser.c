@@ -72,6 +72,12 @@ CompilerResult parser_init(Parser *parser, Scanner scanner, Symbol *optional_tab
 
 	parser->scanner = scanner;
 	parser->symbol_table = optional_table;
+
+	char *cpy = strdup(scanner.source.name);
+	char *tmp = cpy;
+	char *ch = strtok(cpy, ".");
+	strncpy(parser->module_name, ch, sizeof(parser->module_name));
+	free(tmp);
 	return RESULT_SUCCESS;
 }
 
@@ -146,9 +152,13 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 				print(string, "Literal Int: %ld\n", node->data.literal.long_value);
 			}
 			break;
-		case AST_EXPR_IDENT:
-			print(string, "Ident: %s\n", node->data.ident.name);
-			break;
+		case AST_EXPR_IDENT: {
+			char prefix[64] = "";
+			if (*node->data.ident.namespace) {
+				sprintf(prefix, "%s::", node->data.ident.namespace);
+			}
+			print(string, "Ident: %s%s\n", prefix, node->data.ident.name);
+		} break;
 		case AST_RETURN:
 			print(string, "Return:\n");
 			ast_print(node->data.ret.return_expr, indent + 1, string);
@@ -279,10 +289,15 @@ ASTNode *new_enum_decl_node(const char *name, const char *base_type, EnumMember 
 	return node;
 }
 
-ASTNode *new_enum_value_node(const char *enum_type, const char *member) {
+ASTNode *new_enum_value_node(const char *namespace, const char *enum_type, const char *member) {
 	ASTNode *node = new_ast_node(AST_ENUM_VALUE);
 	if (!node)
 		return NULL;
+	if (namespace) {
+		strncpy(node->data.enum_value.namespace, namespace, sizeof(node->data.enum_value.namespace));
+	} else {
+		node->data.enum_value.namespace[0] = '\0';
+	}
 	strncpy(node->data.enum_value.enum_type, enum_type, sizeof(node->data.enum_value.enum_type));
 	strncpy(node->data.enum_value.member, member, sizeof(node->data.enum_value.member));
 	return node;
@@ -467,11 +482,16 @@ ASTNode *new_array_access_node(ASTNode *base, ASTNode *index) {
 	return node;
 }
 
-ASTNode *new_ident_node(const char *name) {
+ASTNode *new_ident_node(const char *namespace, const char *name) {
 	ASTNode *node = new_ast_node(AST_EXPR_IDENT);
 	if (!node)
 		return NULL;
 	strncpy(node->data.ident.name, name, sizeof(node->data.ident.name));
+	if (namespace) {
+		strncpy(node->data.ident.namespace, namespace, sizeof(node->data.ident.namespace));
+	} else {
+		node->data.ident.namespace[0] = '\0';
+	}
 	return node;
 }
 
@@ -488,6 +508,7 @@ ASTNode *new_array_literal_node(ASTNode **elements, int count) {
 
 CompilerResult parse_type_name(Parser *parser, char *buffer) {
 	char base_type[64];
+	char namespace[64] = "";
 	switch (parser->current_token.type) {
 	case TOK_I8:
 	case TOK_I16:
@@ -507,6 +528,17 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 	case TOK_IDENTIFIER:
 		strncpy(base_type, parser->current_token.text, sizeof(base_type));
 		parser->current_token = next_token(&parser->scanner);
+		if (parser->current_token.type == TOK_COLONCOLON) {
+			parser->current_token = next_token(&parser->scanner);
+			if (parser->current_token.type != TOK_IDENTIFIER) {
+				char msg[128];
+				sprintf(msg, "expected identifier after '::' in imported type, got '%s'.", parser->current_token.text);
+				report(parser->current_token.location, msg, 0);
+			}
+			strncpy(namespace, base_type, sizeof(namespace));
+			strncpy(base_type, parser->current_token.text, sizeof(base_type));
+			parser->current_token = next_token(&parser->scanner);
+		}
 		break;
 	default: {
 		char msg[128];
@@ -550,13 +582,42 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 		strcat(array_suffix, "]");
 	}
 
-	snprintf(buffer, 64, "%s%s%s", array_suffix, ptr_prefix, base_type);
+	char prefix[64] = "";
+	if (*namespace) {
+		sprintf(prefix, "%s::", namespace);
+	}
+	snprintf(buffer, 64, "%s%s%s%s", array_suffix, ptr_prefix, prefix, base_type);
 	return RESULT_SUCCESS;
 }
 
 ASTNode *parse_primary(Parser *parser);
 ASTNode *parse_unary(Parser *parser);
 ASTNode *parse_expr(Parser *parser);
+
+ASTNode *parse_qualified_identifier(Parser *parser) {
+	char namespace[64] = "";
+	char name[64] = "";
+	if (parser->current_token.type != TOK_IDENTIFIER) {
+		char msg[128];
+		sprintf(msg, "expected identifier, got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+	strncpy(name, parser->current_token.text, sizeof(name));
+	parser->current_token = next_token(&parser->scanner);
+
+	if (parser->current_token.type == TOK_COLONCOLON) {
+		parser->current_token = next_token(&parser->scanner);
+		strncpy(namespace, name, sizeof(namespace));
+		if (parser->current_token.type != TOK_IDENTIFIER) {
+			char msg[128];
+			sprintf(msg, "expected identifier after '::', got '%s'.", parser->current_token.text);
+			return report(parser->current_token.location, msg, 0);
+		}
+		strncpy(name, parser->current_token.text, sizeof(name));
+		parser->current_token = next_token(&parser->scanner);
+	}
+	return new_ident_node(namespace, name);
+}
 
 ASTNode *parse_assignment(Parser *parser) {
 	ASTNode *node = parse_expr(parser);
@@ -899,24 +960,35 @@ ASTNode *parse_primary(Parser *parser) {
 		parser->current_token = next_token(&parser->scanner);
 		return new_literal_node_bool(0);
 	} else if (parser->current_token.type == TOK_IDENTIFIER) {
-		char ident_name[64];
-		strncpy(ident_name, parser->current_token.text, sizeof(ident_name));
-		parser->current_token = next_token(&parser->scanner); // consume identifier
+		// @TODO: this is deferred until sema.
+		// In the semantic analysis phase, when resolving a qualified identifier, look up the namespace string in your symbol table.
+		// - Case A: Module Namespace.
+		// If the namespace matches one of the imported modules (or the current module’s name if unqualified), then resolve the name as a member of that module.
+		// - Case B: Enum Type.
+		// If the namespace matches an enum type declared in the current module (or an imported module), then resolve the identifier as an enum value.
+		// For example, if SomeEnum is an enum type in the current scope, then SomeEnum::Value should be resolved by:
+		//      - Looking up the enum declaration for SomeEnum.
+		//      - Searching the enumerators for one with the name Value.
+		//      - If found, retrieving the corresponding integer value.
+		//
 
-		if (parser->current_token.type == TOK_COLONCOLON) {
-			parser->current_token = next_token(&parser->scanner); // consume '::'
-			if (parser->current_token.type != TOK_IDENTIFIER) {
-				char msg[128];
-				sprintf(msg, "expected identifier after '::', got '%s'.", parser->current_token.text);
-				return report(parser->current_token.location, msg, 0);
-			}
-
-			char member_name[64];
-			strncpy(member_name, parser->current_token.text, sizeof(member_name));
-			parser->current_token = next_token(&parser->scanner); // consume identifier
-			return new_enum_value_node(ident_name, member_name);
-		}
-		return new_ident_node(ident_name);
+		return parse_qualified_identifier(parser);
+		/* char ident_name[64]; */
+		/* strncpy(ident_name, parser->current_token.text, sizeof(ident_name)); */
+		/* parser->current_token = next_token(&parser->scanner); // consume identifier */
+		/* if (parser->current_token.type == TOK_COLONCOLON) { */
+		/* 	parser->current_token = next_token(&parser->scanner); // consume '::' */
+		/* 	if (parser->current_token.type != TOK_IDENTIFIER) { */
+		/* 		char msg[128]; */
+		/* 		sprintf(msg, "expected identifier after '::', got '%s'.", parser->current_token.text); */
+		/* 		return report(parser->current_token.location, msg, 0); */
+		/* 	} */
+		/* 	char member_name[64]; */
+		/* 	strncpy(member_name, parser->current_token.text, sizeof(member_name)); */
+		/* 	parser->current_token = next_token(&parser->scanner); // consume identifier */
+		/* 	return new_enum_value_node(ident_name, member_name); */
+		/* } */
+		/* return new_ident_node(ident_name); */
 	} else if (parser->current_token.type == TOK_LPAREN) {
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *expr = parse_expr(parser);
@@ -1345,11 +1417,11 @@ CompilerResult parse_import_list(Parser *parser, ImportList *out_import_list) {
 
 	*out_import_list = import_list;
 
-    // Reset scanner to the beginning
-    parser->scanner.id = 0;
-    parser->scanner.col = 0;
-    parser->scanner.line = 0;
-    parser->scanner.is_reading_string = 0;
+	// Reset scanner to the beginning
+	parser->scanner.id = 0;
+	parser->scanner.col = 0;
+	parser->scanner.line = 0;
+	parser->scanner.is_reading_string = 0;
 	return RESULT_SUCCESS;
 }
 

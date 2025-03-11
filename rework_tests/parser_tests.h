@@ -46,7 +46,7 @@ static char *capture_ast_output(ASTNode *ast) {
 
 #define SETUP_TEST(input_string)                                                                                                                                                                                                               \
 	const char *input = input_string;                                                                                                                                                                                                          \
-	const char path[5] = "test";                                                                                                                                                                                                               \
+	const char *path = "parser_tests.sl";                                                                                                                                                                                                      \
 	Scanner scanner;                                                                                                                                                                                                                           \
 	scanner_init_from_string(&scanner, path, input);                                                                                                                                                                                           \
 	Parser parser;                                                                                                                                                                                                                             \
@@ -500,7 +500,7 @@ void test_EnumDecl_VariableDeclaration(void) {
 						   "  Third : 235\n"
 						   "  EVEN : 234\n"
 						   "VarDecl: EnumType enum_var:\n"
-						   "  EnumValue: EnumType::Second";
+						   "  Ident: EnumType::Second\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
@@ -618,6 +618,19 @@ void test_Imports(void) {
 						   "  Second : 234\n"
 						   "  Third : 235\n"
 						   "  EVEN : 234\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_Namespaces_Functions(void) {
+	SETUP_TEST("import io;"
+			   "import print;"
+			   "io::File* file = io::fopen();");
+	const char *expected = "Import: io\n"
+						   "Import: print\n"
+						   "VarDecl: *io::File file:\n"
+						   "  Function call with 0 args:\n"
+						   "    Ident: io::fopen\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
