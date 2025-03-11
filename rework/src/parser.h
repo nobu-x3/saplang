@@ -26,12 +26,6 @@ typedef struct Symbol {
 	struct Symbol *next;
 } Symbol;
 
-typedef struct Parser {
-	Scanner scanner;
-	Symbol *symbol_table;
-	Token current_token;
-} Parser;
-
 typedef struct {
 	char **data;
 	int capacity, count;
@@ -179,12 +173,25 @@ typedef struct ASTNode {
 	} data;
 } ASTNode;
 
+typedef struct Parser {
+	Scanner scanner;
+	Symbol *symbol_table;
+	Token current_token;
+} Parser;
+
+typedef struct {
+    Symbol* symbol_table;
+    ASTNode* ast;
+} Module;
+
 CompilerResult parser_init(Parser *parser, Scanner scanner, Symbol *optional_table);
 
 CompilerResult parser_deinit(Parser *parser);
 
 CompilerResult symbol_table_print(Symbol *table, char *string);
 
-ASTNode *parse_input();
+CompilerResult parse_import_list(Parser *parser, ImportList* import_list);
+
+Module *parse_input(Parser *parser);
 
 CompilerResult ast_print(ASTNode *node, int indent, char *string);

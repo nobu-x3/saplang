@@ -48,11 +48,11 @@ static char *capture_ast_output(ASTNode *ast) {
 	const char *input = input_string;                                                                                                                                                                                                          \
 	const char path[5] = "test";                                                                                                                                                                                                               \
 	Scanner scanner;                                                                                                                                                                                                                           \
-	scanner_init(&scanner, path, input);                                                                                                                                                                                                       \
+	scanner_init_from_string(&scanner, path, input);                                                                                                                                                                                           \
 	Parser parser;                                                                                                                                                                                                                             \
 	parser_init(&parser, scanner, NULL);                                                                                                                                                                                                       \
-	ASTNode *ast = parse_input(&parser);                                                                                                                                                                                                       \
-	char *output = capture_ast_output(ast);
+	Module *module = parse_input(&parser);                                                                                                                                                                                                     \
+	char *output = capture_ast_output(module->ast);
 
 void test_VariableDeclaration(void) {
 	SETUP_TEST("i32 x = 42;");

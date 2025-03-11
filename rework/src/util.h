@@ -61,6 +61,38 @@ void *report(SourceLocation location, const char *msg, int is_warning);
 			return NULL;                                                                                                                                                                                                                       \
 	} while (0)
 
+#define da_init_result(xs, cap)                                                                                                                                                                                                                \
+	do {                                                                                                                                                                                                                                       \
+		xs.count = 0;                                                                                                                                                                                                                          \
+		xs.capacity = cap;                                                                                                                                                                                                                     \
+		xs.data = malloc(xs.capacity * sizeof(*xs.data));                                                                                                                                                                                      \
+		if (!xs.data)                                                                                                                                                                                                                          \
+			return RESULT_MEMORY_ERROR;                                                                                                                                                                                                        \
+	} while (0)
+
+#define da_push_result(xs, x)                                                                                                                                                                                                                  \
+	do {                                                                                                                                                                                                                                       \
+		if (xs.count >= xs.capacity) {                                                                                                                                                                                                         \
+			xs.capacity *= 2;                                                                                                                                                                                                                  \
+			xs.data = realloc(xs.data, xs.capacity * sizeof(*xs.data));                                                                                                                                                                        \
+			if (!xs.data)                                                                                                                                                                                                                      \
+				return RESULT_MEMORY_ERROR;                                                                                                                                                                                                    \
+		}                                                                                                                                                                                                                                      \
+		xs.data[xs.count++] = x;                                                                                                                                                                                                               \
+	} while (0)
+
+#define da_push_safe_result(xs, x, on_error)                                                                                                                                                                                                   \
+	do {                                                                                                                                                                                                                                       \
+		if (xs.count >= xs.capacity) {                                                                                                                                                                                                         \
+			xs.capacity *= 2;                                                                                                                                                                                                                  \
+			xs.data = realloc(xs.data, xs.capacity * sizeof(*xs.data));                                                                                                                                                                        \
+			if (!xs.data) {                                                                                                                                                                                                                    \
+				on_error return RESULT_MEMORY_ERROR;                                                                                                                                                                                           \
+			}                                                                                                                                                                                                                                  \
+		}                                                                                                                                                                                                                                      \
+		xs.data[xs.count++] = x;                                                                                                                                                                                                               \
+	} while (0)
+
 #define da_init_unsafe(xs, cap)                                                                                                                                                                                                                \
 	do {                                                                                                                                                                                                                                       \
 		xs.count = 0;                                                                                                                                                                                                                          \

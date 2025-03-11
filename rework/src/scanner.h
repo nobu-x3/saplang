@@ -66,7 +66,9 @@ typedef struct {
 	int is_reading_string;
 } Scanner;
 
-CompilerResult scanner_init(Scanner *scanner, const char *path, const char *input);
+CompilerResult scanner_init_from_string(Scanner *scanner, const char *path, const char *input);
+
+CompilerResult scanner_init_from_src(Scanner *scanner, SourceFile file);
 
 CompilerResult scanner_deinit(Scanner *scanner);
 

@@ -1,4 +1,6 @@
 #include "driver.h"
+#include "parser.h"
+#include "thread_pool.h"
 #include "timer.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -72,10 +74,10 @@ CompilerResult compile_options_get(int argc, const char **argv, CompileOptions *
 				return RESULT_FAILURE;
 			}
 			options->input_file_path = strdup(arg);
-		} else if (!strcmp(arg, "-h")) {
+		} else if (strcmp(arg, "-h") == 0) {
 			options->display_help = 1;
 			return RESULT_SUCCESS;
-		} else if (!strcmp(arg, "-o")) {
+		} else if (strcmp(arg, "-o") == 0) {
 			options->output_file_path = idx + 1 >= argc ? "" : strdup(argv[++idx]);
 		}
 		/* else if (arg == "-config") { */
@@ -88,7 +90,7 @@ CompilerResult compile_options_get(int argc, const char **argv, CompileOptions *
 		/*     optimization_config = OptimizationConfig::ReleaseWithDebugInfo; */
 		/*   else */
 		/*     error("unexpected argument '" + std::string{arg} + ".'\n"); */
-		else if (!strcmp(arg, "-string")) {
+		else if (strcmp(arg, "-string") == 0) {
 			if (options->input_file_path) {
 				fprintf(stderr, "input file is already set, cannot additionally set an input string.\n");
 				compile_options_deinit(options);
@@ -96,29 +98,29 @@ CompilerResult compile_options_get(int argc, const char **argv, CompileOptions *
 			}
 			options->input_string = idx + 1 >= argc ? "" : strdup(argv[++idx]);
 			options->input_file_path = strdup("input_string.sl");
-		} else if (!strcmp(arg, "-ast-dump"))
+		} else if (strcmp(arg, "-ast-dump") == 0)
 			options->ast_dump = 1;
-		else if (!strcmp(arg, "-res-dump"))
+		else if (strcmp(arg, "-res-dump") == 0)
 			options->res_dump = 1;
-		else if (!strcmp(arg, "-show-timings"))
+		else if (strcmp(arg, "-show-timings") == 0)
 			options->show_timings = 1;
-		else if (!strcmp(arg, "-cfg-dump"))
+		else if (strcmp(arg, "-cfg-dump") == 0)
 			options->cfg_dump = 1;
-		else if (!strcmp(arg, "-llvm-dump"))
+		else if (strcmp(arg, "-llvm-dump") == 0)
 			options->llvm_dump = 1;
-		else if (!strcmp(arg, "-dbg"))
+		else if (strcmp(arg, "-dbg") == 0)
 			options->gen_debug = 1;
-		else if (!strcmp(arg, "-no-cleanup"))
+		else if (strcmp(arg, "-no-cleanup") == 0)
 			options->no_cleanup = 1;
-		else if (!strcmp(arg, "-j")) {
+		else if (strcmp(arg, "-j") == 0) {
 			int parsed = atoi(argv[++idx]);
 			if (parsed < cpu_count)
 				options->threads = parsed;
-		} else if (!strcmp(arg, "-i"))
+		} else if (strcmp(arg, "-i") == 0)
 			options->import_paths = split(argv[++idx], ';');
-		else if (!strcmp(arg, "-L"))
+		else if (strcmp(arg, "-L") == 0)
 			options->library_paths = split(argv[++idx], ';');
-		else if (!strcmp(arg, "-extra"))
+		else if (strcmp(arg, "-extra") == 0)
 			options->extra_flags = split(argv[++idx], ';');
 	}
 	return RESULT_SUCCESS;
@@ -186,7 +188,32 @@ typedef struct {
 } SourceList;
 
 typedef struct {
+	Module **data;
+	int capacity, count;
+} ModuleList;
+
+typedef struct DependencyGraphNode DependencyGraphNode;
+
+typedef struct DependencyGraphNodeList {
+	DependencyGraphNode **data;
+	int capacity, count;
+} DependencyGraphNodeList;
+
+// DependencyGraphNode is a linked list which contains a dynamic array of dependencies, parser instance and a string list of imports without extensions. Also contains module, which contains symbol table and AST for that module.
+typedef struct DependencyGraphNode {
+	char name[64];
+	ImportList imports;
+	Parser parser;
+	DependencyGraphNodeList dependencies;
+	DependencyGraphNode *next;
+    Module* module;
+} DependencyGraphNode;
+
+typedef struct {
 	CompileOptions options;
+	SourceList sources;
+	DependencyGraphNode *dependency_graph;
+	int module_count;
 } Driver;
 
 Driver driver = {0};
@@ -230,7 +257,7 @@ CompilerResult driver_check_paths_for_uniqueness() {
 			const char *filename = entry->d_name;
 			size_t len = strlen(filename);
 
-			if (len > 3 && !strcmp(filename + len - 3, ".sl")) {
+			if (len > 3 && strcmp(filename + len - 3, ".sl") == 0) {
 				char filepath[1024];
 				snprintf(filepath, sizeof(filepath), "%s/%s", driver.options.import_paths.data[i], filename);
 
@@ -260,7 +287,7 @@ SourceFile driver_init_source(const char *name) {
 
 			size_t len = strlen(src_file.name);
 
-			if (len > 3 && !strcmp(src_file.name + len - 3, ".sl")) {
+			if (len > 3 && strcmp(src_file.name + len - 3, ".sl") == 0 && strcmp(src_file.name, name) == 0) {
 				snprintf(src_file.path, sizeof(src_file.path), "%s/%s", driver.options.import_paths.data[i], src_file.name);
 
 				FILE *fp = fopen(src_file.path, "r");
@@ -289,6 +316,7 @@ SourceFile driver_init_source(const char *name) {
 				buffer[file_size] = '\0';
 				src_file.buffer = buffer;
 				fclose(fp);
+				return src_file;
 			}
 		}
 		closedir(dir);
@@ -297,25 +325,115 @@ SourceFile driver_init_source(const char *name) {
 }
 #endif
 
+void parse_module(void *arg) {}
+
+DependencyGraphNode *dg_find(const char *name, DependencyGraphNode *root) {
+	for (DependencyGraphNode *current = root; current != NULL; current = current->next) {
+		if (strcmp(current->name, name) == 0)
+			return current;
+	}
+	return NULL;
+}
+
+void dg_clean(DependencyGraphNode *graph) {
+	if (!graph)
+		return;
+
+	parser_deinit(&graph->parser);
+
+	da_deinit(graph->imports);
+
+	if (graph->next) {
+		dg_clean(graph);
+	}
+	free(graph);
+}
+
+// Builds a dependency graph of the project starting from root. 'DependencyGraphNode::module' field remains untouched.
+CompilerResult build_dependency_graph(SourceFile input_file, DependencyGraphNode **root) {
+	++driver.module_count;
+
+	*root = calloc(sizeof(DependencyGraphNode), 1);
+
+	if (!*root)
+		return RESULT_MEMORY_ERROR;
+
+	strncpy((*root)->name, input_file.name, sizeof((*root)->name));
+
+	da_init_result((*root)->dependencies, 4);
+
+	Scanner scanner;
+	CompilerResult res = scanner_init_from_src(&scanner, input_file);
+	if (res != RESULT_SUCCESS) {
+		dg_clean((*root));
+		return res;
+	}
+
+	res = parser_init(&(*root)->parser, scanner, NULL);
+	if (res != RESULT_SUCCESS) {
+		dg_clean((*root));
+		return res;
+	}
+
+	res = parse_import_list(&(*root)->parser, &(*root)->imports);
+	if (res != RESULT_SUCCESS) {
+		dg_clean((*root));
+		return res;
+	}
+
+	DependencyGraphNode *graph_tail = *root;
+	for (int i = 0; i < (*root)->imports.count; ++i) {
+		// if the node already exists in the (*graph) it must have already been proccessed but we still want to add it to dependencies of the module that is currently being processed.
+		char name[64] = "";
+		sprintf(name, "%s.sl", (*root)->imports.data[i]);
+		DependencyGraphNode *existing_node = dg_find(name, driver.dependency_graph);
+		if (existing_node) {
+			da_push_safe_result((*root)->dependencies, existing_node, { dg_clean(*root); });
+			continue;
+		}
+		SourceFile dep_src = driver_init_source(name);
+		DependencyGraphNode *subgraph;
+
+		if (build_dependency_graph(dep_src, &subgraph) != RESULT_SUCCESS) {
+			free(dep_src.buffer);
+			dg_clean(*root);
+			return RESULT_FAILURE;
+		}
+
+		da_push_safe_result((*root)->dependencies, subgraph, {
+			free(dep_src.buffer);
+			dg_clean(*root);
+		});
+
+		while (graph_tail->next) {
+			graph_tail = graph_tail->next;
+		}
+		graph_tail->next = subgraph;
+		graph_tail = subgraph;
+	}
+
+	return RESULT_SUCCESS;
+}
+
 CompilerResult driver_run() {
-    if(driver.options.display_help) {
-        return RESULT_SUCCESS;
-    }
+	if (driver.options.display_help) {
+		return RESULT_SUCCESS;
+	}
 
 	double time_prep, time_comp, time_sema, time_cfg, time_gen = 0;
 
-	////////////////////////// PREP
 	double before = get_time();
-	SourceFile test_file = driver_init_source("test.sl");
+	////////////////////////// PREP
+	SourceFile input_src_file = driver_init_source(driver.options.input_file_path);
 
-	if (!test_file.buffer) {
+	if (!input_src_file.buffer) {
 		driver_deinit();
 		return 1;
 	}
 
-	printf("%s\n", test_file.buffer);
+	CompilerResult res = build_dependency_graph(input_src_file, &driver.dependency_graph);
 
-	free(test_file.buffer);
+	ThreadPool *thread_pool = threadpool_create(get_num_of_cores());
 
 	if (driver.options.show_timings) {
 		time_prep = (get_time() - before);
@@ -323,7 +441,10 @@ CompilerResult driver_run() {
 	////////////////////////////////////////////////////////
 	////////////////////////// PARSING
 	before = get_time();
+    // Issue parsing tasks
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 
+	}
 	if (driver.options.show_timings) {
 		time_comp = (get_time() - before);
 	}
@@ -358,6 +479,12 @@ CompilerResult driver_run() {
 
 CompilerResult driver_init(int argc, const char **argv) {
 	CHK(compile_options_get(argc, argv, &driver.options), { compile_options_deinit(&driver.options); });
+	char *this_path = strdup(".");
+	da_push_safe_result(driver.options.import_paths, this_path, {
+		free(this_path);
+		compile_options_deinit(&driver.options);
+	});
+
 	if (driver.options.display_help) {
 		driver_print_help();
 		return RESULT_SUCCESS;
