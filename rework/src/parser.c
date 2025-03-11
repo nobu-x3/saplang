@@ -1324,8 +1324,37 @@ char *parse_import(Parser *parser) {
 	return import_name;
 }
 
+CompilerResult parse_import_list(Parser *parser, ImportList *out_import_list) {
+	ImportList import_list;
+	da_init_result(import_list, 4);
+
+	parser->current_token = next_token(&parser->scanner);
+
+	while (parser->current_token.type != TOK_EOF) {
+		if (parser->current_token.type == TOK_IMPORT) {
+			char *import_name = parse_import(parser);
+			if (!import_name) {
+				free(import_list.data);
+				return RESULT_FAILURE;
+			}
+			da_push_result(import_list, import_name);
+		} else {
+			parser->current_token = next_token(&parser->scanner);
+		}
+	}
+
+	*out_import_list = import_list;
+
+    // Reset scanner to the beginning
+    parser->scanner.id = 0;
+    parser->scanner.col = 0;
+    parser->scanner.line = 0;
+    parser->scanner.is_reading_string = 0;
+	return RESULT_SUCCESS;
+}
+
 // <globalDecl>* <EOF>
-ASTNode *parse_input(Parser *parser) {
+Module *parse_input(Parser *parser) {
 	ASTNode *global_list = NULL, *last = NULL;
 
 	ImportList import_list;
@@ -1342,6 +1371,7 @@ ASTNode *parse_input(Parser *parser) {
 			da_push(import_list, import_name);
 			continue;
 		}
+
 		ASTNode *decl = parse_global_decl(parser);
 		if (!decl)
 			return NULL;
@@ -1353,5 +1383,8 @@ ASTNode *parse_input(Parser *parser) {
 		}
 	}
 	global_list->import_list = import_list;
-	return global_list;
+	Module *module = malloc(sizeof(Module));
+	module->ast = global_list;
+	module->symbol_table = parser->symbol_table;
+	return module;
 }

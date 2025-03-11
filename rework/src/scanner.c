@@ -240,7 +240,18 @@ Token next_token(Scanner *scanner) {
 	return current_token;
 }
 
-CompilerResult scanner_init(Scanner *scanner, const char *path, const char *input) {
+CompilerResult scanner_init_from_src(Scanner *scanner, SourceFile file) {
+	if (!scanner)
+		return RESULT_PASSED_NULL_PTR;
+
+	memset(scanner, 0, sizeof(Scanner));
+
+	scanner->source = file;
+
+	return RESULT_SUCCESS;
+}
+
+CompilerResult scanner_init_from_string(Scanner *scanner, const char *path, const char *input) {
 	if (!scanner)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -251,8 +262,6 @@ CompilerResult scanner_init(Scanner *scanner, const char *path, const char *inpu
 	scanner->source.buffer = strdup(input);
 	if (!scanner->source.buffer)
 		return RESULT_MEMORY_ERROR;
-
-	scanner->source = scanner->source;
 
 	return RESULT_SUCCESS;
 }
