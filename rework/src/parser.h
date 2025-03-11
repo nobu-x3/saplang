@@ -109,6 +109,7 @@ typedef struct ASTNode {
 		// Identifier expression.
 		struct {
 			char name[64];
+            char namespace[64];
 		} ident;
 		// Return statement
 		struct {
@@ -157,6 +158,7 @@ typedef struct ASTNode {
 			int member_count;
 		} enum_decl;
 		struct {
+            char namespace[64];
 			char enum_type[64];
 			char member[64];
 		} enum_value;
@@ -174,6 +176,7 @@ typedef struct ASTNode {
 } ASTNode;
 
 typedef struct Parser {
+    char module_name[64];
 	Scanner scanner;
 	Symbol *symbol_table;
 	Token current_token;

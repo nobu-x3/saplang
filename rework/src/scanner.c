@@ -258,6 +258,7 @@ CompilerResult scanner_init_from_string(Scanner *scanner, const char *path, cons
 	memset(scanner, 0, sizeof(Scanner));
 
 	strncpy(scanner->source.path, path, sizeof(scanner->source.path));
+	strncpy(scanner->source.name, "main.sl", sizeof(scanner->source.name));
 
 	scanner->source.buffer = strdup(input);
 	if (!scanner->source.buffer)
