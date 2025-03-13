@@ -341,8 +341,6 @@ SourceFile driver_init_source(const char *name) {
 }
 #endif
 
-void parse_module(void *arg) {}
-
 DependencyGraphNode *dg_find(const char *name, DependencyGraphNode *root) {
 	for (DependencyGraphNode *current = root; current != NULL; current = current->next) {
 		if (strcmp(current->name, name) == 0)
