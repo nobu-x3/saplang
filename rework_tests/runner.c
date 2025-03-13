@@ -37,6 +37,9 @@ int main(void) {
 	RUN_TEST(test_ExportedDecls);
 	RUN_TEST(test_Imports);
 	RUN_TEST(test_Namespaces_Functions);
+	RUN_TEST(test_IfStatements_NoElse);
+	RUN_TEST(test_IfStatements_WithElse);
+	RUN_TEST(test_IfStatements_ElseIf);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

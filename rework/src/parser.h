@@ -54,6 +54,7 @@ typedef enum {
 	AST_ENUM_VALUE,
 	AST_EXTERN_BLOCK,
 	AST_EXTERN_FUNC_DECL,
+    AST_IF_STMT,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -172,6 +173,11 @@ typedef struct ASTNode {
 			int is_exported;
 			struct ASTNode *params; // Linked list of parameter declarations
 		} extern_func;
+        struct {
+            struct ASTNode* condition;
+            struct ASTNode* then_branch;
+            struct ASTNode* else_branch;
+        } if_stmt;
 	} data;
 } ASTNode;
 
