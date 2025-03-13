@@ -46,14 +46,15 @@ StringList split(const char *s, char delim) {
 		return result;
 
 	char *cpy = strdup(s);
-	char *ch = NULL;
-	do {
-		ch = strtok(cpy, &delim);
-		if (ch) {
-			da_push_unsafe(result, ch);
-		}
-		cpy = NULL;
-	} while (ch);
+	char *tmp = cpy;
+	char delim_str[2] = {delim, '\0'};
+	char *found;
+	while ((found = strsep(&cpy, delim_str)) != NULL) {
+		char *found_cpy = strdup(found);
+		da_push_unsafe(result, found_cpy);
+	}
+
+	free(tmp);
 
 	return result;
 }
@@ -139,9 +140,21 @@ void compile_options_deinit(CompileOptions *opt) {
 		free(opt->input_string);
 		opt->input_string = NULL;
 	}
+	for (int i = 0; i < opt->library_paths.count; ++i) {
+		free(opt->library_paths.data[i]);
+	}
 	da_deinit(opt->library_paths);
+
+	for (int i = 0; i < opt->extra_flags.count; ++i) {
+		free(opt->extra_flags.data[i]);
+	}
 	da_deinit(opt->extra_flags);
+
+	for (int i = 0; i < opt->import_paths.count; ++i) {
+		free(opt->import_paths.data[i]);
+	}
 	da_deinit(opt->import_paths);
+
 	opt->threads = 0;
 	opt->gen_debug = 0;
 	opt->display_help = 0;
@@ -293,6 +306,7 @@ SourceFile driver_init_source(const char *name) {
 				FILE *fp = fopen(src_file.path, "r");
 				if (!fp) {
 					fprintf(stderr, "could not open file with path %s.\n", src_file.path);
+					closedir(dir);
 					return src_file;
 				}
 
@@ -304,6 +318,7 @@ SourceFile driver_init_source(const char *name) {
 				if (!buffer) {
 					fprintf(stderr, "failed to allocate memory when reading file %s.", src_file.path);
 					fclose(fp);
+					closedir(dir);
 					return src_file;
 				}
 
@@ -316,6 +331,7 @@ SourceFile driver_init_source(const char *name) {
 				buffer[file_size] = '\0';
 				src_file.buffer = buffer;
 				fclose(fp);
+				closedir(dir);
 				return src_file;
 			}
 		}
@@ -341,12 +357,26 @@ void dg_clean(DependencyGraphNode *graph) {
 
 	parser_deinit(&graph->parser);
 
+	for (int i = 0; i < graph->imports.count; ++i) {
+		free(graph->imports.data[i]);
+	}
 	da_deinit(graph->imports);
 
-	if (graph->next) {
-		dg_clean(graph);
-	}
+	if (graph->module->ast)
+		ast_deinit(graph->module->ast);
+
+	if (graph->module)
+		free(graph->module);
+
+	da_deinit(graph->dependencies);
+
+	DependencyGraphNode *next = graph->next;
+
 	free(graph);
+
+	if (next) {
+		dg_clean(next);
+	}
 }
 
 // Builds a dependency graph of the project starting from root. 'DependencyGraphNode::module' field remains untouched.
@@ -463,6 +493,11 @@ CompilerResult driver_run() {
 		for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 			printf("%s:\n", current->name);
 			ast_print(current->module->ast, 0, NULL);
+			printf("Symbol table:\n");
+			symbol_table_print(current->module->symbol_table, NULL);
+			printf("External symbol table:\n");
+			symbol_table_print(current->module->exported_table, NULL);
+			printf("\n");
 		}
 	}
 	///////////////////////////////////////////////////////
@@ -498,10 +533,7 @@ CompilerResult driver_run() {
 CompilerResult driver_init(int argc, const char **argv) {
 	CHK(compile_options_get(argc, argv, &driver.options), { compile_options_deinit(&driver.options); });
 	char *this_path = strdup(".");
-	da_push_safe_result(driver.options.import_paths, this_path, {
-		free(this_path);
-		compile_options_deinit(&driver.options);
-	});
+	da_push_safe_result(driver.options.import_paths, this_path, { compile_options_deinit(&driver.options); });
 
 	if (driver.options.display_help) {
 		driver_print_help();
@@ -515,4 +547,8 @@ CompilerResult driver_init(int argc, const char **argv) {
 
 void driver_set_compiler_options(CompileOptions opts) { driver.options = opts; }
 
-void driver_deinit() { compile_options_deinit(&driver.options); }
+void driver_deinit() {
+	compile_options_deinit(&driver.options);
+	// free depdendency graph
+	dg_clean(driver.dependency_graph);
+}

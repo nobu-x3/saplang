@@ -6,6 +6,7 @@ typedef enum {
 	SYMB_VAR,
 	SYMB_STRUCT,
 	SYMB_FN,
+    SYMB_ENUM,
 } SymbolKind;
 
 typedef struct {
@@ -57,7 +58,6 @@ typedef enum {
 
 typedef struct ASTNode {
 	ASTNodeType type;
-	ImportList import_list;
 	struct ASTNode *next; // For linked lists (e.g. global declarations, fields, params)
 	union {
 		// Variable declaration: <type> name = init;
@@ -109,7 +109,7 @@ typedef struct ASTNode {
 		// Identifier expression.
 		struct {
 			char name[64];
-            char namespace[64];
+			char namespace[64];
 		} ident;
 		// Return statement
 		struct {
@@ -158,7 +158,7 @@ typedef struct ASTNode {
 			int member_count;
 		} enum_decl;
 		struct {
-            char namespace[64];
+			char namespace[64];
 			char enum_type[64];
 			char member[64];
 		} enum_value;
@@ -176,25 +176,37 @@ typedef struct ASTNode {
 } ASTNode;
 
 typedef struct Parser {
-    char module_name[64];
+	char module_name[64];
 	Scanner scanner;
 	Symbol *symbol_table;
+	Symbol *exported_table;
 	Token current_token;
 } Parser;
 
 typedef struct {
-    Symbol* symbol_table;
-    ASTNode* ast;
+	Symbol *symbol_table;	// not owned
+	Symbol *exported_table; // not owned
+    ImportList imports;
+	ASTNode *ast;
 } Module;
 
-CompilerResult parser_init(Parser *parser, Scanner scanner, Symbol *optional_table);
+// This is so I don't have to change the signature of parser_init in all tests
+typedef struct {
+	Symbol *internal_table;
+	Symbol *exported_table;
+} SymbolTableWrapper;
+
+// Parser takes ownership of the symbol tables
+CompilerResult parser_init(Parser *parser, Scanner scanner, SymbolTableWrapper *optional_table_wrapper);
 
 CompilerResult parser_deinit(Parser *parser);
 
 CompilerResult symbol_table_print(Symbol *table, char *string);
 
-CompilerResult parse_import_list(Parser *parser, ImportList* import_list);
+CompilerResult parse_import_list(Parser *parser, ImportList *import_list);
 
 Module *parse_input(Parser *parser);
 
 CompilerResult ast_print(ASTNode *node, int indent, char *string);
+
+void ast_deinit(ASTNode* node);
