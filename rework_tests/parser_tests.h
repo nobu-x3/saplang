@@ -629,3 +629,114 @@ void test_Namespaces_Functions(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_IfStatements_NoElse(void) {
+	SETUP_TEST("fn i32 test() {"
+			   "    i32 x = 1;"
+			   "    i32 y = 0;"
+			   "    if(x) {"
+			   "        y = 1;"
+			   "    }"
+			   "}");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 3 statement(s):\n"
+						   "      VarDecl: i32 x:\n"
+						   "        Literal Int: 1\n"
+						   "      VarDecl: i32 y:\n"
+						   "        Literal Int: 0\n"
+						   "      IfElseStmt:\n"
+						   "        Condition:\n"
+						   "          Ident: x\n"
+						   "        Then:\n"
+						   "          Block with 1 statement(s):\n"
+						   "            Assignment:\n"
+						   "              Ident: y\n"
+						   "              Literal Int: 1\n"
+						   "        Else:\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_IfStatements_WithElse(void) {
+	SETUP_TEST("fn i32 test() {"
+			   "    i32 x = 1;"
+			   "    i32 y = 0;"
+			   "    if(x) {"
+			   "        y = 1;"
+			   "    } else {"
+			   "        y = 2;"
+			   "    }"
+			   "}");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 3 statement(s):\n"
+						   "      VarDecl: i32 x:\n"
+						   "        Literal Int: 1\n"
+						   "      VarDecl: i32 y:\n"
+						   "        Literal Int: 0\n"
+						   "      IfElseStmt:\n"
+						   "        Condition:\n"
+						   "          Ident: x\n"
+						   "        Then:\n"
+						   "          Block with 1 statement(s):\n"
+						   "            Assignment:\n"
+						   "              Ident: y\n"
+						   "              Literal Int: 1\n"
+						   "        Else:\n"
+						   "          Block with 1 statement(s):\n"
+						   "            Assignment:\n"
+						   "              Ident: y\n"
+						   "              Literal Int: 2\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_IfStatements_ElseIf(void) {
+	SETUP_TEST("fn i32 test() {"
+			   "    i32 x = 1;"
+			   "    i32 y = 0;"
+			   "    if(x) {"
+			   "        y = 1;"
+			   "    } else if(y){"
+			   "        y = 2;"
+			   "    } else {"
+			   "        y = 2;"
+			   "    }"
+			   "}");
+	const char *expected =
+	"FuncDecl: test\n"
+	"  Params:\n"
+	"  Body:\n"
+	"    Block with 3 statement(s):\n"
+	"      VarDecl: i32 x:\n"
+	"        Literal Int: 1\n"
+	"      VarDecl: i32 y:\n"
+	"        Literal Int: 0\n"
+	"      IfElseStmt:\n"
+	"        Condition:\n"
+	"          Ident: x\n"
+	"        Then:\n"
+	"          Block with 1 statement(s):\n"
+	"            Assignment:\n"
+	"              Ident: y\n"
+	"              Literal Int: 1\n"
+	"        Else:\n"
+    "          IfElseStmt:\n"
+    "            Condition:\n"
+    "              Ident: y\n"
+    "            Then:\n"
+    "              Block with 1 statement(s):\n"
+    "                Assignment:\n"
+    "                  Ident: y\n"
+    "                  Literal Int: 2\n"
+    "            Else:\n"
+    "              Block with 1 statement(s):\n"
+    "                Assignment:\n"
+    "                  Ident: y\n"
+    "                  Literal Int: 2\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

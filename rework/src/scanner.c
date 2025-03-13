@@ -83,6 +83,10 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_EXPORT;
 		else if (strcmp(current_token.text, "import") == 0)
 			current_token.type = TOK_IMPORT;
+		else if (strcmp(current_token.text, "if") == 0)
+			current_token.type = TOK_IF;
+		else if (strcmp(current_token.text, "else") == 0)
+			current_token.type = TOK_ELSE;
 		else {
 			current_token.type = TOK_IDENTIFIER;
 		}

@@ -8,7 +8,8 @@
 #include <string.h>
 
 // @TODO: fix memleaks on return NULL
-// @TODO: implement AST deinit
+
+void free_ast_node(ASTNode *node);
 
 typedef struct {
 	ASTNode **data;
@@ -241,6 +242,21 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 				print(string, "  ");
 			print(string, "Params:\n");
 			ast_print(node->data.extern_func.params, indent + 2, string);
+			break;
+		case AST_IF_STMT:
+			print(string, "IfElseStmt:\n");
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Condition:\n");
+			ast_print(node->data.if_stmt.condition, indent + 2, string);
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Then:\n");
+			ast_print(node->data.if_stmt.then_branch, indent + 2, string);
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Else:\n");
+			ast_print(node->data.if_stmt.else_branch, indent + 2, string);
 			break;
 		default: {
 			print(string, "Unknown AST Node\n");
@@ -501,6 +517,18 @@ ASTNode *new_array_literal_node(ASTNode **elements, int count) {
 		return NULL;
 	node->data.array_literal.elements = elements;
 	node->data.array_literal.count = count;
+	return node;
+}
+
+ASTNode *new_if_stmt_node(ASTNode *condition, ASTNode *then_branch, ASTNode *else_branch) {
+	ASTNode *node = new_ast_node(AST_IF_STMT);
+	if (!node)
+		return NULL;
+
+	node->data.if_stmt.condition = condition;
+	node->data.if_stmt.then_branch = then_branch;
+	node->data.if_stmt.else_branch = else_branch;
+
 	return node;
 }
 
@@ -1064,7 +1092,12 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 	return new_var_decl_node(type_name, var_name, is_const, init_expr);
 }
 
+ASTNode* parse_if_stmt(Parser* parser);
+
 ASTNode *parse_stmt(Parser *parser) {
+	if (parser->current_token.type == TOK_IF) {
+		return parse_if_stmt(parser);
+	}
 	if (parser->current_token.type == TOK_RETURN) {
 		return parse_return_stmt(parser);
 	}
@@ -1236,6 +1269,47 @@ ASTNode *parse_block(Parser *parser) {
 
 	parser->current_token = next_token(&parser->scanner);
 	return new_block_node(stmts.data, stmts.count);
+}
+
+// <ifStmt>
+// ::= "if" '(' <expression> ')' <statement> ("else" <statement>)*
+ASTNode *parse_if_stmt(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner); // consume 'if'
+	if (parser->current_token.type != TOK_LPAREN) {
+		char msg[128];
+		sprintf(msg, "expected '(' after 'if', got %s.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume '('
+
+	ASTNode *condition = parse_assignment(parser); // highest precedence expr
+	if (!condition)
+		return NULL;
+
+	if (parser->current_token.type != TOK_RPAREN) {
+		char msg[128];
+		sprintf(msg, "expected ')' after condition in if statement, got %s.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume '('
+
+	ASTNode *then_branch = parse_block(parser);
+	if (!then_branch) {
+		free_ast_node(condition);
+		return NULL;
+	}
+
+	ASTNode *else_branch = NULL;
+	if (parser->current_token.type == TOK_ELSE) {
+		parser->current_token = next_token(&parser->scanner);
+		if (parser->current_token.type == TOK_IF)
+			else_branch = parse_stmt(parser);
+		else
+			else_branch = parse_block(parser);
+	}
+	return new_if_stmt_node(condition, then_branch, else_branch);
 }
 
 // <functionDecl>
@@ -1573,6 +1647,13 @@ void free_ast_node(ASTNode *node) {
 			curr_param = next;
 		}
 	} break;
+	case AST_IF_STMT:
+		free_ast_node(node->data.if_stmt.condition);
+		free_ast_node(node->data.if_stmt.then_branch);
+		free_ast_node(node->data.if_stmt.else_branch);
+		break;
+	default:
+		break;
 	}
 	free(node);
 }
