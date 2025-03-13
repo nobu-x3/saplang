@@ -610,10 +610,7 @@ void test_Imports(void) {
 			   "import print;"
 			   "enum EnumType { First, Second = 234, Third, EVEN = Second }"
 			   "import some_module;");
-	const char *expected = "Import: io\n"
-						   "Import: print\n"
-						   "Import: some_module\n"
-						   "EnumDecl with 4 member(s) - EnumType : i32:\n"
+	const char *expected = "EnumDecl with 4 member(s) - EnumType : i32:\n"
 						   "  First : 0\n"
 						   "  Second : 234\n"
 						   "  Third : 235\n"
@@ -626,9 +623,7 @@ void test_Namespaces_Functions(void) {
 	SETUP_TEST("import io;"
 			   "import print;"
 			   "io::File* file = io::fopen();");
-	const char *expected = "Import: io\n"
-						   "Import: print\n"
-						   "VarDecl: *io::File file:\n"
+	const char *expected = "VarDecl: *io::File file:\n"
 						   "  Function call with 0 args:\n"
 						   "    Ident: io::fopen\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);

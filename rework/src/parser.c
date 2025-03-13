@@ -63,7 +63,7 @@ CompilerResult deinit_symbol_table(Symbol *table) {
 	return RESULT_SUCCESS;
 }
 
-CompilerResult parser_init(Parser *parser, Scanner scanner, Symbol *optional_table) {
+CompilerResult parser_init(Parser *parser, Scanner scanner, SymbolTableWrapper *optional_table_wrapper) {
 	if (!parser)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -71,7 +71,11 @@ CompilerResult parser_init(Parser *parser, Scanner scanner, Symbol *optional_tab
 		return RESULT_MEMORY_ERROR;
 
 	parser->scanner = scanner;
-	parser->symbol_table = optional_table;
+
+	if (optional_table_wrapper) {
+		parser->symbol_table = optional_table_wrapper->internal_table;
+		parser->exported_table = optional_table_wrapper->exported_table;
+	}
 
 	char *cpy = strdup(scanner.source.name);
 	char *tmp = cpy;
@@ -87,6 +91,7 @@ CompilerResult parser_deinit(Parser *parser) {
 
 	scanner_deinit(&parser->scanner);
 	deinit_symbol_table(parser->symbol_table);
+	deinit_symbol_table(parser->exported_table);
 	return RESULT_SUCCESS;
 }
 
@@ -94,9 +99,6 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 	if (!node)
 		return RESULT_PASSED_NULL_PTR;
 	while (node) {
-		for (int i = 0; i < node->import_list.count; ++i) {
-			print(string, "Import: %s\n", node->import_list.data[i]);
-		}
 		for (int i = 0; i < indent; ++i) {
 			print(string, "  ");
 		}
@@ -270,9 +272,7 @@ ASTNode *new_ast_node(ASTNodeType type) {
 	if (!node) {
 		return NULL;
 	}
-	node->import_list.data = NULL;
-	node->import_list.capacity = 0;
-	node->import_list.count = 0;
+
 	node->type = type;
 	node->next = NULL;
 	return node;
@@ -633,7 +633,7 @@ ASTNode *parse_assignment(Parser *parser) {
 	return node;
 }
 
-ASTNode *parse_enum_decl(Parser *parser) {
+ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume 'enum'
 	if (parser->current_token.type != TOK_IDENTIFIER) {
 		char msg[128];
@@ -728,6 +728,10 @@ ASTNode *parse_enum_decl(Parser *parser) {
 		report(parser->current_token.location, msg, 0);
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '}'
+	add_symbol(&parser->symbol_table, enum_name, SYMB_ENUM, base_type);
+	if (is_exported) {
+		add_symbol(&parser->exported_table, enum_name, SYMB_ENUM, base_type);
+	}
 	return new_enum_decl_node(enum_name, base_type, members.data, members.count);
 }
 
@@ -1024,7 +1028,7 @@ ASTNode *parse_unary(Parser *parser) {
 
 // <varDecl>
 // ::= ('const')? <type> <identifier> ('=' <expression>)? ';'
-ASTNode *parse_var_decl(Parser *parser) {
+ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 	int is_const = 0;
 	if (parser->current_token.type == TOK_CONST) {
 		is_const = 1;
@@ -1054,6 +1058,9 @@ ASTNode *parse_var_decl(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume ';'
 
 	add_symbol(&parser->symbol_table, var_name, SYMB_VAR, type_name);
+	if (is_exported) {
+		add_symbol(&parser->exported_table, var_name, SYMB_VAR, type_name);
+	}
 	return new_var_decl_node(type_name, var_name, is_const, init_expr);
 }
 
@@ -1075,7 +1082,7 @@ ASTNode *parse_stmt(Parser *parser) {
 			// most likely var decl, restore state and reparse
 			parser->scanner.id = save;
 			parser->current_token = temp;
-			return parse_var_decl(parser);
+			return parse_var_decl(parser, 0);
 		}
 		// restore and parse expression
 		parser->scanner.id = save;
@@ -1115,7 +1122,7 @@ ASTNode *parse_field_declaration(Parser *parser) {
 
 // <structDecl>
 // ::= 'struct' <identifier> '{' (<fieldDecl>)* '}'
-ASTNode *parse_struct_decl(Parser *parser) {
+ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume 'struct'
 	// @TODO: generic structs
 	if (parser->current_token.type != TOK_IDENTIFIER) {
@@ -1151,6 +1158,9 @@ ASTNode *parse_struct_decl(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
 	add_symbol(&parser->symbol_table, struct_name, SYMB_STRUCT, "struct");
+	if (is_exported) {
+		add_symbol(&parser->exported_table, struct_name, SYMB_STRUCT, "struct");
+	}
 	return new_struct_decl_node(struct_name, field_list);
 }
 
@@ -1235,7 +1245,7 @@ ASTNode *parse_block(Parser *parser) {
 // <basicFuncDecl>
 // ::= 'fn' <type> <identifier> '(' <parameterList> ')' <block>
 // @TODO: implement generic functions
-ASTNode *parse_function_decl(Parser *parser) {
+ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume 'fn'
 	if ((parser->current_token.type < TOKENS_BUILTIN_TYPE_BEGIN || parser->current_token.type > TOKENS_BUILTIN_TYPE_END) && parser->current_token.type == TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected return type.", 0);
@@ -1262,11 +1272,14 @@ ASTNode *parse_function_decl(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
 	add_symbol(&parser->symbol_table, func_name, SYMB_FN, type);
+	if (is_exported)
+		add_symbol(&parser->exported_table, func_name, SYMB_FN, type);
+
 	ASTNode *body = parse_block(parser);
 	return new_func_decl_node(func_name, params, body);
 }
 
-ASTNode *parse_extern_func_decl(Parser *parser) {
+ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume 'fn'
 	if ((parser->current_token.type < TOKENS_BUILTIN_TYPE_BEGIN || parser->current_token.type > TOKENS_BUILTIN_TYPE_END) && parser->current_token.type != TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected return type.", 0);
@@ -1300,6 +1313,9 @@ ASTNode *parse_extern_func_decl(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
 	add_symbol(&parser->symbol_table, func_name, SYMB_FN, type);
+	if (is_exported) {
+		add_symbol(&parser->exported_table, func_name, SYMB_FN, type);
+	}
 	return new_extern_func_decl_node(func_name, params);
 }
 
@@ -1327,16 +1343,16 @@ ASTNode *parse_extern_block(Parser *parser) {
 			parser->current_token = next_token(&parser->scanner);
 		}
 		if (parser->current_token.type == TOK_STRUCT) {
-			decl = parse_struct_decl(parser);
+			decl = parse_struct_decl(parser, is_exported);
 			decl->data.struct_decl.is_exported = is_exported;
 		} else if (parser->current_token.type == TOK_FUNC) {
-			decl = parse_extern_func_decl(parser);
+			decl = parse_extern_func_decl(parser, is_exported);
 			decl->data.extern_func.is_exported = is_exported;
 		} else if (parser->current_token.type == TOK_ENUM) {
-			decl = parse_enum_decl(parser);
+			decl = parse_enum_decl(parser, is_exported);
 			decl->data.enum_decl.is_exported = is_exported;
 		} else {
-			decl = parse_var_decl(parser);
+			decl = parse_var_decl(parser, is_exported);
 			decl->data.var_decl.is_exported = is_exported;
 		}
 		assert(decl);
@@ -1360,18 +1376,18 @@ ASTNode *parse_global_decl(Parser *parser) {
 	}
 	ASTNode *decl = NULL;
 	if (parser->current_token.type == TOK_STRUCT) {
-		decl = parse_struct_decl(parser);
+		decl = parse_struct_decl(parser, is_exported);
 		decl->data.struct_decl.is_exported = is_exported;
 	} else if (parser->current_token.type == TOK_FUNC) {
-		decl = parse_function_decl(parser);
+		decl = parse_function_decl(parser, is_exported);
 		decl->data.func_decl.is_exported = is_exported;
 	} else if (parser->current_token.type == TOK_ENUM) {
-		decl = parse_enum_decl(parser);
+		decl = parse_enum_decl(parser, is_exported);
 		decl->data.enum_decl.is_exported = is_exported;
 	} else if (parser->current_token.type == TOK_EXTERN) {
 		decl = parse_extern_block(parser);
 	} else {
-		decl = parse_var_decl(parser);
+		decl = parse_var_decl(parser, is_exported);
 		decl->data.var_decl.is_exported = is_exported;
 	}
 	return decl;
@@ -1429,18 +1445,22 @@ CompilerResult parse_import_list(Parser *parser, ImportList *out_import_list) {
 Module *parse_input(Parser *parser) {
 	ASTNode *global_list = NULL, *last = NULL;
 
-	ImportList import_list;
-	da_init(import_list, 4);
-
 	parser->current_token = next_token(&parser->scanner);
 	while (parser->current_token.type != TOK_EOF) {
 		if (parser->current_token.type == TOK_IMPORT) {
-			char *import_name = parse_import(parser);
-			if (!import_name) {
-				free(import_list.data);
-				return NULL;
+			parser->current_token = next_token(&parser->scanner); // consume 'import'
+			if (parser->current_token.type != TOK_IDENTIFIER) {
+				char msg[128];
+				sprintf(msg, "expected identifier in import, got %s", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
 			}
-			da_push(import_list, import_name);
+			parser->current_token = next_token(&parser->scanner); // consume import name
+			if (parser->current_token.type != TOK_SEMICOLON) {
+				char msg[128];
+				sprintf(msg, "expected ';' after import's identifier, got %s", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+			parser->current_token = next_token(&parser->scanner); // consume ';'
 			continue;
 		}
 
@@ -1454,10 +1474,117 @@ Module *parse_input(Parser *parser) {
 			last = decl;
 		}
 	}
-    if(global_list)
-        global_list->import_list = import_list;
 	Module *module = malloc(sizeof(Module));
 	module->ast = global_list;
 	module->symbol_table = parser->symbol_table;
+	module->exported_table = parser->exported_table;
 	return module;
+}
+
+void free_ast_node(ASTNode *node) {
+	if (!node)
+		return;
+
+	switch (node->type) {
+	case AST_VAR_DECL:
+		free_ast_node(node->data.var_decl.init);
+		break;
+	case AST_STRUCT_DECL: {
+		ASTNode *current_field = node->data.struct_decl.fields;
+		while (current_field) {
+			ASTNode *next = current_field->next;
+			free_ast_node(current_field);
+			current_field = next;
+		}
+	} break;
+	case AST_FUNC_DECL: {
+		ASTNode *curr_param = node->data.func_decl.params;
+		while (curr_param) {
+			ASTNode *next = curr_param->next;
+			free_ast_node(curr_param);
+			curr_param = next;
+		}
+		ASTNode *body = node->data.func_decl.body;
+		free_ast_node(body);
+	} break;
+	case AST_BLOCK: {
+		for (int i = 0; i < node->data.block.count; ++i) {
+			free_ast_node(node->data.block.statements[i]);
+		}
+		free(node->data.block.statements);
+	} break;
+	case AST_RETURN:
+		free_ast_node(node->data.ret.return_expr);
+		break;
+	case AST_BINARY_EXPR:
+		free_ast_node(node->data.binary_op.left);
+		free_ast_node(node->data.binary_op.right);
+		break;
+	case AST_UNARY_EXPR:
+		free_ast_node(node->data.unary_op.operand);
+		break;
+	case AST_ARRAY_LITERAL:
+		for (int i = 0; i < node->data.array_literal.count; ++i) {
+			free_ast_node(node->data.array_literal.elements[i]);
+		}
+		free(node->data.array_literal.elements);
+		break;
+	case AST_ARRAY_ACCESS:
+		free_ast_node(node->data.array_access.base);
+		free_ast_node(node->data.array_access.index);
+		break;
+	case AST_ASSIGNMENT:
+		free_ast_node(node->data.assignment.lvalue);
+		free_ast_node(node->data.assignment.rvalue);
+		break;
+	case AST_FUNC_CALL:
+		free_ast_node(node->data.func_call.callee);
+		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
+			free_ast_node(node->data.func_call.args[i]);
+		}
+		free(node->data.func_call.args);
+		break;
+	case AST_MEMBER_ACCESS:
+		free_ast_node(node->data.member_access.base);
+		break;
+	case AST_STRUCT_LITERAL:
+		for (int i = 0; i < node->data.struct_literal.count; ++i) {
+			free_ast_node(node->data.struct_literal.inits[i]->expr);
+		}
+		free(node->data.struct_literal.inits);
+		break;
+	case AST_ENUM_DECL:
+		for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
+			free(node->data.enum_decl.members[i]);
+		}
+		free(node->data.enum_decl.members);
+		break;
+	case AST_EXTERN_BLOCK:
+		for (int i = 0; i < node->data.extern_block.count; ++i) {
+			free_ast_node(node->data.extern_block.block[i]);
+		}
+		free(node->data.extern_block.block);
+		break;
+	case AST_EXTERN_FUNC_DECL: {
+		ASTNode *curr_param = node->data.extern_func.params;
+		while (curr_param) {
+			ASTNode *next = curr_param->next;
+			free_ast_node(curr_param);
+			curr_param = next;
+		}
+	} break;
+	}
+	free(node);
+}
+
+void ast_deinit(ASTNode *node) {
+	if (!node)
+		return;
+
+	ASTNode *current_node = node;
+	while (current_node != NULL) {
+		ASTNode *next = current_node->next;
+		free_ast_node(current_node);
+		current_node = next;
+	}
 }
