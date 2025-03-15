@@ -742,7 +742,7 @@ void test_IfStatements_ElseIf(void) {
 
 void test_ForLoop_Full(void) {
 	SETUP_TEST("fn i32 test() {"
-			   "    for (i32 i = 0; i < 10; i = i + 1) {    y = i;  }"
+			   "    for (i32 i = 0; i < 10; i += 1) {    y = i;  }"
 			   "}");
 	const char *expected = "FuncDecl: test\n"
 						   "  Params:\n"
@@ -757,11 +757,9 @@ void test_ForLoop_Full(void) {
 						   "            Ident: i\n"
 						   "            Literal Int: 10\n"
 						   "        Post:\n"
-						   "          Assignment:\n"
+						   "          Binary Expression: +=\n"
 						   "            Ident: i\n"
-						   "            Binary Expression: +\n"
-						   "              Ident: i\n"
-						   "              Literal Int: 1\n"
+						   "            Literal Int: 1\n"
 						   "        Body:\n"
 						   "          Block with 1 statement(s):\n"
 						   "            Assignment:\n"

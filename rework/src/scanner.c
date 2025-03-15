@@ -180,27 +180,52 @@ Token next_token(Scanner *scanner) {
 
 		break;
 	case '+':
-		current_token.type = TOK_PLUS;
-		strncpy(current_token.text, "+", sizeof(current_token.text));
-		eat_next_char(scanner);
-
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_SELFADD;
+			strncpy(current_token.text, "+=", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else {
+			current_token.type = TOK_PLUS;
+			strncpy(current_token.text, "+", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 		break;
 	case '-':
-		current_token.type = TOK_MINUS;
-		strncpy(current_token.text, "-", sizeof(current_token.text));
-		eat_next_char(scanner);
-
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_SELFSUB;
+			strncpy(current_token.text, "-=", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else {
+			current_token.type = TOK_MINUS;
+			strncpy(current_token.text, "-", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 		break;
 	case '*':
-		current_token.type = TOK_ASTERISK;
-		strncpy(current_token.text, "*", sizeof(current_token.text));
-		eat_next_char(scanner);
-
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_SELFMUL;
+			strncpy(current_token.text, "*=", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else {
+			current_token.type = TOK_ASTERISK;
+			strncpy(current_token.text, "*", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 		break;
 	case '/':
-		current_token.type = TOK_SLASH;
-		strncpy(current_token.text, "/", sizeof(current_token.text));
-		eat_next_char(scanner);
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_SELFDIV;
+			strncpy(current_token.text, "*=", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else {
+			current_token.type = TOK_SLASH;
+			strncpy(current_token.text, "/", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 
 		break;
 	case '&':
