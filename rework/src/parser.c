@@ -312,7 +312,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			ast_print(node->data.for_loop.init, indent + 2, string);
 			for (int i = 0; i < indent + 1; i++)
 				print(string, "  ");
-			print(string, "Condiiton:\n");
+			print(string, "Condition:\n");
 			ast_print(node->data.for_loop.condition, indent + 2, string);
 			for (int i = 0; i < indent + 1; i++)
 				print(string, "  ");
@@ -322,6 +322,17 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 				print(string, "  ");
 			print(string, "Body:\n");
 			ast_print(node->data.for_loop.body, indent + 2, string);
+			break;
+		case AST_WHILE_LOOP:
+			print(string, "WhileLoop:\n");
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Condition:\n");
+			ast_print(node->data.while_loop.condition, indent + 2, string);
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Body:\n");
+			ast_print(node->data.while_loop.body, indent + 2, string);
 			break;
 		default: {
 			print(string, "Unknown AST Node\n");
@@ -356,6 +367,16 @@ ASTNode *new_ast_node(ASTNodeType type) {
 
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_while_loop_node(ASTNode *condition, ASTNode *body) {
+	ASTNode *node = new_ast_node(AST_WHILE_LOOP);
+	if (!node)
+		return NULL;
+
+	node->data.while_loop.condition = condition;
+	node->data.while_loop.body = body;
 	return node;
 }
 
@@ -1172,6 +1193,7 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 
 ASTNode *parse_if_stmt(Parser *parser);
 ASTNode *parse_for_loop(Parser *parser);
+ASTNode *parse_while_loop(Parser *parser);
 
 ASTNode *parse_stmt(Parser *parser) {
 	if (parser->current_token.type == TOK_IF) {
@@ -1179,6 +1201,9 @@ ASTNode *parse_stmt(Parser *parser) {
 	}
 	if (parser->current_token.type == TOK_FOR) {
 		return parse_for_loop(parser);
+	}
+	if (parser->current_token.type == TOK_WHILE) {
+		return parse_while_loop(parser);
 	}
 	if (parser->current_token.type == TOK_RETURN) {
 		return parse_return_stmt(parser);
@@ -1353,8 +1378,36 @@ ASTNode *parse_block(Parser *parser) {
 	return new_block_node(stmts.data, stmts.count);
 }
 
+// <whileLoop>
+// ::= 'while' '(' <condition> ')' <block>
+ASTNode *parse_while_loop(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner);
+
+	if (parser->current_token.type != TOK_LPAREN) {
+		char msg[128];
+		sprintf(msg, "expected '(' after 'while', got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume '('
+
+	ASTNode *condition = parse_assignment(parser);
+
+	if (parser->current_token.type != TOK_RPAREN) {
+		char msg[128];
+		sprintf(msg, "expected ')' after while loop condition, got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume ')'
+
+	ASTNode *body = parse_block(parser);
+
+	return new_while_loop_node(condition, body);
+}
+
 // <forLoop>
-// ::= 'for' '(' <init> ';' <condition> ';' <post> ')' '{' <body> '}'
+// ::= 'for' '(' <init> ';' <condition> ';' <post> ')' <block>
 ASTNode *parse_for_loop(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume 'if'
 	if (parser->current_token.type != TOK_LPAREN) {
@@ -1790,6 +1843,10 @@ void free_ast_node(ASTNode *node) {
 		free_ast_node(node->data.for_loop.condition);
 		free_ast_node(node->data.for_loop.post);
 		free_ast_node(node->data.for_loop.body);
+		break;
+	case AST_WHILE_LOOP:
+		free_ast_node(node->data.while_loop.condition);
+		free_ast_node(node->data.while_loop.body);
 		break;
 	default:
 		break;
