@@ -56,6 +56,7 @@ typedef enum {
 	AST_EXTERN_FUNC_DECL,
 	AST_IF_STMT,
 	AST_FOR_LOOP,
+    AST_WHILE_LOOP,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -185,6 +186,10 @@ typedef struct ASTNode {
 			struct ASTNode *post;
 			struct ASTNode *body;
 		} for_loop;
+        struct {
+            struct ASTNode* condition;
+            struct ASTNode* body;
+        } while_loop;
 	} data;
 } ASTNode;
 

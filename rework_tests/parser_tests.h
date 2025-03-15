@@ -752,7 +752,7 @@ void test_ForLoop_Full(void) {
 						   "        Init:\n"
 						   "          VarDecl: i32 i:\n"
 						   "            Literal Int: 0\n"
-						   "        Condiiton:\n"
+						   "        Condition:\n"
 						   "          Binary Expression: <\n"
 						   "            Ident: i\n"
 						   "            Literal Int: 10\n"
@@ -779,13 +779,35 @@ void test_ForLoop_Empty(void) {
 						   "    Block with 1 statement(s):\n"
 						   "      ForLoop:\n"
 						   "        Init:\n"
-						   "        Condiiton:\n"
+						   "        Condition:\n"
 						   "        Post:\n"
 						   "        Body:\n"
 						   "          Block with 1 statement(s):\n"
 						   "            Assignment:\n"
 						   "              Ident: y\n"
 						   "              Ident: i\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_WhileLoop(void) {
+	SETUP_TEST("fn i32 test() {"
+			   "    int condition = 1; while(condition) { y += 1; }"
+			   "}");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 2 statement(s):\n"
+						   "      VarDecl: int condition:\n"
+						   "        Literal Int: 1\n"
+						   "      WhileLoop:\n"
+						   "        Condition:\n"
+						   "          Ident: condition\n"
+						   "        Body:\n"
+						   "          Block with 1 statement(s):\n"
+						   "            Binary Expression: +=\n"
+						   "              Ident: y\n"
+						   "              Literal Int: 1\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
