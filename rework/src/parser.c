@@ -198,6 +198,18 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			case TOK_GTOE:
 				print(string, "Binary Expression: >=\n");
 				break;
+			case TOK_SELFADD:
+				print(string, "Binary Expression: +=\n");
+				break;
+			case TOK_SELFSUB:
+				print(string, "Binary Expression: -=\n");
+				break;
+			case TOK_SELFMUL:
+				print(string, "Binary Expression: *=\n");
+				break;
+			case TOK_SELFDIV:
+				print(string, "Binary Expression: /=\n");
+				break;
 			default:
 				break;
 			}
@@ -997,7 +1009,7 @@ ASTNode *parse_array_literal(Parser *parser) {
 ASTNode *parse_term(Parser *parser) {
 	ASTNode *node = parse_unary(parser);
 	while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH || parser->current_token.type == TOK_LESSTHAN || parser->current_token.type == TOK_GREATERTHAN || parser->current_token.type == TOK_LTOE ||
-		   parser->current_token.type == TOK_GTOE) {
+		   parser->current_token.type == TOK_GTOE || parser->current_token.type == TOK_SELFADD || parser->current_token.type == TOK_SELFSUB || parser->current_token.type == TOK_SELFMUL || parser->current_token.type == TOK_SELFDIV) {
 		TokenType op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_unary(parser);
