@@ -87,6 +87,8 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_IF;
 		else if (strcmp(current_token.text, "else") == 0)
 			current_token.type = TOK_ELSE;
+		else if (strcmp(current_token.text, "for") == 0)
+			current_token.type = TOK_FOR;
 		else {
 			current_token.type = TOK_IDENTIFIER;
 		}
@@ -118,9 +120,16 @@ Token next_token(Scanner *scanner) {
 	// Single-character tokens.
 	switch (_INPUT[_INDEX]) {
 	case '=':
-		current_token.type = TOK_ASSIGN;
-		strncpy(current_token.text, "=", sizeof(current_token.text));
-		eat_next_char(scanner);
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_EQUAL;
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+			strncpy(current_token.text, "==", sizeof(current_token.text));
+		} else {
+			current_token.type = TOK_ASSIGN;
+			strncpy(current_token.text, "=", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 
 		break;
 	case ';':
@@ -201,9 +210,16 @@ Token next_token(Scanner *scanner) {
 
 		break;
 	case '!':
-		current_token.type = TOK_EXCLAMATION;
-		strncpy(current_token.text, "!", sizeof(current_token.text));
-		eat_next_char(scanner);
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_NOTEQUAL;
+			strncpy(current_token.text, "!=", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else {
+			current_token.type = TOK_EXCLAMATION;
+			strncpy(current_token.text, "!", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 
 		break;
 	case '[':
@@ -216,6 +232,30 @@ Token next_token(Scanner *scanner) {
 		current_token.type = TOK_RBRACKET;
 		strncpy(current_token.text, "]", sizeof(current_token.text));
 		eat_next_char(scanner);
+
+		break;
+	case '<':
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_LTOE;
+			eat_next_char(scanner);
+			strncpy(current_token.text, "<=", sizeof(current_token.text));
+		} else {
+			current_token.type = TOK_LESSTHAN;
+			strncpy(current_token.text, "<", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
+
+		break;
+	case '>':
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_GTOE;
+			eat_next_char(scanner);
+			strncpy(current_token.text, ">=", sizeof(current_token.text));
+		} else {
+			current_token.type = TOK_GREATERTHAN;
+			strncpy(current_token.text, ">", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 
 		break;
 	case '.':

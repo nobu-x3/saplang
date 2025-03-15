@@ -6,7 +6,7 @@ typedef enum {
 	SYMB_VAR,
 	SYMB_STRUCT,
 	SYMB_FN,
-    SYMB_ENUM,
+	SYMB_ENUM,
 } SymbolKind;
 
 typedef struct {
@@ -54,7 +54,8 @@ typedef enum {
 	AST_ENUM_VALUE,
 	AST_EXTERN_BLOCK,
 	AST_EXTERN_FUNC_DECL,
-    AST_IF_STMT,
+	AST_IF_STMT,
+	AST_FOR_LOOP,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -118,7 +119,7 @@ typedef struct ASTNode {
 		} ret;
 		// Binary expression
 		struct {
-			char op;
+			TokenType op;
 			struct ASTNode *left;
 			struct ASTNode *right;
 		} binary_op;
@@ -173,11 +174,17 @@ typedef struct ASTNode {
 			int is_exported;
 			struct ASTNode *params; // Linked list of parameter declarations
 		} extern_func;
-        struct {
-            struct ASTNode* condition;
-            struct ASTNode* then_branch;
-            struct ASTNode* else_branch;
-        } if_stmt;
+		struct {
+			struct ASTNode *condition;
+			struct ASTNode *then_branch;
+			struct ASTNode *else_branch;
+		} if_stmt;
+		struct {
+			struct ASTNode *init;
+			struct ASTNode *condition;
+			struct ASTNode *post;
+			struct ASTNode *body;
+		} for_loop;
 	} data;
 } ASTNode;
 
@@ -192,7 +199,7 @@ typedef struct Parser {
 typedef struct {
 	Symbol *symbol_table;	// not owned
 	Symbol *exported_table; // not owned
-    ImportList imports;
+	ImportList imports;
 	ASTNode *ast;
 } Module;
 
@@ -215,4 +222,4 @@ Module *parse_input(Parser *parser);
 
 CompilerResult ast_print(ASTNode *node, int indent, char *string);
 
-void ast_deinit(ASTNode* node);
+void ast_deinit(ASTNode *node);
