@@ -167,7 +167,40 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			ast_print(node->data.ret.return_expr, indent + 1, string);
 			break;
 		case AST_BINARY_EXPR:
-			print(string, "Binary Expression: %c\n", node->data.binary_op.op);
+			switch (node->data.binary_op.op) {
+			case TOK_PLUS:
+				print(string, "Binary Expression: +\n");
+				break;
+			case TOK_MINUS:
+				print(string, "Binary Expression: -\n");
+				break;
+			case TOK_ASTERISK:
+				print(string, "Binary Expression: *\n");
+				break;
+			case TOK_SLASH:
+				print(string, "Binary Expression: /\n");
+				break;
+			case TOK_LESSTHAN:
+				print(string, "Binary Expression: <\n");
+				break;
+			case TOK_GREATERTHAN:
+				print(string, "Binary Expression: >\n");
+				break;
+			case TOK_EQUAL:
+				print(string, "Binary Expression: ==\n");
+				break;
+			case TOK_NOTEQUAL:
+				print(string, "Binary Expression: !=\n");
+				break;
+			case TOK_LTOE:
+				print(string, "Binary Expression: <=\n");
+				break;
+			case TOK_GTOE:
+				print(string, "Binary Expression: >=\n");
+				break;
+			default:
+				break;
+			}
 			ast_print(node->data.binary_op.left, indent + 1, string);
 			ast_print(node->data.binary_op.right, indent + 1, string);
 			break;
@@ -258,6 +291,26 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "Else:\n");
 			ast_print(node->data.if_stmt.else_branch, indent + 2, string);
 			break;
+
+		case AST_FOR_LOOP:
+			print(string, "ForLoop:\n");
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Init:\n");
+			ast_print(node->data.for_loop.init, indent + 2, string);
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Condiiton:\n");
+			ast_print(node->data.for_loop.condition, indent + 2, string);
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Post:\n");
+			ast_print(node->data.for_loop.post, indent + 2, string);
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Body:\n");
+			ast_print(node->data.for_loop.body, indent + 2, string);
+			break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -291,6 +344,18 @@ ASTNode *new_ast_node(ASTNodeType type) {
 
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_for_loop_node(ASTNode *init, ASTNode *condition, ASTNode *post, ASTNode *body) {
+	ASTNode *node = new_ast_node(AST_FOR_LOOP);
+	if (!node)
+		return NULL;
+
+	node->data.for_loop.init = init;
+	node->data.for_loop.condition = condition;
+	node->data.for_loop.post = post;
+	node->data.for_loop.body = body;
 	return node;
 }
 
@@ -356,7 +421,7 @@ ASTNode *new_assignment_node(ASTNode *lvalue, ASTNode *rvalue) {
 	return node;
 }
 
-ASTNode *new_binary_expr_node(char op, ASTNode *left, ASTNode *right) {
+ASTNode *new_binary_expr_node(TokenType op, ASTNode *left, ASTNode *right) {
 	ASTNode *node = new_ast_node(AST_BINARY_EXPR);
 	if (!node)
 		return NULL;
@@ -931,8 +996,9 @@ ASTNode *parse_array_literal(Parser *parser) {
 
 ASTNode *parse_term(Parser *parser) {
 	ASTNode *node = parse_unary(parser);
-	while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH) {
-		char op = parser->current_token.text[0];
+	while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH || parser->current_token.type == TOK_LESSTHAN || parser->current_token.type == TOK_GREATERTHAN || parser->current_token.type == TOK_LTOE ||
+		   parser->current_token.type == TOK_GTOE) {
+		TokenType op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_unary(parser);
 		node = new_binary_expr_node(op, node, right);
@@ -944,7 +1010,7 @@ ASTNode *parse_expr(Parser *parser) {
 	// I split it like that because of operator precedence
 	ASTNode *node = parse_term(parser);
 	while (parser->current_token.type == TOK_MINUS || parser->current_token.type == TOK_PLUS) {
-		char op = parser->current_token.text[0];
+		TokenType op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_term(parser);
 		node = new_binary_expr_node(op, node, right);
@@ -1092,11 +1158,15 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 	return new_var_decl_node(type_name, var_name, is_const, init_expr);
 }
 
-ASTNode* parse_if_stmt(Parser* parser);
+ASTNode *parse_if_stmt(Parser *parser);
+ASTNode *parse_for_loop(Parser *parser);
 
 ASTNode *parse_stmt(Parser *parser) {
 	if (parser->current_token.type == TOK_IF) {
 		return parse_if_stmt(parser);
+	}
+	if (parser->current_token.type == TOK_FOR) {
+		return parse_for_loop(parser);
 	}
 	if (parser->current_token.type == TOK_RETURN) {
 		return parse_return_stmt(parser);
@@ -1269,6 +1339,57 @@ ASTNode *parse_block(Parser *parser) {
 
 	parser->current_token = next_token(&parser->scanner);
 	return new_block_node(stmts.data, stmts.count);
+}
+
+// <forLoop>
+// ::= 'for' '(' <init> ';' <condition> ';' <post> ')' '{' <body> '}'
+ASTNode *parse_for_loop(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner); // consume 'if'
+	if (parser->current_token.type != TOK_LPAREN) {
+		char msg[128];
+		sprintf(msg, "expected '(' after 'for', got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume '('
+
+	// All of these are optional technically
+	ASTNode *init = NULL;
+	if (parser->current_token.type != TOK_SEMICOLON) {
+		init = parse_var_decl(parser, 0); // this also consumes ';' and adds to symtable
+	} else {
+		parser->current_token = next_token(&parser->scanner);
+	}
+
+	ASTNode *condition = NULL;
+	if (parser->current_token.type != TOK_SEMICOLON) {
+		condition = parse_assignment(parser);
+	}
+
+	if (parser->current_token.type != TOK_SEMICOLON) {
+		char msg[128];
+		sprintf(msg, "expected ';' after for loop condition, got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume ';'
+
+	ASTNode *post = NULL;
+	if (parser->current_token.type != TOK_RPAREN) {
+		post = parse_assignment(parser);
+	}
+
+	if (parser->current_token.type != TOK_RPAREN) {
+		char msg[128];
+		sprintf(msg, "expected ';' after for loop post-expression, got '%s'.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume ')'
+
+	ASTNode *body = parse_block(parser);
+
+	return new_for_loop_node(init, condition, post, body);
 }
 
 // <ifStmt>
@@ -1651,6 +1772,12 @@ void free_ast_node(ASTNode *node) {
 		free_ast_node(node->data.if_stmt.condition);
 		free_ast_node(node->data.if_stmt.then_branch);
 		free_ast_node(node->data.if_stmt.else_branch);
+		break;
+	case AST_FOR_LOOP:
+		free_ast_node(node->data.for_loop.init);
+		free_ast_node(node->data.for_loop.condition);
+		free_ast_node(node->data.for_loop.post);
+		free_ast_node(node->data.for_loop.body);
 		break;
 	default:
 		break;
