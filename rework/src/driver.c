@@ -471,7 +471,11 @@ CompilerResult driver_run() {
 
 	CompilerResult res = build_dependency_graph(input_src_file, &driver.dependency_graph);
 
-	ThreadPool *thread_pool = threadpool_create(get_num_of_cores());
+    int available_cores = get_num_of_cores();
+
+    available_cores = driver.module_count > available_cores ? available_cores : driver.module_count;
+
+	ThreadPool *thread_pool = threadpool_create(available_cores);
 
 	if (driver.options.show_timings) {
 		time_prep = (get_time() - before);
