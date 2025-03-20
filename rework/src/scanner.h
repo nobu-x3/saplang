@@ -62,6 +62,7 @@ typedef enum {
     TOK_ELSE,
     TOK_FOR,
     TOK_WHILE,
+    TOK_DEFER,
 	TOKENS_BUILTIN_TYPE_BEGIN = TOK_I8,
 	TOKENS_BUILTIN_TYPE_END = TOK_BOOL,
 } TokenType;

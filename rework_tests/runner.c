@@ -43,6 +43,7 @@ int main(void) {
 	RUN_TEST(test_ForLoop_Full);
 	RUN_TEST(test_ForLoop_Empty);
 	RUN_TEST(test_WhileLoop);
+	RUN_TEST(test_DeferStmts);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();
