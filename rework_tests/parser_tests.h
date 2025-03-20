@@ -811,3 +811,16 @@ void test_WhileLoop(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_DeferStmts(void) {
+	SETUP_TEST("fn void test() {"
+			   "    FILE* file = fopen();"	 // yeah not actually the signature
+			   "    defer { fclose(file); }" // yeah this would actly crash real program
+			   "    if(!file) { return; }"
+			   "    i32 a = 0;"
+			   "    if(a == 0) { return; }"
+			   "}");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

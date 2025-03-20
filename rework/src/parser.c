@@ -100,8 +100,10 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 	if (!node)
 		return RESULT_PASSED_NULL_PTR;
 	while (node) {
-		for (int i = 0; i < indent; ++i) {
-			print(string, "  ");
+		if (node->type != AST_DEFERRED_SEQUENCE) {
+			for (int i = 0; i < indent; ++i) {
+				print(string, "  ");
+			}
 		}
 		switch (node->type) {
 		case AST_VAR_DECL: {
@@ -334,6 +336,13 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "Body:\n");
 			ast_print(node->data.while_loop.body, indent + 2, string);
 			break;
+		case AST_DEFER_BLOCK:
+			break;
+		case AST_DEFERRED_SEQUENCE:
+			for (int i = 0; i < node->data.block.count; ++i) {
+				ast_print(node->data.block.statements[i], indent, string);
+			}
+			break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -367,6 +376,15 @@ ASTNode *new_ast_node(ASTNodeType type) {
 
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_defer_block_node(ASTNode *inner_block) {
+	ASTNode *node = new_ast_node(AST_DEFER_BLOCK);
+	if (!node)
+		return NULL;
+
+	node->data.defer.defer_block = inner_block;
 	return node;
 }
 
@@ -1030,7 +1048,8 @@ ASTNode *parse_array_literal(Parser *parser) {
 ASTNode *parse_term(Parser *parser) {
 	ASTNode *node = parse_unary(parser);
 	while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH || parser->current_token.type == TOK_LESSTHAN || parser->current_token.type == TOK_GREATERTHAN || parser->current_token.type == TOK_LTOE ||
-		   parser->current_token.type == TOK_GTOE || parser->current_token.type == TOK_SELFADD || parser->current_token.type == TOK_SELFSUB || parser->current_token.type == TOK_SELFMUL || parser->current_token.type == TOK_SELFDIV) {
+		   parser->current_token.type == TOK_GTOE || parser->current_token.type == TOK_SELFADD || parser->current_token.type == TOK_SELFSUB || parser->current_token.type == TOK_SELFMUL || parser->current_token.type == TOK_SELFDIV ||
+		   parser->current_token.type == TOK_NOTEQUAL || parser->current_token.type == TOK_EQUAL) {
 		TokenType op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_unary(parser);
@@ -1194,8 +1213,12 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 ASTNode *parse_if_stmt(Parser *parser);
 ASTNode *parse_for_loop(Parser *parser);
 ASTNode *parse_while_loop(Parser *parser);
+ASTNode *parse_defer_block(Parser *parser);
 
 ASTNode *parse_stmt(Parser *parser) {
+	if (parser->current_token.type == TOK_DEFER) {
+		return parse_defer_block(parser);
+	}
 	if (parser->current_token.type == TOK_IF) {
 		return parse_if_stmt(parser);
 	}
@@ -1350,9 +1373,101 @@ ASTNode *parse_parameter_list(Parser *parser) {
 	return param_list;
 }
 
+typedef struct {
+	ASTNode **data;
+	int capacity, count;
+} DeferStack;
+
+DeferStack copy_defer_stack(DeferStack *stack) {
+	DeferStack copy;
+	da_init_unsafe(copy, stack->capacity);
+	for (int i = 0; i < stack->count; ++i) {
+		da_push_unsafe(copy, stack->data[i]);
+	}
+	return copy;
+}
+
+void push_stmt(ASTNode *block, ASTNode *stmt, CompilerResult *success) {
+	if (block->type != AST_BLOCK && block->type != AST_DEFERRED_SEQUENCE) {
+		*success = RESULT_PASSED_NULL_PTR;
+		return;
+	}
+
+	int new_count = block->data.block.count + 1;
+	block->data.block.statements = realloc(block->data.block.statements, new_count * sizeof(ASTNode *));
+	if (!block->data.block.statements) {
+		*success = RESULT_MEMORY_ERROR;
+		return;
+	}
+	block->data.block.statements[block->data.block.count] = stmt;
+	block->data.block.count = new_count;
+	*success = RESULT_SUCCESS;
+}
+
+// TODO: mem leaks on early returns
+void unroll_defer_in_block(ASTNode *block) {
+	if (!block)
+		return;
+
+	struct {
+		ASTNode **data;
+		int capacity, count;
+	} new_stmts;
+
+	da_init_unsafe(new_stmts, 4);
+	DeferStack defer_stack;
+	da_init_unsafe(defer_stack, 4);
+
+	for (int i = 0; i < block->data.block.count; ++i) {
+		ASTNode *stmt = block->data.block.statements[i];
+		if (stmt->type == AST_DEFER_BLOCK) {
+			da_push_unsafe(defer_stack, stmt->data.defer.defer_block);
+		} else if (stmt->type == AST_RETURN) {
+			ASTNode *seq = new_ast_node(AST_DEFERRED_SEQUENCE);
+			for (int j = defer_stack.count - 1; j >= 0; --j) {
+				CompilerResult result;
+				push_stmt(seq, defer_stack.data[j], &result);
+				if (result != RESULT_SUCCESS)
+					return;
+			}
+			CompilerResult result;
+			push_stmt(seq, stmt, &result);
+			if (result != RESULT_SUCCESS)
+				return;
+			da_push_unsafe(new_stmts, seq);
+		} else if (stmt->type == AST_BLOCK) {
+			unroll_defer_in_block(stmt);
+			da_push_unsafe(new_stmts, stmt);
+		} else {
+			da_push_unsafe(new_stmts, stmt);
+		}
+	}
+
+	ASTNode *tail = new_ast_node(AST_DEFERRED_SEQUENCE);
+	for (int i = defer_stack.count - 1; i >= 0; --i) {
+		CompilerResult result;
+		push_stmt(tail, defer_stack.data[i], &result);
+		if (result != RESULT_SUCCESS) {
+			return;
+		}
+	}
+
+	if (tail->data.block.count) {
+		da_push_unsafe(new_stmts, tail);
+	} else {
+		free(tail);
+	}
+
+	free(block->data.block.statements);
+	block->data.block.statements = new_stmts.data;
+	block->data.block.count = new_stmts.count;
+
+	da_deinit(defer_stack);
+}
+
 // <block>
 // ::= '{' (<statement>)* '}'
-ASTNode *parse_block(Parser *parser) {
+ASTNode *parse_block(Parser *parser, int is_defer) {
 	if (parser->current_token.type != TOK_LCURLY) {
 		return report(parser->current_token.location, "expected '{' to start block.", 0);
 	}
@@ -1375,7 +1490,26 @@ ASTNode *parse_block(Parser *parser) {
 	}
 
 	parser->current_token = next_token(&parser->scanner);
-	return new_block_node(stmts.data, stmts.count);
+	ASTNode *block = new_block_node(stmts.data, stmts.count);
+    if(!is_defer)
+        unroll_defer_in_block(block);
+	return block;
+}
+
+// <deferBlock>
+// ::= 'defer' <block>
+ASTNode *parse_defer_block(Parser *parser) {
+	parser->current_token = next_token(&parser->scanner); // consume 'defer'
+
+	if (parser->current_token.type != TOK_LCURLY) {
+		char msg[128];
+		sprintf(msg, "expected '{' after 'defer', got %s.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+
+	ASTNode *inner_block = parse_block(parser, 1);
+
+	return new_defer_block_node(inner_block);
 }
 
 // <whileLoop>
@@ -1401,7 +1535,7 @@ ASTNode *parse_while_loop(Parser *parser) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	ASTNode *body = parse_block(parser);
+	ASTNode *body = parse_block(parser, 0);
 
 	return new_while_loop_node(condition, body);
 }
@@ -1452,7 +1586,7 @@ ASTNode *parse_for_loop(Parser *parser) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	ASTNode *body = parse_block(parser);
+	ASTNode *body = parse_block(parser, 0);
 
 	return new_for_loop_node(init, condition, post, body);
 }
@@ -1481,7 +1615,7 @@ ASTNode *parse_if_stmt(Parser *parser) {
 
 	parser->current_token = next_token(&parser->scanner); // consume '('
 
-	ASTNode *then_branch = parse_block(parser);
+	ASTNode *then_branch = parse_block(parser, 0);
 	if (!then_branch) {
 		free_ast_node(condition);
 		return NULL;
@@ -1493,7 +1627,7 @@ ASTNode *parse_if_stmt(Parser *parser) {
 		if (parser->current_token.type == TOK_IF)
 			else_branch = parse_stmt(parser);
 		else
-			else_branch = parse_block(parser);
+			else_branch = parse_block(parser, 0);
 	}
 	return new_if_stmt_node(condition, then_branch, else_branch);
 }
@@ -1535,7 +1669,7 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	if (is_exported)
 		add_symbol(&parser->exported_table, func_name, SYMB_FN, type);
 
-	ASTNode *body = parse_block(parser);
+	ASTNode *body = parse_block(parser, 0);
 	return new_func_decl_node(func_name, params, body);
 }
 
@@ -1848,6 +1982,13 @@ void free_ast_node(ASTNode *node) {
 		free_ast_node(node->data.while_loop.condition);
 		free_ast_node(node->data.while_loop.body);
 		break;
+	case AST_DEFER_BLOCK:
+		free_ast_node(node->data.defer.defer_block);
+		break;
+	case AST_DEFERRED_SEQUENCE:
+		for (int i = 0; i < node->data.block.count; ++i) {
+			free_ast_node(node->data.block.statements[i]);
+		}
 	default:
 		break;
 	}

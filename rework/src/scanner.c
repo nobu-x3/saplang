@@ -91,6 +91,8 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_FOR;
 		else if (strcmp(current_token.text, "while") == 0)
 			current_token.type = TOK_WHILE;
+		else if (strcmp(current_token.text, "defer") == 0)
+			current_token.type = TOK_DEFER;
 		else {
 			current_token.type = TOK_IDENTIFIER;
 		}
