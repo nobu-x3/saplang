@@ -52,6 +52,15 @@ void *report(SourceLocation location, const char *msg, int is_warning);
 		xs.data[xs.count++] = x;                                                                                                                                                                                                               \
 	} while (0)
 
+#define da_push_unsafe_ptr(xs, x)                                                                                                                                                                                                                  \
+	do {                                                                                                                                                                                                                                       \
+		if (xs->count >= xs->capacity) {                                                                                                                                                                                                         \
+			xs->capacity *= 2;                                                                                                                                                                                                                  \
+			xs->data = realloc(xs->data, xs->capacity * sizeof(*xs->data));                                                                                                                                                                        \
+		}                                                                                                                                                                                                                                      \
+		xs->data[xs->count++] = x;                                                                                                                                                                                                               \
+	} while (0)
+
 #define da_init(xs, cap)                                                                                                                                                                                                                       \
 	do {                                                                                                                                                                                                                                       \
 		xs.count = 0;                                                                                                                                                                                                                          \

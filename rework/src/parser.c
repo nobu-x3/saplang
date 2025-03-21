@@ -1072,7 +1072,10 @@ ASTNode *parse_expr(Parser *parser) {
 
 ASTNode *parse_return_stmt(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume 'return'
-	ASTNode *expr = parse_expr(parser);
+	ASTNode *expr = NULL;
+
+	if (parser->current_token.type != TOK_SEMICOLON)
+		expr = parse_expr(parser);
 
 	if (parser->current_token.type != TOK_SEMICOLON) {
 		report(parser->current_token.location, "expected ';' after return statement.", 0);
@@ -1210,23 +1213,28 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 	return new_var_decl_node(type_name, var_name, is_const, init_expr);
 }
 
-ASTNode *parse_if_stmt(Parser *parser);
-ASTNode *parse_for_loop(Parser *parser);
-ASTNode *parse_while_loop(Parser *parser);
-ASTNode *parse_defer_block(Parser *parser);
+typedef struct {
+	ASTNode **data;
+	int capacity, count;
+} DeferStack;
 
-ASTNode *parse_stmt(Parser *parser) {
+ASTNode *parse_if_stmt(Parser *parser, DeferStack *dstack);
+ASTNode *parse_for_loop(Parser *parse, DeferStack *dstackr);
+ASTNode *parse_while_loop(Parser *parse, DeferStack *dstackr);
+ASTNode *parse_defer_block(Parser *parse, DeferStack *dstackr);
+
+ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
 	if (parser->current_token.type == TOK_DEFER) {
-		return parse_defer_block(parser);
+		return parse_defer_block(parser, dstack);
 	}
 	if (parser->current_token.type == TOK_IF) {
-		return parse_if_stmt(parser);
+		return parse_if_stmt(parser, dstack);
 	}
 	if (parser->current_token.type == TOK_FOR) {
-		return parse_for_loop(parser);
+		return parse_for_loop(parser, dstack);
 	}
 	if (parser->current_token.type == TOK_WHILE) {
-		return parse_while_loop(parser);
+		return parse_while_loop(parser, dstack);
 	}
 	if (parser->current_token.type == TOK_RETURN) {
 		return parse_return_stmt(parser);
@@ -1373,11 +1381,6 @@ ASTNode *parse_parameter_list(Parser *parser) {
 	return param_list;
 }
 
-typedef struct {
-	ASTNode **data;
-	int capacity, count;
-} DeferStack;
-
 DeferStack copy_defer_stack(DeferStack *stack) {
 	DeferStack copy;
 	da_init_unsafe(copy, stack->capacity);
@@ -1404,70 +1407,65 @@ void push_stmt(ASTNode *block, ASTNode *stmt, CompilerResult *success) {
 	*success = RESULT_SUCCESS;
 }
 
-// TODO: mem leaks on early returns
-void unroll_defer_in_block(ASTNode *block) {
-	if (!block)
+void unroll_defers(ASTNode *node, DeferStack *stack) {
+	if (node->type != AST_BLOCK)
 		return;
 
 	struct {
 		ASTNode **data;
 		int capacity, count;
-	} new_stmts;
+	} new_statements;
 
-	da_init_unsafe(new_stmts, 4);
-	DeferStack defer_stack;
-	da_init_unsafe(defer_stack, 4);
+	da_init_unsafe(new_statements, node->data.block.count);
 
-	for (int i = 0; i < block->data.block.count; ++i) {
-		ASTNode *stmt = block->data.block.statements[i];
-		if (stmt->type == AST_DEFER_BLOCK) {
-			da_push_unsafe(defer_stack, stmt->data.defer.defer_block);
-		} else if (stmt->type == AST_RETURN) {
+	for (int i = 0; i < node->data.block.count; ++i) {
+		ASTNode *stmt = node->data.block.statements[i];
+
+		if (stmt->type == AST_RETURN) {
 			ASTNode *seq = new_ast_node(AST_DEFERRED_SEQUENCE);
-			for (int j = defer_stack.count - 1; j >= 0; --j) {
-				CompilerResult result;
-				push_stmt(seq, defer_stack.data[j], &result);
-				if (result != RESULT_SUCCESS)
-					return;
+			for (int j = stack->count - 1; j >= 0; --j) {
+				CompilerResult res;
+				push_stmt(seq, stack->data[j], &res);
+				assert(res == RESULT_SUCCESS);
 			}
-			CompilerResult result;
-			push_stmt(seq, stmt, &result);
-			if (result != RESULT_SUCCESS)
-				return;
-			da_push_unsafe(new_stmts, seq);
+
+			if (seq->data.block.count > 0) {
+				da_push_unsafe(new_statements, seq);
+			} else {
+				free(seq);
+			}
+
+			da_push_unsafe(new_statements, stmt);
 		} else if (stmt->type == AST_BLOCK) {
-			unroll_defer_in_block(stmt);
-			da_push_unsafe(new_stmts, stmt);
+			DeferStack nested = copy_defer_stack(stack);
+			unroll_defers(stmt, &nested);
+			da_deinit(nested);
+			da_push_unsafe(new_statements, stmt);
 		} else {
-			da_push_unsafe(new_stmts, stmt);
+			da_push_unsafe(new_statements, stmt);
 		}
 	}
 
-	ASTNode *tail = new_ast_node(AST_DEFERRED_SEQUENCE);
-	for (int i = defer_stack.count - 1; i >= 0; --i) {
-		CompilerResult result;
-		push_stmt(tail, defer_stack.data[i], &result);
-		if (result != RESULT_SUCCESS) {
-			return;
+	if (stack->count > 0 && new_statements.count > 0 && new_statements.data[new_statements.count - 1]->type != AST_DEFERRED_SEQUENCE && new_statements.data[new_statements.count - 1]->type != AST_RETURN) {
+		ASTNode *tail = new_ast_node(AST_DEFERRED_SEQUENCE);
+		for (int i = stack->count - 1; i >= 0; --i) {
+			if (stack->data[i]->type != AST_DEFER_BLOCK) {
+				CompilerResult res;
+				push_stmt(tail, stack->data[i], &res);
+				assert(res == RESULT_SUCCESS);
+			}
 		}
+		da_push_unsafe(new_statements, tail);
 	}
 
-	if (tail->data.block.count) {
-		da_push_unsafe(new_stmts, tail);
-	} else {
-		free(tail);
-	}
-
-	free(block->data.block.statements);
-	block->data.block.statements = new_stmts.data;
-	block->data.block.count = new_stmts.count;
-
-	da_deinit(defer_stack);
+	free(node->data.block.statements);
+	node->data.block.statements = new_statements.data;
+	node->data.block.count = new_statements.count;
 }
 
 // <block>
 // ::= '{' (<statement>)* '}'
-ASTNode *parse_block(Parser *parser, int is_defer) {
+ASTNode *parse_block(Parser *parser, DeferStack *dstack) {
 	if (parser->current_token.type != TOK_LCURLY) {
 		return report(parser->current_token.location, "expected '{' to start block.", 0);
 	}
@@ -1476,29 +1474,34 @@ ASTNode *parse_block(Parser *parser, int is_defer) {
 	NodeList stmts;
 	da_init(stmts, 4);
 
+	DeferStack dstack_local = copy_defer_stack(dstack);
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
-		ASTNode *stmt = parse_stmt(parser);
+		ASTNode *stmt = parse_stmt(parser, &dstack_local);
+		if (stmt->type == AST_DEFER_BLOCK) {
+			for (int j = 0; j < stmt->data.defer.defer_block->data.block.count; ++j) {
+				da_push_unsafe(dstack_local, stmt->data.defer.defer_block->data.block.statements[j]);
+			}
+			free(stmt);
+			continue;
+		}
 		da_push(stmts, stmt);
 	}
 
 	if (parser->current_token.type != TOK_RCURLY) {
-		/* for (int i = 0; i < capacity; ++i) { */
-		/* 	free(stmts[i]); */
-		/* } */
-		/* free(stmts); */
+		da_deinit(dstack_local);
 		return report(parser->current_token.location, "expected '}' to end the block.", 0);
 	}
 
 	parser->current_token = next_token(&parser->scanner);
 	ASTNode *block = new_block_node(stmts.data, stmts.count);
-    if(!is_defer)
-        unroll_defer_in_block(block);
+	unroll_defers(block, &dstack_local);
+	da_deinit(dstack_local);
 	return block;
 }
 
 // <deferBlock>
 // ::= 'defer' <block>
-ASTNode *parse_defer_block(Parser *parser) {
+ASTNode *parse_defer_block(Parser *parser, DeferStack *dstack) {
 	parser->current_token = next_token(&parser->scanner); // consume 'defer'
 
 	if (parser->current_token.type != TOK_LCURLY) {
@@ -1507,14 +1510,14 @@ ASTNode *parse_defer_block(Parser *parser) {
 		return report(parser->current_token.location, msg, 0);
 	}
 
-	ASTNode *inner_block = parse_block(parser, 1);
+	ASTNode *inner_block = parse_block(parser, dstack);
 
 	return new_defer_block_node(inner_block);
 }
 
 // <whileLoop>
 // ::= 'while' '(' <condition> ')' <block>
-ASTNode *parse_while_loop(Parser *parser) {
+ASTNode *parse_while_loop(Parser *parser, DeferStack *dstack) {
 	parser->current_token = next_token(&parser->scanner);
 
 	if (parser->current_token.type != TOK_LPAREN) {
@@ -1535,14 +1538,14 @@ ASTNode *parse_while_loop(Parser *parser) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	ASTNode *body = parse_block(parser, 0);
+	ASTNode *body = parse_block(parser, dstack);
 
 	return new_while_loop_node(condition, body);
 }
 
 // <forLoop>
 // ::= 'for' '(' <init> ';' <condition> ';' <post> ')' <block>
-ASTNode *parse_for_loop(Parser *parser) {
+ASTNode *parse_for_loop(Parser *parser, DeferStack *dstack) {
 	parser->current_token = next_token(&parser->scanner); // consume 'if'
 	if (parser->current_token.type != TOK_LPAREN) {
 		char msg[128];
@@ -1586,14 +1589,14 @@ ASTNode *parse_for_loop(Parser *parser) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	ASTNode *body = parse_block(parser, 0);
+	ASTNode *body = parse_block(parser, dstack);
 
 	return new_for_loop_node(init, condition, post, body);
 }
 
 // <ifStmt>
 // ::= "if" '(' <expression> ')' <statement> ("else" <statement>)*
-ASTNode *parse_if_stmt(Parser *parser) {
+ASTNode *parse_if_stmt(Parser *parser, DeferStack *dstack) {
 	parser->current_token = next_token(&parser->scanner); // consume 'if'
 	if (parser->current_token.type != TOK_LPAREN) {
 		char msg[128];
@@ -1615,7 +1618,7 @@ ASTNode *parse_if_stmt(Parser *parser) {
 
 	parser->current_token = next_token(&parser->scanner); // consume '('
 
-	ASTNode *then_branch = parse_block(parser, 0);
+	ASTNode *then_branch = parse_block(parser, dstack);
 	if (!then_branch) {
 		free_ast_node(condition);
 		return NULL;
@@ -1625,9 +1628,9 @@ ASTNode *parse_if_stmt(Parser *parser) {
 	if (parser->current_token.type == TOK_ELSE) {
 		parser->current_token = next_token(&parser->scanner);
 		if (parser->current_token.type == TOK_IF)
-			else_branch = parse_stmt(parser);
+			else_branch = parse_stmt(parser, dstack);
 		else
-			else_branch = parse_block(parser, 0);
+			else_branch = parse_block(parser, dstack);
 	}
 	return new_if_stmt_node(condition, then_branch, else_branch);
 }
@@ -1669,7 +1672,10 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	if (is_exported)
 		add_symbol(&parser->exported_table, func_name, SYMB_FN, type);
 
-	ASTNode *body = parse_block(parser, 0);
+	DeferStack defer_stack;
+	da_init(defer_stack, 4);
+	ASTNode *body = parse_block(parser, &defer_stack);
+	da_deinit(defer_stack);
 	return new_func_decl_node(func_name, params, body);
 }
 
