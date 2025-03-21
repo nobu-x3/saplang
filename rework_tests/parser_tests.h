@@ -824,7 +824,7 @@ void test_DeferStmts(void) {
 	const char *expected = "FuncDecl: test\n"
 						   "  Params:\n"
 						   "  Body:\n"
-						   "    Block with 5 statement(s):\n"
+						   "    Block with 6 statement(s):\n"
 						   "      VarDecl: *FILE file:\n"
 						   "        Function call with 0 args:\n"
 						   "          Ident: fopen\n"
@@ -864,6 +864,13 @@ void test_DeferStmts(void) {
 						   "      Function call with 1 args:\n"
 						   "        Ident: fclose\n"
 						   "        Ident: file\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FnPtr_Basic(void) {
+	SETUP_TEST("fn* void test_fn_ptr();");
+	const char *expected = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
