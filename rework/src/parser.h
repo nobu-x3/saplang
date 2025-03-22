@@ -60,6 +60,7 @@ typedef enum {
     AST_DEFER_BLOCK,
     AST_DEFERRED_SEQUENCE,
     AST_FN_PTR,
+    AST_STRING_LIT,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -196,6 +197,9 @@ typedef struct ASTNode {
 		struct {
 			struct ASTNode *defer_block;
 		} defer;
+        struct {
+            char text[64];
+        } string_literal;
 	} data;
 } ASTNode;
 

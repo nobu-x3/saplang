@@ -355,6 +355,9 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 				ast_print(node->data.block.statements[i], indent, string);
 			}
 			break;
+		case AST_STRING_LIT:
+			print(string, "String Literal: \"%s\"", node->data.string_literal.text);
+			break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -388,6 +391,16 @@ ASTNode *new_ast_node(ASTNodeType type) {
 
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_string_lit_node(const char *text) {
+	ASTNode *node = new_ast_node(AST_STRING_LIT);
+	if (!node) {
+		return NULL;
+	}
+
+	strncpy(node->data.string_literal.text, text, sizeof(node->data.string_literal.text));
 	return node;
 }
 
@@ -527,7 +540,7 @@ ASTNode *new_struct_decl_node(const char *name, ASTNode *fields) {
 	return node;
 }
 
-ASTNode *new_var_decl_node(const char *type_name, const char *name, int is_const, ASTNode *initializer) {
+ASTNode *new_var_decl_node(const char *type_name, const char *name, int is_exported, int is_const, ASTNode *initializer) {
 	ASTNode *node = new_ast_node(AST_VAR_DECL);
 	if (!node)
 		return NULL;
@@ -535,6 +548,7 @@ ASTNode *new_var_decl_node(const char *type_name, const char *name, int is_const
 	strncpy(node->data.var_decl.type_name, type_name, sizeof(node->data.var_decl.type_name));
 	node->data.var_decl.init = initializer;
 	node->data.var_decl.is_const = is_const;
+	node->data.var_decl.is_exported = is_exported;
 	return node;
 }
 
@@ -1139,6 +1153,7 @@ ASTNode *parse_return_stmt(Parser *parser) {
 //  | <groupingExpr>
 //  | <arrayLiteral>
 //  | <structLiteral>
+//  | <stringLiteral>
 ASTNode *parse_primary(Parser *parser) {
 	// @TODO: add array and struct literals
 	if (parser->current_token.type == TOK_NUMBER) {
@@ -1200,6 +1215,10 @@ ASTNode *parse_primary(Parser *parser) {
 		return parse_array_literal(parser);
 	} else if (parser->current_token.type == TOK_LCURLY) {
 		return parse_struct_literal(parser);
+	} else if (parser->current_token.type == TOK_STRINGLIT) {
+		ASTNode *string_lit_node = new_string_lit_node(parser->current_token.text);
+		parser->current_token = next_token(&parser->scanner);
+		return string_lit_node;
 	} else {
 		char expr[128];
 		sprintf(expr, "unexpected token in expression: %s", parser->current_token.text);
@@ -1255,7 +1274,7 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 	if (is_exported) {
 		add_symbol(&parser->exported_table, var_name, SYMB_VAR, type_name);
 	}
-	return new_var_decl_node(type_name, var_name, is_const, init_expr);
+	return new_var_decl_node(type_name, var_name, is_exported, is_const, init_expr);
 }
 
 typedef struct {
@@ -1287,9 +1306,12 @@ ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
 
 	if (parser->current_token.type == TOK_I8 || parser->current_token.type == TOK_I16 || parser->current_token.type == TOK_I32 || parser->current_token.type == TOK_I64 || parser->current_token.type == TOK_U8 ||
 		parser->current_token.type == TOK_U16 || parser->current_token.type == TOK_U32 || parser->current_token.type == TOK_U64 || parser->current_token.type == TOK_F32 || parser->current_token.type == TOK_F64 ||
-		parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_VOID || parser->current_token.type == TOK_IDENTIFIER) {
+		parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_VOID || parser->current_token.type == TOK_IDENTIFIER || parser->current_token.type == TOK_CONST) {
 		// peek ahead
 		// @TODO: redo this when reworking scanner to work with indices
+		if (parser->current_token.type == TOK_CONST) {
+			return parse_var_decl(parser, 0);
+		}
 		int save = parser->scanner.id;
 		Token temp = parser->current_token;
 		char type_name[64];
