@@ -1028,3 +1028,17 @@ void test_CharLiteral(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_BinaryLiteral(void) {
+	SETUP_TEST("const u8 a = 0b0101_0000_1111_0101;");
+	const char *expected = "VarDecl: const u8 a:\n  Literal Int: 20725\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_HexadecimalLiteral(void) {
+	SETUP_TEST("const u8 a = 0x1_A_3f;");
+	const char *expected = "VarDecl: const u8 a:\n  Literal Int: 6719\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

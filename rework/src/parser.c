@@ -1175,7 +1175,15 @@ ASTNode *parse_primary(Parser *parser) {
 			parser->current_token = next_token(&parser->scanner);
 			return new_literal_node_float(value);
 		} else {
-			long value = atol(parser->current_token.text);
+			int base = 10;
+			int offset = 0;
+			if (parser->current_token.text[0] == '0' && (parser->current_token.text[1] == 'b' || parser->current_token.text[1] == 'B')) {
+				base = 2;
+				offset = 2;
+			} else if (parser->current_token.text[0] == '0' && (parser->current_token.text[1] == 'x' || parser->current_token.text[1] == 'X')) {
+				base = 16;
+			}
+			long value = strtol(parser->current_token.text + offset, NULL, base);
 			parser->current_token = next_token(&parser->scanner);
 			return new_literal_node_long(value);
 		}
