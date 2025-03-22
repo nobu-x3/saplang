@@ -29,6 +29,19 @@ Token next_token(Scanner *scanner) {
 		return current_token;
 	}
 
+	if (_INPUT[_INDEX] == '"') {
+		int i = 0;
+		current_token.type = TOK_STRINGLIT;
+		eat_next_char(scanner);
+		while (_INPUT[_INDEX] != '"') {
+			current_token.text[i++] = eat_next_char(scanner);
+		}
+		current_token.text[i++] = '\0';
+
+		eat_next_char(scanner);
+		return current_token;
+	}
+
 	// If letter: read identifier/keyword.
 	if (isalpha(_INPUT[_INDEX]) || _INPUT[_INDEX] == '_') {
 		int i = 0;

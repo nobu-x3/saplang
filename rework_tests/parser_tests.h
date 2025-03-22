@@ -997,3 +997,17 @@ void test_Binops_AndOrSelf(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_StringLiteral(void) {
+	SETUP_TEST("fn void main() {"
+			   "   const u8* a = \"Hello world\n\";"
+			   "}");
+	const char *expected = "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      VarDecl: const *u8 a:\n"
+						   "        String Literal: \"Hello world\n\"";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
