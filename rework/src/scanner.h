@@ -4,7 +4,7 @@
 
 typedef enum {
 	TOK_STRUCT,		// "struct"
-	TOK_FUNC,		// "func"
+	TOK_FN,		// "func"
 	TOK_IDENTIFIER, // e.g. variable, struct, or function names
 	TOK_NUMBER,		// Numeric literals
 	TOK_ASSIGN,		// '='
@@ -63,6 +63,7 @@ typedef enum {
     TOK_FOR,
     TOK_WHILE,
     TOK_DEFER,
+    TOK_FN_PTR,
 	TOKENS_BUILTIN_TYPE_BEGIN = TOK_I8,
 	TOKENS_BUILTIN_TYPE_END = TOK_BOOL,
 } TokenType;

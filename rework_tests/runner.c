@@ -44,7 +44,11 @@ int main(void) {
 	RUN_TEST(test_ForLoop_Empty);
 	RUN_TEST(test_WhileLoop);
 	RUN_TEST(test_DeferStmts);
-	RUN_TEST(test_FnPtr_Basic);
+	RUN_TEST(test_FnPtr_BasicDeclNoParam);
+	RUN_TEST(test_FnPtr_BasicDeclWithParams);
+	RUN_TEST(test_FnPtr_BasicCall);
+	RUN_TEST(test_FnPtr_BasicAssignment);
+	RUN_TEST(test_FnPtr_StructFieldAssignment);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

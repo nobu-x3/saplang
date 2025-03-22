@@ -120,7 +120,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "StructDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.struct_decl.name);
 			ast_print(node->data.struct_decl.fields, indent + 1, string);
 			break;
-		case AST_FUNC_DECL:
+		case AST_FN_DECL:
 			print(string, "FuncDecl: %s%s\n", node->data.func_decl.is_exported ? "exported " : "", node->data.func_decl.name);
 			for (int i = 0; i < indent + 1; i++) {
 				print(string, "  ");
@@ -238,7 +238,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			ast_print(node->data.assignment.lvalue, indent + 1, string);
 			ast_print(node->data.assignment.rvalue, indent + 1, string);
 			break;
-		case AST_FUNC_CALL:
+		case AST_FN_CALL:
 			print(string, "Function call with %d args:\n", node->data.func_call.arg_count);
 			ast_print(node->data.func_call.callee, indent + 1, string);
 			for (int i = 0; i < node->data.func_call.arg_count; ++i) {
@@ -454,7 +454,7 @@ ASTNode *new_member_access_node(ASTNode *base, const char *member_name) {
 }
 
 ASTNode *new_function_call(ASTNode *callee, ASTNode **args, int arg_count) {
-	ASTNode *node = new_ast_node(AST_FUNC_CALL);
+	ASTNode *node = new_ast_node(AST_FN_CALL);
 	if (!node)
 		return NULL;
 	node->data.func_call.callee = callee;
@@ -547,7 +547,7 @@ ASTNode *new_param_decl_node(const char *type_name, const char *name, int is_con
 }
 
 ASTNode *new_func_decl_node(const char *name, ASTNode *params, ASTNode *body) {
-	ASTNode *node = new_ast_node(AST_FUNC_DECL);
+	ASTNode *node = new_ast_node(AST_FN_DECL);
 	if (!node)
 		return NULL;
 	strncpy(node->data.func_decl.name, name, sizeof(node->data.func_decl.name));
@@ -651,6 +651,38 @@ ASTNode *new_if_stmt_node(ASTNode *condition, ASTNode *then_branch, ASTNode *els
 ///////////////////////////////////////////////////////////////////////////////
 
 CompilerResult parse_type_name(Parser *parser, char *buffer) {
+	{ // fn ptr parsing
+		if (parser->current_token.type == TOK_FN_PTR) {
+			parser->current_token = next_token(&parser->scanner); // consume 'fn*'
+			char ret_type[64] = "";
+			parse_type_name(parser, ret_type);
+
+			if (parser->current_token.type != TOK_LPAREN) {
+				char msg[128];
+				sprintf(msg, "expected '(' in function pointer argument list, got '%s'.", parser->current_token.text);
+				report(parser->current_token.location, msg, 0);
+				return RESULT_PARSING_ERROR;
+			}
+
+			parser->current_token = next_token(&parser->scanner); // consume '('
+
+			char params[256] = "";
+			while (parser->current_token.type != TOK_RPAREN) {
+				char param_type[64] = "";
+				parse_type_name(parser, param_type);
+				strncat(params, param_type, sizeof(params) - strlen(params) - 1);
+				if (parser->current_token.type == TOK_COMMA) {
+					strncat(params, ",", sizeof(params) - strlen(params) - 1);
+					parser->current_token = next_token(&parser->scanner); // consume ','
+				}
+			}
+
+			parser->current_token = next_token(&parser->scanner); // consume ')'
+
+			snprintf(buffer, 64, "fn* %s(%s)", ret_type, params);
+			return RESULT_SUCCESS;
+		}
+	}
 	char base_type[64];
 	char namespace[64] = "";
 	switch (parser->current_token.type) {
@@ -1745,7 +1777,7 @@ ASTNode *parse_extern_block(Parser *parser) {
 		if (parser->current_token.type == TOK_STRUCT) {
 			decl = parse_struct_decl(parser, is_exported);
 			decl->data.struct_decl.is_exported = is_exported;
-		} else if (parser->current_token.type == TOK_FUNC) {
+		} else if (parser->current_token.type == TOK_FN) {
 			decl = parse_extern_func_decl(parser, is_exported);
 			decl->data.extern_func.is_exported = is_exported;
 		} else if (parser->current_token.type == TOK_ENUM) {
@@ -1778,7 +1810,7 @@ ASTNode *parse_global_decl(Parser *parser) {
 	if (parser->current_token.type == TOK_STRUCT) {
 		decl = parse_struct_decl(parser, is_exported);
 		decl->data.struct_decl.is_exported = is_exported;
-	} else if (parser->current_token.type == TOK_FUNC) {
+	} else if (parser->current_token.type == TOK_FN) {
 		decl = parse_function_decl(parser, is_exported);
 		decl->data.func_decl.is_exported = is_exported;
 	} else if (parser->current_token.type == TOK_ENUM) {
@@ -1897,7 +1929,7 @@ void free_ast_node(ASTNode *node) {
 			current_field = next;
 		}
 	} break;
-	case AST_FUNC_DECL: {
+	case AST_FN_DECL: {
 		ASTNode *curr_param = node->data.func_decl.params;
 		while (curr_param) {
 			ASTNode *next = curr_param->next;
@@ -1937,7 +1969,7 @@ void free_ast_node(ASTNode *node) {
 		free_ast_node(node->data.assignment.lvalue);
 		free_ast_node(node->data.assignment.rvalue);
 		break;
-	case AST_FUNC_CALL:
+	case AST_FN_CALL:
 		free_ast_node(node->data.func_call.callee);
 		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
 			free_ast_node(node->data.func_call.args[i]);
