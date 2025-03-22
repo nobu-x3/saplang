@@ -136,12 +136,43 @@ Token next_token(Scanner *scanner) {
 	if (isdigit(_INPUT[_INDEX])) {
 		int i = 0;
 		int hasDot = 0;
-		while (_INPUT[_INDEX] && (isdigit(_INPUT[_INDEX]) || (_INPUT[_INDEX] == '.' && !hasDot))) {
-			if (_INPUT[_INDEX] == '.') {
-				hasDot = 1;
+		if (_INPUT[_INDEX] == '0' && (_INPUT[_INDEX + 1] == 'x' || _INPUT[_INDEX + 1] == 'X')) {
+			current_token.text[i++] = eat_next_char(scanner);
+			current_token.text[i++] = eat_next_char(scanner);
+
+			while ((_INPUT[_INDEX] >= '0' && _INPUT[_INDEX] <= '9') || (_INPUT[_INDEX] >= 'a' && _INPUT[_INDEX] <= 'f') || (_INPUT[_INDEX] >= 'A' && _INPUT[_INDEX] <= 'F') || _INPUT[_INDEX] == '_') {
+				// skip underscores
+				if (_INPUT[_INDEX] == '_') {
+					eat_next_char(scanner);
+					continue;
+				}
+
+				current_token.text[i++] = _INPUT[_INDEX];
+				eat_next_char(scanner);
 			}
-			current_token.text[i++] = _INPUT[_INDEX];
-			eat_next_char(scanner);
+		} else if (_INPUT[_INDEX] == '0' && (_INPUT[_INDEX + 1] == 'b' || _INPUT[_INDEX + 1] == 'B')) {
+			current_token.text[i++] = eat_next_char(scanner);
+			current_token.text[i++] = eat_next_char(scanner);
+
+			while (_INPUT[_INDEX] == '0' || _INPUT[_INDEX] == '1' || _INPUT[_INDEX] == '_') {
+				// skip underscores
+				if (_INPUT[_INDEX] == '_') {
+					eat_next_char(scanner);
+					continue;
+				}
+
+				current_token.text[i++] = _INPUT[_INDEX];
+				eat_next_char(scanner);
+			}
+
+		} else {
+			while (_INPUT[_INDEX] && (isdigit(_INPUT[_INDEX]) || (_INPUT[_INDEX] == '.' && !hasDot))) {
+				if (_INPUT[_INDEX] == '.') {
+					hasDot = 1;
+				}
+				current_token.text[i++] = _INPUT[_INDEX];
+				eat_next_char(scanner);
+			}
 		}
 		current_token.text[i] = '\0';
 		current_token.type = TOK_NUMBER;
