@@ -868,9 +868,96 @@ void test_DeferStmts(void) {
 	free(output);
 }
 
-void test_FnPtr_Basic(void) {
-	SETUP_TEST("fn* void test_fn_ptr();");
-	const char *expected = "";
+void test_FnPtr_BasicDeclNoParam(void) {
+	SETUP_TEST("fn* void() test_fn_ptr;");
+	const char *expected = "VarDecl: fn* void() test_fn_ptr\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FnPtr_BasicDeclWithParams(void) {
+	SETUP_TEST("fn* void(i32, i64) test_fn_ptr;");
+	const char *expected = "VarDecl: fn* void(i32,i64) test_fn_ptr\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FnPtr_BasicCall(void) {
+	SETUP_TEST("fn* void(i32, i64) test_fn_ptr;"
+			   "fn void main() {"
+			   "   test_fn_ptr(0, 1);"
+			   "}");
+	const char *expected = "VarDecl: fn* void(i32,i64) test_fn_ptr\n"
+						   "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      Function call with 2 args:\n"
+						   "        Ident: test_fn_ptr\n"
+						   "        Literal Int: 0\n"
+						   "        Literal Int: 1\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FnPtr_BasicAssignment(void) {
+	SETUP_TEST("fn* void(i32, i64) test_fn_ptr;"
+			   "fn void foo(i32 a, i64 b){}"
+			   "fn void main() {"
+			   "   test_fn_ptr = &foo;"
+			   "   test_fn_ptr(0, 1);"
+			   "}");
+	const char *expected = "VarDecl: fn* void(i32,i64) test_fn_ptr\n"
+						   "FuncDecl: foo\n"
+						   "  Params:\n"
+						   "    ParamDecl: i32 a\n"
+						   "    ParamDecl: i64 b\n"
+						   "  Body:\n"
+						   "    Block with 0 statement(s):\n"
+						   "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 2 statement(s):\n"
+						   "      Assignment:\n"
+						   "        Ident: test_fn_ptr\n"
+						   "        Unary Expression: &\n"
+						   "          Ident: foo\n"
+						   "      Function call with 2 args:\n"
+						   "        Ident: test_fn_ptr\n"
+						   "        Literal Int: 0\n"
+						   "        Literal Int: 1\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FnPtr_StructFieldAssignment(void) {
+	SETUP_TEST("struct SomeStruct { fn* void(i32, i64) test_fn_ptr; }"
+			   "fn void foo(i32 a, i64 b){}"
+			   "fn void main() {"
+			   "   SomeStruct str = {&foo};"
+			   "   str.test_fn_ptr(0, 1);"
+			   "}");
+	const char *expected = "StructDecl: SomeStruct\n"
+						   "  FieldDecl: fn* void(i32,i64) test_fn_ptr\n"
+						   "FuncDecl: foo\n"
+						   "  Params:\n"
+						   "    ParamDecl: i32 a\n"
+						   "    ParamDecl: i64 b\n"
+						   "  Body:\n"
+						   "    Block with 0 statement(s):\n"
+						   "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 2 statement(s):\n"
+						   "      VarDecl: SomeStruct str:\n"
+						   "        StructLiteral with 1 initializer(s):\n"
+						   "          Unary Expression: &\n"
+						   "            Ident: foo\n"
+						   "      Function call with 2 args:\n"
+						   "        Member access: test_fn_ptr\n"
+						   "          Ident: str\n"
+						   "        Literal Int: 0\n"
+						   "        Literal Int: 1\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }

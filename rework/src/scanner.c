@@ -65,9 +65,13 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_VOID;
 		else if (strcmp(current_token.text, "struct") == 0)
 			current_token.type = TOK_STRUCT;
-		else if (strcmp(current_token.text, "fn") == 0)
-			current_token.type = TOK_FUNC;
-		else if (strcmp(current_token.text, "true") == 0)
+		else if (strcmp(current_token.text, "fn") == 0) {
+			current_token.type = TOK_FN;
+			if (_INPUT[_INDEX] == '*') {
+				current_token.type = TOK_FN_PTR;
+				eat_next_char(scanner);
+			}
+		} else if (strcmp(current_token.text, "true") == 0)
 			current_token.type = TOK_TRUE;
 		else if (strcmp(current_token.text, "false") == 0)
 			current_token.type = TOK_FALSE;
