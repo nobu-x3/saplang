@@ -236,11 +236,35 @@ Token next_token(Scanner *scanner) {
 		}
 
 		break;
+	case '|':
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_SELFOR;
+			strncpy(current_token.text, "||", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else if (_INPUT[_INDEX + 1] == '|') {
+			current_token.type = TOK_OR;
+			strncpy(current_token.text, "||", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		}
+		break;
 	case '&':
-		current_token.type = TOK_AMPERSAND;
-		strncpy(current_token.text, "&", sizeof(current_token.text));
-		eat_next_char(scanner);
-
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_SELFAND;
+			strncpy(current_token.text, "&=", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else if (_INPUT[_INDEX + 1] == '&') {
+			current_token.type = TOK_AND;
+			strncpy(current_token.text, "&&", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else {
+			current_token.type = TOK_AMPERSAND;
+			strncpy(current_token.text, "&", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 		break;
 	case '!':
 		if (_INPUT[_INDEX + 1] == '=') {

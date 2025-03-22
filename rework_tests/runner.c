@@ -49,6 +49,7 @@ int main(void) {
 	RUN_TEST(test_FnPtr_BasicCall);
 	RUN_TEST(test_FnPtr_BasicAssignment);
 	RUN_TEST(test_FnPtr_StructFieldAssignment);
+	RUN_TEST(test_Binops_AndOrSelf);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

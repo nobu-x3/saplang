@@ -170,6 +170,18 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			break;
 		case AST_BINARY_EXPR:
 			switch (node->data.binary_op.op) {
+			case TOK_OR:
+				print(string, "Binary Expression: ||\n");
+				break;
+			case TOK_SELFOR:
+				print(string, "Binary Expression: |=\n");
+				break;
+			case TOK_AND:
+				print(string, "Binary Expression: &&\n");
+				break;
+			case TOK_SELFAND:
+				print(string, "Binary Expression: &=\n");
+				break;
 			case TOK_PLUS:
 				print(string, "Binary Expression: +\n");
 				break;
@@ -1081,7 +1093,8 @@ ASTNode *parse_term(Parser *parser) {
 	ASTNode *node = parse_unary(parser);
 	while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH || parser->current_token.type == TOK_LESSTHAN || parser->current_token.type == TOK_GREATERTHAN || parser->current_token.type == TOK_LTOE ||
 		   parser->current_token.type == TOK_GTOE || parser->current_token.type == TOK_SELFADD || parser->current_token.type == TOK_SELFSUB || parser->current_token.type == TOK_SELFMUL || parser->current_token.type == TOK_SELFDIV ||
-		   parser->current_token.type == TOK_NOTEQUAL || parser->current_token.type == TOK_EQUAL) {
+		   parser->current_token.type == TOK_NOTEQUAL || parser->current_token.type == TOK_EQUAL || parser->current_token.type == TOK_SELFAND || parser->current_token.type == TOK_AND || parser->current_token.type == TOK_OR ||
+		   parser->current_token.type == TOK_SELFOR) {
 		TokenType op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_unary(parser);

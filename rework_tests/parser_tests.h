@@ -961,3 +961,39 @@ void test_FnPtr_StructFieldAssignment(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_Binops_AndOrSelf(void) {
+	SETUP_TEST("fn void main() {"
+			   "   i32 a = 0;"
+			   "   i32 b = 0;"
+			   "   if(a || a && b){"
+			   "        a |= 1; b &= 0;"
+			   "    }"
+			   "}");
+	const char *expected = "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 3 statement(s):\n"
+						   "      VarDecl: i32 a:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 b:\n"
+						   "        Literal Int: 0\n"
+						   "      IfElseStmt:\n"
+						   "        Condition:\n"
+						   "          Binary Expression: &&\n"
+						   "            Binary Expression: ||\n"
+						   "              Ident: a\n"
+						   "              Ident: a\n"
+						   "            Ident: b\n"
+						   "        Then:\n"
+						   "          Block with 2 statement(s):\n"
+						   "            Binary Expression: |=\n"
+						   "              Ident: a\n"
+						   "              Literal Int: 1\n"
+						   "            Binary Expression: &=\n"
+						   "              Ident: b\n"
+						   "              Literal Int: 0\n"
+						   "        Else:\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
