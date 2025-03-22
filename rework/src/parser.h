@@ -61,6 +61,7 @@ typedef enum {
     AST_DEFERRED_SEQUENCE,
     AST_FN_PTR,
     AST_STRING_LIT,
+    AST_CHAR_LIT,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -200,6 +201,9 @@ typedef struct ASTNode {
         struct {
             char text[64];
         } string_literal;
+        struct {
+            char literal;
+        } char_literal;
 	} data;
 } ASTNode;
 

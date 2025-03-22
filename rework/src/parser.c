@@ -356,7 +356,10 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			}
 			break;
 		case AST_STRING_LIT:
-			print(string, "String Literal: \"%s\"", node->data.string_literal.text);
+			print(string, "String Literal: \"%s\"\n", node->data.string_literal.text);
+			break;
+		case AST_CHAR_LIT:
+			print(string, "Char Literal: '%c'\n", node->data.char_literal.literal);
 			break;
 		default: {
 			print(string, "Unknown AST Node\n");
@@ -391,6 +394,16 @@ ASTNode *new_ast_node(ASTNodeType type) {
 
 	node->type = type;
 	node->next = NULL;
+	return node;
+}
+
+ASTNode *new_char_lit_node(char lit) {
+	ASTNode *node = new_ast_node(AST_CHAR_LIT);
+	if (!node) {
+		return NULL;
+	}
+
+	node->data.char_literal.literal = lit;
 	return node;
 }
 
@@ -1219,6 +1232,10 @@ ASTNode *parse_primary(Parser *parser) {
 		ASTNode *string_lit_node = new_string_lit_node(parser->current_token.text);
 		parser->current_token = next_token(&parser->scanner);
 		return string_lit_node;
+	} else if (parser->current_token.type == TOK_CHARLIT) {
+		ASTNode *char_lit_node = new_char_lit_node(parser->current_token.text[0]);
+		parser->current_token = next_token(&parser->scanner);
+		return char_lit_node;
 	} else {
 		char expr[128];
 		sprintf(expr, "unexpected token in expression: %s", parser->current_token.text);
