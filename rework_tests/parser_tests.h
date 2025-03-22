@@ -1007,7 +1007,24 @@ void test_StringLiteral(void) {
 						   "  Body:\n"
 						   "    Block with 1 statement(s):\n"
 						   "      VarDecl: const *u8 a:\n"
-						   "        String Literal: \"Hello world\n\"";
+						   "        String Literal: \"Hello world\n\"\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_CharLiteral(void) {
+	SETUP_TEST("fn void main() {"
+			   "   const u8 a = 'a';"
+			   "   const u8 newline = '\n';"
+			   "}");
+	const char *expected = "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 2 statement(s):\n"
+						   "      VarDecl: const u8 a:\n"
+						   "        Char Literal: 'a'\n"
+						   "      VarDecl: const u8 newline:\n"
+						   "        Char Literal: '\n'\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
