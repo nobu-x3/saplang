@@ -197,6 +197,13 @@ Token next_token(Scanner *scanner) {
 		}
 
 		break;
+	case '%':
+		current_token.type = TOK_MODULO;
+		strncpy(current_token.text, "", sizeof(current_token.text));
+		current_token.text[0] = '%';
+		current_token.text[1] = '\0';
+		eat_next_char(scanner);
+		break;
 	case ';':
 		current_token.type = TOK_SEMICOLON;
 		strncpy(current_token.text, ";", sizeof(current_token.text));
@@ -304,6 +311,10 @@ Token next_token(Scanner *scanner) {
 			strncpy(current_token.text, "||", sizeof(current_token.text));
 			eat_next_char(scanner);
 			eat_next_char(scanner);
+		} else {
+			current_token.type = TOK_BITWISE_OR;
+			strncpy(current_token.text, "|", sizeof(current_token.text));
+			eat_next_char(scanner);
 		}
 		break;
 	case '&':
@@ -353,6 +364,10 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_LTOE;
 			eat_next_char(scanner);
 			strncpy(current_token.text, "<=", sizeof(current_token.text));
+		} else if (_INPUT[_INDEX + 1] == '<') {
+			current_token.type = TOK_BITWISE_LSHIFT;
+			eat_next_char(scanner);
+			strncpy(current_token.text, "<<", sizeof(current_token.text));
 		} else {
 			current_token.type = TOK_LESSTHAN;
 			strncpy(current_token.text, "<", sizeof(current_token.text));
@@ -365,12 +380,26 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_GTOE;
 			eat_next_char(scanner);
 			strncpy(current_token.text, ">=", sizeof(current_token.text));
+		} else if (_INPUT[_INDEX + 1] == '>') {
+			current_token.type = TOK_BITWISE_RSHIFT;
+			eat_next_char(scanner);
+			strncpy(current_token.text, ">>", sizeof(current_token.text));
 		} else {
 			current_token.type = TOK_GREATERTHAN;
 			strncpy(current_token.text, ">", sizeof(current_token.text));
 			eat_next_char(scanner);
 		}
 
+		break;
+	case '~':
+		current_token.type = TOK_BITWISE_NEG;
+		strncpy(current_token.text, "~", sizeof(current_token.text));
+		eat_next_char(scanner);
+		break;
+	case '^':
+		current_token.type = TOK_BITWISE_XOR;
+		strncpy(current_token.text, "^", sizeof(current_token.text));
+		eat_next_char(scanner);
 		break;
 	case '.':
 		current_token.type = TOK_DOT;

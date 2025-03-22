@@ -224,6 +224,27 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			case TOK_SELFDIV:
 				print(string, "Binary Expression: /=\n");
 				break;
+			case TOK_BITWISE_XOR:
+				print(string, "Binary Expression: ^\n");
+				break;
+			case TOK_BITWISE_NEG:
+				print(string, "Binary Expression: ~\n");
+				break;
+			case TOK_BITWISE_OR:
+				print(string, "Binary Expression: |\n");
+				break;
+			case TOK_BITWISE_LSHIFT:
+				print(string, "Binary Expression: <<\n");
+				break;
+			case TOK_BITWISE_RSHIFT:
+				print(string, "Binary Expression: >>\n");
+				break;
+			case TOK_AMPERSAND:
+				print(string, "Binary Expression: &\n");
+				break;
+			case TOK_MODULO:
+				print(string, "Binary Expression: %\n");
+				break;
 			default:
 				break;
 			}
@@ -834,16 +855,47 @@ ASTNode *parse_qualified_identifier(Parser *parser) {
 	return new_ident_node(namespace, name);
 }
 
+ASTNode *parse_logical_or(Parser *);
+
+TokenType get_underlying_op(TokenType type, SourceLocation *loc) {
+	switch (type) {
+	case TOK_SELFOR:
+		return TOK_BITWISE_OR;
+	case TOK_SELFAND:
+		return TOK_AMPERSAND;
+	case TOK_SELFADD:
+		return TOK_PLUS;
+	case TOK_SELFSUB:
+		return TOK_MINUS;
+	case TOK_SELFMUL:
+		return TOK_ASTERISK;
+	case TOK_SELFDIV:
+		return TOK_SLASH;
+	default:
+		report(*loc, "unrecognized compound assignment operator.", 0);
+		return TOK_SELFOR;
+	}
+}
+
 ASTNode *parse_assignment(Parser *parser) {
-	ASTNode *node = parse_expr(parser);
+	ASTNode *node = parse_logical_or(parser);
 	if (!node)
 		return NULL;
 
-	if (parser->current_token.type == TOK_ASSIGN) {
+	if (parser->current_token.type == TOK_ASSIGN || parser->current_token.type == TOK_SELFADD || parser->current_token.type == TOK_SELFSUB || parser->current_token.type == TOK_SELFMUL || parser->current_token.type == TOK_SELFDIV ||
+		parser->current_token.type == TOK_SELFAND || parser->current_token.type == TOK_SELFOR) {
+		TokenType op = parser->current_token.type;
+		SourceLocation loc = parser->current_token.location;
 		parser->current_token = next_token(&parser->scanner);
 		// Right-associative
 		ASTNode *right = parse_assignment(parser);
-		node = new_assignment_node(node, right);
+		if (op == TOK_ASSIGN)
+			node = new_assignment_node(node, right);
+		else {
+			TokenType underlying_op = get_underlying_op(op, &loc);
+			ASTNode *compound_expr = new_binary_expr_node(underlying_op, node, right);
+			node = new_assignment_node(node, compound_expr);
+		}
 	}
 	return node;
 }
@@ -1116,31 +1168,7 @@ ASTNode *parse_array_literal(Parser *parser) {
 	return new_array_literal_node(elements.data, elements.count);
 }
 
-ASTNode *parse_term(Parser *parser) {
-	ASTNode *node = parse_unary(parser);
-	while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH || parser->current_token.type == TOK_LESSTHAN || parser->current_token.type == TOK_GREATERTHAN || parser->current_token.type == TOK_LTOE ||
-		   parser->current_token.type == TOK_GTOE || parser->current_token.type == TOK_SELFADD || parser->current_token.type == TOK_SELFSUB || parser->current_token.type == TOK_SELFMUL || parser->current_token.type == TOK_SELFDIV ||
-		   parser->current_token.type == TOK_NOTEQUAL || parser->current_token.type == TOK_EQUAL || parser->current_token.type == TOK_SELFAND || parser->current_token.type == TOK_AND || parser->current_token.type == TOK_OR ||
-		   parser->current_token.type == TOK_SELFOR) {
-		TokenType op = parser->current_token.type;
-		parser->current_token = next_token(&parser->scanner);
-		ASTNode *right = parse_unary(parser);
-		node = new_binary_expr_node(op, node, right);
-	}
-	return node;
-}
-
-ASTNode *parse_expr(Parser *parser) {
-	// I split it like that because of operator precedence
-	ASTNode *node = parse_term(parser);
-	while (parser->current_token.type == TOK_MINUS || parser->current_token.type == TOK_PLUS) {
-		TokenType op = parser->current_token.type;
-		parser->current_token = next_token(&parser->scanner);
-		ASTNode *right = parse_term(parser);
-		node = new_binary_expr_node(op, node, right);
-	}
-	return node;
-}
+ASTNode *parse_expr(Parser *parser) { return parse_logical_or(parser); }
 
 ASTNode *parse_return_stmt(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume 'return'
@@ -1249,6 +1277,116 @@ ASTNode *parse_primary(Parser *parser) {
 		sprintf(expr, "unexpected token in expression: %s", parser->current_token.text);
 		return report(parser->current_token.location, expr, 0);
 	}
+}
+
+ASTNode *parse_multiplicative(Parser *parser) {
+	ASTNode *node = parse_unary(parser);
+	while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH || parser->current_token.type == TOK_MODULO) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_unary(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_additive(Parser *parser) {
+	ASTNode *node = parse_multiplicative(parser);
+	while (parser->current_token.type == TOK_PLUS || parser->current_token.type == TOK_MINUS) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_multiplicative(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_bitwise_shift(Parser *parser) {
+	ASTNode *node = parse_additive(parser);
+	while (parser->current_token.type == TOK_BITWISE_LSHIFT || parser->current_token.type == TOK_BITWISE_RSHIFT) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_additive(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_relational(Parser *parser) {
+	ASTNode *node = parse_bitwise_shift(parser);
+	while (parser->current_token.type == TOK_LESSTHAN || parser->current_token.type == TOK_LTOE || parser->current_token.type == TOK_GREATERTHAN || parser->current_token.type == TOK_GTOE) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_bitwise_shift(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_equality(Parser *parser) {
+	ASTNode *node = parse_relational(parser);
+	while (parser->current_token.type == TOK_EQUAL || parser->current_token.type == TOK_NOTEQUAL) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_bitwise_shift(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_bitwise_and(Parser *parser) {
+	ASTNode *node = parse_equality(parser);
+	while (parser->current_token.type == TOK_AMPERSAND) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_additive(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_bitwise_xor(Parser *parser) {
+	ASTNode *node = parse_bitwise_and(parser);
+	while (parser->current_token.type == TOK_BITWISE_XOR) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_bitwise_and(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_bitwise_or(Parser *parser) {
+	ASTNode *node = parse_bitwise_xor(parser);
+	while (parser->current_token.type == TOK_BITWISE_OR) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_bitwise_xor(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_logical_and(Parser *parser) {
+	ASTNode *node = parse_bitwise_or(parser);
+	while (parser->current_token.type == TOK_AND) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_bitwise_or(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
+}
+
+ASTNode *parse_logical_or(Parser *parser) {
+	ASTNode *node = parse_logical_and(parser);
+	while (parser->current_token.type == TOK_OR) {
+		TokenType op = parser->current_token.type;
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *right = parse_logical_and(parser);
+		node = new_binary_expr_node(op, node, right);
+	}
+	return node;
 }
 
 // <unaryExpr>
