@@ -39,7 +39,7 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 	return RESULT_SUCCESS;
 }
 
-CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, const char *type) {
+CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, const char *type, int scope_level) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -50,6 +50,7 @@ CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, con
 	strncpy(symb->name, name, sizeof(symb->name));
 	strncpy(symb->type, type, sizeof(symb->type));
 	symb->kind = kind;
+	symb->scope_level = scope_level;
 	symb->next = *table;
 	*table = symb;
 	return RESULT_SUCCESS;
@@ -62,6 +63,14 @@ CompilerResult deinit_symbol_table(Symbol *table) {
 		sym = next;
 	}
 	return RESULT_SUCCESS;
+}
+
+Symbol *lookup_symbol(Symbol *table, const char *name, int current_scope) {
+	for (Symbol *s = table; s != NULL; s = s->next) {
+		if (strcmp(s->name, name) == 0 && s->scope_level <= current_scope)
+			return s;
+	}
+	return NULL;
 }
 
 CompilerResult parser_init(Parser *parser, Scanner scanner, SymbolTableWrapper *optional_table_wrapper) {
@@ -416,6 +425,168 @@ ASTNode *new_ast_node(ASTNodeType type) {
 	node->type = type;
 	node->next = NULL;
 	return node;
+}
+
+ASTNode *copy_ast_node(ASTNode *node) {
+	if (!node)
+		return NULL;
+
+	ASTNode *new_node = new_ast_node(node->type);
+
+	switch (node->type) {
+	case AST_VAR_DECL:
+		strncpy(new_node->data.var_decl.name, node->data.var_decl.name, sizeof(new_node->data.var_decl.name));
+		strncpy(new_node->data.var_decl.type_name, node->data.var_decl.type_name, sizeof(new_node->data.var_decl.type_name));
+		new_node->data.var_decl.is_exported = node->data.var_decl.is_exported;
+		new_node->data.var_decl.is_const = node->data.var_decl.is_const;
+		new_node->data.var_decl.init = copy_ast_node(node->data.var_decl.init);
+		break;
+	case AST_STRUCT_DECL: {
+		strncpy(new_node->data.struct_decl.name, node->data.struct_decl.name, sizeof(new_node->data.struct_decl.name));
+		new_node->data.struct_decl.is_exported = node->data.struct_decl.is_exported;
+		ASTNode *current_field = node->data.struct_decl.fields;
+		while (current_field) {
+			ASTNode *next = current_field->next;
+			copy_ast_node(current_field);
+			current_field = next;
+		}
+	} break;
+	case AST_FN_DECL: {
+		strncpy(new_node->data.func_decl.name, node->data.func_decl.name, sizeof(new_node->data.func_decl.name));
+		new_node->data.func_decl.is_exported = node->data.func_decl.is_exported;
+		ASTNode *curr_param = node->data.func_decl.params;
+		ASTNode *curr_new_param = new_node->data.func_decl.params;
+		while (curr_param) {
+			ASTNode *next = curr_param->next;
+			curr_new_param = copy_ast_node(curr_param);
+			curr_param = next;
+			curr_new_param = curr_new_param->next;
+		}
+		new_node->data.func_decl.body = copy_ast_node(node->data.func_decl.body);
+	} break;
+	case AST_BLOCK: {
+		new_node->data.block.statements = malloc(sizeof(*new_node->data.block.statements) * node->data.block.count);
+		for (int i = 0; i < node->data.block.count; ++i) {
+			new_node->data.block.statements[i] = copy_ast_node(node->data.block.statements[i]);
+		}
+		new_node->data.block.count = node->data.block.count;
+	} break;
+	case AST_RETURN:
+		node->data.ret.return_expr = copy_ast_node(node->data.ret.return_expr);
+		break;
+	case AST_EXPR_IDENT:
+		strncpy(new_node->data.ident.name, node->data.ident.name, sizeof(new_node->data.ident.name));
+		strncpy(new_node->data.ident.namespace, node->data.ident.namespace, sizeof(new_node->data.ident.namespace));
+		break;
+	case AST_BINARY_EXPR:
+		new_node->data.binary_op.op = node->data.binary_op.op;
+		new_node->data.binary_op.left = copy_ast_node(node->data.binary_op.left);
+		new_node->data.binary_op.right = copy_ast_node(node->data.binary_op.right);
+		break;
+	case AST_UNARY_EXPR:
+		new_node->data.unary_op.op = node->data.unary_op.op;
+		new_node->data.unary_op.operand = copy_ast_node(node->data.unary_op.operand);
+		break;
+	case AST_ARRAY_LITERAL:
+		new_node->data.array_literal.elements = malloc(sizeof(*node->data.array_literal.elements) * node->data.array_literal.count);
+		for (int i = 0; i < node->data.array_literal.count; ++i) {
+			new_node->data.array_literal.elements[i] = copy_ast_node(node->data.array_literal.elements[i]);
+		}
+		new_node->data.array_literal.count = node->data.array_literal.count;
+		break;
+	case AST_ARRAY_ACCESS:
+		new_node->data.array_access.base = copy_ast_node(node->data.array_access.base);
+		new_node->data.array_access.index = copy_ast_node(node->data.array_access.index);
+		break;
+	case AST_ASSIGNMENT:
+		new_node->data.assignment.lvalue = copy_ast_node(node->data.assignment.lvalue);
+		new_node->data.assignment.rvalue = copy_ast_node(node->data.assignment.rvalue);
+		break;
+	case AST_FN_CALL:
+		new_node->data.func_call.callee = copy_ast_node(node->data.func_call.callee);
+		new_node->data.func_call.args = malloc(sizeof(*new_node->data.func_call.args) * node->data.func_call.arg_count);
+		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
+			new_node->data.func_call.args[i] = copy_ast_node(node->data.func_call.args[i]);
+		}
+		new_node->data.func_call.arg_count = node->data.func_call.arg_count;
+		break;
+	case AST_MEMBER_ACCESS:
+		strncpy(new_node->data.member_access.member, node->data.member_access.member, sizeof(new_node->data.member_access.member));
+		new_node->data.member_access.base = copy_ast_node(node->data.member_access.base);
+		break;
+	case AST_STRUCT_LITERAL:
+		new_node->data.struct_literal.inits = malloc(sizeof(*new_node->data.struct_literal.inits) * node->data.struct_literal.count);
+		for (int i = 0; i < node->data.struct_literal.count; ++i) {
+			new_node->data.struct_literal.inits[i] = malloc(sizeof(FieldInitializer));
+			strncpy(new_node->data.struct_literal.inits[i]->field, node->data.struct_literal.inits[i]->field, sizeof(new_node->data.struct_literal.inits[i]->field));
+			new_node->data.struct_literal.inits[i]->is_designated = node->data.struct_literal.inits[i]->is_designated;
+			new_node->data.struct_literal.inits[i]->expr = copy_ast_node(node->data.struct_literal.inits[i]->expr);
+		}
+		new_node->data.struct_literal.count = node->data.struct_literal.count;
+		break;
+	case AST_ENUM_DECL:
+		strncpy(new_node->data.enum_decl.name, node->data.enum_decl.name, sizeof(new_node->data.enum_decl.name));
+		strncpy(new_node->data.enum_decl.base_type, node->data.enum_decl.base_type, sizeof(new_node->data.enum_decl.base_type));
+		new_node->data.enum_decl.member_count = node->data.enum_decl.member_count;
+		new_node->data.enum_decl.is_exported = node->data.enum_decl.is_exported;
+		new_node->data.enum_decl.members = malloc(sizeof(*new_node->data.enum_decl.members) * node->data.enum_decl.member_count);
+		for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
+			new_node->data.enum_decl.members[i] = malloc(sizeof(EnumMember));
+			new_node->data.enum_decl.members[i]->value = node->data.enum_decl.members[i]->value;
+			strncpy(new_node->data.enum_decl.members[i]->name, node->data.enum_decl.members[i]->name, sizeof(new_node->data.enum_decl.members[i]->name));
+		}
+		break;
+	case AST_EXTERN_BLOCK:
+		strncpy(new_node->data.extern_block.lib_name, node->data.extern_block.lib_name, sizeof(new_node->data.extern_block.lib_name));
+		new_node->data.extern_block.count = node->data.extern_block.count;
+		new_node->data.extern_block.block = malloc(sizeof(*new_node->data.extern_block.block) * new_node->data.extern_block.count);
+		for (int i = 0; i < node->data.extern_block.count; ++i) {
+			new_node->data.extern_block.block[i] = copy_ast_node(node->data.extern_block.block[i]);
+		}
+		break;
+	case AST_EXTERN_FUNC_DECL: {
+		strncpy(new_node->data.extern_func.name, node->data.extern_func.name, sizeof(new_node->data.extern_func.name));
+		new_node->data.extern_func.is_exported = node->data.extern_func.is_exported;
+		ASTNode *curr_new_param = new_node->data.extern_func.params;
+		ASTNode *curr_param = node->data.extern_func.params;
+		while (curr_param) {
+			ASTNode *next = curr_param->next;
+			curr_new_param = copy_ast_node(curr_param);
+			curr_param = next;
+			curr_new_param = curr_new_param->next;
+		}
+	} break;
+	case AST_IF_STMT:
+		new_node->data.if_stmt.condition = copy_ast_node(node->data.if_stmt.condition);
+		new_node->data.if_stmt.then_branch = copy_ast_node(node->data.if_stmt.then_branch);
+		new_node->data.if_stmt.else_branch = copy_ast_node(node->data.if_stmt.else_branch);
+		break;
+	case AST_FOR_LOOP:
+		new_node->data.for_loop.init = copy_ast_node(node->data.for_loop.init);
+		new_node->data.for_loop.condition = copy_ast_node(node->data.for_loop.condition);
+		new_node->data.for_loop.post = copy_ast_node(node->data.for_loop.post);
+		new_node->data.for_loop.body = copy_ast_node(node->data.for_loop.body);
+		break;
+	case AST_WHILE_LOOP:
+		new_node->data.while_loop.condition = copy_ast_node(node->data.while_loop.condition);
+		new_node->data.while_loop.body = copy_ast_node(node->data.while_loop.body);
+		break;
+	case AST_DEFER_BLOCK:
+		new_node->data.defer.defer_block = copy_ast_node(node->data.defer.defer_block);
+	case AST_DEFERRED_SEQUENCE:
+
+		new_node->data.block.statements = malloc(sizeof(*new_node->data.block.statements) * node->data.block.count);
+		for (int i = 0; i < node->data.block.count; ++i) {
+			new_node->data.block.statements[i] = copy_ast_node(node->data.block.statements[i]);
+		}
+		new_node->data.block.count = node->data.block.count;
+	default:
+		break;
+	}
+	if (node->next)
+		new_node->next = copy_ast_node(node->next);
+
+	return new_node;
 }
 
 ASTNode *new_char_lit_node(char lit) {
@@ -893,7 +1064,7 @@ ASTNode *parse_assignment(Parser *parser) {
 			node = new_assignment_node(node, right);
 		else {
 			TokenType underlying_op = get_underlying_op(op, &loc);
-			ASTNode *compound_expr = new_binary_expr_node(underlying_op, node, right);
+			ASTNode *compound_expr = new_binary_expr_node(underlying_op, copy_ast_node(node), right);
 			node = new_assignment_node(node, compound_expr);
 		}
 	}
@@ -995,9 +1166,9 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 		report(parser->current_token.location, msg, 0);
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '}'
-	add_symbol(&parser->symbol_table, enum_name, SYMB_ENUM, base_type);
+	add_symbol(&parser->symbol_table, enum_name, SYMB_ENUM, base_type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, enum_name, SYMB_ENUM, base_type);
+		add_symbol(&parser->exported_table, enum_name, SYMB_ENUM, base_type, parser->current_scope);
 	}
 	return new_enum_decl_node(enum_name, base_type, members.data, members.count);
 }
@@ -1433,9 +1604,9 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ';'
 
-	add_symbol(&parser->symbol_table, var_name, SYMB_VAR, type_name);
+	add_symbol(&parser->symbol_table, var_name, SYMB_VAR, type_name, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, var_name, SYMB_VAR, type_name);
+		add_symbol(&parser->exported_table, var_name, SYMB_VAR, type_name, parser->current_scope);
 	}
 	return new_var_decl_node(type_name, var_name, is_exported, is_const, init_expr);
 }
@@ -1558,9 +1729,9 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
-	add_symbol(&parser->symbol_table, struct_name, SYMB_STRUCT, "struct");
+	add_symbol(&parser->symbol_table, struct_name, SYMB_STRUCT, "struct", parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, struct_name, SYMB_STRUCT, "struct");
+		add_symbol(&parser->exported_table, struct_name, SYMB_STRUCT, "struct", parser->current_scope);
 	}
 	return new_struct_decl_node(struct_name, field_list);
 }
@@ -1898,14 +2069,16 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	add_symbol(&parser->symbol_table, func_name, SYMB_FN, type);
+	add_symbol(&parser->symbol_table, func_name, SYMB_FN, type, parser->current_scope);
 	if (is_exported)
-		add_symbol(&parser->exported_table, func_name, SYMB_FN, type);
+		add_symbol(&parser->exported_table, func_name, SYMB_FN, type, parser->current_scope);
 
+	++parser->current_scope;
 	DeferStack defer_stack;
 	da_init(defer_stack, 4);
 	ASTNode *body = parse_block(parser, &defer_stack);
 	da_deinit(defer_stack);
+	--parser->current_scope;
 	return new_func_decl_node(func_name, params, body);
 }
 
@@ -1942,9 +2115,9 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	add_symbol(&parser->symbol_table, func_name, SYMB_FN, type);
+	add_symbol(&parser->symbol_table, func_name, SYMB_FN, type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, func_name, SYMB_FN, type);
+		add_symbol(&parser->exported_table, func_name, SYMB_FN, type, parser->current_scope);
 	}
 	return new_extern_func_decl_node(func_name, params);
 }
@@ -2118,6 +2291,7 @@ void free_ast_node(ASTNode *node) {
 	switch (node->type) {
 	case AST_VAR_DECL:
 		free_ast_node(node->data.var_decl.init);
+		node->data.var_decl.init = NULL;
 		break;
 	case AST_STRUCT_DECL: {
 		ASTNode *current_field = node->data.struct_decl.fields;
@@ -2126,6 +2300,7 @@ void free_ast_node(ASTNode *node) {
 			free_ast_node(current_field);
 			current_field = next;
 		}
+		node->data.struct_decl.fields = NULL;
 	} break;
 	case AST_FN_DECL: {
 		ASTNode *curr_param = node->data.func_decl.params;
@@ -2134,66 +2309,90 @@ void free_ast_node(ASTNode *node) {
 			free_ast_node(curr_param);
 			curr_param = next;
 		}
+		node->data.func_decl.params = NULL;
 		ASTNode *body = node->data.func_decl.body;
 		free_ast_node(body);
+		node->data.func_decl.body = NULL;
 	} break;
 	case AST_BLOCK: {
 		for (int i = 0; i < node->data.block.count; ++i) {
 			free_ast_node(node->data.block.statements[i]);
+			node->data.block.statements[i] = NULL;
 		}
 		free(node->data.block.statements);
+		node->data.block.statements = NULL;
 	} break;
 	case AST_RETURN:
 		free_ast_node(node->data.ret.return_expr);
+		node->data.ret.return_expr = NULL;
 		break;
 	case AST_BINARY_EXPR:
 		free_ast_node(node->data.binary_op.left);
+		node->data.binary_op.left = NULL;
 		free_ast_node(node->data.binary_op.right);
+		node->data.binary_op.right = NULL;
 		break;
 	case AST_UNARY_EXPR:
 		free_ast_node(node->data.unary_op.operand);
+		node->data.unary_op.operand = NULL;
 		break;
 	case AST_ARRAY_LITERAL:
 		for (int i = 0; i < node->data.array_literal.count; ++i) {
 			free_ast_node(node->data.array_literal.elements[i]);
+			node->data.array_literal.elements[i] = NULL;
 		}
 		free(node->data.array_literal.elements);
+		node->data.array_literal.elements = NULL;
 		break;
 	case AST_ARRAY_ACCESS:
 		free_ast_node(node->data.array_access.base);
+		node->data.array_access.base = NULL;
 		free_ast_node(node->data.array_access.index);
+		node->data.array_access.index = NULL;
 		break;
 	case AST_ASSIGNMENT:
 		free_ast_node(node->data.assignment.lvalue);
+		node->data.assignment.lvalue = NULL;
 		free_ast_node(node->data.assignment.rvalue);
+		node->data.assignment.rvalue = NULL;
 		break;
 	case AST_FN_CALL:
 		free_ast_node(node->data.func_call.callee);
+		node->data.func_call.callee = NULL;
 		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
 			free_ast_node(node->data.func_call.args[i]);
+			node->data.func_call.args[i] = NULL;
 		}
 		free(node->data.func_call.args);
+		node->data.func_call.args = NULL;
 		break;
 	case AST_MEMBER_ACCESS:
 		free_ast_node(node->data.member_access.base);
+		node->data.member_access.base = NULL;
 		break;
 	case AST_STRUCT_LITERAL:
 		for (int i = 0; i < node->data.struct_literal.count; ++i) {
 			free_ast_node(node->data.struct_literal.inits[i]->expr);
+			node->data.struct_literal.inits[i]->expr = NULL;
 		}
 		free(node->data.struct_literal.inits);
+		node->data.struct_literal.inits = NULL;
 		break;
 	case AST_ENUM_DECL:
 		for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
 			free(node->data.enum_decl.members[i]);
+			node->data.enum_decl.members[i] = NULL;
 		}
 		free(node->data.enum_decl.members);
+		node->data.enum_decl.members = NULL;
 		break;
 	case AST_EXTERN_BLOCK:
 		for (int i = 0; i < node->data.extern_block.count; ++i) {
 			free_ast_node(node->data.extern_block.block[i]);
+			node->data.extern_block.block[i] = NULL;
 		}
 		free(node->data.extern_block.block);
+		node->data.extern_block.block = NULL;
 		break;
 	case AST_EXTERN_FUNC_DECL: {
 		ASTNode *curr_param = node->data.extern_func.params;
@@ -2202,29 +2401,41 @@ void free_ast_node(ASTNode *node) {
 			free_ast_node(curr_param);
 			curr_param = next;
 		}
+		node->data.extern_func.params = NULL;
 	} break;
 	case AST_IF_STMT:
 		free_ast_node(node->data.if_stmt.condition);
+		node->data.if_stmt.condition = NULL;
 		free_ast_node(node->data.if_stmt.then_branch);
+		node->data.if_stmt.then_branch = NULL;
 		free_ast_node(node->data.if_stmt.else_branch);
+		node->data.if_stmt.else_branch = NULL;
 		break;
 	case AST_FOR_LOOP:
 		free_ast_node(node->data.for_loop.init);
+		node->data.for_loop.init = NULL;
 		free_ast_node(node->data.for_loop.condition);
+		node->data.for_loop.condition = NULL;
 		free_ast_node(node->data.for_loop.post);
+		node->data.for_loop.post = NULL;
 		free_ast_node(node->data.for_loop.body);
+		node->data.for_loop.body = NULL;
 		break;
 	case AST_WHILE_LOOP:
 		free_ast_node(node->data.while_loop.condition);
+		node->data.while_loop.condition = NULL;
 		free_ast_node(node->data.while_loop.body);
+		node->data.while_loop.body = NULL;
 		break;
 	case AST_DEFER_BLOCK:
-		free_ast_node(node->data.defer.defer_block);
 		break;
 	case AST_DEFERRED_SEQUENCE:
 		for (int i = 0; i < node->data.block.count; ++i) {
 			free_ast_node(node->data.block.statements[i]);
+			node->data.block.statements[i] = NULL;
 		}
+		free(node->data.block.statements);
+		node->data.block.statements = NULL;
 	default:
 		break;
 	}

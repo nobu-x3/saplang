@@ -22,8 +22,9 @@ typedef struct {
 
 typedef struct Symbol {
 	char name[64];
-	SymbolKind kind;
 	char type[64];
+    int scope_level;
+    SymbolKind kind;
 	struct Symbol *next;
 } Symbol;
 
@@ -209,6 +210,7 @@ typedef struct ASTNode {
 
 typedef struct Parser {
 	char module_name[64];
+    int current_scope;
 	Scanner scanner;
 	Symbol *symbol_table;
 	Symbol *exported_table;
@@ -227,6 +229,8 @@ typedef struct {
 	Symbol *internal_table;
 	Symbol *exported_table;
 } SymbolTableWrapper;
+
+Symbol *lookup_symbol(Symbol *table, const char *name, int current_scope);
 
 // Parser takes ownership of the symbol tables
 CompilerResult parser_init(Parser *parser, Scanner scanner, SymbolTableWrapper *optional_table_wrapper);
