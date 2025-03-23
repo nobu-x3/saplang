@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "scanner.h"
+#include "types.h"
 #include "util.h"
 #include <assert.h>
 #include <ctype.h>
@@ -27,19 +28,26 @@ typedef struct {
 CompilerResult symbol_table_print(Symbol *table, char *string) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
+
 	for (Symbol *sym = table; sym; sym = sym->next) {
 		if (sym->kind == SYMB_VAR) {
-			print(string, "\tVariable: %s, Type: %s\n", sym->name, sym->type);
+			print(string, "\tVariable: %s", sym->name);
 		} else if (sym->kind == SYMB_STRUCT) {
-			print(string, "\tStruct: %s\n", sym->name);
+			print(string, "\tStruct: %s ", sym->name);
 		} else if (sym->kind == SYMB_FN) {
-			print(string, "\tFn: %s\n", sym->name);
+			print(string, "\tFn: %s ", sym->name);
 		}
+
+		char type_buffer[128];
+		type_print(type_buffer, sym->type);
+		print(string, "\tType: %s", type_buffer);
+
+		print(string, "\tscope: %d\n", sym->scope_level)
 	}
 	return RESULT_SUCCESS;
 }
 
-CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, const char *type, int scope_level) {
+CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, Type *type, int scope_level) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -48,7 +56,7 @@ CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, con
 		return RESULT_MEMORY_ERROR;
 
 	strncpy(symb->name, name, sizeof(symb->name));
-	strncpy(symb->type, type, sizeof(symb->type));
+	symb->type = copy_type(type);
 	symb->kind = kind;
 	symb->scope_level = scope_level;
 	symb->next = *table;
@@ -116,7 +124,9 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 		}
 		switch (node->type) {
 		case AST_VAR_DECL: {
-			print(string, "VarDecl: %s%s%s %s", node->data.var_decl.is_exported ? "exported " : "", node->data.var_decl.is_const ? "const " : "", node->data.var_decl.type_name, node->data.var_decl.name);
+			print(string, "VarDecl: %s%s", node->data.var_decl.is_exported ? "exported " : "", node->data.var_decl.is_const ? "const " : "");
+			type_print(string, node->data.var_decl.type);
+			print(string, " %s", node->data.var_decl.name);
 			if (node->data.var_decl.init) {
 				print(string, ":\n");
 				ast_print(node->data.var_decl.init, indent + 1, string);
@@ -141,14 +151,18 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "Body:\n");
 			ast_print(node->data.func_decl.body, indent + 2, string);
 			break;
-		case AST_FIELD_DECL:
-			print(string, "FieldDecl: %s %s\n", node->data.field_decl.type_name, node->data.field_decl.name);
-			break;
+		case AST_FIELD_DECL: {
+			print(string, "FieldDecl: ");
+			type_print(string, node->data.field_decl.type);
+			print(string, " %s\n", node->data.field_decl.name)
+		} break;
 		case AST_PARAM_DECL:
 			if (node->data.param_decl.is_va) {
 				print(string, "ParamDecl: ...\n");
 			} else {
-				print(string, "ParamDecl: %s%s %s\n", node->data.param_decl.is_const ? "const " : "", node->data.param_decl.type_name, node->data.param_decl.name);
+				print(string, "ParamDecl: %s", node->data.param_decl.is_const ? "const " : "");
+				type_print(string, node->data.param_decl.type);
+				print(string, " %s\n", node->data.param_decl.name)
 			}
 			break;
 		case AST_BLOCK:
@@ -305,8 +319,10 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 				ast_print(node->data.struct_literal.inits[i]->expr, indent + 1 + node->data.struct_literal.inits[i]->is_designated, string);
 			}
 			break;
-		case AST_ENUM_DECL:
-			print(string, "EnumDecl with %d member(s) - %s%s : %s:\n", node->data.enum_decl.member_count, node->data.enum_decl.is_exported ? "exported " : "", node->data.enum_decl.name, node->data.enum_decl.base_type);
+		case AST_ENUM_DECL: {
+			print(string, "EnumDecl with %d member(s) - %s%s : ", node->data.enum_decl.member_count, node->data.enum_decl.is_exported ? "exported " : "", node->data.enum_decl.name);
+			type_print(string, node->data.enum_decl.base_type);
+			print(string, ":\n");
 			for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
 				for (int i = 0; i < indent + 1; ++i) {
 					print(string, "  ");
@@ -315,10 +331,12 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 				sprintf(prefix, "%s : %ld", node->data.enum_decl.members[i]->name, node->data.enum_decl.members[i]->value);
 				print(string, "%s\n", prefix);
 			}
-			break;
-		case AST_ENUM_VALUE:
-			print(string, "EnumValue: %s::%s", node->data.enum_value.enum_type, node->data.enum_value.member);
-			break;
+		} break;
+		case AST_ENUM_VALUE: {
+			print(string, "EnumValue: ");
+			type_print(string, node->data.enum_value.enum_type);
+			print(string, "::%s", node->data.enum_value.member)
+		} break;
 		case AST_EXTERN_BLOCK:
 			print(string, "ExternBlock from lib %s:\n", node->data.extern_block.lib_name);
 			for (int i = 0; i < node->data.extern_block.count; ++i) {
@@ -436,7 +454,7 @@ ASTNode *copy_ast_node(ASTNode *node) {
 	switch (node->type) {
 	case AST_VAR_DECL:
 		strncpy(new_node->data.var_decl.name, node->data.var_decl.name, sizeof(new_node->data.var_decl.name));
-		strncpy(new_node->data.var_decl.type_name, node->data.var_decl.type_name, sizeof(new_node->data.var_decl.type_name));
+		new_node->data.var_decl.type = copy_type(node->data.var_decl.type);
 		new_node->data.var_decl.is_exported = node->data.var_decl.is_exported;
 		new_node->data.var_decl.is_const = node->data.var_decl.is_const;
 		new_node->data.var_decl.init = copy_ast_node(node->data.var_decl.init);
@@ -526,7 +544,7 @@ ASTNode *copy_ast_node(ASTNode *node) {
 		break;
 	case AST_ENUM_DECL:
 		strncpy(new_node->data.enum_decl.name, node->data.enum_decl.name, sizeof(new_node->data.enum_decl.name));
-		strncpy(new_node->data.enum_decl.base_type, node->data.enum_decl.base_type, sizeof(new_node->data.enum_decl.base_type));
+		new_node->data.enum_decl.base_type = copy_type(node->data.enum_decl.base_type);
 		new_node->data.enum_decl.member_count = node->data.enum_decl.member_count;
 		new_node->data.enum_decl.is_exported = node->data.enum_decl.is_exported;
 		new_node->data.enum_decl.members = malloc(sizeof(*new_node->data.enum_decl.members) * node->data.enum_decl.member_count);
@@ -640,18 +658,18 @@ ASTNode *new_for_loop_node(ASTNode *init, ASTNode *condition, ASTNode *post, AST
 	return node;
 }
 
-ASTNode *new_enum_decl_node(const char *name, const char *base_type, EnumMember **members, int member_count) {
+ASTNode *new_enum_decl_node(const char *name, Type *base_type, EnumMember **members, int member_count) {
 	ASTNode *node = new_ast_node(AST_ENUM_DECL);
 	if (!node)
 		return NULL;
 	strncpy(node->data.enum_decl.name, name, sizeof(node->data.enum_decl.name));
-	strncpy(node->data.enum_decl.base_type, base_type, sizeof(node->data.enum_decl.base_type));
+	node->data.enum_decl.base_type = base_type;
 	node->data.enum_decl.members = members;
 	node->data.enum_decl.member_count = member_count;
 	return node;
 }
 
-ASTNode *new_enum_value_node(const char *namespace, const char *enum_type, const char *member) {
+ASTNode *new_enum_value_node(const char *namespace, Type *enum_type, const char *member) {
 	ASTNode *node = new_ast_node(AST_ENUM_VALUE);
 	if (!node)
 		return NULL;
@@ -660,7 +678,7 @@ ASTNode *new_enum_value_node(const char *namespace, const char *enum_type, const
 	} else {
 		node->data.enum_value.namespace[0] = '\0';
 	}
-	strncpy(node->data.enum_value.enum_type, enum_type, sizeof(node->data.enum_value.enum_type));
+	node->data.enum_value.enum_type = enum_type;
 	strncpy(node->data.enum_value.member, member, sizeof(node->data.enum_value.member));
 	return node;
 }
@@ -729,11 +747,11 @@ ASTNode *new_return_node(ASTNode *expr) {
 	return node;
 }
 
-ASTNode *new_field_decl_node(const char *type_name, const char *name) {
+ASTNode *new_field_decl_node(Type *field_type, const char *name) {
 	ASTNode *node = new_ast_node(AST_FIELD_DECL);
 	if (!node)
 		return NULL;
-	strncpy(node->data.field_decl.type_name, type_name, sizeof(node->data.field_decl.type_name));
+	node->data.field_decl.type = field_type;
 	strncpy(node->data.field_decl.name, name, sizeof(node->data.field_decl.name));
 	return node;
 }
@@ -745,12 +763,12 @@ ASTNode *new_struct_decl_node(const char *name, ASTNode *fields) {
 	return node;
 }
 
-ASTNode *new_var_decl_node(const char *type_name, const char *name, int is_exported, int is_const, ASTNode *initializer) {
+ASTNode *new_var_decl_node(Type *type, const char *name, int is_exported, int is_const, ASTNode *initializer) {
 	ASTNode *node = new_ast_node(AST_VAR_DECL);
 	if (!node)
 		return NULL;
 	strncpy(node->data.var_decl.name, name, sizeof(node->data.var_decl.name));
-	strncpy(node->data.var_decl.type_name, type_name, sizeof(node->data.var_decl.type_name));
+	node->data.var_decl.type = type;
 	node->data.var_decl.init = initializer;
 	node->data.var_decl.is_const = is_const;
 	node->data.var_decl.is_exported = is_exported;
@@ -766,11 +784,11 @@ ASTNode *new_block_node(ASTNode **stmts, int count) {
 	return node;
 }
 
-ASTNode *new_param_decl_node(const char *type_name, const char *name, int is_const, int is_va) {
+ASTNode *new_param_decl_node(Type *type, const char *name, int is_const, int is_va) {
 	ASTNode *node = new_ast_node(AST_PARAM_DECL);
 	if (!node)
 		return NULL;
-	strncpy(node->data.param_decl.type_name, type_name, sizeof(node->data.param_decl.type_name));
+	node->data.param_decl.type = type;
 	strncpy(node->data.param_decl.name, name, sizeof(node->data.param_decl.name));
 	node->data.param_decl.is_const = is_const;
 	node->data.param_decl.is_va = is_va;
@@ -881,12 +899,19 @@ ASTNode *new_if_stmt_node(ASTNode *condition, ASTNode *then_branch, ASTNode *els
 
 ///////////////////////////////////////////////////////////////////////////////
 
-CompilerResult parse_type_name(Parser *parser, char *buffer) {
+CompilerResult parse_type(Parser *parser, Type **out_type) {
 	{ // fn ptr parsing
 		if (parser->current_token.type == TOK_FN_PTR) {
 			parser->current_token = next_token(&parser->scanner); // consume 'fn*'
-			char ret_type[64] = "";
-			parse_type_name(parser, ret_type);
+
+			SourceLocation loc = parser->current_token.location;
+
+			Type *ret_type = NULL;
+			parse_type(parser, &ret_type);
+			if (!ret_type) {
+				report(loc, "failed to parse type.", 0);
+				return RESULT_PARSING_ERROR;
+			}
 
 			if (parser->current_token.type != TOK_LPAREN) {
 				char msg[128];
@@ -897,20 +922,35 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 
 			parser->current_token = next_token(&parser->scanner); // consume '('
 
-			char params[256] = "";
+			struct {
+				Type **data;
+				int capacity, count;
+			} params;
+
+			da_init_result(params, 4);
+
 			while (parser->current_token.type != TOK_RPAREN) {
-				char param_type[64] = "";
-				parse_type_name(parser, param_type);
-				strncat(params, param_type, sizeof(params) - strlen(params) - 1);
+				Type *param_type = NULL;
+
+				SourceLocation loc = parser->current_token.location;
+
+				parse_type(parser, &param_type);
+				if (!param_type) {
+					report(loc, "failed to parse type.", 0);
+					return RESULT_PARSING_ERROR;
+				}
+
+				da_push_result(params, param_type);
+
 				if (parser->current_token.type == TOK_COMMA) {
-					strncat(params, ",", sizeof(params) - strlen(params) - 1);
 					parser->current_token = next_token(&parser->scanner); // consume ','
 				}
 			}
 
 			parser->current_token = next_token(&parser->scanner); // consume ')'
 
-			snprintf(buffer, 64, "fn* %s(%s)", ret_type, params);
+			*out_type = new_function_type(ret_type, params.data, params.count);
+
 			return RESULT_SUCCESS;
 		}
 	}
@@ -931,6 +971,7 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 	case TOK_BOOL:
 		strncpy(base_type, parser->current_token.text, sizeof(base_type));
 		parser->current_token = next_token(&parser->scanner);
+		*out_type = new_primitive_type(base_type);
 		break;
 	case TOK_IDENTIFIER:
 		strncpy(base_type, parser->current_token.text, sizeof(base_type));
@@ -946,6 +987,11 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 			strncpy(base_type, parser->current_token.text, sizeof(base_type));
 			parser->current_token = next_token(&parser->scanner);
 		}
+		*out_type = new_named_type(base_type, namespace, TYPE_UNDECIDED);
+		if (!*out_type) {
+			report(parser->current_token.location, "failed to parse struct type.", 0);
+			return RESULT_PARSING_ERROR;
+		}
 		break;
 	default: {
 		char msg[128];
@@ -955,13 +1001,12 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 	}
 	}
 
-	char ptr_prefix[64] = "";
 	while (parser->current_token.type == TOK_ASTERISK) {
-		strcat(ptr_prefix, "*");
 		parser->current_token = next_token(&parser->scanner);
+		*out_type = new_pointer_type(*out_type);
+		assert(*out_type);
 	}
 
-	char array_suffix[64] = "";
 	while (parser->current_token.type == TOK_LBRACKET) {
 		parser->current_token = next_token(&parser->scanner); // consume '['
 
@@ -972,8 +1017,7 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 			return RESULT_PARSING_ERROR;
 		}
 
-		char size_text[32];
-		strncpy(size_text, parser->current_token.text, sizeof(size_text));
+		int size = atoi(parser->current_token.text);
 		parser->current_token = next_token(&parser->scanner); // consume number
 
 		if (parser->current_token.type != TOK_RBRACKET) {
@@ -984,16 +1028,9 @@ CompilerResult parse_type_name(Parser *parser, char *buffer) {
 		}
 
 		parser->current_token = next_token(&parser->scanner); // consume ']'
-		strcat(array_suffix, "[");
-		strcat(array_suffix, size_text);
-		strcat(array_suffix, "]");
+		*out_type = new_array_type(*out_type, size);
 	}
 
-	char prefix[64] = "";
-	if (*namespace) {
-		sprintf(prefix, "%s::", namespace);
-	}
-	snprintf(buffer, 64, "%s%s%s%s", array_suffix, ptr_prefix, prefix, base_type);
 	return RESULT_SUCCESS;
 }
 
@@ -1083,13 +1120,19 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 	strncpy(enum_name, parser->current_token.text, sizeof(enum_name));
 	parser->current_token = next_token(&parser->scanner); // consume enum name
 
-	char base_type[64] = "";
+	Type *base_type = NULL;
 	if (parser->current_token.type == TOK_COLON) {
 		parser->current_token = next_token(&parser->scanner); // consume ':'
-		parse_type_name(parser, base_type);
+		if (parse_type(parser, &base_type) != RESULT_SUCCESS)
+			return NULL;
+		assert(base_type);
+		base_type->kind = TYPE_ENUM;
 	} else {
-		strncpy(base_type, "i32", sizeof(base_type));
+		base_type = new_primitive_type("i32");
+		base_type->kind = TYPE_ENUM;
 	}
+
+	assert(base_type);
 
 	if (parser->current_token.type != TOK_LCURLY) {
 		char msg[128];
@@ -1582,8 +1625,9 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 		parser->current_token = next_token(&parser->scanner); // consume 'const'
 	}
 
-	char type_name[64];
-	parse_type_name(parser, type_name);
+	Type *var_type = NULL;
+	if (parse_type(parser, &var_type) != RESULT_SUCCESS)
+		return NULL;
 
 	if (parser->current_token.type != TOK_IDENTIFIER) {
 		return report(parser->current_token.location, "expected identifier in variable declaration.", 0);
@@ -1604,11 +1648,11 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ';'
 
-	add_symbol(&parser->symbol_table, var_name, SYMB_VAR, type_name, parser->current_scope);
+	add_symbol(&parser->symbol_table, var_name, SYMB_VAR, var_type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, var_name, SYMB_VAR, type_name, parser->current_scope);
+		add_symbol(&parser->exported_table, var_name, SYMB_VAR, var_type, parser->current_scope);
 	}
-	return new_var_decl_node(type_name, var_name, is_exported, is_const, init_expr);
+	return new_var_decl_node(var_type, var_name, is_exported, is_const, init_expr);
 }
 
 typedef struct {
@@ -1641,17 +1685,20 @@ ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
 	if (parser->current_token.type == TOK_I8 || parser->current_token.type == TOK_I16 || parser->current_token.type == TOK_I32 || parser->current_token.type == TOK_I64 || parser->current_token.type == TOK_U8 ||
 		parser->current_token.type == TOK_U16 || parser->current_token.type == TOK_U32 || parser->current_token.type == TOK_U64 || parser->current_token.type == TOK_F32 || parser->current_token.type == TOK_F64 ||
 		parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_VOID || parser->current_token.type == TOK_IDENTIFIER || parser->current_token.type == TOK_CONST) {
-		// peek ahead
-		// @TODO: redo this when reworking scanner to work with indices
 		if (parser->current_token.type == TOK_CONST) {
 			return parse_var_decl(parser, 0);
 		}
+		// peek ahead
 		int save = parser->scanner.id;
 		Token temp = parser->current_token;
-		char type_name[64];
-		parse_type_name(parser, type_name);
+		Type *type = NULL;
+		parse_type(parser, &type);
 		if (parser->current_token.type == TOK_IDENTIFIER) {
 			// most likely var decl, restore state and reparse
+			if (type) {
+				type_deinit(type);
+				free(type);
+			}
 			parser->scanner.id = save;
 			parser->current_token = temp;
 			return parse_var_decl(parser, 0);
@@ -1672,8 +1719,10 @@ ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
 // <fieldDecl>
 // ::= <type> <identifier> ;
 ASTNode *parse_field_declaration(Parser *parser) {
-	char type_name[64];
-	parse_type_name(parser, type_name);
+	Type *type = NULL;
+	if (parse_type(parser, &type) != RESULT_SUCCESS) {
+		return NULL;
+	}
 
 	if (parser->current_token.type != TOK_IDENTIFIER) {
 		return report(parser->current_token.location, "expected identifier in struct field declaration.", 0);
@@ -1689,7 +1738,7 @@ ASTNode *parse_field_declaration(Parser *parser) {
 	}
 
 	parser->current_token = next_token(&parser->scanner); // consume ';'
-	return new_field_decl_node(type_name, field_name);
+	return new_field_decl_node(type, field_name);
 }
 
 // <structDecl>
@@ -1729,10 +1778,13 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
-	add_symbol(&parser->symbol_table, struct_name, SYMB_STRUCT, "struct", parser->current_scope);
+	Type *struct_type = new_named_type(struct_name, "", TYPE_STRUCT);
+	add_symbol(&parser->symbol_table, struct_name, SYMB_STRUCT, struct_type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, struct_name, SYMB_STRUCT, "struct", parser->current_scope);
+		add_symbol(&parser->exported_table, struct_name, SYMB_STRUCT, struct_type, parser->current_scope);
 	}
+	type_deinit(struct_type);
+	free(struct_type);
 	return new_struct_decl_node(struct_name, field_list);
 }
 
@@ -1741,16 +1793,17 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 ASTNode *parse_parameter_declaration(Parser *parser) {
 	if (parser->current_token.type == TOK_DOTDOTDOT) {
 		parser->current_token = next_token(&parser->scanner); // consume name
-		return new_param_decl_node("", "", 0, 1);
+		return new_param_decl_node(NULL, "", 0, 1);
 	}
 	int is_const = 0;
 	if (parser->current_token.type == TOK_CONST) {
 		is_const = 1;
 		parser->current_token = next_token(&parser->scanner); // consume name
 	}
-	char type_name[64];
-	if (parse_type_name(parser, type_name) != RESULT_SUCCESS)
+	Type *type = NULL;
+	if (parse_type(parser, &type) != RESULT_SUCCESS)
 		return NULL;
+
 	if (parser->current_token.type != TOK_IDENTIFIER) {
 		char msg[128];
 		sprintf(msg, "expected identifier in parameter declaration, got %s.", parser->current_token.text);
@@ -1759,7 +1812,7 @@ ASTNode *parse_parameter_declaration(Parser *parser) {
 	char param_name[64];
 	strncpy(param_name, parser->current_token.text, sizeof(param_name));
 	parser->current_token = next_token(&parser->scanner); // consume name
-	return new_param_decl_node(type_name, param_name, is_const, 0);
+	return new_param_decl_node(type, param_name, is_const, 0);
 }
 
 ASTNode *parse_parameter_list(Parser *parser) {
@@ -1824,6 +1877,7 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 
 		if (stmt->type == AST_RETURN) {
 			ASTNode *seq = new_ast_node(AST_DEFERRED_SEQUENCE);
+            seq->data.block.count = 0;
 			for (int j = stack->count - 1; j >= 0; --j) {
 				CompilerResult res;
 				push_stmt(seq, stack->data[j], &res);
@@ -2048,8 +2102,10 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	if ((parser->current_token.type < TOKENS_BUILTIN_TYPE_BEGIN || parser->current_token.type > TOKENS_BUILTIN_TYPE_END) && parser->current_token.type == TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected return type.", 0);
 
-	char type[64];
-	parse_type_name(parser, type);
+	Type *type = NULL;
+	if (parse_type(parser, &type) != RESULT_SUCCESS) {
+		return NULL;
+	}
 
 	if (parser->current_token.type != TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected function identifier.", 0);
@@ -2073,6 +2129,9 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	if (is_exported)
 		add_symbol(&parser->exported_table, func_name, SYMB_FN, type, parser->current_scope);
 
+	type_deinit(type);
+	free(type);
+
 	++parser->current_scope;
 	DeferStack defer_stack;
 	da_init(defer_stack, 4);
@@ -2087,8 +2146,10 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	if ((parser->current_token.type < TOKENS_BUILTIN_TYPE_BEGIN || parser->current_token.type > TOKENS_BUILTIN_TYPE_END) && parser->current_token.type != TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected return type.", 0);
 
-	char type[64];
-	parse_type_name(parser, type);
+	Type *type = NULL;
+	if (parse_type(parser, &type) != RESULT_SUCCESS) {
+		return NULL;
+	}
 
 	if (parser->current_token.type != TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected function identifier.", 0);
@@ -2119,6 +2180,8 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	if (is_exported) {
 		add_symbol(&parser->exported_table, func_name, SYMB_FN, type, parser->current_scope);
 	}
+	type_deinit(type);
+	free(type);
 	return new_extern_func_decl_node(func_name, params);
 }
 
@@ -2292,6 +2355,9 @@ void free_ast_node(ASTNode *node) {
 	case AST_VAR_DECL:
 		free_ast_node(node->data.var_decl.init);
 		node->data.var_decl.init = NULL;
+		type_deinit(node->data.var_decl.type);
+		free(node->data.var_decl.type);
+		node->data.var_decl.type = NULL;
 		break;
 	case AST_STRUCT_DECL: {
 		ASTNode *current_field = node->data.struct_decl.fields;
@@ -2302,6 +2368,16 @@ void free_ast_node(ASTNode *node) {
 		}
 		node->data.struct_decl.fields = NULL;
 	} break;
+	case AST_FIELD_DECL:
+		type_deinit(node->data.field_decl.type);
+		free(node->data.field_decl.type);
+		node->data.field_decl.type = NULL;
+		break;
+	case AST_PARAM_DECL:
+		type_deinit(node->data.param_decl.type);
+		free(node->data.param_decl.type);
+		node->data.param_decl.type = NULL;
+		break;
 	case AST_FN_DECL: {
 		ASTNode *curr_param = node->data.func_decl.params;
 		while (curr_param) {
@@ -2385,6 +2461,14 @@ void free_ast_node(ASTNode *node) {
 		}
 		free(node->data.enum_decl.members);
 		node->data.enum_decl.members = NULL;
+		type_deinit(node->data.enum_decl.base_type);
+		free(node->data.enum_decl.base_type);
+		node->data.enum_decl.base_type = NULL;
+		break;
+	case AST_ENUM_VALUE:
+		type_deinit(node->data.enum_value.enum_type);
+		free(node->data.enum_value.enum_type);
+		node->data.enum_value.enum_type = NULL;
 		break;
 	case AST_EXTERN_BLOCK:
 		for (int i = 0; i < node->data.extern_block.count; ++i) {
