@@ -8,15 +8,11 @@ Type *copy_type(Type *type) {
 	Type *t = malloc(sizeof(Type));
 	if (!t)
 		return NULL;
+
 	t->kind = type->kind;
 
-	t->type_name = NULL;
-	if (type->type_name)
-		t->type_name = strdup(type->type_name);
-
-	t->namespace = NULL;
-	if (type->namespace)
-		t->namespace = strdup(type->namespace);
+	strncpy(t->type_name, type->type_name, sizeof(t->type_name));
+	strncpy(t->namespace, type->namespace, sizeof(t->namespace));
 
 	switch (t->kind) {
 	case TYPE_PRIMITIVE:
@@ -52,15 +48,8 @@ void type_deinit(Type *type) {
 	if (!type)
 		return;
 
-	if (type->type_name) {
-		free(type->type_name);
-		type->type_name = NULL;
-	}
-
-	if (type->namespace) {
-		free(type->namespace);
-		type->namespace = NULL;
-	}
+	memset(type->type_name, 0, sizeof(type->type_name));
+	memset(type->namespace, 0, sizeof(type->namespace));
 
 	switch (type->kind) {
 	case TYPE_STRUCT:
@@ -70,10 +59,12 @@ void type_deinit(Type *type) {
 		break;
 	case TYPE_POINTER:
 		type_deinit(type->pointee);
+		free(type->pointee);
 		type->pointee = NULL;
 		break;
 	case TYPE_ARRAY:
 		type_deinit(type->array.element_type);
+		free(type->array.element_type);
 		type->array.element_type = NULL;
 		break;
 	case TYPE_FUNCTION:
@@ -94,8 +85,8 @@ Type *new_primitive_type(const char *name) {
 	if (!t)
 		return NULL;
 	t->kind = TYPE_PRIMITIVE;
-	t->type_name = strdup(name);
-	t->namespace = NULL;
+	strncpy(t->type_name, name, sizeof(t->type_name));
+	memset(t->namespace, 0, sizeof(t->namespace));
 	return t;
 }
 
@@ -103,8 +94,8 @@ Type *new_pointer_type(Type *pointee) {
 	Type *t = malloc(sizeof(Type));
 	if (!t)
 		return NULL;
-	t->type_name = NULL;
-	t->namespace = NULL;
+	memset(t->type_name, 0, sizeof(t->type_name));
+	memset(t->namespace, 0, sizeof(t->namespace));
 	t->kind = TYPE_POINTER;
 	t->pointee = pointee;
 	return t;
@@ -114,8 +105,8 @@ Type *new_array_type(Type *element_type, int size) {
 	Type *t = malloc(sizeof(Type));
 	if (!t)
 		return NULL;
-	t->type_name = NULL;
-	t->namespace = NULL;
+	memset(t->type_name, 0, sizeof(t->type_name));
+	memset(t->namespace, 0, sizeof(t->namespace));
 	t->kind = TYPE_ARRAY;
 	t->array.element_type = element_type;
 	t->array.size = size;
@@ -127,8 +118,8 @@ Type *new_function_type(Type *return_type, Type **param_types, int param_count) 
 	if (!t)
 		return NULL;
 	t->kind = TYPE_FUNCTION;
-	t->type_name = NULL;
-	t->namespace = NULL;
+	memset(t->type_name, 0, sizeof(t->type_name));
+	memset(t->namespace, 0, sizeof(t->namespace));
 	t->function.return_type = return_type;
 	t->function.param_types = param_types;
 	t->function.param_count = param_count;
@@ -139,9 +130,10 @@ Type *new_named_type(const char *name, const char *namespace, TypeKind kind) { /
 	Type *t = malloc(sizeof(Type));
 	if (!t)
 		return NULL;
+
 	t->kind = kind;
-	t->type_name = strdup(name);
-	t->namespace = strdup(namespace);
+	strncpy(t->type_name, name, sizeof(t->type_name));
+	strncpy(t->namespace, namespace, sizeof(t->namespace));
 	return t;
 }
 
@@ -206,21 +198,21 @@ void type_print(char *string, Type *type) {
 		type_print(string, type->function.return_type);
 		break;
 	case TYPE_STRUCT:
-		if (type->namespace && type->namespace[0] != '\0') {
+		if (type->namespace[0] != '\0') {
 			print(string, "struct %s::%s", type->namespace, type->type_name);
 		} else {
 			print(string, "struct %s", type->type_name);
 		}
 		break;
 	case TYPE_ENUM:
-		if (type->namespace && type->namespace[0] != '\0') {
+		if (type->namespace[0] != '\0') {
 			print(string, "enum %s::%s", type->namespace, type->type_name);
 		} else {
 			print(string, "enum %s", type->type_name);
 		}
 		break;
 	case TYPE_UNDECIDED:
-		if (type->namespace && type->namespace[0] != '\0') {
+		if (type->namespace[0] != '\0') {
 			print(string, "%s::%s", type->namespace, type->type_name);
 		} else {
 			print(string, "%s", type->type_name);

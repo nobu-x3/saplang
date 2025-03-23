@@ -67,6 +67,8 @@ CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, Typ
 CompilerResult deinit_symbol_table(Symbol *table) {
 	for (Symbol *sym = table; sym != NULL;) {
 		Symbol *next = sym->next;
+		type_deinit(sym->type);
+		free(sym->type);
 		free(sym);
 		sym = next;
 	}
@@ -1704,6 +1706,10 @@ ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
 			return parse_var_decl(parser, 0);
 		}
 		// restore and parse expression
+		if (type) {
+			type_deinit(type);
+			free(type);
+		}
 		parser->scanner.id = save;
 		parser->current_token = temp;
 	}
@@ -1877,7 +1883,7 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 
 		if (stmt->type == AST_RETURN) {
 			ASTNode *seq = new_ast_node(AST_DEFERRED_SEQUENCE);
-            seq->data.block.count = 0;
+			seq->data.block.count = 0;
 			for (int j = stack->count - 1; j >= 0; --j) {
 				CompilerResult res;
 				push_stmt(seq, stack->data[j], &res);
@@ -2355,9 +2361,11 @@ void free_ast_node(ASTNode *node) {
 	case AST_VAR_DECL:
 		free_ast_node(node->data.var_decl.init);
 		node->data.var_decl.init = NULL;
+
 		type_deinit(node->data.var_decl.type);
 		free(node->data.var_decl.type);
 		node->data.var_decl.type = NULL;
+
 		break;
 	case AST_STRUCT_DECL: {
 		ASTNode *current_field = node->data.struct_decl.fields;

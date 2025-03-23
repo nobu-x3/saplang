@@ -4,8 +4,8 @@ typedef enum { TYPE_PRIMITIVE, TYPE_POINTER, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STR
 
 typedef struct Type {
 	TypeKind kind;
-	char *type_name;
-	char *namespace;
+	char type_name[64];
+	char namespace[64];
 	union {
 		// For pointer types
 		struct Type *pointee;
