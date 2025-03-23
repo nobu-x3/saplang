@@ -1,5 +1,6 @@
 #pragma once
 #include "scanner.h"
+#include "types.h"
 #include "util.h"
 
 typedef enum {
@@ -22,9 +23,9 @@ typedef struct {
 
 typedef struct Symbol {
 	char name[64];
-	char type[64];
-    int scope_level;
-    SymbolKind kind;
+    Type* type;
+	int scope_level;
+	SymbolKind kind;
 	struct Symbol *next;
 } Symbol;
 
@@ -58,11 +59,11 @@ typedef enum {
 	AST_IF_STMT,
 	AST_FOR_LOOP,
 	AST_WHILE_LOOP,
-    AST_DEFER_BLOCK,
-    AST_DEFERRED_SEQUENCE,
-    AST_FN_PTR,
-    AST_STRING_LIT,
-    AST_CHAR_LIT,
+	AST_DEFER_BLOCK,
+	AST_DEFERRED_SEQUENCE,
+	AST_FN_PTR,
+	AST_STRING_LIT,
+	AST_CHAR_LIT,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -71,7 +72,7 @@ typedef struct ASTNode {
 	union {
 		// Variable declaration: <type> name = init;
 		struct {
-			char type_name[64];
+			Type *type;
 			char name[64];
 			int is_const;
 			int is_exported;
@@ -92,14 +93,14 @@ typedef struct ASTNode {
 		} func_decl;
 		// Field declaration inside struct: <type> name;
 		struct {
-			char type_name[64];
+			Type *type;
 			char name[64];
 		} field_decl;
 		// Parameter declaration: <type> name
 		struct {
 			int is_const;
 			int is_va;
-			char type_name[64];
+			Type *type;
 			char name[64];
 		} param_decl;
 		// Block: a list of statements
@@ -161,14 +162,14 @@ typedef struct ASTNode {
 		} struct_literal;
 		struct {
 			char name[64];
-			char base_type[64];	  // i32 by default
+			Type *base_type;
 			EnumMember **members; // Dynamic array of members
 			int is_exported;
 			int member_count;
 		} enum_decl;
 		struct {
 			char namespace[64];
-			char enum_type[64];
+			Type *enum_type;
 			char member[64];
 		} enum_value;
 		struct {
@@ -199,18 +200,18 @@ typedef struct ASTNode {
 		struct {
 			struct ASTNode *defer_block;
 		} defer;
-        struct {
-            char text[64];
-        } string_literal;
-        struct {
-            char literal;
-        } char_literal;
+		struct {
+			char text[64];
+		} string_literal;
+		struct {
+			char literal;
+		} char_literal;
 	} data;
 } ASTNode;
 
 typedef struct Parser {
 	char module_name[64];
-    int current_scope;
+	int current_scope;
 	Scanner scanner;
 	Symbol *symbol_table;
 	Symbol *exported_table;
