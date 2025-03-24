@@ -33,3 +33,6 @@ Type *new_function_type(Type *return_type, Type **param_types, int param_count);
 Type *new_named_type(const char *name, const char *namespace, TypeKind kind); // structs/enums
 int type_equals(Type *a, Type *b);
 void type_print(char *string, Type *type);
+
+// Used for printing symbol table
+int type_get_string_len(Type *type, int initial);

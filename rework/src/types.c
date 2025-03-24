@@ -171,6 +171,54 @@ int type_equals(Type *a, Type *b) {
 		printf(format, ##__VA_ARGS__);                                                                                                                                                                                                         \
 	}
 
+int type_get_string_len(Type *type, int initial) {
+	if (!type)
+		return initial;
+
+	switch (type->kind) {
+	case TYPE_PRIMITIVE:
+		if (type->namespace[0] != 0)
+			// 2 comes from '::'
+			return initial + strlen(type->namespace) + 2 + strlen(type->type_name);
+		return initial + strlen(type->type_name);
+	case TYPE_POINTER:
+		// 1 comes from '*'
+		return type_get_string_len(type->pointee, initial + 1);
+	case TYPE_ARRAY:
+		initial += type_get_string_len(type->array.element_type, initial);
+		char size_str[64] = "";
+		sprintf(size_str, "[%d]", type->array.size);
+		return initial + strlen(size_str);
+	case TYPE_FUNCTION:
+		initial += 3; // "fn("
+		for (int i = 0; i < type->function.param_count; ++i) {
+			initial += type_get_string_len(type->function.param_types[i], initial);
+			if (i != type->function.param_count - 1) {
+				initial += 2; // ", "
+			}
+		}
+		initial += 3; // ")->"
+		return initial + type_get_string_len(type->function.return_type, initial);
+	case TYPE_STRUCT:
+		initial += 7; // "struct ";
+		if (type->namespace[0] != 0)
+			// 2 comes from '::'
+			return initial + strlen(type->namespace) + 2 + strlen(type->type_name);
+		return initial + strlen(type->type_name);
+	case TYPE_ENUM:
+		initial += 5; // "enum ";
+		if (type->namespace[0] != 0)
+			// 2 comes from '::'
+			return initial + strlen(type->namespace) + 2 + strlen(type->type_name);
+		return initial + strlen(type->type_name);
+	case TYPE_UNDECIDED:
+		if (type->namespace[0] != 0)
+			// 2 comes from '::'
+			return initial + strlen(type->namespace) + 2 + strlen(type->type_name);
+		return initial + strlen(type->type_name);
+	}
+}
+
 void type_print(char *string, Type *type) {
 	if (!type)
 		return;

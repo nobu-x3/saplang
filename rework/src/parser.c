@@ -29,20 +29,53 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
+	int max_name_len = 0;
+	int max_type_len = 0;
+	for (Symbol *sym = table; sym; sym = sym->next) {
+		int name_len = strlen(sym->name);
+		max_name_len = name_len > max_name_len ? name_len : max_name_len;
+		int type_len = type_get_string_len(sym->type, 0);
+		max_type_len = type_len > max_type_len ? type_len : max_type_len;
+	}
+
+	print(string, "Symbol Type\tName");
+	for (int i = 0; i <= max_name_len - 4 - 1; ++i) {
+		print(string, " ");
+	}
+
+	print(string, "\tType");
+
+	for (int i = 0; i <= max_type_len - 4 - 1; ++i) {
+		print(string, " ");
+	}
+
+	print(string, "\tScope\n");
+
 	for (Symbol *sym = table; sym; sym = sym->next) {
 		if (sym->kind == SYMB_VAR) {
-			print(string, "\tVariable: %s", sym->name);
+			print(string, "Variable    \t%s", sym->name);
 		} else if (sym->kind == SYMB_STRUCT) {
-			print(string, "\tStruct: %s ", sym->name);
+			print(string, "Struct     \t%s", sym->name);
 		} else if (sym->kind == SYMB_FN) {
-			print(string, "\tFn: %s ", sym->name);
+			print(string, "Fn         \t%s", sym->name);
+		} else if (sym->kind == SYMB_ENUM) {
+			print(string, "Enum       \t%s", sym->name);
 		}
 
-		char type_buffer[128];
-		type_print(type_buffer, sym->type);
-		print(string, "\tType: %s", type_buffer);
+		int cur_name_len = strlen(sym->name);
+		for (int i = 0; i <= max_name_len - cur_name_len - 1; ++i) {
+			print(string, " ");
+		}
 
-		print(string, "\tscope: %d\n", sym->scope_level)
+		print(string, "\t");
+		type_print(string, sym->type);
+
+		int type_len = type_get_string_len(sym->type, 0);
+		for (int i = 0; i <= max_type_len - type_len - 1; ++i) {
+			print(string, " ");
+		}
+
+		print(string, "\t%d\n", sym->scope_level)
 	}
 	return RESULT_SUCCESS;
 }
