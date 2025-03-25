@@ -1,5 +1,6 @@
 #include "driver.h"
 #include "parser.h"
+#include "symbol_table.h"
 #include "thread_pool.h"
 #include "timer.h"
 #include <stdio.h>
@@ -471,9 +472,9 @@ CompilerResult driver_run() {
 
 	CompilerResult res = build_dependency_graph(input_src_file, &driver.dependency_graph);
 
-    int available_cores = get_num_of_cores();
+	int available_cores = get_num_of_cores();
 
-    available_cores = driver.module_count > available_cores ? available_cores : driver.module_count;
+	available_cores = driver.module_count > available_cores ? available_cores : driver.module_count;
 
 	ThreadPool *thread_pool = threadpool_create(available_cores);
 

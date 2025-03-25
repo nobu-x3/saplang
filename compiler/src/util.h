@@ -123,3 +123,10 @@ typedef struct {
 	char **data;
 	int capacity, count;
 } StringList;
+
+#define print(string, format, ...)                                                                                                                                                                                                             \
+	if (string) {                                                                                                                                                                                                                              \
+		sprintf(string, format, ##__VA_ARGS__);                                                                                                                                                                                                \
+	} else {                                                                                                                                                                                                                                   \
+		printf(format, ##__VA_ARGS__);                                                                                                                                                                                                         \
+	}
