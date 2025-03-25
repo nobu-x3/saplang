@@ -1,44 +1,38 @@
-#include <cassert>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <optional>
-#include <sstream>
-#include <vector>
+#pragma once
 
-namespace saplang {
+#include "util.h"
 
-std::vector<std::string> split(const std::string &s, char delim);
+typedef struct {
+	char *input_file_path;
+	char *output_file_path;
+	char *input_string;
+	StringList library_paths;
+	StringList extra_flags;
+	StringList import_paths;
+	int threads;
+	int show_timings;
+	int gen_debug;
+	int display_help;
+	int ast_dump;
+	int res_dump;
+	int cfg_dump;
+	int llvm_dump;
+	int no_cleanup;
+} CompileOptions;
 
-enum class OptimizationConfig { Debug, Release, ReleaseWithDebugInfo };
+CompilerResult compile_options_get(int argc, const char **argv, CompileOptions *options);
 
-struct CompilerOptions {
-  std::filesystem::path source;
-  std::filesystem::path output;
-  std::optional<std::string> input_string{std::nullopt};
-  std::vector<std::string> import_paths{};
-  std::vector<std::string> library_paths{};
-  std::vector<std::string> extra_flags{};
-  bool gen_debug{false};
-  bool display_help{false};
-  bool ast_dump{false};
-  bool res_dump{false};
-  bool cfg_dump{false};
-  bool llvm_dump{false};
-  bool no_cleanup{false};
-  OptimizationConfig optimization_config{OptimizationConfig::Debug};
-  CompilerOptions(int argc, const char **argv);
-  CompilerOptions(std::filesystem::path source, std::filesystem::path output);
-};
+void compile_options_deinit(CompileOptions *opt);
 
-class Driver {
-public:
-  inline Driver(int argc, const char **argv) : m_Options(argc, argv) {}
-  inline Driver(const CompilerOptions &options) : m_Options(options) {}
-  int run(std::ostream &output_stream);
-  static void display_help();
+void compile_options_print(CompileOptions *opt);
 
-private:
-  CompilerOptions m_Options;
-};
-} // namespace saplang
+void driver_print_help();
+
+CompilerResult driver_init(int argc, const char **argv);
+
+CompilerResult driver_run();
+
+void driver_deinit();
+
+// will keep for tests
+void driver_set_compiler_options(CompileOptions opts);

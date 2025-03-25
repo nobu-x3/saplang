@@ -1,111 +1,249 @@
 #pragma once
+#include "scanner.h"
+#include "types.h"
+#include "util.h"
 
-#include "ast.h"
-#include "lexer.h"
-#include <algorithm>
-#include <memory>
-#include <vector>
+typedef enum {
+	SYMB_VAR,
+	SYMB_STRUCT,
+	SYMB_FN,
+	SYMB_ENUM,
+} SymbolKind;
 
-namespace saplang {
+typedef struct {
+	char field[64]; // if designated, holds field name, otherwise empty
+	int is_designated;
+	struct ASTNode *expr;
+} FieldInitializer;
 
-struct ParsingResult {
-  bool is_complete_ast;
-  std::unique_ptr<Module> module;
-};
+typedef struct {
+	char name[64];
+	long value;
+} EnumMember;
 
-struct ParserConfig {
-  const std::vector<std::string> &include_paths;
-  bool check_paths;
-};
+typedef struct Symbol {
+	char name[64];
+    Type* type;
+	int scope_level;
+	SymbolKind kind;
+	struct Symbol *next;
+} Symbol;
 
-class Parser {
-public:
-  explicit Parser(Lexer *lexer, ParserConfig cfg);
-  ParsingResult parse_source_file();
-  inline bool is_complete_ast() const { return m_IsCompleteAst; }
+typedef struct {
+	char **data;
+	int capacity, count;
+} ImportList;
 
-private:
-  enum class Context {
-    Binop,
-    VarDecl,
-    Stmt,
-  };
+typedef enum {
+	AST_VAR_DECL,
+	AST_STRUCT_DECL,
+	AST_FN_DECL,
+	AST_FIELD_DECL,
+	AST_PARAM_DECL,
+	AST_BLOCK,
+	AST_EXPR_LITERAL,
+	AST_EXPR_IDENT,
+	AST_RETURN,
+	AST_BINARY_EXPR,
+	AST_UNARY_EXPR,
+	AST_ARRAY_LITERAL,
+	AST_ARRAY_ACCESS,
+	AST_ASSIGNMENT,
+	AST_FN_CALL,
+	AST_MEMBER_ACCESS,
+	AST_STRUCT_LITERAL,
+	AST_ENUM_DECL,
+	AST_ENUM_VALUE,
+	AST_EXTERN_BLOCK,
+	AST_EXTERN_FUNC_DECL,
+	AST_IF_STMT,
+	AST_FOR_LOOP,
+	AST_WHILE_LOOP,
+	AST_DEFER_BLOCK,
+	AST_DEFERRED_SEQUENCE,
+	AST_FN_PTR,
+	AST_STRING_LIT,
+	AST_CHAR_LIT,
+} ASTNodeType;
 
-  inline void eat_next_token() { m_NextToken = m_Lexer->get_next_token(); }
-  inline void go_back_to_prev_token(const Token &token) { m_NextToken = m_Lexer->get_prev_token(token); }
+typedef struct ASTNode {
+	ASTNodeType type;
+	struct ASTNode *next; // For linked lists (e.g. global declarations, fields, params)
+	union {
+		// Variable declaration: <type> name = init;
+		struct {
+			Type *type;
+			char name[64];
+			int is_const;
+			int is_exported;
+			struct ASTNode *init; // Expression node
+		} var_decl;
+		// Struct declaration: struct Name { fields }
+		struct {
+			char name[64];
+			int is_exported;
+			struct ASTNode *fields; // Linked list of field declarations
+		} struct_decl;
+		// Function declaration: func name(params) { body }
+		struct {
+			char name[64];
+			int is_exported;
+			struct ASTNode *params; // Linked list of parameter declarations
+			struct ASTNode *body;	// Block node
+		} func_decl;
+		// Field declaration inside struct: <type> name;
+		struct {
+			Type *type;
+			char name[64];
+		} field_decl;
+		// Parameter declaration: <type> name
+		struct {
+			int is_const;
+			int is_va;
+			Type *type;
+			char name[64];
+		} param_decl;
+		// Block: a list of statements
+		struct {
+			struct ASTNode **statements;
+			int count;
+		} block;
+		// Literal expression: integer, float, or bool
+		struct {
+			long long_value;
+			double float_value;
+			int is_float;	// 1 if float literal
+			int bool_value; // 1 for true, 0 for false
+			int is_bool;	// 1 if bool literal
+		} literal;
+		// Identifier expression.
+		struct {
+			char name[64];
+			char namespace[64];
+		} ident;
+		// Return statement
+		struct {
+			struct ASTNode *return_expr;
+		} ret;
+		// Binary expression
+		struct {
+			TokenType op;
+			struct ASTNode *left;
+			struct ASTNode *right;
+		} binary_op;
+		struct {
+			char op;
+			struct ASTNode *operand;
+		} unary_op;
+		struct {
+			struct ASTNode **elements;
+			int count;
+		} array_literal;
+		struct {
+			struct ASTNode *base;
+			struct ASTNode *index;
+		} array_access;
+		struct {
+			struct ASTNode *lvalue;
+			struct ASTNode *rvalue;
+		} assignment;
+		struct {
+			struct ASTNode *callee;
+			struct ASTNode **args;
+			int arg_count;
+		} func_call;
+		struct {
+			struct ASTNode *base;
+			char member[64];
+		} member_access;
+		struct {
+			FieldInitializer **inits;
+			int count;
+		} struct_literal;
+		struct {
+			char name[64];
+			Type *base_type;
+			EnumMember **members; // Dynamic array of members
+			int is_exported;
+			int member_count;
+		} enum_decl;
+		struct {
+			char namespace[64];
+			Type *enum_type;
+			char member[64];
+		} enum_value;
+		struct {
+			char lib_name[64];
+			struct ASTNode **block;
+			int count;
+		} extern_block;
+		struct {
+			char name[64];
+			int is_exported;
+			struct ASTNode *params; // Linked list of parameter declarations
+		} extern_func;
+		struct {
+			struct ASTNode *condition;
+			struct ASTNode *then_branch;
+			struct ASTNode *else_branch;
+		} if_stmt;
+		struct {
+			struct ASTNode *init;
+			struct ASTNode *condition;
+			struct ASTNode *post;
+			struct ASTNode *body;
+		} for_loop;
+		struct {
+			struct ASTNode *condition;
+			struct ASTNode *body;
+		} while_loop;
+		struct {
+			struct ASTNode *defer_block;
+		} defer;
+		struct {
+			char text[64];
+		} string_literal;
+		struct {
+			char literal;
+		} char_literal;
+	} data;
+} ASTNode;
 
-  inline void sync_on(const std::vector<TokenKind> &kinds) {
-    m_IsCompleteAst = false;
-    bool found_next = false;
-    while (!found_next && m_NextToken.kind != TokenKind::Eof) {
-      for (auto &&kind : kinds) {
-        if (m_NextToken.kind == kind) {
-          found_next = true;
-          return;
-        }
-      }
-      eat_next_token();
-    }
-  }
+typedef struct Parser {
+	char module_name[64];
+	int current_scope;
+	Scanner scanner;
+	Symbol *symbol_table;
+	Symbol *exported_table;
+	Token current_token;
+} Parser;
 
-  void synchronize();
-  std::unique_ptr<FunctionDecl> parse_function_decl(SourceLocation decl_loc, Type return_type, std::string function_identifier);
-  std::unique_ptr<GenericFunctionDecl> parse_generic_function_decl(SourceLocation decl_loc, Type return_type, std::string function_identifier);
+typedef struct {
+	Symbol *symbol_table;	// not owned
+	Symbol *exported_table; // not owned
+	ImportList imports;
+	ASTNode *ast;
+} Module;
 
-  using MaybeExternBlock = std::optional<std::vector<std::unique_ptr<Decl>>>;
-  MaybeExternBlock parse_extern_block();
+// This is so I don't have to change the signature of parser_init in all tests
+typedef struct {
+	Symbol *internal_table;
+	Symbol *exported_table;
+} SymbolTableWrapper;
 
-  std::string parse_import();
-  std::unique_ptr<Block> parse_block();
-  std::unique_ptr<Stmt> parse_stmt();
-  std::unique_ptr<ReturnStmt> parse_return_stmt();
-  std::unique_ptr<Expr> parse_prefix_expr(Context context);
-  std::unique_ptr<Expr> parse_primary_expr(Context context);
-  std::unique_ptr<Expr> parse_call_expr(SourceLocation location, std::unique_ptr<DeclRefExpr> decl_ref_expr);
-  std::unique_ptr<ExplicitCast> parse_explicit_cast(Type type);
-  std::unique_ptr<StructLiteralExpr> parse_struct_literal_expr();
-  std::unique_ptr<ArrayLiteralExpr> parse_array_literal_expr();
-  std::unique_ptr<StringLiteralExpr> parse_string_literal_expr();
-  std::unique_ptr<Expr> parse_expr(Context context);
-  std::unique_ptr<Expr> parse_expr_rhs(std::unique_ptr<Expr> lhs, int precedence);
-  std::unique_ptr<SizeofExpr> parse_sizeof_expr();
-  std::unique_ptr<AlignofExpr> parse_alignof_expr();
-  std::unique_ptr<EnumElementAccess> parse_enum_element_access(std::string enum_id);
-  std::unique_ptr<ParamDecl> parse_param_decl();
-  std::unique_ptr<DeferStmt> parse_defer_stmt();
-  std::optional<Type> parse_type();
+Symbol *lookup_symbol(Symbol *table, const char *name, int current_scope);
 
-  using ArgumentList = std::vector<std::unique_ptr<Expr>>;
-  std::optional<ArgumentList> parse_argument_list();
+// Parser takes ownership of the symbol tables
+CompilerResult parser_init(Parser *parser, Scanner scanner, SymbolTableWrapper *optional_table_wrapper);
 
-  std::optional<ParameterList> parse_parameter_list();
+CompilerResult parser_deinit(Parser *parser);
 
-  std::optional<ParameterList> parse_parameter_list_of_generic_fn(const std::vector<std::string> &placeholders);
+CompilerResult symbol_table_print(Symbol *table, char *string);
 
-  std::unique_ptr<IfStmt> parse_if_stmt();
-  std::unique_ptr<SwitchStmt> parse_switch_stmt();
-  std::unique_ptr<WhileStmt> parse_while_stmt();
-  std::unique_ptr<ForStmt> parse_for_stmt();
+CompilerResult parse_import_list(Parser *parser, ImportList *import_list);
 
-  std::unique_ptr<DeclStmt> parse_var_decl_stmt(bool is_global = false);
-  std::unique_ptr<VarDecl> parse_var_decl(bool is_const, bool is_global = false);
-  std::unique_ptr<StructDecl> parse_struct_decl(SourceLocation struct_token_loc);
-  std::unique_ptr<GenericStructDecl> parse_generic_struct_decl(SourceLocation struct_token_loc);
-  std::unique_ptr<EnumDecl> parse_enum_decl();
-  std::unique_ptr<MemberAccess> parse_member_access(std::unique_ptr<DeclRefExpr> decl_ref_expr, const std::string &var_id);
-  std::unique_ptr<ArrayElementAccess> parse_array_element_access(std::string var_id);
-  std::unique_ptr<Stmt> parse_assignment_or_expr(Context context);
-  std::unique_ptr<Assignment> parse_assignment(std::unique_ptr<Expr> lhs);
-  std::unique_ptr<Assignment> parse_assignment_rhs(std::unique_ptr<DeclRefExpr> lhs, int lhs_deref_count);
+Module *parse_input(Parser *parser);
 
-private:
-  ParserConfig m_Config;
-  std::unordered_map<std::string, Type> m_EnumTypes;
-  Lexer *m_Lexer;
-  Token m_NextToken;
-  bool m_IsCompleteAst{true};
-  std::string m_ModuleName;
-  std::string m_ModulePath;
-};
+CompilerResult ast_print(ASTNode *node, int indent, char *string);
 
-} // namespace saplang
+void ast_deinit(ASTNode *node);
