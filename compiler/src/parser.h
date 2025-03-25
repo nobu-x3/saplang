@@ -64,6 +64,8 @@ typedef enum {
 	AST_FN_PTR,
 	AST_STRING_LIT,
 	AST_CHAR_LIT,
+    AST_CONTINUE,
+    AST_BREAK,
 } ASTNodeType;
 
 typedef struct ASTNode {

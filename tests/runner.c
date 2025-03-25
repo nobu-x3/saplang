@@ -54,6 +54,7 @@ int main(void) {
 	RUN_TEST(test_CharLiteral);
 	RUN_TEST(test_BinaryLiteral);
 	RUN_TEST(test_HexadecimalLiteral);
+	RUN_TEST(test_ContinueBreak);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

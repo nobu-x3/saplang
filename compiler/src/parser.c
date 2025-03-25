@@ -444,6 +444,12 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 		case AST_CHAR_LIT:
 			print(string, "Char Literal: '%c'\n", node->data.char_literal.literal);
 			break;
+		case AST_CONTINUE:
+			print(string, "continue\n");
+			break;
+		case AST_BREAK:
+			print(string, "break\n");
+			break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -627,12 +633,15 @@ ASTNode *copy_ast_node(ASTNode *node) {
 	case AST_DEFER_BLOCK:
 		new_node->data.defer.defer_block = copy_ast_node(node->data.defer.defer_block);
 	case AST_DEFERRED_SEQUENCE:
-
 		new_node->data.block.statements = malloc(sizeof(*new_node->data.block.statements) * node->data.block.count);
 		for (int i = 0; i < node->data.block.count; ++i) {
 			new_node->data.block.statements[i] = copy_ast_node(node->data.block.statements[i]);
 		}
 		new_node->data.block.count = node->data.block.count;
+		break;
+	// In continue and break we don't really need to copy anything but node type which is already done
+	case AST_CONTINUE:
+	case AST_BREAK:
 	default:
 		break;
 	}
@@ -1701,6 +1710,22 @@ ASTNode *parse_while_loop(Parser *parse, DeferStack *dstackr);
 ASTNode *parse_defer_block(Parser *parse, DeferStack *dstackr);
 
 ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
+	if (parser->current_token.type == TOK_BREAK) {
+		parser->current_token = next_token(&parser->scanner); // consume 'break'
+		if (parser->current_token.type != TOK_SEMICOLON) {
+			return report(parser->current_token.location, "expected ';' after 'break'.", 0);
+		}
+		parser->current_token = next_token(&parser->scanner);
+		return new_ast_node(AST_BREAK);
+	}
+	if (parser->current_token.type == TOK_CONTINUE) {
+		parser->current_token = next_token(&parser->scanner); // consume 'continue'
+		if (parser->current_token.type != TOK_SEMICOLON) {
+			return report(parser->current_token.location, "expected ';' after 'continue'.", 0);
+		}
+		parser->current_token = next_token(&parser->scanner);
+		return new_ast_node(AST_CONTINUE);
+	}
 	if (parser->current_token.type == TOK_DEFER) {
 		return parse_defer_block(parser, dstack);
 	}
