@@ -1,23 +1,23 @@
+
 cmake_minimum_required(VERSION 3.5)
 
-project(saplang_tests LANGUAGES CXX)
+project(saplangc_tests LANGUAGES CXX)
 
 Include(FetchContent)
 
 FetchContent_Declare(
-  Catch2
-  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  GIT_TAG        v3.4.0 # or a later release
+  unity
+  GIT_REPOSITORY https://github.com/ThrowTheSwitch/Unity.git
+  GIT_TAG        v2.6.1 # or a later release
 )
 
-FetchContent_MakeAvailable(Catch2)
+FetchContent_MakeAvailable(unity)
 
-file(GLOB tests_src CONFIGURE_DEPENDS "*.cpp")
+file(GLOB tests_src CONFIGURE_DEPENDS "*.c")
+# file(GLOB tests_runners CONFIGURE_DEPENDS ".runner/runner.c")
+# list(APPEND tests_src ${tests_runners})
 
-add_executable(saplang_tests ${tests_src})
-target_link_libraries(saplang_tests PRIVATE Catch2::Catch2WithMain saplang_lib)
+add_executable(saplangc_tests ${tests_src})
+target_link_libraries(saplangc_tests PRIVATE unity saplangc_lib)
 
-list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(CTest)
-include(Catch)
-catch_discover_tests(saplang_tests)
