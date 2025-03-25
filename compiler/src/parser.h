@@ -1,14 +1,8 @@
 #pragma once
 #include "scanner.h"
+#include "symbol_table.h"
 #include "types.h"
 #include "util.h"
-
-typedef enum {
-	SYMB_VAR,
-	SYMB_STRUCT,
-	SYMB_FN,
-	SYMB_ENUM,
-} SymbolKind;
 
 typedef struct {
 	char field[64]; // if designated, holds field name, otherwise empty
@@ -20,14 +14,6 @@ typedef struct {
 	char name[64];
 	long value;
 } EnumMember;
-
-typedef struct Symbol {
-	char name[64];
-    Type* type;
-	int scope_level;
-	SymbolKind kind;
-	struct Symbol *next;
-} Symbol;
 
 typedef struct {
 	char **data;

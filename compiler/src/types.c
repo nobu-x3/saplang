@@ -1,4 +1,5 @@
 #include "types.h"
+#include "util.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -163,13 +164,6 @@ int type_equals(Type *a, Type *b) {
 		return strcmp(a->namespace, b->namespace) == 0 == 0 && strcmp(a->type_name, b->type_name);
 	}
 }
-
-#define print(string, format, ...)                                                                                                                                                                                                             \
-	if (string) {                                                                                                                                                                                                                              \
-		sprintf(string, format, ##__VA_ARGS__);                                                                                                                                                                                                \
-	} else {                                                                                                                                                                                                                                   \
-		printf(format, ##__VA_ARGS__);                                                                                                                                                                                                         \
-	}
 
 int type_get_string_len(Type *type, int initial) {
 	if (!type)
