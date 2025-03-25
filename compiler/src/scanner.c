@@ -123,6 +123,10 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_WHILE;
 		else if (strcmp(current_token.text, "defer") == 0)
 			current_token.type = TOK_DEFER;
+		else if (strcmp(current_token.text, "continue") == 0)
+			current_token.type = TOK_CONTINUE;
+		else if (strcmp(current_token.text, "break") == 0)
+			current_token.type = TOK_BREAK;
 		else {
 			current_token.type = TOK_IDENTIFIER;
 		}

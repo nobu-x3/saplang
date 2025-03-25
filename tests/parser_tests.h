@@ -1050,3 +1050,54 @@ void test_HexadecimalLiteral(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_ContinueBreak(void) {
+	SETUP_TEST("fn i32 test() {"
+			   "    for (i32 i = 0; i < 10; i += 1) {"
+			   "        y = i;"
+			   "        if(i % 2 == 0){"
+			   "            break;"
+			   "        } else {"
+			   "            continue;"
+			   "        }"
+			   "    }"
+			   "}");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      ForLoop:\n"
+						   "        Init:\n"
+						   "          VarDecl: i32 i:\n"
+						   "            Literal Int: 0\n"
+						   "        Condition:\n"
+						   "          Binary Expression: <\n"
+						   "            Ident: i\n"
+						   "            Literal Int: 10\n"
+						   "        Post:\n"
+						   "          Assignment:\n"
+						   "            Ident: i\n"
+						   "            Binary Expression: +\n"
+						   "              Ident: i\n"
+						   "              Literal Int: 1\n"
+						   "        Body:\n"
+						   "          Block with 2 statement(s):\n"
+						   "            Assignment:\n"
+						   "              Ident: y\n"
+						   "              Ident: i\n"
+						   "            IfElseStmt:\n"
+						   "              Condition:\n"
+						   "                Binary Expression: ==\n"
+						   "                  Binary Expression: %\n"
+						   "                    Ident: i\n"
+						   "                    Literal Int: 2\n"
+						   "                  Literal Int: 0\n"
+						   "              Then:\n"
+						   "                Block with 1 statement(s):\n"
+						   "                  break\n"
+						   "              Else:\n"
+						   "                Block with 1 statement(s):\n"
+						   "                  continue\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
