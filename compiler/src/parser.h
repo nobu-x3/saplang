@@ -55,6 +55,7 @@ typedef enum {
 } ASTNodeType;
 
 typedef struct ASTNode {
+    SourceLocation location;
 	ASTNodeType type;
 	struct ASTNode *next; // For linked lists (e.g. global declarations, fields, params)
 	union {
