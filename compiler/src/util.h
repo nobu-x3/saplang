@@ -52,13 +52,13 @@ void *report(SourceLocation location, const char *msg, int is_warning);
 		xs.data[xs.count++] = x;                                                                                                                                                                                                               \
 	} while (0)
 
-#define da_push_unsafe_ptr(xs, x)                                                                                                                                                                                                                  \
+#define da_push_unsafe_ptr(xs, x)                                                                                                                                                                                                              \
 	do {                                                                                                                                                                                                                                       \
-		if (xs->count >= xs->capacity) {                                                                                                                                                                                                         \
-			xs->capacity *= 2;                                                                                                                                                                                                                  \
-			xs->data = realloc(xs->data, xs->capacity * sizeof(*xs->data));                                                                                                                                                                        \
+		if (xs->count >= xs->capacity) {                                                                                                                                                                                                       \
+			xs->capacity *= 2;                                                                                                                                                                                                                 \
+			xs->data = realloc(xs->data, xs->capacity * sizeof(*xs->data));                                                                                                                                                                    \
 		}                                                                                                                                                                                                                                      \
-		xs->data[xs->count++] = x;                                                                                                                                                                                                               \
+		xs->data[xs->count++] = x;                                                                                                                                                                                                             \
 	} while (0)
 
 #define da_init(xs, cap)                                                                                                                                                                                                                       \
@@ -126,7 +126,9 @@ typedef struct {
 
 #define print(string, format, ...)                                                                                                                                                                                                             \
 	if (string) {                                                                                                                                                                                                                              \
-		sprintf(string, format, ##__VA_ARGS__);                                                                                                                                                                                                \
+		char formatted[256] = "";                                                                                                                                                                                                              \
+		sprintf(formatted, format, ##__VA_ARGS__);                                                                                                                                                                                             \
+		strcat(string, formatted);                                                                                                                                                                                                             \
 	} else {                                                                                                                                                                                                                                   \
 		printf(format, ##__VA_ARGS__);                                                                                                                                                                                                         \
 	}
