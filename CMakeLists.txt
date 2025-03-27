@@ -17,7 +17,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 include_directories(compiler/src "${LLVM_INCLUDE_DIR}")
 
 if(BUILD_TESTS)
-    enable_testing()
     add_compile_definitions(BUILD_TESTS)
 endif(BUILD_TESTS)
 

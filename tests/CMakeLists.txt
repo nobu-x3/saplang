@@ -19,5 +19,3 @@ file(GLOB tests_src CONFIGURE_DEPENDS "*.c")
 
 add_executable(saplangc_tests ${tests_src})
 target_link_libraries(saplangc_tests PRIVATE unity saplangc_lib)
-
-include(CTest)
