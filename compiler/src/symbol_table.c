@@ -1,4 +1,5 @@
 #include "symbol_table.h"
+#include "types.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,4 +93,17 @@ Symbol *lookup_symbol(Symbol *table, const char *name, int current_scope) {
 			return s;
 	}
 	return NULL;
+}
+
+Symbol *symbol_table_copy(Symbol *table) {
+	Symbol *new_table = malloc(sizeof(Symbol));
+
+	Symbol *current = table;
+	while (current) {
+		Type *type_copy = copy_type(current->type);
+		add_symbol(&new_table, current->name, current->kind, type_copy, current->scope_level);
+		current = current->next;
+	}
+
+	return new_table;
 }
