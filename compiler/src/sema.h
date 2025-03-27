@@ -3,10 +3,12 @@
 #include "parser.h"
 #include "util.h"
 
-int is_convertible(const char* source, const char* target);
+int is_convertible(const Type *source, const Type *target);
 
-char* get_type(ASTNode* node);
+Type *get_type(Symbol *table, ASTNode *node, int scope_level);
 
-ASTNode* insert_implicit_cast(ASTNode* expr, const char* target_type);
+/* ASTNode *insert_implicit_cast(ASTNode *expr, const char *target_type); */
 
-CompilerResult analyze_ast(ASTNode*, int scope_level);
+CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level);
+
+void merge_tables(Symbol* external, Symbol* internal);

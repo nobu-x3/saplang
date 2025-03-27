@@ -1,4 +1,5 @@
 #include "parser_tests.h"
+#include "sema_tests.h"
 #include "threadpool_tests.h"
 #include <unity.h>
 
@@ -55,6 +56,9 @@ int main(void) {
 	RUN_TEST(test_BinaryLiteral);
 	RUN_TEST(test_HexadecimalLiteral);
 	RUN_TEST(test_ContinueBreak);
+
+	RUN_TEST(test_TypePrinting);
+	RUN_TEST(test_UndeclaredVariable);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

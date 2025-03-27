@@ -2329,6 +2329,8 @@ Module *parse_input(Parser *parser) {
 	ASTNode *global_list = NULL, *last = NULL;
 
 	parser->current_token = next_token(&parser->scanner);
+
+	int has_errors = 0;
 	while (parser->current_token.type != TOK_EOF) {
 		if (parser->current_token.type == TOK_IMPORT) {
 			parser->current_token = next_token(&parser->scanner); // consume 'import'
@@ -2348,8 +2350,10 @@ Module *parse_input(Parser *parser) {
 		}
 
 		ASTNode *decl = parse_global_decl(parser);
-		if (!decl)
-			return NULL;
+		if (!decl) {
+			has_errors = 1;
+			continue;
+		}
 		if (!global_list) {
 			global_list = last = decl;
 		} else {
@@ -2361,6 +2365,7 @@ Module *parse_input(Parser *parser) {
 	module->ast = global_list;
 	module->symbol_table = parser->symbol_table;
 	module->exported_table = parser->exported_table;
+    module->has_errors = has_errors;
 	return module;
 }
 
