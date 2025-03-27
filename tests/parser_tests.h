@@ -1,5 +1,6 @@
 #pragma once
 
+#include "test_util.h"
 #include <parser.h>
 #include <unity.h>
 
@@ -8,42 +9,6 @@
 // This function temporarily redirects stdout to a temporary file, calls printAST,
 // then reads the file contents into a malloc()ed string.
 //---------------------------------------------------------------------
-static char *capture_ast_output(ASTNode *ast) {
-	// Create a temporary file.
-	FILE *temp = tmpfile();
-	if (!temp) {
-		TEST_FAIL_MESSAGE("Failed to create temporary file for output capture");
-	}
-
-	// Save the current stdout pointer.
-	FILE *old_stdout = stdout;
-	stdout = temp;
-
-	// Print the AST.
-	ast_print(ast, 0, NULL);
-	fflush(stdout);
-
-	// Restore stdout.
-	stdout = old_stdout;
-
-	// Determine the size of the output.
-	fseek(temp, 0, SEEK_END);
-	long size = ftell(temp);
-	fseek(temp, 0, SEEK_SET);
-
-	char *buffer = malloc(size + 1);
-	if (!buffer) {
-		fclose(temp);
-		TEST_FAIL_MESSAGE("Memory allocation failed in captureASTOutput");
-	}
-
-	fread(buffer, 1, size, temp);
-	buffer[size] = '\0';
-
-	fclose(temp);
-	return buffer;
-}
-
 #define SETUP_TEST(input_string)                                                                                                                                                                                                               \
 	const char *input = input_string;                                                                                                                                                                                                          \
 	const char *path = "parser_tests.sl";                                                                                                                                                                                                      \

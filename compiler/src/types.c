@@ -138,7 +138,7 @@ Type *new_named_type(const char *name, const char *namespace, TypeKind kind) { /
 	return t;
 }
 
-int type_equals(Type *a, Type *b) {
+int type_equals(const Type *a, const Type *b) {
 	if (!a && !b)
 		return 0;
 	if (a->kind != b->kind)

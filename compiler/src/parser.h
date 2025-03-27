@@ -212,6 +212,7 @@ typedef struct {
 	Symbol *exported_table; // not owned
 	ImportList imports;
 	ASTNode *ast;
+    int has_errors;
 } Module;
 
 // This is so I don't have to change the signature of parser_init in all tests
