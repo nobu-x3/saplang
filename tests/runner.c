@@ -62,6 +62,10 @@ int main(void) {
 	RUN_TEST(test_ConstNoInit);
 	RUN_TEST(test_AssignmentToConst);
 	RUN_TEST(test_AssignmentToRValue);
+	RUN_TEST(test_VarialbeRedeclaration);
+	RUN_TEST(test_FnRedeclaration);
+	RUN_TEST(test_StructRedeclaration);
+	RUN_TEST(test_EnumRedeclaration);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

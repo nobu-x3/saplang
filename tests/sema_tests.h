@@ -12,9 +12,9 @@
 	Scanner scanner;                                                                                                                                                                                                                           \
 	scanner_init_from_string(&scanner, path, input);                                                                                                                                                                                           \
 	Parser parser;                                                                                                                                                                                                                             \
+	FILE *old_stdout = capture_error_begin();                                                                                                                                                                                                  \
 	parser_init(&parser, scanner, NULL);                                                                                                                                                                                                       \
 	Module *module = parse_input(&parser);                                                                                                                                                                                                     \
-	FILE *old_stdout = capture_error_begin();                                                                                                                                                                                                  \
 	for (ASTNode *node = module->ast; node != NULL; node = node->next) {                                                                                                                                                                       \
 		analyze_ast(module->symbol_table, node, 0);                                                                                                                                                                                            \
 	}                                                                                                                                                                                                                                          \
@@ -58,6 +58,34 @@ void test_AssignmentToConst(void) {
 void test_AssignmentToRValue(void) {
 	TEST_SETUP_SINGLE("fn void foo() { const i32 i = 0; 2 = i + 3; }");
 	const char *expected = "parser_tests.sl:0:36:Error: cannot assign a value to a literal.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_VarialbeRedeclaration(void) {
+	TEST_SETUP_SINGLE("i32 var_a; i32 var_a; ");
+	const char *expected = "parser_tests.sl:0:20:Error: variable var_a already declared in this scope.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FnRedeclaration(void) {
+	TEST_SETUP_SINGLE("fn void foo() {} fn void foo() {} ");
+	const char *expected = "parser_tests.sl:0:28:Error: variable foo already declared in this scope.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructRedeclaration(void) {
+	TEST_SETUP_SINGLE("struct Str {} struct Str {} ");
+	const char *expected = "parser_tests.sl:0:24:Error: struct redeclaration.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_EnumRedeclaration(void) {
+	TEST_SETUP_SINGLE("enum Str {} enum Str {} ");
+	const char *expected = "parser_tests.sl:0:20:Error: enum redeclaration.\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }

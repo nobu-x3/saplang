@@ -103,7 +103,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		return RESULT_PASSED_NULL_PTR;
 
 	switch (node->type) {
-	case AST_VAR_DECL:
+	case AST_VAR_DECL: {
 		if (node->data.var_decl.is_const && !node->data.var_decl.init) {
 			report(node->location, "const variable must have an initializer.", 0);
 			return RESULT_FAILURE;
@@ -132,6 +132,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 			}
 		}
 		return RESULT_SUCCESS;
+	} break;
 	case AST_BLOCK: {
 		CompilerResult result;
 		for (int i = 0; i < node->data.block.count; ++i) {

@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "scanner.h"
+#include "symbol_table.h"
 #include "types.h"
 #include "util.h"
 #include <assert.h>
@@ -1067,26 +1068,32 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 	SourceLocation loc = parser->current_token.location;
 	char enum_name[64];
 	strncpy(enum_name, parser->current_token.text, sizeof(enum_name));
+	int is_error = 0;
+	if (lookup_symbol(parser->symbol_table, enum_name, parser->current_scope)) {
+		char msg[128];
+		sprintf(msg, "enum redeclaration.");
+		report(parser->current_token.location, msg, 0);
+		is_error = 1;
+	}
 	parser->current_token = next_token(&parser->scanner); // consume enum name
 
 	Type *base_type = NULL;
 	if (parser->current_token.type == TOK_COLON) {
 		parser->current_token = next_token(&parser->scanner); // consume ':'
 		if (parse_type(parser, &base_type) != RESULT_SUCCESS)
-			return NULL;
-		assert(base_type);
-		base_type->kind = TYPE_ENUM;
+			is_error = 1;
+		if (!is_error)
+			base_type->kind = TYPE_ENUM;
 	} else {
 		base_type = new_primitive_type("i32");
 		base_type->kind = TYPE_ENUM;
 	}
 
-	assert(base_type);
-
 	if (parser->current_token.type != TOK_LCURLY) {
 		char msg[128];
 		sprintf(msg, "expected '{' in enum declaration, got '%s'.", parser->current_token.text);
-		return report(parser->current_token.location, msg, 0);
+		report(parser->current_token.location, msg, 0);
+		is_error = 1;
 	}
 
 	parser->current_token = next_token(&parser->scanner); // consume '{'
@@ -1104,11 +1111,13 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 		if (parser->current_token.type != TOK_IDENTIFIER) {
 			char msg[128];
 			sprintf(msg, "expected identifier in enum member declaration, got '%s'.", parser->current_token.text);
-			return report(parser->current_token.location, msg, 0);
+			report(parser->current_token.location, msg, 0);
+			is_error = 1;
 		}
 		EnumMember *member = malloc(sizeof(EnumMember));
 		if (!member) // @TODO: leaks
 			return NULL;
+		// @TODO: check if this member has already been added
 		strncpy(member->name, parser->current_token.text, sizeof(member->name));
 		parser->current_token = next_token(&parser->scanner); // consume identifier
 
@@ -1132,12 +1141,14 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 				if (!found) {
 					char msg[128];
 					sprintf(msg, "enum member '%s' not found for initializer.", parser->current_token.text);
-					return report(parser->current_token.location, msg, 0);
+					report(parser->current_token.location, msg, 0);
+					is_error = 1;
 				}
 			} else {
 				char msg[128];
 				sprintf(msg, "expected number or identifier after '=' in enum member declaration, got '%s'.", parser->current_token.text);
-				return report(parser->current_token.location, msg, 0);
+				report(parser->current_token.location, msg, 0);
+				is_error = 1;
 			}
 		} else {
 			member->value = next_value++;
@@ -1156,13 +1167,18 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 		char msg[128];
 		sprintf(msg, "expected '}' at the end of enum declaration, got '%s'.", parser->current_token.text);
 		report(parser->current_token.location, msg, 0);
+		is_error = 1;
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '}'
-	add_symbol(&parser->symbol_table, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
-	if (is_exported) {
-		add_symbol(&parser->exported_table, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
+
+	if (!is_error) {
+		add_symbol(&parser->symbol_table, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
+		if (is_exported) {
+			add_symbol(&parser->exported_table, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
+		}
+		return new_enum_decl_node(enum_name, base_type, members.data, members.count, loc);
 	}
-	return new_enum_decl_node(enum_name, base_type, members.data, members.count, loc);
+	return NULL;
 }
 
 ASTNode *parse_struct_literal(Parser *parser) {
@@ -1610,11 +1626,12 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 
 	SourceLocation decl_location = parser->current_token.location;
 
+	int is_error = 0;
 	if (lookup_symbol(parser->symbol_table, var_name, parser->current_scope)) {
 		char msg[128] = "";
 		sprintf(msg, "variable %s already declared in this scope.", var_name);
 		report(decl_location, msg, 0);
-		return NULL;
+		is_error = 1;
 	}
 
 	parser->current_token = next_token(&parser->scanner); // consume identifier
@@ -1630,11 +1647,15 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ';'
 
-	add_symbol(&parser->symbol_table, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
-	if (is_exported) {
-		add_symbol(&parser->exported_table, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
+	if (!is_error) {
+		add_symbol(&parser->symbol_table, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
+		if (is_exported) {
+			add_symbol(&parser->exported_table, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
+		}
+		return new_var_decl_node(var_type, var_name, is_exported, is_const, init_expr, decl_location);
+	} else {
+		return NULL;
 	}
-	return new_var_decl_node(var_type, var_name, is_exported, is_const, init_expr, decl_location);
 }
 
 typedef struct {
@@ -1759,10 +1780,17 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 	char struct_name[64];
 	strncpy(struct_name, parser->current_token.text, sizeof(struct_name));
 
+	int is_error = 0;
+	if (lookup_symbol(parser->symbol_table, struct_name, parser->current_scope)) {
+		report(parser->current_token.location, "struct redeclaration.", 0);
+		is_error = 1;
+	}
+
 	parser->current_token = next_token(&parser->scanner); // consume struct name
 
 	if (parser->current_token.type != TOK_LCURLY) {
-		return report(parser->current_token.location, "expected '{' in struct declaration.", 0);
+		report(parser->current_token.location, "expected '{' in struct declaration.", 0);
+		is_error = 1;
 	}
 
 	parser->current_token = next_token(&parser->scanner); // consume '{'
@@ -1780,18 +1808,23 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 	}
 
 	if (parser->current_token.type != TOK_RCURLY) {
-		return report(parser->current_token.location, "expected '}' at the end of struct declaration.", 0);
+		report(parser->current_token.location, "expected '}' at the end of struct declaration.", 0);
+		is_error = 1;
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
-	Type *struct_type = new_named_type(struct_name, "", TYPE_STRUCT);
-	add_symbol(&parser->symbol_table, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
-	if (is_exported) {
-		add_symbol(&parser->exported_table, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
+	if (!is_error) {
+		Type *struct_type = new_named_type(struct_name, "", TYPE_STRUCT);
+		add_symbol(&parser->symbol_table, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
+		if (is_exported) {
+			add_symbol(&parser->exported_table, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
+		}
+		type_deinit(struct_type);
+		free(struct_type);
+		return new_struct_decl_node(struct_name, field_list, loc);
 	}
-	type_deinit(struct_type);
-	free(struct_type);
-	return new_struct_decl_node(struct_name, field_list, loc);
+
+	return NULL;
 }
 
 // <parameterDecl>
@@ -1930,8 +1963,10 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 // ::= '{' (<statement>)* '}'
 ASTNode *parse_block(Parser *parser, DeferStack *dstack) {
 	SourceLocation loc = parser->current_token.location;
+	int is_error = 0;
 	if (parser->current_token.type != TOK_LCURLY) {
-		return report(parser->current_token.location, "expected '{' to start block.", 0);
+		report(parser->current_token.location, "expected '{' to start block.", 0);
+		is_error = 1;
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
@@ -1952,15 +1987,19 @@ ASTNode *parse_block(Parser *parser, DeferStack *dstack) {
 	}
 
 	if (parser->current_token.type != TOK_RCURLY) {
-		da_deinit(dstack_local);
-		return report(parser->current_token.location, "expected '}' to end the block.", 0);
+		is_error = 1;
+		report(parser->current_token.location, "expected '}' to end the block.", 0);
 	}
 
-	parser->current_token = next_token(&parser->scanner);
-	ASTNode *block = new_block_node(stmts.data, stmts.count, loc);
-	unroll_defers(block, &dstack_local);
+	if (!is_error) {
+		parser->current_token = next_token(&parser->scanner);
+		ASTNode *block = new_block_node(stmts.data, stmts.count, loc);
+		unroll_defers(block, &dstack_local);
+		da_deinit(dstack_local);
+		return block;
+	}
 	da_deinit(dstack_local);
-	return block;
+	return NULL;
 }
 
 // <deferBlock>
@@ -2129,31 +2168,45 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner); // consume function name
 
+	int is_error = 0;
+	if (lookup_symbol(parser->symbol_table, func_name, parser->current_scope)) {
+		char msg[128] = "";
+		sprintf(msg, "variable %s already declared in this scope.", func_name);
+		report(loc, msg, 0);
+		is_error = 1;
+	}
+
 	if (parser->current_token.type != TOK_LPAREN) {
-		return report(parser->current_token.location, "expected '(' after function name.", 0);
+		report(parser->current_token.location, "expected '(' after function name.", 0);
+		is_error = 1;
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '('
 
 	ASTNode *params = parse_parameter_list(parser);
 	if (parser->current_token.type != TOK_RPAREN) {
-		return report(parser->current_token.location, "expected ')' after parameter list.", 0);
+		report(parser->current_token.location, "expected ')' after parameter list.", 0);
+		is_error = 1;
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	add_symbol(&parser->symbol_table, func_name, 1, SYMB_FN, type, parser->current_scope);
-	if (is_exported)
-		add_symbol(&parser->exported_table, func_name, 1, SYMB_FN, type, parser->current_scope);
+	if (!is_error) {
+		add_symbol(&parser->symbol_table, func_name, 1, SYMB_FN, type, parser->current_scope);
+		if (is_exported)
+			add_symbol(&parser->exported_table, func_name, 1, SYMB_FN, type, parser->current_scope);
 
-	type_deinit(type);
-	free(type);
-
+		type_deinit(type);
+		free(type);
+	}
 	++parser->current_scope;
 	DeferStack defer_stack;
 	da_init(defer_stack, 4);
 	ASTNode *body = parse_block(parser, &defer_stack);
 	da_deinit(defer_stack);
 	--parser->current_scope;
-	return new_func_decl_node(func_name, params, body, loc);
+	if (!is_error && body) {
+		return new_func_decl_node(func_name, params, body, loc);
+	}
+	return NULL;
 }
 
 ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
@@ -2227,15 +2280,23 @@ ASTNode *parse_extern_block(Parser *parser) {
 		}
 		if (parser->current_token.type == TOK_STRUCT) {
 			decl = parse_struct_decl(parser, is_exported);
+			if (!decl)
+				return NULL;
 			decl->data.struct_decl.is_exported = is_exported;
 		} else if (parser->current_token.type == TOK_FN) {
 			decl = parse_extern_func_decl(parser, is_exported);
+			if (!decl)
+				return NULL;
 			decl->data.extern_func.is_exported = is_exported;
 		} else if (parser->current_token.type == TOK_ENUM) {
 			decl = parse_enum_decl(parser, is_exported);
+			if (!decl)
+				return NULL;
 			decl->data.enum_decl.is_exported = is_exported;
 		} else {
 			decl = parse_var_decl(parser, is_exported);
+			if (!decl)
+				return NULL;
 			decl->data.var_decl.is_exported = is_exported;
 		}
 		assert(decl);
@@ -2260,17 +2321,25 @@ ASTNode *parse_global_decl(Parser *parser) {
 	ASTNode *decl = NULL;
 	if (parser->current_token.type == TOK_STRUCT) {
 		decl = parse_struct_decl(parser, is_exported);
+		if (!decl)
+			return NULL;
 		decl->data.struct_decl.is_exported = is_exported;
 	} else if (parser->current_token.type == TOK_FN) {
 		decl = parse_function_decl(parser, is_exported);
+		if (!decl)
+			return NULL;
 		decl->data.func_decl.is_exported = is_exported;
 	} else if (parser->current_token.type == TOK_ENUM) {
 		decl = parse_enum_decl(parser, is_exported);
+		if (!decl)
+			return NULL;
 		decl->data.enum_decl.is_exported = is_exported;
 	} else if (parser->current_token.type == TOK_EXTERN) {
 		decl = parse_extern_block(parser);
 	} else {
 		decl = parse_var_decl(parser, is_exported);
+		if (!decl)
+			return NULL;
 		decl->data.var_decl.is_exported = is_exported;
 	}
 	return decl;
@@ -2365,7 +2434,7 @@ Module *parse_input(Parser *parser) {
 	module->ast = global_list;
 	module->symbol_table = parser->symbol_table;
 	module->exported_table = parser->exported_table;
-    module->has_errors = has_errors;
+	module->has_errors = has_errors;
 	return module;
 }
 
