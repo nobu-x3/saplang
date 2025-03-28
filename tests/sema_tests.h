@@ -110,3 +110,24 @@ void test_ParamRedeclaration(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_UndeclaredFunction(void) {
+	TEST_SETUP_SINGLE("fn void foo() { baz(); }");
+	const char *expected = "parser_tests.sl:0:19:Error: undeclared identifier baz.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ArgCountMismatch(void) {
+	TEST_SETUP_SINGLE("fn void foo() { baz(); baz(0); } fn void baz(i32 a, i32 b) {}");
+	const char *expected = "parser_tests.sl:0:21:Error: argument count mismatch.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ArgTypeMismatch(void) {
+	TEST_SETUP_SINGLE("fn void foo() { baz(0.0, true); } fn void baz(i32 a, i32 b) {}");
+	const char *expected = "parser_tests.sl:0:21:Error: cannot implicitly convert from type f32 to type i32 in function call baz.\nparser_tests.sl:0:21:Error: cannot implicitly convert from type bool to type i32 in function call baz.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

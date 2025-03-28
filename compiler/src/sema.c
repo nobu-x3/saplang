@@ -228,9 +228,48 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		if (result != RESULT_SUCCESS)
 			return result;
 
+		// Previous call to analyze_ast would fail if the symbol didn't exist
+		Symbol *sym = lookup_symbol(table, node->data.func_call.callee->data.ident.name, 0);
+		if (sym->node->type != AST_FN_DECL || sym->kind != SYMB_FN) {
+			char msg[256] = "";
+			sprintf(msg, "symbol %s is not a function but used as a function.", node->data.func_call.callee->data.ident.name);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+
+		// @TODO: cache this probably
+		int param_count = 0;
+		ASTNode *param = sym->node->data.func_decl.params;
+		while (param) {
+			++param_count;
+			param = param->next;
+		}
+
+		if (param_count != node->data.func_call.arg_count) {
+			char msg[256] = "";
+			sprintf(msg, "argument count mismatch.");
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+
+		param = sym->node->data.func_decl.params;
 		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
 			result = analyze_ast(table, node->data.func_call.args[i], scope_level);
+			Type *param_type = param->data.param_decl.type;
+			Type *arg_type = get_type(table, node->data.func_call.args[i], sym->scope_level + 1);
+			if (!is_convertible(arg_type, param_type)) {
+				char left_str[128] = "";
+				char right_str[128] = "";
+				type_print(left_str, param_type);
+				type_print(right_str, arg_type);
+				char msg[256] = "";
+				sprintf(msg, "cannot implicitly convert from type %s to type %s in function call %s.", right_str, left_str, sym->name);
+				report(node->location, msg, 0);
+				result = RESULT_FAILURE;
+			}
+			param = param->next;
 		}
+		return result;
 	} break;
 
 	case AST_FN_DECL:
@@ -270,6 +309,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		break;
 	// Want to handle these where they are used
 	case AST_EXPR_LITERAL:
+		break;
+	case AST_PARAM_DECL:
 		break;
 	default:
 		report(node->location, "sema: unsupported node type.", 1);

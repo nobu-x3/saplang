@@ -69,6 +69,9 @@ int main(void) {
 	RUN_TEST(test_StructFieldRedeclaration);
 	RUN_TEST(test_EnumMemberRedeclaration);
 	RUN_TEST(test_ParamRedeclaration);
+	RUN_TEST(test_UndeclaredFunction);
+	RUN_TEST(test_ArgCountMismatch);
+	RUN_TEST(test_ArgTypeMismatch);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

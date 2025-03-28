@@ -237,3 +237,5 @@ Module *parse_input(Parser *parser);
 CompilerResult ast_print(ASTNode *node, int indent, char *string);
 
 void ast_deinit(ASTNode *node);
+
+ASTNode *copy_ast_node(ASTNode *node);

@@ -1,4 +1,5 @@
 #include "symbol_table.h"
+#include "parser.h"
 #include "types.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,7 +64,7 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 	return RESULT_SUCCESS;
 }
 
-CompilerResult add_symbol(Symbol **table, const char *name, int is_const, SymbolKind kind, Type *type, int scope_level) {
+CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, int is_const, SymbolKind kind, Type *type, int scope_level) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -75,7 +76,8 @@ CompilerResult add_symbol(Symbol **table, const char *name, int is_const, Symbol
 	symb->type = copy_type(type);
 	symb->kind = kind;
 	symb->scope_level = scope_level;
-    symb->is_const = is_const;
+	symb->is_const = is_const;
+    symb->node = node;
 	symb->next = *table;
 	*table = symb;
 	return RESULT_SUCCESS;
@@ -106,7 +108,8 @@ Symbol *symbol_table_copy(Symbol *table) {
 	Symbol *current = table;
 	while (current) {
 		Type *type_copy = copy_type(current->type);
-		add_symbol(&new_table, current->name, current->is_const, current->kind, type_copy, current->scope_level);
+		ASTNode *node_copy = copy_ast_node(current->node);
+		add_symbol(&new_table, node_copy, current->name, current->is_const, current->kind, type_copy, current->scope_level);
 		current = current->next;
 	}
 

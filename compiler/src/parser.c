@@ -1177,11 +1177,12 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume '}'
 
 	if (!is_error) {
-		add_symbol(&parser->symbol_table, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
+		ASTNode *decl_node = new_enum_decl_node(enum_name, base_type, members.data, members.count, loc);
+		add_symbol(&parser->symbol_table, decl_node, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
+			add_symbol(&parser->exported_table, decl_node, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
 		}
-		return new_enum_decl_node(enum_name, base_type, members.data, members.count, loc);
+		return decl_node;
 	}
 	return NULL;
 }
@@ -1653,11 +1654,12 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume ';'
 
 	if (!is_error) {
-		add_symbol(&parser->symbol_table, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
+		ASTNode *decl_node = new_var_decl_node(var_type, var_name, is_exported, is_const, init_expr, decl_location);
+		add_symbol(&parser->symbol_table, decl_node, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
+			add_symbol(&parser->exported_table, decl_node, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
 		}
-		return new_var_decl_node(var_type, var_name, is_exported, is_const, init_expr, decl_location);
+		return decl_node;
 	} else {
 		return NULL;
 	}
@@ -1826,13 +1828,14 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 
 	if (!is_error) {
 		Type *struct_type = new_named_type(struct_name, "", TYPE_STRUCT);
-		add_symbol(&parser->symbol_table, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
+		ASTNode *node = new_struct_decl_node(struct_name, field_list, loc);
+		add_symbol(&parser->symbol_table, node, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
+			add_symbol(&parser->exported_table, node, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
 		}
 		type_deinit(struct_type);
 		free(struct_type);
-		return new_struct_decl_node(struct_name, field_list, loc);
+        return node;
 	}
 
 	return NULL;
@@ -2210,14 +2213,6 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	if (!is_error) {
-		add_symbol(&parser->symbol_table, func_name, 1, SYMB_FN, type, parser->current_scope);
-		if (is_exported)
-			add_symbol(&parser->exported_table, func_name, 1, SYMB_FN, type, parser->current_scope);
-
-		type_deinit(type);
-		free(type);
-	}
 	++parser->current_scope;
 	DeferStack defer_stack;
 	da_init(defer_stack, 4);
@@ -2225,7 +2220,14 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	da_deinit(defer_stack);
 	--parser->current_scope;
 	if (!is_error && body) {
-		return new_func_decl_node(func_name, params, body, loc);
+		ASTNode *decl_node = new_func_decl_node(func_name, params, body, loc);
+		add_symbol(&parser->symbol_table, decl_node, func_name, 1, SYMB_FN, type, parser->current_scope);
+		if (is_exported)
+			add_symbol(&parser->exported_table, decl_node, func_name, 1, SYMB_FN, type, parser->current_scope);
+
+		type_deinit(type);
+		free(type);
+		return decl_node;
 	}
 	return NULL;
 }
@@ -2266,13 +2268,14 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	add_symbol(&parser->symbol_table, func_name, 1, SYMB_FN, type, parser->current_scope);
+	ASTNode *decl_node = new_extern_func_decl_node(func_name, params, loc);
+	add_symbol(&parser->symbol_table, decl_node, func_name, 1, SYMB_FN, type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, func_name, 1, SYMB_FN, type, parser->current_scope);
+		add_symbol(&parser->exported_table, decl_node, func_name, 1, SYMB_FN, type, parser->current_scope);
 	}
 	type_deinit(type);
 	free(type);
-	return new_extern_func_decl_node(func_name, params, loc);
+	return decl_node;
 }
 
 ASTNode *parse_extern_block(Parser *parser) {
