@@ -41,6 +41,13 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level) {
 		return NULL;
 	switch (node->type) {
 	case AST_EXPR_LITERAL:
+		if (node->data.literal.is_bool) {
+			return new_primitive_type("bool");
+		} else if (node->data.literal.is_float) {
+			return new_primitive_type("f32");
+		} else {
+			return new_primitive_type("i32");
+		}
 		break;
 	case AST_EXPR_IDENT: {
 		char full_name[128] = "";
@@ -67,14 +74,49 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level) {
 
 /* ASTNode *insert_implicit_cast(ASTNode *expr, const char *target_type) {} */
 
+CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level) {
+	Type *rtype = get_type(table, node, scope_level);
+	if (is_convertible(rtype, lvalue_type))
+		rtype = copy_type(lvalue_type);
+	else if (rtype) {
+		char left_str[128] = "";
+		char right_str[128] = "";
+		type_print(left_str, node->data.var_decl.type);
+		type_print(right_str, rtype);
+		char msg[256] = "";
+		sprintf(msg, "assignment type mismatch: cannot implicitly convert %s to %s.", right_str, left_str);
+		report(node->location, msg, 0);
+		return RESULT_FAILURE;
+	} else {
+		if (!rtype) {
+			char msg[256] = "";
+			sprintf(msg, "Could not determine the type of rvalue in variable initialization.");
+			report(node->location, msg, 0);
+		}
+		return RESULT_FAILURE;
+	}
+	return RESULT_SUCCESS;
+}
+
 CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 	if (!node)
 		return RESULT_PASSED_NULL_PTR;
 
 	switch (node->type) {
 	case AST_VAR_DECL:
+		if (node->data.var_decl.is_const && !node->data.var_decl.init) {
+			report(node->location, "const variable must have an initializer.", 0);
+			return RESULT_FAILURE;
+		}
 		if (node->data.var_decl.init) {
-			CompilerResult result = analyze_ast(table, node->data.var_decl.init, scope_level);
+			CompilerResult result;
+			if (node->data.var_decl.init->type == AST_EXPR_LITERAL) {
+				// TODO: type matching and implicit conversions
+				result = analyze_expr_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level);
+			} else {
+				result = analyze_ast(table, node->data.var_decl.init, scope_level);
+			}
+
 			if (result != RESULT_SUCCESS) {
 				return result;
 			}
@@ -140,11 +182,33 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		if (result != RESULT_SUCCESS)
 			return result;
 
-		result = analyze_ast(table, node->data.assignment.rvalue, scope_level);
+		if (node->data.assignment.lvalue->type == AST_EXPR_IDENT) {
+			// This should never be NULL at this point because we passed the analyze_ast call above
+			Symbol *sym = lookup_symbol(table, node->data.assignment.lvalue->data.ident.name, scope_level);
+			if (sym->is_const) {
+				char msg[256] = "";
+				sprintf(msg, "cannot assign a value to a const variable %s.", node->data.assignment.lvalue->data.ident.name);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+		} else if (node->data.assignment.lvalue->type == AST_EXPR_LITERAL) {
+			char msg[256] = "";
+			sprintf(msg, "cannot assign a value to a literal.");
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+
+		Type *ltype = get_type(table, node->data.assignment.lvalue, scope_level);
+		if (node->data.assignment.rvalue->type == AST_EXPR_LITERAL) {
+			// TODO: type matching and implicit conversions
+			result = analyze_expr_literal(table, ltype, node->data.assignment.rvalue, scope_level);
+		} else {
+			result = analyze_ast(table, node->data.assignment.rvalue, scope_level);
+		}
+
 		if (result != RESULT_SUCCESS)
 			return result;
 
-		Type *ltype = get_type(table, node->data.assignment.lvalue, scope_level);
 		Type *rtype = get_type(table, node->data.assignment.rvalue, scope_level);
 		if (!is_convertible(rtype, ltype)) {
 			char left_str[128] = "";
@@ -202,6 +266,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
+		break;
+	// Want to handle these where they are used
+	case AST_EXPR_LITERAL:
 		break;
 	default:
 		report(node->location, "sema: unsupported node type.", 1);

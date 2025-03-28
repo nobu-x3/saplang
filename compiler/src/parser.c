@@ -1158,9 +1158,9 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 		report(parser->current_token.location, msg, 0);
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '}'
-	add_symbol(&parser->symbol_table, enum_name, SYMB_ENUM, base_type, parser->current_scope);
+	add_symbol(&parser->symbol_table, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, enum_name, SYMB_ENUM, base_type, parser->current_scope);
+		add_symbol(&parser->exported_table, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
 	}
 	return new_enum_decl_node(enum_name, base_type, members.data, members.count, loc);
 }
@@ -1630,9 +1630,9 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ';'
 
-	add_symbol(&parser->symbol_table, var_name, SYMB_VAR, var_type, parser->current_scope);
+	add_symbol(&parser->symbol_table, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, var_name, SYMB_VAR, var_type, parser->current_scope);
+		add_symbol(&parser->exported_table, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
 	}
 	return new_var_decl_node(var_type, var_name, is_exported, is_const, init_expr, decl_location);
 }
@@ -1785,9 +1785,9 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
 	Type *struct_type = new_named_type(struct_name, "", TYPE_STRUCT);
-	add_symbol(&parser->symbol_table, struct_name, SYMB_STRUCT, struct_type, parser->current_scope);
+	add_symbol(&parser->symbol_table, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, struct_name, SYMB_STRUCT, struct_type, parser->current_scope);
+		add_symbol(&parser->exported_table, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
 	}
 	type_deinit(struct_type);
 	free(struct_type);
@@ -2140,9 +2140,9 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	add_symbol(&parser->symbol_table, func_name, SYMB_FN, type, parser->current_scope);
+	add_symbol(&parser->symbol_table, func_name, 1, SYMB_FN, type, parser->current_scope);
 	if (is_exported)
-		add_symbol(&parser->exported_table, func_name, SYMB_FN, type, parser->current_scope);
+		add_symbol(&parser->exported_table, func_name, 1, SYMB_FN, type, parser->current_scope);
 
 	type_deinit(type);
 	free(type);
@@ -2192,9 +2192,9 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	add_symbol(&parser->symbol_table, func_name, SYMB_FN, type, parser->current_scope);
+	add_symbol(&parser->symbol_table, func_name, 1, SYMB_FN, type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, func_name, SYMB_FN, type, parser->current_scope);
+		add_symbol(&parser->exported_table, func_name, 1, SYMB_FN, type, parser->current_scope);
 	}
 	type_deinit(type);
 	free(type);

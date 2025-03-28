@@ -59,6 +59,9 @@ int main(void) {
 
 	RUN_TEST(test_TypePrinting);
 	RUN_TEST(test_UndeclaredVariable);
+	RUN_TEST(test_ConstNoInit);
+	RUN_TEST(test_AssignmentToConst);
+	RUN_TEST(test_AssignmentToRValue);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

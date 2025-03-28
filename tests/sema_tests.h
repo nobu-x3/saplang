@@ -40,3 +40,24 @@ void test_UndeclaredVariable(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_ConstNoInit(void) {
+	TEST_SETUP_SINGLE("fn void foo() { const i32 i; }");
+	const char *expected = "parser_tests.sl:0:27:Error: const variable must have an initializer.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_AssignmentToConst(void) {
+	TEST_SETUP_SINGLE("fn void foo() { const i32 i = 1; i = 2; }");
+	const char *expected = "parser_tests.sl:0:38:Error: cannot assign a value to a const variable i.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_AssignmentToRValue(void) {
+	TEST_SETUP_SINGLE("fn void foo() { const i32 i = 0; 2 = i + 3; }");
+	const char *expected = "parser_tests.sl:0:36:Error: cannot assign a value to a literal.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

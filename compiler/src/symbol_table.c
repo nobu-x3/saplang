@@ -22,6 +22,8 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 		print(string, " ");
 	}
 
+	print(string, "\tConst");
+
 	print(string, "\tType");
 
 	for (int i = 0; i <= max_type_len - 4 - 1; ++i) {
@@ -46,6 +48,8 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 			print(string, " ");
 		}
 
+		print("\t", "%d", sym->is_const);
+
 		print(string, "\t");
 		type_print(string, sym->type);
 
@@ -59,7 +63,7 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 	return RESULT_SUCCESS;
 }
 
-CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, Type *type, int scope_level) {
+CompilerResult add_symbol(Symbol **table, const char *name, int is_const, SymbolKind kind, Type *type, int scope_level) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -71,6 +75,7 @@ CompilerResult add_symbol(Symbol **table, const char *name, SymbolKind kind, Typ
 	symb->type = copy_type(type);
 	symb->kind = kind;
 	symb->scope_level = scope_level;
+    symb->is_const = is_const;
 	symb->next = *table;
 	*table = symb;
 	return RESULT_SUCCESS;
@@ -101,7 +106,7 @@ Symbol *symbol_table_copy(Symbol *table) {
 	Symbol *current = table;
 	while (current) {
 		Type *type_copy = copy_type(current->type);
-		add_symbol(&new_table, current->name, current->kind, type_copy, current->scope_level);
+		add_symbol(&new_table, current->name, current->is_const, current->kind, type_copy, current->scope_level);
 		current = current->next;
 	}
 
