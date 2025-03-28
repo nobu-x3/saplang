@@ -10,5 +10,3 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level);
 /* ASTNode *insert_implicit_cast(ASTNode *expr, const char *target_type); */
 
 CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level);
-
-void merge_tables(Symbol* external, Symbol* internal);

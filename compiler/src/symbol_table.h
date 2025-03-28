@@ -24,3 +24,4 @@ CompilerResult add_symbol(Symbol **table, const char *name, int is_const, Symbol
 CompilerResult deinit_symbol_table(Symbol *table);
 Symbol *lookup_symbol(Symbol *table, const char *name, int current_scope);
 Symbol* symbol_table_copy(Symbol* table);
+void symbol_table_merge(Symbol* external, Symbol* internal);

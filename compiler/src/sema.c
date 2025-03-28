@@ -276,14 +276,3 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 	}
 	return RESULT_SUCCESS;
 }
-
-void merge_tables(Symbol *external, Symbol *internal) {
-	if (!external)
-		return;
-
-	Symbol *current_ext = external;
-	while (current_ext->next) {
-		current_ext = current_ext->next;
-	}
-	current_ext->next = internal;
-}

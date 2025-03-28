@@ -112,3 +112,14 @@ Symbol *symbol_table_copy(Symbol *table) {
 
 	return new_table;
 }
+
+void symbol_table_merge(Symbol *external, Symbol *internal) {
+	if (!external)
+		return;
+
+	Symbol *current_ext = external;
+	while (current_ext->next) {
+		current_ext = current_ext->next;
+	}
+	current_ext->next = internal;
+}
