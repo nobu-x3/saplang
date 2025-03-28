@@ -89,3 +89,17 @@ void test_EnumRedeclaration(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_StructFieldRedeclaration(void) {
+	TEST_SETUP_SINGLE("struct Str { i32 a; f32 a; }");
+	const char *expected = "parser_tests.sl:0:25:Error: field redeclaration.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_EnumMemberRedeclaration(void) {
+	TEST_SETUP_SINGLE("enum Str { One, One } ");
+	const char *expected = "parser_tests.sl:0:19:Error: enum member redeclaration.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

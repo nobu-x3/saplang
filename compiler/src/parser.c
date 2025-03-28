@@ -1117,8 +1117,13 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 		EnumMember *member = malloc(sizeof(EnumMember));
 		if (!member) // @TODO: leaks
 			return NULL;
-		// @TODO: check if this member has already been added
 		strncpy(member->name, parser->current_token.text, sizeof(member->name));
+		for (int i = 0; i < members.count; ++i) {
+			if (strcmp(member->name, members.data[i]->name) == 0) {
+				report(parser->current_token.location, "enum member redeclaration.", 0);
+				is_error = 1;
+			}
+		}
 		parser->current_token = next_token(&parser->scanner); // consume identifier
 
 		if (parser->current_token.type == TOK_ASSIGN) {
@@ -1798,6 +1803,12 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 	ASTNode *field_list = NULL, *last_field = NULL;
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *field = parse_field_declaration(parser);
+		for (ASTNode *field_it = field_list; field_it != NULL; field_it = field_it->next) {
+			if (strcmp(field_it->data.field_decl.name, field->data.field_decl.name) == 0) {
+				report(field->location, "field redeclaration.", 0);
+				is_error = 1;
+			}
+		}
 
 		if (!field_list) {
 			field_list = last_field = field;

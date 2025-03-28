@@ -66,6 +66,8 @@ int main(void) {
 	RUN_TEST(test_FnRedeclaration);
 	RUN_TEST(test_StructRedeclaration);
 	RUN_TEST(test_EnumRedeclaration);
+	RUN_TEST(test_StructFieldRedeclaration);
+	RUN_TEST(test_EnumMemberRedeclaration);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();
