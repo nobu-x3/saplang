@@ -72,6 +72,7 @@ int main(void) {
 	RUN_TEST(test_UndeclaredFunction);
 	RUN_TEST(test_ArgCountMismatch);
 	RUN_TEST(test_ArgTypeMismatch);
+	RUN_TEST(test_ParameterNameConflict);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

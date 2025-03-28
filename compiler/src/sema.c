@@ -279,11 +279,18 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
+
 		if (node->data.func_decl.params) {
-			CompilerResult result = analyze_ast(table, node->data.func_decl.params, scope_level + 1);
+			CompilerResult result;
+			ASTNode *param = node->data.func_decl.params;
+			while (param) {
+				result = analyze_ast(table, param, scope_level + 1);
+				param = param->next;
+			}
 			if (result != RESULT_SUCCESS)
 				return result;
 		}
+
 		if (node->data.func_decl.body) {
 			CompilerResult result = analyze_ast(table, node->data.func_decl.body, scope_level + 1);
 			if (result != RESULT_SUCCESS)
