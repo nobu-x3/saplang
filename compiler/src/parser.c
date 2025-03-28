@@ -1877,14 +1877,24 @@ ASTNode *parse_parameter_list(Parser *parser) {
 	ASTNode *param = parse_parameter_declaration(parser);
 	param_list = last_param = param;
 
+	int is_error = 0;
 	while (parser->current_token.type == TOK_COMMA) {
 		parser->current_token = next_token(&parser->scanner); // consume comma
 		param = parse_parameter_declaration(parser);
+		for (ASTNode *param_it = param_list; param_it != NULL; param_it = param_it->next) {
+			if (strcmp(param->data.param_decl.name, param_it->data.param_decl.name) == 0) {
+				char msg[128];
+				sprintf(msg, "parameter redeclaration: %s.", param->data.param_decl.name);
+				report(parser->current_token.location, msg, 0);
+				is_error = 1;
+			}
+		}
 		last_param->next = param;
 		last_param = param;
 	}
-
-	return param_list;
+	if (!is_error)
+		return param_list;
+	return NULL;
 }
 
 DeferStack copy_defer_stack(DeferStack *stack) {

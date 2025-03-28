@@ -103,3 +103,10 @@ void test_EnumMemberRedeclaration(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_ParamRedeclaration(void) {
+	TEST_SETUP_SINGLE("fn void foo(i32 a, i32 a) {}");
+	const char *expected = "parser_tests.sl:0:25:Error: parameter redeclaration: a.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
