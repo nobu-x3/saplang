@@ -138,3 +138,17 @@ void test_ParameterNameConflict(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_FuncCallInitWrongType(void) {
+	TEST_SETUP_SINGLE("fn i32 foo() { return 1; } fn void main() { f32 float = foo(); }");
+	const char *expected = "parser_tests.sl:0:66:Error: type mismatch in initializer.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FuncCallAssignmentWrongType(void) {
+	TEST_SETUP_SINGLE("fn i32 foo() { return 1; } fn void main() { f32 float = 0.0; float = foo(); }");
+	const char *expected = "parser_tests.sl:0:76:Error: assignment type mismatch: cannot implicitly convert i32 to f32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

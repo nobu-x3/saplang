@@ -66,13 +66,20 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level) {
 		return get_type(table, node->data.binary_op.left, scope_level);
 	case AST_ASSIGNMENT:
 		return get_type(table, node->data.assignment.lvalue, scope_level);
+	case AST_FN_DECL: {
+		Symbol *sym = lookup_symbol(table, node->data.func_decl.name, scope_level);
+		if (!sym) {
+			return NULL;
+		}
+		return sym->type;
+	}
+	case AST_FN_CALL:
+		return get_type(table, node->data.func_call.callee, scope_level);
 	default:
 		return NULL;
 	}
 	return NULL;
 }
-
-/* ASTNode *insert_implicit_cast(ASTNode *expr, const char *target_type) {} */
 
 CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level) {
 	Type *rtype = get_type(table, node, scope_level);
@@ -151,10 +158,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		}
 	} break;
 	case AST_RETURN: {
-		CompilerResult result = RESULT_SUCCESS;
-		if (node->data.ret.return_expr)
-			result = analyze_ast(table, node, scope_level);
-		return result;
+		break;
 	}
 	case AST_BINARY_EXPR: {
 		CompilerResult result = analyze_ast(table, node->data.binary_op.left, scope_level);
