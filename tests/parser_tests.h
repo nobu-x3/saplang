@@ -1066,3 +1066,30 @@ void test_ContinueBreak(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_ExplicitCast(void) {
+	SETUP_TEST("fn i32 test() {"
+			   "    i64 var = 0;"
+			   "    f32 fvar = (f32)var;"
+			   "    i32* pvar = (i32*)&var;"
+			   "    return (i32)var;"
+			   "}");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 4 statement(s):\n"
+						   "      VarDecl: i64 var:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: f32 fvar:\n"
+						   "        Explicit cast to f32:\n"
+						   "          Ident: var\n"
+						   "      VarDecl: i32* pvar:\n"
+						   "        Explicit cast to i32*:\n"
+						   "          Unary Expression: &\n"
+						   "            Ident: var\n"
+						   "      Return:\n"
+						   "        Explicit cast to i32:\n"
+						   "          Ident: var\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

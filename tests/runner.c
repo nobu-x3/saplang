@@ -56,6 +56,7 @@ int main(void) {
 	RUN_TEST(test_BinaryLiteral);
 	RUN_TEST(test_HexadecimalLiteral);
 	RUN_TEST(test_ContinueBreak);
+	RUN_TEST(test_ExplicitCast);
 
 	RUN_TEST(test_TypePrinting);
 	RUN_TEST(test_UndeclaredVariable);

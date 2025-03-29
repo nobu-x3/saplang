@@ -50,12 +50,13 @@ typedef enum {
 	AST_FN_PTR,
 	AST_STRING_LIT,
 	AST_CHAR_LIT,
-    AST_CONTINUE,
-    AST_BREAK,
+	AST_CONTINUE,
+	AST_BREAK,
+	AST_CAST,
 } ASTNodeType;
 
 typedef struct ASTNode {
-    SourceLocation location;
+	SourceLocation location;
 	ASTNodeType type;
 	struct ASTNode *next; // For linked lists (e.g. global declarations, fields, params)
 	union {
@@ -195,6 +196,10 @@ typedef struct ASTNode {
 		struct {
 			char literal;
 		} char_literal;
+		struct {
+			Type *target_type;
+			struct ASTNode *expr;
+		} cast;
 	} data;
 } ASTNode;
 
@@ -212,7 +217,7 @@ typedef struct {
 	Symbol *exported_table; // not owned
 	ImportList imports;
 	ASTNode *ast;
-    int has_errors;
+	int has_errors;
 } Module;
 
 // This is so I don't have to change the signature of parser_init in all tests

@@ -353,6 +353,12 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 		case AST_BREAK:
 			print(string, "break\n");
 			break;
+		case AST_CAST: {
+			char type_str[128] = "";
+			type_print(type_str, node->data.cast.target_type);
+			print(string, "Explicit cast to %s:\n", type_str);
+			ast_print(node->data.cast.expr, indent + 1, string);
+		} break;
 		default: {
 			print(string, "Unknown AST Node\n");
 		} break;
@@ -684,6 +690,17 @@ ASTNode *new_unary_expr_node(char op, ASTNode *operand, SourceLocation loc) {
 		return NULL;
 	node->data.unary_op.op = op;
 	node->data.unary_op.operand = operand;
+	return node;
+}
+
+ASTNode *new_cast_node(Type *target_type, ASTNode *expr, SourceLocation loc) {
+	ASTNode *node = new_ast_node(AST_CAST, loc);
+	if (!node)
+		return NULL;
+
+	node->data.cast.target_type = target_type;
+	node->data.cast.expr = expr;
+
 	return node;
 }
 
@@ -1377,6 +1394,27 @@ ASTNode *parse_return_stmt(Parser *parser) {
 	return new_return_node(expr, loc);
 }
 
+int is_type_spec(Parser *parser) {
+	switch (parser->current_token.type) {
+	case TOK_I8:
+	case TOK_I16:
+	case TOK_I32:
+	case TOK_I64:
+	case TOK_U8:
+	case TOK_U16:
+	case TOK_U32:
+	case TOK_U64:
+	case TOK_F32:
+	case TOK_F64:
+	case TOK_VOID:
+	case TOK_BOOL:
+	case TOK_IDENTIFIER:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 // numbers, bools, identifiers, grouping expressions
 // <primaryExpr>
 // ::= <number>
@@ -1448,13 +1486,39 @@ ASTNode *parse_primary(Parser *parser) {
 		/* return new_ident_node(ident_name); */
 	} else if (parser->current_token.type == TOK_LPAREN) {
 		parser->current_token = next_token(&parser->scanner);
-		ASTNode *expr = parse_expr(parser);
-		if (!expr)
-			return NULL;
-		if (parser->current_token.type != TOK_RPAREN)
-			return report(parser->current_token.location, "expected ')'.", 0);
-		parser->current_token = next_token(&parser->scanner);
-		return expr;
+		if (is_type_spec(parser)) {
+			SourceLocation loc = parser->current_token.location;
+			Type *target_type = NULL;
+			int is_error = 0;
+			if (parse_type(parser, &target_type) != RESULT_SUCCESS) {
+				is_error = 1;
+			}
+			if (parser->current_token.type != TOK_RPAREN) {
+				char msg[128] = "";
+				sprintf(msg, "expected ')' after cast type, got %s", parser->current_token.text);
+				report(parser->current_token.location, msg, 0);
+				is_error = 1;
+			}
+
+			parser->current_token = next_token(&parser->scanner);
+			ASTNode *expr = parse_expr(parser);
+			if (!expr) {
+				is_error = 1;
+			}
+
+			if (is_error)
+				return NULL;
+
+			return new_cast_node(target_type, expr, loc);
+		} else {
+			ASTNode *expr = parse_expr(parser);
+			if (!expr)
+				return NULL;
+			if (parser->current_token.type != TOK_RPAREN)
+				return report(parser->current_token.location, "expected ')'.", 0);
+			parser->current_token = next_token(&parser->scanner);
+			return expr;
+		}
 	} else if (parser->current_token.type == TOK_LBRACKET) {
 		return parse_array_literal(parser);
 	} else if (parser->current_token.type == TOK_LCURLY) {
@@ -1835,7 +1899,7 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 		}
 		type_deinit(struct_type);
 		free(struct_type);
-        return node;
+		return node;
 	}
 
 	return NULL;
@@ -2637,6 +2701,13 @@ void free_ast_node(ASTNode *node) {
 		}
 		free(node->data.block.statements);
 		node->data.block.statements = NULL;
+	case AST_CAST:
+		type_deinit(node->data.cast.target_type);
+		free(node->data.cast.target_type);
+		node->data.cast.target_type = NULL;
+		free_ast_node(node->data.cast.expr);
+		node->data.cast.expr = NULL;
+		break;
 	default:
 		break;
 	}
