@@ -77,6 +77,10 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "StructDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.struct_decl.name);
 			ast_print(node->data.struct_decl.fields, indent + 1, string);
 			break;
+		case AST_UNION_DECL:
+			print(string, "UnionDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.union_decl.name);
+			ast_print(node->data.union_decl.fields, indent + 1, string);
+			break;
 		case AST_FN_DECL:
 			print(string, "FuncDecl: %s%s\n", node->data.func_decl.is_exported ? "exported " : "", node->data.func_decl.name);
 			for (int i = 0; i < indent + 1; i++) {
@@ -721,8 +725,19 @@ ASTNode *new_field_decl_node(Type *field_type, const char *name, SourceLocation 
 	return node;
 }
 
+ASTNode *new_union_decl_node(const char *name, ASTNode *fields, SourceLocation loc) {
+	ASTNode *node = new_ast_node(AST_UNION_DECL, loc);
+	if (!node)
+		return NULL;
+	strncpy(node->data.union_decl.name, name, sizeof(node->data.union_decl.name));
+	node->data.union_decl.fields = fields;
+	return node;
+}
+
 ASTNode *new_struct_decl_node(const char *name, ASTNode *fields, SourceLocation loc) {
 	ASTNode *node = new_ast_node(AST_STRUCT_DECL, loc);
+	if (!node)
+		return NULL;
 	strncpy(node->data.struct_decl.name, name, sizeof(node->data.struct_decl.name));
 	node->data.struct_decl.fields = fields;
 	return node;
@@ -1838,6 +1853,69 @@ ASTNode *parse_field_declaration(Parser *parser) {
 	return new_field_decl_node(type, field_name, loc);
 }
 
+ASTNode *parse_union_decl(Parser *parser, int is_exported) {
+	parser->current_token = next_token(&parser->scanner); // consume 'struct'
+	if (parser->current_token.type != TOK_IDENTIFIER) {
+		return report(parser->current_token.location, "expected identifier after 'union'.", 0);
+	}
+
+	SourceLocation loc = parser->current_token.location;
+	char union_name[64];
+	strncpy(union_name, parser->current_token.text, sizeof(union_name));
+
+	int is_error = 0;
+	if (lookup_symbol(parser->symbol_table, union_name, parser->current_scope)) {
+		report(parser->current_token.location, "union redeclaration.", 0);
+		is_error = 1;
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume struct name
+
+	if (parser->current_token.type != TOK_LCURLY) {
+		report(parser->current_token.location, "expected '{' in union declaration.", 0);
+		is_error = 1;
+	}
+
+	parser->current_token = next_token(&parser->scanner); // consume '{'
+
+	ASTNode *field_list = NULL, *last_field = NULL;
+	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
+		ASTNode *field = parse_field_declaration(parser);
+		for (ASTNode *field_it = field_list; field_it != NULL; field_it = field_it->next) {
+			if (strcmp(field_it->data.field_decl.name, field->data.field_decl.name) == 0) {
+				report(field->location, "field redeclaration.", 0);
+				is_error = 1;
+			}
+		}
+
+		if (!field_list) {
+			field_list = last_field = field;
+		} else {
+			last_field->next = field;
+			last_field = field;
+		}
+	}
+
+	if (parser->current_token.type != TOK_RCURLY) {
+		report(parser->current_token.location, "expected '}' at the end of struct declaration.", 0);
+		is_error = 1;
+	}
+	parser->current_token = next_token(&parser->scanner); // consume '{'
+
+	if (!is_error) {
+		Type *union_type = new_named_type(union_name, "", TYPE_STRUCT);
+		ASTNode *node = new_union_decl_node(union_name, field_list, loc);
+		add_symbol(&parser->symbol_table, node, union_name, 1, SYMB_UNION, union_type, parser->current_scope);
+		if (is_exported) {
+			add_symbol(&parser->exported_table, node, union_name, 1, SYMB_UNION, union_type, parser->current_scope);
+		}
+		type_deinit(union_type);
+		free(union_type);
+		return node;
+	}
+
+	return NULL;
+}
 // <structDecl>
 // ::= 'struct' <identifier> '{' (<fieldDecl>)* '}'
 ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
@@ -2371,6 +2449,11 @@ ASTNode *parse_extern_block(Parser *parser) {
 			if (!decl)
 				return NULL;
 			decl->data.struct_decl.is_exported = is_exported;
+		} else if (parser->current_token.type == TOK_UNION) {
+			decl = parse_union_decl(parser, is_exported);
+			if (!decl)
+				return NULL;
+			decl->data.struct_decl.is_exported = is_exported;
 		} else if (parser->current_token.type == TOK_FN) {
 			decl = parse_extern_func_decl(parser, is_exported);
 			if (!decl)
@@ -2409,6 +2492,11 @@ ASTNode *parse_global_decl(Parser *parser) {
 	ASTNode *decl = NULL;
 	if (parser->current_token.type == TOK_STRUCT) {
 		decl = parse_struct_decl(parser, is_exported);
+		if (!decl)
+			return NULL;
+		decl->data.struct_decl.is_exported = is_exported;
+	} else if (parser->current_token.type == TOK_UNION) {
+		decl = parse_union_decl(parser, is_exported);
 		if (!decl)
 			return NULL;
 		decl->data.struct_decl.is_exported = is_exported;

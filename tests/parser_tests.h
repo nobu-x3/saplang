@@ -52,6 +52,16 @@ void test_StructDeclaration(void) {
 	free(output);
 }
 
+void test_UnionDecl(void) {
+	SETUP_TEST("union Point { f32 x; i32 y; }");
+	const char *expected = "UnionDecl: Point\n"
+						   "  FieldDecl: f32 x\n"
+						   "  FieldDecl: i32 y\n";
+
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_FunctionDeclaration(void) {
 	SETUP_TEST("fn i32 add(i32 a, i32 b) { i32 result = a + b * 2; return result - 1; }");
 	const char *expected = "FuncDecl: add\n"

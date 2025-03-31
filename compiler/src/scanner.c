@@ -107,6 +107,8 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_RETURN;
 		else if (strcmp(current_token.text, "enum") == 0)
 			current_token.type = TOK_ENUM;
+		else if (strcmp(current_token.text, "union") == 0)
+			current_token.type = TOK_UNION;
 		else if (strcmp(current_token.text, "extern") == 0)
 			current_token.type = TOK_EXTERN;
 		else if (strcmp(current_token.text, "export") == 0)

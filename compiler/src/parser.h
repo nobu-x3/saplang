@@ -53,6 +53,7 @@ typedef enum {
 	AST_CONTINUE,
 	AST_BREAK,
 	AST_CAST,
+    AST_UNION_DECL,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -74,6 +75,11 @@ typedef struct ASTNode {
 			int is_exported;
 			struct ASTNode *fields; // Linked list of field declarations
 		} struct_decl;
+		struct {
+			char name[64];
+			int is_exported;
+			struct ASTNode *fields; // Linked list of field declarations
+		} union_decl;
 		// Function declaration: func name(params) { body }
 		struct {
 			char name[64];

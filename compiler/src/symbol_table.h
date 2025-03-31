@@ -8,6 +8,7 @@ typedef enum {
 	SYMB_STRUCT,
 	SYMB_FN,
 	SYMB_ENUM,
+    SYMB_UNION,
 } SymbolKind;
 
 typedef struct Symbol {

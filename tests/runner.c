@@ -12,6 +12,7 @@ int main(void) {
 	RUN_TEST(test_VariableDeclaration);
 	RUN_TEST(test_ArithmeticExpression);
 	RUN_TEST(test_StructDeclaration);
+	RUN_TEST(test_UnionDecl);
 	RUN_TEST(test_FunctionDeclaration);
 	RUN_TEST(test_CombinedDeclarations);
 	RUN_TEST(test_UnaryExpression_Exclamation);
