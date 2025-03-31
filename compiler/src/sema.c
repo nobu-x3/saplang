@@ -33,6 +33,13 @@ int is_convertible(const Type *source, const Type *target) {
 
 		return pointer_count == decay_count && type_equals(underlying_array_type, underlying_pointer_type);
 	}
+	if (source->kind == TYPE_POINTER) {
+		return target->kind == TYPE_POINTER;
+	}
+
+	if (source->kind != TYPE_POINTER && target->kind == TYPE_POINTER) {
+		return 0;
+	}
 	return 0;
 }
 
@@ -75,6 +82,10 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level) {
 	}
 	case AST_FN_CALL:
 		return get_type(table, node->data.func_call.callee, scope_level);
+	case AST_CAST:
+		return node->data.cast.target_type;
+	case AST_RETURN:
+		return get_type(table, node->data.ret.return_expr, scope_level);
 	default:
 		return NULL;
 	}
@@ -276,8 +287,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		return result;
 	} break;
 
-	case AST_FN_DECL:
-		if (!lookup_symbol(table, node->data.func_decl.name, scope_level)) {
+	case AST_FN_DECL: {
+		Symbol *sym = lookup_symbol(table, node->data.func_decl.name, scope_level);
+		if (!sym) {
 			char msg[256] = "";
 			sprintf(msg, "function %s undefined.", node->data.func_decl.name);
 			report(node->location, msg, 0);
@@ -299,8 +311,28 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 			CompilerResult result = analyze_ast(table, node->data.func_decl.body, scope_level + 1);
 			if (result != RESULT_SUCCESS)
 				return result;
+
+			if (node->data.func_decl.body->data.block.count) {
+				ASTNode *last_stmt = node->data.func_decl.body->data.block.statements[node->data.func_decl.body->data.block.count - 1];
+				if (last_stmt && last_stmt->type == AST_RETURN) {
+					Type *ret_type = get_type(table, last_stmt, scope_level + 1);
+					if (!ret_type) {
+						return RESULT_FAILURE;
+					}
+					if (!is_convertible(ret_type, sym->type)) {
+						char msg[256] = "";
+						char expr_type_str[64] = "";
+						type_print(expr_type_str, ret_type);
+						char decl_type_str[64] = "";
+						type_print(decl_type_str, sym->type);
+						sprintf(msg, "function return type is %s but returned value is of type %s.", decl_type_str, expr_type_str);
+						report(last_stmt->location, msg, 0);
+						return RESULT_FAILURE;
+					}
+				}
+			}
 		}
-		break;
+	} break;
 
 	case AST_STRUCT_DECL:
 		if (!lookup_symbol(table, node->data.struct_decl.name, scope_level)) {
@@ -323,6 +355,24 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		break;
 	case AST_PARAM_DECL:
 		break;
+	case AST_CAST: {
+		CompilerResult result = analyze_ast(table, node->data.cast.expr, scope_level);
+		if (result != RESULT_SUCCESS) {
+			return result;
+		}
+		Type *expr_type = get_type(table, node->data.cast.expr, scope_level);
+		if (!is_convertible(expr_type, node->data.cast.target_type)) {
+			char msg[256] = "";
+			char src_type[64] = "";
+			type_print(src_type, expr_type);
+			char target_type[64] = "";
+			type_print(target_type, node->data.cast.target_type);
+			sprintf(msg, "cannot convert type %s into type %s.", src_type, target_type);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		return RESULT_SUCCESS;
+	}
 	default:
 		report(node->location, "sema: unsupported node type.", 1);
 		break;

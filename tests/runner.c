@@ -76,6 +76,9 @@ int main(void) {
 	RUN_TEST(test_ParameterNameConflict);
 	RUN_TEST(test_FuncCallInitWrongType);
 	RUN_TEST(test_FuncCallAssignmentWrongType);
+	RUN_TEST(test_ExplicitCastWrongTypes_ValueToPointer);
+	RUN_TEST(test_ExplicitCastWrongTypes_PointerToValue);
+	RUN_TEST(test_ExplicitCastWrongTypes_ReturnType);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

@@ -152,3 +152,24 @@ void test_FuncCallAssignmentWrongType(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_ExplicitCastWrongTypes_ValueToPointer(void) {
+	TEST_SETUP_SINGLE("fn i32 foo() { i64 val; i64* p = (i64*)val; }");
+	const char *expected = "parser_tests.sl:0:44:Error: cannot convert type i64 into type i64*.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ExplicitCastWrongTypes_PointerToValue(void) {
+	TEST_SETUP_SINGLE("fn i32 foo() { i64 *p; i64 val = (i64)p; }");
+	const char *expected = "parser_tests.sl:0:44:Error: cannot convert type i64* into type i64.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ExplicitCastWrongTypes_ReturnType(void) {
+	TEST_SETUP_SINGLE("fn i32 foo() { i64 val; return (f32)val; }");
+	const char *expected = "parser_tests.sl:0:34:Error: function return type is i32 but returned value is of type f32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
