@@ -1,5 +1,12 @@
 #pragma once
 
+#include <stddef.h>
+
+typedef struct {
+    size_t size;
+    size_t align;
+} TypeInfo;
+
 typedef enum { TYPE_PRIMITIVE, TYPE_POINTER, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_UNDECIDED } TypeKind;
 
 typedef struct Type {
@@ -36,3 +43,6 @@ void type_print(char *string, Type *type);
 
 // Used for printing symbol table
 int type_get_string_len(Type *type, int initial);
+
+struct ASTNode;
+TypeInfo get_type_info(Type *type, struct ASTNode *node);

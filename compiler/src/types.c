@@ -1,9 +1,111 @@
 #include "types.h"
+#include "parser.h"
 #include "util.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+TypeInfo compute_struct_size_and_alignment(ASTNode *node);
+
+TypeInfo get_type_info(Type *type, ASTNode *node) {
+	TypeInfo info = {0, 1};
+	if (!type || !node)
+		return info;
+
+	switch (type->kind) {
+	case TYPE_PRIMITIVE: {
+		char *type_name = type->type_name;
+		if (strcmp(type_name, "i8") == 0) {
+			info.size = 1;
+			info.align = 1;
+		} else if (strcmp(type_name, "u8") == 0) {
+			info.size = 1;
+			info.align = 1;
+		} else if (strcmp(type_name, "i16") == 0) {
+			info.size = 2;
+			info.align = 2;
+		} else if (strcmp(type_name, "u16") == 0) {
+			info.size = 2;
+			info.align = 2;
+		} else if (strcmp(type_name, "i32") == 0) {
+			info.size = 4;
+			info.align = 4;
+		} else if (strcmp(type_name, "u32") == 0) {
+			info.size = 4;
+			info.align = 4;
+		} else if (strcmp(type_name, "i64") == 0) {
+			info.size = 8;
+			info.align = 8;
+		} else if (strcmp(type_name, "u64") == 0) {
+			info.size = 8;
+			info.align = 8;
+		} else if (strcmp(type_name, "f32") == 0) {
+			info.size = 4;
+			info.align = 4;
+		} else if (strcmp(type_name, "f64") == 0) {
+			info.size = 8;
+			info.align = 8;
+		} else if (strcmp(type_name, "bool") == 0) {
+			info.size = 1;
+			info.align = 1;
+		}
+		return info;
+	};
+	case TYPE_POINTER:
+		info.size = sizeof(void *);
+		info.align = sizeof(void *);
+		return info;
+	case TYPE_ARRAY: {
+		TypeInfo elem_info = get_type_info(type->array.element_type, node);
+		info.size = elem_info.size * type->array.size;
+		info.align = elem_info.align;
+		return info;
+	}
+	case TYPE_FUNCTION:
+		return info;
+	case TYPE_STRUCT:
+		return compute_struct_size_and_alignment(node);
+	case TYPE_ENUM:
+		return get_type_info(node->data.enum_decl.base_type, node);
+	case TYPE_UNDECIDED:
+		break;
+	}
+	return info;
+}
+
+TypeInfo compute_struct_size_and_alignment(ASTNode *node) {
+	TypeInfo info = {0, 1};
+	if (!node)
+		return info;
+
+	assert(node->type == AST_STRUCT_DECL);
+
+	size_t offset = 0;
+	size_t max_align = 1;
+
+	ASTNode *current_field = node->data.struct_decl.fields;
+	while (current_field) {
+		assert(current_field->type == AST_FIELD_DECL);
+		TypeInfo field_info = get_type_info(current_field->data.field_decl.type, current_field);
+
+		if (field_info.align > max_align)
+			max_align = field_info.align;
+
+		size_t padding = (info.align - (offset % info.align)) % info.align;
+		offset += padding;
+		offset += info.size;
+
+		current_field = current_field->next;
+	}
+
+	size_t final_padding = (max_align - (offset % max_align) % max_align);
+	info.size = offset + final_padding;
+	info.align = max_align;
+	return info;
+}
+
+size_t align_to(size_t offset, size_t alignment) { return (offset + alignment - 1) & ~(alignment - 1); }
 
 Type *copy_type(Type *type) {
 	Type *t = malloc(sizeof(Type));

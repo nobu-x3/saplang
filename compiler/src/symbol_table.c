@@ -77,7 +77,30 @@ CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, int i
 	symb->kind = kind;
 	symb->scope_level = scope_level;
 	symb->is_const = is_const;
-    symb->node = node;
+	symb->size = 0;
+	symb->alignment = 0;
+	symb->node = node;
+	symb->next = *table;
+	*table = symb;
+	return RESULT_SUCCESS;
+}
+
+CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const char *name, int is_const, SymbolKind kind, Type *type, int scope_level, size_t size, size_t align) {
+	if (!table)
+		return RESULT_PASSED_NULL_PTR;
+
+	Symbol *symb = malloc(sizeof(Symbol));
+	if (!symb)
+		return RESULT_MEMORY_ERROR;
+
+	strncpy(symb->name, name, sizeof(symb->name));
+	symb->type = copy_type(type);
+	symb->kind = kind;
+	symb->scope_level = scope_level;
+	symb->is_const = is_const;
+	symb->size = size;
+	symb->alignment = align;
+	symb->node = node;
 	symb->next = *table;
 	*table = symb;
 	return RESULT_SUCCESS;
@@ -109,7 +132,7 @@ Symbol *symbol_table_copy(Symbol *table) {
 	while (current) {
 		Type *type_copy = copy_type(current->type);
 		ASTNode *node_copy = copy_ast_node(current->node);
-		add_symbol(&new_table, node_copy, current->name, current->is_const, current->kind, type_copy, current->scope_level);
+		add_symbol_with_type_info(&new_table, node_copy, current->name, current->is_const, current->kind, type_copy, current->scope_level, current->size, current->alignment);
 		current = current->next;
 	}
 
@@ -125,4 +148,25 @@ void symbol_table_merge(Symbol *external, Symbol *internal) {
 		current_ext = current_ext->next;
 	}
 	current_ext->next = internal;
+}
+
+void set_size(Symbol *symbol) {
+	if (!symbol)
+		return;
+
+	Type *type = symbol->type;
+	if (!type)
+		return;
+
+	TypeInfo info = get_type_info(type, symbol->node);
+	symbol->size = info.size;
+	symbol->alignment = info.align;
+}
+
+void symbol_table_set_type_info(Symbol *table) {
+	Symbol *current = table;
+	while (current) {
+		set_size(current);
+		current = current->next;
+	}
 }
