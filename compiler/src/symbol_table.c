@@ -31,7 +31,7 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 		print(string, " ");
 	}
 
-	print(string, "\tScope\n");
+	print(string, "\tScope\tSize\tAlignment\n");
 
 	for (Symbol *sym = table; sym; sym = sym->next) {
 		if (sym->kind == SYMB_VAR) {
@@ -49,9 +49,8 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 			print(string, " ");
 		}
 
-		print("\t", "%d", sym->is_const);
+		print(string, "\t%d\t", sym->is_const);
 
-		print(string, "\t");
 		type_print(string, sym->type);
 
 		int type_len = type_get_string_len(sym->type, 0);
@@ -59,7 +58,7 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 			print(string, " ");
 		}
 
-		print(string, "\t%d\n", sym->scope_level)
+		print(string, "\t%d\t%zu\t%zu\n", sym->scope_level, sym->size, sym->alignment);
 	}
 	return RESULT_SUCCESS;
 }
