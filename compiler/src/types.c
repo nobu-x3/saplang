@@ -193,6 +193,15 @@ Type *new_primitive_type(const char *name) {
 	return t;
 }
 
+Type get_primitive_type(const char* name) {
+    Type t = {TYPE_PRIMITIVE};
+
+    strncpy(t.type_name, name, sizeof(t.type_name));
+	memset(t.namespace, 0, sizeof(t.namespace));
+
+    return t;
+}
+
 Type *new_pointer_type(Type *pointee) {
 	Type *t = malloc(sizeof(Type));
 	if (!t)
@@ -312,6 +321,53 @@ int type_get_string_len(Type *type, int initial) {
 			// 2 comes from '::'
 			return initial + strlen(type->namespace) + 2 + strlen(type->type_name);
 		return initial + strlen(type->type_name);
+	}
+}
+
+int is_builtin(const Type *type) {
+	switch (type->kind) {
+	case TYPE_PRIMITIVE: {
+		int is_builtin = 0;
+		const char *type_name = type->type_name;
+		if (strcmp(type_name, "i8") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "u8") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "i16") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "u16") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "i32") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "u32") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "i64") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "u64") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "f32") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "f64") == 0) {
+			is_builtin = 1;
+		} else if (strcmp(type_name, "bool") == 0) {
+			is_builtin = 1;
+		}
+		return is_builtin;
+	} break;
+	case TYPE_POINTER:
+		return is_builtin(type->pointee);
+		break;
+	case TYPE_ARRAY:
+		return is_builtin(type->array.element_type);
+		break;
+	case TYPE_FUNCTION:
+		return 1;
+	case TYPE_STRUCT:
+		return 0;
+	case TYPE_ENUM:
+		return 0;
+	case TYPE_UNDECIDED:
+		return 0;
 	}
 }
 

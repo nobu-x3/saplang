@@ -3,8 +3,20 @@
 #include "symbol_table.h"
 #include "types.h"
 #include "util.h"
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
+
+int is_known_type(Symbol *table, const Type *source, int current_scope) {
+	if (is_builtin(source))
+		return 1;
+
+	Symbol *sym = lookup_symbol(table, source->type_name, current_scope);
+	if (!sym)
+		return 0;
+
+	return 1;
+}
 
 int is_convertible(const Type *source, const Type *target) {
 	if (!source || !target)
@@ -39,6 +51,16 @@ int is_convertible(const Type *source, const Type *target) {
 
 	if (source->kind != TYPE_POINTER && target->kind == TYPE_POINTER) {
 		return 0;
+	}
+
+	if (target->kind == TYPE_PRIMITIVE) {
+		if (strcmp(target->type_name, "bool") == 0) {
+			if (source->kind == TYPE_POINTER)
+				return 1;
+
+			if (source->kind == TYPE_PRIMITIVE)
+				return 1;
+		}
 	}
 	return 0;
 }
@@ -130,6 +152,15 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 			CompilerResult result;
 			if (node->data.var_decl.init->type == AST_EXPR_LITERAL) {
 				// TODO: type matching and implicit conversions
+				assert(node->data.var_decl.type);
+				if (!is_known_type(table, node->data.var_decl.type, scope_level)) {
+					char type_str[128] = "";
+					type_print(type_str, node->data.var_decl.type);
+					char msg[128] = "";
+					sprintf(msg, "unknown type %s.", type_str);
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
 				result = analyze_expr_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level);
 			} else {
 				result = analyze_ast(table, node->data.var_decl.init, scope_level);
@@ -373,6 +404,56 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		}
 		return RESULT_SUCCESS;
 	}
+	case AST_WHILE_LOOP: {
+		CompilerResult result = analyze_ast(table, node->data.while_loop.condition, scope_level);
+		if (result != RESULT_SUCCESS)
+			return result;
+
+		Type bool_type = get_primitive_type("bool");
+		Type *condition_type = get_type(table, node->data.while_loop.condition, scope_level);
+		if (!is_convertible(condition_type, &bool_type)) {
+			char condition_type_str[128] = "";
+			type_print(condition_type_str, condition_type);
+			char msg[128] = "";
+			sprintf(msg, "while loop condition must convert to bool but is of type %s .", condition_type_str);
+			report(node->data.while_loop.condition->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+
+		result = analyze_ast(table, node->data.while_loop.body, scope_level + 1);
+		if (result != RESULT_SUCCESS)
+			return result;
+
+	} break;
+	case AST_FOR_LOOP: {
+		CompilerResult result = analyze_ast(table, node->data.for_loop.init, scope_level);
+		if (result != RESULT_SUCCESS)
+			return result;
+
+		result = analyze_ast(table, node->data.for_loop.condition, scope_level);
+		if (result != RESULT_SUCCESS)
+			return result;
+
+		Type bool_type = get_primitive_type("bool");
+		Type *condition_type = get_type(table, node->data.for_loop.condition, scope_level);
+		if (!is_convertible(condition_type, &bool_type)) {
+			char condition_type_str[128] = "";
+			type_print(condition_type_str, condition_type);
+			char msg[128] = "";
+			sprintf(msg, "for loop condition must convert to bool but is of type %s .", condition_type_str);
+			report(node->data.while_loop.condition->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+
+		result = analyze_ast(table, node->data.for_loop.post, scope_level);
+		if (result != RESULT_SUCCESS)
+			return result;
+
+		result = analyze_ast(table, node->data.for_loop.body, scope_level);
+		if (result != RESULT_SUCCESS)
+			return result;
+
+	} break;
 	default:
 		report(node->location, "sema: unsupported node type.", 1);
 		break;

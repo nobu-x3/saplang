@@ -3,8 +3,8 @@
 #include <stddef.h>
 
 typedef struct {
-    size_t size;
-    size_t align;
+	size_t size;
+	size_t align;
 } TypeInfo;
 
 typedef enum { TYPE_PRIMITIVE, TYPE_POINTER, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_UNDECIDED } TypeKind;
@@ -34,12 +34,14 @@ typedef struct Type {
 Type *copy_type(Type *type);
 void type_deinit(Type *type);
 Type *new_primitive_type(const char *name);
+Type get_primitive_type(const char* name);
 Type *new_pointer_type(Type *pointee);
 Type *new_array_type(Type *element_type, int size);
 Type *new_function_type(Type *return_type, Type **param_types, int param_count);
 Type *new_named_type(const char *name, const char *namespace, TypeKind kind); // structs/enums
 int type_equals(const Type *a, const Type *b);
 void type_print(char *string, Type *type);
+int is_builtin(const Type *type);
 
 // Used for printing symbol table
 int type_get_string_len(Type *type, int initial);
