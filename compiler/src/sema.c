@@ -65,7 +65,7 @@ int is_convertible(const Type *source, const Type *target) {
 	return 0;
 }
 
-Type *get_type(Symbol *table, ASTNode *node, int scope_level) {
+Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier) {
 	if (!node)
 		return NULL;
 	switch (node->type) {
@@ -79,22 +79,34 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level) {
 		}
 		break;
 	case AST_EXPR_IDENT: {
-		char full_name[128] = "";
+		char name_with_namespace[128] = "";
 		if (node->data.ident.namespace[0] != '\0') {
-			sprintf(full_name, "%s::%s", node->data.ident.namespace, node->data.ident.name);
+			sprintf(name_with_namespace, "%s::%s", node->data.ident.namespace, node->data.ident.name);
 		} else {
-			sprintf(full_name, "%s", node->data.ident.name);
+			sprintf(name_with_namespace, "%s", node->data.ident.name);
 		}
-		Symbol *sym = lookup_symbol(table, full_name, scope_level);
+
+		Symbol *sym = lookup_symbol_weak(table, name_with_namespace, scope_level);
 		if (!sym) {
-			return NULL;
+			if (scope_specifier[0] != '\0') {
+				char resolved_same[128] = "";
+				sprintf(resolved_same, "__%s", scope_specifier);
+				if (node->data.ident.namespace[0] != '\0') {
+					sprintf(resolved_same, "%s::%s_%s", node->data.ident.namespace, resolved_same, node->data.ident.name);
+				} else {
+					sprintf(resolved_same, "%s_%s", resolved_same, node->data.ident.name);
+				}
+				sym = lookup_symbol(table, resolved_same, scope_level);
+				if (!sym)
+					return NULL;
+			}
 		}
 		return sym->type;
 	}
 	case AST_BINARY_EXPR:
-		return get_type(table, node->data.binary_op.left, scope_level);
+		return get_type(table, node->data.binary_op.left, scope_level, scope_specifier);
 	case AST_ASSIGNMENT:
-		return get_type(table, node->data.assignment.lvalue, scope_level);
+		return get_type(table, node->data.assignment.lvalue, scope_level, scope_specifier);
 	case AST_FN_DECL: {
 		Symbol *sym = lookup_symbol(table, node->data.func_decl.name, scope_level);
 		if (!sym) {
@@ -103,19 +115,19 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level) {
 		return sym->type;
 	}
 	case AST_FN_CALL:
-		return get_type(table, node->data.func_call.callee, scope_level);
+		return get_type(table, node->data.func_call.callee, scope_level, scope_specifier);
 	case AST_CAST:
 		return node->data.cast.target_type;
 	case AST_RETURN:
-		return get_type(table, node->data.ret.return_expr, scope_level);
+		return get_type(table, node->data.ret.return_expr, scope_level, scope_specifier);
 	default:
 		return NULL;
 	}
 	return NULL;
 }
 
-CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level) {
-	Type *rtype = get_type(table, node, scope_level);
+CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level, const char *scope_specifier) {
+	Type *rtype = get_type(table, node, scope_level, scope_specifier);
 	if (is_convertible(rtype, lvalue_type))
 		rtype = copy_type(lvalue_type);
 	else if (rtype) {
@@ -138,7 +150,7 @@ CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *n
 	return RESULT_SUCCESS;
 }
 
-CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
+CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier) {
 	if (!node)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -161,16 +173,16 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
 				}
-				result = analyze_expr_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level);
+				result = analyze_expr_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
 			} else {
-				result = analyze_ast(table, node->data.var_decl.init, scope_level);
+				result = analyze_ast(table, node->data.var_decl.init, scope_level, scope_specifier);
 			}
 
 			if (result != RESULT_SUCCESS) {
 				return result;
 			}
 
-			Type *init_type = get_type(table, node->data.var_decl.init, scope_level);
+			Type *init_type = get_type(table, node->data.var_decl.init, scope_level, scope_specifier);
 			if (!init_type) {
 				return RESULT_FAILURE;
 			}
@@ -185,14 +197,22 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 	case AST_BLOCK: {
 		CompilerResult result;
 		for (int i = 0; i < node->data.block.count; ++i) {
-			result = analyze_ast(table, node->data.block.statements[i], scope_level);
+			result = analyze_ast(table, node->data.block.statements[i], scope_level, scope_specifier);
 			if (result != RESULT_SUCCESS)
 				return result;
 		}
 	} break;
 	case AST_EXPR_IDENT: {
-		Symbol *sym = lookup_symbol(table, node->data.ident.name, scope_level);
-		if (!sym) {
+		Symbol *non_var_sym = lookup_symbol_weak(table, node->data.ident.name, scope_level);
+		if (!non_var_sym) {
+
+			char resolved_name[128] = "";
+			if (scope_specifier[0] != '\0')
+				sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.ident.name);
+			else
+				strncpy(resolved_name, node->data.ident.name, sizeof(resolved_name));
+
+			Symbol *var_sym = lookup_symbol(table, resolved_name, scope_level);
 			char msg[64] = "";
 			sprintf(msg, "undeclared identifier %s.", node->data.ident.name);
 			report(node->location, msg, 0);
@@ -203,16 +223,16 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		break;
 	}
 	case AST_BINARY_EXPR: {
-		CompilerResult result = analyze_ast(table, node->data.binary_op.left, scope_level);
+		CompilerResult result = analyze_ast(table, node->data.binary_op.left, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 
-		result = analyze_ast(table, node->data.binary_op.right, scope_level);
+		result = analyze_ast(table, node->data.binary_op.right, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 
-		Type *ltype = get_type(table, node->data.binary_op.left, scope_level);
-		Type *rtype = get_type(table, node->data.binary_op.right, scope_level);
+		Type *ltype = get_type(table, node->data.binary_op.left, scope_level, scope_specifier);
+		Type *rtype = get_type(table, node->data.binary_op.right, scope_level, scope_specifier);
 		if (!is_convertible(rtype, ltype)) {
 			char left_str[128] = "";
 			char right_str[128] = "";
@@ -225,13 +245,19 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		}
 	} break;
 	case AST_ASSIGNMENT: {
-		CompilerResult result = analyze_ast(table, node->data.assignment.lvalue, scope_level);
+		CompilerResult result = analyze_ast(table, node->data.assignment.lvalue, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 
 		if (node->data.assignment.lvalue->type == AST_EXPR_IDENT) {
 			// This should never be NULL at this point because we passed the analyze_ast call above
-			Symbol *sym = lookup_symbol(table, node->data.assignment.lvalue->data.ident.name, scope_level);
+			char resolved_name[128] = "";
+			if (scope_specifier[0] != '\0')
+				sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.assignment.lvalue->data.ident.name);
+			else
+				strncpy(resolved_name, node->data.assignment.lvalue->data.ident.name, sizeof(resolved_name));
+
+			Symbol *sym = lookup_symbol(table, resolved_name, scope_level);
 			if (sym->is_const) {
 				char msg[256] = "";
 				sprintf(msg, "cannot assign a value to a const variable %s.", node->data.assignment.lvalue->data.ident.name);
@@ -245,18 +271,18 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 			return RESULT_FAILURE;
 		}
 
-		Type *ltype = get_type(table, node->data.assignment.lvalue, scope_level);
+		Type *ltype = get_type(table, node->data.assignment.lvalue, scope_level, scope_specifier);
 		if (node->data.assignment.rvalue->type == AST_EXPR_LITERAL) {
 			// TODO: type matching and implicit conversions
-			result = analyze_expr_literal(table, ltype, node->data.assignment.rvalue, scope_level);
+			result = analyze_expr_literal(table, ltype, node->data.assignment.rvalue, scope_level, scope_specifier);
 		} else {
-			result = analyze_ast(table, node->data.assignment.rvalue, scope_level);
+			result = analyze_ast(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 		}
 
 		if (result != RESULT_SUCCESS)
 			return result;
 
-		Type *rtype = get_type(table, node->data.assignment.rvalue, scope_level);
+		Type *rtype = get_type(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 		if (!is_convertible(rtype, ltype)) {
 			char left_str[128] = "";
 			char right_str[128] = "";
@@ -270,7 +296,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		return RESULT_SUCCESS;
 	} break;
 	case AST_FN_CALL: {
-		CompilerResult result = analyze_ast(table, node->data.func_call.callee, scope_level);
+		CompilerResult result = analyze_ast(table, node->data.func_call.callee, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 
@@ -300,9 +326,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 
 		param = sym->node->data.func_decl.params;
 		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
-			result = analyze_ast(table, node->data.func_call.args[i], scope_level);
+			result = analyze_ast(table, node->data.func_call.args[i], scope_level, scope_specifier);
 			Type *param_type = param->data.param_decl.type;
-			Type *arg_type = get_type(table, node->data.func_call.args[i], sym->scope_level + 1);
+			Type *arg_type = get_type(table, node->data.func_call.args[i], sym->scope_level + 1, scope_specifier);
 			if (!is_convertible(arg_type, param_type)) {
 				char left_str[128] = "";
 				char right_str[128] = "";
@@ -331,7 +357,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 			CompilerResult result;
 			ASTNode *param = node->data.func_decl.params;
 			while (param) {
-				result = analyze_ast(table, param, scope_level + 1);
+				result = analyze_ast(table, param, scope_level + 1, node->data.func_decl.name);
 				param = param->next;
 			}
 			if (result != RESULT_SUCCESS)
@@ -339,14 +365,14 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		}
 
 		if (node->data.func_decl.body) {
-			CompilerResult result = analyze_ast(table, node->data.func_decl.body, scope_level + 1);
+			CompilerResult result = analyze_ast(table, node->data.func_decl.body, scope_level + 1, node->data.func_decl.name);
 			if (result != RESULT_SUCCESS)
 				return result;
 
 			if (node->data.func_decl.body->data.block.count) {
 				ASTNode *last_stmt = node->data.func_decl.body->data.block.statements[node->data.func_decl.body->data.block.count - 1];
 				if (last_stmt && last_stmt->type == AST_RETURN) {
-					Type *ret_type = get_type(table, last_stmt, scope_level + 1);
+					Type *ret_type = get_type(table, last_stmt, scope_level + 1, scope_specifier);
 					if (!ret_type) {
 						return RESULT_FAILURE;
 					}
@@ -387,11 +413,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 	case AST_PARAM_DECL:
 		break;
 	case AST_CAST: {
-		CompilerResult result = analyze_ast(table, node->data.cast.expr, scope_level);
+		CompilerResult result = analyze_ast(table, node->data.cast.expr, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS) {
 			return result;
 		}
-		Type *expr_type = get_type(table, node->data.cast.expr, scope_level);
+		Type *expr_type = get_type(table, node->data.cast.expr, scope_level, scope_specifier);
 		if (!is_convertible(expr_type, node->data.cast.target_type)) {
 			char msg[256] = "";
 			char src_type[64] = "";
@@ -405,12 +431,12 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 		return RESULT_SUCCESS;
 	}
 	case AST_WHILE_LOOP: {
-		CompilerResult result = analyze_ast(table, node->data.while_loop.condition, scope_level);
+		CompilerResult result = analyze_ast(table, node->data.while_loop.condition, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 
 		Type bool_type = get_primitive_type("bool");
-		Type *condition_type = get_type(table, node->data.while_loop.condition, scope_level);
+		Type *condition_type = get_type(table, node->data.while_loop.condition, scope_level, scope_specifier);
 		if (!is_convertible(condition_type, &bool_type)) {
 			char condition_type_str[128] = "";
 			type_print(condition_type_str, condition_type);
@@ -420,22 +446,22 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 			return RESULT_FAILURE;
 		}
 
-		result = analyze_ast(table, node->data.while_loop.body, scope_level + 1);
+		result = analyze_ast(table, node->data.while_loop.body, scope_level + 1, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 
 	} break;
 	case AST_FOR_LOOP: {
-		CompilerResult result = analyze_ast(table, node->data.for_loop.init, scope_level);
+		CompilerResult result = analyze_ast(table, node->data.for_loop.init, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 
-		result = analyze_ast(table, node->data.for_loop.condition, scope_level);
+		result = analyze_ast(table, node->data.for_loop.condition, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 
 		Type bool_type = get_primitive_type("bool");
-		Type *condition_type = get_type(table, node->data.for_loop.condition, scope_level);
+		Type *condition_type = get_type(table, node->data.for_loop.condition, scope_level, scope_specifier);
 		if (!is_convertible(condition_type, &bool_type)) {
 			char condition_type_str[128] = "";
 			type_print(condition_type_str, condition_type);
@@ -445,11 +471,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level) {
 			return RESULT_FAILURE;
 		}
 
-		result = analyze_ast(table, node->data.for_loop.post, scope_level);
+		result = analyze_ast(table, node->data.for_loop.post, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 
-		result = analyze_ast(table, node->data.for_loop.body, scope_level);
+		result = analyze_ast(table, node->data.for_loop.body, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
 

@@ -63,7 +63,7 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 	return RESULT_SUCCESS;
 }
 
-CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, int is_const, SymbolKind kind, Type *type, int scope_level) {
+CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, const char *resolved_name, int is_const, SymbolKind kind, Type *type, int scope_level) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -72,6 +72,7 @@ CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, int i
 		return RESULT_MEMORY_ERROR;
 
 	strncpy(symb->name, name, sizeof(symb->name));
+	strncpy(symb->resolved_name, resolved_name, sizeof(symb->resolved_name));
 	symb->type = copy_type(type);
 	symb->kind = kind;
 	symb->scope_level = scope_level;
@@ -116,9 +117,17 @@ CompilerResult deinit_symbol_table(Symbol *table) {
 	return RESULT_SUCCESS;
 }
 
-Symbol *lookup_symbol(Symbol *table, const char *name, int current_scope) {
+Symbol *lookup_symbol(Symbol *table, const char *resolved_name, int current_scope) {
 	for (Symbol *s = table; s != NULL; s = s->next) {
-		if (strcmp(s->name, name) == 0 && s->scope_level <= current_scope)
+		if (strcmp(s->resolved_name, resolved_name) == 0 && s->scope_level <= current_scope)
+			return s;
+	}
+	return NULL;
+}
+
+Symbol *lookup_symbol_weak(Symbol *table, const char *name, int current_scope) {
+	for (Symbol *s = table; s != NULL; s = s->next) {
+		if (strcmp(s->name, name) == 0 && s->scope_level <= current_scope && s->type != SYMB_VAR)
 			return s;
 	}
 	return NULL;

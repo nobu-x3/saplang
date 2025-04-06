@@ -16,7 +16,7 @@
 	parser_init(&parser, scanner, NULL);                                                                                                                                                                                                       \
 	Module *module = parse_input(&parser);                                                                                                                                                                                                     \
 	for (ASTNode *node = module->ast; node != NULL; node = node->next) {                                                                                                                                                                       \
-		analyze_ast(module->symbol_table, node, 0);                                                                                                                                                                                            \
+		analyze_ast(module->symbol_table, node, 0, "");                                                                                                                                                                                            \
 	}                                                                                                                                                                                                                                          \
 	char *output = capture_error_end(old_stdout);
 

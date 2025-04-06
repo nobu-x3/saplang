@@ -409,6 +409,7 @@ ASTNode *copy_ast_node(ASTNode *node) {
 	switch (node->type) {
 	case AST_VAR_DECL:
 		strncpy(new_node->data.var_decl.name, node->data.var_decl.name, sizeof(new_node->data.var_decl.name));
+		strncpy(new_node->data.var_decl.resolved_name, node->data.var_decl.resolved_name, sizeof(new_node->data.var_decl.resolved_name));
 		new_node->data.var_decl.type = copy_type(node->data.var_decl.type);
 		new_node->data.var_decl.is_exported = node->data.var_decl.is_exported;
 		new_node->data.var_decl.is_const = node->data.var_decl.is_const;
@@ -743,11 +744,12 @@ ASTNode *new_struct_decl_node(const char *name, ASTNode *fields, SourceLocation 
 	return node;
 }
 
-ASTNode *new_var_decl_node(Type *type, const char *name, int is_exported, int is_const, ASTNode *initializer, SourceLocation loc) {
+ASTNode *new_var_decl_node(Type *type, const char *name, const char *resolved_name, int is_exported, int is_const, ASTNode *initializer, SourceLocation loc) {
 	ASTNode *node = new_ast_node(AST_VAR_DECL, loc);
 	if (!node)
 		return NULL;
 	strncpy(node->data.var_decl.name, name, sizeof(node->data.var_decl.name));
+	strncpy(node->data.var_decl.resolved_name, resolved_name, sizeof(node->data.var_decl.resolved_name));
 	node->data.var_decl.type = type;
 	node->data.var_decl.init = initializer;
 	node->data.var_decl.is_const = is_const;
@@ -1210,9 +1212,9 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported) {
 
 	if (!is_error) {
 		ASTNode *decl_node = new_enum_decl_node(enum_name, base_type, members.data, members.count, loc);
-		add_symbol(&parser->symbol_table, decl_node, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
+		add_symbol(&parser->symbol_table, decl_node, enum_name, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, decl_node, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
+			add_symbol(&parser->exported_table, decl_node, enum_name, enum_name, 1, SYMB_ENUM, base_type, parser->current_scope);
 		}
 		return decl_node;
 	}
@@ -1691,7 +1693,7 @@ ASTNode *parse_unary(Parser *parser) {
 
 // <varDecl>
 // ::= ('const')? <type> <identifier> ('=' <expression>)? ';'
-ASTNode *parse_var_decl(Parser *parser, int is_exported) {
+ASTNode *parse_var_decl(Parser *parser, const char *prefix_name, int is_exported) {
 	int is_const = 0;
 	if (parser->current_token.type == TOK_CONST) {
 		is_const = 1;
@@ -1712,7 +1714,15 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 	SourceLocation decl_location = parser->current_token.location;
 
 	int is_error = 0;
-	if (lookup_symbol(parser->symbol_table, var_name, parser->current_scope)) {
+
+	char resolved_name[128] = "";
+	if (prefix_name[0] != '\0') {
+		sprintf(resolved_name, "__%s_%s", prefix_name, var_name);
+	} else {
+		strncpy(resolved_name, var_name, sizeof(resolved_name));
+	}
+
+	if (lookup_symbol(parser->symbol_table, resolved_name, parser->current_scope)) {
 		char msg[128] = "";
 		sprintf(msg, "variable %s already declared in this scope.", var_name);
 		report(decl_location, msg, 0);
@@ -1733,10 +1743,16 @@ ASTNode *parse_var_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume ';'
 
 	if (!is_error) {
-		ASTNode *decl_node = new_var_decl_node(var_type, var_name, is_exported, is_const, init_expr, decl_location);
-		add_symbol(&parser->symbol_table, decl_node, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
+		char resolved_name[128] = "";
+		if (prefix_name[0] != '\0') {
+			sprintf(resolved_name, "__%s_%s", prefix_name, var_name);
+		} else {
+			strncpy(resolved_name, var_name, sizeof(resolved_name));
+		}
+		ASTNode *decl_node = new_var_decl_node(var_type, var_name, resolved_name, is_exported, is_const, init_expr, decl_location);
+		add_symbol(&parser->symbol_table, decl_node, var_name, resolved_name, is_const, SYMB_VAR, var_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, decl_node, var_name, is_const, SYMB_VAR, var_type, parser->current_scope);
+			add_symbol(&parser->exported_table, decl_node, var_name, resolved_name, is_const, SYMB_VAR, var_type, parser->current_scope);
 		}
 		return decl_node;
 	} else {
@@ -1749,12 +1765,12 @@ typedef struct {
 	int capacity, count;
 } DeferStack;
 
-ASTNode *parse_if_stmt(Parser *parser, DeferStack *dstack);
-ASTNode *parse_for_loop(Parser *parse, DeferStack *dstackr);
-ASTNode *parse_while_loop(Parser *parse, DeferStack *dstackr);
-ASTNode *parse_defer_block(Parser *parse, DeferStack *dstackr);
+ASTNode *parse_if_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack);
+ASTNode *parse_for_loop(Parser *parse, const char *prefix_name, DeferStack *dstackr);
+ASTNode *parse_while_loop(Parser *parse, const char *prefix_name, DeferStack *dstackr);
+ASTNode *parse_defer_block(Parser *parse, const char *prefix_name, DeferStack *dstackr);
 
-ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
+ASTNode *parse_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack) {
 	if (parser->current_token.type == TOK_BREAK) {
 		SourceLocation loc = parser->current_token.location;
 		parser->current_token = next_token(&parser->scanner); // consume 'break'
@@ -1774,16 +1790,16 @@ ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
 		return new_ast_node(AST_CONTINUE, loc);
 	}
 	if (parser->current_token.type == TOK_DEFER) {
-		return parse_defer_block(parser, dstack);
+		return parse_defer_block(parser, prefix_name, dstack);
 	}
 	if (parser->current_token.type == TOK_IF) {
-		return parse_if_stmt(parser, dstack);
+		return parse_if_stmt(parser, prefix_name, dstack);
 	}
 	if (parser->current_token.type == TOK_FOR) {
-		return parse_for_loop(parser, dstack);
+		return parse_for_loop(parser, prefix_name, dstack);
 	}
 	if (parser->current_token.type == TOK_WHILE) {
-		return parse_while_loop(parser, dstack);
+		return parse_while_loop(parser, prefix_name, dstack);
 	}
 	if (parser->current_token.type == TOK_RETURN) {
 		return parse_return_stmt(parser);
@@ -1793,7 +1809,7 @@ ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
 		parser->current_token.type == TOK_U16 || parser->current_token.type == TOK_U32 || parser->current_token.type == TOK_U64 || parser->current_token.type == TOK_F32 || parser->current_token.type == TOK_F64 ||
 		parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_VOID || parser->current_token.type == TOK_IDENTIFIER || parser->current_token.type == TOK_CONST) {
 		if (parser->current_token.type == TOK_CONST) {
-			return parse_var_decl(parser, 0);
+			return parse_var_decl(parser, prefix_name, 0);
 		}
 		// peek ahead
 		int save = parser->scanner.id;
@@ -1808,7 +1824,7 @@ ASTNode *parse_stmt(Parser *parser, DeferStack *dstack) {
 			}
 			parser->scanner.id = save;
 			parser->current_token = temp;
-			return parse_var_decl(parser, 0);
+			return parse_var_decl(parser, prefix_name, 0);
 		}
 		// restore and parse expression
 		if (type) {
@@ -1905,9 +1921,9 @@ ASTNode *parse_union_decl(Parser *parser, int is_exported) {
 	if (!is_error) {
 		Type *union_type = new_named_type(union_name, "", TYPE_STRUCT);
 		ASTNode *node = new_union_decl_node(union_name, field_list, loc);
-		add_symbol(&parser->symbol_table, node, union_name, 1, SYMB_UNION, union_type, parser->current_scope);
+		add_symbol(&parser->symbol_table, node, union_name, union_name, 1, SYMB_UNION, union_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, node, union_name, 1, SYMB_UNION, union_type, parser->current_scope);
+			add_symbol(&parser->exported_table, node, union_name, union_name, 1, SYMB_UNION, union_type, parser->current_scope);
 		}
 		type_deinit(union_type);
 		free(union_type);
@@ -1971,9 +1987,9 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 	if (!is_error) {
 		Type *struct_type = new_named_type(struct_name, "", TYPE_STRUCT);
 		ASTNode *node = new_struct_decl_node(struct_name, field_list, loc);
-		add_symbol(&parser->symbol_table, node, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
+		add_symbol(&parser->symbol_table, node, struct_name, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, node, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
+			add_symbol(&parser->exported_table, node, struct_name, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
 		}
 		type_deinit(struct_type);
 		free(struct_type);
@@ -2127,7 +2143,7 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 
 // <block>
 // ::= '{' (<statement>)* '}'
-ASTNode *parse_block(Parser *parser, DeferStack *dstack) {
+ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack) {
 	SourceLocation loc = parser->current_token.location;
 	int is_error = 0;
 	if (parser->current_token.type != TOK_LCURLY) {
@@ -2141,7 +2157,10 @@ ASTNode *parse_block(Parser *parser, DeferStack *dstack) {
 
 	DeferStack dstack_local = copy_defer_stack(dstack);
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
-		ASTNode *stmt = parse_stmt(parser, &dstack_local);
+		ASTNode *stmt = parse_stmt(parser, prefix_name, &dstack_local);
+		if (!stmt)
+			continue;
+
 		if (stmt->type == AST_DEFER_BLOCK) {
 			for (int j = 0; j < stmt->data.defer.defer_block->data.block.count; ++j) {
 				da_push_unsafe(dstack_local, stmt->data.defer.defer_block->data.block.statements[j]);
@@ -2170,7 +2189,7 @@ ASTNode *parse_block(Parser *parser, DeferStack *dstack) {
 
 // <deferBlock>
 // ::= 'defer' <block>
-ASTNode *parse_defer_block(Parser *parser, DeferStack *dstack) {
+ASTNode *parse_defer_block(Parser *parser, const char *prefix_name, DeferStack *dstack) {
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner); // consume 'defer'
 
@@ -2180,14 +2199,14 @@ ASTNode *parse_defer_block(Parser *parser, DeferStack *dstack) {
 		return report(parser->current_token.location, msg, 0);
 	}
 
-	ASTNode *inner_block = parse_block(parser, dstack);
+	ASTNode *inner_block = parse_block(parser, prefix_name, dstack);
 
 	return new_defer_block_node(inner_block, loc);
 }
 
 // <whileLoop>
 // ::= 'while' '(' <condition> ')' <block>
-ASTNode *parse_while_loop(Parser *parser, DeferStack *dstack) {
+ASTNode *parse_while_loop(Parser *parser, const char *prefix_name, DeferStack *dstack) {
 
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner);
@@ -2210,14 +2229,14 @@ ASTNode *parse_while_loop(Parser *parser, DeferStack *dstack) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	ASTNode *body = parse_block(parser, dstack);
+	ASTNode *body = parse_block(parser, prefix_name, dstack);
 
 	return new_while_loop_node(condition, body, loc);
 }
 
 // <forLoop>
 // ::= 'for' '(' <init> ';' <condition> ';' <post> ')' <block>
-ASTNode *parse_for_loop(Parser *parser, DeferStack *dstack) {
+ASTNode *parse_for_loop(Parser *parser, const char *prefix_name, DeferStack *dstack) {
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner); // consume 'if'
 	if (parser->current_token.type != TOK_LPAREN) {
@@ -2231,7 +2250,7 @@ ASTNode *parse_for_loop(Parser *parser, DeferStack *dstack) {
 	// All of these are optional technically
 	ASTNode *init = NULL;
 	if (parser->current_token.type != TOK_SEMICOLON) {
-		init = parse_var_decl(parser, 0); // this also consumes ';' and adds to symtable
+		init = parse_var_decl(parser, prefix_name, 0); // this also consumes ';' and adds to symtable
 	} else {
 		parser->current_token = next_token(&parser->scanner);
 	}
@@ -2262,14 +2281,14 @@ ASTNode *parse_for_loop(Parser *parser, DeferStack *dstack) {
 
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
-	ASTNode *body = parse_block(parser, dstack);
+	ASTNode *body = parse_block(parser, prefix_name, dstack);
 
 	return new_for_loop_node(init, condition, post, body, loc);
 }
 
 // <ifStmt>
 // ::= "if" '(' <expression> ')' <statement> ("else" <statement>)*
-ASTNode *parse_if_stmt(Parser *parser, DeferStack *dstack) {
+ASTNode *parse_if_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack) {
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner); // consume 'if'
 	if (parser->current_token.type != TOK_LPAREN) {
@@ -2292,7 +2311,7 @@ ASTNode *parse_if_stmt(Parser *parser, DeferStack *dstack) {
 
 	parser->current_token = next_token(&parser->scanner); // consume '('
 
-	ASTNode *then_branch = parse_block(parser, dstack);
+	ASTNode *then_branch = parse_block(parser, prefix_name, dstack);
 	if (!then_branch) {
 		free_ast_node(condition);
 		return NULL;
@@ -2302,9 +2321,9 @@ ASTNode *parse_if_stmt(Parser *parser, DeferStack *dstack) {
 	if (parser->current_token.type == TOK_ELSE) {
 		parser->current_token = next_token(&parser->scanner);
 		if (parser->current_token.type == TOK_IF)
-			else_branch = parse_stmt(parser, dstack);
+			else_branch = parse_stmt(parser, prefix_name, dstack);
 		else
-			else_branch = parse_block(parser, dstack);
+			else_branch = parse_block(parser, prefix_name, dstack);
 	}
 	return new_if_stmt_node(condition, then_branch, else_branch, loc);
 }
@@ -2358,14 +2377,14 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	++parser->current_scope;
 	DeferStack defer_stack;
 	da_init(defer_stack, 4);
-	ASTNode *body = parse_block(parser, &defer_stack);
+	ASTNode *body = parse_block(parser, func_name, &defer_stack);
 	da_deinit(defer_stack);
 	--parser->current_scope;
 	if (!is_error && body) {
 		ASTNode *decl_node = new_func_decl_node(func_name, params, body, loc);
-		add_symbol(&parser->symbol_table, decl_node, func_name, 1, SYMB_FN, type, parser->current_scope);
+		add_symbol(&parser->symbol_table, decl_node, func_name, func_name, 1, SYMB_FN, type, parser->current_scope);
 		if (is_exported)
-			add_symbol(&parser->exported_table, decl_node, func_name, 1, SYMB_FN, type, parser->current_scope);
+			add_symbol(&parser->exported_table, decl_node, func_name, func_name, 1, SYMB_FN, type, parser->current_scope);
 
 		type_deinit(type);
 		free(type);
@@ -2411,16 +2430,16 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 
 	ASTNode *decl_node = new_extern_func_decl_node(func_name, params, loc);
-	add_symbol(&parser->symbol_table, decl_node, func_name, 1, SYMB_FN, type, parser->current_scope);
+	add_symbol(&parser->symbol_table, decl_node, func_name, func_name, 1, SYMB_FN, type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, decl_node, func_name, 1, SYMB_FN, type, parser->current_scope);
+		add_symbol(&parser->exported_table, decl_node, func_name, func_name, 1, SYMB_FN, type, parser->current_scope);
 	}
 	type_deinit(type);
 	free(type);
 	return decl_node;
 }
 
-ASTNode *parse_extern_block(Parser *parser) {
+ASTNode *parse_extern_block(Parser *parser, const char *prefix_name) {
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner); // consume 'extern'
 	char lib_name[64] = "c";
@@ -2465,7 +2484,7 @@ ASTNode *parse_extern_block(Parser *parser) {
 				return NULL;
 			decl->data.enum_decl.is_exported = is_exported;
 		} else {
-			decl = parse_var_decl(parser, is_exported);
+			decl = parse_var_decl(parser, prefix_name, is_exported);
 			if (!decl)
 				return NULL;
 			decl->data.var_decl.is_exported = is_exported;
@@ -2511,9 +2530,9 @@ ASTNode *parse_global_decl(Parser *parser) {
 			return NULL;
 		decl->data.enum_decl.is_exported = is_exported;
 	} else if (parser->current_token.type == TOK_EXTERN) {
-		decl = parse_extern_block(parser);
+		decl = parse_extern_block(parser, "");
 	} else {
-		decl = parse_var_decl(parser, is_exported);
+		decl = parse_var_decl(parser, "", is_exported);
 		if (!decl)
 			return NULL;
 		decl->data.var_decl.is_exported = is_exported;

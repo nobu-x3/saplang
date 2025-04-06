@@ -65,6 +65,7 @@ typedef struct ASTNode {
 		struct {
 			Type *type;
 			char name[64];
+            char resolved_name[128];
 			int is_const;
 			int is_exported;
 			struct ASTNode *init; // Expression node

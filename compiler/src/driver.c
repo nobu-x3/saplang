@@ -462,7 +462,7 @@ void sema_task(void *arg) {
 		return;
 
 	// @TODO: print error in a thread safe manner
-	if (analyze_ast(node->module->symbol_table, node->module->ast, 0) != RESULT_SUCCESS) {
+	if (analyze_ast(node->module->symbol_table, node->module->ast, 0, "") != RESULT_SUCCESS) {
 		node->module->has_errors = 1;
 	}
 }

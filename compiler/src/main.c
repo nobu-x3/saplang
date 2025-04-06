@@ -10,7 +10,7 @@
 int main(int argc, const char **argv) {
 	CompileOptions options = {0};
 	CHK(driver_init(argc, argv), {});
-	CHK(driver_run(), { driver_deinit(); });
+	CHK(driver_run(), {});
 	driver_deinit();
 #if 0
 	{

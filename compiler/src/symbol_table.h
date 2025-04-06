@@ -13,6 +13,7 @@ typedef enum {
 
 typedef struct Symbol {
 	char name[64];
+    char resolved_name[128];
     Type* type;
 	int scope_level;
 	SymbolKind kind;
@@ -25,11 +26,13 @@ typedef struct Symbol {
 
 CompilerResult symbol_table_print(Symbol *table, char *string);
 
-CompilerResult add_symbol(Symbol **table, struct ASTNode* node, const char *name, int is_const, SymbolKind kind, Type *type, int scope_level);
+CompilerResult add_symbol(Symbol **table, struct ASTNode* node, const char *name, const char* resolved_name, int is_const, SymbolKind kind, Type *type, int scope_level);
 
 CompilerResult deinit_symbol_table(Symbol *table);
 
 Symbol *lookup_symbol(Symbol *table, const char *name, int current_scope);
+
+Symbol *lookup_symbol_weak(Symbol *table, const char *name, int current_scope);
 
 Symbol* symbol_table_copy(Symbol* table);
 
