@@ -85,7 +85,7 @@ CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, const
 	return RESULT_SUCCESS;
 }
 
-CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const char *name, int is_const, SymbolKind kind, Type *type, int scope_level, size_t size, size_t align) {
+CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const char *name, const char* resolved_name, int is_const, SymbolKind kind, Type *type, int scope_level, size_t size, size_t align) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -94,7 +94,8 @@ CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const ch
 		return RESULT_MEMORY_ERROR;
 
 	strncpy(symb->name, name, sizeof(symb->name));
-	symb->type = copy_type(type);
+	strncpy(symb->resolved_name, resolved_name, sizeof(symb->resolved_name));
+	symb->type = type;
 	symb->kind = kind;
 	symb->scope_level = scope_level;
 	symb->is_const = is_const;
@@ -136,28 +137,38 @@ Symbol *lookup_symbol_weak(Symbol *table, const char *name, int current_scope) {
 Symbol *symbol_table_copy(Symbol *table) {
 	Symbol *new_table = malloc(sizeof(Symbol));
 
-	Symbol *current = table;
+    new_table->type = copy_type(table->type);
+    new_table->node = table->node;
+    new_table->is_const = table->is_const;
+    new_table->kind = table->kind;
+    new_table->alignment = table->alignment;
+    new_table->size = table->size;
+    new_table->scope_level = table->scope_level;
+    strncpy(new_table->name, table->name, sizeof(new_table->name));
+    strncpy(new_table->resolved_name, table->resolved_name, sizeof(new_table->resolved_name));
+
+	Symbol *current = table->next;
 	while (current) {
 		Type *type_copy = copy_type(current->type);
-		ASTNode *node_copy = current->node;
-		add_symbol_with_type_info(&new_table, node_copy, current->name, current->is_const, current->kind, type_copy, current->scope_level, current->size, current->alignment);
+		ASTNode *node = current->node;
+		add_symbol_with_type_info(&new_table, node, current->name, current->resolved_name, current->is_const, current->kind, type_copy, current->scope_level, current->size, current->alignment);
 		current = current->next;
 	}
 
 	return new_table;
 }
 
-void symbol_table_merge(Symbol *external, Symbol *internal) {
+Symbol *symbol_table_merge(Symbol *external, Symbol *internal) {
 	if (!external)
-		return;
+		return internal;
 
-	Symbol *current_ext = symbol_table_copy(external);
-	Symbol *new_root = current_ext;
+	Symbol *new_root = symbol_table_copy(external);
+	Symbol *current_ext = new_root;
 	while (current_ext->next) {
 		current_ext = current_ext->next;
 	}
 	current_ext->next = internal;
-	internal = new_root;
+	return new_root;
 }
 
 void set_size(Symbol *symbol) {

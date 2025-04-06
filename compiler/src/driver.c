@@ -516,7 +516,7 @@ CompilerResult driver_run() {
 		}
 		if (!should_quit) {
 			for (int i = 0; i < current->dependencies.count; ++i) {
-				symbol_table_merge(current->dependencies.data[i]->module->exported_table, current->module->symbol_table);
+				current->module->symbol_table = symbol_table_merge(current->dependencies.data[i]->module->exported_table, current->module->symbol_table);
 			}
 		}
 	}
