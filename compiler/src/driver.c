@@ -1,8 +1,10 @@
 #include "driver.h"
 #include "parser.h"
+#include "sema.h"
 #include "symbol_table.h"
 #include "thread_pool.h"
 #include "timer.h"
+#include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -454,6 +456,17 @@ void parsing_task(void *arg) {
 	node->module = parse_input(&node->parser);
 }
 
+void sema_task(void *arg) {
+	DependencyGraphNode *node = (DependencyGraphNode *)arg;
+	if (!node)
+		return;
+
+	// @TODO: print error in a thread safe manner
+	if (analyze_ast(node->module->symbol_table, node->module->ast, 0) != RESULT_SUCCESS) {
+		node->module->has_errors = 1;
+	}
+}
+
 CompilerResult driver_run() {
 	if (driver.options.display_help) {
 		return RESULT_SUCCESS;
@@ -481,6 +494,8 @@ CompilerResult driver_run() {
 	if (driver.options.show_timings) {
 		time_prep = (get_time() - before);
 	}
+
+	int should_quit = 1;
 	////////////////////////////////////////////////////////
 	////////////////////////// PARSING
 	before = get_time();
@@ -489,10 +504,18 @@ CompilerResult driver_run() {
 		threadpool_submit_task(thread_pool, parsing_task, current);
 	}
 	threadpool_wait_all(thread_pool);
+
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		for (int i = 0; i < current->dependencies.count; ++i) {
+			symbol_table_merge(current->dependencies.data[i]->module->exported_table, current->module->symbol_table);
+		}
+	}
+
 	if (driver.options.show_timings) {
 		time_comp = (get_time() - before);
 	}
 	if (driver.options.ast_dump) {
+		printf("Parsed tree dump:\n");
 		for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 			printf("%s:\n", current->name);
 			ast_print(current->module->ast, 0, NULL);
@@ -506,10 +529,38 @@ CompilerResult driver_run() {
 	///////////////////////////////////////////////////////
 	////////////////////////// SEMA
 	before = get_time();
-	// do sema
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		threadpool_submit_task(thread_pool, sema_task, current);
+	}
+
+	threadpool_wait_all(thread_pool);
+
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		if (current->module->has_errors) {
+			fprintf(stderr, "%s failed semantic analysis.\n", current->name);
+			should_quit = 1;
+		}
+	}
+
 	if (driver.options.show_timings) {
 		time_sema = (get_time() - before);
 	}
+	if (driver.options.res_dump) {
+		printf("Resolved tree dump:\n");
+		for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+			printf("%s:\n", current->name);
+			ast_print(current->module->ast, 0, NULL);
+			printf("Symbol table:\n");
+			symbol_table_print(current->module->symbol_table, NULL);
+			printf("External symbol table:\n");
+			symbol_table_print(current->module->exported_table, NULL);
+			printf("\n");
+		}
+	}
+
+	if (should_quit)
+		return RESULT_FAILURE;
+
 	//////////////////////////////////////////////////////
 	//////////////////////// CFG
 	before = get_time();
