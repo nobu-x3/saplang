@@ -53,7 +53,7 @@ typedef enum {
 	AST_CONTINUE,
 	AST_BREAK,
 	AST_CAST,
-    AST_UNION_DECL,
+	AST_UNION_DECL,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -65,7 +65,7 @@ typedef struct ASTNode {
 		struct {
 			Type *type;
 			char name[64];
-            char resolved_name[128];
+			char resolved_name[128];
 			int is_const;
 			int is_exported;
 			struct ASTNode *init; // Expression node
@@ -214,8 +214,8 @@ typedef struct Parser {
 	char module_name[64];
 	int current_scope;
 	Scanner scanner;
-	Symbol *symbol_table;
-	Symbol *exported_table;
+	Symbol *symbol_table;	// even though it's first allocated here, driver owns this memory
+	Symbol *exported_table; // even though it's first allocated here, driver owns this memory
 	Token current_token;
 } Parser;
 

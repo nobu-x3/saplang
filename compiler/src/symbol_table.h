@@ -38,4 +38,4 @@ Symbol *symbol_table_copy(Symbol *table);
 
 void symbol_table_set_type_info(Symbol *table);
 
-Symbol* symbol_table_merge(Symbol *external, Symbol *internal);
+Symbol *symbol_table_merge(Symbol *external, Symbol *internal);

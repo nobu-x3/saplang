@@ -85,7 +85,7 @@ CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, const
 	return RESULT_SUCCESS;
 }
 
-CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const char *name, const char* resolved_name, int is_const, SymbolKind kind, Type *type, int scope_level, size_t size, size_t align) {
+CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const char *name, const char *resolved_name, int is_const, SymbolKind kind, Type *type, int scope_level, size_t size, size_t align) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -137,15 +137,16 @@ Symbol *lookup_symbol_weak(Symbol *table, const char *name, int current_scope) {
 Symbol *symbol_table_copy(Symbol *table) {
 	Symbol *new_table = malloc(sizeof(Symbol));
 
-    new_table->type = copy_type(table->type);
-    new_table->node = table->node;
-    new_table->is_const = table->is_const;
-    new_table->kind = table->kind;
-    new_table->alignment = table->alignment;
-    new_table->size = table->size;
-    new_table->scope_level = table->scope_level;
-    strncpy(new_table->name, table->name, sizeof(new_table->name));
-    strncpy(new_table->resolved_name, table->resolved_name, sizeof(new_table->resolved_name));
+	new_table->type = copy_type(table->type);
+	new_table->node = table->node;
+	new_table->is_const = table->is_const;
+	new_table->kind = table->kind;
+	new_table->alignment = table->alignment;
+	new_table->size = table->size;
+	new_table->scope_level = table->scope_level;
+	new_table->next = NULL;
+	strncpy(new_table->name, table->name, sizeof(new_table->name));
+	strncpy(new_table->resolved_name, table->resolved_name, sizeof(new_table->resolved_name));
 
 	Symbol *current = table->next;
 	while (current) {

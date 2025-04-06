@@ -46,8 +46,6 @@ CompilerResult parser_deinit(Parser *parser) {
 		return RESULT_PASSED_NULL_PTR;
 
 	scanner_deinit(&parser->scanner);
-	deinit_symbol_table(parser->symbol_table);
-	deinit_symbol_table(parser->exported_table);
 	return RESULT_SUCCESS;
 }
 

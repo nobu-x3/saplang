@@ -570,6 +570,13 @@ CompilerResult driver_run() {
 		}
 	}
 
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		if (current->module->symbol_table)
+			deinit_symbol_table(current->module->symbol_table);
+		if (current->module->exported_table)
+			deinit_symbol_table(current->module->exported_table);
+	}
+
 	if (should_quit)
 		return RESULT_FAILURE;
 
