@@ -65,17 +65,21 @@ int is_convertible(const Type *source, const Type *target) {
 	return 0;
 }
 
+Type primitive_bool_type = {TYPE_PRIMITIVE, "bool", ""};
+Type primitive_f32_type = {TYPE_PRIMITIVE, "f32", ""};
+Type primitive_i32_type = {TYPE_PRIMITIVE, "i32", ""};
+
 Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier) {
 	if (!node)
 		return NULL;
 	switch (node->type) {
 	case AST_EXPR_LITERAL:
 		if (node->data.literal.is_bool) {
-			return new_primitive_type("bool");
+			return &primitive_bool_type;
 		} else if (node->data.literal.is_float) {
-			return new_primitive_type("f32");
+			return &primitive_f32_type;
 		} else {
-			return new_primitive_type("i32");
+			return &primitive_i32_type;
 		}
 		break;
 	case AST_EXPR_IDENT: {
@@ -128,24 +132,24 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 
 CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level, const char *scope_specifier) {
 	Type *rtype = get_type(table, node, scope_level, scope_specifier);
-	if (is_convertible(rtype, lvalue_type))
-		rtype = copy_type(lvalue_type);
-	else if (rtype) {
-		char left_str[128] = "";
-		char right_str[128] = "";
-		type_print(left_str, node->data.var_decl.type);
-		type_print(right_str, rtype);
-		char msg[256] = "";
-		sprintf(msg, "assignment type mismatch: cannot implicitly convert %s to %s.", right_str, left_str);
-		report(node->location, msg, 0);
-		return RESULT_FAILURE;
-	} else {
-		if (!rtype) {
+	if (!is_convertible(rtype, lvalue_type)) {
+		if (rtype) {
+			char left_str[128] = "";
+			char right_str[128] = "";
+			type_print(left_str, node->data.var_decl.type);
+			type_print(right_str, rtype);
 			char msg[256] = "";
-			sprintf(msg, "Could not determine the type of rvalue in variable initialization.");
+			sprintf(msg, "assignment type mismatch: cannot implicitly convert %s to %s.", right_str, left_str);
 			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		} else {
+			if (!rtype) {
+				char msg[256] = "";
+				sprintf(msg, "Could not determine the type of rvalue in variable initialization.");
+				report(node->location, msg, 0);
+			}
+			return RESULT_FAILURE;
 		}
-		return RESULT_FAILURE;
 	}
 	return RESULT_SUCCESS;
 }

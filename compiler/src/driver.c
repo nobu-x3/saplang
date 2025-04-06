@@ -462,6 +462,11 @@ void sema_task(void *arg) {
 		return;
 
 	// @TODO: print error in a thread safe manner
+	if (!node->module->ast)
+		return;
+
+	symbol_table_set_type_info(node->module->symbol_table);
+
 	if (analyze_ast(node->module->symbol_table, node->module->ast, 0, "") != RESULT_SUCCESS) {
 		node->module->has_errors = 1;
 	}
@@ -495,7 +500,7 @@ CompilerResult driver_run() {
 		time_prep = (get_time() - before);
 	}
 
-	int should_quit = 1;
+	int should_quit = 0;
 	////////////////////////////////////////////////////////
 	////////////////////////// PARSING
 	before = get_time();
@@ -506,8 +511,13 @@ CompilerResult driver_run() {
 	threadpool_wait_all(thread_pool);
 
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
-		for (int i = 0; i < current->dependencies.count; ++i) {
-			symbol_table_merge(current->dependencies.data[i]->module->exported_table, current->module->symbol_table);
+		if (current->module->has_errors) {
+			should_quit = 1;
+		}
+		if (!should_quit) {
+			for (int i = 0; i < current->dependencies.count; ++i) {
+				symbol_table_merge(current->dependencies.data[i]->module->exported_table, current->module->symbol_table);
+			}
 		}
 	}
 
@@ -526,6 +536,8 @@ CompilerResult driver_run() {
 			printf("\n");
 		}
 	}
+	if (should_quit)
+		return RESULT_FAILURE;
 	///////////////////////////////////////////////////////
 	////////////////////////// SEMA
 	before = get_time();

@@ -66,8 +66,34 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 		return info;
 	case TYPE_STRUCT:
 		return compute_struct_size_and_alignment(node);
-	case TYPE_ENUM:
-		return get_type_info(node->data.enum_decl.base_type, node);
+	case TYPE_ENUM: {
+		char *type_name = type->type_name;
+		if (strcmp(type_name, "i8") == 0) {
+			info.size = 1;
+			info.align = 1;
+		} else if (strcmp(type_name, "u8") == 0) {
+			info.size = 1;
+			info.align = 1;
+		} else if (strcmp(type_name, "i16") == 0) {
+			info.size = 2;
+			info.align = 2;
+		} else if (strcmp(type_name, "u16") == 0) {
+			info.size = 2;
+			info.align = 2;
+		} else if (strcmp(type_name, "i32") == 0) {
+			info.size = 4;
+			info.align = 4;
+		} else if (strcmp(type_name, "u32") == 0) {
+			info.size = 4;
+			info.align = 4;
+		} else if (strcmp(type_name, "i64") == 0) {
+			info.size = 8;
+			info.align = 8;
+		} else if (strcmp(type_name, "u64") == 0) {
+			info.size = 8;
+			info.align = 8;
+		}
+	}
 	case TYPE_UNDECIDED:
 		break;
 	}
@@ -193,13 +219,13 @@ Type *new_primitive_type(const char *name) {
 	return t;
 }
 
-Type get_primitive_type(const char* name) {
-    Type t = {TYPE_PRIMITIVE};
+Type get_primitive_type(const char *name) {
+	Type t = {TYPE_PRIMITIVE};
 
-    strncpy(t.type_name, name, sizeof(t.type_name));
+	strncpy(t.type_name, name, sizeof(t.type_name));
 	memset(t.namespace, 0, sizeof(t.namespace));
 
-    return t;
+	return t;
 }
 
 Type *new_pointer_type(Type *pointee) {

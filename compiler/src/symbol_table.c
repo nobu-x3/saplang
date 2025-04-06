@@ -139,7 +139,7 @@ Symbol *symbol_table_copy(Symbol *table) {
 	Symbol *current = table;
 	while (current) {
 		Type *type_copy = copy_type(current->type);
-		ASTNode *node_copy = copy_ast_node(current->node);
+		ASTNode *node_copy = current->node;
 		add_symbol_with_type_info(&new_table, node_copy, current->name, current->is_const, current->kind, type_copy, current->scope_level, current->size, current->alignment);
 		current = current->next;
 	}
@@ -151,11 +151,13 @@ void symbol_table_merge(Symbol *external, Symbol *internal) {
 	if (!external)
 		return;
 
-	Symbol *current_ext = external;
+	Symbol *current_ext = symbol_table_copy(external);
+	Symbol *new_root = current_ext;
 	while (current_ext->next) {
 		current_ext = current_ext->next;
 	}
 	current_ext->next = internal;
+	internal = new_root;
 }
 
 void set_size(Symbol *symbol) {

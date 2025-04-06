@@ -32,6 +32,8 @@ typedef struct {
 
 void *report(SourceLocation location, const char *msg, int is_warning);
 
+unsigned long djb2(const char *str);
+
 #define da_push(xs, x)                                                                                                                                                                                                                         \
 	do {                                                                                                                                                                                                                                       \
 		if (xs.count >= xs.capacity) {                                                                                                                                                                                                         \
