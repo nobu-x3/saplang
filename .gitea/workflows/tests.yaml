@@ -10,7 +10,7 @@ on:
 
 jobs:
   arm64-linux-debug:
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: [ARM64]
     steps:
       - name: checkout
         uses: https://github.com/actions/checkout@v4
@@ -18,7 +18,7 @@ jobs:
         run: sh ci/arm64-linux-debug-tests.sh
 
   x86_64-linux-debug:
-    runs-on: [self-hosted, Linux, x64]
+    runs-on: [x64-linux]
     steps:
       - name: checkout
         uses: https://github.com/actions/checkout@v4
