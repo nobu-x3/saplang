@@ -10,3 +10,4 @@ build/bin/saplangc_tests
 # build/bin/saplangc
 # cp -r tests/module_tests build/bin/module_tests
 # build/bin/saplang_tests
+
