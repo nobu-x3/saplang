@@ -13,7 +13,7 @@ jobs:
     runs-on: [ARM64]
     steps:
       - name: checkout
-        uses: https://github.com/actions/checkout@v4
+        uses: actions/checkout@v4
       - name: Build and Test
         run: sh ci/arm64-linux-debug-tests.sh
 
@@ -21,6 +21,6 @@ jobs:
     runs-on: [x64-linux]
     steps:
       - name: checkout
-        uses: https://github.com/actions/checkout@v4
+        uses: actions/checkout@v4
       - name: Build and Test
         run: sh ci/x86_64-linux-debug-tests.sh
