@@ -18,7 +18,7 @@ jobs:
         run: sh ci/arm64-linux-debug-tests.sh
 
   x86_64-linux-debug:
-    runs-on: [x64-linux]
+    runs-on: [linux-x64-docker]
     steps:
       - name: checkout
         uses: actions/checkout@v4
