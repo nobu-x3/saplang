@@ -1,3 +1,4 @@
+#include "codegen_tests.h"
 #include "parser_tests.h"
 #include "sema_tests.h"
 #include "threadpool_tests.h"
@@ -80,6 +81,8 @@ int main(void) {
 	RUN_TEST(test_ExplicitCastWrongTypes_ValueToPointer);
 	RUN_TEST(test_ExplicitCastWrongTypes_PointerToValue);
 	RUN_TEST(test_ExplicitCastWrongTypes_ReturnType);
+
+    RUN_TEST(test_FunctionDecl_codegen);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

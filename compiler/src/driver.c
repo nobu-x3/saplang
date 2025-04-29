@@ -1,4 +1,5 @@
 #include "driver.h"
+#include "codegen.h"
 #include "parser.h"
 #include "sema.h"
 #include "symbol_table.h"
