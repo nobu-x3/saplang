@@ -105,6 +105,8 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 					return NULL;
 			}
 		}
+		if (sym->kind == SYMB_FN)
+			return get_type(table, sym->node, scope_level, scope_specifier);
 		return sym->type;
 	}
 	case AST_BINARY_EXPR:
@@ -116,7 +118,7 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		if (!sym) {
 			return NULL;
 		}
-		return sym->type;
+		return sym->type->function.return_type;
 	}
 	case AST_FN_CALL:
 		return get_type(table, node->data.func_call.callee, scope_level, scope_specifier);
@@ -376,16 +378,16 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (node->data.func_decl.body->data.block.count) {
 				ASTNode *last_stmt = node->data.func_decl.body->data.block.statements[node->data.func_decl.body->data.block.count - 1];
 				if (last_stmt && last_stmt->type == AST_RETURN) {
-					Type *ret_type = get_type(table, last_stmt, scope_level + 1, scope_specifier);
-					if (!ret_type) {
+					Type *stmt_type = get_type(table, last_stmt, scope_level + 1, scope_specifier);
+					if (!stmt_type) {
 						return RESULT_FAILURE;
 					}
-					if (!is_convertible(ret_type, sym->type)) {
+					if (!is_convertible(stmt_type, sym->type->function.return_type)) {
 						char msg[256] = "";
 						char expr_type_str[64] = "";
-						type_print(expr_type_str, ret_type);
+						type_print(expr_type_str, stmt_type);
 						char decl_type_str[64] = "";
-						type_print(decl_type_str, sym->type);
+						type_print(decl_type_str, sym->type->function.return_type);
 						sprintf(msg, "function return type is %s but returned value is of type %s.", decl_type_str, expr_type_str);
 						report(last_stmt->location, msg, 0);
 						return RESULT_FAILURE;

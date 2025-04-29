@@ -2338,8 +2338,8 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	if ((parser->current_token.type < TOKENS_BUILTIN_TYPE_BEGIN || parser->current_token.type > TOKENS_BUILTIN_TYPE_END) && parser->current_token.type == TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected return type.", 0);
 
-	Type *type = NULL;
-	if (parse_type(parser, &type) != RESULT_SUCCESS) {
+	Type *ret_type = NULL;
+	if (parse_type(parser, &ret_type) != RESULT_SUCCESS) {
 		return NULL;
 	}
 
@@ -2371,7 +2371,6 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 		is_error = 1;
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
-
 	++parser->current_scope;
 	DeferStack defer_stack;
 	da_init(defer_stack, 4);
@@ -2380,12 +2379,27 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	--parser->current_scope;
 	if (!is_error && body) {
 		ASTNode *decl_node = new_func_decl_node(func_name, params, body, loc);
-		add_symbol(&parser->symbol_table, decl_node, func_name, func_name, 1, SYMB_FN, type, parser->current_scope);
+		Type function_type = {TYPE_FUNCTION, "", ""};
+		function_type.function.return_type = ret_type;
+		function_type.function.param_count = 0;
+		struct {
+			Type **data;
+			int count, capacity;
+		} param_type_list;
+		da_init_unsafe(param_type_list, 4);
+		ASTNode *curr_param = params;
+		while (curr_param) {
+			da_push_unsafe(param_type_list, curr_param->data.param_decl.type);
+			curr_param = curr_param->next;
+		}
+		function_type.function.param_count = param_type_list.count;
+		function_type.function.param_types = param_type_list.data;
+		add_symbol(&parser->symbol_table, decl_node, func_name, func_name, 1, SYMB_FN, &function_type, parser->current_scope);
 		if (is_exported)
-			add_symbol(&parser->exported_table, decl_node, func_name, func_name, 1, SYMB_FN, type, parser->current_scope);
-
-		type_deinit(type);
-		free(type);
+			add_symbol(&parser->exported_table, decl_node, func_name, func_name, 1, SYMB_FN, &function_type, parser->current_scope);
+		da_deinit(param_type_list);
+		type_deinit(ret_type);
+		free(ret_type);
 		return decl_node;
 	}
 	return NULL;

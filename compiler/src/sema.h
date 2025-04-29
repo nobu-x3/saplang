@@ -5,6 +5,7 @@
 
 int is_convertible(const Type *source, const Type *target);
 
+// If given an AST_FUNC_DECL, will return return type of the function
 Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char* scope_specifier);
 
 /* ASTNode *insert_implicit_cast(ASTNode *expr, const char *target_type); */
