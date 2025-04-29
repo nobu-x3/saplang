@@ -10,3 +10,4 @@ build
 CMakeSettings.json
 .vscode
 rework_tests/.runners
+tags
