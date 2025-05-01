@@ -68,3 +68,102 @@ void test_FunctionDecl_codegen(void) {
 		free(error);
 	}
 }
+
+void test_BuiltinGlobalVarNoInit_codegen(void) {
+	{
+		CODEGEN_TEST_SETUP_SINGLE("i32 i;");
+		const char *expected = "; ModuleID = 'test'\n"
+							   "source_filename = \"test\"\n\n"
+							   "@i = global i32 0\n";
+		const char *expected_error = "";
+		TEST_ASSERT_EQUAL_STRING(expected, output);
+		TEST_ASSERT_EQUAL_STRING(expected_error, error);
+		free(error);
+	}
+	{
+		CODEGEN_TEST_SETUP_SINGLE("f32 i;");
+		const char *expected = "; ModuleID = 'test'\n"
+							   "source_filename = \"test\"\n\n"
+							   "@i = global bfloat 0xR0000\n";
+		const char *expected_error = "";
+		TEST_ASSERT_EQUAL_STRING(expected, output);
+		TEST_ASSERT_EQUAL_STRING(expected_error, error);
+		free(error);
+	}
+	{
+		CODEGEN_TEST_SETUP_SINGLE("bool i;");
+		const char *expected = "; ModuleID = 'test'\n"
+							   "source_filename = \"test\"\n\n"
+							   "@i = global i1 false\n";
+		const char *expected_error = "";
+		TEST_ASSERT_EQUAL_STRING(expected, output);
+		TEST_ASSERT_EQUAL_STRING(expected_error, error);
+		free(error);
+	}
+}
+
+void test_BuiltinGlobalVar_codegen(void) {
+	{
+		CODEGEN_TEST_SETUP_SINGLE("i32 i = 1;");
+		const char *expected = "; ModuleID = 'test'\n"
+							   "source_filename = \"test\"\n\n"
+							   "@i = global i32 1\n";
+		const char *expected_error = "";
+		TEST_ASSERT_EQUAL_STRING(expected, output);
+		TEST_ASSERT_EQUAL_STRING(expected_error, error);
+		free(error);
+	}
+	{
+		CODEGEN_TEST_SETUP_SINGLE("f32 i = 1.0;");
+		const char *expected = "; ModuleID = 'test'\n"
+							   "source_filename = \"test\"\n\n"
+							   "@i = global bfloat 0xR3F80\n";
+		const char *expected_error = "";
+		TEST_ASSERT_EQUAL_STRING(expected, output);
+		TEST_ASSERT_EQUAL_STRING(expected_error, error);
+		free(error);
+	}
+	{
+		CODEGEN_TEST_SETUP_SINGLE("bool i = true;");
+		const char *expected = "; ModuleID = 'test'\n"
+							   "source_filename = \"test\"\n\n"
+							   "@i = global i1 true\n";
+		const char *expected_error = "";
+		TEST_ASSERT_EQUAL_STRING(expected, output);
+		TEST_ASSERT_EQUAL_STRING(expected_error, error);
+		free(error);
+	}
+}
+
+void test_BuiltinGlobalConst_codegen(void) {
+	{
+		CODEGEN_TEST_SETUP_SINGLE("const i32 i = 1;");
+		const char *expected = "; ModuleID = 'test'\n"
+							   "source_filename = \"test\"\n\n"
+							   "@i = constant i32 1\n";
+		const char *expected_error = "";
+		TEST_ASSERT_EQUAL_STRING(expected, output);
+		TEST_ASSERT_EQUAL_STRING(expected_error, error);
+		free(error);
+	}
+	{
+		CODEGEN_TEST_SETUP_SINGLE("const f32 i = 1.0;");
+		const char *expected = "; ModuleID = 'test'\n"
+							   "source_filename = \"test\"\n\n"
+							   "@i = constant bfloat 0xR3F80\n";
+		const char *expected_error = "";
+		TEST_ASSERT_EQUAL_STRING(expected, output);
+		TEST_ASSERT_EQUAL_STRING(expected_error, error);
+		free(error);
+	}
+	{
+		CODEGEN_TEST_SETUP_SINGLE("const bool i = true;");
+		const char *expected = "; ModuleID = 'test'\n"
+							   "source_filename = \"test\"\n\n"
+							   "@i = constant i1 true\n";
+		const char *expected_error = "";
+		TEST_ASSERT_EQUAL_STRING(expected, output);
+		TEST_ASSERT_EQUAL_STRING(expected_error, error);
+		free(error);
+	}
+}

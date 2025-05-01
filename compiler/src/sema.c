@@ -166,6 +166,18 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, "const variable must have an initializer.", 0);
 			return RESULT_FAILURE;
 		}
+		if (node->data.var_decl.type->kind == TYPE_UNDECIDED) {
+			Symbol *sym = lookup_symbol(table, node->data.var_decl.type->type_name, 0);
+			if (!sym) {
+				char type_str[128] = "";
+				type_print(type_str, node->data.var_decl.type);
+				char msg[128] = "";
+				sprintf(msg, "declaring variable of unknown type %s.", type_str);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			node->data.var_decl.type->kind = sym->type->kind;
+		}
 		if (node->data.var_decl.init) {
 			CompilerResult result;
 			if (node->data.var_decl.init->type == AST_EXPR_LITERAL) {

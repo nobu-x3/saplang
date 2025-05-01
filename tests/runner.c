@@ -82,7 +82,10 @@ int main(void) {
 	RUN_TEST(test_ExplicitCastWrongTypes_PointerToValue);
 	RUN_TEST(test_ExplicitCastWrongTypes_ReturnType);
 
-    RUN_TEST(test_FunctionDecl_codegen);
+	RUN_TEST(test_FunctionDecl_codegen);
+	RUN_TEST(test_BuiltinGlobalVarNoInit_codegen);
+	RUN_TEST(test_BuiltinGlobalVar_codegen);
+	RUN_TEST(test_BuiltinGlobalConst_codegen);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();

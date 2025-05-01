@@ -1,4 +1,5 @@
 #include "codegen.h"
+#include "parser.h"
 #include "symbol_table.h"
 #include "types.h"
 
@@ -8,6 +9,29 @@
 #include <llvm-c/Types.h>
 #include <stdio.h>
 #include <string.h>
+
+#define PLATFORM_POINTER_SIZE 64
+
+typedef enum DebugEncodingType {
+	DW_ATE_address = 0x01,
+	DW_ATE_boolean = 0x02,
+	DW_ATE_complex_float = 0x03,
+	DW_ATE_float = 0x04,
+	DW_ATE_signed = 0x05,
+	DW_ATE_signed_char = 0x06,
+	DW_ATE_unsigned = 0x07,
+	DW_ATE_unsigned_char = 0x08,
+	DW_ATE_imaginary_float = 0x09,
+	DW_ATE_packed_decimal = 0x0a,
+	DW_ATE_numeric_string = 0x0b,
+	DW_ATE_edited = 0x0c,
+	DW_ATE_signed_fixed = 0x0d,
+	DW_ATE_unsigned_fixed = 0x0e,
+	DW_ATE_decimal_float = 0x0f,
+	DW_ATE_UTF = 0x10,
+	DW_ATE_lo_user = 0x80,
+	DW_ATE_hi_user = 0xff
+} DebugEncodingType;
 
 CodegenLLVM codegen_init(CodegenInitContext *init_params) {
 	CodegenLLVM cg = {init_params->should_build_debug, 0};
@@ -103,8 +127,48 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 	}
 	return NULL;
 }
-
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable);
+
+LLVMValueRef codegen_expr_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type, Symbol *table) {
+	LLVMTypeRef ty = map_to_llvm(cg, expected_type, table);
+	if (node->data.literal.is_bool) {
+		return LLVMConstInt(ty, node->data.literal.bool_value, 0);
+	} else if (node->data.literal.is_float) {
+		return LLVMConstReal(ty, node->data.literal.float_value);
+	}
+	return LLVMConstInt(ty, node->data.literal.long_value, 1);
+}
+
+LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
+	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
+	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.name);
+	LLVMValueRef init_value = LLVMConstNull(ty);
+	if (node->data.var_decl.init) {
+		switch (node->data.var_decl.init->type) {
+		case AST_EXPR_LITERAL:
+			init_value = codegen_expr_literal(cg, node->data.var_decl.init, node->data.var_decl.type, table);
+			break;
+		default:
+			assert(0);
+		}
+	}
+	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
+	LLVMSetInitializer(global_var, init_value);
+	LLVMSetLinkage(global_var, LLVMExternalLinkage);
+	// LLVMSetThreadLocal(global_var, 0);
+	// LLVMSetThreadLocalMode(global_var, LLVMNotThreadLocal);
+	return global_var;
+}
+
+LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
+	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
+	LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, node->data.var_decl.resolved_name);
+	if (node->data.var_decl.init) {
+		LLVMValueRef val = codegen_ast(cg, node->data.var_decl.init, table);
+		LLVMBuildStore(cg->builder, val, ptr);
+	}
+	return ptr;
+}
 
 LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	const char *func_name = node->data.func_decl.name;
@@ -145,6 +209,10 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			LLVMTypeRef ty = args_types[index];
 			LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, curr_param->data.param_decl.name);
 			LLVMBuildStore(cg->builder, args[index], ptr);
+			// if (cg->should_build_debug) {
+			// 	int name_len = strlen(curr_param->data.param_decl.name);
+			// 	LLVMDIBuilderCreateParameterVariable(cg->di_builder, (LLVMMetadataRef)cg->di_cu, curr_param->data.param_decl.name, name_len, index, cg->di_file, curr_param->location.line, args_types[index], 1, 0);
+			// }
 			curr_param = curr_param->next;
 			++index;
 		}
@@ -160,10 +228,11 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	case AST_FN_DECL:
 		return codegen_function(cg, node, table);
 	case AST_VAR_DECL:
+		return codegen_var_decl(cg, node, table);
+		break;
 	case AST_STRUCT_DECL:
 	case AST_FIELD_DECL:
 	case AST_BLOCK:
-	case AST_EXPR_LITERAL:
 	case AST_EXPR_IDENT:
 	case AST_RETURN:
 	case AST_BINARY_EXPR:
@@ -198,7 +267,12 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 	ASTNode *current = root;
 	while (current) {
-		codegen_ast(cg, current, table);
+		// TODO: quick hack
+		if (current->type == AST_VAR_DECL) {
+			codegen_global_var_decl(cg, current, table, 0);
+		} else {
+			codegen_ast(cg, current, table);
+		}
 		current = current->next;
 	}
 }
