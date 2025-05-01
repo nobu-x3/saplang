@@ -122,6 +122,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	}
 	Symbol *sym = lookup_symbol_weak(table, linkage_name, 0);
 	assert(sym);
+	assert(sym->type);
 	LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
 	LLVMValueRef fn = LLVMAddFunction(cg->module, func_name, fn_ty);
 	if (cg->should_build_debug) {
@@ -130,6 +131,24 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	}
 	LLVMBasicBlockRef entry = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "entry");
 	LLVMPositionBuilderAtEnd(cg->builder, entry);
+	// function parameters
+	{
+		LLVMValueRef *args = alloca(sizeof(LLVMValueRef) * sym->type->function.param_count);
+		LLVMGetParams(fn, args);
+		LLVMTypeRef *args_types = alloca(sizeof(LLVMTypeRef) * sym->type->function.param_count);
+		LLVMGetParamTypes(fn_ty, args_types);
+		ASTNode *curr_param = node->data.func_decl.params;
+		size_t index = 0;
+		while (curr_param) {
+			assert(args_types[index]);
+			assert(args[index]);
+			LLVMTypeRef ty = args_types[index];
+			LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, curr_param->data.param_decl.name);
+			LLVMBuildStore(cg->builder, args[index], ptr);
+			curr_param = curr_param->next;
+			++index;
+		}
+	}
 	codegen_ast(cg, node->data.func_decl.body, table);
 	if (should_free_linkage_name)
 		free(linkage_name);
@@ -140,9 +159,40 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	switch (node->type) {
 	case AST_FN_DECL:
 		return codegen_function(cg, node, table);
-	default:
-		return NULL;
+	case AST_VAR_DECL:
+	case AST_STRUCT_DECL:
+	case AST_FIELD_DECL:
+	case AST_BLOCK:
+	case AST_EXPR_LITERAL:
+	case AST_EXPR_IDENT:
+	case AST_RETURN:
+	case AST_BINARY_EXPR:
+	case AST_UNARY_EXPR:
+	case AST_ARRAY_LITERAL:
+	case AST_ARRAY_ACCESS:
+	case AST_ASSIGNMENT:
+	case AST_FN_CALL:
+	case AST_MEMBER_ACCESS:
+	case AST_STRUCT_LITERAL:
+	case AST_ENUM_DECL:
+	case AST_ENUM_VALUE:
+	case AST_EXTERN_BLOCK:
+	case AST_EXTERN_FUNC_DECL:
+	case AST_IF_STMT:
+	case AST_FOR_LOOP:
+	case AST_WHILE_LOOP:
+	case AST_DEFER_BLOCK:
+	case AST_DEFERRED_SEQUENCE:
+	case AST_FN_PTR:
+	case AST_STRING_LIT:
+	case AST_CHAR_LIT:
+	case AST_CONTINUE:
+	case AST_BREAK:
+	case AST_CAST:
+	case AST_UNION_DECL:
+		break;
 	}
+	return NULL;
 }
 
 void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
