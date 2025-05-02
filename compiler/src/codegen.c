@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "symbol_table.h"
 #include "types.h"
+#include "util.h"
 
 #include <assert.h>
 #include <llvm-c/Core.h>
@@ -127,31 +128,104 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 	}
 	return NULL;
 }
+
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable);
 
-LLVMValueRef codegen_expr_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type, Symbol *table) {
-	LLVMTypeRef ty = map_to_llvm(cg, expected_type, table);
-	if (node->data.literal.is_bool) {
-		return LLVMConstInt(ty, node->data.literal.bool_value, 0);
-	} else if (node->data.literal.is_float) {
-		return LLVMConstReal(ty, node->data.literal.float_value);
+LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
+	int field_count = 0;
+	ASTNode *current_field = node->data.struct_decl.fields;
+	LLVMTypeRef element_types[256];
+	while (current_field) {
+		assert(field_count < 255);
+		element_types[field_count] = map_to_llvm(cg, current_field->data.field_decl.type, table);
+		++field_count;
+		current_field = current_field->next;
 	}
-	return LLVMConstInt(ty, node->data.literal.long_value, 1);
+	LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, node->data.struct_decl.name);
+	// NOTE: not sure if packed
+	LLVMStructSetBody(struct_type, element_types, field_count, 0);
+	return struct_type;
+}
+
+// return -1 if field not present
+int find_field_index(ASTNode *struct_decl, const char *field_name) {
+	int index = 0;
+	ASTNode *curr_field = struct_decl->data.struct_decl.fields;
+	while (curr_field) {
+		if (strcmp(curr_field->data.field_decl.name, field_name) == 0)
+			return index;
+		curr_field = curr_field->next;
+		++index;
+	}
+	return -1;
+}
+
+LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *var_decl_node, Symbol *table, int is_global) {
+	Type *expected_type = var_decl_node->data.var_decl.type;
+	LLVMTypeRef ty = map_to_llvm(cg, expected_type, table);
+	if (!var_decl_node->data.var_decl.init)
+		return LLVMConstNull(ty);
+	ASTNode *init_node = var_decl_node->data.var_decl.init;
+	switch (init_node->type) {
+	case AST_EXPR_LITERAL:
+		if (init_node->data.literal.is_bool) {
+			return LLVMConstInt(ty, init_node->data.literal.bool_value, 0);
+		} else if (init_node->data.literal.is_float) {
+			return LLVMConstReal(ty, init_node->data.literal.float_value);
+		}
+		return LLVMConstInt(ty, init_node->data.literal.long_value, 1);
+		break;
+	case AST_STRUCT_LITERAL: {
+		int init_count = init_node->data.struct_literal.count;
+		Symbol *decl_sym = lookup_symbol(table, expected_type->type_name, 0);
+		assert(decl_sym);
+		ASTNode *decl_node = decl_sym->node;
+		assert(decl_node); // sanity
+		ASTNode *curr_field = decl_node->data.struct_decl.fields;
+		int field_count = 0;
+		// TODO: optimize this by refactoring AST_STRUCT_DECL to be darray instead of linked list or at least add field_count field
+		while (curr_field) {
+			curr_field = curr_field->next;
+			++field_count;
+		}
+		curr_field = decl_node->data.struct_decl.fields;
+		LLVMValueRef *generated_values = alloca(sizeof(LLVMValueRef) * field_count);
+		// TODO: maybe make default field initialization opt-in?
+		for (int i = 0; i < field_count; ++i) {
+			LLVMTypeRef field_type = map_to_llvm(cg, curr_field->data.field_decl.type, table);
+			generated_values[i] = LLVMConstNull(field_type);
+            curr_field = curr_field->next;
+		}
+		if (is_global) {
+			int current_field_index = 0;
+			for (int i = 0; i < init_count; ++i) {
+				FieldInitializer *init = init_node->data.struct_literal.inits[i];
+				if (init->is_designated) {
+					current_field_index = find_field_index(decl_node, init->field);
+					if (current_field_index == -1) {
+						char msg[256] = "";
+						sprintf(msg, "cannot find a field with name %s in the definition of struct %s", init->field, expected_type->type_name);
+						report(init_node->location, msg, 0);
+						return NULL;
+					}
+				}
+				LLVMValueRef generated_value = codegen_ast(cg, init->expr, table);
+				generated_values[current_field_index] = generated_value;
+				++current_field_index;
+			}
+			return LLVMConstNamedStruct(ty, generated_values, init_count);
+		}
+	} break;
+	case AST_ARRAY_LITERAL:
+		break;
+	}
+	return NULL;
 }
 
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.name);
-	LLVMValueRef init_value = LLVMConstNull(ty);
-	if (node->data.var_decl.init) {
-		switch (node->data.var_decl.init->type) {
-		case AST_EXPR_LITERAL:
-			init_value = codegen_expr_literal(cg, node->data.var_decl.init, node->data.var_decl.type, table);
-			break;
-		default:
-			assert(0);
-		}
-	}
+	LLVMValueRef init_value = codegen_literal(cg, node, table, 1);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
 	LLVMSetLinkage(global_var, LLVMExternalLinkage);
@@ -230,7 +304,10 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	case AST_VAR_DECL:
 		return codegen_var_decl(cg, node, table);
 		break;
-	case AST_STRUCT_DECL:
+	case AST_STRUCT_DECL: {
+		LLVMTypeRef type = codegen_struct_decl(cg, node, table);
+		break;
+	}
 	case AST_FIELD_DECL:
 	case AST_BLOCK:
 	case AST_EXPR_IDENT:

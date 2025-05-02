@@ -167,3 +167,15 @@ void test_BuiltinGlobalConst_codegen(void) {
 		free(error);
 	}
 }
+
+void test_StructDecl_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct { i32 first; f32 second; } TestStruct str; ");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%TestStruct = type { i32, bfloat }\n\n"
+						   "@str = global %TestStruct zeroinitializer\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
