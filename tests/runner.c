@@ -87,6 +87,8 @@ int main(void) {
 	RUN_TEST(test_BuiltinGlobalVar_codegen);
 	RUN_TEST(test_BuiltinGlobalConst_codegen);
 	RUN_TEST(test_StructDecl_codegen);
+	RUN_TEST(test_GlobalStructDeclInit_codegen);
+	RUN_TEST(test_ConstGlobalStructDeclInit_codegen);
 
 	RUN_TEST(test_PrintfTest);
 	return UNITY_END();
