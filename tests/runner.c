@@ -1,4 +1,5 @@
 #include "codegen_tests.h"
+#include "hashmap_tests.h"
 #include "parser_tests.h"
 #include "sema_tests.h"
 #include "threadpool_tests.h"
@@ -93,5 +94,13 @@ int main(void) {
 	RUN_TEST(test_ConstGlobalStructDeclInit_codegen);
 
 	RUN_TEST(test_PrintfTest);
+
+
+    RUN_TEST(test_hashmap_create_and_destroy);
+    RUN_TEST(test_hashmap_put_and_get);
+    RUN_TEST(test_hashmap_update_existing_key);
+    RUN_TEST(test_hashmap_remove_and_contains);
+    RUN_TEST(test_hashmap_remove_missing_key);
+    RUN_TEST(test_hashmap_rehash);
 	return UNITY_END();
 }
