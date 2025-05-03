@@ -13,7 +13,6 @@ typedef struct {
 
 typedef struct {
 	int should_build_debug;
-	int current_scope;
 	LLVMContextRef llvm_context;
 	LLVMModuleRef module;
 	LLVMBuilderRef builder;

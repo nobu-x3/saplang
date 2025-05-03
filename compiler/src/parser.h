@@ -74,7 +74,7 @@ typedef struct ASTNode {
 		struct {
 			char name[64];
 			int is_exported;
-            int field_count;
+			int field_count;
 			struct ASTNode **fields; // Linked list of field declarations
 		} struct_decl;
 		struct {

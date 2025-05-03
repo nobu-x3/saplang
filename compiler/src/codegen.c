@@ -1,4 +1,5 @@
 #include "codegen.h"
+#include "hashmap.h"
 #include "parser.h"
 #include "symbol_table.h"
 #include "types.h"
@@ -117,7 +118,7 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 	case TYPE_STRUCT:
 		return LLVMGetTypeByName2(cg->llvm_context, type->type_name);
 	case TYPE_ENUM: {
-		Symbol *sym = lookup_symbol(table, type->type_name, cg->current_scope);
+		Symbol *sym = lookup_symbol(table, type->type_name, 0);
 		assert(sym && "unknown enum symbol.");
 		assert(sym->kind == SYMB_ENUM && "symbol expected to be enum.");
 		return map_to_llvm(cg, sym->type, table);
@@ -129,8 +130,9 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 }
 
 typedef struct {
-	int is_global;
+	int current_scope;
 	Type *expected_type;
+	hashmap_t *loaded_values;
 } PassContext;
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
@@ -148,8 +150,8 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	return struct_type;
 }
 
-LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type, Symbol *table, int is_global) {
-	LLVMTypeRef ty = map_to_llvm(cg, expected_type, table);
+LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+	LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
 	switch (node->type) {
 	case AST_EXPR_LITERAL:
 		if (node->data.literal.is_bool) {
@@ -161,7 +163,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type
 		break;
 	case AST_STRUCT_LITERAL: {
 		int init_count = node->data.struct_literal.count;
-		Symbol *decl_sym = lookup_symbol(table, expected_type->type_name, 0);
+		Symbol *decl_sym = lookup_symbol(table, ctx.expected_type->type_name, ctx.current_scope);
 		assert(decl_sym);
 		ASTNode *decl_node = decl_sym->node;
 		assert(decl_node); // sanity
@@ -174,7 +176,8 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type
 			generated_values[i] = LLVMConstNull(field_type);
 			curr_field = curr_field->next;
 		}
-		if (is_global) {
+		// If global scope
+		if (ctx.current_scope == 0) {
 			int current_field_index = 0;
 			for (int i = 0; i < init_count; ++i) {
 				FieldInitializer *init = node->data.struct_literal.inits[i];
@@ -183,7 +186,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type
 					assert(current_field_index != -1);
 				}
 				ASTNode *curr_field = decl_node->data.struct_decl.fields[current_field_index];
-				PassContext ctx = {is_global, curr_field->data.field_decl.type};
+				ctx.expected_type = curr_field->data.field_decl.type;
 				LLVMValueRef generated_value = codegen_ast(cg, init->expr, table, ctx);
 				generated_values[current_field_index] = generated_value;
 				++current_field_index;
@@ -199,8 +202,9 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type
 
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
-	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.name);
-	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, node->data.var_decl.type, table, 1) : LLVMConstNull(ty);
+	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
+	PassContext ctx = {0, node->data.var_decl.type, NULL};
+	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, table, ctx) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
 	LLVMSetLinkage(global_var, LLVMExternalLinkage);
@@ -213,13 +217,15 @@ LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pas
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, node->data.var_decl.resolved_name);
 	if (node->data.var_decl.init) {
-        ctx.is_global = 0;
-        ctx.expected_type = node->data.var_decl.type;
+		++ctx.current_scope;
+		ctx.expected_type = node->data.var_decl.type;
 		LLVMValueRef val = codegen_ast(cg, node->data.var_decl.init, table, ctx);
 		LLVMBuildStore(cg->builder, val, ptr);
 	}
 	return ptr;
 }
+
+void free_str(void *str) { free(str); }
 
 LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	const char *func_name = node->data.func_decl.name;
@@ -246,6 +252,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	}
 	LLVMBasicBlockRef entry = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "entry");
 	LLVMPositionBuilderAtEnd(cg->builder, entry);
+	hashmap_t *values_map = hashmap_create(64, NULL, NULL);
 	// function parameters
 	{
 		LLVMValueRef *args = alloca(sizeof(LLVMValueRef) * sym->type->function.param_count);
@@ -258,7 +265,9 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			assert(args_types[index]);
 			assert(args[index]);
 			LLVMTypeRef ty = args_types[index];
-			LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, curr_param->data.param_decl.name);
+			LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, curr_param->data.param_decl.resolved_name);
+			char *param_name = strdup(curr_param->data.param_decl.resolved_name);
+			hashmap_put(values_map, param_name, ptr);
 			LLVMBuildStore(cg->builder, args[index], ptr);
 			// if (cg->should_build_debug) {
 			// 	int name_len = strlen(curr_param->data.param_decl.name);
@@ -268,10 +277,12 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			++index;
 		}
 	}
-	PassContext ctx = {0};
+	PassContext ctx = {1, NULL, values_map};
 	codegen_ast(cg, node->data.func_decl.body, table, ctx);
 	if (should_free_linkage_name)
 		free(linkage_name);
+	if (hashmap_size(values_map))
+		hashmap_destroy(values_map, free_str, NULL);
 	return fn;
 }
 
@@ -279,15 +290,27 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	switch (node->type) {
 	case AST_FN_DECL:
 		return codegen_function(cg, node, table);
-	case AST_VAR_DECL:
-		return codegen_var_decl(cg, node, table);
-		break;
+	case AST_VAR_DECL: {
+		LLVMValueRef value = codegen_var_decl(cg, node, table, ctx);
+		char *resolved_name = strdup(node->data.var_decl.resolved_name);
+		hashmap_put(ctx.loaded_values, resolved_name, value);
+		return value;
+	} break;
 	case AST_STRUCT_DECL: {
 		LLVMTypeRef type = codegen_struct_decl(cg, node, table);
 		break;
 	}
+	case AST_EXPR_IDENT: {
+		if (hashmap_contains(ctx.loaded_values, node->data.ident.resolved_name))
+			return hashmap_get(ctx.loaded_values, node->data.ident.resolved_name);
+		LLVMValueRef named_global = LLVMGetNamedGlobal(cg->module, node->data.ident.resolved_name);
+		assert(named_global); // @NOTE: I think that's the only option here - can only be global var
+		return named_global;
+	}
 	case AST_EXPR_LITERAL:
-		return codegen_literal(cg, node, ctx.expected_type, table, ctx.is_global);
+		return codegen_literal(cg, node, table, ctx);
+	case AST_ASSIGNMENT:
+		return codegen_assignment(cg, node, table, ctx);
 	case AST_DEFERRED_SEQUENCE:
 	case AST_BLOCK: {
 		for (int i = 0; i < node->data.block.count; ++i) {
@@ -304,7 +327,6 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	case AST_BINARY_EXPR:
 	case AST_UNARY_EXPR:
 	case AST_ARRAY_ACCESS:
-	case AST_ASSIGNMENT:
 	case AST_FN_CALL:
 	case AST_MEMBER_ACCESS:
 	case AST_ENUM_DECL:
@@ -332,7 +354,7 @@ void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 		if (current->type == AST_VAR_DECL) {
 			codegen_global_var_decl(cg, current, table, 0);
 		} else {
-			PassContext ctx = {1};
+			PassContext ctx = {0, NULL, NULL};
 			codegen_ast(cg, current, table, ctx);
 		}
 		current = current->next;
