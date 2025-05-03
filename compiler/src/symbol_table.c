@@ -128,7 +128,7 @@ Symbol *lookup_symbol(Symbol *table, const char *resolved_name, int current_scop
 
 Symbol *lookup_symbol_weak(Symbol *table, const char *name, int current_scope) {
 	for (Symbol *s = table; s != NULL; s = s->next) {
-		if (strcmp(s->name, name) == 0 && s->scope_level <= current_scope && s->type != SYMB_VAR)
+		if (strcmp(s->name, name) == 0 && s->scope_level <= current_scope && s->kind != SYMB_VAR)
 			return s;
 	}
 	return NULL;
