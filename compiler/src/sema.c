@@ -132,6 +132,47 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 	return NULL;
 }
 
+CompilerResult analyze_stuct_literal(Symbol *table, Type *expected_type, ASTNode *node, int scope_level, const char *scope_specifier) {
+	assert(node->type == AST_STRUCT_LITERAL);
+	int init_count = node->data.struct_literal.count;
+	Symbol *decl_sym = lookup_symbol(table, expected_type->type_name, scope_level);
+	if (!decl_sym) {
+		char msg[256] = "";
+		sprintf(msg, "unknown struct type %s.", expected_type->type_name);
+		report(node->location, msg, 0);
+		return RESULT_FAILURE;
+	}
+	if (decl_sym->kind != SYMB_STRUCT) {
+		char msg[256] = "";
+		sprintf(msg, "%s is not a struct type.", expected_type->type_name);
+		report(node->location, msg, 0);
+		return RESULT_FAILURE;
+	}
+	ASTNode *decl_node = decl_sym->node;
+	assert(decl_node); // sanity
+	int current_field_index = 0;
+	for (int i = 0; i < init_count; ++i) {
+		if (current_field_index >= decl_node->data.struct_decl.field_count) {
+			char msg[256] = "";
+			sprintf(msg, "struct '%s' has %d fields, check initialization.", expected_type->type_name, decl_node->data.struct_decl.field_count);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		FieldInitializer *init = node->data.struct_literal.inits[i];
+		if (init->is_designated) {
+			current_field_index = find_field_index(decl_node, init->field);
+			if (current_field_index == -1) {
+				char msg[256] = "";
+				sprintf(msg, "cannot find a field with name '%s' in the definition of struct '%s'.", init->field, expected_type->type_name);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+		}
+		++current_field_index;
+	}
+	return RESULT_SUCCESS;
+}
+
 CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level, const char *scope_specifier) {
 	Type *rtype = get_type(table, node, scope_level, scope_specifier);
 	if (!is_convertible(rtype, lvalue_type)) {
@@ -192,6 +233,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					return RESULT_FAILURE;
 				}
 				result = analyze_expr_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
+			} else if (node->data.var_decl.init->type == AST_STRUCT_LITERAL) {
+				result = analyze_stuct_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
 			} else {
 				result = analyze_ast(table, node->data.var_decl.init, scope_level, scope_specifier);
 			}
@@ -427,6 +470,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		break;
 	// Want to handle these where they are used
 	case AST_EXPR_LITERAL:
+	case AST_STRUCT_LITERAL:
 		break;
 	case AST_PARAM_DECL:
 		break;

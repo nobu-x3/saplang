@@ -181,12 +181,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type
 				FieldInitializer *init = node->data.struct_literal.inits[i];
 				if (init->is_designated) {
 					current_field_index = find_field_index(decl_node, init->field);
-					if (current_field_index == -1) {
-						char msg[256] = "";
-						sprintf(msg, "cannot find a field with name %s in the definition of struct %s", init->field, expected_type->type_name);
-						report(node->location, msg, 0);
-						return NULL;
-					}
+					assert(current_field_index != -1);
 				}
 				ASTNode *curr_field = decl_node->data.struct_decl.fields[current_field_index];
 				PassContext ctx = {is_global, curr_field->data.field_decl.type};
