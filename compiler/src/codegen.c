@@ -137,30 +137,24 @@ typedef struct {
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
 
 LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
-	int field_count = 0;
-	ASTNode *current_field = node->data.struct_decl.fields;
 	LLVMTypeRef element_types[256];
-	while (current_field) {
-		assert(field_count < 255);
-		element_types[field_count] = map_to_llvm(cg, current_field->data.field_decl.type, table);
-		++field_count;
-		current_field = current_field->next;
+	assert(node->data.struct_decl.field_count < 257 && "can only have 256 fields max.");
+	for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
+		ASTNode *current_field = node->data.struct_decl.fields[i];
+		element_types[i] = map_to_llvm(cg, current_field->data.field_decl.type, table);
 	}
 	LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, node->data.struct_decl.name);
 	// NOTE: not sure if packed
-	LLVMStructSetBody(struct_type, element_types, field_count, 0);
+	LLVMStructSetBody(struct_type, element_types, node->data.struct_decl.field_count, 0);
 	return struct_type;
 }
 
 // return -1 if field not present
 int find_field_index(ASTNode *struct_decl, const char *field_name) {
-	int index = 0;
-	ASTNode *curr_field = struct_decl->data.struct_decl.fields;
-	while (curr_field) {
+	for (int i = 0; i < struct_decl->data.struct_decl.field_count; ++i) {
+		ASTNode *curr_field = struct_decl->data.struct_decl.fields[i];
 		if (strcmp(curr_field->data.field_decl.name, field_name) == 0)
-			return index;
-		curr_field = curr_field->next;
-		++index;
+			return i;
 	}
 	return -1;
 }
@@ -182,17 +176,11 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type
 		assert(decl_sym);
 		ASTNode *decl_node = decl_sym->node;
 		assert(decl_node); // sanity
-		ASTNode *curr_field = decl_node->data.struct_decl.fields;
-		int field_count = 0;
-		// TODO: optimize this by refactoring AST_STRUCT_DECL to be darray instead of linked list
-		while (curr_field) {
-			curr_field = curr_field->next;
-			++field_count;
-		}
-		curr_field = decl_node->data.struct_decl.fields;
+		int field_count = decl_node->data.struct_decl.field_count;
 		LLVMValueRef *generated_values = alloca(sizeof(LLVMValueRef) * field_count);
 		// TODO: maybe make default field initialization opt-in?
 		for (int i = 0; i < field_count; ++i) {
+			ASTNode *curr_field = decl_node->data.struct_decl.fields[i];
 			LLVMTypeRef field_type = map_to_llvm(cg, curr_field->data.field_decl.type, table);
 			generated_values[i] = LLVMConstNull(field_type);
 			curr_field = curr_field->next;
@@ -210,10 +198,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type
 						return NULL;
 					}
 				}
-				// TODO: Refactor this when AST_STRUCT_DECL is darray
-				curr_field = decl_node->data.struct_decl.fields;
-				for (int j = 0; j < current_field_index; ++j)
-					curr_field = curr_field->next;
+				ASTNode *curr_field = decl_node->data.struct_decl.fields[current_field_index];
 				PassContext ctx = {is_global, curr_field->data.field_decl.type};
 				LLVMValueRef generated_value = codegen_ast(cg, init->expr, table, ctx);
 				generated_values[current_field_index] = generated_value;
@@ -231,7 +216,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.name);
-	LLVMValueRef init_value = node->data.var_decl.init? codegen_literal(cg, node->data.var_decl.init, node->data.var_decl.type, table, 1) : LLVMConstNull(ty);
+	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, node->data.var_decl.type, table, 1) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
 	LLVMSetLinkage(global_var, LLVMExternalLinkage);

@@ -110,8 +110,8 @@ TypeInfo compute_struct_size_and_alignment(ASTNode *node) {
 	size_t offset = 0;
 	size_t max_align = 1;
 
-	ASTNode *current_field = node->data.struct_decl.fields;
-	while (current_field) {
+	for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
+		ASTNode *current_field = node->data.struct_decl.fields[i];
 		assert(current_field->type == AST_FIELD_DECL);
 		TypeInfo field_info = get_type_info(current_field->data.field_decl.type, current_field);
 
@@ -121,8 +121,6 @@ TypeInfo compute_struct_size_and_alignment(ASTNode *node) {
 		size_t padding = (info.align - (offset % info.align)) % info.align;
 		offset += padding;
 		offset += info.size;
-
-		current_field = current_field->next;
 	}
 
 	size_t final_padding = (max_align - (offset % max_align) % max_align);

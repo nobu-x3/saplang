@@ -73,7 +73,9 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 		}
 		case AST_STRUCT_DECL:
 			print(string, "StructDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.struct_decl.name);
-			ast_print(node->data.struct_decl.fields, indent + 1, string);
+			for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
+				ast_print(node->data.struct_decl.fields[i], indent + 1, string);
+			}
 			break;
 		case AST_UNION_DECL:
 			print(string, "UnionDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.union_decl.name);
@@ -416,11 +418,15 @@ ASTNode *copy_ast_node(ASTNode *node) {
 	case AST_STRUCT_DECL: {
 		strncpy(new_node->data.struct_decl.name, node->data.struct_decl.name, sizeof(new_node->data.struct_decl.name));
 		new_node->data.struct_decl.is_exported = node->data.struct_decl.is_exported;
-		ASTNode *current_field = node->data.struct_decl.fields;
-		while (current_field) {
-			ASTNode *next = current_field->next;
-			copy_ast_node(current_field);
-			current_field = next;
+		int field_count = node->data.struct_decl.field_count;
+		struct {
+			ASTNode **data;
+			int count, capacity;
+		} field_list;
+		da_init(field_list, field_count);
+		for (int i = 0; i < field_count; ++i) {
+			ASTNode *field_copy = copy_ast_node(node->data.struct_decl.fields[i]);
+			da_push(field_list, field_copy);
 		}
 	} break;
 	case AST_FN_DECL: {
@@ -733,11 +739,12 @@ ASTNode *new_union_decl_node(const char *name, ASTNode *fields, SourceLocation l
 	return node;
 }
 
-ASTNode *new_struct_decl_node(const char *name, ASTNode *fields, SourceLocation loc) {
+ASTNode *new_struct_decl_node(const char *name, ASTNode **fields, int field_count, SourceLocation loc) {
 	ASTNode *node = new_ast_node(AST_STRUCT_DECL, loc);
 	if (!node)
 		return NULL;
 	strncpy(node->data.struct_decl.name, name, sizeof(node->data.struct_decl.name));
+	node->data.struct_decl.field_count = field_count;
 	node->data.struct_decl.fields = fields;
 	return node;
 }
@@ -1958,22 +1965,21 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
-	ASTNode *field_list = NULL, *last_field = NULL;
+	struct {
+		ASTNode **data;
+		int count, capacity;
+	} field_list;
+	da_init(field_list, 4);
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *field = parse_field_declaration(parser);
-		for (ASTNode *field_it = field_list; field_it != NULL; field_it = field_it->next) {
+		for (int i = 0; i < field_list.count; ++i) {
+			ASTNode *field_it = field_list.data[i];
 			if (strcmp(field_it->data.field_decl.name, field->data.field_decl.name) == 0) {
 				report(field->location, "field redeclaration.", 0);
 				is_error = 1;
 			}
 		}
-
-		if (!field_list) {
-			field_list = last_field = field;
-		} else {
-			last_field->next = field;
-			last_field = field;
-		}
+		da_push(field_list, field);
 	}
 
 	if (parser->current_token.type != TOK_RCURLY) {
@@ -1984,7 +1990,7 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported) {
 
 	if (!is_error) {
 		Type *struct_type = new_named_type(struct_name, "", TYPE_STRUCT);
-		ASTNode *node = new_struct_decl_node(struct_name, field_list, loc);
+		ASTNode *node = new_struct_decl_node(struct_name, field_list.data, field_list.count, loc);
 		add_symbol(&parser->symbol_table, node, struct_name, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
 		if (is_exported) {
 			add_symbol(&parser->exported_table, node, struct_name, struct_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
@@ -2660,12 +2666,10 @@ void free_ast_node(ASTNode *node) {
 
 		break;
 	case AST_STRUCT_DECL: {
-		ASTNode *current_field = node->data.struct_decl.fields;
-		while (current_field) {
-			ASTNode *next = current_field->next;
-			free_ast_node(current_field);
-			current_field = next;
+		for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
+			free_ast_node(node->data.struct_decl.fields[i]);
 		}
+		free(node->data.struct_decl.fields);
 		node->data.struct_decl.fields = NULL;
 	} break;
 	case AST_FIELD_DECL:
