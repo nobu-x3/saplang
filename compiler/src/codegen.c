@@ -2,7 +2,6 @@
 #include "parser.h"
 #include "symbol_table.h"
 #include "types.h"
-#include "util.h"
 
 #include <assert.h>
 #include <llvm-c/Core.h>
@@ -210,11 +209,12 @@ LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *tab
 	return global_var;
 }
 
-LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
+LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, node->data.var_decl.resolved_name);
 	if (node->data.var_decl.init) {
-		PassContext ctx = {0};
+        ctx.is_global = 0;
+        ctx.expected_type = node->data.var_decl.type;
 		LLVMValueRef val = codegen_ast(cg, node->data.var_decl.init, table, ctx);
 		LLVMBuildStore(cg->builder, val, ptr);
 	}
@@ -286,15 +286,20 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMTypeRef type = codegen_struct_decl(cg, node, table);
 		break;
 	}
+	case AST_EXPR_LITERAL:
+		return codegen_literal(cg, node, ctx.expected_type, table, ctx.is_global);
+	case AST_DEFERRED_SEQUENCE:
+	case AST_BLOCK: {
+		for (int i = 0; i < node->data.block.count; ++i) {
+			ASTNode *stmt = node->data.block.statements[i];
+			codegen_ast(cg, stmt, table, ctx);
+		}
+	}
 	case AST_ARRAY_LITERAL:
 	case AST_STRUCT_LITERAL:
 	case AST_STRING_LIT:
 	case AST_CHAR_LIT:
-	case AST_EXPR_LITERAL:
-		return codegen_literal(cg, node, ctx.expected_type, table, ctx.is_global);
 	case AST_FIELD_DECL:
-	case AST_BLOCK:
-	case AST_EXPR_IDENT:
 	case AST_RETURN:
 	case AST_BINARY_EXPR:
 	case AST_UNARY_EXPR:
@@ -309,13 +314,12 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	case AST_IF_STMT:
 	case AST_FOR_LOOP:
 	case AST_WHILE_LOOP:
-	case AST_DEFER_BLOCK:
-	case AST_DEFERRED_SEQUENCE:
 	case AST_FN_PTR:
 	case AST_CONTINUE:
 	case AST_BREAK:
 	case AST_CAST:
 	case AST_UNION_DECL:
+	case AST_DEFER_BLOCK:
 		break;
 	}
 	return NULL;

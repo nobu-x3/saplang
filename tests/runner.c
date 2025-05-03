@@ -92,6 +92,8 @@ int main(void) {
 	RUN_TEST(test_StructDecl_codegen);
 	RUN_TEST(test_GlobalStructDeclInit_codegen);
 	RUN_TEST(test_ConstGlobalStructDeclInit_codegen);
+	RUN_TEST(test_LocalVarDeclNoInit_codegen);
+	RUN_TEST(test_LocalVarDeclWithInit_codegen);
 
     RUN_TEST(test_hashmap_create_and_destroy);
     RUN_TEST(test_hashmap_put_and_get);

@@ -203,3 +203,32 @@ void test_ConstGlobalStructDeclInit_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_LocalVarDeclNoInit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void some_func() { i32 i; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @some_func() {\n"
+						   "entry:\n"
+						   "  %__some_func_i = alloca i32, align 4\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_LocalVarDeclWithInit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void some_func() { i32 i = 3; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @some_func() {\n"
+						   "entry:\n"
+						   "  %__some_func_i = alloca i32, align 4\n"
+						   "  store i32 3, ptr %__some_func_i, align 4\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
