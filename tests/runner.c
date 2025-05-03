@@ -94,6 +94,13 @@ int main(void) {
 	RUN_TEST(test_ConstGlobalStructDeclInit_codegen);
 	RUN_TEST(test_LocalVarDeclNoInit_codegen);
 	RUN_TEST(test_LocalVarDeclWithInit_codegen);
+	RUN_TEST(test_LocalVarDeclWithInitOfIdent_codegen);
+	RUN_TEST(test_LocalVarReassignmentToLiteral_codegen);
+	RUN_TEST(test_LocalVarReassignmentToLocalVar_codegen);
+	RUN_TEST(test_LocalVarReassignmentToGlobalVar_codegen);
+	RUN_TEST(test_GlobalVarReassignmentToLiteral_codegen);
+	RUN_TEST(test_GlobalVarReassignmentToGlobal_codegen);
+	RUN_TEST(test_GlobalVarReassignmentToLocal_codegen);
 
     RUN_TEST(test_hashmap_create_and_destroy);
     RUN_TEST(test_hashmap_put_and_get);

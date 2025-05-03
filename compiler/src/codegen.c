@@ -137,6 +137,18 @@ typedef struct {
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
 
+LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+	ASTNode *lvalue = node->data.assignment.lvalue;
+	assert(lvalue->type == AST_EXPR_IDENT);
+	Symbol *sym = lookup_symbol(table, lvalue->data.ident.resolved_name, ctx.current_scope);
+	assert(sym);
+	ASTNode *rvalue = node->data.assignment.rvalue;
+	LLVMValueRef lhs = codegen_ast(cg, lvalue, table, ctx);
+	ctx.expected_type = sym->type;
+	LLVMValueRef rhs = codegen_ast(cg, rvalue, table, ctx);
+	return LLVMBuildStore(cg->builder, rhs, lhs);
+}
+
 LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	LLVMTypeRef element_types[256];
 	assert(node->data.struct_decl.field_count < 257 && "can only have 256 fields max.");

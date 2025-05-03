@@ -776,6 +776,7 @@ ASTNode *new_param_decl_node(Type *type, const char *name, int is_const, int is_
 		return NULL;
 	node->data.param_decl.type = type;
 	strncpy(node->data.param_decl.name, name, sizeof(node->data.param_decl.name));
+    strncpy(node->data.param_decl.resolved_name, "", sizeof(node->data.param_decl.resolved_name));
 	node->data.param_decl.is_const = is_const;
 	node->data.param_decl.is_va = is_va;
 	return node;
@@ -859,6 +860,7 @@ ASTNode *new_ident_node(const char *namespace, const char *name, SourceLocation 
 	} else {
 		node->data.ident.namespace[0] = '\0';
 	}
+	node->data.ident.resolved_name[0] = '\0';
 	return node;
 }
 

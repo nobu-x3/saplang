@@ -65,7 +65,7 @@ typedef struct ASTNode {
 		struct {
 			Type *type;
 			char name[64];
-			char resolved_name[128];
+			char resolved_name[256];
 			int is_const;
 			int is_exported;
 			struct ASTNode *init; // Expression node
@@ -100,6 +100,7 @@ typedef struct ASTNode {
 			int is_va;
 			Type *type;
 			char name[128];
+            char resolved_name[256];
 		} param_decl;
 		// Block: a list of statements
 		struct {
@@ -118,6 +119,7 @@ typedef struct ASTNode {
 		struct {
 			char name[64];
 			char namespace[64];
+			char resolved_name[256];
 		} ident;
 		// Return statement
 		struct {

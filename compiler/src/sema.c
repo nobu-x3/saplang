@@ -92,15 +92,23 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 
 		Symbol *sym = lookup_symbol_weak(table, name_with_namespace, scope_level);
 		if (!sym) {
-			if (scope_specifier[0] != '\0') {
-				char resolved_same[128] = "";
-				sprintf(resolved_same, "__%s", scope_specifier);
-				if (node->data.ident.namespace[0] != '\0') {
-					sprintf(resolved_same, "%s::%s_%s", node->data.ident.namespace, resolved_same, node->data.ident.name);
+			if (node->data.ident.resolved_name[0] == '\0') {
+				char resolved_name[128] = "";
+				if (scope_specifier[0] != '\0') {
+					sprintf(resolved_name, "__%s", scope_specifier);
+					if (node->data.ident.namespace[0] != '\0') {
+						sprintf(resolved_name, "%s::%s_%s", node->data.ident.namespace, resolved_name, node->data.ident.name);
+					} else {
+						sprintf(resolved_name, "%s_%s", resolved_name, node->data.ident.name);
+					}
 				} else {
-					sprintf(resolved_same, "%s_%s", resolved_same, node->data.ident.name);
+					strncpy(resolved_name, node->data.ident.name, sizeof(resolved_name));
 				}
-				sym = lookup_symbol(table, resolved_same, scope_level);
+				sym = lookup_symbol(table, resolved_name, scope_level);
+				if (!sym)
+					return NULL;
+			} else {
+				sym = lookup_symbol(table, node->data.ident.resolved_name, scope_level);
 				if (!sym)
 					return NULL;
 			}
@@ -130,6 +138,21 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		return NULL;
 	}
 	return NULL;
+}
+
+CompilerResult analyze_expr_ident(Symbol *table, ASTNode *node, int scope_level) {
+	// This should never be NULL at this point because we passed the analyze_ast call above
+	if (node->data.ident.resolved_name[0] != '\0') {
+		// We've either already done this or it's a global we don't want to touch
+		Symbol *var_sym = lookup_symbol(table, node->data.ident.resolved_name, scope_level);
+		if (var_sym) {
+			return RESULT_SUCCESS;
+		}
+	}
+	Symbol *global_sym_resolved = lookup_symbol(table, node->data.ident.resolved_name, 0);
+	if (global_sym_resolved)
+		return RESULT_SUCCESS;
+	return RESULT_FAILURE;
 }
 
 CompilerResult analyze_stuct_literal(Symbol *table, Type *expected_type, ASTNode *node, int scope_level, const char *scope_specifier) {
@@ -266,18 +289,36 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	case AST_EXPR_IDENT: {
 		Symbol *non_var_sym = lookup_symbol_weak(table, node->data.ident.name, scope_level);
 		if (!non_var_sym) {
-
-			char resolved_name[128] = "";
+			if (node->data.ident.resolved_name[0] != '\0') {
+				// We've either already done this or it's a global we don't want to touch
+				Symbol *var_sym = lookup_symbol(table, node->data.ident.resolved_name, scope_level);
+				if (var_sym) {
+					return RESULT_SUCCESS;
+				}
+			}
+			Symbol *global_sym_resolved = lookup_symbol(table, node->data.ident.resolved_name, 0);
+			if (global_sym_resolved)
+				return RESULT_SUCCESS;
+			Symbol *global_sym = lookup_symbol(table, node->data.ident.name, 0);
+			if (global_sym) {
+				// This is for codegen compatability
+				strncpy(node->data.ident.resolved_name, node->data.ident.name, sizeof(node->data.ident.resolved_name));
+				return RESULT_SUCCESS;
+			}
+			char resolved_name[256] = "";
 			if (scope_specifier[0] != '\0')
 				sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.ident.name);
 			else
 				strncpy(resolved_name, node->data.ident.name, sizeof(resolved_name));
 
 			Symbol *var_sym = lookup_symbol(table, resolved_name, scope_level);
-			char msg[64] = "";
-			sprintf(msg, "undeclared identifier %s.", node->data.ident.name);
-			report(node->location, msg, 0);
-			return RESULT_FAILURE;
+			if (!var_sym) {
+				char msg[64] = "";
+				sprintf(msg, "undeclared identifier %s.", node->data.ident.name);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			strncpy(node->data.ident.resolved_name, resolved_name, sizeof(resolved_name));
 		}
 	} break;
 	case AST_RETURN: {
@@ -311,13 +352,15 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 
 		if (node->data.assignment.lvalue->type == AST_EXPR_IDENT) {
-			// This should never be NULL at this point because we passed the analyze_ast call above
-			char resolved_name[128] = "";
-			if (scope_specifier[0] != '\0')
-				sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.assignment.lvalue->data.ident.name);
-			else
-				strncpy(resolved_name, node->data.assignment.lvalue->data.ident.name, sizeof(resolved_name));
-
+			char resolved_name[256] = "";
+			if (analyze_expr_ident(table, node->data.assignment.lvalue, scope_level) == RESULT_SUCCESS) {
+				strncpy(resolved_name, node->data.assignment.lvalue->data.ident.resolved_name, sizeof(resolved_name));
+			} else {
+				if (scope_specifier[0] != '\0')
+					sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.assignment.lvalue->data.ident.name);
+				else
+					strncpy(resolved_name, node->data.assignment.lvalue->data.ident.name, sizeof(resolved_name));
+			}
 			Symbol *sym = lookup_symbol(table, resolved_name, scope_level);
 			if (sym->is_const) {
 				char msg[256] = "";
@@ -474,9 +517,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		break;
 	case AST_PARAM_DECL:
 		if (scope_specifier[0] != '\0') {
-			char resolved_name[128] = "";
-			sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.param_decl.name);
-			strncpy(node->data.param_decl.name, resolved_name, sizeof(node->data.param_decl.name));
+			snprintf(node->data.param_decl.resolved_name, sizeof(node->data.param_decl.resolved_name), "__%s_%s", scope_specifier, node->data.param_decl.name);
 		}
 		break;
 	case AST_CAST: {

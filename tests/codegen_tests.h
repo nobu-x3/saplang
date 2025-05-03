@@ -232,3 +232,113 @@ void test_LocalVarDeclWithInit_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_LocalVarDeclWithInitOfIdent_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void some_func() { i32 a; i32 i = a; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @some_func() {\n"
+						   "entry:\n"
+						   "  %__some_func_a = alloca i32, align 4\n"
+						   "  %__some_func_i = alloca i32, align 4\n"
+						   "  store ptr %__some_func_a, ptr %__some_func_i, align 8\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_LocalVarReassignmentToLiteral_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void some_func() { i32 i; i = 3; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @some_func() {\n"
+						   "entry:\n"
+						   "  %__some_func_i = alloca i32, align 4\n"
+						   "  store i32 3, ptr %__some_func_i, align 4\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_LocalVarReassignmentToLocalVar_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void some_func() { i32 i; i32 a; i = a; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @some_func() {\n"
+						   "entry:\n"
+						   "  %__some_func_i = alloca i32, align 4\n"
+						   "  %__some_func_a = alloca i32, align 4\n"
+						   "  store ptr %__some_func_a, ptr %__some_func_i, align 8\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_LocalVarReassignmentToGlobalVar_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("i32 a; fn void some_func() { i32 i; i = a; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@a = global i32 0\n\n"
+						   "define void @some_func() {\n"
+						   "entry:\n"
+						   "  %__some_func_i = alloca i32, align 4\n"
+						   "  store ptr @a, ptr %__some_func_i, align 8\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_GlobalVarReassignmentToLiteral_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("i32 a; fn void some_func() { a = 3; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@a = global i32 0\n\n"
+						   "define void @some_func() {\n"
+						   "entry:\n"
+						   "  store i32 3, ptr @a, align 4\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_GlobalVarReassignmentToGlobal_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("i32 a; i32 i; fn void some_func() { i = a; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@a = global i32 0\n"
+						   "@i = global i32 0\n\n"
+						   "define void @some_func() {\n"
+						   "entry:\n"
+						   "  store ptr @a, ptr @i, align 8\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_GlobalVarReassignmentToLocal_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("i32 i; fn void some_func() { i32 a; i = a; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@i = global i32 0\n\n"
+						   "define void @some_func() {\n"
+						   "entry:\n"
+						   "  %__some_func_a = alloca i32, align 4\n"
+						   "  store ptr %__some_func_a, ptr @i, align 8\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
