@@ -473,6 +473,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	case AST_STRUCT_LITERAL:
 		break;
 	case AST_PARAM_DECL:
+		if (scope_specifier[0] != '\0') {
+			char resolved_name[128] = "";
+			sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.param_decl.name);
+			strncpy(node->data.param_decl.name, resolved_name, sizeof(node->data.param_decl.name));
+		}
 		break;
 	case AST_CAST: {
 		CompilerResult result = analyze_ast(table, node->data.cast.expr, scope_level, scope_specifier);

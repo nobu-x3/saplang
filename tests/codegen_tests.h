@@ -57,10 +57,10 @@ void test_FunctionDecl_codegen(void) {
 							   "source_filename = \"test\"\n\n"
 							   "define i32 @some_func(i32 %0, i32 %1) {\n"
 							   "entry:\n"
-							   "  %a = alloca i32, align 4\n"
-							   "  store i32 %0, ptr %a, align 4\n"
-							   "  %b = alloca i32, align 4\n"
-							   "  store i32 %1, ptr %b, align 4\n"
+							   "  %__some_func_a = alloca i32, align 4\n"
+							   "  store i32 %0, ptr %__some_func_a, align 4\n"
+							   "  %__some_func_b = alloca i32, align 4\n"
+							   "  store i32 %1, ptr %__some_func_b, align 4\n"
 							   "}\n";
 		const char *expected_error = "";
 		TEST_ASSERT_EQUAL_STRING(expected, output);

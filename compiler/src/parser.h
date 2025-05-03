@@ -99,7 +99,7 @@ typedef struct ASTNode {
 			int is_const;
 			int is_va;
 			Type *type;
-			char name[64];
+			char name[128];
 		} param_decl;
 		// Block: a list of statements
 		struct {
