@@ -259,6 +259,12 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			} else if (node->data.var_decl.init->type == AST_STRUCT_LITERAL) {
 				result = analyze_stuct_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
 			} else {
+				// Disallow global variable initialization with other global variables
+				if (node->data.var_decl.init->type == AST_EXPR_IDENT && scope_level == 0) {
+					char msg[128] = "global variables cannot be initialized with other global variables.";
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
 				result = analyze_ast(table, node->data.var_decl.init, scope_level, scope_specifier);
 			}
 

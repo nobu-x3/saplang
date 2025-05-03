@@ -35,8 +35,8 @@ void test_TypePrinting_sema(void) {
 }
 
 void test_UndeclaredVariable_sema(void) {
-	TEST_SETUP_SINGLE("i32 var_a = var_b;");
-	const char *expected = "parser_tests.sl:0:17:Error: undeclared identifier var_b.\n";
+	TEST_SETUP_SINGLE("fn void foo() { i32 var_a = var_b; }");
+	const char *expected = "parser_tests.sl:0:39:Error: undeclared identifier var_b.\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
@@ -184,6 +184,13 @@ void test_ExplicitCastWrongTypes_PointerToValue_sema(void) {
 void test_ExplicitCastWrongTypes_ReturnType_sema(void) {
 	TEST_SETUP_SINGLE("fn i32 foo() { i64 val; return (f32)val; }");
 	const char *expected = "parser_tests.sl:0:34:Error: function return type is i32 but returned value is of type f32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_GlobalVariableInitWithGlobalVar(void) {
+	TEST_SETUP_SINGLE("i32 i = 0; i32 a = i;");
+	const char *expected = "parser_tests.sl:0:16:Error: global variables cannot be initialized with other global variables.\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }

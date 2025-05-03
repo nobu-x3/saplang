@@ -84,6 +84,7 @@ int main(void) {
 	RUN_TEST(test_ExplicitCastWrongTypes_ValueToPointer_sema);
 	RUN_TEST(test_ExplicitCastWrongTypes_PointerToValue_sema);
 	RUN_TEST(test_ExplicitCastWrongTypes_ReturnType_sema);
+	RUN_TEST(test_GlobalVariableInitWithGlobalVar);
 
 	RUN_TEST(test_FunctionDecl_codegen);
 	RUN_TEST(test_BuiltinGlobalVarNoInit_codegen);
