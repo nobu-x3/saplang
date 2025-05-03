@@ -443,3 +443,12 @@ void type_print(char *string, Type *type) {
 		}
 	}
 }
+
+int find_field_index(struct ASTNode *struct_decl, const char *field_name) {
+	for (int i = 0; i < struct_decl->data.struct_decl.field_count; ++i) {
+		ASTNode *curr_field = struct_decl->data.struct_decl.fields[i];
+		if (strcmp(curr_field->data.field_decl.name, field_name) == 0)
+			return i;
+	}
+	return -1;
+}

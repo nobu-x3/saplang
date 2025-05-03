@@ -48,3 +48,6 @@ int type_get_string_len(Type *type, int initial);
 
 struct ASTNode;
 TypeInfo get_type_info(Type *type, struct ASTNode *node);
+
+// return -1 if field not present
+int find_field_index(struct ASTNode *struct_decl, const char *field_name);

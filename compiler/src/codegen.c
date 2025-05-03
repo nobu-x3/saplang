@@ -149,16 +149,6 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	return struct_type;
 }
 
-// return -1 if field not present
-int find_field_index(ASTNode *struct_decl, const char *field_name) {
-	for (int i = 0; i < struct_decl->data.struct_decl.field_count; ++i) {
-		ASTNode *curr_field = struct_decl->data.struct_decl.fields[i];
-		if (strcmp(curr_field->data.field_decl.name, field_name) == 0)
-			return i;
-	}
-	return -1;
-}
-
 LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Type *expected_type, Symbol *table, int is_global) {
 	LLVMTypeRef ty = map_to_llvm(cg, expected_type, table);
 	switch (node->type) {
