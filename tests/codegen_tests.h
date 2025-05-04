@@ -185,7 +185,7 @@ void test_GlobalStructDeclInit_codegen(void) {
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
 						   "%TestStruct = type { i32, float, i64 }\n\n"
-                           "@str = global %TestStruct { i32 0, float 0x4009C28F60000000, i64 1337 }\n";
+						   "@str = global %TestStruct { i32 0, float 0x4009C28F60000000, i64 1337 }\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -348,14 +348,33 @@ void test_LocalStructLiteralInit_codegen(void) {
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
 						   "%TestStruct = type { i32, float }\n\n"
-                           "define void @foo() {\n"
-                           "entry:\n"
-                           "  %__foo_str = alloca %TestStruct, align 8\n"
-                           "  %gep_0__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
-                           "  store i32 3, ptr %gep_0__foo_str, align 4\n"
-                           "  %gep_1__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
-                           "  store float 4.000000e+00, ptr %gep_1__foo_str, align 4\n"
-                           "}\n";
+						   "define void @foo() {\n"
+						   "entry:\n"
+						   "  %__foo_str = alloca %TestStruct, align 8\n"
+						   "  %gep_0__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
+						   "  store i32 3, ptr %gep_0__foo_str, align 4\n"
+						   "  %gep_1__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
+						   "  store float 4.000000e+00, ptr %gep_1__foo_str, align 4\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_LocalStructLiteralEmptyInit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct { i32 first; f32 second; } fn void foo() { TestStruct str = {}; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%TestStruct = type { i32, float }\n\n"
+						   "define void @foo() {\n"
+						   "entry:\n"
+						   "  %__foo_str = alloca %TestStruct, align 8\n"
+						   "  %gep_0__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
+						   "  store i32 0, ptr %gep_0__foo_str, align 4\n"
+						   "  %gep_1__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
+						   "  store float 0.000000e+00, ptr %gep_1__foo_str, align 4\n"
+						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
