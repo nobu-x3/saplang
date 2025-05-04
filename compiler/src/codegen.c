@@ -133,6 +133,7 @@ typedef struct {
 	int current_scope;
 	Type *expected_type;
 	hashmap_t *loaded_values;
+	ASTNode *auxiliary_node;
 } PassContext;
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
@@ -162,6 +163,7 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	return struct_type;
 }
 
+// This can only be assignment
 LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
 	switch (node->type) {
@@ -189,22 +191,35 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 			curr_field = curr_field->next;
 		}
 		// If global scope
-		if (ctx.current_scope == 0) {
-			int current_field_index = 0;
-			for (int i = 0; i < init_count; ++i) {
-				FieldInitializer *init = node->data.struct_literal.inits[i];
-				if (init->is_designated) {
-					current_field_index = find_field_index(decl_node, init->field);
-					assert(current_field_index != -1);
-				}
-				ASTNode *curr_field = decl_node->data.struct_decl.fields[current_field_index];
-				ctx.expected_type = curr_field->data.field_decl.type;
-				LLVMValueRef generated_value = codegen_ast(cg, init->expr, table, ctx);
-				generated_values[current_field_index] = generated_value;
-				++current_field_index;
+		int current_field_index = 0;
+		for (int i = 0; i < init_count; ++i) {
+			FieldInitializer *init = node->data.struct_literal.inits[i];
+			if (init->is_designated) {
+				current_field_index = find_field_index(decl_node, init->field);
+				assert(current_field_index != -1);
 			}
+			ASTNode *curr_field = decl_node->data.struct_decl.fields[current_field_index];
+			ctx.expected_type = curr_field->data.field_decl.type;
+			LLVMValueRef generated_value = codegen_ast(cg, init->expr, table, ctx);
+			generated_values[current_field_index] = generated_value;
+			++current_field_index;
+		}
+		if (ctx.current_scope == 0) {
 			return LLVMConstNamedStruct(ty, generated_values, field_count);
 		}
+		LLVMValueRef var_ptr = hashmap_get(ctx.loaded_values, ctx.auxiliary_node->data.var_decl.resolved_name);
+		assert(var_ptr);
+		for (int i = 0; i < field_count; ++i) {
+			ASTNode *curr_field = decl_node->data.struct_decl.fields[i];
+			LLVMTypeRef field_type = LLVMStructGetTypeAtIndex(ty, i);
+			LLVMTypeRef index_type = LLVMIntType(PLATFORM_POINTER_SIZE);
+			LLVMValueRef index = LLVMConstInt(index_type, i, 0);
+			char gep_name[512] = "";
+			snprintf(gep_name, sizeof(gep_name), "gep_%d%s", i, ctx.auxiliary_node->data.var_decl.resolved_name);
+			LLVMValueRef field_gep = LLVMBuildStructGEP2(cg->builder, ty, var_ptr, i, gep_name);
+			LLVMBuildStore(cg->builder, generated_values[i], field_gep);
+		}
+		return var_ptr;
 	} break;
 	case AST_ARRAY_LITERAL:
 		break;
@@ -215,7 +230,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
-	PassContext ctx = {0, node->data.var_decl.type, NULL};
+	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL};
 	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, table, ctx) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
@@ -228,11 +243,17 @@ LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *tab
 LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, node->data.var_decl.resolved_name);
+	char *resolved_name = strdup(node->data.var_decl.resolved_name);
+	hashmap_put(ctx.loaded_values, resolved_name, ptr);
 	if (node->data.var_decl.init) {
 		++ctx.current_scope;
 		ctx.expected_type = node->data.var_decl.type;
+		ctx.auxiliary_node = node;
 		LLVMValueRef val = codegen_ast(cg, node->data.var_decl.init, table, ctx);
-		LLVMBuildStore(cg->builder, val, ptr);
+		if (node->data.var_decl.init->type != AST_STRUCT_LITERAL) {
+			assert(val);
+			LLVMBuildStore(cg->builder, val, ptr);
+		}
 	}
 	return ptr;
 }
@@ -289,7 +310,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			++index;
 		}
 	}
-	PassContext ctx = {1, NULL, values_map};
+	PassContext ctx = {1, NULL, values_map, NULL};
 	codegen_ast(cg, node->data.func_decl.body, table, ctx);
 	if (should_free_linkage_name)
 		free(linkage_name);
@@ -304,8 +325,6 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		return codegen_function(cg, node, table);
 	case AST_VAR_DECL: {
 		LLVMValueRef value = codegen_var_decl(cg, node, table, ctx);
-		char *resolved_name = strdup(node->data.var_decl.resolved_name);
-		hashmap_put(ctx.loaded_values, resolved_name, value);
 		return value;
 	} break;
 	case AST_STRUCT_DECL: {
@@ -319,6 +338,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		assert(named_global); // @NOTE: I think that's the only option here - can only be global var
 		return named_global;
 	}
+
+	case AST_STRUCT_LITERAL:
 	case AST_EXPR_LITERAL:
 		return codegen_literal(cg, node, table, ctx);
 	case AST_ASSIGNMENT:
@@ -331,7 +352,6 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		}
 	}
 	case AST_ARRAY_LITERAL:
-	case AST_STRUCT_LITERAL:
 	case AST_STRING_LIT:
 	case AST_CHAR_LIT:
 	case AST_FIELD_DECL:
@@ -366,7 +386,7 @@ void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 		if (current->type == AST_VAR_DECL) {
 			codegen_global_var_decl(cg, current, table, 0);
 		} else {
-			PassContext ctx = {0, NULL, NULL};
+			PassContext ctx = {0, NULL, NULL, NULL};
 			codegen_ast(cg, current, table, ctx);
 		}
 		current = current->next;

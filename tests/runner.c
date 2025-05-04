@@ -112,6 +112,7 @@ int main(void) {
 	RUN_TEST(test_GlobalVarReassignmentToLiteral_codegen);
 	RUN_TEST(test_GlobalVarReassignmentToGlobal_codegen);
 	RUN_TEST(test_GlobalVarReassignmentToLocal_codegen);
+	RUN_TEST(test_LocalStructLiteralInit_codegen);
 
 	return UNITY_END();
 }
