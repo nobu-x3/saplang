@@ -90,7 +90,7 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 		}
 		// TODO: add f16
 		if (strcmp(type->type_name, "f32") == 0) {
-			return LLVMBFloatTypeInContext(cg->llvm_context);
+			return LLVMFloatTypeInContext(cg->llvm_context);
 		}
 		if (strcmp(type->type_name, "f64") == 0) {
 			return LLVMDoubleTypeInContext(cg->llvm_context);

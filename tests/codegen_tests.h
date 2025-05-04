@@ -84,7 +84,7 @@ void test_BuiltinGlobalVarNoInit_codegen(void) {
 		CODEGEN_TEST_SETUP_SINGLE("f32 i;");
 		const char *expected = "; ModuleID = 'test'\n"
 							   "source_filename = \"test\"\n\n"
-							   "@i = global bfloat 0xR0000\n";
+							   "@i = global float 0.000000e+00\n";
 		const char *expected_error = "";
 		TEST_ASSERT_EQUAL_STRING(expected, output);
 		TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -117,7 +117,7 @@ void test_BuiltinGlobalVar_codegen(void) {
 		CODEGEN_TEST_SETUP_SINGLE("f32 i = 1.0;");
 		const char *expected = "; ModuleID = 'test'\n"
 							   "source_filename = \"test\"\n\n"
-							   "@i = global bfloat 0xR3F80\n";
+							   "@i = global float 1.000000e+00\n";
 		const char *expected_error = "";
 		TEST_ASSERT_EQUAL_STRING(expected, output);
 		TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -150,7 +150,7 @@ void test_BuiltinGlobalConst_codegen(void) {
 		CODEGEN_TEST_SETUP_SINGLE("const f32 i = 1.0;");
 		const char *expected = "; ModuleID = 'test'\n"
 							   "source_filename = \"test\"\n\n"
-							   "@i = constant bfloat 0xR3F80\n";
+							   "@i = constant float 1.000000e+00\n";
 		const char *expected_error = "";
 		TEST_ASSERT_EQUAL_STRING(expected, output);
 		TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -172,7 +172,7 @@ void test_StructDecl_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct { i32 first; f32 second; } TestStruct str; ");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "%TestStruct = type { i32, bfloat }\n\n"
+						   "%TestStruct = type { i32, float }\n\n"
 						   "@str = global %TestStruct zeroinitializer\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -184,8 +184,8 @@ void test_GlobalStructDeclInit_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct { i32 first; f32 second; i64 third; } TestStruct str = {.second = 3.22, 1337}; ");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "%TestStruct = type { i32, bfloat, i64 }\n\n"
-						   "@str = global %TestStruct { i32 0, bfloat 0xR404E, i64 1337 }\n";
+						   "%TestStruct = type { i32, float, i64 }\n\n"
+                           "@str = global %TestStruct { i32 0, float 0x4009C28F60000000, i64 1337 }\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -196,8 +196,8 @@ void test_ConstGlobalStructDeclInit_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct { i32 first; f32 second; i64 third; } const TestStruct str = {.second = 3.22, 1337}; ");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "%TestStruct = type { i32, bfloat, i64 }\n\n"
-						   "@str = constant %TestStruct { i32 0, bfloat 0xR404E, i64 1337 }\n";
+						   "%TestStruct = type { i32, float, i64 }\n\n"
+						   "@str = constant %TestStruct { i32 0, float 0x4009C28F60000000, i64 1337 }\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
