@@ -191,6 +191,7 @@ CompilerResult analyze_stuct_literal(Symbol *table, Type *expected_type, ASTNode
 				return RESULT_FAILURE;
 			}
 		}
+        // TODO: add struct literal's field type checks
 		++current_field_index;
 	}
 	return RESULT_SUCCESS;
