@@ -1,5 +1,6 @@
 #pragma once
 #include "test_util.h"
+#include "unity_internals.h"
 #include <codegen.h>
 #include <parser.h>
 #include <sema.h>
@@ -16,9 +17,12 @@
 	FILE *old_stdout = capture_error_begin();                                                                                                                                                                                                  \
 	parser_init(&parser, scanner, NULL);                                                                                                                                                                                                       \
 	Module *module = parse_input(&parser);                                                                                                                                                                                                     \
+	int success = 1;                                                                                                                                                                                                                           \
 	for (ASTNode *node = module->ast; node != NULL; node = node->next) {                                                                                                                                                                       \
-		analyze_ast(module->symbol_table, node, 0, "");                                                                                                                                                                                        \
+		success &= analyze_ast(module->symbol_table, node, 0, "") == RESULT_SUCCESS;                                                                                                                                                           \
 	}                                                                                                                                                                                                                                          \
+    if(!success) \
+        UnityFail("Sema failed", 0);\
 	CodegenInitContext cg_init_ctx = {"test", "test", ".", 0};                                                                                                                                                                                 \
 	CodegenLLVM cg_ctx = codegen_init(&cg_init_ctx);                                                                                                                                                                                           \
 	codegen_run(&cg_ctx, module->ast, module->symbol_table);                                                                                                                                                                                   \
