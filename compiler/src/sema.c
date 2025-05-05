@@ -82,6 +82,7 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 			return &primitive_i32_type;
 		}
 		break;
+
 	case AST_EXPR_IDENT: {
 		char name_with_namespace[128] = "";
 		if (node->data.ident.namespace[0] != '\0') {
@@ -117,10 +118,13 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 			return get_type(table, sym->node, scope_level, scope_specifier);
 		return sym->type;
 	}
+
 	case AST_BINARY_EXPR:
 		return get_type(table, node->data.binary_op.left, scope_level, scope_specifier);
+
 	case AST_ASSIGNMENT:
 		return get_type(table, node->data.assignment.lvalue, scope_level, scope_specifier);
+
 	case AST_FN_DECL: {
 		Symbol *sym = lookup_symbol(table, node->data.func_decl.name, scope_level);
 		if (!sym) {
@@ -128,10 +132,13 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		}
 		return sym->type->function.return_type;
 	}
+
 	case AST_FN_CALL:
 		return get_type(table, node->data.func_call.callee, scope_level, scope_specifier);
+
 	case AST_CAST:
 		return node->data.cast.target_type;
+
 	case AST_RETURN:
 		return get_type(table, node->data.ret.return_expr, scope_level, scope_specifier);
 	default:
@@ -155,7 +162,7 @@ CompilerResult analyze_expr_ident(Symbol *table, ASTNode *node, int scope_level)
 	return RESULT_FAILURE;
 }
 
-CompilerResult analyze_stuct_literal(Symbol *table, Type *expected_type, ASTNode *node, int scope_level, const char *scope_specifier) {
+CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNode *node, int scope_level, const char *scope_specifier) {
 	assert(node->type == AST_STRUCT_LITERAL);
 	int init_count = node->data.struct_literal.count;
 	Symbol *decl_sym = lookup_symbol(table, expected_type->type_name, scope_level);
@@ -191,7 +198,7 @@ CompilerResult analyze_stuct_literal(Symbol *table, Type *expected_type, ASTNode
 				return RESULT_FAILURE;
 			}
 		}
-        // TODO: add struct literal's field type checks
+		// TODO: add struct literal's field type checks
 		++current_field_index;
 	}
 	return RESULT_SUCCESS;
@@ -224,7 +231,6 @@ CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *n
 CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier) {
 	if (!node)
 		return RESULT_PASSED_NULL_PTR;
-
 	switch (node->type) {
 	case AST_VAR_DECL: {
 		if (node->data.var_decl.is_const && !node->data.var_decl.init) {
@@ -258,7 +264,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				}
 				result = analyze_expr_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
 			} else if (node->data.var_decl.init->type == AST_STRUCT_LITERAL) {
-				result = analyze_stuct_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
+				result = analyze_struct_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
 			} else {
 				// Disallow global variable initialization with other global variables
 				if (node->data.var_decl.init->type == AST_EXPR_IDENT && scope_level == 0) {
@@ -268,16 +274,13 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				}
 				result = analyze_ast(table, node->data.var_decl.init, scope_level, scope_specifier);
 			}
-
 			if (result != RESULT_SUCCESS) {
 				return result;
 			}
-
 			Type *init_type = get_type(table, node->data.var_decl.init, scope_level, scope_specifier);
 			if (!init_type) {
 				return RESULT_FAILURE;
 			}
-
 			if (!is_convertible(init_type, node->data.var_decl.type)) {
 				report(node->data.var_decl.init->location, "type mismatch in initializer.", 0);
 				return RESULT_FAILURE;
@@ -285,6 +288,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		}
 		return RESULT_SUCCESS;
 	} break;
+
 	case AST_BLOCK: {
 		CompilerResult result;
 		for (int i = 0; i < node->data.block.count; ++i) {
@@ -293,6 +297,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				return result;
 		}
 	} break;
+
 	case AST_EXPR_IDENT: {
 		Symbol *non_var_sym = lookup_symbol_weak(table, node->data.ident.name, scope_level);
 		if (!non_var_sym) {
@@ -317,7 +322,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.ident.name);
 			else
 				strncpy(resolved_name, node->data.ident.name, sizeof(resolved_name));
-
 			Symbol *var_sym = lookup_symbol(table, resolved_name, scope_level);
 			if (!var_sym) {
 				char msg[64] = "";
@@ -328,18 +332,18 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			strncpy(node->data.ident.resolved_name, resolved_name, sizeof(resolved_name));
 		}
 	} break;
+
 	case AST_RETURN: {
 		break;
 	}
+
 	case AST_BINARY_EXPR: {
 		CompilerResult result = analyze_ast(table, node->data.binary_op.left, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
-
 		result = analyze_ast(table, node->data.binary_op.right, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
-
 		Type *ltype = get_type(table, node->data.binary_op.left, scope_level, scope_specifier);
 		Type *rtype = get_type(table, node->data.binary_op.right, scope_level, scope_specifier);
 		if (!is_convertible(rtype, ltype)) {
@@ -353,11 +357,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 	} break;
+
 	case AST_ASSIGNMENT: {
 		CompilerResult result = analyze_ast(table, node->data.assignment.lvalue, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
-
 		if (node->data.assignment.lvalue->type == AST_EXPR_IDENT) {
 			char resolved_name[256] = "";
 			if (analyze_expr_ident(table, node->data.assignment.lvalue, scope_level) == RESULT_SUCCESS) {
@@ -381,7 +385,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-
 		Type *ltype = get_type(table, node->data.assignment.lvalue, scope_level, scope_specifier);
 		if (node->data.assignment.rvalue->type == AST_EXPR_LITERAL) {
 			// TODO: type matching and implicit conversions
@@ -389,10 +392,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		} else {
 			result = analyze_ast(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 		}
-
 		if (result != RESULT_SUCCESS)
 			return result;
-
 		Type *rtype = get_type(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 		if (!is_convertible(rtype, ltype)) {
 			char left_str[128] = "";
@@ -406,11 +407,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		}
 		return RESULT_SUCCESS;
 	} break;
+
 	case AST_FN_CALL: {
 		CompilerResult result = analyze_ast(table, node->data.func_call.callee, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
-
 		// Previous call to analyze_ast would fail if the symbol didn't exist
 		Symbol *sym = lookup_symbol(table, node->data.func_call.callee->data.ident.name, 0);
 		if (sym->node->type != AST_FN_DECL || sym->kind != SYMB_FN) {
@@ -419,7 +420,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-
 		// @TODO: cache this probably
 		int param_count = 0;
 		ASTNode *param = sym->node->data.func_decl.params;
@@ -427,14 +427,12 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			++param_count;
 			param = param->next;
 		}
-
 		if (param_count != node->data.func_call.arg_count) {
 			char msg[256] = "";
 			sprintf(msg, "argument count mismatch.");
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-
 		param = sym->node->data.func_decl.params;
 		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
 			result = analyze_ast(table, node->data.func_call.args[i], scope_level, scope_specifier);
@@ -463,7 +461,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-
 		if (node->data.func_decl.params) {
 			CompilerResult result;
 			ASTNode *param = node->data.func_decl.params;
@@ -474,7 +471,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (result != RESULT_SUCCESS)
 				return result;
 		}
-
 		if (node->data.func_decl.body) {
 			CompilerResult result = analyze_ast(table, node->data.func_decl.body, scope_level + 1, node->data.func_decl.name);
 			if (result != RESULT_SUCCESS)
@@ -510,6 +506,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 		break;
+
 	case AST_ENUM_DECL:
 		if (!lookup_symbol(table, node->data.enum_decl.name, scope_level)) {
 			char msg[256] = "";
@@ -518,15 +515,18 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 		break;
+
 	// Want to handle these where they are used
 	case AST_EXPR_LITERAL:
 	case AST_STRUCT_LITERAL:
 		break;
+
 	case AST_PARAM_DECL:
 		if (scope_specifier[0] != '\0') {
 			snprintf(node->data.param_decl.resolved_name, sizeof(node->data.param_decl.resolved_name), "__%s_%s", scope_specifier, node->data.param_decl.name);
 		}
 		break;
+
 	case AST_CAST: {
 		CompilerResult result = analyze_ast(table, node->data.cast.expr, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS) {
@@ -545,6 +545,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		}
 		return RESULT_SUCCESS;
 	}
+
 	case AST_WHILE_LOOP: {
 		CompilerResult result = analyze_ast(table, node->data.while_loop.condition, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
@@ -566,6 +567,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 
 	} break;
+
 	case AST_FOR_LOOP: {
 		CompilerResult result = analyze_ast(table, node->data.for_loop.init, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
