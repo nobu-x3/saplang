@@ -248,6 +248,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				return RESULT_FAILURE;
 			}
 			node->data.var_decl.type->kind = sym->type->kind;
+			Symbol *var_sym = lookup_symbol(table, node->data.var_decl.resolved_name, scope_level);
+			assert(var_sym);
+			var_sym->type->kind = sym->type->kind;
 		}
 		if (node->data.var_decl.init) {
 			CompilerResult result;
