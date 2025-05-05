@@ -59,6 +59,7 @@ void codegen_deinit(CodegenLLVM *cg) {
 }
 
 LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
+    assert(type);
 	switch (type->kind) {
 	case TYPE_PRIMITIVE:
 		if (strcmp(type->type_name, "i8") == 0) {
@@ -146,7 +147,11 @@ LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, P
 	ASTNode *rvalue = node->data.assignment.rvalue;
 	LLVMValueRef lhs = codegen_ast(cg, lvalue, table, ctx);
 	ctx.expected_type = sym->type;
+    ctx.auxiliary_node = sym->node;
 	LLVMValueRef rhs = codegen_ast(cg, rvalue, table, ctx);
+    // There is no need for store here since struct literal assignment is already handled
+    if(lvalue->type == AST_EXPR_IDENT && rvalue->type == AST_STRUCT_LITERAL)
+        return NULL;
 	return LLVMBuildStore(cg->builder, rhs, lhs);
 }
 

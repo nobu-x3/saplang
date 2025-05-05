@@ -280,13 +280,17 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (result != RESULT_SUCCESS) {
 				return result;
 			}
-			Type *init_type = get_type(table, node->data.var_decl.init, scope_level, scope_specifier);
-			if (!init_type) {
-				return RESULT_FAILURE;
-			}
-			if (!is_convertible(init_type, node->data.var_decl.type)) {
-				report(node->data.var_decl.init->location, "type mismatch in initializer.", 0);
-				return RESULT_FAILURE;
+			// Struct literals have already been handled, and it's really difficult to find the type of the struct literal that way
+			ASTNodeType init_node_type = node->data.var_decl.init->type;
+			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_EXPR_LITERAL) {
+				Type *init_type = get_type(table, node->data.var_decl.init, scope_level, scope_specifier);
+				if (!init_type) {
+					return RESULT_FAILURE;
+				}
+				if (!is_convertible(init_type, node->data.var_decl.type)) {
+					report(node->data.var_decl.init->location, "type mismatch in initializer.", 0);
+					return RESULT_FAILURE;
+				}
 			}
 		}
 		return RESULT_SUCCESS;
@@ -367,13 +371,15 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		if (node->data.assignment.lvalue->type == AST_EXPR_IDENT) {
 			char resolved_name[256] = "";
-			if (analyze_expr_ident(table, node->data.assignment.lvalue, scope_level) == RESULT_SUCCESS) {
-				strncpy(resolved_name, node->data.assignment.lvalue->data.ident.resolved_name, sizeof(resolved_name));
+			ASTNode *lvalue = node->data.assignment.lvalue;
+			if (analyze_expr_ident(table, lvalue, scope_level) == RESULT_SUCCESS) {
+				strncpy(resolved_name, lvalue->data.ident.resolved_name, sizeof(resolved_name));
 			} else {
 				if (scope_specifier[0] != '\0')
-					sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.assignment.lvalue->data.ident.name);
+					sprintf(resolved_name, "__%s_%s", scope_specifier, lvalue->data.ident.name);
 				else
-					strncpy(resolved_name, node->data.assignment.lvalue->data.ident.name, sizeof(resolved_name));
+					strncpy(resolved_name, lvalue->data.ident.name, sizeof(resolved_name));
+				strncpy(lvalue->data.ident.resolved_name, resolved_name, sizeof(lvalue->data.ident.resolved_name));
 			}
 			Symbol *sym = lookup_symbol(table, resolved_name, scope_level);
 			if (sym->is_const) {
@@ -392,21 +398,26 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		if (node->data.assignment.rvalue->type == AST_EXPR_LITERAL) {
 			// TODO: type matching and implicit conversions
 			result = analyze_expr_literal(table, ltype, node->data.assignment.rvalue, scope_level, scope_specifier);
+		} else if (node->data.assignment.rvalue->type == AST_STRUCT_LITERAL) {
+			result = analyze_struct_literal(table, ltype, node->data.assignment.rvalue, scope_level, scope_specifier);
 		} else {
 			result = analyze_ast(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 		}
 		if (result != RESULT_SUCCESS)
 			return result;
-		Type *rtype = get_type(table, node->data.assignment.rvalue, scope_level, scope_specifier);
-		if (!is_convertible(rtype, ltype)) {
-			char left_str[128] = "";
-			char right_str[128] = "";
-			type_print(left_str, ltype);
-			type_print(right_str, rtype);
-			char msg[256] = "";
-			sprintf(msg, "assignment type mismatch: cannot implicitly convert %s to %s.", right_str, left_str);
-			report(node->location, msg, 0);
-			return RESULT_FAILURE;
+		ASTNodeType rvalue_node_type = node->data.assignment.rvalue->type;
+		if (rvalue_node_type != AST_STRUCT_LITERAL && rvalue_node_type != AST_EXPR_LITERAL) {
+			Type *rtype = get_type(table, node->data.assignment.rvalue, scope_level, scope_specifier);
+			if (!is_convertible(rtype, ltype)) {
+				char left_str[128] = "";
+				char right_str[128] = "";
+				type_print(left_str, ltype);
+				type_print(right_str, rtype);
+				char msg[256] = "";
+				sprintf(msg, "assignment type mismatch: cannot implicitly convert %s to %s.", right_str, left_str);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
 		}
 		return RESULT_SUCCESS;
 	} break;
