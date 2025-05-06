@@ -148,7 +148,7 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		Symbol *decl_sym = lookup_symbol(table, base_type->type_name, scope_level);
 		if (!decl_sym)
 			return NULL;
-        ASTNode* decl_node = decl_sym->node;
+		ASTNode *decl_node = decl_sym->node;
 		int field_index = find_field_index(decl_node, node->data.member_access.member);
 		if (field_index == -1)
 			return NULL;
@@ -649,6 +649,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		if (field_index == -1) {
 			char msg[128] = "";
 			sprintf(msg, "%s does not have a member named %s.", base_type->type_name, node->data.member_access.member);
+			report(base_node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
 		Type *field_type = get_type(table, node, scope_level, scope_specifier);
