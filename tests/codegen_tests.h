@@ -475,3 +475,23 @@ void test_ExprIdentReturn_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_MemberAccessReturn_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStr { i32 first; } fn i32 main() { TestStr a = {8}; return a.first; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+                           "%TestStr = type { i32 }\n\n"
+                           "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_a = alloca %TestStr, align 8\n"
+                           "  %gep_0__main_a = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
+                           "  store i32 8, ptr %gep_0__main_a, align 4\n"
+                           "  %first = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
+                           "  %0 = load i32, ptr %first, align 4\n"
+                           "  ret i32 %0\n"
+                           "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}

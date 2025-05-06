@@ -119,6 +119,7 @@ int main(void) {
 	RUN_TEST(test_NestedMemberAccessAssignment_codegen);
 	RUN_TEST(test_BasicReturn_codegen);
 	RUN_TEST(test_ExprIdentReturn_codegen);
+	RUN_TEST(test_MemberAccessReturn_codegen);
 
 	return UNITY_END();
 }

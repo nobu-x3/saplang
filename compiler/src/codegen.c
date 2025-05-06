@@ -131,7 +131,7 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 	return NULL;
 }
 
-typedef enum { PI_NONE, PI_LOAD, PI_STORE } PassIntention;
+typedef enum { PI_NONE, PI_LOAD_PTR, PI_LOAD_VAL, PI_STORE_VAL, PI_STORE_PTR } PassIntention;
 
 typedef struct {
 	int current_scope;
@@ -181,8 +181,11 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 }
 
 LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+    PassIntention tmp_intention = ctx.intention;
+    ctx.intention = PI_LOAD_PTR;
 	LLVMValueRef base_value = codegen_ast(cg, node->data.member_access.base, table, ctx);
 	assert(base_value);
+    ctx.intention = tmp_intention;
 	Type *base_type = get_type(table, node->data.member_access.base, ctx.current_scope, "");
 	assert(base_type);
 	assert(base_type->kind == TYPE_STRUCT);
@@ -195,7 +198,11 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 	LLVMValueRef index = LLVMConstInt(index_type, field_index, 0);
 	LLVMValueRef field_gep = LLVMBuildStructGEP2(cg->builder, struct_ty, base_value, field_index, node->data.member_access.member);
 	assert(field_gep);
-	return field_gep;
+	if (ctx.intention != PI_LOAD_VAL) {
+		return field_gep;
+	}
+	LLVMTypeRef field_ty = LLVMStructGetTypeAtIndex(struct_ty, field_index);
+	return LLVMBuildLoad2(cg->builder, field_ty, field_gep, "");
 }
 
 LLVMValueRef codegen_return(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
@@ -221,7 +228,7 @@ LLVMValueRef codegen_return(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	if (should_free_linkage_name)
 		free(linkage_name);
 	ctx.expected_type = sym->type->function.return_type;
-    ctx.intention = PI_LOAD;
+	ctx.intention = PI_LOAD_VAL;
 	ASTNodeType ret_expr_type = node->data.ret.return_expr->type;
 	LLVMValueRef expr = codegen_ast(cg, node->data.ret.return_expr, table, ctx);
 	assert(expr);
@@ -399,7 +406,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	case AST_EXPR_IDENT: {
 		if (hashmap_contains(ctx.loaded_values, node->data.ident.resolved_name)) {
 			LLVMValueRef ptr = hashmap_get(ctx.loaded_values, node->data.ident.resolved_name);
-			if (ctx.intention == PI_LOAD && ctx.expected_type) {
+			if (ctx.intention == PI_LOAD_VAL && ctx.expected_type) {
 				LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
 				return LLVMBuildLoad2(cg->builder, ty, ptr, "");
 			}
