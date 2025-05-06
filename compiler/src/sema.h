@@ -18,3 +18,5 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char* scope_
  * scope_specifier - optional parameter that is the function name if we're using this on nodes in body of a function, otherwise empty string (!!! not NULL)
  * */
 CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier);
+
+CompilerResult resolve_types(Symbol *table, ASTNode *root);

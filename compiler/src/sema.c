@@ -663,3 +663,51 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	}
 	return RESULT_SUCCESS;
 }
+
+CompilerResult resolve_types(Symbol *table, ASTNode *root) {
+	Symbol *sym = table;
+	while (sym) {
+		if (sym->type->kind == TYPE_UNDECIDED) {
+			Symbol *type_def = lookup_symbol(table, sym->type->type_name, 0);
+			if (!type_def) {
+				char msg[128] = "";
+				sprintf(msg, "unknown type %s.", sym->type->type_name);
+				report(sym->node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			sym->type->kind = type_def->type->kind;
+		}
+		sym = sym->next;
+	}
+	for (ASTNode *node = root; node != NULL; node = node->next) {
+		switch (node->type) {
+		case AST_STRUCT_DECL: {
+			for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
+				ASTNode *field = node->data.struct_decl.fields[i];
+				if (field->data.field_decl.type->kind == TYPE_UNDECIDED) {
+					Symbol *sym = lookup_symbol(table, field->data.field_decl.type->type_name, 0);
+					if (!sym) {
+						char msg[128] = "";
+						sprintf(msg, "unknown type %s.", field->data.field_decl.type->type_name);
+						report(sym->node->location, msg, 0);
+						return RESULT_FAILURE;
+					}
+					field->data.field_decl.type->kind = sym->type->kind;
+				}
+			}
+		} break;
+
+		case AST_DEFERRED_SEQUENCE:
+		case AST_BLOCK:
+			for (int i = 0; i < node->data.block.count; ++i) {
+				CompilerResult result = resolve_types(table, node->data.block.statements[i]);
+				if (result != RESULT_SUCCESS)
+					return result;
+			}
+			break;
+		}
+
+        // TODO: finish this
+	}
+	return RESULT_SUCCESS;
+}
