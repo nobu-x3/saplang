@@ -131,11 +131,15 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 	return NULL;
 }
 
+typedef enum { PI_NONE, PI_LOAD, PI_STORE } PassIntention;
+
 typedef struct {
 	int current_scope;
 	Type *expected_type;
 	hashmap_t *loaded_values;
 	ASTNode *auxiliary_node;
+	ASTNode *current_function_node;
+	PassIntention intention;
 } PassContext;
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
@@ -192,6 +196,36 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 	LLVMValueRef field_gep = LLVMBuildStructGEP2(cg->builder, struct_ty, base_value, field_index, node->data.member_access.member);
 	assert(field_gep);
 	return field_gep;
+}
+
+LLVMValueRef codegen_return(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+	// NOTE: this is copy pasted from codegen_function
+	// TODO: cache this probably
+	char *func_name = ctx.current_function_node->data.func_decl.name;
+	size_t func_name_len = strlen(func_name);
+	char *linkage_name = func_name;
+	size_t linkage_name_len = func_name_len;
+	int should_free_linkage_name = 0;
+	if (node->data.func_decl.is_exported) {
+		size_t len = 0;
+		const char *mod_name = LLVMGetModuleIdentifier(cg->module, &len);
+		linkage_name_len = len + func_name_len + 4; // underscores in the beginning and middle, \0
+		linkage_name = malloc(sizeof(char) * linkage_name_len);
+		sprintf(linkage_name, "__%s_%s", mod_name, func_name);
+		int should_free_linkage_name = 1;
+	}
+	Symbol *sym = lookup_symbol_weak(table, linkage_name, 0);
+	assert(sym);
+	assert(sym->type);
+	assert(sym->kind == SYMB_FN && sym->type->kind == TYPE_FUNCTION);
+	if (should_free_linkage_name)
+		free(linkage_name);
+	ctx.expected_type = sym->type->function.return_type;
+    ctx.intention = PI_LOAD;
+	ASTNodeType ret_expr_type = node->data.ret.return_expr->type;
+	LLVMValueRef expr = codegen_ast(cg, node->data.ret.return_expr, table, ctx);
+	assert(expr);
+	return LLVMBuildRet(cg->builder, expr);
 }
 
 // This can only be assignment
@@ -261,7 +295,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
-	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL};
+	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE};
 	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, table, ctx) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
@@ -292,9 +326,9 @@ LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pas
 void free_str(void *str) { free(str); }
 
 LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
-	const char *func_name = node->data.func_decl.name;
+	char *func_name = node->data.func_decl.name;
 	size_t func_name_len = strlen(func_name);
-	const char *linkage_name = func_name;
+	char *linkage_name = func_name;
 	size_t linkage_name_len = func_name_len;
 	int should_free_linkage_name = 0;
 	if (node->data.func_decl.is_exported) {
@@ -341,7 +375,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			++index;
 		}
 	}
-	PassContext ctx = {1, NULL, values_map, NULL};
+	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE};
 	codegen_ast(cg, node->data.func_decl.body, table, ctx);
 	if (should_free_linkage_name)
 		free(linkage_name);
@@ -363,8 +397,14 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		break;
 	}
 	case AST_EXPR_IDENT: {
-		if (hashmap_contains(ctx.loaded_values, node->data.ident.resolved_name))
-			return hashmap_get(ctx.loaded_values, node->data.ident.resolved_name);
+		if (hashmap_contains(ctx.loaded_values, node->data.ident.resolved_name)) {
+			LLVMValueRef ptr = hashmap_get(ctx.loaded_values, node->data.ident.resolved_name);
+			if (ctx.intention == PI_LOAD && ctx.expected_type) {
+				LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
+				return LLVMBuildLoad2(cg->builder, ty, ptr, "");
+			}
+			return ptr;
+		}
 		LLVMValueRef named_global = LLVMGetNamedGlobal(cg->module, node->data.ident.resolved_name);
 		assert(named_global); // @NOTE: I think that's the only option here - can only be global var
 		return named_global;
@@ -384,11 +424,12 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	} break;
 	case AST_MEMBER_ACCESS:
 		return codegen_member_access(cg, node, table, ctx);
+	case AST_RETURN:
+		return codegen_return(cg, node, table, ctx);
 	case AST_ARRAY_LITERAL:
 	case AST_STRING_LIT:
 	case AST_CHAR_LIT:
 	case AST_FIELD_DECL:
-	case AST_RETURN:
 	case AST_BINARY_EXPR:
 	case AST_UNARY_EXPR:
 	case AST_ARRAY_ACCESS:
@@ -418,7 +459,7 @@ void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 		if (current->type == AST_VAR_DECL) {
 			codegen_global_var_decl(cg, current, table, 0);
 		} else {
-			PassContext ctx = {0, NULL, NULL, NULL};
+			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE};
 			codegen_ast(cg, current, table, ctx);
 		}
 		current = current->next;

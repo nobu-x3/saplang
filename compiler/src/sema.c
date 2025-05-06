@@ -357,6 +357,29 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	} break;
 
 	case AST_RETURN: {
+		CompilerResult result = analyze_ast(table, node->data.ret.return_expr, scope_level, scope_specifier);
+		if (result != RESULT_SUCCESS)
+			return result;
+		// This is a gamble
+		Symbol *sym = lookup_symbol_weak(table, scope_specifier, scope_level);
+		if (!sym || sym->kind != SYMB_FN || sym->type->kind != TYPE_FUNCTION) {
+			char msg[128] = "";
+			sprintf(msg, "%s is not a function.", scope_specifier);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		Type *expr_type = get_type(table, node, scope_level, scope_specifier);
+		if (!is_convertible(expr_type, sym->type->function.return_type)) {
+			char msg[128] = "";
+			char src_type[128] = "";
+			char trg_type[128] = "";
+			type_print(src_type, expr_type);
+			type_print(trg_type, sym->type->function.return_type);
+			sprintf(msg, "cannot implicitly convert from %s to %s.", scope_specifier);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		return RESULT_SUCCESS;
 		break;
 	}
 
@@ -707,7 +730,7 @@ CompilerResult resolve_types(Symbol *table, ASTNode *root) {
 			break;
 		}
 
-        // TODO: finish this
+		// TODO: finish this
 	}
 	return RESULT_SUCCESS;
 }
