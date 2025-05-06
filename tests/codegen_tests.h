@@ -391,17 +391,39 @@ void test_LocalStructLiteralReinitialization_codegen(void) {
 						   "source_filename = \"test\"\n\n"
 						   "%TestStruct = type { i32, float }\n\n"
 						   "define void @foo() {\n"
+						   "entry:\n"
+						   "  %__foo_str = alloca %TestStruct, align 8\n"
+						   "  %gep_0__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
+						   "  store i32 1, ptr %gep_0__foo_str, align 4\n"
+						   "  %gep_1__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
+						   "  store float 1.000000e+00, ptr %gep_1__foo_str, align 4\n"
+						   "  %gep_0__foo_str1 = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
+						   "  store i32 0, ptr %gep_0__foo_str1, align 4\n"
+						   "  %gep_1__foo_str2 = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
+						   "  store float 0.000000e+00, ptr %gep_1__foo_str2, align 4\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_BasicMemberAccessAssignment_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct { i32 first; f32 second; } fn void foo() { TestStruct str; str.first = 1; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%TestStruct = type { i32, float }\n\n"
+						   "define void @foo() {\n"
                            "entry:\n"
                            "  %__foo_str = alloca %TestStruct, align 8\n"
-                           "  %gep_0__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
-                           "  store i32 1, ptr %gep_0__foo_str, align 4\n"
-                           "  %gep_1__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
-                           "  store float 1.000000e+00, ptr %gep_1__foo_str, align 4\n"
-                           "  %gep_0__foo_str1 = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
-                           "  store i32 0, ptr %gep_0__foo_str1, align 4\n"
-                           "  %gep_1__foo_str2 = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
-                           "  store float 0.000000e+00, ptr %gep_1__foo_str2, align 4\n"
-                           "}\n";
+                           "  %gep_0 = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
+                           "  store i32 1, ptr %gep_0, align 4\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);

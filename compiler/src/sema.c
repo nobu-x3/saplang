@@ -139,6 +139,22 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 	case AST_CAST:
 		return node->data.cast.target_type;
 
+	case AST_MEMBER_ACCESS: {
+		ASTNode *base_node = node->data.member_access.base;
+		Type *base_type = get_type(table, base_node, scope_level, scope_specifier);
+		if (!base_type) {
+			return NULL;
+		}
+		Symbol *decl_sym = lookup_symbol(table, base_type->type_name, scope_level);
+		if (!decl_sym)
+			return NULL;
+        ASTNode* decl_node = decl_sym->node;
+		int field_index = find_field_index(decl_node, node->data.member_access.member);
+		if (field_index == -1)
+			return NULL;
+		return decl_node->data.struct_decl.fields[field_index]->data.field_decl.type;
+	} break;
+
 	case AST_RETURN:
 		return get_type(table, node->data.ret.return_expr, scope_level, scope_specifier);
 	default:
@@ -610,6 +626,35 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		if (result != RESULT_SUCCESS)
 			return result;
 
+	} break;
+
+	case AST_MEMBER_ACCESS: {
+		ASTNode *base_node = node->data.member_access.base;
+		CompilerResult result = analyze_ast(table, base_node, scope_level, scope_specifier);
+		if (result != RESULT_SUCCESS)
+			return result;
+		Type *base_type = get_type(table, base_node, scope_level, scope_specifier);
+		if (!base_type) {
+			report(base_node->location, "cannot determine type", 0);
+			return RESULT_FAILURE;
+		}
+		Symbol *decl_sym = lookup_symbol(table, base_type->type_name, scope_level);
+		if (!decl_sym) {
+			char msg[128] = "";
+			sprintf(msg, "unknown type %s.", base_type->type_name);
+			report(base_node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		int field_index = find_field_index(decl_sym->node, node->data.member_access.member);
+		if (field_index == -1) {
+			char msg[128] = "";
+			sprintf(msg, "%s does not have a member named %s.", base_type->type_name, node->data.member_access.member);
+			return RESULT_FAILURE;
+		}
+		Type *field_type = get_type(table, node, scope_level, scope_specifier);
+		if (!field_type)
+			return RESULT_FAILURE;
+		return RESULT_SUCCESS;
 	} break;
 	default:
 		report(node->location, "sema: unsupported node type.", 1);

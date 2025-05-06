@@ -1,6 +1,7 @@
 #include "codegen.h"
 #include "hashmap.h"
 #include "parser.h"
+#include "sema.h"
 #include "symbol_table.h"
 #include "types.h"
 
@@ -59,7 +60,7 @@ void codegen_deinit(CodegenLLVM *cg) {
 }
 
 LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
-    assert(type);
+	assert(type);
 	switch (type->kind) {
 	case TYPE_PRIMITIVE:
 		if (strcmp(type->type_name, "i8") == 0) {
@@ -141,17 +142,24 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassCon
 
 LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	ASTNode *lvalue = node->data.assignment.lvalue;
-	assert(lvalue->type == AST_EXPR_IDENT);
-	Symbol *sym = lookup_symbol(table, lvalue->data.ident.resolved_name, ctx.current_scope);
-	assert(sym);
+	assert(lvalue->type == AST_EXPR_IDENT || lvalue->type == AST_MEMBER_ACCESS);
+	if (lvalue->type == AST_EXPR_IDENT) {
+		Symbol *sym = lookup_symbol(table, lvalue->data.ident.resolved_name, ctx.current_scope);
+		assert(sym);
+		ctx.expected_type = sym->type;
+		ctx.auxiliary_node = sym->node;
+	} else if (lvalue->type == AST_MEMBER_ACCESS) {
+		Type *type = get_type(table, node, ctx.current_scope, "");
+		assert(type);
+		ctx.expected_type = type;
+		ctx.auxiliary_node = node->data.member_access.base;
+	}
 	ASTNode *rvalue = node->data.assignment.rvalue;
 	LLVMValueRef lhs = codegen_ast(cg, lvalue, table, ctx);
-	ctx.expected_type = sym->type;
-    ctx.auxiliary_node = sym->node;
 	LLVMValueRef rhs = codegen_ast(cg, rvalue, table, ctx);
-    // There is no need for store here since struct literal assignment is already handled
-    if(lvalue->type == AST_EXPR_IDENT && rvalue->type == AST_STRUCT_LITERAL)
-        return NULL;
+	// There is no need for store here since struct literal assignment is already handled
+	if (lvalue->type == AST_EXPR_IDENT && rvalue->type == AST_STRUCT_LITERAL)
+		return NULL;
 	return LLVMBuildStore(cg->builder, rhs, lhs);
 }
 
@@ -166,6 +174,26 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	// NOTE: not sure if packed
 	LLVMStructSetBody(struct_type, element_types, node->data.struct_decl.field_count, 0);
 	return struct_type;
+}
+
+LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+	LLVMValueRef base_value = codegen_ast(cg, node->data.member_access.base, table, ctx);
+	assert(base_value);
+	Type *base_type = get_type(table, node->data.member_access.base, ctx.current_scope, "");
+	assert(base_type);
+	assert(base_type->kind == TYPE_STRUCT);
+	LLVMTypeRef struct_ty = map_to_llvm(cg, base_type, table);
+	assert(struct_ty);
+	Symbol *decl_sym = lookup_symbol(table, base_type->type_name, ctx.current_scope);
+	int field_index = find_field_index(decl_sym->node, node->data.member_access.member);
+	assert(field_index > -1);
+	LLVMTypeRef index_type = LLVMIntType(PLATFORM_POINTER_SIZE);
+	LLVMValueRef index = LLVMConstInt(index_type, field_index, 0);
+	char gep_name[512] = "";
+	snprintf(gep_name, sizeof(gep_name), "gep_%d%s", field_index, ctx.auxiliary_node->data.var_decl.resolved_name);
+	LLVMValueRef field_gep = LLVMBuildStructGEP2(cg->builder, struct_ty, base_value, field_index, gep_name);
+	assert(field_gep);
+	return field_gep;
 }
 
 // This can only be assignment
@@ -355,7 +383,9 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			ASTNode *stmt = node->data.block.statements[i];
 			codegen_ast(cg, stmt, table, ctx);
 		}
-	}
+	} break;
+	case AST_MEMBER_ACCESS:
+		return codegen_member_access(cg, node, table, ctx);
 	case AST_ARRAY_LITERAL:
 	case AST_STRING_LIT:
 	case AST_CHAR_LIT:
@@ -365,7 +395,6 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	case AST_UNARY_EXPR:
 	case AST_ARRAY_ACCESS:
 	case AST_FN_CALL:
-	case AST_MEMBER_ACCESS:
 	case AST_ENUM_DECL:
 	case AST_ENUM_VALUE:
 	case AST_EXTERN_BLOCK:
