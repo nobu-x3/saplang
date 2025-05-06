@@ -20,9 +20,10 @@
 	int success = 1;                                                                                                                                                                                                                           \
 	for (ASTNode *node = module->ast; node != NULL; node = node->next) {                                                                                                                                                                       \
 		success &= analyze_ast(module->symbol_table, node, 0, "") == RESULT_SUCCESS;                                                                                                                                                           \
+		resolve_types(module->symbol_table, node);                                                                                                                                                                                             \
 	}                                                                                                                                                                                                                                          \
-    if(!success) \
-        UnityFail("Sema failed", 0);\
+	if (!success)                                                                                                                                                                                                                              \
+		UnityFail("Sema failed", 0);                                                                                                                                                                                                           \
 	CodegenInitContext cg_init_ctx = {"test", "test", ".", 0};                                                                                                                                                                                 \
 	CodegenLLVM cg_ctx = codegen_init(&cg_init_ctx);                                                                                                                                                                                           \
 	codegen_run(&cg_ctx, module->ast, module->symbol_table);                                                                                                                                                                                   \
@@ -413,17 +414,31 @@ void test_BasicMemberAccessAssignment_codegen(void) {
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
 						   "%TestStruct = type { i32, float }\n\n"
-						   "define void @foo() {\n"
+                           "define void @foo() {\n"
                            "entry:\n"
                            "  %__foo_str = alloca %TestStruct, align 8\n"
-                           "  %gep_0 = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
-                           "  store i32 1, ptr %gep_0, align 4\n"
-						   "}\n";
+                           "  %first = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
+                           "  store i32 1, ptr %first, align 4\n"
+                           "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_NestedMemberAccessAssignment_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct { i32 first; f32 second; } struct TestStruct2 { TestStruct nest; } fn void foo() { TestStruct2 str; str.nest.first = 1; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%TestStruct2 = type { %TestStruct }\n"
+                           "%TestStruct = type { i32, float }\n\n"
+                           "define void @foo() {\n"
+                           "entry:\n"
+                           "  %__foo_str = alloca %TestStruct2, align 8\n"
+                           "  %nest = getelementptr inbounds %TestStruct2, ptr %__foo_str, i32 0, i32 0\n"
+                           "  %first = getelementptr inbounds %TestStruct, ptr %nest, i32 0, i32 0\n"
+                           "  store i32 1, ptr %first, align 4\n"
+                           "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);

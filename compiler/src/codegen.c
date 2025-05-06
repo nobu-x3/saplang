@@ -189,9 +189,7 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 	assert(field_index > -1);
 	LLVMTypeRef index_type = LLVMIntType(PLATFORM_POINTER_SIZE);
 	LLVMValueRef index = LLVMConstInt(index_type, field_index, 0);
-	char gep_name[512] = "";
-	snprintf(gep_name, sizeof(gep_name), "gep_%d%s", field_index, ctx.auxiliary_node->data.var_decl.resolved_name);
-	LLVMValueRef field_gep = LLVMBuildStructGEP2(cg->builder, struct_ty, base_value, field_index, gep_name);
+	LLVMValueRef field_gep = LLVMBuildStructGEP2(cg->builder, struct_ty, base_value, field_index, node->data.member_access.member);
 	assert(field_gep);
 	return field_gep;
 }
