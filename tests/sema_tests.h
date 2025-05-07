@@ -183,7 +183,7 @@ void test_ExplicitCastWrongTypes_PointerToValue_sema(void) {
 
 void test_ExplicitCastWrongTypes_ReturnType_sema(void) {
 	TEST_SETUP_SINGLE("fn i32 foo() { i64 val; return (f32)val; }");
-	const char *expected = "parser_tests.sl:0:34:Error: function return type is i32 but returned value is of type f32.\n";
+	const char *expected = "parser_tests.sl:0:34:Error: cannot implicitly convert from f32 to i32.\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }

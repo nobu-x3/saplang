@@ -62,6 +62,7 @@ int is_convertible(const Type *source, const Type *target) {
 				return 1;
 		}
 	}
+
 	return 0;
 }
 
@@ -375,7 +376,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			char trg_type[128] = "";
 			type_print(src_type, expr_type);
 			type_print(trg_type, sym->type->function.return_type);
-			sprintf(msg, "cannot implicitly convert from %s to %s.", scope_specifier);
+			sprintf(msg, "cannot implicitly convert from %s to %s.", src_type, trg_type);
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
@@ -536,16 +537,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					if (!stmt_type) {
 						return RESULT_FAILURE;
 					}
-					if (!is_convertible(stmt_type, sym->type->function.return_type)) {
-						char msg[256] = "";
-						char expr_type_str[64] = "";
-						type_print(expr_type_str, stmt_type);
-						char decl_type_str[64] = "";
-						type_print(decl_type_str, sym->type->function.return_type);
-						sprintf(msg, "function return type is %s but returned value is of type %s.", decl_type_str, expr_type_str);
-						report(last_stmt->location, msg, 0);
-						return RESULT_FAILURE;
-					}
 				}
 			}
 		}
@@ -586,6 +577,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		}
 		Type *expr_type = get_type(table, node->data.cast.expr, scope_level, scope_specifier);
+        if(expr_type->kind == TYPE_PRIMITIVE && node->data.cast.target_type->kind == TYPE_PRIMITIVE)
+            return RESULT_SUCCESS;
 		if (!is_convertible(expr_type, node->data.cast.target_type)) {
 			char msg[256] = "";
 			char src_type[64] = "";
