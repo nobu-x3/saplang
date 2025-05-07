@@ -160,7 +160,7 @@ LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, P
 	}
 	ASTNode *rvalue = node->data.assignment.rvalue;
 	LLVMValueRef lhs = codegen_ast(cg, lvalue, table, ctx);
-    ctx.intention = PI_LOAD_VAL;
+	ctx.intention = PI_LOAD_VAL;
 	LLVMValueRef rhs = codegen_ast(cg, rvalue, table, ctx);
 	// There is no need for store here since struct literal assignment is already handled
 	if (lvalue->type == AST_EXPR_IDENT && rvalue->type == AST_STRUCT_LITERAL)
@@ -182,11 +182,11 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 }
 
 LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
-    PassIntention tmp_intention = ctx.intention;
-    ctx.intention = PI_LOAD_PTR;
+	PassIntention tmp_intention = ctx.intention;
+	ctx.intention = PI_LOAD_PTR;
 	LLVMValueRef base_value = codegen_ast(cg, node->data.member_access.base, table, ctx);
 	assert(base_value);
-    ctx.intention = tmp_intention;
+	ctx.intention = tmp_intention;
 	Type *base_type = get_type(table, node->data.member_access.base, ctx.current_scope, "");
 	assert(base_type);
 	assert(base_type->kind == TYPE_STRUCT);
