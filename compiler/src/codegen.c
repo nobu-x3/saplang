@@ -214,7 +214,7 @@ LLVMValueRef codegen_return(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	char *linkage_name = func_name;
 	size_t linkage_name_len = func_name_len;
 	int should_free_linkage_name = 0;
-	if (node->data.func_decl.is_exported) {
+	if (ctx.current_function_node->data.func_decl.is_exported) {
 		size_t len = 0;
 		const char *mod_name = LLVMGetModuleIdentifier(cg->module, &len);
 		linkage_name_len = len + func_name_len + 4; // underscores in the beginning and middle, \0
