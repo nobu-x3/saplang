@@ -117,6 +117,7 @@ int main(void) {
 	RUN_TEST(test_LocalStructLiteralReinitialization_codegen);
 	RUN_TEST(test_BasicMemberAccessAssignment_codegen);
 	RUN_TEST(test_NestedMemberAccessAssignment_codegen);
+	RUN_TEST(test_MemberAccessAssignmentToMemberAccess_codegen);
 	RUN_TEST(test_BasicReturn_codegen);
 	RUN_TEST(test_ExprIdentReturn_codegen);
 	RUN_TEST(test_MemberAccessReturn_codegen);

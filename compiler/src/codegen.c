@@ -160,6 +160,7 @@ LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, P
 	}
 	ASTNode *rvalue = node->data.assignment.rvalue;
 	LLVMValueRef lhs = codegen_ast(cg, lvalue, table, ctx);
+    ctx.intention = PI_LOAD_VAL;
 	LLVMValueRef rhs = codegen_ast(cg, rvalue, table, ctx);
 	// There is no need for store here since struct literal assignment is already handled
 	if (lvalue->type == AST_EXPR_IDENT && rvalue->type == AST_STRUCT_LITERAL)
