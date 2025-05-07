@@ -350,6 +350,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	Symbol *sym = lookup_symbol_weak(table, linkage_name, 0);
 	assert(sym);
 	assert(sym->type);
+    Type* ret_type = sym->type->function.return_type;
 	LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
 	LLVMValueRef fn = LLVMAddFunction(cg->module, func_name, fn_ty);
 	if (cg->should_build_debug) {
@@ -389,6 +390,9 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 		free(linkage_name);
 	if (hashmap_size(values_map))
 		hashmap_destroy(values_map, free_str, NULL);
+	if (ret_type->kind == TYPE_PRIMITIVE && strcmp(ret_type->type_name, "void") == 0) {
+		LLVMBuildRetVoid(cg->builder);
+	}
 	return fn;
 }
 

@@ -38,6 +38,7 @@ void test_FunctionDecl_codegen(void) {
 							   "source_filename = \"test\"\n\n"
 							   "define void @some_func() {\n"
 							   "entry:\n"
+							   "  ret void\n"
 							   "}\n";
 		const char *expected_error = "";
 		TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -216,6 +217,7 @@ void test_LocalVarDeclNoInit_codegen(void) {
 						   "define void @some_func() {\n"
 						   "entry:\n"
 						   "  %__some_func_i = alloca i32, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -231,6 +233,7 @@ void test_LocalVarDeclWithInit_codegen(void) {
 						   "entry:\n"
 						   "  %__some_func_i = alloca i32, align 4\n"
 						   "  store i32 3, ptr %__some_func_i, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -247,6 +250,7 @@ void test_LocalVarDeclWithInitOfIdent_codegen(void) {
 						   "  %__some_func_a = alloca i32, align 4\n"
 						   "  %__some_func_i = alloca i32, align 4\n"
 						   "  store ptr %__some_func_a, ptr %__some_func_i, align 8\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -262,6 +266,7 @@ void test_LocalVarReassignmentToLiteral_codegen(void) {
 						   "entry:\n"
 						   "  %__some_func_i = alloca i32, align 4\n"
 						   "  store i32 3, ptr %__some_func_i, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -279,6 +284,7 @@ void test_LocalVarReassignmentToLocalVar_codegen(void) {
 						   "  %__some_func_a = alloca i32, align 4\n"
 						   "  %0 = load i32, ptr %__some_func_a, align 4\n"
 						   "  store i32 %0, ptr %__some_func_i, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	;
 	const char *expected_error = "";
@@ -296,6 +302,7 @@ void test_LocalVarReassignmentToGlobalVar_codegen(void) {
 						   "entry:\n"
 						   "  %__some_func_i = alloca i32, align 4\n"
 						   "  store ptr @a, ptr %__some_func_i, align 8\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -311,6 +318,7 @@ void test_GlobalVarReassignmentToLiteral_codegen(void) {
 						   "define void @some_func() {\n"
 						   "entry:\n"
 						   "  store i32 3, ptr @a, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -327,6 +335,7 @@ void test_GlobalVarReassignmentToGlobal_codegen(void) {
 						   "define void @some_func() {\n"
 						   "entry:\n"
 						   "  store ptr @a, ptr @i, align 8\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -341,10 +350,11 @@ void test_GlobalVarReassignmentToLocal_codegen(void) {
 						   "@i = global i32 0\n\n"
 						   "define void @some_func() {\n"
 						   "entry:\n"
-                           "  %__some_func_a = alloca i32, align 4\n"
-                           "  %0 = load i32, ptr %__some_func_a, align 4\n"
-                           "  store i32 %0, ptr @i, align 4\n"
-                           "}\n";
+						   "  %__some_func_a = alloca i32, align 4\n"
+						   "  %0 = load i32, ptr %__some_func_a, align 4\n"
+						   "  store i32 %0, ptr @i, align 4\n"
+						   "  ret void\n"
+						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -363,6 +373,7 @@ void test_LocalStructLiteralInit_codegen(void) {
 						   "  store i32 3, ptr %gep_0__foo_str, align 4\n"
 						   "  %gep_1__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
 						   "  store float 4.000000e+00, ptr %gep_1__foo_str, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -382,6 +393,7 @@ void test_LocalStructLiteralEmptyInit_codegen(void) {
 						   "  store i32 0, ptr %gep_0__foo_str, align 4\n"
 						   "  %gep_1__foo_str = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
 						   "  store float 0.000000e+00, ptr %gep_1__foo_str, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -405,6 +417,7 @@ void test_LocalStructLiteralReinitialization_codegen(void) {
 						   "  store i32 0, ptr %gep_0__foo_str1, align 4\n"
 						   "  %gep_1__foo_str2 = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 1\n"
 						   "  store float 0.000000e+00, ptr %gep_1__foo_str2, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -422,6 +435,7 @@ void test_BasicMemberAccessAssignment_codegen(void) {
 						   "  %__foo_str = alloca %TestStruct, align 8\n"
 						   "  %first = getelementptr inbounds %TestStruct, ptr %__foo_str, i32 0, i32 0\n"
 						   "  store i32 1, ptr %first, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -441,6 +455,7 @@ void test_NestedMemberAccessAssignment_codegen(void) {
 						   "  %nest = getelementptr inbounds %TestStruct2, ptr %__foo_str, i32 0, i32 0\n"
 						   "  %first = getelementptr inbounds %TestStruct, ptr %nest, i32 0, i32 0\n"
 						   "  store i32 1, ptr %first, align 4\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -509,16 +524,36 @@ void test_MemberAccessReturn_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("struct TestStr { i32 first; } fn i32 main() { TestStr a = {8}; return a.first; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-                           "%TestStr = type { i32 }\n\n"
-                           "define i32 @main() {\n"
-                           "entry:\n"
-                           "  %__main_a = alloca %TestStr, align 8\n"
-                           "  %gep_0__main_a = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
-                           "  store i32 8, ptr %gep_0__main_a, align 4\n"
-                           "  %first = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
-                           "  %0 = load i32, ptr %first, align 4\n"
-                           "  ret i32 %0\n"
-                           "}\n";
+						   "%TestStr = type { i32 }\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca %TestStr, align 8\n"
+						   "  %gep_0__main_a = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
+						   "  store i32 8, ptr %gep_0__main_a, align 4\n"
+						   "  %first = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
+						   "  %0 = load i32, ptr %first, align 4\n"
+						   "  ret i32 %0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_MemberAccessNestedReturn_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStr { i32 first; } struct TestStr2 { TestStr nest; } fn i32 main() { TestStr a = {8}; return a.first; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%TestStr = type { i32 }\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca %TestStr, align 8\n"
+						   "  %gep_0__main_a = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
+						   "  store i32 8, ptr %gep_0__main_a, align 4\n"
+						   "  %first = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
+						   "  %0 = load i32, ptr %first, align 4\n"
+						   "  ret i32 %0\n"
+						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
