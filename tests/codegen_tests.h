@@ -540,20 +540,49 @@ void test_MemberAccessReturn_codegen(void) {
 	free(error);
 }
 
-void test_MemberAccessNestedReturn_codegen(void) {
-	CODEGEN_TEST_SETUP_SINGLE("struct TestStr { i32 first; } struct TestStr2 { TestStr nest; } fn i32 main() { TestStr a = {8}; return a.first; }");
+void test_NestedStructInit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStr { i32 first; } struct TestStr2 { TestStr nest; } fn i32 main() { TestStr2 str = {{8}}; return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "%TestStr = type { i32 }\n\n"
-						   "define i32 @main() {\n"
-						   "entry:\n"
-						   "  %__main_a = alloca %TestStr, align 8\n"
-						   "  %gep_0__main_a = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
-						   "  store i32 8, ptr %gep_0__main_a, align 4\n"
-						   "  %first = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
-						   "  %0 = load i32, ptr %first, align 4\n"
-						   "  ret i32 %0\n"
-						   "}\n";
+						   "%TestStr2 = type { %TestStr }\n"
+                           "%TestStr = type { i32 }\n"
+                           "\n"
+                           "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_str = alloca %TestStr2, align 8\n"
+                           "  %tmp_inner_str = alloca %TestStr, align 8\n"
+                           "  %gep_0 = getelementptr inbounds %TestStr, ptr %tmp_inner_str, i32 0, i32 0\n"
+                           "  store i32 8, ptr %gep_0, align 4\n"
+                           "  %inner_struct_val = load %TestStr, ptr %tmp_inner_str, align 4\n"
+                           "  %gep_0__main_str = getelementptr inbounds %TestStr2, ptr %__main_str, i32 0, i32 0\n"
+                           "  store %TestStr %inner_struct_val, ptr %gep_0__main_str, align 4\n"
+                           "  ret i32 0\n"
+                           "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_MemberAccessNestedReturn_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStr { i32 first; } struct TestStr2 { TestStr nest; } fn i32 main() { TestStr2 a = {{8}}; return a.nest.first; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%TestStr2 = type { %TestStr }\n"
+                           "%TestStr = type { i32 }\n"
+                           "\n"
+                           "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_a = alloca %TestStr2, align 8\n"
+                           "  %gep_0__main_a = getelementptr inbounds %TestStr, ptr %__main_a, i32 0, i32 0\n"
+                           "  store i32 8, ptr %gep_0__main_a, align 4\n"
+                           "  %gep_0__main_a1 = getelementptr inbounds %TestStr2, ptr %__main_a, i32 0, i32 0\n"
+                           "  store ptr %__main_a, ptr %gep_0__main_a1, align 8\n"
+                           "  %nest = getelementptr inbounds %TestStr2, ptr %__main_a, i32 0, i32 0\n"
+                           "  %first = getelementptr inbounds %TestStr, ptr %nest, i32 0, i32 0\n"
+                           "  %0 = load i32, ptr %first, align 4\n"
+                           "  ret i32 %0\n"
+                           "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);

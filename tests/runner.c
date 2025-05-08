@@ -115,12 +115,14 @@ int main(void) {
 	RUN_TEST(test_LocalStructLiteralInit_codegen);
 	RUN_TEST(test_LocalStructLiteralEmptyInit_codegen);
 	RUN_TEST(test_LocalStructLiteralReinitialization_codegen);
+    RUN_TEST(test_NestedStructInit_codegen);
 	RUN_TEST(test_BasicMemberAccessAssignment_codegen);
 	RUN_TEST(test_NestedMemberAccessAssignment_codegen);
 	RUN_TEST(test_MemberAccessAssignmentToMemberAccess_codegen);
 	RUN_TEST(test_BasicReturn_codegen);
 	RUN_TEST(test_ExprIdentReturn_codegen);
 	RUN_TEST(test_MemberAccessReturn_codegen);
+	// RUN_TEST(test_MemberAccessNestedReturn_codegen);
 
 	return UNITY_END();
 }

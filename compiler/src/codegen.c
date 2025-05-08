@@ -140,6 +140,7 @@ typedef struct {
 	ASTNode *auxiliary_node;
 	ASTNode *current_function_node;
 	PassIntention intention;
+	LLVMValueRef passed_value;
 } PassContext;
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
@@ -263,7 +264,6 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 			generated_values[i] = LLVMConstNull(field_type);
 			curr_field = curr_field->next;
 		}
-		// If global scope
 		int current_field_index = 0;
 		for (int i = 0; i < init_count; ++i) {
 			FieldInitializer *init = node->data.struct_literal.inits[i];
@@ -271,16 +271,29 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 				current_field_index = find_field_index(decl_node, init->field);
 				assert(current_field_index != -1);
 			}
+			LLVMValueRef generated_value = NULL;
 			ASTNode *curr_field = decl_node->data.struct_decl.fields[current_field_index];
 			ctx.expected_type = curr_field->data.field_decl.type;
-			LLVMValueRef generated_value = codegen_ast(cg, init->expr, table, ctx);
+			if (init->expr->type == AST_STRUCT_LITERAL) {
+				LLVMTypeRef inner_ty = map_to_llvm(cg, ctx.expected_type, table);
+				LLVMValueRef tmp = LLVMBuildAlloca(cg->builder, inner_ty, "tmp_inner_str");
+				PassContext inner_ctx = ctx;
+				inner_ctx.intention = PI_STORE_PTR;
+				inner_ctx.auxiliary_node = node;
+				inner_ctx.passed_value = tmp;
+				codegen_literal(cg, init->expr, table, inner_ctx);
+				generated_value = LLVMBuildLoad2(cg->builder, inner_ty, tmp, "inner_struct_val");
+			} else {
+				generated_value = codegen_ast(cg, init->expr, table, ctx);
+			}
 			generated_values[current_field_index] = generated_value;
 			++current_field_index;
 		}
+		// If global scope
 		if (ctx.current_scope == 0) {
 			return LLVMConstNamedStruct(ty, generated_values, field_count);
 		}
-		LLVMValueRef var_ptr = hashmap_get(ctx.loaded_values, ctx.auxiliary_node->data.var_decl.resolved_name);
+		LLVMValueRef var_ptr = ctx.passed_value ? ctx.passed_value : hashmap_get(ctx.loaded_values, ctx.auxiliary_node->data.var_decl.resolved_name);
 		assert(var_ptr);
 		for (int i = 0; i < field_count; ++i) {
 			ASTNode *curr_field = decl_node->data.struct_decl.fields[i];
@@ -303,7 +316,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
-	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE};
+	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE, NULL};
 	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, table, ctx) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
@@ -350,7 +363,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	Symbol *sym = lookup_symbol_weak(table, linkage_name, 0);
 	assert(sym);
 	assert(sym->type);
-    Type* ret_type = sym->type->function.return_type;
+	Type *ret_type = sym->type->function.return_type;
 	LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
 	LLVMValueRef fn = LLVMAddFunction(cg->module, func_name, fn_ty);
 	if (cg->should_build_debug) {
@@ -384,7 +397,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			++index;
 		}
 	}
-	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE};
+	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE, NULL};
 	codegen_ast(cg, node->data.func_decl.body, table, ctx);
 	if (should_free_linkage_name)
 		free(linkage_name);
@@ -471,7 +484,7 @@ void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 		if (current->type == AST_VAR_DECL) {
 			codegen_global_var_decl(cg, current, table, 0);
 		} else {
-			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE};
+			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE, NULL};
 			codegen_ast(cg, current, table, ctx);
 		}
 		current = current->next;
