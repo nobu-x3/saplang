@@ -439,6 +439,11 @@ LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCo
 		LLVMValueRef val = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
 		return LLVMBuildNeg(cg->builder, val, "negtmp");
 	} break;
+	case '~': {
+		ctx.intention = PI_LOAD_VAL;
+		LLVMValueRef val = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
+		return LLVMBuildXor(cg->builder, val, LLVMConstInt(LLVMTypeOf(val), -1, 0), "lnot");
+	}
 	default:
 		assert(0 && "unknown unary op");
 		return NULL;

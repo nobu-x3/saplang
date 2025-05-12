@@ -672,3 +672,24 @@ void test_UnaryDeref_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING("", error);
 	free(error);
 }
+
+void test_UnaryBitwiseNot_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 x = 0; i32 y = ~x; return y; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_x = alloca i32, align 4\n"
+                           "  store i32 0, ptr %__main_x, align 4\n"
+                           "  %__main_y = alloca i32, align 4\n"
+                           "  %0 = load i32, ptr %__main_x, align 4\n"
+                           "  %lnot = xor i32 %0, -1\n"
+                           "  store i32 %lnot, ptr %__main_y, align 4\n"
+                           "  %1 = load i32, ptr %__main_y, align 4\n"
+                           "  ret i32 %1\n"
+                           "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}

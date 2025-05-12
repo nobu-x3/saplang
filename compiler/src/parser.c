@@ -776,7 +776,7 @@ ASTNode *new_param_decl_node(Type *type, const char *name, int is_const, int is_
 		return NULL;
 	node->data.param_decl.type = type;
 	strncpy(node->data.param_decl.name, name, sizeof(node->data.param_decl.name));
-    strncpy(node->data.param_decl.resolved_name, "", sizeof(node->data.param_decl.resolved_name));
+	strncpy(node->data.param_decl.resolved_name, "", sizeof(node->data.param_decl.resolved_name));
 	node->data.param_decl.is_const = is_const;
 	node->data.param_decl.is_va = is_va;
 	return node;
@@ -1687,7 +1687,7 @@ ASTNode *parse_logical_or(Parser *parser) {
 // ::= ('*' | '!' | '&') <expr>
 ASTNode *parse_unary(Parser *parser) {
 	TokenType type = parser->current_token.type;
-	if (type == TOK_EXCLAMATION || type == TOK_AMPERSAND || type == TOK_ASTERISK) {
+	if (type == TOK_EXCLAMATION || type == TOK_AMPERSAND || type == TOK_ASTERISK || type == TOK_BITWISE_NEG || type == TOK_MINUS) {
 		SourceLocation loc = parser->current_token.location;
 		char op = parser->current_token.text[0];
 		parser->current_token = next_token(&parser->scanner);

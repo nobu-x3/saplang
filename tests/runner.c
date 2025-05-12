@@ -127,6 +127,7 @@ int main(void) {
 	RUN_TEST(test_UnaryLogicalNot_codegen);
 	RUN_TEST(test_UnaryAddressOf_codegen);
 	RUN_TEST(test_UnaryDeref_codegen);
+	RUN_TEST(test_UnaryBitwiseNot_codegen);
 
 	return UNITY_END();
 }
