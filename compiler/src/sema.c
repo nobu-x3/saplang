@@ -158,6 +158,10 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 
 	case AST_RETURN:
 		return get_type(table, node->data.ret.return_expr, scope_level, scope_specifier);
+
+	case AST_UNARY_EXPR:
+		return get_type(table, node->data.unary_op.operand, scope_level, scope_specifier);
+
 	default:
 		return NULL;
 	}
@@ -177,6 +181,67 @@ CompilerResult analyze_expr_ident(Symbol *table, ASTNode *node, int scope_level)
 	if (global_sym_resolved)
 		return RESULT_SUCCESS;
 	return RESULT_FAILURE;
+}
+
+CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier) {
+	// First, analyze the sub-expression
+	CompilerResult res = analyze_ast(table, node->data.unary_op.operand, scope_level, scope_specifier);
+	if (res != RESULT_SUCCESS)
+		return res;
+	// Determine operand type
+	Type *op_ty = get_type(table, node->data.unary_op.operand, scope_level, scope_specifier);
+	if (!op_ty) {
+		report(node->location, "cannot determine type of unary operand", 0);
+		return RESULT_FAILURE;
+	}
+	switch (node->data.unary_op.op) {
+	case '-': // -x
+		if (op_ty->kind != TYPE_PRIMITIVE) {
+			report(node->location, "unary '-' requires built-in operand", 0);
+			return RESULT_FAILURE;
+		}
+		break;
+
+	case '~': // ~x
+		// only integer types allowed
+		if (op_ty->kind != TYPE_PRIMITIVE || strcmp(op_ty->type_name, "i8") && strcmp(op_ty->type_name, "i16") && strcmp(op_ty->type_name, "i32") && strcmp(op_ty->type_name, "i64")) {
+			report(node->location, "unary '~' requires integer operand", 0);
+			return RESULT_FAILURE;
+		}
+		break;
+
+	case '!': // !x
+		// must convert to bool
+		{
+			Type bool_type = get_primitive_type("bool");
+			if (!is_convertible(op_ty, &bool_type)) {
+				report(node->location, "unary '!' requires a boolean-convertible operand", 0);
+				return RESULT_FAILURE;
+			}
+		}
+		break;
+
+	case '&': // &x
+		// operand must be an l-value: identifier, member, or array access
+		if (node->data.unary_op.operand->type != AST_EXPR_IDENT && node->data.unary_op.operand->type != AST_MEMBER_ACCESS && node->data.unary_op.operand->type != AST_ARRAY_ACCESS) {
+			report(node->location, "unary '&' requires an l-value operand", 0);
+			return RESULT_FAILURE;
+		}
+		break;
+
+	case '*': // *p
+		// operand must be pointer
+		if (op_ty->kind != TYPE_POINTER) {
+			report(node->location, "unary '*' requires a pointer operand", 0);
+			return RESULT_FAILURE;
+		}
+		break;
+
+	default:
+		report(node->location, "unknown unary operator", 0);
+		return RESULT_FAILURE;
+	}
+	return RESULT_SUCCESS;
 }
 
 CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNode *node, int scope_level, const char *scope_specifier) {
@@ -297,9 +362,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (result != RESULT_SUCCESS) {
 				return result;
 			}
-			// Struct literals have already been handled, and it's really difficult to find the type of the struct literal that way
+			// Struct literals and unary exprs have already been handled, and it's really difficult to find the type of the struct literal this way
 			ASTNodeType init_node_type = node->data.var_decl.init->type;
-			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_EXPR_LITERAL) {
+			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_EXPR_LITERAL && init_node_type != AST_UNARY_EXPR) {
 				Type *init_type = get_type(table, node->data.var_decl.init, scope_level, scope_specifier);
 				if (!init_type) {
 					return RESULT_FAILURE;
@@ -577,8 +642,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		}
 		Type *expr_type = get_type(table, node->data.cast.expr, scope_level, scope_specifier);
-        if(expr_type->kind == TYPE_PRIMITIVE && node->data.cast.target_type->kind == TYPE_PRIMITIVE)
-            return RESULT_SUCCESS;
+		if (expr_type->kind == TYPE_PRIMITIVE && node->data.cast.target_type->kind == TYPE_PRIMITIVE)
+			return RESULT_SUCCESS;
 		if (!is_convertible(expr_type, node->data.cast.target_type)) {
 			char msg[256] = "";
 			char src_type[64] = "";
@@ -673,6 +738,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		return RESULT_SUCCESS;
 	} break;
+
+	case AST_UNARY_EXPR: {
+		return analyze_unary_op(table, node, scope_level, scope_specifier);
+	} break;
+
 	default:
 		report(node->location, "sema: unsupported node type.", 1);
 		break;

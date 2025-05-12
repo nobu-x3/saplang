@@ -12,12 +12,12 @@ void tearDown(void) {}
 int main(void) {
 	UNITY_BEGIN();
 
-    RUN_TEST(test_hashmap_create_and_destroy);
-    RUN_TEST(test_hashmap_put_and_get);
-    RUN_TEST(test_hashmap_update_existing_key);
-    RUN_TEST(test_hashmap_remove_and_contains);
-    RUN_TEST(test_hashmap_remove_missing_key);
-    RUN_TEST(test_hashmap_rehash);
+	RUN_TEST(test_hashmap_create_and_destroy);
+	RUN_TEST(test_hashmap_put_and_get);
+	RUN_TEST(test_hashmap_update_existing_key);
+	RUN_TEST(test_hashmap_remove_and_contains);
+	RUN_TEST(test_hashmap_remove_missing_key);
+	RUN_TEST(test_hashmap_rehash);
 
 	RUN_TEST(test_PrintfTest);
 
@@ -115,14 +115,18 @@ int main(void) {
 	RUN_TEST(test_LocalStructLiteralInit_codegen);
 	RUN_TEST(test_LocalStructLiteralEmptyInit_codegen);
 	RUN_TEST(test_LocalStructLiteralReinitialization_codegen);
-    RUN_TEST(test_NestedStructInit_codegen);
+	RUN_TEST(test_NestedStructInit_codegen);
 	RUN_TEST(test_BasicMemberAccessAssignment_codegen);
 	RUN_TEST(test_NestedMemberAccessAssignment_codegen);
 	RUN_TEST(test_MemberAccessAssignmentToMemberAccess_codegen);
 	RUN_TEST(test_BasicReturn_codegen);
 	RUN_TEST(test_ExprIdentReturn_codegen);
 	RUN_TEST(test_MemberAccessReturn_codegen);
-	// RUN_TEST(test_MemberAccessNestedReturn_codegen);
+	RUN_TEST(test_MemberAccessNestedReturn_codegen);
+	RUN_TEST(test_UnaryNeg_codegen);
+	RUN_TEST(test_UnaryLogicalNot_codegen);
+	RUN_TEST(test_UnaryAddressOf_codegen);
+	RUN_TEST(test_UnaryDeref_codegen);
 
 	return UNITY_END();
 }

@@ -409,6 +409,42 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	return fn;
 }
 
+LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+	switch (node->data.unary_op.op) {
+	case '*': {
+		ctx.intention = PI_LOAD_PTR;
+		LLVMValueRef ptr = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
+		Type *type = get_type(table, node->data.unary_op.operand, ctx.current_scope, "");
+		assert(type);
+		assert(type->kind == TYPE_POINTER);
+		LLVMTypeRef val_type = map_to_llvm(cg, type->pointee, table);
+		assert(val_type);
+		LLVMTypeRef ptr_type = LLVMTypeOf(ptr);
+		assert(ptr_type);
+		LLVMValueRef ptr_load = LLVMBuildLoad2(cg->builder, ptr_type, ptr, "");
+		assert(ptr_load);
+		return LLVMBuildLoad2(cg->builder, val_type, ptr_load, "deref");
+	} break;
+	case '&':
+		ctx.intention = PI_LOAD_PTR;
+		return codegen_ast(cg, node->data.unary_op.operand, table, ctx);
+		break;
+	case '!': {
+		ctx.intention = PI_LOAD_VAL;
+		LLVMValueRef val = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
+		return LLVMBuildNot(cg->builder, val, "nottmp");
+	} break;
+	case '-': {
+		ctx.intention = PI_LOAD_VAL;
+		LLVMValueRef val = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
+		return LLVMBuildNeg(cg->builder, val, "negtmp");
+	} break;
+	default:
+		assert(0 && "unknown unary op");
+		return NULL;
+	}
+}
+
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	switch (node->type) {
 	case AST_FN_DECL:
@@ -451,12 +487,13 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		return codegen_member_access(cg, node, table, ctx);
 	case AST_RETURN:
 		return codegen_return(cg, node, table, ctx);
+	case AST_UNARY_EXPR:
+		return codegen_unary(cg, node, table, ctx);
 	case AST_ARRAY_LITERAL:
 	case AST_STRING_LIT:
 	case AST_CHAR_LIT:
 	case AST_FIELD_DECL:
 	case AST_BINARY_EXPR:
-	case AST_UNARY_EXPR:
 	case AST_ARRAY_ACCESS:
 	case AST_FN_CALL:
 	case AST_ENUM_DECL:
