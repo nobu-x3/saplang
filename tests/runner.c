@@ -128,6 +128,11 @@ int main(void) {
 	RUN_TEST(test_UnaryAddressOf_codegen);
 	RUN_TEST(test_UnaryDeref_codegen);
 	RUN_TEST(test_UnaryBitwiseNot_codegen);
+	RUN_TEST(test_Add_codegen);
+	RUN_TEST(test_Sub_codegen);
+	RUN_TEST(test_Div_codegen);
+	RUN_TEST(test_Mul_codegen);
+	RUN_TEST(test_Mod_codegen);
 
 	return UNITY_END();
 }

@@ -1,6 +1,7 @@
 #include "codegen.h"
 #include "hashmap.h"
 #include "parser.h"
+#include "scanner.h"
 #include "sema.h"
 #include "symbol_table.h"
 #include "types.h"
@@ -450,6 +451,59 @@ LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCo
 	}
 }
 
+LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+	LLVMValueRef L = codegen_ast(cg, node->data.binary_op.left, table, ctx);
+	LLVMValueRef R = codegen_ast(cg, node->data.binary_op.right, table, ctx);
+	switch (node->data.binary_op.op) {
+	case TOK_PLUS:
+		return LLVMBuildAdd(cg->builder, L, R, "add");
+	case TOK_MINUS:
+		return LLVMBuildSub(cg->builder, L, R, "sub");
+	case TOK_ASTERISK:
+		return LLVMBuildMul(cg->builder, L, R, "mul");
+	case TOK_SLASH:
+		return LLVMBuildSDiv(cg->builder, L, R, "div");
+	case TOK_MODULO:
+		return LLVMBuildSRem(cg->builder, L, R, "rem");
+	case TOK_AND:
+		return LLVMBuildAnd(cg->builder, L, R, "and");
+	case TOK_OR:
+		return LLVMBuildOr(cg->builder, L, R, "or");
+	case TOK_BITWISE_XOR:
+		return LLVMBuildXor(cg->builder, L, R, "xor");
+	case TOK_BITWISE_LSHIFT:
+		return LLVMBuildShl(cg->builder, L, R, "shl");
+	case TOK_BITWISE_RSHIFT:
+		return LLVMBuildAShr(cg->builder, L, R, "shr");
+	case TOK_SELFADD: {
+		LLVMValueRef add = LLVMBuildAdd(cg->builder, L, R, "add");
+		return LLVMBuildStore(cg->builder, add, L);
+	}
+	case TOK_SELFSUB: {
+		LLVMValueRef sub = LLVMBuildSub(cg->builder, L, R, "sub");
+		return LLVMBuildStore(cg->builder, sub, L);
+	}
+	case TOK_SELFDIV: {
+		LLVMValueRef div = LLVMBuildSDiv(cg->builder, L, R, "div");
+		return LLVMBuildStore(cg->builder, div, L);
+	}
+	case TOK_SELFMUL: {
+		LLVMValueRef mul = LLVMBuildMul(cg->builder, L, R, "mul");
+		return LLVMBuildStore(cg->builder, mul, L);
+	}
+	case TOK_SELFOR: {
+		LLVMValueRef or = LLVMBuildOr(cg->builder, L, R, "or");
+		return LLVMBuildStore(cg->builder, or, L);
+	}
+	case TOK_SELFAND: {
+		LLVMValueRef and = LLVMBuildAnd(cg->builder, L, R, "and");
+		return LLVMBuildStore(cg->builder, and, L);
+	}
+	default:
+		assert(0 && "Unknown binary op");
+	}
+}
+
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	switch (node->type) {
 	case AST_FN_DECL:
@@ -494,11 +548,12 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		return codegen_return(cg, node, table, ctx);
 	case AST_UNARY_EXPR:
 		return codegen_unary(cg, node, table, ctx);
+	case AST_BINARY_EXPR:
+		return codegen_binary(cg, node, table, ctx);
 	case AST_ARRAY_LITERAL:
 	case AST_STRING_LIT:
 	case AST_CHAR_LIT:
 	case AST_FIELD_DECL:
-	case AST_BINARY_EXPR:
 	case AST_ARRAY_ACCESS:
 	case AST_FN_CALL:
 	case AST_ENUM_DECL:
