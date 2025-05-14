@@ -137,6 +137,7 @@ int main(void) {
 	RUN_TEST(test_SelfSub_codegen);
 	RUN_TEST(test_SelfMul_codegen);
 	RUN_TEST(test_SelfDiv_codegen);
+	RUN_TEST(test_CharList_codegen);
 
 	return UNITY_END();
 }

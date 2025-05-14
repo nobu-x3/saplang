@@ -550,9 +550,12 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		return codegen_unary(cg, node, table, ctx);
 	case AST_BINARY_EXPR:
 		return codegen_binary(cg, node, table, ctx);
+	case AST_CHAR_LIT: {
+		LLVMTypeRef u8_type = LLVMInt8TypeInContext(cg->llvm_context);
+		return LLVMConstInt(u8_type, node->data.char_literal.literal, 0);
+	}
 	case AST_ARRAY_LITERAL:
 	case AST_STRING_LIT:
-	case AST_CHAR_LIT:
 	case AST_FIELD_DECL:
 	case AST_ARRAY_ACCESS:
 	case AST_FN_CALL:

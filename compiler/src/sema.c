@@ -350,6 +350,15 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				result = analyze_expr_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
 			} else if (node->data.var_decl.init->type == AST_STRUCT_LITERAL) {
 				result = analyze_struct_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
+			} else if (node->data.var_decl.init->type == AST_CHAR_LIT) {
+				Type *type = node->data.var_decl.type;
+				if (type->kind != TYPE_PRIMITIVE)
+					return RESULT_FAILURE;
+				int is_u8 = strcmp(type->type_name, "u8") == 0;
+				int is_i8 = strcmp(type->type_name, "i8") == 0;
+				if (!is_u8 && !is_i8)
+					return RESULT_FAILURE;
+				result = RESULT_SUCCESS;
 			} else {
 				// Disallow global variable initialization with other global variables
 				if (node->data.var_decl.init->type == AST_EXPR_IDENT && scope_level == 0) {
@@ -364,7 +373,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			}
 			// Struct literals and unary exprs have already been handled, and it's really difficult to find the type of the struct literal this way
 			ASTNodeType init_node_type = node->data.var_decl.init->type;
-			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_EXPR_LITERAL && init_node_type != AST_UNARY_EXPR) {
+			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_EXPR_LITERAL && init_node_type != AST_UNARY_EXPR && init_node_type != AST_CHAR_LIT) {
 				Type *init_type = get_type(table, node->data.var_decl.init, scope_level, scope_specifier);
 				if (!init_type) {
 					return RESULT_FAILURE;
@@ -505,13 +514,21 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			result = analyze_expr_literal(table, ltype, node->data.assignment.rvalue, scope_level, scope_specifier);
 		} else if (node->data.assignment.rvalue->type == AST_STRUCT_LITERAL) {
 			result = analyze_struct_literal(table, ltype, node->data.assignment.rvalue, scope_level, scope_specifier);
+		} else if (node->data.assignment.rvalue->type == AST_CHAR_LIT) {
+			if (ltype->kind != TYPE_PRIMITIVE)
+				return RESULT_FAILURE;
+			int is_u8 = strcmp(ltype->type_name, "u8") == 0;
+			int is_i8 = strcmp(ltype->type_name, "i8") == 0;
+			if (!is_u8 && !is_i8)
+				return RESULT_FAILURE;
+			result = RESULT_SUCCESS;
 		} else {
 			result = analyze_ast(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 		}
 		if (result != RESULT_SUCCESS)
 			return result;
 		ASTNodeType rvalue_node_type = node->data.assignment.rvalue->type;
-		if (rvalue_node_type != AST_STRUCT_LITERAL && rvalue_node_type != AST_EXPR_LITERAL) {
+		if (rvalue_node_type != AST_STRUCT_LITERAL && rvalue_node_type != AST_EXPR_LITERAL && rvalue_node_type != AST_CHAR_LIT) {
 			Type *rtype = get_type(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 			if (!is_convertible(rtype, ltype)) {
 				char left_str[128] = "";
@@ -742,6 +759,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	case AST_UNARY_EXPR: {
 		return analyze_unary_op(table, node, scope_level, scope_specifier);
 	} break;
+
+	case AST_CHAR_LIT:
+		break;
 
 	default:
 		report(node->location, "sema: unsupported node type.", 1);
