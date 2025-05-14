@@ -133,6 +133,10 @@ int main(void) {
 	RUN_TEST(test_Div_codegen);
 	RUN_TEST(test_Mul_codegen);
 	RUN_TEST(test_Mod_codegen);
+	RUN_TEST(test_SelfAdd_codegen);
+	RUN_TEST(test_SelfSub_codegen);
+	RUN_TEST(test_SelfMul_codegen);
+	RUN_TEST(test_SelfDiv_codegen);
 
 	return UNITY_END();
 }

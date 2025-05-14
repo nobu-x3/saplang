@@ -465,9 +465,9 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 		return LLVMBuildSDiv(cg->builder, L, R, "div");
 	case TOK_MODULO:
 		return LLVMBuildSRem(cg->builder, L, R, "rem");
-	case TOK_AND:
+	case TOK_AMPERSAND:
 		return LLVMBuildAnd(cg->builder, L, R, "and");
-	case TOK_OR:
+	case TOK_BITWISE_OR:
 		return LLVMBuildOr(cg->builder, L, R, "or");
 	case TOK_BITWISE_XOR:
 		return LLVMBuildXor(cg->builder, L, R, "xor");

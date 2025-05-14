@@ -835,3 +835,123 @@ void test_Mod_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_SelfAdd_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 x = 1; i32 y = 1; y += x; y += 1; y += y; return y; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_x = alloca i32, align 4\n"
+                           "  store i32 1, ptr %__main_x, align 4\n"
+                           "  %__main_y = alloca i32, align 4\n"
+                           "  store i32 1, ptr %__main_y, align 4\n"
+                           "  %0 = load i32, ptr %__main_y, align 4\n"
+                           "  %1 = load i32, ptr %__main_x, align 4\n"
+                           "  %add = add i32 %0, %1\n"
+                           "  store i32 %add, ptr %__main_y, align 4\n"
+                           "  %2 = load i32, ptr %__main_y, align 4\n"
+                           "  %add1 = add i32 %2, 1\n"
+                           "  store i32 %add1, ptr %__main_y, align 4\n"
+                           "  %3 = load i32, ptr %__main_y, align 4\n"
+                           "  %4 = load i32, ptr %__main_y, align 4\n"
+                           "  %add2 = add i32 %3, %4\n"
+                           "  store i32 %add2, ptr %__main_y, align 4\n"
+                           "  %5 = load i32, ptr %__main_y, align 4\n"
+                           "  ret i32 %5\n"
+                           "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_SelfSub_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 x = 1; i32 y = 10; y -= x; y -= 1; y -= y; return y; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_x = alloca i32, align 4\n"
+                           "  store i32 1, ptr %__main_x, align 4\n"
+                           "  %__main_y = alloca i32, align 4\n"
+                           "  store i32 10, ptr %__main_y, align 4\n"
+                           "  %0 = load i32, ptr %__main_y, align 4\n"
+                           "  %1 = load i32, ptr %__main_x, align 4\n"
+                           "  %sub = sub i32 %0, %1\n"
+                           "  store i32 %sub, ptr %__main_y, align 4\n"
+                           "  %2 = load i32, ptr %__main_y, align 4\n"
+                           "  %sub1 = sub i32 %2, 1\n"
+                           "  store i32 %sub1, ptr %__main_y, align 4\n"
+                           "  %3 = load i32, ptr %__main_y, align 4\n"
+                           "  %4 = load i32, ptr %__main_y, align 4\n"
+                           "  %sub2 = sub i32 %3, %4\n"
+                           "  store i32 %sub2, ptr %__main_y, align 4\n"
+                           "  %5 = load i32, ptr %__main_y, align 4\n"
+                           "  ret i32 %5\n"
+                           "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_SelfMul_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 x = 2; i32 y = 10; y *= x; y *= 1; y *= y; return y; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_x = alloca i32, align 4\n"
+                           "  store i32 2, ptr %__main_x, align 4\n"
+                           "  %__main_y = alloca i32, align 4\n"
+                           "  store i32 10, ptr %__main_y, align 4\n"
+                           "  %0 = load i32, ptr %__main_y, align 4\n"
+                           "  %1 = load i32, ptr %__main_x, align 4\n"
+                           "  %mul = mul i32 %0, %1\n"
+                           "  store i32 %mul, ptr %__main_y, align 4\n"
+                           "  %2 = load i32, ptr %__main_y, align 4\n"
+                           "  %mul1 = mul i32 %2, 1\n"
+                           "  store i32 %mul1, ptr %__main_y, align 4\n"
+                           "  %3 = load i32, ptr %__main_y, align 4\n"
+                           "  %4 = load i32, ptr %__main_y, align 4\n"
+                           "  %mul2 = mul i32 %3, %4\n"
+                           "  store i32 %mul2, ptr %__main_y, align 4\n"
+                           "  %5 = load i32, ptr %__main_y, align 4\n"
+                           "  ret i32 %5\n"
+                           "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_SelfDiv_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 x = 2; i32 y = 10; y /= x; y /= 1; y /= y; return y; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_x = alloca i32, align 4\n"
+                           "  store i32 2, ptr %__main_x, align 4\n"
+                           "  %__main_y = alloca i32, align 4\n"
+                           "  store i32 10, ptr %__main_y, align 4\n"
+                           "  %0 = load i32, ptr %__main_y, align 4\n"
+                           "  %1 = load i32, ptr %__main_x, align 4\n"
+                           "  %div = sdiv i32 %0, %1\n"
+                           "  store i32 %div, ptr %__main_y, align 4\n"
+                           "  %2 = load i32, ptr %__main_y, align 4\n"
+                           "  %div1 = sdiv i32 %2, 1\n"
+                           "  store i32 %div1, ptr %__main_y, align 4\n"
+                           "  %3 = load i32, ptr %__main_y, align 4\n"
+                           "  %4 = load i32, ptr %__main_y, align 4\n"
+                           "  %div2 = sdiv i32 %3, %4\n"
+                           "  store i32 %div2, ptr %__main_y, align 4\n"
+                           "  %5 = load i32, ptr %__main_y, align 4\n"
+                           "  ret i32 %5\n"
+                           "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
