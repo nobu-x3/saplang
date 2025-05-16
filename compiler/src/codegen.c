@@ -590,9 +590,29 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMTypeRef u8_type = LLVMInt8TypeInContext(cg->llvm_context);
 		return LLVMConstInt(u8_type, node->data.char_literal.literal, 0);
 	}
+	case AST_ARRAY_ACCESS: {
+		PassContext base_ctx = ctx;
+		base_ctx.intention = PI_LOAD_PTR;
+		base_ctx.expected_type = get_type(table, node->data.array_access.base, ctx.current_scope, "");
+		LLVMTypeRef arr_ty = map_to_llvm(cg, base_ctx.expected_type, table);
+		LLVMValueRef base_ptr = codegen_ast(cg, node->data.array_access.base, table, base_ctx);
+		// compute index
+		PassContext idx_ctx = ctx;
+		idx_ctx.intention = PI_LOAD_VAL;
+		LLVMValueRef idx = codegen_ast(cg, node->data.array_access.index, table, idx_ctx);
+		// extend index to i64 if needed
+		LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
+		LLVMValueRef idx64 = LLVMBuildSExtOrBitCast(cg->builder, idx, i64_ty, "idx64");
+		// first GEP: [0, idx]
+		LLVMValueRef gep = LLVMBuildInBoundsGEP2(cg->builder, arr_ty, base_ptr, (LLVMValueRef[]){LLVMConstInt(i64_ty, 0, 0), idx64}, 2, "arrgep");
+		if (ctx.intention == PI_LOAD_VAL) {
+			LLVMTypeRef elem_ty = map_to_llvm(cg, ctx.expected_type, table);
+			return LLVMBuildLoad2(cg->builder, elem_ty, gep, "arrload");
+		}
+		return gep;
+	}
 	case AST_STRING_LIT:
 	case AST_FIELD_DECL:
-	case AST_ARRAY_ACCESS:
 	case AST_FN_CALL:
 	case AST_ENUM_DECL:
 	case AST_ENUM_VALUE:

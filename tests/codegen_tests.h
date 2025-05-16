@@ -1060,9 +1060,68 @@ void test_ArrayElementAccess_codegen(void) {
 						   "  store i32 2, ptr %arrayinit.element, align 4\n"
 						   "  %arrayinit.element1 = getelementptr inbounds i32, ptr %arrayinit.element, i64 1\n"
 						   "  store i32 3, ptr %arrayinit.element1, align 4\n"
-						   "  %0 = load i32, ptr %__main_lit, align 4\n"
-						   "  %arrgep = getelementptr inbounds i32, i32 %0, 0, 0\n"
-						   "  %arrload = load i32, i32 %arrgep, align 4\n"
+						   "  %arrgep = getelementptr inbounds [3 x i32], ptr %__main_lit, i64 0, i64 0\n"
+						   "  %arrload = load i32, ptr %arrgep, align 4\n"
+						   "  ret i32 %arrload\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ArrayElementAccessFromVarIndex_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 a = 0; i32[3] lit = [1, 2, 3]; return lit[a]; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_a, align 4\n"
+						   "  %__main_lit = alloca [3 x i32], align 4\n"
+						   "  %arrayinit.begin = getelementptr inbounds [3 x i32], ptr %__main_lit, i64 0, i64 0\n"
+						   "  store i32 1, ptr %arrayinit.begin, align 4\n"
+						   "  %arrayinit.element = getelementptr inbounds i32, ptr %arrayinit.begin, i64 1\n"
+						   "  store i32 2, ptr %arrayinit.element, align 4\n"
+						   "  %arrayinit.element1 = getelementptr inbounds i32, ptr %arrayinit.element, i64 1\n"
+						   "  store i32 3, ptr %arrayinit.element1, align 4\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  %idx64 = sext i32 %0 to i64\n"
+						   "  %arrgep = getelementptr inbounds [3 x i32], ptr %__main_lit, i64 0, i64 %idx64\n"
+						   "  %arrload = load i32, ptr %arrgep, align 4\n"
+						   "  ret i32 %arrload\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_NestedArrayAccess_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32[3][2] lit = [[1, 2], [3, 4], [5, 6]]; return lit[0][1]; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_lit = alloca [3 x [2 x i32]], align 4\n"
+						   "  %arrayinit.begin = getelementptr inbounds [3 x [2 x i32]], ptr %__main_lit, i64 0, i64 0\n"
+						   "  %arrayinit.begin1 = getelementptr inbounds [2 x i32], ptr %arrayinit.begin, i64 0, i64 0\n"
+						   "  store i32 1, ptr %arrayinit.begin1, align 4\n"
+						   "  %arrayinit.element = getelementptr inbounds i32, ptr %arrayinit.begin1, i64 1\n"
+						   "  store i32 2, ptr %arrayinit.element, align 4\n"
+						   "  %arrayinit.element2 = getelementptr inbounds [2 x i32], ptr %arrayinit.begin, i64 1\n"
+						   "  %arrayinit.begin3 = getelementptr inbounds [2 x i32], ptr %arrayinit.element2, i64 0, i64 0\n"
+						   "  store i32 3, ptr %arrayinit.begin3, align 4\n"
+						   "  %arrayinit.element4 = getelementptr inbounds i32, ptr %arrayinit.begin3, i64 1\n"
+						   "  store i32 4, ptr %arrayinit.element4, align 4\n"
+						   "  %arrayinit.element5 = getelementptr inbounds [2 x i32], ptr %arrayinit.element2, i64 1\n"
+						   "  %arrayinit.begin6 = getelementptr inbounds [2 x i32], ptr %arrayinit.element5, i64 0, i64 0\n"
+						   "  store i32 5, ptr %arrayinit.begin6, align 4\n"
+						   "  %arrayinit.element7 = getelementptr inbounds i32, ptr %arrayinit.begin6, i64 1\n"
+						   "  store i32 6, ptr %arrayinit.element7, align 4\n"
+						   "  %arrgep = getelementptr inbounds [3 x [2 x i32]], ptr %__main_lit, i64 0, i64 0\n"
+						   "  %arrgep8 = getelementptr inbounds [2 x i32], ptr %arrgep, i64 0, i64 1\n"
+						   "  %arrload = load i32, ptr %arrgep8, align 4\n"
 						   "  ret i32 %arrload\n"
 						   "}\n";
 	const char *expected_error = "";

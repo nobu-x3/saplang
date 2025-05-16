@@ -141,6 +141,9 @@ int main(void) {
 	RUN_TEST(test_LocalArrayLiteralInit_codegen);
 	RUN_TEST(test_LocalArrayLiteralInitWithVar_codegen);
 	RUN_TEST(test_LocalArrayLiteralNested_codegen);
+	RUN_TEST(test_ArrayElementAccess_codegen);
+	RUN_TEST(test_ArrayElementAccessFromVarIndex_codegen);
+	RUN_TEST(test_NestedArrayAccess_codegen);
 
 	return UNITY_END();
 }

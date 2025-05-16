@@ -20,7 +20,7 @@ int is_known_type(Symbol *table, const Type *source, int current_scope) {
 
 int is_int(const Type *type) {
 	return type->kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "i8") == 0 || strcmp(type->type_name, "i16") == 0 || strcmp(type->type_name, "i32") == 0 || strcmp(type->type_name, "i64") == 0 || strcmp(type->type_name, "u8") == 0 ||
-		   strcmp(type->type_name, "u16") == 0 || strcmp(type->type_name, "u32") == 0 || strcmp(type->type_name, "u64") == 0 || strcmp(type->type_name, "bool") == 0);
+											strcmp(type->type_name, "u16") == 0 || strcmp(type->type_name, "u32") == 0 || strcmp(type->type_name, "u64") == 0 || strcmp(type->type_name, "bool") == 0);
 }
 
 int is_float(const Type *type) { return type->kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "f32") == 0 || strcmp(type->type_name, "f64") == 0); }
@@ -176,6 +176,12 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 	case AST_UNARY_EXPR:
 		return get_type(table, node->data.unary_op.operand, scope_level, scope_specifier);
 
+	case AST_ARRAY_ACCESS: {
+		Type *base_type = get_type(table, node->data.array_access.base, scope_level, scope_specifier);
+		if (!base_type || base_type->kind != TYPE_ARRAY)
+			return NULL;
+		return base_type->array.element_type;
+	} break;
 	default:
 		return NULL;
 	}
@@ -381,13 +387,13 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
 				}
-				if(node->data.var_decl.type->array.size != array_literal->data.array_literal.count){
+				if (node->data.var_decl.type->array.size != array_literal->data.array_literal.count) {
 					report(node->location, "array element count mismatch. Arrays cannot be initialized with partial initializers.", 0);
 					return RESULT_FAILURE;
 				}
 				for (int i = 0; i < array_literal->data.array_literal.count; ++i) {
 					// This if is a hack that essentially prevents type checking in nested array literals
-					if(array_literal->data.array_literal.elements[i]->type != AST_ARRAY_LITERAL) {
+					if (array_literal->data.array_literal.elements[i]->type != AST_ARRAY_LITERAL) {
 						Type *element_type = get_type(table, array_literal->data.array_literal.elements[i], scope_level, scope_specifier);
 						if (!is_convertible(element_type, node->data.var_decl.type->array.element_type, 1)) {
 							char type_str[128] = "";
@@ -821,6 +827,33 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		Type *field_type = get_type(table, node, scope_level, scope_specifier);
 		if (!field_type)
 			return RESULT_FAILURE;
+		return RESULT_SUCCESS;
+	} break;
+
+	case AST_ARRAY_ACCESS: {
+		CompilerResult res = analyze_ast(table, node->data.array_access.base, scope_level, scope_specifier);
+		if (res != RESULT_SUCCESS)
+			return res;
+		res = analyze_ast(table, node->data.array_access.index, scope_level, scope_specifier);
+		if (res != RESULT_SUCCESS)
+			return res;
+		// Fetch the base’s type
+		Type *base_ty = get_type(table, node->data.array_access.base, scope_level, scope_specifier);
+		if (!base_ty) {
+			report(node->location, "cannot determine type of array base", 0);
+			return RESULT_FAILURE;
+		}
+		// Must be an array or pointer
+		if (base_ty->kind != TYPE_ARRAY && base_ty->kind != TYPE_POINTER) {
+			report(node->location, "subscripted value is not an array or pointer", 0);
+			return RESULT_FAILURE;
+		}
+		// Check index is integer
+		Type *idx_ty = get_type(table, node->data.array_access.index, scope_level, scope_specifier);
+		if (!idx_ty || idx_ty->kind != TYPE_PRIMITIVE || strchr("iu", idx_ty->type_name[0]) == NULL) {
+			report(node->data.array_access.index->location, "array index must be an integer type", 0);
+			return RESULT_FAILURE;
+		}
 		return RESULT_SUCCESS;
 	} break;
 
