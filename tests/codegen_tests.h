@@ -1036,7 +1036,20 @@ void test_LocalArrayLiteralNested_codegen(void) {
 						   "  %arrayinit.element = getelementptr inbounds i8, ptr %arrayinit.begin1, i64 1\n"
 						   "  store i8 2, ptr %arrayinit.element, align 1\n"
 						   "  store ptr %arrayinit.begin, ptr %arrayinit.begin, align 8\n"
-						   "  %arrayinit.element2 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 1\n  %arrayinit.begin3 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n  store i8 3, ptr %arrayinit.begin3, align 1\n  %arrayinit.element4 = getelementptr inbounds i8, ptr %arrayinit.begin3, i64 1\n  store i8 4, ptr %arrayinit.element4, align 1\n  store ptr %arrayinit.begin, ptr %arrayinit.element2, align 8\n  %arrayinit.element5 = getelementptr inbounds [2 x i8], ptr %arrayinit.element2, i64 1\n  %arrayinit.begin6 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n  store i8 5, ptr %arrayinit.begin6, align 1\n  %arrayinit.element7 = getelementptr inbounds i8, ptr %arrayinit.begin6, i64 1\n  store i8 6, ptr %arrayinit.element7, align 1\n  store ptr %arrayinit.begin, ptr %arrayinit.element5, align 8\n  ret void\n}\n";
+						   "  %arrayinit.element2 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 1\n"
+						   "  %arrayinit.begin3 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n"
+						   "  store i8 3, ptr %arrayinit.begin3, align 1\n"
+						   "  %arrayinit.element4 = getelementptr inbounds i8, ptr %arrayinit.begin3, i64 1\n"
+						   "  store i8 4, ptr %arrayinit.element4, align 1\n"
+						   "  store ptr %arrayinit.begin, ptr %arrayinit.element2, align 8\n"
+						   "  %arrayinit.element5 = getelementptr inbounds [2 x i8], ptr %arrayinit.element2, i64 1\n"
+						   "  %arrayinit.begin6 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n"
+						   "  store i8 5, ptr %arrayinit.begin6, align 1\n"
+						   "  %arrayinit.element7 = getelementptr inbounds i8, ptr %arrayinit.begin6, i64 1\n"
+						   "  store i8 6, ptr %arrayinit.element7, align 1\n"
+						   "  store ptr %arrayinit.begin, ptr %arrayinit.element5, align 8\n"
+						   "  ret void\n"
+						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
