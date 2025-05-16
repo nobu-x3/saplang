@@ -18,7 +18,14 @@ int is_known_type(Symbol *table, const Type *source, int current_scope) {
 	return 1;
 }
 
-int is_convertible(const Type *source, const Type *target) {
+int is_int(const Type *type) {
+	return type->kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "i8") == 0 || strcmp(type->type_name, "i16") == 0 || strcmp(type->type_name, "i32") == 0 || strcmp(type->type_name, "i64") == 0 || strcmp(type->type_name, "u8") == 0 ||
+		   strcmp(type->type_name, "u16") == 0 || strcmp(type->type_name, "u32") == 0 || strcmp(type->type_name, "u64") == 0 || strcmp(type->type_name, "bool") == 0);
+}
+
+int is_float(const Type *type) { return type->kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "f32") == 0 || strcmp(type->type_name, "f64") == 0); }
+
+int is_convertible(const Type *source, const Type *target, int permissive) {
 	if (!source || !target)
 		return 0;
 
@@ -60,6 +67,13 @@ int is_convertible(const Type *source, const Type *target) {
 
 			if (source->kind == TYPE_PRIMITIVE)
 				return 1;
+		}
+
+		if (permissive) {
+			if (source->kind == TYPE_PRIMITIVE) {
+				return (is_int(target) && is_int(source)) || (is_float(target) && is_float(source));
+			}
+			return 0;
 		}
 	}
 
@@ -214,7 +228,7 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 		// must convert to bool
 		{
 			Type bool_type = get_primitive_type("bool");
-			if (!is_convertible(op_ty, &bool_type)) {
+			if (!is_convertible(op_ty, &bool_type, 0)) {
 				report(node->location, "unary '!' requires a boolean-convertible operand", 0);
 				return RESULT_FAILURE;
 			}
@@ -288,7 +302,7 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 
 CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level, const char *scope_specifier) {
 	Type *rtype = get_type(table, node, scope_level, scope_specifier);
-	if (!is_convertible(rtype, lvalue_type)) {
+	if (!is_convertible(rtype, lvalue_type, 1)) {
 		if (rtype) {
 			char left_str[128] = "";
 			char right_str[128] = "";
@@ -359,6 +373,36 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				if (!is_u8 && !is_i8)
 					return RESULT_FAILURE;
 				result = RESULT_SUCCESS;
+			} else if (node->data.var_decl.init->type == AST_ARRAY_LITERAL) {
+				ASTNode *array_literal = node->data.var_decl.init;
+				if (node->data.var_decl.type->kind != TYPE_ARRAY) {
+					char msg[256] = "";
+					sprintf(msg, "lvalue is not an array.");
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+				if(node->data.var_decl.type->array.size != array_literal->data.array_literal.count){
+					report(node->location, "array element count mismatch. Arrays cannot be initialized with partial initializers.", 0);
+					return RESULT_FAILURE;
+				}
+				for (int i = 0; i < array_literal->data.array_literal.count; ++i) {
+					// This if is a hack that essentially prevents type checking in nested array literals
+					if(array_literal->data.array_literal.elements[i]->type != AST_ARRAY_LITERAL) {
+						Type *element_type = get_type(table, array_literal->data.array_literal.elements[i], scope_level, scope_specifier);
+						if (!is_convertible(element_type, node->data.var_decl.type->array.element_type, 1)) {
+							char type_str[128] = "";
+							type_print(type_str, node->data.var_decl.type->array.element_type);
+							char msg[256] = "";
+							sprintf(msg, "array initialization mistype, expected type %s.", type_str);
+							report(array_literal->data.array_literal.elements[i]->location, msg, 0);
+							return RESULT_FAILURE;
+						}
+					}
+					result = analyze_ast(table, array_literal->data.array_literal.elements[i], scope_level, scope_specifier);
+					if (result != RESULT_SUCCESS) {
+						return result;
+					}
+				}
 			} else {
 				// Disallow global variable initialization with other global variables
 				if (node->data.var_decl.init->type == AST_EXPR_IDENT && scope_level == 0) {
@@ -373,12 +417,12 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			}
 			// Struct literals and unary exprs have already been handled, and it's really difficult to find the type of the struct literal this way
 			ASTNodeType init_node_type = node->data.var_decl.init->type;
-			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_EXPR_LITERAL && init_node_type != AST_UNARY_EXPR && init_node_type != AST_CHAR_LIT) {
+			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_EXPR_LITERAL && init_node_type != AST_UNARY_EXPR && init_node_type != AST_CHAR_LIT && init_node_type != AST_ARRAY_LITERAL) {
 				Type *init_type = get_type(table, node->data.var_decl.init, scope_level, scope_specifier);
 				if (!init_type) {
 					return RESULT_FAILURE;
 				}
-				if (!is_convertible(init_type, node->data.var_decl.type)) {
+				if (!is_convertible(init_type, node->data.var_decl.type, 0)) {
 					report(node->data.var_decl.init->location, "type mismatch in initializer.", 0);
 					return RESULT_FAILURE;
 				}
@@ -444,7 +488,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 		Type *expr_type = get_type(table, node, scope_level, scope_specifier);
-		if (!is_convertible(expr_type, sym->type->function.return_type)) {
+		if (!is_convertible(expr_type, sym->type->function.return_type, 0)) {
 			char msg[128] = "";
 			char src_type[128] = "";
 			char trg_type[128] = "";
@@ -467,7 +511,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		Type *ltype = get_type(table, node->data.binary_op.left, scope_level, scope_specifier);
 		Type *rtype = get_type(table, node->data.binary_op.right, scope_level, scope_specifier);
-		if (!is_convertible(rtype, ltype)) {
+		if (!is_convertible(rtype, ltype, 1)) {
 			char left_str[128] = "";
 			char right_str[128] = "";
 			type_print(left_str, ltype);
@@ -522,15 +566,38 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (!is_u8 && !is_i8)
 				return RESULT_FAILURE;
 			result = RESULT_SUCCESS;
+		} else if (node->data.assignment.rvalue->type == AST_ARRAY_LITERAL) {
+			ASTNode *array_literal = node->data.assignment.rvalue;
+			if (ltype->kind != TYPE_ARRAY) {
+				char msg[256] = "";
+				sprintf(msg, "lvalue is not an array.");
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			for (int i = 0; i < array_literal->data.array_literal.count; ++i) {
+				Type *element_type = get_type(table, array_literal->data.array_literal.elements[i], scope_level, scope_specifier);
+				if (!is_convertible(element_type, ltype, 1)) {
+					char type_str[128] = "";
+					type_print(type_str, ltype->array.element_type);
+					char msg[256] = "";
+					sprintf(msg, "array initialization mistype, expected type %s.", type_str);
+					report(array_literal->data.array_literal.elements[i]->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+				result = analyze_ast(table, array_literal->data.array_literal.elements[i], scope_level, scope_specifier);
+				if (result != RESULT_SUCCESS) {
+					return result;
+				}
+			}
 		} else {
 			result = analyze_ast(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 		}
 		if (result != RESULT_SUCCESS)
 			return result;
 		ASTNodeType rvalue_node_type = node->data.assignment.rvalue->type;
-		if (rvalue_node_type != AST_STRUCT_LITERAL && rvalue_node_type != AST_EXPR_LITERAL && rvalue_node_type != AST_CHAR_LIT) {
+		if (rvalue_node_type != AST_STRUCT_LITERAL && rvalue_node_type != AST_EXPR_LITERAL && rvalue_node_type != AST_CHAR_LIT && rvalue_node_type != AST_UNARY_EXPR && rvalue_node_type != AST_ARRAY_LITERAL) {
 			Type *rtype = get_type(table, node->data.assignment.rvalue, scope_level, scope_specifier);
-			if (!is_convertible(rtype, ltype)) {
+			if (!is_convertible(rtype, ltype, 0)) {
 				char left_str[128] = "";
 				char right_str[128] = "";
 				type_print(left_str, ltype);
@@ -574,7 +641,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			result = analyze_ast(table, node->data.func_call.args[i], scope_level, scope_specifier);
 			Type *param_type = param->data.param_decl.type;
 			Type *arg_type = get_type(table, node->data.func_call.args[i], sym->scope_level + 1, scope_specifier);
-			if (!is_convertible(arg_type, param_type)) {
+			if (!is_convertible(arg_type, param_type, 0)) {
 				char left_str[128] = "";
 				char right_str[128] = "";
 				type_print(left_str, param_type);
@@ -645,6 +712,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	// Want to handle these where they are used
 	case AST_EXPR_LITERAL:
 	case AST_STRUCT_LITERAL:
+	case AST_ARRAY_LITERAL:
 		break;
 
 	case AST_PARAM_DECL:
@@ -661,7 +729,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		Type *expr_type = get_type(table, node->data.cast.expr, scope_level, scope_specifier);
 		if (expr_type->kind == TYPE_PRIMITIVE && node->data.cast.target_type->kind == TYPE_PRIMITIVE)
 			return RESULT_SUCCESS;
-		if (!is_convertible(expr_type, node->data.cast.target_type)) {
+		if (!is_convertible(expr_type, node->data.cast.target_type, 0)) {
 			char msg[256] = "";
 			char src_type[64] = "";
 			type_print(src_type, expr_type);
@@ -681,7 +749,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 
 		Type bool_type = get_primitive_type("bool");
 		Type *condition_type = get_type(table, node->data.while_loop.condition, scope_level, scope_specifier);
-		if (!is_convertible(condition_type, &bool_type)) {
+		if (!is_convertible(condition_type, &bool_type, 0)) {
 			char condition_type_str[128] = "";
 			type_print(condition_type_str, condition_type);
 			char msg[128] = "";
@@ -707,7 +775,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 
 		Type bool_type = get_primitive_type("bool");
 		Type *condition_type = get_type(table, node->data.for_loop.condition, scope_level, scope_specifier);
-		if (!is_convertible(condition_type, &bool_type)) {
+		if (!is_convertible(condition_type, &bool_type, 0)) {
 			char condition_type_str[128] = "";
 			type_print(condition_type_str, condition_type);
 			char msg[128] = "";

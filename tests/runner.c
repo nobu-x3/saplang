@@ -138,6 +138,9 @@ int main(void) {
 	RUN_TEST(test_SelfMul_codegen);
 	RUN_TEST(test_SelfDiv_codegen);
 	RUN_TEST(test_CharList_codegen);
+	RUN_TEST(test_LocalArrayLiteralInit_codegen);
+	RUN_TEST(test_LocalArrayLiteralInitWithVar_codegen);
+	RUN_TEST(test_LocalArrayLiteralNested_codegen);
 
 	return UNITY_END();
 }

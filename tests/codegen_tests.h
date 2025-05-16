@@ -971,3 +971,74 @@ void test_CharList_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_LocalArrayLiteralInit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { u8[3] lit = [1, 2, 3]; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @foo() {\n"
+						   "entry:\n"
+						   "  %__foo_lit = alloca [3 x i8], align 1\n"
+						   "  %arrayinit.begin = getelementptr inbounds [3 x i8], ptr %__foo_lit, i64 0, i64 0\n"
+						   "  store i8 1, ptr %arrayinit.begin, align 1\n"
+						   "  %arrayinit.element = getelementptr inbounds i8, ptr %arrayinit.begin, i64 1\n"
+						   "  store i8 2, ptr %arrayinit.element, align 1\n"
+						   "  %arrayinit.element1 = getelementptr inbounds i8, ptr %arrayinit.element, i64 1\n"
+						   "  store i8 3, ptr %arrayinit.element1, align 1\n"
+						   "  ret void\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_LocalArrayLiteralInitWithVar_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { u8 a = 0; u8[3] lit = [a, 2, 3]; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @foo() {\n"
+						   "entry:\n"
+						   "  %__foo_lit = alloca [3 x [2 x i8]], align 1\n"
+						   "  %arrayinit.begin = getelementptr inbounds [3 x [2 x i8]], ptr %__foo_lit, i64 0, i64 0\n"
+						   "  %arrayinit.begin1 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n"
+						   "  store i8 1, ptr %arrayinit.begin1, align 1\n"
+						   "  %arrayinit.element = getelementptr inbounds i8, ptr %arrayinit.begin1, i64 1\n"
+						   "  store i8 2, ptr %arrayinit.element, align 1\n"
+						   "  %arrayinit.element2 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 1\n"
+						   "  %arrayinit.begin3 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n"
+						   "  store i8 3, ptr %arrayinit.begin3, align 1\n"
+						   "  %arrayinit.element4 = getelementptr inbounds i8, ptr %arrayinit.begin3, i64 1\n"
+						   "  store i8 4, ptr %arrayinit.element4, align 1\n"
+						   "  %arrayinit.element5 = getelementptr inbounds [2 x i8], ptr %arrayinit.element2, i64 1\n"
+						   "  %arrayinit.begin6 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n"
+						   "  store i8 5, ptr %arrayinit.begin6, align 1\n"
+						   "  %arrayinit.element7 = getelementptr inbounds i8, ptr %arrayinit.begin6, i64 1\n"
+						   "  store i8 6, ptr %arrayinit.element7, align 1\n"
+						   "  ret void\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_LocalArrayLiteralNested_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { u8[3][2] lit = [[1, 2], [3, 4], [5, 6]]; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @foo() {\n"
+						   "entry:\n"
+						   "  %__foo_lit = alloca [3 x [2 x i8]], align 1\n"
+						   "  %arrayinit.begin = getelementptr inbounds [3 x [2 x i8]], ptr %__foo_lit, i64 0, i64 0\n"
+						   "  %arrayinit.begin1 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n"
+						   "  store i8 1, ptr %arrayinit.begin1, align 1\n"
+						   "  %arrayinit.element = getelementptr inbounds i8, ptr %arrayinit.begin1, i64 1\n"
+						   "  store i8 2, ptr %arrayinit.element, align 1\n"
+						   "  store ptr %arrayinit.begin, ptr %arrayinit.begin, align 8\n"
+						   "  %arrayinit.element2 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 1\n  %arrayinit.begin3 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n  store i8 3, ptr %arrayinit.begin3, align 1\n  %arrayinit.element4 = getelementptr inbounds i8, ptr %arrayinit.begin3, i64 1\n  store i8 4, ptr %arrayinit.element4, align 1\n  store ptr %arrayinit.begin, ptr %arrayinit.element2, align 8\n  %arrayinit.element5 = getelementptr inbounds [2 x i8], ptr %arrayinit.element2, i64 1\n  %arrayinit.begin6 = getelementptr inbounds [2 x i8], ptr %arrayinit.begin, i64 0, i64 0\n  store i8 5, ptr %arrayinit.begin6, align 1\n  %arrayinit.element7 = getelementptr inbounds i8, ptr %arrayinit.begin6, i64 1\n  store i8 6, ptr %arrayinit.element7, align 1\n  store ptr %arrayinit.begin, ptr %arrayinit.element5, align 8\n  ret void\n}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}

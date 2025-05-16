@@ -308,8 +308,40 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 		}
 		return var_ptr;
 	} break;
-	case AST_ARRAY_LITERAL:
-		break;
+	case AST_ARRAY_LITERAL: {
+		int count = node->data.array_literal.count;
+		LLVMTypeRef elem_ty = map_to_llvm(cg, ctx.expected_type->array.element_type, table);
+		assert(elem_ty);
+		LLVMTypeRef arr_ty = map_to_llvm(cg, ctx.expected_type, table);
+		assert(arr_ty);
+		// If global scope, build a constant array
+		if (ctx.current_scope == 0) {
+			LLVMValueRef *elems = alloca(sizeof(LLVMValueRef) * count);
+			for (int i = 0; i < count; i++) {
+				ctx.expected_type = ctx.expected_type->array.element_type;
+				elems[i] = codegen_literal(cg, node->data.array_literal.elements[i], table, ctx);
+				assert(elems[i]);
+			}
+			return LLVMConstArray(arr_ty, elems, count);
+		}
+		// Get pointer to first element
+		LLVMValueRef ptr =
+			LLVMBuildInBoundsGEP2(cg->builder, arr_ty, ctx.passed_value, (LLVMValueRef[]){LLVMConstInt(LLVMInt64TypeInContext(cg->llvm_context), 0, 0), LLVMConstInt(LLVMInt64TypeInContext(cg->llvm_context), 0, 0)}, 2, "arrayinit.begin");
+		assert(ptr);
+		LLVMValueRef begin_ptr = ptr;
+		for (int i = 0; i < count; i++) {
+			if (i > 0)
+				ptr = LLVMBuildInBoundsGEP2(cg->builder, elem_ty, ptr, (LLVMValueRef[]){LLVMConstInt(LLVMInt64TypeInContext(cg->llvm_context), 1, 0)}, 1, "arrayinit.element");
+			PassContext elem_ctx = ctx;
+			elem_ctx.passed_value = begin_ptr;
+			elem_ctx.expected_type = ctx.expected_type->array.element_type;
+			elem_ctx.intention = PI_LOAD_VAL;
+			LLVMValueRef val = codegen_ast(cg, node->data.array_literal.elements[i], table, elem_ctx);
+			if (node->data.array_literal.elements[i]->type != AST_ARRAY_LITERAL)
+				LLVMBuildStore(cg->builder, val, ptr);
+		}
+		return ctx.passed_value;
+	} break;
 	}
 	return NULL;
 }
@@ -336,8 +368,9 @@ LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pas
 		++ctx.current_scope;
 		ctx.expected_type = node->data.var_decl.type;
 		ctx.auxiliary_node = node;
+		ctx.passed_value = ptr;
 		LLVMValueRef val = codegen_ast(cg, node->data.var_decl.init, table, ctx);
-		if (node->data.var_decl.init->type != AST_STRUCT_LITERAL) {
+		if (node->data.var_decl.init->type != AST_STRUCT_LITERAL && node->data.var_decl.init->type != AST_ARRAY_LITERAL) {
 			assert(val);
 			LLVMBuildStore(cg->builder, val, ptr);
 		}
@@ -532,6 +565,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 
 	case AST_STRUCT_LITERAL:
 	case AST_EXPR_LITERAL:
+	case AST_ARRAY_LITERAL:
 		return codegen_literal(cg, node, table, ctx);
 	case AST_ASSIGNMENT:
 		return codegen_assignment(cg, node, table, ctx);
@@ -554,7 +588,6 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMTypeRef u8_type = LLVMInt8TypeInContext(cg->llvm_context);
 		return LLVMConstInt(u8_type, node->data.char_literal.literal, 0);
 	}
-	case AST_ARRAY_LITERAL:
 	case AST_STRING_LIT:
 	case AST_FIELD_DECL:
 	case AST_ARRAY_ACCESS:

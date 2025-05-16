@@ -199,7 +199,7 @@ void test_ArrayLiterals(void) {
 						   "    Literal Int: 1\n"
 						   "    Literal Int: 2\n"
 						   "    Literal Int: 3\n"
-						   "VarDecl: i32[2][3] arr2:\n"
+						   "VarDecl: i32[3][2] arr2:\n"
 						   "  Array literal of size 2:\n"
 						   "    Array literal of size 3:\n"
 						   "      Literal Int: 1\n"

@@ -1017,6 +1017,11 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 
 		parser->current_token = next_token(&parser->scanner); // consume ']'
 		*out_type = new_array_type(*out_type, size);
+		// This is a hack that swaps the sizes of the arrays because the function above adds them in reverse order
+		if ((*out_type)->array.element_type && (*out_type)->array.element_type->kind == TYPE_ARRAY) {
+			(*out_type)->array.size = (*out_type)->array.element_type->array.size;
+			(*out_type)->array.element_type->array.size = size;
+		}
 	}
 
 	return RESULT_SUCCESS;
