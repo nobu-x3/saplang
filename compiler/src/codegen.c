@@ -332,8 +332,10 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 		for (int i = 0; i < count; i++) {
 			if (i > 0)
 				ptr = LLVMBuildInBoundsGEP2(cg->builder, elem_ty, ptr, (LLVMValueRef[]){LLVMConstInt(LLVMInt64TypeInContext(cg->llvm_context), 1, 0)}, 1, "arrayinit.element");
+			else
+				ptr = begin_ptr;
 			PassContext elem_ctx = ctx;
-			elem_ctx.passed_value = begin_ptr;
+			elem_ctx.passed_value = ptr;
 			elem_ctx.expected_type = ctx.expected_type->array.element_type;
 			elem_ctx.intention = PI_LOAD_VAL;
 			LLVMValueRef val = codegen_ast(cg, node->data.array_literal.elements[i], table, elem_ctx);
