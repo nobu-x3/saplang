@@ -1129,3 +1129,51 @@ void test_NestedArrayAccess_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_VoidFnCallNoParams_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() {} fn i32 main() { foo(); return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @foo() {\n"
+						   "entry:\n"
+						   "  ret void\n"
+						   "}\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  call void @foo()\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_VoidFnCallWithParams_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo(i32 a, i32 b) {} fn i32 main() { i32 a = 0; i32 b = 0; foo(a, b); return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @foo(i32 %0, i32 %1) {\n"
+						   "entry:\n"
+						   "  %__foo_a = alloca i32, align 4\n"
+						   "  store i32 %0, ptr %__foo_a, align 4\n"
+						   "  %__foo_b = alloca i32, align 4\n"
+						   "  store i32 %1, ptr %__foo_b, align 4\n"
+						   "  ret void\n"
+						   "}\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_a, align 4\n"
+						   "  %__main_b = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_b, align 4\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  %1 = load i32, ptr %__main_b, align 4\n"
+						   "  call void @foo(i32 %0, i32 %1)\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}

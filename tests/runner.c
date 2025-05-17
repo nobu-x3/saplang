@@ -144,6 +144,8 @@ int main(void) {
 	RUN_TEST(test_ArrayElementAccess_codegen);
 	RUN_TEST(test_ArrayElementAccessFromVarIndex_codegen);
 	RUN_TEST(test_NestedArrayAccess_codegen);
+	RUN_TEST(test_VoidFnCallNoParams_codegen);
+	RUN_TEST(test_VoidFnCallWithParams_codegen);
 
 	return UNITY_END();
 }

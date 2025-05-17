@@ -554,7 +554,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	case AST_EXPR_IDENT: {
 		if (hashmap_contains(ctx.loaded_values, node->data.ident.resolved_name)) {
 			LLVMValueRef ptr = hashmap_get(ctx.loaded_values, node->data.ident.resolved_name);
-			if (ctx.intention == PI_LOAD_VAL && ctx.expected_type) {
+			if (ctx.intention == PI_LOAD_VAL) {
+				assert(ctx.expected_type && "Must give expected type with PI_LOAD_VAL");
 				LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
 				return LLVMBuildLoad2(cg->builder, ty, ptr, "");
 			}
@@ -611,9 +612,29 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		}
 		return gep;
 	}
+	case AST_FN_CALL: {
+		Symbol *fn_sym = lookup_symbol_weak(table, node->data.func_call.callee->data.ident.name, ctx.current_scope);
+		assert(fn_sym);
+		LLVMTypeRef fn_type = map_to_llvm(cg, fn_sym->type, table);
+		assert(fn_type);
+		LLVMValueRef callee = LLVMGetNamedFunction(cg->module, fn_sym->resolved_name);;
+		assert(callee);
+		int n = node->data.func_call.arg_count;
+		LLVMValueRef *args = alloca(sizeof(LLVMValueRef) * n);
+		for (int i = 0; i < n; i++){
+			PassContext param_ctx = ctx;
+			param_ctx.intention = PI_LOAD_VAL;
+			ASTNode* param = node->data.func_call.args[i];
+			Symbol* param_sym = lookup_symbol(table, param->data.ident.resolved_name, ctx.current_scope);
+			assert(param_sym);
+			param_ctx.expected_type = param_sym->type;
+			args[i] = codegen_ast(cg, param, table, param_ctx);
+		}
+		int is_void = fn_sym->type->function.return_type->kind == TYPE_PRIMITIVE && strcmp(fn_sym->type->function.return_type->type_name, "void") == 0;
+		return LLVMBuildCall2(cg->builder, fn_type, callee, args, n, is_void ? "" : "calltmp");
+	}
 	case AST_STRING_LIT:
 	case AST_FIELD_DECL:
-	case AST_FN_CALL:
 	case AST_ENUM_DECL:
 	case AST_ENUM_VALUE:
 	case AST_EXTERN_BLOCK:
