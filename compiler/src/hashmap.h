@@ -19,6 +19,7 @@ int ptr_equals(const void *a, const void *b);
 // Function pointer types for hashing and key comparison
 typedef size_t (*hash_func)(const void *key);
 typedef int   (*equals_func)(const void *a, const void *b);
+typedef void *(*copy_func)(const void *);
 
 // Create a new hashmap.
 //   init_capacity: initial number of buckets (will be rounded up to a power of two)
@@ -56,3 +57,8 @@ int hashmap_contains(const hashmap_t *map, const void *key);
 
 // Number of entries currently stored.
 size_t hashmap_size(const hashmap_t *map);
+
+hashmap_t *hashmap_copy(const hashmap_t *orig, copy_func copy_key, copy_func copy_val);
+
+// Helper copy function for strings. Wraps strdup.
+void* str_copy(const void* s);
