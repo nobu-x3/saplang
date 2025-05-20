@@ -409,6 +409,28 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						return result;
 					}
 				}
+			} else if (node->data.var_decl.init->type == AST_STRING_LIT) {
+				Type *lhs_type = node->data.var_decl.type;
+				if (lhs_type->kind == TYPE_ARRAY) {
+					if (lhs_type->array.element_type->kind != TYPE_PRIMITIVE || (strcmp(lhs_type->array.element_type->type_name, "i8") != 0 && strcmp(lhs_type->array.element_type->type_name, "u8") != 0)) {
+						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
+						report(node->location, msg, 0);
+						return RESULT_FAILURE;
+					}
+					size_t str_len = strlen(node->data.var_decl.init->data.string_literal.text) + 1;
+					if (lhs_type->array.size < str_len) {
+						char msg[128] = "";
+						sprintf(msg, "\"%s\" is %zu symbols long, while the array is of size %d.", node->data.var_decl.init->data.string_literal.text, str_len, lhs_type->array.size);
+						report(node->location, msg, 0);
+						return RESULT_FAILURE;
+					}
+				} else if (lhs_type->kind == TYPE_POINTER) {
+					if (lhs_type->pointee->kind != TYPE_PRIMITIVE || (strcmp(lhs_type->pointee->type_name, "i8") != 0 && strcmp(lhs_type->pointee->type_name, "u8") != 0)) {
+						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
+						report(node->location, msg, 0);
+						return RESULT_FAILURE;
+					}
+				}
 			} else {
 				// Disallow global variable initialization with other global variables
 				if (node->data.var_decl.init->type == AST_EXPR_IDENT && scope_level == 0) {
@@ -423,7 +445,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			}
 			// Struct literals and unary exprs have already been handled, and it's really difficult to find the type of the struct literal this way
 			ASTNodeType init_node_type = node->data.var_decl.init->type;
-			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_EXPR_LITERAL && init_node_type != AST_UNARY_EXPR && init_node_type != AST_CHAR_LIT && init_node_type != AST_ARRAY_LITERAL) {
+			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_STRING_LIT && init_node_type != AST_EXPR_LITERAL && init_node_type != AST_UNARY_EXPR && init_node_type != AST_CHAR_LIT && init_node_type != AST_ARRAY_LITERAL) {
 				Type *init_type = get_type(table, node->data.var_decl.init, scope_level, scope_specifier);
 				if (!init_type) {
 					return RESULT_FAILURE;
@@ -595,13 +617,35 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					return result;
 				}
 			}
+		} else if (node->data.assignment.lvalue->type == AST_STRING_LIT) {
+			if (ltype->kind == TYPE_ARRAY) {
+				if (ltype->array.element_type->kind != TYPE_PRIMITIVE || (strcmp(ltype->array.element_type->type_name, "i8") != 0 && strcmp(ltype->array.element_type->type_name, "u8") != 0)) {
+					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+				size_t str_len = strlen(node->data.assignment.rvalue->data.string_literal.text) + 1;
+				if (ltype->array.size < str_len) {
+					char msg[128] = "";
+					sprintf(msg, "\"%s\" is %zu symbols long, while the array is of size %d.", node->data.assignment.rvalue->data.string_literal.text, str_len, ltype->array.size);
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+			} else if (ltype->kind == TYPE_ARRAY) {
+				if (ltype->pointee->kind != TYPE_PRIMITIVE || (strcmp(ltype->pointee->type_name, "i8") != 0 && strcmp(ltype->pointee->type_name, "u8") != 0)) {
+					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+			}
 		} else {
 			result = analyze_ast(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 		}
 		if (result != RESULT_SUCCESS)
 			return result;
 		ASTNodeType rvalue_node_type = node->data.assignment.rvalue->type;
-		if (rvalue_node_type != AST_STRUCT_LITERAL && rvalue_node_type != AST_EXPR_LITERAL && rvalue_node_type != AST_CHAR_LIT && rvalue_node_type != AST_UNARY_EXPR && rvalue_node_type != AST_ARRAY_LITERAL) {
+		if (rvalue_node_type != AST_STRUCT_LITERAL && rvalue_node_type != AST_STRING_LIT && rvalue_node_type != AST_EXPR_LITERAL && rvalue_node_type != AST_CHAR_LIT && rvalue_node_type != AST_UNARY_EXPR &&
+			rvalue_node_type != AST_ARRAY_LITERAL) {
 			Type *rtype = get_type(table, node->data.assignment.rvalue, scope_level, scope_specifier);
 			if (!is_convertible(rtype, ltype, 0)) {
 				char left_str[128] = "";
@@ -862,6 +906,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	} break;
 
 	case AST_CHAR_LIT:
+		break;
+
+	case AST_STRING_LIT:
 		break;
 
 	default:
