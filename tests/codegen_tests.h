@@ -1210,3 +1210,34 @@ void test_NonVoidFnCallWithParams_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_EnumVar_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("enum EnumType { First, Second = 234, Third, EVEN = Second } fn i32 main() { EnumType a = EnumType::Second; return a; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 234, ptr %__main_a, align 4\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  ret i32 %0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_EnumValueReturn_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("enum EnumType { First, Second = 234, Third, EVEN = Second } fn i32 main() { return EnumType::Second; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  ret i32 234\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}

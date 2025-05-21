@@ -296,7 +296,7 @@ int type_equals(const Type *a, const Type *b) {
 	case TYPE_STRUCT:
 	case TYPE_UNDECIDED:
 	case TYPE_ENUM:
-		return strcmp(a->namespace, b->namespace) == 0 == 0 && strcmp(a->type_name, b->type_name);
+		return a->kind == TYPE_ENUM && b->kind == TYPE_ENUM && strcmp(a->namespace, b->namespace) == 0 && strcmp(a->type_name, b->type_name) == 0;
 	}
 }
 

@@ -14,6 +14,7 @@
 #include <string.h>
 
 #define PLATFORM_POINTER_SIZE 64
+#define BYTE_TO_BIT(x) x * 8
 
 typedef enum DebugEncodingType {
 	DW_ATE_address = 0x01,
@@ -124,7 +125,9 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 		Symbol *sym = lookup_symbol(table, type->type_name, 0);
 		assert(sym && "unknown enum symbol.");
 		assert(sym->kind == SYMB_ENUM && "symbol expected to be enum.");
-		return map_to_llvm(cg, sym->type, table);
+		Type type_copy = *sym->type;
+		type_copy.kind = TYPE_PRIMITIVE;
+		return map_to_llvm(cg, &type_copy, table);
 	}
 	case TYPE_UNDECIDED:
 		assert(0 && "should not be any undecided types in codegen.");
@@ -657,9 +660,40 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		// decay to i8*
 		return LLVMBuildBitCast(cg->builder, gv, LLVMPointerType(LLVMInt8TypeInContext(cg->llvm_context), 0), "strptr");
 	} break;
+
+	case AST_ENUM_DECL: {
+		if (cg->should_build_debug) {
+			LLVMTypeRef base_ty = map_to_llvm(cg, node->data.enum_decl.base_type, table);
+			int base_name_len = strlen(node->data.enum_decl.base_type->type_name);
+			LLVMDWARFTypeEncoding encoding = node->data.enum_decl.base_type->type_name[0] == 'u' ? DW_ATE_unsigned : DW_ATE_signed;
+			TypeInfo base_type_info = get_type_info(node->data.enum_decl.base_type, node);
+			LLVMMetadataRef base_type_md = LLVMDIBuilderCreateBasicType(cg->di_builder, node->data.enum_decl.base_type->type_name, base_name_len, BYTE_TO_BIT(base_type_info.size), DW_ATE_signed, 0);
+			LLVMMetadataRef *enumerators = alloca(sizeof(LLVMMetadataRef) * node->data.enum_decl.member_count);
+			for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
+				int name_len = strlen(node->data.enum_decl.members[i]->name);
+				enumerators[i] = LLVMDIBuilderCreateEnumerator(cg->di_builder, node->data.enum_decl.members[i]->name, name_len, node->data.enum_decl.members[i]->value,
+															   0); // isUnsigned: false
+			}
+			int name_len = strlen(node->data.enum_decl.name);
+			LLVMMetadataRef enum_type = LLVMDIBuilderCreateEnumerationType(cg->di_builder, cg->di_cu, node->data.enum_decl.name, name_len, cg->di_file, node->location.line,
+																		   BYTE_TO_BIT(base_type_info.size),  // size in bits
+																		   BYTE_TO_BIT(base_type_info.align), // align in bits
+																		   enumerators, node->data.enum_decl.member_count, NULL);
+		}
+	} break;
+
+	case AST_ENUM_VALUE: {
+		LLVMTypeRef base_ty = map_to_llvm(cg, node->data.enum_value.enum_type, table);
+		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_name, ctx.current_scope);
+		assert(sym);
+		for (int i = 0; i < sym->node->data.enum_decl.member_count; ++i) {
+			if (strcmp(sym->node->data.enum_decl.members[i]->name, node->data.enum_value.member) == 0) {
+				return LLVMConstInt(base_ty, sym->node->data.enum_decl.members[i]->value, 0);
+			}
+		}
+		assert(0);
+	} break;
 	case AST_FIELD_DECL:
-	case AST_ENUM_DECL:
-	case AST_ENUM_VALUE:
 	case AST_EXTERN_BLOCK:
 	case AST_EXTERN_FUNC_DECL:
 	case AST_IF_STMT:

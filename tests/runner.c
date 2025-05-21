@@ -147,6 +147,8 @@ int main(void) {
 	RUN_TEST(test_VoidFnCallNoParams_codegen);
 	RUN_TEST(test_VoidFnCallWithParams_codegen);
 	RUN_TEST(test_NonVoidFnCallWithParams_codegen);
+	RUN_TEST(test_EnumVar_codegen);
+	RUN_TEST(test_EnumValueReturn_codegen);
 
 	return UNITY_END();
 }

@@ -182,6 +182,10 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 			return NULL;
 		return base_type->array.element_type;
 	} break;
+
+	case AST_ENUM_VALUE:
+		return node->data.enum_value.enum_type;
+
 	default:
 		return NULL;
 	}
@@ -487,6 +491,17 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				strncpy(node->data.ident.resolved_name, node->data.ident.name, sizeof(node->data.ident.resolved_name));
 				return RESULT_SUCCESS;
 			}
+			if (node->data.ident.namespace[0] != '\0') {
+				Symbol *maybe_enum = lookup_symbol(table, node->data.ident.namespace, 0);
+				if (maybe_enum && maybe_enum->kind == SYMB_ENUM) {
+					node->type = AST_ENUM_VALUE;
+					strncpy(node->data.enum_value.member, node->data.ident.name, sizeof(node->data.enum_value.member));
+					node->data.enum_value.enum_type = copy_type(maybe_enum->type);
+					strncpy(node->data.enum_value.enum_type->type_name, maybe_enum->name, sizeof(node->data.enum_value.enum_type->type_name));
+					CompilerResult result = analyze_ast(table, node, scope_level, scope_specifier);
+					return result;
+				}
+			}
 			char resolved_name[256] = "";
 			if (scope_specifier[0] != '\0')
 				sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.ident.name);
@@ -516,6 +531,17 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 		Type *expr_type = get_type(table, node, scope_level, scope_specifier);
+		if (expr_type->kind == TYPE_ENUM) {
+			Symbol *enum_decl = lookup_symbol(table, expr_type->type_name, scope_level);
+			if (!enum_decl) {
+				char msg[128] = "";
+				sprintf(msg, "undeclared enum %s.", expr_type->type_name);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			expr_type = enum_decl->node->data.enum_decl.base_type;
+			expr_type->kind = TYPE_PRIMITIVE;
+		}
 		if (!is_convertible(expr_type, sym->type->function.return_type, 0)) {
 			char msg[128] = "";
 			char src_type[128] = "";
@@ -750,14 +776,18 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		}
 		break;
 
-	case AST_ENUM_DECL:
-		if (!lookup_symbol(table, node->data.enum_decl.name, scope_level)) {
+	case AST_ENUM_DECL: {
+		Symbol *sym = lookup_symbol(table, node->data.enum_decl.name, scope_level);
+		if (!sym) {
 			char msg[256] = "";
 			sprintf(msg, "enum %s undefined.", node->data.enum_decl.name);
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-		break;
+		if (sym->type->kind == TYPE_UNDECIDED) {
+			sym->type->kind = TYPE_ENUM;
+		}
+	} break;
 
 	// Want to handle these where they are used
 	case AST_EXPR_LITERAL:
@@ -910,6 +940,31 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 
 	case AST_STRING_LIT:
 		break;
+
+	case AST_ENUM_VALUE: {
+		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_name, scope_level);
+		if (!sym) {
+			char msg[128] = "";
+			sprintf(msg, "Unknown enum %s.", node->data.enum_value.enum_type->type_name);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		if (sym->kind != SYMB_ENUM) {
+			char msg[128] = "";
+			sprintf(msg, "%s is not an enum.", sym->name);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		for (int i = 0; i < sym->node->data.enum_decl.member_count; ++i) {
+			if (strcmp(sym->node->data.enum_decl.members[i]->name, node->data.enum_value.member) == 0) {
+				return RESULT_SUCCESS;
+			}
+		}
+		char msg[128] = "";
+		sprintf(msg, "Enum %s does not contain a member %s.", sym->name, node->data.enum_value.member);
+		report(node->location, msg, 0);
+		return RESULT_FAILURE;
+	} break;
 
 	default:
 		report(node->location, "sema: unsupported node type.", 1);

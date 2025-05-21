@@ -1042,7 +1042,6 @@ ASTNode *parse_qualified_identifier(Parser *parser) {
 	SourceLocation loc = parser->current_token.location;
 	strncpy(name, parser->current_token.text, sizeof(name));
 	parser->current_token = next_token(&parser->scanner);
-
 	if (parser->current_token.type == TOK_COLONCOLON) {
 		parser->current_token = next_token(&parser->scanner);
 		strncpy(namespace, name, sizeof(namespace));
