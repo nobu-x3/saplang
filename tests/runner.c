@@ -146,6 +146,7 @@ int main(void) {
 	RUN_TEST(test_NestedArrayAccess_codegen);
 	RUN_TEST(test_VoidFnCallNoParams_codegen);
 	RUN_TEST(test_VoidFnCallWithParams_codegen);
+	RUN_TEST(test_NonVoidFnCallWithParams_codegen);
 
 	return UNITY_END();
 }

@@ -1177,3 +1177,36 @@ void test_VoidFnCallWithParams_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_NonVoidFnCallWithParams_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 foo(i32 a, i32 b) { return 5; } fn i32 main() { i32 a = 0; i32 b = 0; a = foo(a, b); return foo(a, b); }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @foo(i32 %0, i32 %1) {\n"
+						   "entry:\n"
+						   "  %__foo_a = alloca i32, align 4\n"
+						   "  store i32 %0, ptr %__foo_a, align 4\n"
+						   "  %__foo_b = alloca i32, align 4\n"
+						   "  store i32 %1, ptr %__foo_b, align 4\n"
+						   "  ret i32 5\n"
+						   "}\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_a, align 4\n"
+						   "  %__main_b = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_b, align 4\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  %1 = load i32, ptr %__main_b, align 4\n"
+						   "  %calltmp = call i32 @foo(i32 %0, i32 %1)\n"
+						   "  store i32 %calltmp, ptr %__main_a, align 4\n"
+						   "  %2 = load i32, ptr %__main_a, align 4\n"
+						   "  %3 = load i32, ptr %__main_b, align 4\n"
+						   "  %calltmp1 = call i32 @foo(i32 %2, i32 %3)\n"
+						   "  ret i32 %calltmp1\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
