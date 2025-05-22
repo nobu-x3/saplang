@@ -452,3 +452,29 @@ int find_field_index(struct ASTNode *struct_decl, const char *field_name) {
 	}
 	return -1;
 }
+
+Type *get_primitive_bool() {
+	static Type primitive_bool_type = {TYPE_PRIMITIVE, "bool", ""};
+	return &primitive_bool_type;
+}
+
+Type *get_primitive_i32() {
+	static Type primitive_i32_type = {TYPE_PRIMITIVE, "i32", ""};
+	return &primitive_i32_type;
+}
+
+Type *get_primitive_f32() {
+	static Type primitive_f32_type = {TYPE_PRIMITIVE, "f32", ""};
+	return &primitive_f32_type;
+}
+
+Type *get_primitive_u8() {
+	static Type primitive_u8_type = {TYPE_PRIMITIVE, "u8", ""};
+	return &primitive_u8_type;
+}
+
+Type *get_string_type() {
+	static Type primitive_u8_type = {TYPE_PRIMITIVE, "u8", ""};
+	static Type string_literal_type = {TYPE_POINTER, "", "", .pointee = &primitive_u8_type};
+	return &string_literal_type;
+}

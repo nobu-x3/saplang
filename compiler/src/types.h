@@ -34,7 +34,7 @@ typedef struct Type {
 Type *copy_type(Type *type);
 void type_deinit(Type *type);
 Type *new_primitive_type(const char *name);
-Type get_primitive_type(const char* name);
+Type get_primitive_type(const char *name);
 Type *new_pointer_type(Type *pointee);
 Type *new_array_type(Type *element_type, int size);
 Type *new_function_type(Type *return_type, Type **param_types, int param_count);
@@ -51,3 +51,9 @@ TypeInfo get_type_info(Type *type, struct ASTNode *node);
 
 // return -1 if field not present
 int find_field_index(struct ASTNode *struct_decl, const char *field_name);
+
+Type *get_primitive_bool();
+Type *get_primitive_i32();
+Type *get_primitive_f32();
+Type *get_primitive_u8();
+Type *get_string_type();
