@@ -151,6 +151,8 @@ int main(void) {
 	RUN_TEST(test_EnumValueReturn_codegen);
 	RUN_TEST(test_ExternBlockFn_codegen);
 	RUN_TEST(test_ExternBlockFnVa_codegen);
+	RUN_TEST(test_ForLoopConstComp_codegen);
+	RUN_TEST(test_ForLoopVarComp_codegen);
 
 	return UNITY_END();
 }

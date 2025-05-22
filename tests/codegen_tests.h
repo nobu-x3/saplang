@@ -1283,3 +1283,74 @@ void test_ExternBlockFnVa_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_ForLoopConstComp_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("extern { fn void printf(const u8* str, ...); }"
+							  R"(fn i32 main() { for(i32 i = 0; i < 10; i +=1 ){ printf("hello world %d", i); } return 0; })");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "declare void @printf(ptr)\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_i = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_i, align 4\n"
+						   "  br label %forcond\n\n"
+						   "forcond:                                          ; preds = %forstep, %entry\n"
+						   "  %0 = load i32, ptr %__main_i, align 4\n"
+						   "  %cmplt = icmp slt i32 %0, 10\n"
+						   "  br i1 %cmplt, label %forbody, label %forend\n\n"
+						   "forbody:                                          ; preds = %forcond\n"
+						   "  %1 = load i32, ptr %__main_i, align 4\n"
+						   "  call void @printf(ptr @.str, i32 %1)\n"
+						   "  br label %forstep\n\n"
+						   "forstep:                                          ; preds = %forbody\n"
+						   "  %2 = load i32, ptr %__main_i, align 4\n"
+						   "  %add = add i32 %2, 1\n"
+						   "  store i32 %add, ptr %__main_i, align 4\n"
+						   "  br label %forcond\n\n"
+						   "forend:                                           ; preds = %forcond\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ForLoopVarComp_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("extern { fn void printf(const u8* str, ...); }"
+							  R"(fn i32 main() { i32 a = 10; for(i32 i = 0; i < a; i +=1 ){ printf("hello world %d", i); } return 0; })");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "declare void @printf(ptr)\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 10, ptr %__main_a, align 4\n"
+						   "  %__main_i = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_i, align 4\n"
+						   "  br label %forcond\n\n"
+						   "forcond:                                          ; preds = %forstep, %entry\n"
+						   "  %0 = load i32, ptr %__main_i, align 4\n"
+						   "  %1 = load i32, ptr %__main_a, align 4\n"
+						   "  %cmplt = icmp slt i32 %0, %1\n"
+						   "  br i1 %cmplt, label %forbody, label %forend\n\n"
+						   "forbody:                                          ; preds = %forcond\n"
+						   "  %2 = load i32, ptr %__main_i, align 4\n"
+						   "  call void @printf(ptr @.str, i32 %2)\n"
+						   "  br label %forstep\n\n"
+						   "forstep:                                          ; preds = %forbody\n"
+						   "  %3 = load i32, ptr %__main_i, align 4\n"
+						   "  %add = add i32 %3, 1\n"
+						   "  store i32 %add, ptr %__main_i, align 4\n"
+						   "  br label %forcond\n\n"
+						   "forend:                                           ; preds = %forcond\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}

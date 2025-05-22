@@ -490,8 +490,14 @@ LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCo
 }
 
 LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
-	LLVMValueRef L = codegen_ast(cg, node->data.binary_op.left, table, ctx);
-	LLVMValueRef R = codegen_ast(cg, node->data.binary_op.right, table, ctx);
+	Type *l_type = get_type(table, node->data.binary_op.left, ctx.current_scope, "");
+	assert(l_type);
+	PassContext lhs_ctx = ctx;
+	lhs_ctx.expected_type = l_type;
+	LLVMValueRef L = codegen_ast(cg, node->data.binary_op.left, table, lhs_ctx);
+	PassContext rhs_ctx = ctx;
+	rhs_ctx.expected_type = l_type;
+	LLVMValueRef R = codegen_ast(cg, node->data.binary_op.right, table, rhs_ctx);
 	switch (node->data.binary_op.op) {
 	case TOK_LESSTHAN:
 		return LLVMBuildICmp(cg->builder, LLVMIntSLT, L, R, "cmplt");
@@ -718,8 +724,40 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		return fn;
 	} break;
 
+	case AST_FOR_LOOP: {
+		// init
+		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.name);
+		codegen_ast(cg, node->data.for_loop.init, table, ctx);
+		LLVMBasicBlockRef condBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "forcond");
+		LLVMBasicBlockRef bodyBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "forbody");
+		LLVMBasicBlockRef stepBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "forstep");
+		LLVMBasicBlockRef endBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "forend");
+		LLVMBuildBr(cg->builder, condBB);
+		// cond
+		LLVMPositionBuilderAtEnd(cg->builder, condBB);
+		if (node->data.for_loop.condition) {
+			PassContext condition_ctx = ctx;
+			condition_ctx.expected_type = get_primitive_bool();
+			condition_ctx.intention = PI_LOAD_VAL;
+			LLVMValueRef condition = codegen_ast(cg, node->data.for_loop.condition, table, condition_ctx);
+			LLVMBuildCondBr(cg->builder, condition, bodyBB, endBB);
+		} else {
+			LLVMBuildBr(cg->builder, bodyBB);
+		}
+		// body
+		LLVMPositionBuilderAtEnd(cg->builder, bodyBB);
+		codegen_ast(cg, node->data.for_loop.body, table, ctx);
+		LLVMBuildBr(cg->builder, stepBB);
+		// step
+		LLVMPositionBuilderAtEnd(cg->builder, stepBB);
+		if (node->data.for_loop.post)
+			codegen_ast(cg, node->data.for_loop.post, table, ctx);
+		LLVMBuildBr(cg->builder, condBB);
+		// end
+		LLVMPositionBuilderAtEnd(cg->builder, endBB);
+		return NULL;
+	} break;
 	case AST_IF_STMT:
-	case AST_FOR_LOOP:
 	case AST_WHILE_LOOP:
 	case AST_FN_PTR:
 	case AST_CONTINUE:

@@ -80,23 +80,17 @@ int is_convertible(const Type *source, const Type *target, int permissive) {
 	return 0;
 }
 
-Type primitive_bool_type = {TYPE_PRIMITIVE, "bool", ""};
-Type primitive_f32_type = {TYPE_PRIMITIVE, "f32", ""};
-Type primitive_i32_type = {TYPE_PRIMITIVE, "i32", ""};
-Type primitive_u8_type = {TYPE_PRIMITIVE, "u8", ""};
-Type string_literal_type = {TYPE_POINTER, "", "", .pointee = &primitive_u8_type};
-
 Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier) {
 	if (!node)
 		return NULL;
 	switch (node->type) {
 	case AST_EXPR_LITERAL:
 		if (node->data.literal.is_bool) {
-			return &primitive_bool_type;
+			return get_primitive_bool();
 		} else if (node->data.literal.is_float) {
-			return &primitive_f32_type;
+			return get_primitive_f32();
 		} else {
-			return &primitive_i32_type;
+			return get_primitive_i32();
 		}
 		break;
 
@@ -189,7 +183,7 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		return node->data.enum_value.enum_type;
 
 	case AST_STRING_LIT:
-		return &string_literal_type;
+		return get_string_type();
 
 	default:
 		return NULL;
