@@ -633,16 +633,17 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMTypeRef fn_type = map_to_llvm(cg, fn_sym->type, table);
 		assert(fn_type);
 		LLVMValueRef callee = LLVMGetNamedFunction(cg->module, fn_sym->resolved_name);
-	
 		assert(callee);
 		LLVMValueRef *args = alloca(sizeof(LLVMValueRef) * node->data.func_call.arg_count);
 		for (int i = 0; i < node->data.func_call.arg_count; i++) {
 			PassContext param_ctx = ctx;
 			param_ctx.intention = PI_LOAD_VAL;
 			ASTNode *param = node->data.func_call.args[i];
-			Symbol *param_sym = lookup_symbol(table, param->data.ident.resolved_name, ctx.current_scope);
-			assert(param_sym);
-			param_ctx.expected_type = param_sym->type;
+			if (param->type == AST_EXPR_IDENT) {
+				Symbol *param_sym = lookup_symbol(table, param->data.ident.resolved_name, ctx.current_scope);
+				assert(param_sym);
+				param_ctx.expected_type = param_sym->type;
+			}
 			args[i] = codegen_ast(cg, param, table, param_ctx);
 		}
 		int is_void = fn_sym->type->function.return_type->kind == TYPE_PRIMITIVE && strcmp(fn_sym->type->function.return_type->type_name, "void") == 0;
@@ -692,9 +693,23 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		}
 		assert(0);
 	} break;
-	case AST_FIELD_DECL:
-	case AST_EXTERN_BLOCK:
-	case AST_EXTERN_FUNC_DECL:
+	case AST_EXTERN_BLOCK: {
+		for (int i = 0; i < node->data.extern_block.count; ++i) {
+			codegen_ast(cg, node->data.extern_block.block[i], table, ctx);
+		}
+	} break;
+
+	case AST_EXTERN_FUNC_DECL: {
+		Symbol *sym = lookup_symbol_weak(table, node->data.extern_func.name, ctx.current_scope);
+		assert(sym);
+		LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
+		assert(fn_ty);
+		LLVMValueRef fn = LLVMAddFunction(cg->module, sym->resolved_name, fn_ty);
+		assert(fn);
+		LLVMSetLinkage(fn, LLVMExternalLinkage);
+		return fn;
+	} break;
+
 	case AST_IF_STMT:
 	case AST_FOR_LOOP:
 	case AST_WHILE_LOOP:
@@ -703,6 +718,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	case AST_BREAK:
 	case AST_CAST:
 	case AST_UNION_DECL:
+	case AST_FIELD_DECL:
 	case AST_DEFER_BLOCK:
 		break;
 	}

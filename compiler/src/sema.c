@@ -698,20 +698,22 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		// Previous call to analyze_ast would fail if the symbol didn't exist
 		Symbol *sym = lookup_symbol(table, node->data.func_call.callee->data.ident.name, 0);
-		if (sym->node->type != AST_FN_DECL || sym->kind != SYMB_FN) {
+		if ((sym->node->type != AST_FN_DECL && sym->node->type != AST_EXTERN_FUNC_DECL) || sym->kind != SYMB_FN) {
 			char msg[256] = "";
 			sprintf(msg, "symbol %s is not a function but used as a function.", node->data.func_call.callee->data.ident.name);
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
 		// @TODO: cache this probably
-		int param_count = 0;
+		int non_va_param_count = 0;
 		ASTNode *param = sym->node->data.func_decl.params;
 		while (param) {
-			++param_count;
+			if (param->data.param_decl.is_va)
+				break;
+			++non_va_param_count;
 			param = param->next;
 		}
-		if (param_count != node->data.func_call.arg_count) {
+		if (non_va_param_count > node->data.func_call.arg_count) {
 			char msg[256] = "";
 			sprintf(msg, "argument count mismatch.");
 			report(node->location, msg, 0);
@@ -720,19 +722,23 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		param = sym->node->data.func_decl.params;
 		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
 			result = analyze_ast(table, node->data.func_call.args[i], scope_level, scope_specifier);
-			Type *param_type = param->data.param_decl.type;
-			Type *arg_type = get_type(table, node->data.func_call.args[i], sym->scope_level + 1, scope_specifier);
-			if (!is_convertible(arg_type, param_type, 0)) {
-				char left_str[128] = "";
-				char right_str[128] = "";
-				type_print(left_str, param_type);
-				type_print(right_str, arg_type);
-				char msg[256] = "";
-				sprintf(msg, "cannot implicitly convert from type %s to type %s in function call %s.", right_str, left_str, sym->name);
-				report(node->location, msg, 0);
-				result = RESULT_FAILURE;
+			if (result != RESULT_SUCCESS)
+				return result;
+			if (i < non_va_param_count) {
+				Type *param_type = param->data.param_decl.type;
+				Type *arg_type = get_type(table, node->data.func_call.args[i], sym->scope_level + 1, scope_specifier);
+				if (!is_convertible(arg_type, param_type, 0)) {
+					char left_str[128] = "";
+					char right_str[128] = "";
+					type_print(left_str, param_type);
+					type_print(right_str, arg_type);
+					char msg[256] = "";
+					sprintf(msg, "cannot implicitly convert from type %s to type %s in function call %s.", right_str, left_str, sym->name);
+					report(node->location, msg, 0);
+					result = RESULT_FAILURE;
+				}
+				param = param->next;
 			}
-			param = param->next;
 		}
 		return result;
 	} break;
@@ -801,7 +807,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		break;
 
 	case AST_PARAM_DECL:
-		if (scope_specifier[0] != '\0') {
+		if (scope_specifier[0] != '\0' && !node->data.param_decl.is_va) {
 			snprintf(node->data.param_decl.resolved_name, sizeof(node->data.param_decl.resolved_name), "__%s_%s", scope_specifier, node->data.param_decl.name);
 		}
 		break;
@@ -969,6 +975,29 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		sprintf(msg, "Enum %s does not contain a member %s.", sym->name, node->data.enum_value.member);
 		report(node->location, msg, 0);
 		return RESULT_FAILURE;
+	} break;
+
+	case AST_EXTERN_BLOCK: {
+		CompilerResult result = RESULT_SUCCESS;
+		for (int i = 0; i < node->data.extern_block.count; ++i) {
+			result = analyze_ast(table, node->data.extern_block.block[i], scope_level, scope_specifier);
+			if (result != RESULT_SUCCESS) {
+				return result;
+			}
+		}
+	} break;
+
+	case AST_EXTERN_FUNC_DECL: {
+		if (node->data.extern_func.params) {
+			CompilerResult result = RESULT_SUCCESS;
+			ASTNode *param = node->data.extern_func.params;
+			while (param) {
+				result = analyze_ast(table, param, scope_level + 1, node->data.extern_func.name);
+				param = param->next;
+			}
+			if (result != RESULT_SUCCESS)
+				return result;
+		}
 	} break;
 
 	default:

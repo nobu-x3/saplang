@@ -2420,12 +2420,10 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume 'fn'
 	if ((parser->current_token.type < TOKENS_BUILTIN_TYPE_BEGIN || parser->current_token.type > TOKENS_BUILTIN_TYPE_END) && parser->current_token.type != TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected return type.", 0);
-
-	Type *type = NULL;
-	if (parse_type(parser, &type) != RESULT_SUCCESS) {
+	Type *ret_type = NULL;
+	if (parse_type(parser, &ret_type) != RESULT_SUCCESS) {
 		return NULL;
 	}
-
 	if (parser->current_token.type != TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected function identifier.", 0);
 
@@ -2433,32 +2431,46 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	strncpy(func_name, parser->current_token.text, sizeof(func_name));
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner); // consume function name
-
 	if (parser->current_token.type != TOK_LPAREN) {
 		return report(parser->current_token.location, "expected '(' after function name.", 0);
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '('
-
 	ASTNode *params = parse_parameter_list(parser);
 	if (parser->current_token.type != TOK_RPAREN) {
 		return report(parser->current_token.location, "expected ')' after parameter list.", 0);
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
-
 	if (parser->current_token.type != TOK_SEMICOLON) {
 		char msg[128];
 		sprintf(msg, "expected ';' after extern function declaration, got '%s'.", parser->current_token.text);
 		return report(parser->current_token.location, msg, 0);
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
-
 	ASTNode *decl_node = new_extern_func_decl_node(func_name, params, loc);
-	add_symbol(&parser->symbol_table, decl_node, func_name, func_name, 1, SYMB_FN, type, parser->current_scope);
-	if (is_exported) {
-		add_symbol(&parser->exported_table, decl_node, func_name, func_name, 1, SYMB_FN, type, parser->current_scope);
+	Type function_type = {TYPE_FUNCTION, "", ""};
+	function_type.function.return_type = ret_type;
+	function_type.function.param_count = 0;
+	struct {
+		Type **data;
+		int count, capacity;
+	} param_type_list;
+	da_init_unsafe(param_type_list, 4);
+	ASTNode *curr_param = params;
+	while (curr_param) {
+		if (curr_param->data.param_decl.is_va)
+			break;
+		da_push_unsafe(param_type_list, curr_param->data.param_decl.type);
+		curr_param = curr_param->next;
 	}
-	type_deinit(type);
-	free(type);
+	function_type.function.param_count = param_type_list.count;
+	function_type.function.param_types = param_type_list.data;
+	add_symbol(&parser->symbol_table, decl_node, func_name, func_name, 1, SYMB_FN, &function_type, parser->current_scope);
+	if (is_exported) {
+		add_symbol(&parser->exported_table, decl_node, func_name, func_name, 1, SYMB_FN, &function_type, parser->current_scope);
+	}
+	da_deinit(param_type_list);
+	type_deinit(ret_type);
+	free(ret_type);
 	return decl_node;
 }
 

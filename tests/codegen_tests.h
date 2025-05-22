@@ -4,6 +4,7 @@
 #include <codegen.h>
 #include <parser.h>
 #include <sema.h>
+#include <string.h>
 #include <types.h>
 #include <unity.h>
 #include <util.h>
@@ -17,6 +18,8 @@
 	FILE *old_stdout = capture_error_begin();                                                                                                                                                                                                  \
 	parser_init(&parser, scanner, NULL);                                                                                                                                                                                                       \
 	Module *module = parse_input(&parser);                                                                                                                                                                                                     \
+	if (!module || module->has_errors)                                                                                                                                                                                                         \
+		UnityFail("Parsing failed", 0);                                                                                                                                                                                                        \
 	int success = 1;                                                                                                                                                                                                                           \
 	for (ASTNode *node = module->ast; node != NULL; node = node->next) {                                                                                                                                                                       \
 		success &= analyze_ast(module->symbol_table, node, 0, "") == RESULT_SUCCESS;                                                                                                                                                           \
@@ -1235,6 +1238,45 @@ void test_EnumValueReturn_codegen(void) {
 						   "define i32 @main() {\n"
 						   "entry:\n"
 						   "  ret i32 234\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ExternBlockFn_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("extern { fn void printf(const u8* str, ...); }"
+							  R"(fn i32 main() { printf("hello world"); return 0; })");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@.str = constant [12 x i8] c\"hello world\\00\"\n\n"
+						   "declare void @printf(ptr)\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  call void @printf(ptr @.str)\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ExternBlockFnVa_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("extern { fn void printf(const u8* str, ...); }"
+							  R"(fn i32 main() { i32 a = 1; printf("hello world %d", a); return 0; })");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "declare void @printf(ptr)\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 1, ptr %__main_a, align 4\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  call void @printf(ptr @.str, i32 %0)\n"
+						   "  ret i32 0\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
