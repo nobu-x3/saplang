@@ -633,11 +633,10 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMTypeRef fn_type = map_to_llvm(cg, fn_sym->type, table);
 		assert(fn_type);
 		LLVMValueRef callee = LLVMGetNamedFunction(cg->module, fn_sym->resolved_name);
-		;
+	
 		assert(callee);
-		int n = node->data.func_call.arg_count;
-		LLVMValueRef *args = alloca(sizeof(LLVMValueRef) * n);
-		for (int i = 0; i < n; i++) {
+		LLVMValueRef *args = alloca(sizeof(LLVMValueRef) * node->data.func_call.arg_count);
+		for (int i = 0; i < node->data.func_call.arg_count; i++) {
 			PassContext param_ctx = ctx;
 			param_ctx.intention = PI_LOAD_VAL;
 			ASTNode *param = node->data.func_call.args[i];
@@ -647,7 +646,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			args[i] = codegen_ast(cg, param, table, param_ctx);
 		}
 		int is_void = fn_sym->type->function.return_type->kind == TYPE_PRIMITIVE && strcmp(fn_sym->type->function.return_type->type_name, "void") == 0;
-		return LLVMBuildCall2(cg->builder, fn_type, callee, args, n, is_void ? "" : "calltmp");
+		return LLVMBuildCall2(cg->builder, fn_type, callee, args, node->data.func_call.arg_count, is_void ? "" : "calltmp");
 	} break;
 
 	case AST_STRING_LIT: {
@@ -655,7 +654,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		size_t len = strlen(s) + 1;
 		LLVMValueRef gv = LLVMAddGlobal(cg->module, LLVMArrayType(LLVMInt8TypeInContext(cg->llvm_context), len), ".str");
 		LLVMSetGlobalConstant(gv, 1);
-		LLVMValueRef constStr = LLVMConstStringInContext(cg->llvm_context, s, len, 0);
+		LLVMValueRef constStr = LLVMConstStringInContext(cg->llvm_context, s, len, 1);
 		LLVMSetInitializer(gv, constStr);
 		// decay to i8*
 		return LLVMBuildBitCast(cg->builder, gv, LLVMPointerType(LLVMInt8TypeInContext(cg->llvm_context), 0), "strptr");
