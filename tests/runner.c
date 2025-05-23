@@ -153,6 +153,8 @@ int main(void) {
 	RUN_TEST(test_ExternBlockFnVa_codegen);
 	RUN_TEST(test_ForLoopConstComp_codegen);
 	RUN_TEST(test_ForLoopVarComp_codegen);
+	RUN_TEST(test_WhileLoopBasicComp_codegen);
+	RUN_TEST(test_WhileLoopVarComp_codegen);
 
 	return UNITY_END();
 }

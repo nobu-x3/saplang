@@ -1354,3 +1354,76 @@ void test_ForLoopVarComp_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_WhileLoopBasicComp_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("extern { fn void printf(const u8* str, ...); }"
+							  "fn i32 main() { i32 a = 0; while(a < 10){ printf(\"hello world %d\", a); a += 1; } return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "declare void @printf(ptr)\n\n"
+						   "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_a = alloca i32, align 4\n"
+                           "  store i32 0, ptr %__main_a, align 4\n"
+                           "  br label %whilecond\n"
+                           "\n"
+                           "whilecond:                                        ; preds = %whilebody, %entry\n"
+                           "  %0 = load i32, ptr %__main_a, align 4\n"
+                           "  %cmplt = icmp slt i32 %0, 10\n"
+                           "  br i1 %cmplt, label %whilebody, label %whileend\n"
+                           "\n"
+                           "whilebody:                                        ; preds = %whilecond\n"
+                           "  %1 = load i32, ptr %__main_a, align 4\n"
+                           "  call void @printf(ptr @.str, i32 %1)\n"
+                           "  %2 = load i32, ptr %__main_a, align 4\n"
+                           "  %add = add i32 %2, 1\n"
+                           "  store i32 %add, ptr %__main_a, align 4\n"
+                           "  br label %whilecond\n"
+                           "\n"
+                           "whileend:                                         ; preds = %whilecond\n"
+                           "  ret i32 0\n"
+                           "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_WhileLoopVarComp_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("extern { fn void printf(const u8* str, ...); }"
+							  "fn i32 main() { i32 a = 0; i32 b = 10; while(a < b){ printf(\"hello world %d\", a); a += 1; } return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "declare void @printf(ptr)\n\n"
+                           "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_a = alloca i32, align 4\n"
+                           "  store i32 0, ptr %__main_a, align 4\n"
+                           "  %__main_b = alloca i32, align 4\n"
+                           "  store i32 10, ptr %__main_b, align 4\n"
+                           "  br label %whilecond\n"
+                           "\n"
+                           "whilecond:                                        ; preds = %whilebody, %entry\n"
+                           "  %0 = load i32, ptr %__main_a, align 4\n"
+                           "  %1 = load i32, ptr %__main_b, align 4\n"
+                           "  %cmplt = icmp slt i32 %0, %1\n"
+                           "  br i1 %cmplt, label %whilebody, label %whileend\n"
+                           "\n"
+                           "whilebody:                                        ; preds = %whilecond\n"
+                           "  %2 = load i32, ptr %__main_a, align 4\n"
+                           "  call void @printf(ptr @.str, i32 %2)\n"
+                           "  %3 = load i32, ptr %__main_a, align 4\n"
+                           "  %add = add i32 %3, 1\n"
+                           "  store i32 %add, ptr %__main_a, align 4\n"
+                           "  br label %whilecond\n"
+                           "\n"
+                           "whileend:                                         ; preds = %whilecond\n"
+                           "  ret i32 0\n"
+                           "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}

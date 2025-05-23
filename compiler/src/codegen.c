@@ -757,8 +757,29 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMPositionBuilderAtEnd(cg->builder, endBB);
 		return NULL;
 	} break;
+
+	case AST_WHILE_LOOP: {
+		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.name);
+		LLVMBasicBlockRef condBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "whilecond");
+		LLVMBasicBlockRef bodyBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "whilebody");
+		LLVMBasicBlockRef endBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "whileend");
+		LLVMBuildBr(cg->builder, condBB);
+		// cond
+		LLVMPositionBuilderAtEnd(cg->builder, condBB);
+		PassContext condition_ctx = ctx;
+		condition_ctx.expected_type = get_primitive_bool();
+		condition_ctx.intention = PI_LOAD_VAL;
+		LLVMValueRef cond = codegen_ast(cg, node->data.while_loop.condition, table, condition_ctx);
+		LLVMBuildCondBr(cg->builder, cond, bodyBB, endBB);
+		// body
+		LLVMPositionBuilderAtEnd(cg->builder, bodyBB);
+		codegen_ast(cg, node->data.while_loop.body, table, ctx);
+		LLVMBuildBr(cg->builder, condBB);
+		// end
+		LLVMPositionBuilderAtEnd(cg->builder, endBB);
+		return NULL;
+	} break;
 	case AST_IF_STMT:
-	case AST_WHILE_LOOP:
 	case AST_FN_PTR:
 	case AST_CONTINUE:
 	case AST_BREAK:
