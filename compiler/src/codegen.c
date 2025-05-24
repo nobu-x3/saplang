@@ -499,6 +499,10 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	rhs_ctx.expected_type = l_type;
 	LLVMValueRef R = codegen_ast(cg, node->data.binary_op.right, table, rhs_ctx);
 	switch (node->data.binary_op.op) {
+	case TOK_EQUAL:
+		return LLVMBuildICmp(cg->builder, LLVMIntEQ, L, R, "");
+	case TOK_NOTEQUAL:
+		return LLVMBuildICmp(cg->builder, LLVMIntNE, L, R, "");
 	case TOK_LESSTHAN:
 		return LLVMBuildICmp(cg->builder, LLVMIntSLT, L, R, "cmplt");
 	case TOK_LTOE:
