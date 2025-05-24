@@ -19,4 +19,4 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char* scope_
  * */
 CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier);
 
-CompilerResult resolve_types(Symbol *table, ASTNode *root);
+CompilerResult resolve_types(Symbol *table, ASTNode *root, int should_traverse_symtab);

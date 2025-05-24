@@ -129,6 +129,8 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 	return NULL;
 }
 
+CompilerResult resolve_type(Symbol *table, Type *type, SourceLocation loc);
+
 CompilerResult analyze_expr_ident(Symbol *table, ASTNode *node, int scope_level) {
 	// This should never be NULL at this point because we passed the analyze_ast call above
 	if (node->data.ident.resolved_name[0] != '\0') {
@@ -451,6 +453,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				report(node->location, msg, 0);
 				return RESULT_FAILURE;
 			}
+			CompilerResult result = resolve_type(table, var_sym->type, var_sym->node->location);
+			if (result != RESULT_SUCCESS)
+				return result;
 			strncpy(node->data.ident.resolved_name, resolved_name, sizeof(resolved_name));
 		}
 	} break;
@@ -710,14 +715,17 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		}
 	} break;
 
-	case AST_STRUCT_DECL:
-		if (!lookup_symbol(table, node->data.struct_decl.name, scope_level)) {
+	case AST_STRUCT_DECL: {
+		Symbol *sym = lookup_symbol(table, node->data.struct_decl.name, scope_level);
+		if (!sym) {
 			char msg[256] = "";
 			sprintf(msg, "struct %s undefined.", node->data.struct_decl.name);
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-		break;
+		sym->kind = SYMB_STRUCT;
+		sym->type->kind = TYPE_STRUCT;
+	} break;
 
 	case AST_ENUM_DECL: {
 		Symbol *sym = lookup_symbol(table, node->data.enum_decl.name, scope_level);
@@ -745,13 +753,20 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		break;
 
 	case AST_CAST: {
-		CompilerResult result = analyze_ast(table, node->data.cast.expr, scope_level, scope_specifier);
-		if (result != RESULT_SUCCESS) {
+		CompilerResult result = resolve_type(table, node->data.cast.target_type, node->location);
+		if (result != RESULT_SUCCESS)
 			return result;
-		}
+		result = analyze_ast(table, node->data.cast.expr, scope_level, scope_specifier);
+		if (result != RESULT_SUCCESS)
+			return result;
 		Type *expr_type = get_type(table, node->data.cast.expr, scope_level, scope_specifier);
+		assert(expr_type);
 		if (expr_type->kind == TYPE_PRIMITIVE && node->data.cast.target_type->kind == TYPE_PRIMITIVE)
 			return RESULT_SUCCESS;
+		if ((is_int(expr_type) && expr_type->type_name[1] == '6' && expr_type->type_name[2] == '4' && node->data.cast.target_type->kind == TYPE_POINTER) ||
+			is_int(node->data.cast.target_type) && node->data.cast.target_type->type_name[1] == '6' && node->data.cast.target_type->type_name[2] == '4' && expr_type->kind == TYPE_POINTER) {
+			return RESULT_SUCCESS;
+		}
 		if (!is_convertible(expr_type, node->data.cast.target_type, 0)) {
 			char msg[256] = "";
 			char src_type[64] = "";
@@ -963,43 +978,93 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	return RESULT_SUCCESS;
 }
 
-CompilerResult resolve_types(Symbol *table, ASTNode *root) {
-	Symbol *sym = table;
-	while (sym) {
-		if (sym->type->kind == TYPE_UNDECIDED) {
-			Symbol *type_def = lookup_symbol(table, sym->type->type_name, 0);
-			if (!type_def) {
-				char msg[128] = "";
-				sprintf(msg, "unknown type %s.", sym->type->type_name);
-				report(sym->node->location, msg, 0);
-				return RESULT_FAILURE;
-			}
-			sym->type->kind = type_def->type->kind;
+CompilerResult resolve_type(Symbol *table, Type *type, SourceLocation loc) {
+	if (type->kind == TYPE_UNDECIDED) {
+		Symbol *type_def = lookup_symbol(table, type->type_name, 0);
+		if (!type_def) {
+			char msg[128] = "";
+			sprintf(msg, "unknown type %s.", type->type_name);
+			report(loc, msg, 0);
+			return RESULT_FAILURE;
 		}
-		sym = sym->next;
+		type->kind = type_def->type->kind;
+	} else if (type->kind == TYPE_POINTER) {
+		Type *pointee_type = type->pointee;
+		while (pointee_type->kind == TYPE_POINTER) {
+			pointee_type = pointee_type->pointee;
+		}
+		return resolve_type(table, pointee_type, loc);
+	} else if (type->kind == TYPE_ARRAY) {
+		Type *arr_type = type->array.element_type;
+		while (arr_type->kind == TYPE_ARRAY) {
+			arr_type = arr_type->array.element_type;
+		}
+		return resolve_type(table, arr_type, loc);
+	} else if (type->kind == TYPE_FUNCTION) {
+		CompilerResult result = resolve_type(table, type->function.return_type, loc);
+		if (result != RESULT_SUCCESS)
+			return result;
+		for (int i = 0; i < type->function.param_count; ++i) {
+			result = resolve_type(table, type->function.param_types[i], loc);
+			if (result != RESULT_SUCCESS)
+				return result;
+		}
+		return result;
+	}
+	// others are basically handled
+	return RESULT_SUCCESS;
+}
+
+CompilerResult resolve_types(Symbol *table, ASTNode *root, int should_traverse_symbols) {
+	if (should_traverse_symbols) {
+		Symbol *sym = table;
+		while (sym) {
+			CompilerResult result = resolve_type(table, sym->type, sym->node->location);
+			sym = sym->next;
+		}
 	}
 	for (ASTNode *node = root; node != NULL; node = node->next) {
 		switch (node->type) {
 		case AST_STRUCT_DECL: {
 			for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
 				ASTNode *field = node->data.struct_decl.fields[i];
-				if (field->data.field_decl.type->kind == TYPE_UNDECIDED) {
-					Symbol *sym = lookup_symbol(table, field->data.field_decl.type->type_name, 0);
-					if (!sym) {
-						char msg[128] = "";
-						sprintf(msg, "unknown type %s.", field->data.field_decl.type->type_name);
-						report(sym->node->location, msg, 0);
-						return RESULT_FAILURE;
-					}
-					field->data.field_decl.type->kind = sym->type->kind;
-				}
+				CompilerResult result = resolve_type(table, field->data.field_decl.type, field->location);
+				if (result != RESULT_SUCCESS)
+					return result;
 			}
+		} break;
+
+		case AST_FN_DECL: {
+			for (ASTNode *param = node->data.func_decl.params; param; param = param->next) {
+				CompilerResult result = resolve_types(table, param, 0);
+				if (result != RESULT_SUCCESS)
+					return result;
+			}
+			CompilerResult result = resolve_types(table, node->data.func_decl.body, 0);
+			if (result != RESULT_SUCCESS)
+				return result;
+		} break;
+
+		case AST_VAR_DECL:
+		case AST_PARAM_DECL:
+		case AST_CAST: {
+			Type *type = NULL;
+			if (node->type == AST_VAR_DECL) {
+				type = node->data.var_decl.type;
+			} else if (node->type == AST_PARAM_DECL) {
+				type = node->data.param_decl.type;
+			} else if (node->type == AST_CAST) {
+				type = node->data.cast.target_type;
+			}
+			CompilerResult result = resolve_type(table, type, node->location);
+			if (result != RESULT_SUCCESS)
+				return result;
 		} break;
 
 		case AST_DEFERRED_SEQUENCE:
 		case AST_BLOCK:
 			for (int i = 0; i < node->data.block.count; ++i) {
-				CompilerResult result = resolve_types(table, node->data.block.statements[i]);
+				CompilerResult result = resolve_types(table, node->data.block.statements[i], 0);
 				if (result != RESULT_SUCCESS)
 					return result;
 			}
