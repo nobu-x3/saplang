@@ -478,3 +478,65 @@ Type *get_string_type() {
 	static Type string_literal_type = {TYPE_POINTER, "", "", .pointee = &primitive_u8_type};
 	return &string_literal_type;
 }
+
+int is_int(const Type *type) {
+	return type->kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "i8") == 0 || strcmp(type->type_name, "i16") == 0 || strcmp(type->type_name, "i32") == 0 || strcmp(type->type_name, "i64") == 0 || strcmp(type->type_name, "u8") == 0 ||
+											strcmp(type->type_name, "u16") == 0 || strcmp(type->type_name, "u32") == 0 || strcmp(type->type_name, "u64") == 0 || strcmp(type->type_name, "bool") == 0);
+}
+
+int is_float(const Type *type) { return type->kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "f32") == 0 || strcmp(type->type_name, "f64") == 0); }
+
+int is_convertible(const Type *source, const Type *target, int permissive) {
+	if (!source || !target)
+		return 0;
+
+	// Allow identical types
+	if (type_equals(source, target))
+		return 1;
+
+	// Allow array decay
+	if (source->kind == TYPE_ARRAY && target->kind == TYPE_POINTER) {
+		// Could call for is_convertible on underlying types but easier to debug non-recursive code
+		int decay_count = 1;
+		Type *underlying_array_type = source->array.element_type;
+		while (underlying_array_type && underlying_array_type->kind == TYPE_ARRAY) {
+			++decay_count;
+			underlying_array_type = underlying_array_type->array.element_type;
+		}
+
+		int pointer_count = 1;
+		Type *underlying_pointer_type = target->pointee;
+		while (underlying_pointer_type && underlying_pointer_type->kind == TYPE_POINTER) {
+			++pointer_count;
+			underlying_pointer_type = underlying_pointer_type->pointee;
+		}
+
+		return pointer_count == decay_count && type_equals(underlying_array_type, underlying_pointer_type);
+	}
+	if (source->kind == TYPE_POINTER) {
+		return target->kind == TYPE_POINTER;
+	}
+
+	if (source->kind != TYPE_POINTER && target->kind == TYPE_POINTER) {
+		return 0;
+	}
+
+	if (target->kind == TYPE_PRIMITIVE) {
+		if (strcmp(target->type_name, "bool") == 0) {
+			if (source->kind == TYPE_POINTER)
+				return 1;
+
+			if (source->kind == TYPE_PRIMITIVE)
+				return 1;
+		}
+
+		if (permissive) {
+			if (source->kind == TYPE_PRIMITIVE) {
+				return (is_int(target) && is_int(source)) || (is_float(target) && is_float(source));
+			}
+			return 0;
+		}
+	}
+
+	return 0;
+}

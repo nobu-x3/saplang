@@ -57,3 +57,8 @@ Type *get_primitive_i32();
 Type *get_primitive_f32();
 Type *get_primitive_u8();
 Type *get_string_type();
+
+int is_builtin(const Type *type);
+int is_int(const Type *type);
+int is_float(const Type *type);
+int is_convertible(const Type *source, const Type *target, int permissive);
