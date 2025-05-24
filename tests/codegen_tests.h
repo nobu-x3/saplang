@@ -1498,7 +1498,7 @@ void test_IfElseStmtInWhileLoop_codegen(void) {
 							  "fn i32 main() { i32 a = 0; while(a < 10) { if(a % 2 == 0){ printf(\"hello world %d\", a); } else { printf(\"\n\"); } a += 1; } a = 50; return a; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n"
 						   "@.str.1 = constant [2 x i8] c\"\\0A\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n\n"
 						   "define i32 @main() {\n"
