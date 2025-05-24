@@ -1250,7 +1250,7 @@ void test_ExternBlockFn_codegen(void) {
 							  "fn i32 main() { printf(\"hello world\"); return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [12 x i8] c\"hello world\\00\"\n\n"
+						   "@.str = constant [12 x i8] c\"hello world\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n\n"
 						   "define i32 @main() {\n"
 						   "entry:\n"
@@ -1268,7 +1268,7 @@ void test_ExternBlockFnVa_codegen(void) {
 							  "fn i32 main() { i32 a = 1; printf(\"hello world %d\", a); return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n\n"
 						   "define i32 @main() {\n"
 						   "entry:\n"
@@ -1289,7 +1289,7 @@ void test_ForLoopConstComp_codegen(void) {
 							  "fn i32 main() { for(i32 i = 0; i < 10; i +=1 ){ printf(\"hello world %d\", i); } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n\n"
 						   "define i32 @main() {\n"
 						   "entry:\n"
@@ -1323,7 +1323,7 @@ void test_ForLoopVarComp_codegen(void) {
 							  "fn i32 main() { i32 a = 10; for(i32 i = 0; i < a; i +=1 ){ printf(\"hello world %d\", i); } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n\n"
 						   "define i32 @main() {\n"
 						   "entry:\n"
@@ -1360,7 +1360,7 @@ void test_WhileLoopBasicComp_codegen(void) {
 							  "fn i32 main() { i32 a = 0; while(a < 10){ printf(\"hello world %d\", a); a += 1; } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n\n"
 						   "define i32 @main() {\n"
                            "entry:\n"
@@ -1395,7 +1395,7 @@ void test_WhileLoopVarComp_codegen(void) {
 							  "fn i32 main() { i32 a = 0; i32 b = 10; while(a < b){ printf(\"hello world %d\", a); a += 1; } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n\n"
                            "define i32 @main() {\n"
                            "entry:\n"

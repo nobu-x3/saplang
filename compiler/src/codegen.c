@@ -675,6 +675,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMSetGlobalConstant(gv, 1);
 		LLVMValueRef constStr = LLVMConstStringInContext(cg->llvm_context, s, len, 1);
 		LLVMSetInitializer(gv, constStr);
+		LLVMSetAlignment(gv, 1);
 		// decay to i8*
 		return LLVMBuildBitCast(cg->builder, gv, LLVMPointerType(LLVMInt8TypeInContext(cg->llvm_context), 0), "strptr");
 	} break;
