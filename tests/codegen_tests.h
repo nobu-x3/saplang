@@ -1427,3 +1427,113 @@ void test_WhileLoopVarComp_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_IfStmtBasic_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("extern { fn void printf(const u8* str, ...); }"
+							  "fn i32 main() { i32 a = 0; if(a){ printf(\"hello world %d\", a); } return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "declare void @printf(ptr)\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_a, align 4\n"
+						   "  %0 = load i1, ptr %__main_a, align 1\n"
+						   "  br i1 %0, label %then, label %ifcont\n\n"
+						   "then:                                             ; preds = %entry\n"
+						   "  %1 = load i32, ptr %__main_a, align 4\n"
+						   "  call void @printf(ptr @.str, i32 %1)\n"
+						   "  br label %ifcont\n\n"
+						   "ifcont:                                           ; preds = %then, %entry\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_IfStmtInWhileLoop_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("extern { fn void printf(const u8* str, ...); }"
+							  "fn i32 main() { i32 a = 0; while(a < 10) { if(a % 2 == 0){ printf(\"hello world %d\", a); } a += 1; } return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "declare void @printf(ptr)\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_a, align 4\n"
+						   "  br label %whilecond\n\n"
+						   "whilecond:                                        ; preds = %ifcont, %entry\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  %cmplt = icmp slt i32 %0, 10\n"
+						   "  br i1 %cmplt, label %whilebody, label %whileend\n\n"
+						   "whilebody:                                        ; preds = %whilecond\n"
+						   "  %1 = load i32, ptr %__main_a, align 4\n"
+						   "  %rem = srem i32 %1, 2\n"
+						   "  %2 = icmp eq i32 %rem, 0\n"
+						   "  br i1 %2, label %then, label %ifcont\n\n"
+						   "whileend:                                         ; preds = %whilecond\n"
+						   "  ret i32 0\n\n"
+						   "then:                                             ; preds = %whilebody\n"
+						   "  %3 = load i32, ptr %__main_a, align 4\n"
+						   "  call void @printf(ptr @.str, i32 %3)\n"
+						   "  br label %ifcont\n\n"
+						   "ifcont:                                           ; preds = %then, %whilebody\n"
+						   "  %4 = load i32, ptr %__main_a, align 4\n"
+						   "  %add = add i32 %4, 1\n"
+						   "  store i32 %add, ptr %__main_a, align 4\n"
+						   "  br label %whilecond\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_IfElseStmtInWhileLoop_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("extern { fn void printf(const u8* str, ...); }"
+							  "fn i32 main() { i32 a = 0; while(a < 10) { if(a % 2 == 0){ printf(\"hello world %d\", a); } else { printf(\"\n\"); } a += 1; } a = 50; return a; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "@.str.1 = constant [2 x i8] c\"\\0A\\00\", align 1\n\n"
+						   "declare void @printf(ptr)\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_a, align 4\n"
+						   "  br label %whilecond\n\n"
+						   "whilecond:                                        ; preds = %ifcont, %entry\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  %cmplt = icmp slt i32 %0, 10\n"
+						   "  br i1 %cmplt, label %whilebody, label %whileend\n\n"
+						   "whilebody:                                        ; preds = %whilecond\n"
+						   "  %1 = load i32, ptr %__main_a, align 4\n"
+						   "  %rem = srem i32 %1, 2\n"
+						   "  %2 = icmp eq i32 %rem, 0\n"
+						   "  br i1 %2, label %then, label %else\n\n"
+						   "whileend:                                         ; preds = %whilecond\n"
+						   "  store i32 50, ptr %__main_a, align 4\n"
+						   "  %3 = load i32, ptr %__main_a, align 4\n"
+						   "  ret i32 %3\n\n"
+						   "then:                                             ; preds = %whilebody\n"
+						   "  %4 = load i32, ptr %__main_a, align 4\n"
+						   "  call void @printf(ptr @.str, i32 %4)\n"
+						   "  br label %ifcont\n\n"
+						   "else:                                             ; preds = %whilebody\n"
+						   "  call void @printf(ptr @.str.1)\n"
+						   "  br label %ifcont\n\n"
+						   "ifcont:                                           ; preds = %else, %then\n"
+						   "  %5 = load i32, ptr %__main_a, align 4\n"
+						   "  %add = add i32 %5, 1\n"
+						   "  store i32 %add, ptr %__main_a, align 4\n"
+						   "  br label %whilecond\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}

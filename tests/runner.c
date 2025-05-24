@@ -155,6 +155,9 @@ int main(void) {
 	RUN_TEST(test_ForLoopVarComp_codegen);
 	RUN_TEST(test_WhileLoopBasicComp_codegen);
 	RUN_TEST(test_WhileLoopVarComp_codegen);
+	RUN_TEST(test_IfStmtBasic_codegen);
+	RUN_TEST(test_IfStmtInWhileLoop_codegen);
+	RUN_TEST(test_IfElseStmtInWhileLoop_codegen);
 
 	return UNITY_END();
 }

@@ -784,7 +784,31 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMPositionBuilderAtEnd(cg->builder, endBB);
 		return NULL;
 	} break;
-	case AST_IF_STMT:
+
+	case AST_IF_STMT: {
+		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.name);
+		PassContext condition_ctx = ctx;
+		condition_ctx.expected_type = get_primitive_bool();
+		condition_ctx.intention = PI_LOAD_VAL;
+		LLVMValueRef cond = codegen_ast(cg, node->data.if_stmt.condition, table, condition_ctx);
+		LLVMBasicBlockRef thenBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "then");
+		LLVMBasicBlockRef elseBB = node->data.if_stmt.else_branch ? LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "else") : NULL;
+		LLVMBasicBlockRef mergeBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "ifcont");
+		LLVMBuildCondBr(cg->builder, cond, thenBB, elseBB ? elseBB : mergeBB);
+		// then
+		LLVMPositionBuilderAtEnd(cg->builder, thenBB);
+		codegen_ast(cg, node->data.if_stmt.then_branch, table, ctx);
+		LLVMBuildBr(cg->builder, mergeBB);
+		// else
+		if (elseBB) {
+			LLVMPositionBuilderAtEnd(cg->builder, elseBB);
+			codegen_ast(cg, node->data.if_stmt.else_branch, table, ctx);
+			LLVMBuildBr(cg->builder, mergeBB);
+		}
+		// merge
+		LLVMPositionBuilderAtEnd(cg->builder, mergeBB);
+		return NULL;
+	} break;
 	case AST_FN_PTR:
 	case AST_CONTINUE:
 	case AST_BREAK:

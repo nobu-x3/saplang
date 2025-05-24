@@ -994,6 +994,30 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		}
 	} break;
 
+	case AST_IF_STMT: {
+		CompilerResult result = analyze_ast(table, node->data.if_stmt.condition, scope_level, scope_specifier);
+		if (result != RESULT_SUCCESS)
+			return result;
+		Type *cond_type = get_type(table, node->data.if_stmt.condition, scope_level, scope_specifier);
+		assert(cond_type);
+		if (!is_convertible(cond_type, get_primitive_bool(), 1)) {
+			char msg[256] = "";
+			char type_msg[128] = "";
+			type_print(type_msg, cond_type);
+			sprintf(msg, "condition expression of type %s cannot be converted to bool.", type_msg);
+			report(node->data.if_stmt.condition->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		result = analyze_ast(table, node->data.if_stmt.then_branch, scope_level, scope_specifier);
+		if (result != RESULT_SUCCESS)
+			return result;
+		if (node->data.if_stmt.else_branch) {
+			result = analyze_ast(table, node->data.if_stmt.else_branch, scope_level, scope_specifier);
+			if (result != RESULT_SUCCESS)
+				return result;
+		}
+	} break;
+
 	default:
 		report(node->location, "sema: unsupported node type.", 1);
 		break;
