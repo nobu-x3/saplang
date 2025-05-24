@@ -91,8 +91,8 @@ int main(void) {
 	RUN_TEST(test_ParameterNameConflict_sema);
 	RUN_TEST(test_FuncCallInitWrongType_sema);
 	RUN_TEST(test_FuncCallAssignmentWrongType_sema);
-	RUN_TEST(test_ExplicitCastWrongTypes_ValueToPointer_sema);
-	RUN_TEST(test_ExplicitCastWrongTypes_PointerToValue_sema);
+	RUN_TEST(test_ExplicitCastCorrectTypes_ValueToPointer_sema);
+	RUN_TEST(test_ExplicitCastCorrectTypes_PointerToValue_sema);
 	RUN_TEST(test_ExplicitCastWrongTypes_ReturnType_sema);
 	RUN_TEST(test_GlobalVariableInitWithGlobalVar);
 
@@ -158,6 +158,11 @@ int main(void) {
 	RUN_TEST(test_IfStmtBasic_codegen);
 	RUN_TEST(test_IfStmtInWhileLoop_codegen);
 	RUN_TEST(test_IfElseStmtInWhileLoop_codegen);
+	RUN_TEST(test_ExplicitCastIntToIntType);
+	RUN_TEST(test_ExplicitCastFloatToFloatType);
+	RUN_TEST(test_ExplicitCastFloatToIntType);
+	RUN_TEST(test_ExplicitCastPtrToIntType);
+	RUN_TEST(test_ExplicitCastPtrToPtr);
 
 	return UNITY_END();
 }

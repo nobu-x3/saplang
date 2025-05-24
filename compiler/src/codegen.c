@@ -181,6 +181,7 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 		element_types[i] = map_to_llvm(cg, current_field->data.field_decl.type, table);
 	}
 	LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, node->data.struct_decl.name);
+	assert(struct_type);
 	// NOTE: not sure if packed
 	LLVMStructSetBody(struct_type, element_types, node->data.struct_decl.field_count, 0);
 	return struct_type;
@@ -809,10 +810,56 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMPositionBuilderAtEnd(cg->builder, mergeBB);
 		return NULL;
 	} break;
+
+	case AST_CAST: {
+		Type *exp_val_type = get_type(table, node->data.cast.expr, ctx.current_scope, "");
+		PassContext val_ctx = ctx;
+		val_ctx.expected_type = exp_val_type;
+		val_ctx.intention = PI_LOAD_VAL;
+		LLVMValueRef v = codegen_ast(cg, node->data.cast.expr, table, val_ctx);
+		LLVMTypeRef target_ty = map_to_llvm(cg, node->data.cast.target_type, table);
+		// integer<->integer
+		if (is_int(node->data.cast.target_type) && is_int(exp_val_type)) {
+			return LLVMBuildIntCast(cg->builder, v, target_ty, "casttmp");
+		}
+		// float<->float
+		if (LLVMGetTypeKind(LLVMTypeOf(v)) == LLVMFloatTypeKind && LLVMGetTypeKind(target_ty) == LLVMDoubleTypeKind) {
+			return LLVMBuildFPExt(cg->builder, v, target_ty, "fpext");
+		}
+		if (LLVMGetTypeKind(LLVMTypeOf(v)) == LLVMDoubleTypeKind && LLVMGetTypeKind(target_ty) == LLVMFloatTypeKind) {
+			return LLVMBuildFPTrunc(cg->builder, v, target_ty, "fptrunc");
+		}
+		// int<->float
+		if (is_int(exp_val_type) && is_float(node->data.cast.target_type)) {
+			if (exp_val_type->type_name[0] == 'u') {
+				return LLVMBuildUIToFP(cg->builder, v, target_ty, "uitofp");
+			} else if (exp_val_type->type_name[0] == 'i') {
+				return LLVMBuildSIToFP(cg->builder, v, target_ty, "sitofp");
+			}
+		}
+		if (is_int(node->data.cast.target_type) && is_float(exp_val_type)) {
+			if (node->data.cast.target_type->type_name[0] == 'u') {
+				return LLVMBuildFPToUI(cg->builder, v, target_ty, "fptoui");
+			} else if (node->data.cast.target_type->type_name[0] == 'i') {
+				return LLVMBuildFPToSI(cg->builder, v, target_ty, "fptosi");
+			}
+		}
+		// int<->ptr
+		if (exp_val_type->kind == TYPE_POINTER && is_int(node->data.cast.target_type))
+			return LLVMBuildPtrToInt(cg->builder, v, target_ty, "inttoptr");
+		if (node->data.cast.target_type->kind == TYPE_POINTER && is_int(exp_val_type))
+			return LLVMBuildIntToPtr(cg->builder, v, target_ty, "ptrtoint");
+		// pointer casts
+		if (LLVMGetTypeKind(LLVMTypeOf(v)) == LLVMPointerTypeKind && LLVMGetTypeKind(target_ty) == LLVMPointerTypeKind) {
+			return LLVMBuildBitCast(cg->builder, v, target_ty, "bitcast");
+		}
+		// fallback
+		return LLVMBuildBitCast(cg->builder, v, target_ty, "casttmp");
+	} break;
+
 	case AST_FN_PTR:
 	case AST_CONTINUE:
 	case AST_BREAK:
-	case AST_CAST:
 	case AST_UNION_DECL:
 	case AST_FIELD_DECL:
 	case AST_DEFER_BLOCK:

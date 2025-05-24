@@ -23,7 +23,7 @@
 	int success = 1;                                                                                                                                                                                                                           \
 	for (ASTNode *node = module->ast; node != NULL; node = node->next) {                                                                                                                                                                       \
 		success &= analyze_ast(module->symbol_table, node, 0, "") == RESULT_SUCCESS;                                                                                                                                                           \
-		resolve_types(module->symbol_table, node);                                                                                                                                                                                             \
+		success &= resolve_types(module->symbol_table, node, 1) == RESULT_SUCCESS;                                                                                                                                                             \
 	}                                                                                                                                                                                                                                          \
 	if (!success)                                                                                                                                                                                                                              \
 		UnityFail("Sema failed", 0);                                                                                                                                                                                                           \
@@ -1363,27 +1363,27 @@ void test_WhileLoopBasicComp_codegen(void) {
 						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n\n"
 						   "define i32 @main() {\n"
-                           "entry:\n"
-                           "  %__main_a = alloca i32, align 4\n"
-                           "  store i32 0, ptr %__main_a, align 4\n"
-                           "  br label %whilecond\n"
-                           "\n"
-                           "whilecond:                                        ; preds = %whilebody, %entry\n"
-                           "  %0 = load i32, ptr %__main_a, align 4\n"
-                           "  %cmplt = icmp slt i32 %0, 10\n"
-                           "  br i1 %cmplt, label %whilebody, label %whileend\n"
-                           "\n"
-                           "whilebody:                                        ; preds = %whilecond\n"
-                           "  %1 = load i32, ptr %__main_a, align 4\n"
-                           "  call void @printf(ptr @.str, i32 %1)\n"
-                           "  %2 = load i32, ptr %__main_a, align 4\n"
-                           "  %add = add i32 %2, 1\n"
-                           "  store i32 %add, ptr %__main_a, align 4\n"
-                           "  br label %whilecond\n"
-                           "\n"
-                           "whileend:                                         ; preds = %whilecond\n"
-                           "  ret i32 0\n"
-                           "}\n";
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_a, align 4\n"
+						   "  br label %whilecond\n"
+						   "\n"
+						   "whilecond:                                        ; preds = %whilebody, %entry\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  %cmplt = icmp slt i32 %0, 10\n"
+						   "  br i1 %cmplt, label %whilebody, label %whileend\n"
+						   "\n"
+						   "whilebody:                                        ; preds = %whilecond\n"
+						   "  %1 = load i32, ptr %__main_a, align 4\n"
+						   "  call void @printf(ptr @.str, i32 %1)\n"
+						   "  %2 = load i32, ptr %__main_a, align 4\n"
+						   "  %add = add i32 %2, 1\n"
+						   "  store i32 %add, ptr %__main_a, align 4\n"
+						   "  br label %whilecond\n"
+						   "\n"
+						   "whileend:                                         ; preds = %whilecond\n"
+						   "  ret i32 0\n"
+						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -1397,31 +1397,31 @@ void test_WhileLoopVarComp_codegen(void) {
 						   "source_filename = \"test\"\n\n"
 						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n\n"
-                           "define i32 @main() {\n"
-                           "entry:\n"
-                           "  %__main_a = alloca i32, align 4\n"
-                           "  store i32 0, ptr %__main_a, align 4\n"
-                           "  %__main_b = alloca i32, align 4\n"
-                           "  store i32 10, ptr %__main_b, align 4\n"
-                           "  br label %whilecond\n"
-                           "\n"
-                           "whilecond:                                        ; preds = %whilebody, %entry\n"
-                           "  %0 = load i32, ptr %__main_a, align 4\n"
-                           "  %1 = load i32, ptr %__main_b, align 4\n"
-                           "  %cmplt = icmp slt i32 %0, %1\n"
-                           "  br i1 %cmplt, label %whilebody, label %whileend\n"
-                           "\n"
-                           "whilebody:                                        ; preds = %whilecond\n"
-                           "  %2 = load i32, ptr %__main_a, align 4\n"
-                           "  call void @printf(ptr @.str, i32 %2)\n"
-                           "  %3 = load i32, ptr %__main_a, align 4\n"
-                           "  %add = add i32 %3, 1\n"
-                           "  store i32 %add, ptr %__main_a, align 4\n"
-                           "  br label %whilecond\n"
-                           "\n"
-                           "whileend:                                         ; preds = %whilecond\n"
-                           "  ret i32 0\n"
-                           "}\n";
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_a, align 4\n"
+						   "  %__main_b = alloca i32, align 4\n"
+						   "  store i32 10, ptr %__main_b, align 4\n"
+						   "  br label %whilecond\n"
+						   "\n"
+						   "whilecond:                                        ; preds = %whilebody, %entry\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  %1 = load i32, ptr %__main_b, align 4\n"
+						   "  %cmplt = icmp slt i32 %0, %1\n"
+						   "  br i1 %cmplt, label %whilebody, label %whileend\n"
+						   "\n"
+						   "whilebody:                                        ; preds = %whilecond\n"
+						   "  %2 = load i32, ptr %__main_a, align 4\n"
+						   "  call void @printf(ptr @.str, i32 %2)\n"
+						   "  %3 = load i32, ptr %__main_a, align 4\n"
+						   "  %add = add i32 %3, 1\n"
+						   "  store i32 %add, ptr %__main_a, align 4\n"
+						   "  br label %whilecond\n"
+						   "\n"
+						   "whileend:                                         ; preds = %whilecond\n"
+						   "  ret i32 0\n"
+						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -1531,6 +1531,123 @@ void test_IfElseStmtInWhileLoop_codegen(void) {
 						   "  %add = add i32 %5, 1\n"
 						   "  store i32 %add, ptr %__main_a, align 4\n"
 						   "  br label %whilecond\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ExplicitCastIntToIntType(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 a = 0; i64 b = (i64)a; i8 c = (i8)a; return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_a, align 4\n"
+						   "  %__main_b = alloca i64, align 8\n"
+						   "  %0 = load i32, ptr %__main_a, align 4\n"
+						   "  %casttmp = sext i32 %0 to i64\n"
+						   "  store i64 %casttmp, ptr %__main_b, align 4\n"
+						   "  %__main_c = alloca i8, align 1\n"
+						   "  %1 = load i32, ptr %__main_a, align 4\n"
+						   "  %casttmp1 = trunc i32 %1 to i8\n"
+						   "  store i8 %casttmp1, ptr %__main_c, align 1\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ExplicitCastFloatToFloatType(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { f32 a = 0.0; f64 b = (f64)a; f32 c = (f32)b; return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca float, align 4\n"
+						   "  store float 0.000000e+00, ptr %__main_a, align 4\n"
+						   "  %__main_b = alloca double, align 8\n"
+						   "  %0 = load float, ptr %__main_a, align 4\n"
+						   "  %fpext = fpext float %0 to double\n"
+						   "  store double %fpext, ptr %__main_b, align 8\n"
+						   "  %__main_c = alloca float, align 4\n"
+						   "  %1 = load double, ptr %__main_b, align 8\n"
+						   "  %fptrunc = fptrunc double %1 to float\n"
+						   "  store float %fptrunc, ptr %__main_c, align 4\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ExplicitCastFloatToIntType(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { f32 a = 0.0; i64 b = (i64)a; f64 c = (f64)b; return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca float, align 4\n"
+						   "  store float 0.000000e+00, ptr %__main_a, align 4\n"
+						   "  %__main_b = alloca i64, align 8\n"
+						   "  %0 = load float, ptr %__main_a, align 4\n"
+						   "  %fptosi = fptosi float %0 to i64\n"
+						   "  store i64 %fptosi, ptr %__main_b, align 4\n"
+						   "  %__main_c = alloca double, align 8\n"
+						   "  %1 = load i64, ptr %__main_b, align 4\n"
+						   "  %sitofp = sitofp i64 %1 to double\n"
+						   "  store double %sitofp, ptr %__main_c, align 8\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ExplicitCastPtrToIntType(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i64 a = 0; i64* b = &a; i64 c = (i64)b; i32* d = (i32*)c; return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_a = alloca i64, align 8\n"
+						   "  store i64 0, ptr %__main_a, align 4\n"
+						   "  %__main_b = alloca ptr, align 8\n"
+						   "  store ptr %__main_a, ptr %__main_b, align 8\n"
+						   "  %__main_c = alloca i64, align 8\n"
+						   "  %0 = load ptr, ptr %__main_b, align 8\n"
+						   "  %inttoptr = ptrtoint ptr %0 to i64\n"
+						   "  store i64 %inttoptr, ptr %__main_c, align 4\n"
+						   "  %__main_d = alloca ptr, align 8\n"
+						   "  %1 = load i64, ptr %__main_c, align 4\n"
+						   "  %ptrtoint = inttoptr i64 %1 to ptr\n"
+						   "  store ptr %ptrtoint, ptr %__main_d, align 8\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ExplicitCastPtrToPtr(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct1 { i32 a; } struct TestStruct2 { f64 b; }"
+							  "fn i32 main() { TestStruct1* ts1; TestStruct2* ts2 = (TestStruct1*)ts1; return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_ts1 = alloca ptr, align 8\n"
+						   "  %__main_ts2 = alloca ptr, align 8\n"
+						   "  %0 = load ptr, ptr %__main_ts1, align 8\n"
+						   "  store ptr %0, ptr %__main_ts2, align 8\n"
+						   "  ret i32 0\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
