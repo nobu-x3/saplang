@@ -100,7 +100,7 @@ typedef struct ASTNode {
 			int is_va;
 			Type *type;
 			char name[128];
-            char resolved_name[256];
+			char resolved_name[256];
 		} param_decl;
 		// Block: a list of statements
 		struct {
@@ -134,7 +134,7 @@ typedef struct ASTNode {
 		struct {
 			char op;
 			struct ASTNode *operand;
-			Type* result_type;
+			Type *result_type;
 		} unary_op;
 		struct {
 			struct ASTNode **elements;
