@@ -698,6 +698,7 @@ ASTNode *new_unary_expr_node(char op, ASTNode *operand, SourceLocation loc) {
 		return NULL;
 	node->data.unary_op.op = op;
 	node->data.unary_op.operand = operand;
+	node->data.unary_op.result_type = NULL;
 	return node;
 }
 
@@ -2732,6 +2733,10 @@ void free_ast_node(ASTNode *node) {
 	case AST_UNARY_EXPR:
 		free_ast_node(node->data.unary_op.operand);
 		node->data.unary_op.operand = NULL;
+		if (node->data.unary_op.result_type) {
+			type_deinit(node->data.unary_op.result_type);
+			free(node->data.unary_op.result_type);
+		}
 		break;
 	case AST_ARRAY_LITERAL:
 		for (int i = 0; i < node->data.array_literal.count; ++i) {

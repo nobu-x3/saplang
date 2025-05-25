@@ -107,8 +107,9 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 	case AST_RETURN:
 		return get_type(table, node->data.ret.return_expr, scope_level, scope_specifier);
 
-	case AST_UNARY_EXPR:
-		return get_type(table, node->data.unary_op.operand, scope_level, scope_specifier);
+	case AST_UNARY_EXPR: {
+		return node->data.unary_op.result_type;
+	}
 
 	case AST_ARRAY_ACCESS: {
 		Type *base_type = get_type(table, node->data.array_access.base, scope_level, scope_specifier);
@@ -203,6 +204,24 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 	default:
 		report(node->location, "unknown unary operator", 0);
 		return RESULT_FAILURE;
+	}
+	if (node->data.unary_op.op == '&') {
+		Type *expr_type_cpy = copy_type(op_ty);
+		node->data.unary_op.result_type = calloc(1, sizeof(Type));
+		node->data.unary_op.result_type->kind = TYPE_POINTER;
+		node->data.unary_op.result_type->pointee = expr_type_cpy;
+	} else if (node->data.unary_op.op == '*') {
+		if (op_ty->kind != TYPE_POINTER) {
+			char type_str[128] = "";
+			type_print(type_str, op_ty);
+			char msg[256] = "";
+			sprintf(msg, "cannot dereference a non-pointer type: %s", type_str);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		node->data.unary_op.result_type = copy_type(op_ty->pointee);
+	} else {
+		node->data.unary_op.result_type = copy_type(op_ty);
 	}
 	return RESULT_SUCCESS;
 }
@@ -764,7 +783,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		if (expr_type->kind == TYPE_PRIMITIVE && node->data.cast.target_type->kind == TYPE_PRIMITIVE)
 			return RESULT_SUCCESS;
 		if ((is_int(expr_type) && expr_type->type_name[1] == '6' && expr_type->type_name[2] == '4' && node->data.cast.target_type->kind == TYPE_POINTER) ||
-			is_int(node->data.cast.target_type) && node->data.cast.target_type->type_name[1] == '6' && node->data.cast.target_type->type_name[2] == '4' && expr_type->kind == TYPE_POINTER) {
+			(is_int(node->data.cast.target_type) && node->data.cast.target_type->type_name[1] == '6' && node->data.cast.target_type->type_name[2] == '4' && expr_type->kind == TYPE_POINTER)) {
 			return RESULT_SUCCESS;
 		}
 		if (!is_convertible(expr_type, node->data.cast.target_type, 0)) {
@@ -889,9 +908,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		return RESULT_SUCCESS;
 	} break;
 
-	case AST_UNARY_EXPR: {
+	case AST_UNARY_EXPR:
 		return analyze_unary_op(table, node, scope_level, scope_specifier);
-	} break;
 
 	case AST_CHAR_LIT:
 		break;

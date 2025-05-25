@@ -163,6 +163,7 @@ int main(void) {
 	RUN_TEST(test_ExplicitCastFloatToIntType);
 	RUN_TEST(test_ExplicitCastPtrToIntType);
 	RUN_TEST(test_ExplicitCastPtrToPtr);
+	RUN_TEST(test_ExplicitCastPtrToPtrWithAddressOf);
 
 	return UNITY_END();
 }

@@ -134,6 +134,7 @@ typedef struct ASTNode {
 		struct {
 			char op;
 			struct ASTNode *operand;
+			Type* result_type;
 		} unary_op;
 		struct {
 			struct ASTNode **elements;

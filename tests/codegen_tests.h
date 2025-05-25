@@ -1654,3 +1654,22 @@ void test_ExplicitCastPtrToPtr(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_ExplicitCastPtrToPtrWithAddressOf(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct1 { i32 a; } struct TestStruct2 { f64 b; }"
+							  "fn i32 main() { TestStruct1 ts1; TestStruct2* ts2 = (TestStruct1*)&ts1; return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%TestStruct1 = type { i32 }\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_ts1 = alloca %TestStruct1, align 8\n"
+						   "  %__main_ts2 = alloca ptr, align 8\n"
+						   "  store ptr %__main_ts1, ptr %__main_ts2, align 8\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
