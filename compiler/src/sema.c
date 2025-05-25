@@ -730,6 +730,16 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						return RESULT_FAILURE;
 					}
 				}
+				for (int i = 0; i < node->data.func_decl.body->data.block.count; ++i) {
+					if (node->data.func_decl.body->data.block.statements[i]->type == AST_CONTINUE) {
+						report(node->data.func_decl.body->data.block.statements[i]->location, "'continue' out of loop context.", 0);
+						return RESULT_FAILURE;
+					}
+					if (node->data.func_decl.body->data.block.statements[i]->type == AST_BREAK) {
+						report(node->data.func_decl.body->data.block.statements[i]->location, "'break' out of loop context.", 0);
+						return RESULT_FAILURE;
+					}
+				}
 			}
 		}
 	} break;
@@ -763,6 +773,10 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	case AST_EXPR_LITERAL:
 	case AST_STRUCT_LITERAL:
 	case AST_ARRAY_LITERAL:
+	case AST_CHAR_LIT:
+	case AST_STRING_LIT:
+	case AST_CONTINUE:
+	case AST_BREAK:
 		break;
 
 	case AST_PARAM_DECL:
@@ -910,12 +924,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 
 	case AST_UNARY_EXPR:
 		return analyze_unary_op(table, node, scope_level, scope_specifier);
-
-	case AST_CHAR_LIT:
-		break;
-
-	case AST_STRING_LIT:
-		break;
 
 	case AST_ENUM_VALUE: {
 		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_name, scope_level);

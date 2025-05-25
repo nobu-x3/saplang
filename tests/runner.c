@@ -164,6 +164,8 @@ int main(void) {
 	RUN_TEST(test_ExplicitCastPtrToIntType);
 	RUN_TEST(test_ExplicitCastPtrToPtr);
 	RUN_TEST(test_ExplicitCastPtrToPtrWithAddressOf);
+	RUN_TEST(test_WhileLoopContinueBreak_codegen);
+	RUN_TEST(test_ForLoopContinueBreak_codegen);
 
 	return UNITY_END();
 }

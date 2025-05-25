@@ -145,6 +145,8 @@ typedef struct {
 	ASTNode *current_function_node;
 	PassIntention intention;
 	LLVMValueRef passed_value;
+	LLVMBasicBlockRef end_block;
+	LLVMBasicBlockRef loop_beg_block;
 } PassContext;
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
@@ -355,7 +357,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
-	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE, NULL};
+	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL};
 	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, table, ctx) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
@@ -437,7 +439,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			++index;
 		}
 	}
-	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE, NULL};
+	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE, NULL, NULL, NULL};
 	codegen_ast(cg, node->data.func_decl.body, table, ctx);
 	if (should_free_linkage_name)
 		free(linkage_name);
@@ -752,7 +754,10 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		}
 		// body
 		LLVMPositionBuilderAtEnd(cg->builder, bodyBB);
-		codegen_ast(cg, node->data.for_loop.body, table, ctx);
+		PassContext for_ctx = ctx;
+		for_ctx.loop_beg_block = stepBB;
+		for_ctx.end_block = endBB;
+		codegen_ast(cg, node->data.for_loop.body, table, for_ctx);
 		LLVMBuildBr(cg->builder, stepBB);
 		// step
 		LLVMPositionBuilderAtEnd(cg->builder, stepBB);
@@ -779,7 +784,10 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMBuildCondBr(cg->builder, cond, bodyBB, endBB);
 		// body
 		LLVMPositionBuilderAtEnd(cg->builder, bodyBB);
-		codegen_ast(cg, node->data.while_loop.body, table, ctx);
+		PassContext body_ctx = ctx;
+		body_ctx.end_block = endBB;
+		body_ctx.loop_beg_block = condBB;
+		codegen_ast(cg, node->data.while_loop.body, table, body_ctx);
 		LLVMBuildBr(cg->builder, condBB);
 		// end
 		LLVMPositionBuilderAtEnd(cg->builder, endBB);
@@ -799,12 +807,18 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		// then
 		LLVMPositionBuilderAtEnd(cg->builder, thenBB);
 		codegen_ast(cg, node->data.if_stmt.then_branch, table, ctx);
-		LLVMBuildBr(cg->builder, mergeBB);
+		LLVMValueRef last_inst = LLVMGetLastInstruction(thenBB);
+		LLVMOpcode last_inst_opcode = LLVMGetInstructionOpcode(last_inst);
+		if (last_inst_opcode != LLVMBr)
+			LLVMBuildBr(cg->builder, mergeBB);
 		// else
 		if (elseBB) {
 			LLVMPositionBuilderAtEnd(cg->builder, elseBB);
 			codegen_ast(cg, node->data.if_stmt.else_branch, table, ctx);
-			LLVMBuildBr(cg->builder, mergeBB);
+			last_inst = LLVMGetLastInstruction(elseBB);
+			LLVMOpcode last_inst_opcode = LLVMGetInstructionOpcode(last_inst);
+			if (last_inst_opcode != LLVMBr)
+				LLVMBuildBr(cg->builder, mergeBB);
 		}
 		// merge
 		LLVMPositionBuilderAtEnd(cg->builder, mergeBB);
@@ -857,10 +871,19 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		return LLVMBuildBitCast(cg->builder, v, target_ty, "casttmp");
 	} break;
 
-	case AST_FN_PTR:
-	case AST_CONTINUE:
-	case AST_BREAK:
+	case AST_CONTINUE: {
+		assert(ctx.loop_beg_block);
+		LLVMBuildBr(cg->builder, ctx.loop_beg_block);
+	} break;
+
+	case AST_BREAK: {
+		assert(ctx.end_block);
+		LLVMBuildBr(cg->builder, ctx.end_block);
+	} break;
+
 	case AST_UNION_DECL:
+		assert(0 && "not implemented yet");
+
 	case AST_FIELD_DECL:
 	case AST_DEFER_BLOCK:
 		break;
@@ -875,7 +898,7 @@ void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 		if (current->type == AST_VAR_DECL) {
 			codegen_global_var_decl(cg, current, table, 0);
 		} else {
-			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE, NULL};
+			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL};
 			codegen_ast(cg, current, table, ctx);
 		}
 		current = current->next;
