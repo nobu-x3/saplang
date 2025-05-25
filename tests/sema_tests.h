@@ -188,7 +188,7 @@ void test_ExplicitCastWrongTypes_ReturnType_sema(void) {
 	free(output);
 }
 
-void test_GlobalVariableInitWithGlobalVar(void) {
+void test_GlobalVariableInitWithGlobalVar_sema(void) {
 	TEST_SETUP_SINGLE("i32 i = 0; i32 a = i;");
 	const char *expected = "parser_tests.sl:0:16:Error: global variables cannot be initialized with other global variables.\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
