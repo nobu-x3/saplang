@@ -369,9 +369,11 @@ Token next_token(Scanner *scanner) {
 		if (_INPUT[_INDEX + 1] == '=') {
 			current_token.type = TOK_LTOE;
 			eat_next_char(scanner);
+			eat_next_char(scanner);
 			strncpy(current_token.text, "<=", sizeof(current_token.text));
 		} else if (_INPUT[_INDEX + 1] == '<') {
 			current_token.type = TOK_BITWISE_LSHIFT;
+			eat_next_char(scanner);
 			eat_next_char(scanner);
 			strncpy(current_token.text, "<<", sizeof(current_token.text));
 		} else {
@@ -385,9 +387,11 @@ Token next_token(Scanner *scanner) {
 		if (_INPUT[_INDEX + 1] == '=') {
 			current_token.type = TOK_GTOE;
 			eat_next_char(scanner);
+			eat_next_char(scanner);
 			strncpy(current_token.text, ">=", sizeof(current_token.text));
 		} else if (_INPUT[_INDEX + 1] == '>') {
 			current_token.type = TOK_BITWISE_RSHIFT;
+			eat_next_char(scanner);
 			eat_next_char(scanner);
 			strncpy(current_token.text, ">>", sizeof(current_token.text));
 		} else {
