@@ -22,6 +22,7 @@ typedef struct {
 
 typedef enum {
 	AST_VAR_DECL,
+	AST_UNION_DECL,
 	AST_STRUCT_DECL,
 	AST_FN_DECL,
 	AST_FIELD_DECL,
@@ -53,7 +54,6 @@ typedef enum {
 	AST_CONTINUE,
 	AST_BREAK,
 	AST_CAST,
-	AST_UNION_DECL,
 } ASTNodeType;
 
 typedef struct ASTNode {

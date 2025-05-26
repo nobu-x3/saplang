@@ -98,10 +98,23 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		if (!decl_sym)
 			return NULL;
 		ASTNode *decl_node = decl_sym->node;
-		int field_index = find_struct_field_index(decl_node, node->data.member_access.member);
-		if (field_index == -1)
-			return NULL;
-		return decl_node->data.struct_decl.fields[field_index]->data.field_decl.type;
+		if (decl_sym->kind == SYMB_STRUCT) {
+			int field_index = find_struct_field_index(decl_node, node->data.member_access.member);
+			if (field_index == -1)
+				return NULL;
+			return decl_node->data.struct_decl.fields[field_index]->data.field_decl.type;
+		} else if (decl_sym->kind == SYMB_UNION) {
+			int field_index = find_union_field_index(decl_node->data.union_decl.fields, node->data.member_access.member);
+			if (field_index == -1) {
+				return NULL;
+			}
+			ASTNode *field = decl_node->data.union_decl.fields;
+			while (field_index && field) {
+				field = field->next;
+				--field_index;
+			}
+			return field->data.field_decl.type;
+		}
 	} break;
 
 	case AST_RETURN:
@@ -906,12 +919,26 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(base_node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-		int field_index = find_struct_field_index(decl_sym->node, node->data.member_access.member);
-		if (field_index == -1) {
-			char msg[128] = "";
-			sprintf(msg, "%s does not have a member named %s.", base_type->type_name, node->data.member_access.member);
-			report(base_node->location, msg, 0);
+		if (decl_sym->kind != SYMB_STRUCT && decl_sym->kind != SYMB_UNION) {
+			report(base_node->location, "can only access members of structs or unions.", 0);
 			return RESULT_FAILURE;
+		}
+		if (decl_sym->kind == SYMB_STRUCT) {
+			int field_index = find_struct_field_index(decl_sym->node, node->data.member_access.member);
+			if (field_index == -1) {
+				char msg[128] = "";
+				sprintf(msg, "%s does not have a member named %s.", base_type->type_name, node->data.member_access.member);
+				report(base_node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+		} else if (decl_sym->kind == SYMB_UNION) {
+			int field_index = find_union_field_index(decl_sym->node->data.union_decl.fields, node->data.member_access.member);
+			if (field_index == -1) {
+				char msg[128] = "";
+				sprintf(msg, "%s does not have a member named %s.", base_type->type_name, node->data.member_access.member);
+				report(base_node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
 		}
 		Type *field_type = get_type(table, node, scope_level, scope_specifier);
 		if (!field_type)

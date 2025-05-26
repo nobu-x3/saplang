@@ -103,14 +103,17 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 			return LLVMVoidTypeInContext(cg->llvm_context);
 		}
 		break;
+
 	case TYPE_POINTER: {
 		LLVMTypeRef elem = map_to_llvm(cg, type->pointee, table);
 		return LLVMPointerType(elem, 0);
 	} break;
+
 	case TYPE_ARRAY: {
 		LLVMTypeRef elem = map_to_llvm(cg, type->array.element_type, table);
 		return LLVMArrayType(elem, type->array.size);
 	} break;
+
 	case TYPE_FUNCTION: {
 		LLVMTypeRef ret_type = map_to_llvm(cg, type->function.return_type, table);
 		LLVMTypeRef *param_types = alloca(sizeof(LLVMTypeRef) * (size_t)type->function.param_count);
@@ -119,8 +122,16 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 		}
 		return LLVMFunctionType(ret_type, param_types, type->function.param_count, 0);
 	}
+
 	case TYPE_STRUCT:
 		return LLVMGetTypeByName2(cg->llvm_context, type->type_name);
+
+	case TYPE_UNION: {
+		char name[512] = "";
+		sprintf(name, "union.%s", type->type_name);
+		return LLVMGetTypeByName2(cg->llvm_context, name);
+	} break;
+
 	case TYPE_ENUM: {
 		Symbol *sym = lookup_symbol(table, type->type_name, 0);
 		assert(sym && "unknown enum symbol.");
@@ -128,7 +139,8 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 		Type type_copy = *sym->type;
 		type_copy.kind = TYPE_PRIMITIVE;
 		return map_to_llvm(cg, &type_copy, table);
-	}
+	} break;
+
 	case TYPE_UNDECIDED:
 		assert(0 && "should not be any undecided types in codegen.");
 	}
@@ -189,6 +201,25 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	return struct_type;
 }
 
+LLVMTypeRef codegen_union_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
+	LLVMTypeRef max_type_ref = NULL;
+	int max_size = 0;
+	for (ASTNode *field = node->data.union_decl.fields; field; field = field->next) {
+		TypeInfo ti = get_type_info(field->data.field_decl.type, field);
+		if (ti.size > max_size) {
+			max_type_ref = map_to_llvm(cg, field->data.field_decl.type, table);
+		}
+	}
+	assert(max_type_ref);
+	char union_name[512] = "";
+	sprintf(union_name, "union.%s", node->data.union_decl.name);
+	LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, union_name);
+	assert(struct_type);
+	// NOTE: not sure if packed
+	LLVMStructSetBody(struct_type, &max_type_ref, 1, 0);
+	return struct_type;
+}
+
 LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	PassIntention tmp_intention = ctx.intention;
 	ctx.intention = PI_LOAD_PTR;
@@ -197,21 +228,36 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 	ctx.intention = tmp_intention;
 	Type *base_type = get_type(table, node->data.member_access.base, ctx.current_scope, "");
 	assert(base_type);
-	assert(base_type->kind == TYPE_STRUCT);
+	assert(base_type->kind == TYPE_STRUCT || base_type->kind == TYPE_UNION);
 	LLVMTypeRef struct_ty = map_to_llvm(cg, base_type, table);
 	assert(struct_ty);
 	Symbol *decl_sym = lookup_symbol(table, base_type->type_name, ctx.current_scope);
-	int field_index = find_field_index(decl_sym->node, node->data.member_access.member);
-	assert(field_index > -1);
-	LLVMTypeRef index_type = LLVMIntType(PLATFORM_POINTER_SIZE);
-	LLVMValueRef index = LLVMConstInt(index_type, field_index, 0);
-	LLVMValueRef field_gep = LLVMBuildStructGEP2(cg->builder, struct_ty, base_value, field_index, node->data.member_access.member);
-	assert(field_gep);
-	if (ctx.intention != PI_LOAD_VAL) {
-		return field_gep;
+	if (base_type->kind == TYPE_UNION) {
+		int field_index = find_union_field_index(decl_sym->node->data.union_decl.fields, node->data.member_access.member);
+		assert(field_index > -1);
+		ASTNode *field = decl_sym->node->data.union_decl.fields;
+		for (int i = 0; i < field_index || !field; ++i) {
+			field = field->next;
+		}
+		LLVMTypeRef field_type = map_to_llvm(cg, field->data.field_decl.type, table);
+		assert(field_type);
+		if (ctx.intention != PI_LOAD_VAL) {
+			return base_value;
+		}
+		return LLVMBuildLoad2(cg->builder, field_type, base_value, "");
+	} else if (base_type->kind == TYPE_STRUCT) {
+		int field_index = find_struct_field_index(decl_sym->node, node->data.member_access.member);
+		assert(field_index > -1);
+		LLVMTypeRef index_type = LLVMIntType(PLATFORM_POINTER_SIZE);
+		LLVMValueRef index = LLVMConstInt(index_type, 0, 0);
+		LLVMValueRef field_gep = LLVMBuildStructGEP2(cg->builder, struct_ty, base_value, field_index, node->data.member_access.member);
+		assert(field_gep);
+		if (ctx.intention != PI_LOAD_VAL) {
+			return field_gep;
+		}
+		LLVMTypeRef field_ty = LLVMStructGetTypeAtIndex(struct_ty, field_index);
+		return LLVMBuildLoad2(cg->builder, field_ty, field_gep, "");
 	}
-	LLVMTypeRef field_ty = LLVMStructGetTypeAtIndex(struct_ty, field_index);
-	return LLVMBuildLoad2(cg->builder, field_ty, field_gep, "");
 }
 
 LLVMValueRef codegen_return(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
@@ -275,7 +321,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 		for (int i = 0; i < init_count; ++i) {
 			FieldInitializer *init = node->data.struct_literal.inits[i];
 			if (init->is_designated) {
-				current_field_index = find_field_index(decl_node, init->field);
+				current_field_index = find_struct_field_index(decl_node, init->field);
 				assert(current_field_index != -1);
 			}
 			LLVMValueRef generated_value = NULL;
@@ -575,8 +621,11 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 
 	case AST_STRUCT_DECL: {
 		LLVMTypeRef type = codegen_struct_decl(cg, node, table);
-		break;
-	}
+	} break;
+
+	case AST_UNION_DECL: {
+		codegen_union_decl(cg, node, table);
+	} break;
 
 	case AST_EXPR_IDENT: {
 		if (hashmap_contains(ctx.loaded_values, node->data.ident.resolved_name)) {
@@ -880,9 +929,6 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		assert(ctx.end_block);
 		LLVMBuildBr(cg->builder, ctx.end_block);
 	} break;
-
-	case AST_UNION_DECL:
-		assert(0 && "not implemented yet");
 
 	case AST_FIELD_DECL:
 	case AST_DEFER_BLOCK:

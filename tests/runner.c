@@ -175,6 +175,8 @@ int main(void) {
 	RUN_TEST(test_ExplicitCastPtrToPtrWithAddressOf_codegen);
 	RUN_TEST(test_WhileLoopContinueBreak_codegen);
 	RUN_TEST(test_ForLoopContinueBreak_codegen);
+	RUN_TEST(test_UnionDecl_codegen);
+	RUN_TEST(test_UnionMemberAccess_codegen);
 
 	return UNITY_END();
 }

@@ -1797,3 +1797,39 @@ void test_ForLoopContinueBreak_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_UnionDecl_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("union TestUnion { i32 a; i64 b; } "
+							  "fn i32 main() { TestUnion ts; return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%union.TestUnion = type { i64 }\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_ts = alloca %union.TestUnion, align 8\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_UnionMemberAccess_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("union TestUnion { i32 a; i64 b; } "
+							  "fn i32 main() { TestUnion ts; ts.a = 50; return ts.a; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%union.TestUnion = type { i64 }\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_ts = alloca %union.TestUnion, align 8\n"
+						   "  store i32 50, ptr %__main_ts, align 4\n"
+						   "  %0 = load i32, ptr %__main_ts, align 4\n"
+						   "  ret i32 %0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
