@@ -93,6 +93,27 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 			info.size = 8;
 			info.align = 8;
 		}
+	} break;
+
+	case TYPE_UNION: {
+		info.size = 0;
+		info.align = 1;
+		if (!node || node->type != AST_UNION_DECL)
+			return info;
+		ASTNode *field = node->data.union_decl.fields;
+		while (field) {
+			if (field->type == AST_FIELD_DECL) {
+				TypeInfo field_info = get_type_info(field->data.field_decl.type, field);
+				if (field_info.size > info.size) {
+					info.size = field_info.size;
+				}
+				if (field_info.align > info.align) {
+					info.align = field_info.align;
+				}
+			}
+			field = field->next;
+		}
+		return info;
 	}
 	case TYPE_UNDECIDED:
 		break;
@@ -444,11 +465,23 @@ void type_print(char *string, Type *type) {
 	}
 }
 
-int find_field_index(struct ASTNode *struct_decl, const char *field_name) {
+int find_struct_field_index(struct ASTNode *struct_decl, const char *field_name) {
 	for (int i = 0; i < struct_decl->data.struct_decl.field_count; ++i) {
 		ASTNode *curr_field = struct_decl->data.struct_decl.fields[i];
 		if (strcmp(curr_field->data.field_decl.name, field_name) == 0)
 			return i;
+	}
+	return -1;
+}
+
+int find_union_field_index(struct ASTNode *fields, const char *field_name) {
+	ASTNode *field = fields;
+	int index = 0;
+	while (field) {
+		if (strcmp(field_name, field->data.field_decl.name) == 0)
+			return index;
+		++index;
+		field = field->next;
 	}
 	return -1;
 }

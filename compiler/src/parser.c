@@ -1930,7 +1930,7 @@ ASTNode *parse_union_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
 	if (!is_error) {
-		Type *union_type = new_named_type(union_name, "", TYPE_STRUCT);
+		Type *union_type = new_named_type(union_name, "", TYPE_UNION);
 		ASTNode *node = new_union_decl_node(union_name, field_list, loc);
 		add_symbol(&parser->symbol_table, node, union_name, union_name, 1, SYMB_UNION, union_type, parser->current_scope);
 		if (is_exported) {

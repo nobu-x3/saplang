@@ -3,6 +3,7 @@
 #include "parser_tests.h"
 #include "sema_tests.h"
 #include "threadpool_tests.h"
+#include "typeinfo_tests.h"
 #include <unity.h>
 
 void setUp(void) {}
@@ -94,7 +95,15 @@ int main(void) {
 	RUN_TEST(test_ExplicitCastCorrectTypes_ValueToPointer_sema);
 	RUN_TEST(test_ExplicitCastCorrectTypes_PointerToValue_sema);
 	RUN_TEST(test_ExplicitCastWrongTypes_ReturnType_sema);
-	RUN_TEST(test_GlobalVariableInitWithGlobalVar);
+	RUN_TEST(test_GlobalVariableInitWithGlobalVar_sema);
+
+	RUN_TEST(test_Primitivei32_typeinfo);
+	RUN_TEST(test_Primitivei64_typeinfo);
+	RUN_TEST(test_Pointer_typeinfo);
+	RUN_TEST(test_ArrayType_typeinfo);
+	RUN_TEST(test_EnumType_typeinfo);
+	RUN_TEST(test_StructDecl_typeinfo);
+	RUN_TEST(test_UnionDecl_typeinfo);
 
 	RUN_TEST(test_FunctionDecl_codegen);
 	RUN_TEST(test_BuiltinGlobalVarNoInit_codegen);

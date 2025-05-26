@@ -7,7 +7,7 @@ typedef struct {
 	size_t align;
 } TypeInfo;
 
-typedef enum { TYPE_PRIMITIVE, TYPE_POINTER, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_UNDECIDED } TypeKind;
+typedef enum { TYPE_PRIMITIVE, TYPE_POINTER, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_UNION, TYPE_UNDECIDED } TypeKind;
 
 typedef struct Type {
 	TypeKind kind;
@@ -50,7 +50,8 @@ struct ASTNode;
 TypeInfo get_type_info(Type *type, struct ASTNode *node);
 
 // return -1 if field not present
-int find_field_index(struct ASTNode *struct_decl, const char *field_name);
+int find_struct_field_index(struct ASTNode *struct_decl, const char *field_name);
+int find_union_field_index(struct ASTNode *fields, const char *field_name);
 
 Type *get_primitive_bool();
 Type *get_primitive_i32();

@@ -98,7 +98,7 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		if (!decl_sym)
 			return NULL;
 		ASTNode *decl_node = decl_sym->node;
-		int field_index = find_field_index(decl_node, node->data.member_access.member);
+		int field_index = find_struct_field_index(decl_node, node->data.member_access.member);
 		if (field_index == -1)
 			return NULL;
 		return decl_node->data.struct_decl.fields[field_index]->data.field_decl.type;
@@ -254,7 +254,7 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 		}
 		FieldInitializer *init = node->data.struct_literal.inits[i];
 		if (init->is_designated) {
-			current_field_index = find_field_index(decl_node, init->field);
+			current_field_index = find_struct_field_index(decl_node, init->field);
 			if (current_field_index == -1) {
 				char msg[256] = "";
 				sprintf(msg, "cannot find a field with name '%s' in the definition of struct '%s'.", init->field, expected_type->type_name);
@@ -288,6 +288,30 @@ CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *n
 			}
 			return RESULT_FAILURE;
 		}
+	}
+	return RESULT_SUCCESS;
+}
+
+CompilerResult analyze_union_decl(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier) {
+	assert(node && node->type == AST_UNION_DECL);
+	const char *union_name = node->data.union_decl.name;
+	ASTNode *field = node->data.union_decl.fields;
+	int field_count = 0;
+	while (field) {
+		if (field->type != AST_FIELD_DECL) {
+			char msg[128] = "";
+			sprintf(msg, "expected field declaration.");
+			report(field->location, msg, 0);
+			return RESULT_FAILURE;
+		}
+		// check duplicates
+		int index = find_union_field_index(node->data.union_decl.fields, field->data.field_decl.name);
+		if (index != field_count) {
+			report(field->location, "duplicate field declaration.", 0);
+			return RESULT_FAILURE;
+		}
+		++field_count;
+		field = field->next;
 	}
 	return RESULT_SUCCESS;
 }
@@ -882,7 +906,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(base_node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-		int field_index = find_field_index(decl_sym->node, node->data.member_access.member);
+		int field_index = find_struct_field_index(decl_sym->node, node->data.member_access.member);
 		if (field_index == -1) {
 			char msg[128] = "";
 			sprintf(msg, "%s does not have a member named %s.", base_type->type_name, node->data.member_access.member);
@@ -996,6 +1020,10 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				return result;
 		}
 	} break;
+
+	case AST_UNION_DECL:
+		return analyze_union_decl(table, node, scope_level, scope_specifier);
+		break;
 
 	default:
 		report(node->location, "sema: unsupported node type.", 1);
