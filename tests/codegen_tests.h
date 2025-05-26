@@ -1538,7 +1538,7 @@ void test_IfElseStmtInWhileLoop_codegen(void) {
 	free(error);
 }
 
-void test_ExplicitCastIntToIntType(void) {
+void test_ExplicitCastIntToIntType_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 a = 0; i64 b = (i64)a; i8 c = (i8)a; return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
@@ -1562,7 +1562,7 @@ void test_ExplicitCastIntToIntType(void) {
 	free(error);
 }
 
-void test_ExplicitCastFloatToFloatType(void) {
+void test_ExplicitCastFloatToFloatType_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { f32 a = 0.0; f64 b = (f64)a; f32 c = (f32)b; return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
@@ -1586,7 +1586,7 @@ void test_ExplicitCastFloatToFloatType(void) {
 	free(error);
 }
 
-void test_ExplicitCastFloatToIntType(void) {
+void test_ExplicitCastFloatToIntType_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { f32 a = 0.0; i64 b = (i64)a; f64 c = (f64)b; return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
@@ -1610,7 +1610,7 @@ void test_ExplicitCastFloatToIntType(void) {
 	free(error);
 }
 
-void test_ExplicitCastPtrToIntType(void) {
+void test_ExplicitCastPtrToIntType_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i64 a = 0; i64* b = &a; i64 c = (i64)b; i32* d = (i32*)c; return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
@@ -1636,7 +1636,7 @@ void test_ExplicitCastPtrToIntType(void) {
 	free(error);
 }
 
-void test_ExplicitCastPtrToPtr(void) {
+void test_ExplicitCastPtrToPtr_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct1 { i32 a; } struct TestStruct2 { f64 b; }"
 							  "fn i32 main() { TestStruct1* ts1; TestStruct2* ts2 = (TestStruct1*)ts1; return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
@@ -1655,7 +1655,7 @@ void test_ExplicitCastPtrToPtr(void) {
 	free(error);
 }
 
-void test_ExplicitCastPtrToPtrWithAddressOf(void) {
+void test_ExplicitCastPtrToPtrWithAddressOf_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct1 { i32 a; } struct TestStruct2 { f64 b; }"
 							  "fn i32 main() { TestStruct1 ts1; TestStruct2* ts2 = (TestStruct1*)&ts1; return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"

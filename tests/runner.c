@@ -167,12 +167,12 @@ int main(void) {
 	RUN_TEST(test_IfStmtBasic_codegen);
 	RUN_TEST(test_IfStmtInWhileLoop_codegen);
 	RUN_TEST(test_IfElseStmtInWhileLoop_codegen);
-	RUN_TEST(test_ExplicitCastIntToIntType);
-	RUN_TEST(test_ExplicitCastFloatToFloatType);
-	RUN_TEST(test_ExplicitCastFloatToIntType);
-	RUN_TEST(test_ExplicitCastPtrToIntType);
-	RUN_TEST(test_ExplicitCastPtrToPtr);
-	RUN_TEST(test_ExplicitCastPtrToPtrWithAddressOf);
+	RUN_TEST(test_ExplicitCastIntToIntType_codegen);
+	RUN_TEST(test_ExplicitCastFloatToFloatType_codegen);
+	RUN_TEST(test_ExplicitCastFloatToIntType_codegen);
+	RUN_TEST(test_ExplicitCastPtrToIntType_codegen);
+	RUN_TEST(test_ExplicitCastPtrToPtr_codegen);
+	RUN_TEST(test_ExplicitCastPtrToPtrWithAddressOf_codegen);
 	RUN_TEST(test_WhileLoopContinueBreak_codegen);
 	RUN_TEST(test_ForLoopContinueBreak_codegen);
 
