@@ -141,3 +141,4 @@ char *flatten_stringlist(const StringList *list);
 char* full_path(const char *restrict file_name, char* restrict resolved_name);
 int make_dir(const char* pathname, int mode);
 char* dir_name(char* path);
+int rmrf(char *path);

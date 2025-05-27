@@ -3,10 +3,12 @@
 #include <string.h>
 
 #if defined(__linux__) || defined(__unix__)
+#include <libgen.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <libgen.h>
+#define __USE_XOPEN_EXTENDED
+#include <ftw.h>
 #endif
 
 void *report(SourceLocation location, const char *msg, int is_warning) {
@@ -28,7 +30,8 @@ unsigned long djb2(const char *str) {
 }
 
 char *flatten_stringlist(const StringList *list) {
-	if (list == NULL || list->count == 0) return strdup("");
+	if (list == NULL || list->count == 0)
+		return strdup("");
 
 	// First calculate the total length needed
 	size_t total_length = 0;
@@ -40,12 +43,14 @@ char *flatten_stringlist(const StringList *list) {
 	total_length += list->count - 1 + 1;
 
 	char *result = malloc(total_length);
-	if (!result) return NULL;
+	if (!result)
+		return NULL;
 
 	result[0] = '\0';
 	for (int i = 0; i < list->count; i++) {
 		strcat(result, list->data[i]);
-		if (i < list->count - 1) strcat(result, " ");
+		if (i < list->count - 1)
+			strcat(result, " ");
 	}
 
 	return result;
@@ -60,8 +65,8 @@ char *full_path(const char *restrict file_name, char *restrict resolved_name) {
 #endif
 }
 
-int make_dir(const char* pathname, int mode) {
-	#if defined(__linux__) || defined(__unix__)
+int make_dir(const char *pathname, int mode) {
+#if defined(__linux__) || defined(__unix__)
 	return mkdir(pathname, (mode_t)mode);
 #else
 	printf("mkdir only implemented for linux\n");
@@ -69,9 +74,29 @@ int make_dir(const char* pathname, int mode) {
 #endif
 }
 
-char* dir_name(char* pathname) {
-	#if defined(__linux__) || defined(__unix__)
+char *dir_name(char *pathname) {
+#if defined(__linux__) || defined(__unix__)
 	return dirname(pathname);
+#else
+	printf("mkdir only implemented for linux\n");
+	return NULL;
+#endif
+}
+
+#if defined(__linux__) || defined(__unix__)
+int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) {
+	int rv = remove(fpath);
+
+	if (rv)
+		perror(fpath);
+
+	return rv;
+}
+#endif
+
+int rmrf(char *path) {
+#if defined(__linux__) || defined(__unix__)
+	return nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
 #else
 	printf("mkdir only implemented for linux\n");
 	return NULL;
