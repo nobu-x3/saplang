@@ -7,6 +7,8 @@
 
 #define _INDEX scanner->id
 
+#define _LEN scanner->source.len
+
 char eat_next_char(Scanner *scanner) {
 	++scanner->col;
 	if (_INPUT[_INDEX] == '\n' && !scanner->is_reading_string) {
@@ -48,6 +50,10 @@ Token next_token(Scanner *scanner) {
 		eat_next_char(scanner);
 		while (_INPUT[_INDEX] != '"') {
 			current_token.text[i++] = eat_next_char(scanner);
+			if (_INDEX > _LEN) {
+				report(current_token.location, "unclosed string.", 0);
+				break;
+			}
 		}
 		current_token.text[i++] = '\0';
 
@@ -461,6 +467,7 @@ CompilerResult scanner_init_from_string(Scanner *scanner, const char *path, cons
 	if (!scanner->source.buffer)
 		return RESULT_MEMORY_ERROR;
 
+	scanner->source.len = strlen(input);
 	return RESULT_SUCCESS;
 }
 

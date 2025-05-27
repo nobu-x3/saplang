@@ -258,6 +258,7 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 		LLVMTypeRef field_ty = LLVMStructGetTypeAtIndex(struct_ty, field_index);
 		return LLVMBuildLoad2(cg->builder, field_ty, field_gep, "");
 	}
+	return NULL;
 }
 
 LLVMValueRef codegen_return(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {

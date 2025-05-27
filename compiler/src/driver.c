@@ -6,6 +6,9 @@
 #include "thread_pool.h"
 #include "timer.h"
 #include "util.h"
+#include <errno.h>
+#include <linux/limits.h>
+#include <llvm-c-18/llvm-c/Core.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +16,8 @@
 #if defined(__linux__) || defined(__unix__)
 #include <unistd.h>
 #endif
+
+#define LL_DIRECTORY ".tmp"
 
 int get_num_of_cores() {
 #if defined(__linux__) || defined(__unix__)
@@ -258,6 +263,27 @@ int module_name_is_unique(const char *name) {
 	return count == 1;
 }
 
+void combine_ir_paths(StringList *string_list, char *ll_dir) {
+	DIR *dir = opendir(ll_dir);
+	if (!dir) {
+		fprintf(stderr, "could not open ll directory: %d", errno);
+		return;
+	}
+	struct dirent *entry;
+	while ((entry = readdir(dir)) != NULL) {
+		// Skip current and parent directory entries
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+
+		const char *filename = entry->d_name;
+		char filepath[1024];
+		snprintf(filepath, sizeof(filepath), "%s/%s", ll_dir, filename);
+		char *filepath_cpy = strdup(filepath);
+		da_push_unsafe_ptr(string_list, filepath_cpy);
+	}
+	closedir(dir);
+}
+
 CompilerResult driver_check_paths_for_uniqueness() {
 	for (int i = 0; i < driver.options.import_paths.count; ++i) {
 		DIR *dir = opendir(driver.options.import_paths.data[i]);
@@ -303,10 +329,12 @@ SourceFile driver_init_source(const char *name) {
 			strncpy(src_file.name, entry->d_name, sizeof(src_file.name));
 
 			size_t len = strlen(src_file.name);
+			char *fullpath = alloca(sizeof(char) * (PATH_MAX + 1));
+			char *ptr = full_path(entry->d_name, fullpath);
 
-			if (len > 3 && strcmp(src_file.name + len - 3, ".sl") == 0 && strcmp(src_file.name, name) == 0) {
-				snprintf(src_file.path, sizeof(src_file.path), "%s/%s", driver.options.import_paths.data[i], src_file.name);
-
+			if (len > 3 && strcmp(src_file.name + len - 3, ".sl") == 0 && strcmp(fullpath, name) == 0) {
+				// snprintf(src_file.path, sizeof(src_file.path), "%s/%s", driver.options.import_paths.data[i], src_file.name);
+				strncpy(src_file.path, fullpath, sizeof(src_file.path));
 				FILE *fp = fopen(src_file.path, "r");
 				if (!fp) {
 					fprintf(stderr, "could not open file with path %s.\n", src_file.path);
@@ -334,6 +362,7 @@ SourceFile driver_init_source(const char *name) {
 				}
 				buffer[file_size] = '\0';
 				src_file.buffer = buffer;
+				src_file.len = file_size;
 				fclose(fp);
 				closedir(dir);
 				return src_file;
@@ -468,9 +497,40 @@ void sema_task(void *arg) {
 
 	symbol_table_set_type_info(node->module->symbol_table);
 
-	if (analyze_ast(node->module->symbol_table, node->module->ast, 0, "") != RESULT_SUCCESS) {
-		node->module->has_errors = 1;
+	for (ASTNode *ast_node = node->module->ast; ast_node; ast_node = ast_node->next) {
+		int sema_failed = analyze_ast(node->module->symbol_table, ast_node, 0, "") != RESULT_SUCCESS;
+		int type_resolution_failed = resolve_types(node->module->symbol_table, ast_node, ast_node == node->module->ast) != RESULT_SUCCESS;
+		node->module->has_errors |= sema_failed || type_resolution_failed;
 	}
+}
+
+void codegen_task(void *arg) {
+	DependencyGraphNode *node = (DependencyGraphNode *)arg;
+	if (!node)
+		return;
+	char source_file_path[PATH_MAX + 1] = "";
+	strncpy(source_file_path, node->parser.scanner.source.path, sizeof(source_file_path));
+	char *source_dir = dir_name(source_file_path);
+	CodegenInitContext cg_init_ctx = {node->parser.module_name, node->parser.scanner.source.name, source_dir, 0};
+	CodegenLLVM cg_ctx = codegen_init(&cg_init_ctx);
+	codegen_run(&cg_ctx, node->module->ast, node->module->symbol_table);
+	char *output = codegen_output_str(&cg_ctx);
+	codegen_deinit(&cg_ctx);
+	// prepare path for ir files
+	char out_path_copy[PATH_MAX + 1] = "";
+	strncpy(out_path_copy, driver.options.output_file_path, sizeof(out_path_copy));
+	make_dir(LL_DIRECTORY, 0777);
+	char ll_path[512] = "";
+	sprintf(ll_path, "%s/tmp-%s.ll", LL_DIRECTORY, node->parser.module_name);
+	FILE *f = fopen(ll_path, "w");
+	if (!f) {
+		fprintf(stderr, "failed to create tmp file for LLVM IR with code: %d", errno);
+		free(output);
+		return;
+	}
+	fprintf(f, "%s", output);
+	fclose(f);
+	free(output);
 }
 
 CompilerResult driver_run() {
@@ -571,13 +631,6 @@ CompilerResult driver_run() {
 		}
 	}
 
-	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
-		if (current->module->symbol_table)
-			deinit_symbol_table(current->module->symbol_table);
-		if (current->module->exported_table)
-			deinit_symbol_table(current->module->exported_table);
-	}
-
 	if (should_quit)
 		return RESULT_FAILURE;
 
@@ -592,6 +645,23 @@ CompilerResult driver_run() {
 	////////////////////// CODEGEN
 	before = get_time();
 	// do codegen
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		threadpool_submit_task(thread_pool, codegen_task, current);
+	}
+	threadpool_wait_all(thread_pool);
+	StringList cmd;
+	da_init_result(cmd, 4);
+	da_push_result(cmd, strdup("clang"));
+	combine_ir_paths(&cmd, LL_DIRECTORY);
+	da_push_result(cmd, strdup("-o"));
+	da_push_result(cmd, strdup(driver.options.output_file_path));
+	char *final_cmd = flatten_stringlist(&cmd);
+	for (int i = 0; i < cmd.count; ++i) {
+		free(cmd.data[i]);
+	}
+	da_deinit(cmd);
+	system(final_cmd);
+	rmrf(LL_DIRECTORY);
 	if (driver.options.show_timings) {
 		time_gen = (get_time() - before);
 		double total_comp = time_prep + time_comp + time_sema + time_cfg + time_gen;
@@ -599,6 +669,14 @@ CompilerResult driver_run() {
 			   time_gen);
 	}
 	/////////////////////////////////////////////////////
+
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		if (current->module->symbol_table)
+			deinit_symbol_table(current->module->symbol_table);
+		if (current->module->exported_table)
+			deinit_symbol_table(current->module->exported_table);
+	}
+
 	threadpool_destroy(thread_pool);
 
 	return RESULT_SUCCESS;

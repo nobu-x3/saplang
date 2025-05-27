@@ -1,11 +1,6 @@
 #include "driver.h"
-#include "parser.h"
-#include "scanner.h"
-#include "timer.h"
 #include "util.h"
 #include <stdio.h>
-#include <string.h>
-#include <unistd.h>
 
 int main(int argc, const char **argv) {
 	CompileOptions options = {0};
