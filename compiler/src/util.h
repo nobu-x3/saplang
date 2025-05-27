@@ -127,6 +127,8 @@ typedef struct {
 	int capacity, count;
 } StringList;
 
+char *flatten_stringlist(const StringList *list);
+
 #define print(string, format, ...)                                                                                                                                                                                                             \
 	if (string) {                                                                                                                                                                                                                              \
 		char formatted[256] = "";                                                                                                                                                                                                              \

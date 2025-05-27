@@ -1,5 +1,6 @@
 #include "util.h"
 #include <stdio.h>
+#include <string.h>
 
 #if defined(__linux__) || defined(__unix__)
 #include <stdlib.h>
@@ -24,6 +25,30 @@ unsigned long djb2(const char *str) {
 	}
 
 	return hash;
+}
+
+char *flatten_stringlist(const StringList *list) {
+	if (list == NULL || list->count == 0) return strdup("");
+
+	// First calculate the total length needed
+	size_t total_length = 0;
+	for (int i = 0; i < list->count; i++) {
+		total_length += strlen(list->data[i]);
+	}
+
+	// Add space for the spaces and null terminator
+	total_length += list->count - 1 + 1;
+
+	char *result = malloc(total_length);
+	if (!result) return NULL;
+
+	result[0] = '\0';
+	for (int i = 0; i < list->count; i++) {
+		strcat(result, list->data[i]);
+		if (i < list->count - 1) strcat(result, " ");
+	}
+
+	return result;
 }
 
 char *full_path(const char *restrict file_name, char *restrict resolved_name) {
