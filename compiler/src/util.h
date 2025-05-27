@@ -20,6 +20,7 @@ typedef enum {
 typedef struct {
 	char name[64];
 	char path[128];
+	int len;
 	char *buffer;
 } SourceFile;
 
@@ -134,3 +135,7 @@ typedef struct {
 	} else {                                                                                                                                                                                                                                   \
 		printf(format, ##__VA_ARGS__);                                                                                                                                                                                                         \
 	}
+
+char* full_path(const char *restrict file_name, char* restrict resolved_name);
+int make_dir(const char* pathname, int mode);
+char* dir_name(char* path);
