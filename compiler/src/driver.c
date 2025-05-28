@@ -318,57 +318,44 @@ CompilerResult driver_check_paths_for_uniqueness() {
 
 SourceFile driver_init_source(const char *name) {
 	SourceFile src_file = {0};
+	/* char input_fullpath[PATH_MAX + 1] = ""; */
+	/* char *input_ptr = full_path(name, input_fullpath); */
+	/* int input_path_len = strlen(input_fullpath); */
+	/* if (!input_path_len) { */
+	/* 	fprintf(stderr, "could not find input file '%s'.\n", name); */
+	/* 	return src_file; */
+	/* } */
 	for (int i = 0; i < driver.options.import_paths.count; ++i) {
-		DIR *dir = opendir(driver.options.import_paths.data[i]);
-		if (!dir) {
-			fprintf(stderr, "could not open directory '%s'.\n", driver.options.import_paths.data[i]);
-			return src_file;
-		}
-		struct dirent *entry;
-		while ((entry = readdir(dir)) != NULL) {
-			strncpy(src_file.name, entry->d_name, sizeof(src_file.name));
-
-			size_t len = strlen(src_file.name);
-			char *fullpath = alloca(sizeof(char) * (PATH_MAX + 1));
-			char *ptr = full_path(entry->d_name, fullpath);
-
-			if (len > 3 && strcmp(src_file.name + len - 3, ".sl") == 0 && strcmp(fullpath, name) == 0) {
-				// snprintf(src_file.path, sizeof(src_file.path), "%s/%s", driver.options.import_paths.data[i], src_file.name);
-				strncpy(src_file.path, fullpath, sizeof(src_file.path));
-				FILE *fp = fopen(src_file.path, "r");
-				if (!fp) {
-					fprintf(stderr, "could not open file with path %s.\n", src_file.path);
-					closedir(dir);
-					return src_file;
-				}
-
-				fseek(fp, 0, SEEK_END);
-				long file_size = ftell(fp);
-				rewind(fp);
-
-				char *buffer = malloc(file_size + 1);
-				if (!buffer) {
-					fprintf(stderr, "failed to allocate memory when reading file %s.", src_file.path);
-					fclose(fp);
-					closedir(dir);
-					return src_file;
-				}
-
-				if (fread(buffer, 1, file_size, fp) != file_size) {
-					fprintf(stderr, "failed to read file %s.", src_file.path);
-					free(buffer);
-					fclose(fp);
-					return src_file;
-				}
-				buffer[file_size] = '\0';
-				src_file.buffer = buffer;
-				src_file.len = file_size;
-				fclose(fp);
-				closedir(dir);
+		char *full_path = find_file_in_dir(driver.options.import_paths.data[i], name);
+		if (full_path) {
+			strncpy(src_file.name, name, sizeof(src_file.name));
+			strncpy(src_file.path, full_path, sizeof(src_file.path));
+			FILE *fp = fopen(src_file.path, "r");
+			if (!fp) {
+				fprintf(stderr, "could not open file with path %s.\n", src_file.path);
 				return src_file;
 			}
+			fseek(fp, 0, SEEK_END);
+			long file_size = ftell(fp);
+			rewind(fp);
+			char *buffer = malloc(file_size + 1);
+			if (!buffer) {
+				fprintf(stderr, "failed to allocate memory when reading file %s.", src_file.path);
+				fclose(fp);
+				return src_file;
+			}
+			if (fread(buffer, 1, file_size, fp) != file_size) {
+				fprintf(stderr, "failed to read file %s.", src_file.path);
+				free(buffer);
+				fclose(fp);
+				return src_file;
+			}
+			buffer[file_size] = '\0';
+			src_file.buffer = buffer;
+			src_file.len = file_size;
+			fclose(fp);
+			return src_file;
 		}
-		closedir(dir);
 	}
 	return src_file;
 }
@@ -526,6 +513,7 @@ void codegen_task(void *arg) {
 	if (!f) {
 		fprintf(stderr, "failed to create tmp file for LLVM IR with code: %d", errno);
 		free(output);
+		codegen_deinit(&cg_ctx);
 		return;
 	}
 	fprintf(f, "%s", output);
@@ -537,30 +525,21 @@ CompilerResult driver_run() {
 	if (driver.options.display_help) {
 		return RESULT_SUCCESS;
 	}
-
 	double time_prep, time_comp, time_sema, time_cfg, time_gen = 0;
-
 	double before = get_time();
 	////////////////////////// PREP
 	SourceFile input_src_file = driver_init_source(driver.options.input_file_path);
-
 	if (!input_src_file.buffer) {
 		driver_deinit();
 		return 1;
 	}
-
 	CompilerResult res = build_dependency_graph(input_src_file, &driver.dependency_graph);
-
 	int available_cores = get_num_of_cores();
-
 	available_cores = driver.module_count > available_cores ? available_cores : driver.module_count;
-
 	ThreadPool *thread_pool = threadpool_create(available_cores);
-
 	if (driver.options.show_timings) {
 		time_prep = (get_time() - before);
 	}
-
 	int should_quit = 0;
 	////////////////////////////////////////////////////////
 	////////////////////////// PARSING
@@ -570,7 +549,6 @@ CompilerResult driver_run() {
 		threadpool_submit_task(thread_pool, parsing_task, current);
 	}
 	threadpool_wait_all(thread_pool);
-
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		if (current->module->has_errors) {
 			should_quit = 1;
@@ -581,7 +559,6 @@ CompilerResult driver_run() {
 			}
 		}
 	}
-
 	if (driver.options.show_timings) {
 		time_comp = (get_time() - before);
 	}
@@ -605,16 +582,14 @@ CompilerResult driver_run() {
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		threadpool_submit_task(thread_pool, sema_task, current);
 	}
-
 	threadpool_wait_all(thread_pool);
-
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		if (current->module->has_errors) {
 			fprintf(stderr, "%s failed semantic analysis.\n", current->name);
+			printf("%s failed semantic analysis.\n", current->name);
 			should_quit = 1;
 		}
 	}
-
 	if (driver.options.show_timings) {
 		time_sema = (get_time() - before);
 	}
@@ -630,10 +605,8 @@ CompilerResult driver_run() {
 			printf("\n");
 		}
 	}
-
 	if (should_quit)
 		return RESULT_FAILURE;
-
 	//////////////////////////////////////////////////////
 	//////////////////////// CFG
 	before = get_time();
@@ -661,7 +634,9 @@ CompilerResult driver_run() {
 	}
 	da_deinit(cmd);
 	system(final_cmd);
-	rmrf(LL_DIRECTORY);
+	free(final_cmd);
+	if (!driver.options.no_cleanup)
+		rmrf(LL_DIRECTORY);
 	if (driver.options.show_timings) {
 		time_gen = (get_time() - before);
 		double total_comp = time_prep + time_comp + time_sema + time_cfg + time_gen;
@@ -669,14 +644,12 @@ CompilerResult driver_run() {
 			   time_gen);
 	}
 	/////////////////////////////////////////////////////
-
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		if (current->module->symbol_table)
 			deinit_symbol_table(current->module->symbol_table);
 		if (current->module->exported_table)
 			deinit_symbol_table(current->module->exported_table);
 	}
-
 	threadpool_destroy(thread_pool);
 
 	return RESULT_SUCCESS;

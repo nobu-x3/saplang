@@ -4,6 +4,7 @@
 
 #if defined(__linux__) || defined(__unix__)
 #include <libgen.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -56,6 +57,42 @@ char *flatten_stringlist(const StringList *list) {
 	return result;
 }
 
+#if defined(__linux__) || defined(__unix__)
+
+static const char *target_filename;
+static char found_path[PATH_MAX];
+
+int find_file_callback(const char *fpath, const struct stat *sb, int type_flag, struct FTW *ftwbuf) {
+	if (type_flag == FTW_F) {
+		const char *fname = strrchr(fpath, '/');
+		if (fname)
+			++fname;
+		else
+			fname = fpath;
+		if (strcmp(fname, target_filename) == 0) {
+			strncpy(found_path, fpath, sizeof(found_path) - 1);
+			return 1; // stop traversal
+		}
+	}
+	return 0; // continue
+}
+#endif
+
+char *find_file_in_dir(const char *root_dir, const char *filename) {
+#if defined(__linux__) || defined(__unix__)
+	target_filename = filename;
+	found_path[0] = '\0';
+	if (nftw(root_dir, find_file_callback, 16, FTW_PHYS) == 1) {
+		return strdup(found_path);
+	} else {
+		return NULL;
+	}
+#else
+	printf("find_file_in_dir only implemented for linux\n");
+	return NULL;
+#endif
+}
+
 char *full_path(const char *restrict file_name, char *restrict resolved_name) {
 #if defined(__linux__) || defined(__unix__)
 	return realpath(file_name, resolved_name);
@@ -97,6 +134,15 @@ int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW
 int rmrf(char *path) {
 #if defined(__linux__) || defined(__unix__)
 	return nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
+#else
+	printf("mkdir only implemented for linux\n");
+	return NULL;
+#endif
+}
+
+char *file_name(const char *restrict file_name) {
+#if defined(__linux__) || defined(__unix__)
+	return basename(file_name);
 #else
 	printf("mkdir only implemented for linux\n");
 	return NULL;

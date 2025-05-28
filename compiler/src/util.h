@@ -139,6 +139,9 @@ char *flatten_stringlist(const StringList *list);
 	}
 
 char* full_path(const char *restrict file_name, char* restrict resolved_name);
+// Searches for filename recursively in root_dir. NOT thread safe. Allocates memory.
+char* find_file_in_dir(const char* root_dir, const char* filename);
+char* file_name(const char* restrict file_name);
 int make_dir(const char* pathname, int mode);
 char* dir_name(char* path);
 int rmrf(char *path);
