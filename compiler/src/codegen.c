@@ -640,6 +640,11 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		}
 		LLVMValueRef named_global = LLVMGetNamedGlobal(cg->module, node->data.ident.resolved_name);
 		assert(named_global); // @NOTE: I think that's the only option here - can only be global var
+		if (ctx.intention == PI_LOAD_VAL) {
+			assert(ctx.expected_type && "Must give expected type with PI_LOAD_VAL");
+			LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
+			return LLVMBuildLoad2(cg->builder, ty, named_global, "");
+		}
 		return named_global;
 	}
 

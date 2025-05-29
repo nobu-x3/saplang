@@ -298,16 +298,18 @@ void test_LocalVarReassignmentToLocalVar_codegen(void) {
 }
 
 void test_LocalVarReassignmentToGlobalVar_codegen(void) {
-	CODEGEN_TEST_SETUP_SINGLE("i32 a; fn void some_func() { i32 i; i = a; }");
+	CODEGEN_TEST_SETUP_SINGLE("i32 a; fn i32 main() { i32 i; i = a; return i; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
 						   "@a = global i32 0\n\n"
-						   "define void @some_func() {\n"
-						   "entry:\n"
-						   "  %__some_func_i = alloca i32, align 4\n"
-						   "  store ptr @a, ptr %__some_func_i, align 8\n"
-						   "  ret void\n"
-						   "}\n";
+						   "define i32 @main() {\n"
+                           "entry:\n"
+                           "  %__main_i = alloca i32, align 4\n"
+                           "  %0 = load i32, ptr @a, align 4\n"
+                           "  store i32 %0, ptr %__main_i, align 4\n"
+                           "  %1 = load i32, ptr %__main_i, align 4\n"
+                           "  ret i32 %1\n"
+                           "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -337,10 +339,11 @@ void test_GlobalVarReassignmentToGlobal_codegen(void) {
 						   "@a = global i32 0\n"
 						   "@i = global i32 0\n\n"
 						   "define void @some_func() {\n"
-						   "entry:\n"
-						   "  store ptr @a, ptr @i, align 8\n"
-						   "  ret void\n"
-						   "}\n";
+                           "entry:\n"
+                           "  %0 = load i32, ptr @a, align 4\n"
+                           "  store i32 %0, ptr @i, align 4\n"
+                           "  ret void\n"
+                           "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
