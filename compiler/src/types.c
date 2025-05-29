@@ -1,5 +1,6 @@
 #include "types.h"
 #include "parser.h"
+#include "symbol_table.h"
 #include "util.h"
 #include <assert.h>
 #include <stdio.h>
@@ -519,7 +520,7 @@ int is_int(const Type *type) {
 
 int is_float(const Type *type) { return type->kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "f32") == 0 || strcmp(type->type_name, "f64") == 0); }
 
-int is_convertible(const Type *source, const Type *target, int permissive) {
+int is_convertible(const Type *source, const Type *target, int permissive, Symbol *table) {
 	if (!source || !target)
 		return 0;
 
@@ -561,6 +562,13 @@ int is_convertible(const Type *source, const Type *target, int permissive) {
 
 			if (source->kind == TYPE_PRIMITIVE)
 				return 1;
+		}
+
+		if (source->kind == TYPE_ENUM) {
+			Symbol *enum_sym = lookup_symbol(table, source->type_name, 0);
+			if (!enum_sym)
+				return 0;
+			return type_equals(enum_sym->node->data.enum_decl.base_type, target);
 		}
 
 		if (permissive) {

@@ -62,4 +62,7 @@ Type *get_string_type();
 int is_builtin(const Type *type);
 int is_int(const Type *type);
 int is_float(const Type *type);
-int is_convertible(const Type *source, const Type *target, int permissive);
+
+struct Symbol;
+
+int is_convertible(const Type *source, const Type *target, int permissive, struct Symbol *table);

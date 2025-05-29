@@ -169,14 +169,14 @@ void test_FuncCallAssignmentWrongType_sema(void) {
 }
 
 void test_ExplicitCastCorrectTypes_ValueToPointer_sema(void) {
-	TEST_SETUP_SINGLE("fn i32 foo() { i64 val; i64* p = (i64*)val; }");
+	TEST_SETUP_SINGLE("fn i32 foo() { i64 val; i64* p = (i64*)val; return 0; }");
 	const char *expected = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
 
 void test_ExplicitCastCorrectTypes_PointerToValue_sema(void) {
-	TEST_SETUP_SINGLE("fn i32 foo() { i64 *p; i64 val = (i64)p; }");
+	TEST_SETUP_SINGLE("fn i32 foo() { i64 *p; i64 val = (i64)p; return 0; }");
 	const char *expected = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);

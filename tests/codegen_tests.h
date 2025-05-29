@@ -961,14 +961,15 @@ void test_SelfDiv_codegen(void) {
 }
 
 void test_CharList_codegen(void) {
-	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { u8 lit = 'a'; lit = 'b'; }");
+	CODEGEN_TEST_SETUP_SINGLE("fn void main() { u8 lit = 'a'; lit = 'b'; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "define i32 @main() {\n"
+						   "define void @main() {\n"
 						   "entry:\n"
 						   "  %__main_lit = alloca i8, align 1\n"
 						   "  store i8 97, ptr %__main_lit, align 1\n"
 						   "  store i8 98, ptr %__main_lit, align 1\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
