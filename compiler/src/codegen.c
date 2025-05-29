@@ -355,7 +355,11 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 			LLVMTypeRef index_type = LLVMIntType(PLATFORM_POINTER_SIZE);
 			LLVMValueRef index = LLVMConstInt(index_type, i, 0);
 			char gep_name[512] = "";
-			snprintf(gep_name, sizeof(gep_name), "gep_%d%s", i, ctx.auxiliary_node->data.var_decl.resolved_name);
+			if (ctx.auxiliary_node->type == AST_VAR_DECL) {
+				snprintf(gep_name, sizeof(gep_name), "gep_%d%s", i, ctx.auxiliary_node->data.var_decl.resolved_name);
+			} else {
+				snprintf(gep_name, sizeof(gep_name), "gep_%d", i);
+			}
 			LLVMValueRef field_gep = LLVMBuildStructGEP2(cg->builder, ty, var_ptr, i, gep_name);
 			LLVMBuildStore(cg->builder, generated_values[i], field_gep);
 		}
