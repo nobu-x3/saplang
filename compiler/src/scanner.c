@@ -26,6 +26,17 @@ Token next_token(Scanner *scanner) {
 		eat_next_char(scanner);
 	}
 
+    // skip commented lines
+	if (_INPUT[_INDEX] && _INPUT[_INDEX] == '/' && _INPUT[_INDEX + 1] && _INPUT[_INDEX + 1] == '/') {
+		while (_INPUT[_INDEX] && _INPUT[_INDEX] != '\n')
+			eat_next_char(scanner);
+		eat_next_char(scanner);
+	}
+
+	while (_INPUT[_INDEX] && isspace(_INPUT[_INDEX])) {
+		eat_next_char(scanner);
+	}
+
 	if (_INPUT[_INDEX] == '\0') {
 		current_token.type = TOK_EOF;
 		return current_token;
