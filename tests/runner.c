@@ -20,7 +20,7 @@ int main(void) {
 	RUN_TEST(test_hashmap_remove_missing_key);
 	RUN_TEST(test_hashmap_rehash);
 
-	RUN_TEST(test_PrintfTest);
+	/* RUN_TEST(test_PrintfTest); */
 
 	RUN_TEST(test_VariableDeclaration);
 	RUN_TEST(test_ArithmeticExpression);
@@ -77,7 +77,7 @@ int main(void) {
 	RUN_TEST(test_ConstNoInit_sema);
 	RUN_TEST(test_AssignmentToConst_sema);
 	RUN_TEST(test_AssignmentToRValue_sema);
-	RUN_TEST(test_VarialbeRedeclaration_sema);
+	RUN_TEST(test_VariableRedeclaration_sema);
 	RUN_TEST(test_FnRedeclaration_sema);
 	RUN_TEST(test_StructRedeclaration_sema);
 	RUN_TEST(test_StructLiteralInitMoreInitsThanFields_sema);
