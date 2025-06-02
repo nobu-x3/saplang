@@ -23,7 +23,7 @@
 
 void test_Primitivei32_typeinfo(void) {
     ASTNode dummynody;
-	Type type = {.kind = TYPE_PRIMITIVE, .type_name = "i32"};
+	Type type = {.type_kind = TYPE_PRIMITIVE, .type_name = "i32"};
 	TypeInfo info = get_type_info(&type, &dummynody);
 	TEST_ASSERT_EQUAL_UINT32(4, info.size);
 	TEST_ASSERT_EQUAL_UINT32(4, info.align);
@@ -31,7 +31,7 @@ void test_Primitivei32_typeinfo(void) {
 
 void test_Primitivei64_typeinfo(void) {
     ASTNode dummynody;
-	Type type = {.kind = TYPE_PRIMITIVE, .type_name = "i64"};
+	Type type = {.type_kind = TYPE_PRIMITIVE, .type_name = "i64"};
 	TypeInfo info = get_type_info(&type, &dummynody);
 	TEST_ASSERT_EQUAL_UINT32(8, info.size);
 	TEST_ASSERT_EQUAL_UINT32(8, info.align);
@@ -39,7 +39,7 @@ void test_Primitivei64_typeinfo(void) {
 
 void test_Pointer_typeinfo(void) {
     ASTNode dummynody;
-	Type type = {.kind = TYPE_POINTER};
+	Type type = {.type_kind = TYPE_POINTER};
 	TypeInfo info = get_type_info(&type, &dummynody);
 	TEST_ASSERT_EQUAL_UINT32(sizeof(void *), info.size);
 	TEST_ASSERT_EQUAL_UINT32(sizeof(void *), info.align);
@@ -47,8 +47,8 @@ void test_Pointer_typeinfo(void) {
 
 void test_ArrayType_typeinfo(void) {
     ASTNode dummynody;
-	Type elem = {.kind = TYPE_PRIMITIVE, .type_name = "u8"};
-	Type type = {.kind = TYPE_ARRAY, .array = {.element_type = &elem, .size = 10}};
+	Type elem = {.type_kind = TYPE_PRIMITIVE, .type_name = "u8"};
+	Type type = {.type_kind = TYPE_ARRAY, .array = {.element_type = &elem, .size = 10}};
 	TypeInfo info = get_type_info(&type, &dummynody);
 	TEST_ASSERT_EQUAL_UINT32(10, info.size);
 	TEST_ASSERT_EQUAL_UINT32(1, info.align);
@@ -56,7 +56,7 @@ void test_ArrayType_typeinfo(void) {
 
 void test_EnumType_typeinfo(void) {
     TEST_SETUP_SINGLE_TYPEINFO("enum Enum : u32 {}");
-	Type type = {.kind = TYPE_ENUM, .type_name = "u32"};
+	Type type = {.type_kind = TYPE_ENUM, .type_name = "u32"};
 	TypeInfo info = get_type_info(&type, module->ast);
 	TEST_ASSERT_EQUAL_UINT32(4, info.size);
 	TEST_ASSERT_EQUAL_UINT32(4, info.align);
@@ -64,7 +64,7 @@ void test_EnumType_typeinfo(void) {
 
 void test_StructDecl_typeinfo(void) {
     TEST_SETUP_SINGLE_TYPEINFO("struct Struct { i32 first; f64 second; bool third; }");
-	Type type = {.kind = TYPE_STRUCT, .type_name = "Struct"};
+	Type type = {.type_kind = TYPE_STRUCT, .type_name = "Struct"};
 	TypeInfo info = get_type_info(&type, module->ast);
 	TEST_ASSERT_EQUAL_UINT32(8, info.size);
 	TEST_ASSERT_EQUAL_UINT32(8, info.align);
@@ -72,7 +72,7 @@ void test_StructDecl_typeinfo(void) {
 
 void test_UnionDecl_typeinfo(void) {
     TEST_SETUP_SINGLE_TYPEINFO("union Union { i32 first; f64 second; bool third; }");
-	Type type = {.kind = TYPE_UNION, .type_name = "Union"};
+	Type type = {.type_kind = TYPE_UNION, .type_name = "Union"};
 	TypeInfo info = get_type_info(&type, module->ast);
 	TEST_ASSERT_EQUAL_UINT32(8, info.size);
 	TEST_ASSERT_EQUAL_UINT32(8, info.align);

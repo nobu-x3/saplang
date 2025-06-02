@@ -15,9 +15,11 @@
 	FILE *old_stdout = capture_error_begin();                                                                                                                                                                                                  \
 	parser_init(&parser, scanner, NULL);                                                                                                                                                                                                       \
 	Module *module = parse_input(&parser);                                                                                                                                                                                                     \
-	symbol_table_set_type_info(module->symbol_table);                                                                                                                                                                                    \
-	for (ASTNode *node = module->ast; node != NULL; node = node->next) {                                                                                                                                                                       \
-		analyze_ast(module->symbol_table, node, 0, "");                                                                                                                                                                                        \
+	symbol_table_set_type_info(module->symbol_table);                                                                                                                                                                                          \
+	if (!module->has_errors) {                                                                                                                                                                                                                 \
+		for (ASTNode *node = module->ast; node != NULL; node = node->next) {                                                                                                                                                                   \
+			analyze_ast(module->symbol_table, node, 0, "");                                                                                                                                                                                    \
+		}                                                                                                                                                                                                                                      \
 	}                                                                                                                                                                                                                                          \
 	char *output = capture_error_end(old_stdout);
 
@@ -63,7 +65,7 @@ void test_AssignmentToRValue_sema(void) {
 	free(output);
 }
 
-void test_VarialbeRedeclaration_sema(void) {
+void test_VariableRedeclaration_sema(void) {
 	TEST_SETUP_SINGLE("i32 var_a; i32 var_a; ");
 	const char *expected = "parser_tests.sl:0:20:Error: variable var_a already declared in this scope.\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -72,7 +74,7 @@ void test_VarialbeRedeclaration_sema(void) {
 
 void test_FnRedeclaration_sema(void) {
 	TEST_SETUP_SINGLE("fn void foo() {} fn void foo() {} ");
-	const char *expected = "parser_tests.sl:0:28:Error: variable foo already declared in this scope.\n";
+	const char *expected = "parser_tests.sl:0:28:Error: function foo already declared in this scope.\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }

@@ -14,7 +14,7 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 	if (!type || !node)
 		return info;
 
-	switch (type->kind) {
+	switch (type->type_kind) {
 	case TYPE_PRIMITIVE: {
 		char *type_name = type->type_name;
 		if (strcmp(type_name, "i8") == 0) {
@@ -158,12 +158,13 @@ Type *copy_type(Type *type) {
 	if (!t)
 		return NULL;
 
-	t->kind = type->kind;
+	t->type_kind = type->type_kind;
 
 	strncpy(t->type_name, type->type_name, sizeof(t->type_name));
-	strncpy(t->namespace, type->namespace, sizeof(t->namespace));
+	strncpy(t->type_namespace, type->type_namespace, sizeof(t->type_namespace));
+	strncpy(t->type_resolved_name, type->type_resolved_name, sizeof(t->type_resolved_name));
 
-	switch (t->kind) {
+	switch (t->type_kind) {
 	case TYPE_PRIMITIVE:
 	case TYPE_STRUCT:
 	case TYPE_UNDECIDED:
@@ -198,9 +199,10 @@ void type_deinit(Type *type) {
 		return;
 
 	memset(type->type_name, 0, sizeof(type->type_name));
-	memset(type->namespace, 0, sizeof(type->namespace));
+	memset(type->type_namespace, 0, sizeof(type->type_namespace));
+	memset(type->type_resolved_name, 0, sizeof(type->type_resolved_name));
 
-	switch (type->kind) {
+	switch (type->type_kind) {
 	case TYPE_STRUCT:
 	case TYPE_ENUM:
 	case TYPE_UNDECIDED:
@@ -233,9 +235,9 @@ Type *new_primitive_type(const char *name) {
 	Type *t = malloc(sizeof(Type));
 	if (!t)
 		return NULL;
-	t->kind = TYPE_PRIMITIVE;
+	t->type_kind = TYPE_PRIMITIVE;
 	strncpy(t->type_name, name, sizeof(t->type_name));
-	memset(t->namespace, 0, sizeof(t->namespace));
+	memset(t->type_namespace, 0, sizeof(t->type_namespace));
 	return t;
 }
 
@@ -243,7 +245,7 @@ Type get_primitive_type(const char *name) {
 	Type t = {TYPE_PRIMITIVE};
 
 	strncpy(t.type_name, name, sizeof(t.type_name));
-	memset(t.namespace, 0, sizeof(t.namespace));
+	memset(t.type_namespace, 0, sizeof(t.type_namespace));
 
 	return t;
 }
@@ -253,8 +255,8 @@ Type *new_pointer_type(Type *pointee) {
 	if (!t)
 		return NULL;
 	memset(t->type_name, 0, sizeof(t->type_name));
-	memset(t->namespace, 0, sizeof(t->namespace));
-	t->kind = TYPE_POINTER;
+	memset(t->type_namespace, 0, sizeof(t->type_namespace));
+	t->type_kind = TYPE_POINTER;
 	t->pointee = pointee;
 	return t;
 }
@@ -264,8 +266,8 @@ Type *new_array_type(Type *element_type, int size) {
 	if (!t)
 		return NULL;
 	memset(t->type_name, 0, sizeof(t->type_name));
-	memset(t->namespace, 0, sizeof(t->namespace));
-	t->kind = TYPE_ARRAY;
+	memset(t->type_namespace, 0, sizeof(t->type_namespace));
+	t->type_kind = TYPE_ARRAY;
 	t->array.element_type = element_type;
 	t->array.size = size;
 	return t;
@@ -275,9 +277,9 @@ Type *new_function_type(Type *return_type, Type **param_types, int param_count) 
 	Type *t = malloc(sizeof(Type));
 	if (!t)
 		return NULL;
-	t->kind = TYPE_FUNCTION;
+	t->type_kind = TYPE_FUNCTION;
 	memset(t->type_name, 0, sizeof(t->type_name));
-	memset(t->namespace, 0, sizeof(t->namespace));
+	memset(t->type_namespace, 0, sizeof(t->type_namespace));
 	t->function.return_type = return_type;
 	t->function.param_types = param_types;
 	t->function.param_count = param_count;
@@ -289,18 +291,19 @@ Type *new_named_type(const char *name, const char *namespace, TypeKind kind) { /
 	if (!t)
 		return NULL;
 
-	t->kind = kind;
+	t->type_kind = kind;
 	strncpy(t->type_name, name, sizeof(t->type_name));
-	strncpy(t->namespace, namespace, sizeof(t->namespace));
+	strncpy(t->type_namespace, namespace, sizeof(t->type_namespace));
+	sprintf(t->type_resolved_name, "__%s_%s", t->type_namespace, t->type_name);
 	return t;
 }
 
 int type_equals(const Type *a, const Type *b) {
 	if (!a && !b)
 		return 0;
-	if (a->kind != b->kind)
+	if (a->type_kind != b->type_kind)
 		return 0;
-	switch (a->kind) {
+	switch (a->type_kind) {
 	case TYPE_PRIMITIVE:
 		return strcmp(a->type_name, b->type_name) == 0;
 	case TYPE_POINTER:
@@ -316,9 +319,10 @@ int type_equals(const Type *a, const Type *b) {
 		}
 		return 1;
 	case TYPE_STRUCT:
+		return a->type_kind == TYPE_STRUCT && b->type_kind == TYPE_STRUCT && strcmp(a->type_resolved_name, b->type_resolved_name) == 0;
 	case TYPE_UNDECIDED:
 	case TYPE_ENUM:
-		return a->kind == TYPE_ENUM && b->kind == TYPE_ENUM && strcmp(a->namespace, b->namespace) == 0 && strcmp(a->type_name, b->type_name) == 0;
+		return a->type_kind == TYPE_ENUM && b->type_kind == TYPE_ENUM && strcmp(a->type_resolved_name, b->type_resolved_name) == 0;
 	}
 }
 
@@ -326,11 +330,11 @@ int type_get_string_len(Type *type, int initial) {
 	if (!type)
 		return initial;
 
-	switch (type->kind) {
+	switch (type->type_kind) {
 	case TYPE_PRIMITIVE:
-		if (type->namespace[0] != 0)
+		if (type->type_namespace[0] != 0)
 			// 2 comes from '::'
-			return initial + strlen(type->namespace) + 2 + strlen(type->type_name);
+			return initial + strlen(type->type_namespace) + 2 + strlen(type->type_name);
 		return initial + strlen(type->type_name);
 	case TYPE_POINTER:
 		// 1 comes from '*'
@@ -352,26 +356,26 @@ int type_get_string_len(Type *type, int initial) {
 		return initial + type_get_string_len(type->function.return_type, initial);
 	case TYPE_STRUCT:
 		initial += 7; // "struct ";
-		if (type->namespace[0] != 0)
+		if (type->type_namespace[0] != 0)
 			// 2 comes from '::'
-			return initial + strlen(type->namespace) + 2 + strlen(type->type_name);
+			return initial + strlen(type->type_namespace) + 2 + strlen(type->type_name);
 		return initial + strlen(type->type_name);
 	case TYPE_ENUM:
 		initial += 5; // "enum ";
-		if (type->namespace[0] != 0)
+		if (type->type_namespace[0] != 0)
 			// 2 comes from '::'
-			return initial + strlen(type->namespace) + 2 + strlen(type->type_name);
+			return initial + strlen(type->type_namespace) + 2 + strlen(type->type_name);
 		return initial + strlen(type->type_name);
 	case TYPE_UNDECIDED:
-		if (type->namespace[0] != 0)
+		if (type->type_namespace[0] != 0)
 			// 2 comes from '::'
-			return initial + strlen(type->namespace) + 2 + strlen(type->type_name);
+			return initial + strlen(type->type_namespace) + 2 + strlen(type->type_name);
 		return initial + strlen(type->type_name);
 	}
 }
 
 int is_builtin(const Type *type) {
-	switch (type->kind) {
+	switch (type->type_kind) {
 	case TYPE_PRIMITIVE: {
 		int is_builtin = 0;
 		const char *type_name = type->type_name;
@@ -420,7 +424,7 @@ int is_builtin(const Type *type) {
 void type_print(char *string, Type *type) {
 	if (!type)
 		return;
-	switch (type->kind) {
+	switch (type->type_kind) {
 	case TYPE_PRIMITIVE:
 		print(string, "%s", type->type_name);
 		break;
@@ -444,22 +448,22 @@ void type_print(char *string, Type *type) {
 		type_print(string, type->function.return_type);
 		break;
 	case TYPE_STRUCT:
-		if (type->namespace[0] != '\0') {
-			print(string, "struct %s::%s", type->namespace, type->type_name);
+		if (type->type_namespace[0] != '\0') {
+			print(string, "struct %s::%s", type->type_namespace, type->type_name);
 		} else {
 			print(string, "struct %s", type->type_name);
 		}
 		break;
 	case TYPE_ENUM:
-		if (type->namespace[0] != '\0') {
-			print(string, "enum %s::%s", type->namespace, type->type_name);
+		if (type->type_namespace[0] != '\0') {
+			print(string, "enum %s::%s", type->type_namespace, type->type_name);
 		} else {
 			print(string, "enum %s", type->type_name);
 		}
 		break;
 	case TYPE_UNDECIDED:
-		if (type->namespace[0] != '\0') {
-			print(string, "%s::%s", type->namespace, type->type_name);
+		if (type->type_namespace[0] != '\0') {
+			print(string, "%s::%s", type->type_namespace, type->type_name);
 		} else {
 			print(string, "%s", type->type_name);
 		}
@@ -514,11 +518,12 @@ Type *get_string_type() {
 }
 
 int is_int(const Type *type) {
-	return type->kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "i8") == 0 || strcmp(type->type_name, "i16") == 0 || strcmp(type->type_name, "i32") == 0 || strcmp(type->type_name, "i64") == 0 || strcmp(type->type_name, "u8") == 0 ||
-											strcmp(type->type_name, "u16") == 0 || strcmp(type->type_name, "u32") == 0 || strcmp(type->type_name, "u64") == 0 || strcmp(type->type_name, "bool") == 0);
+	return type->type_kind == TYPE_PRIMITIVE &&
+		   (strcmp(type->type_name, "i8") == 0 || strcmp(type->type_name, "i16") == 0 || strcmp(type->type_name, "i32") == 0 || strcmp(type->type_name, "i64") == 0 || strcmp(type->type_name, "u8") == 0 ||
+			strcmp(type->type_name, "u16") == 0 || strcmp(type->type_name, "u32") == 0 || strcmp(type->type_name, "u64") == 0 || strcmp(type->type_name, "bool") == 0);
 }
 
-int is_float(const Type *type) { return type->kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "f32") == 0 || strcmp(type->type_name, "f64") == 0); }
+int is_float(const Type *type) { return type->type_kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "f32") == 0 || strcmp(type->type_name, "f64") == 0); }
 
 int is_convertible(const Type *source, const Type *target, int permissive, Symbol *table) {
 	if (!source || !target)
@@ -529,54 +534,54 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 		return 1;
 
 	// Allow array decay
-	if (source->kind == TYPE_ARRAY && target->kind == TYPE_POINTER) {
+	if (source->type_kind == TYPE_ARRAY && target->type_kind == TYPE_POINTER) {
 		// Could call for is_convertible on underlying types but easier to debug non-recursive code
 		int decay_count = 1;
 		Type *underlying_array_type = source->array.element_type;
-		while (underlying_array_type && underlying_array_type->kind == TYPE_ARRAY) {
+		while (underlying_array_type && underlying_array_type->type_kind == TYPE_ARRAY) {
 			++decay_count;
 			underlying_array_type = underlying_array_type->array.element_type;
 		}
 
 		int pointer_count = 1;
 		Type *underlying_pointer_type = target->pointee;
-		while (underlying_pointer_type && underlying_pointer_type->kind == TYPE_POINTER) {
+		while (underlying_pointer_type && underlying_pointer_type->type_kind == TYPE_POINTER) {
 			++pointer_count;
 			underlying_pointer_type = underlying_pointer_type->pointee;
 		}
 
 		return pointer_count == decay_count && type_equals(underlying_array_type, underlying_pointer_type);
 	}
-	if (source->kind == TYPE_POINTER) {
-		return target->kind == TYPE_POINTER;
-	}
-
-	if (source->kind != TYPE_POINTER && target->kind == TYPE_POINTER) {
-		return 0;
-	}
-
-	if (target->kind == TYPE_PRIMITIVE) {
+	if (target->type_kind == TYPE_PRIMITIVE) {
 		if (strcmp(target->type_name, "bool") == 0) {
-			if (source->kind == TYPE_POINTER)
+			if (source->type_kind == TYPE_POINTER)
 				return 1;
 
-			if (source->kind == TYPE_PRIMITIVE)
+			if (source->type_kind == TYPE_PRIMITIVE)
 				return 1;
 		}
 
-		if (source->kind == TYPE_ENUM) {
-			Symbol *enum_sym = lookup_symbol(table, source->type_name, 0);
+		if (source->type_kind == TYPE_ENUM) {
+			Symbol *enum_sym = lookup_symbol(table, source->type_resolved_name, 0);
 			if (!enum_sym)
 				return 0;
 			return type_equals(enum_sym->node->data.enum_decl.base_type, target);
 		}
 
 		if (permissive) {
-			if (source->kind == TYPE_PRIMITIVE) {
+			if (source->type_kind == TYPE_PRIMITIVE) {
 				return (is_int(target) && is_int(source)) || (is_float(target) && is_float(source));
 			}
 			return 0;
 		}
+	}
+
+	if (source->type_kind == TYPE_POINTER) {
+		return target->type_kind == TYPE_POINTER;
+	}
+
+	if (source->type_kind != TYPE_POINTER && target->type_kind == TYPE_POINTER) {
+		return 0;
 	}
 
 	return 0;

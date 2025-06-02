@@ -73,18 +73,21 @@ typedef struct ASTNode {
 		// Struct declaration: struct Name { fields }
 		struct {
 			char name[64];
+            char resolved_name[256];
 			int is_exported;
 			int field_count;
 			struct ASTNode **fields; // Linked list of field declarations
 		} struct_decl;
 		struct {
 			char name[64];
+            char resolved_name[256];
 			int is_exported;
 			struct ASTNode *fields; // Linked list of field declarations
 		} union_decl;
 		// Function declaration: func name(params) { body }
 		struct {
 			char name[64];
+            char resolved_name[256];
 			int is_exported;
 			struct ASTNode *params; // Linked list of parameter declarations
 			struct ASTNode *body;	// Block node
@@ -163,6 +166,7 @@ typedef struct ASTNode {
 		} struct_literal;
 		struct {
 			char name[64];
+            char resolved_name[128];
 			Type *base_type;
 			EnumMember **members; // Dynamic array of members
 			int is_exported;
@@ -180,6 +184,7 @@ typedef struct ASTNode {
 		} extern_block;
 		struct {
 			char name[64];
+            char resolved_name[256];
 			int is_exported;
 			struct ASTNode *params; // Linked list of parameter declarations
 		} extern_func;

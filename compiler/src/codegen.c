@@ -63,7 +63,7 @@ void codegen_deinit(CodegenLLVM *cg) {
 
 LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 	assert(type);
-	switch (type->kind) {
+	switch (type->type_kind) {
 	case TYPE_PRIMITIVE:
 		if (strcmp(type->type_name, "i8") == 0) {
 			return LLVMInt8TypeInContext(cg->llvm_context);
@@ -123,21 +123,22 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 		return LLVMFunctionType(ret_type, param_types, type->function.param_count, 0);
 	}
 
-	case TYPE_STRUCT:
-		return LLVMGetTypeByName2(cg->llvm_context, type->type_name);
+	case TYPE_STRUCT: {
+		return LLVMGetTypeByName2(cg->llvm_context, type->type_resolved_name);
+	}
 
 	case TYPE_UNION: {
 		char name[512] = "";
-		sprintf(name, "union.%s", type->type_name);
+		sprintf(name, "union.%s", type->type_resolved_name);
 		return LLVMGetTypeByName2(cg->llvm_context, name);
 	} break;
 
 	case TYPE_ENUM: {
-		Symbol *sym = lookup_symbol(table, type->type_name, 0);
+		Symbol *sym = lookup_symbol(table, type->type_resolved_name, 0);
 		assert(sym && "unknown enum symbol.");
 		assert(sym->kind == SYMB_ENUM && "symbol expected to be enum.");
 		Type type_copy = *sym->type;
-		type_copy.kind = TYPE_PRIMITIVE;
+		type_copy.type_kind = TYPE_PRIMITIVE;
 		return map_to_llvm(cg, &type_copy, table);
 	} break;
 
@@ -194,7 +195,7 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 		ASTNode *current_field = node->data.struct_decl.fields[i];
 		element_types[i] = map_to_llvm(cg, current_field->data.field_decl.type, table);
 	}
-	LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, node->data.struct_decl.name);
+	LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, node->data.struct_decl.resolved_name);
 	assert(struct_type);
 	// NOTE: not sure if packed
 	LLVMStructSetBody(struct_type, element_types, node->data.struct_decl.field_count, 0);
@@ -212,7 +213,7 @@ LLVMTypeRef codegen_union_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	}
 	assert(max_type_ref);
 	char union_name[512] = "";
-	sprintf(union_name, "union.%s", node->data.union_decl.name);
+	sprintf(union_name, "union.%s", node->data.union_decl.resolved_name);
 	LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, union_name);
 	assert(struct_type);
 	// NOTE: not sure if packed
@@ -228,11 +229,11 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 	ctx.intention = tmp_intention;
 	Type *base_type = get_type(table, node->data.member_access.base, ctx.current_scope, "");
 	assert(base_type);
-	assert(base_type->kind == TYPE_STRUCT || base_type->kind == TYPE_UNION);
+	assert(base_type->type_kind == TYPE_STRUCT || base_type->type_kind == TYPE_UNION);
 	LLVMTypeRef struct_ty = map_to_llvm(cg, base_type, table);
 	assert(struct_ty);
-	Symbol *decl_sym = lookup_symbol(table, base_type->type_name, ctx.current_scope);
-	if (base_type->kind == TYPE_UNION) {
+	Symbol *decl_sym = lookup_symbol(table, base_type->type_resolved_name, ctx.current_scope);
+	if (base_type->type_kind == TYPE_UNION) {
 		int field_index = find_union_field_index(decl_sym->node->data.union_decl.fields, node->data.member_access.member);
 		assert(field_index > -1);
 		ASTNode *field = decl_sym->node->data.union_decl.fields;
@@ -245,7 +246,7 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 			return base_value;
 		}
 		return LLVMBuildLoad2(cg->builder, field_type, base_value, "");
-	} else if (base_type->kind == TYPE_STRUCT) {
+	} else if (base_type->type_kind == TYPE_STRUCT) {
 		int field_index = find_struct_field_index(decl_sym->node, node->data.member_access.member);
 		assert(field_index > -1);
 		LLVMTypeRef index_type = LLVMIntType(PLATFORM_POINTER_SIZE);
@@ -264,25 +265,14 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 LLVMValueRef codegen_return(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	// NOTE: this is copy pasted from codegen_function
 	// TODO: cache this probably
-	char *func_name = ctx.current_function_node->data.func_decl.name;
+	char *func_name = ctx.current_function_node->data.func_decl.resolved_name;
 	size_t func_name_len = strlen(func_name);
 	char *linkage_name = func_name;
 	size_t linkage_name_len = func_name_len;
-	int should_free_linkage_name = 0;
-	if (ctx.current_function_node->data.func_decl.is_exported) {
-		size_t len = 0;
-		const char *mod_name = LLVMGetModuleIdentifier(cg->module, &len);
-		linkage_name_len = len + func_name_len + 4; // underscores in the beginning and middle, \0
-		linkage_name = malloc(sizeof(char) * linkage_name_len);
-		sprintf(linkage_name, "__%s_%s", mod_name, func_name);
-		int should_free_linkage_name = 1;
-	}
-	Symbol *sym = lookup_symbol_weak(table, linkage_name, 0);
+	Symbol *sym = lookup_symbol(table, linkage_name, 0);
 	assert(sym);
 	assert(sym->type);
-	assert(sym->kind == SYMB_FN && sym->type->kind == TYPE_FUNCTION);
-	if (should_free_linkage_name)
-		free(linkage_name);
+	assert(sym->kind == SYMB_FN && sym->type->type_kind == TYPE_FUNCTION);
 	ctx.expected_type = sym->type->function.return_type;
 	ctx.intention = PI_LOAD_VAL;
 	ASTNodeType ret_expr_type = node->data.ret.return_expr->type;
@@ -305,7 +295,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 		break;
 	case AST_STRUCT_LITERAL: {
 		int init_count = node->data.struct_literal.count;
-		Symbol *decl_sym = lookup_symbol(table, ctx.expected_type->type_name, ctx.current_scope);
+		Symbol *decl_sym = lookup_named_type(table, ctx.expected_type, ctx.current_scope);
 		assert(decl_sym);
 		ASTNode *decl_node = decl_sym->node;
 		assert(decl_node); // sanity
@@ -419,9 +409,11 @@ LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *tab
 }
 
 LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+	Symbol *sym = lookup_symbol(table, node->data.var_decl.resolved_name, ctx.current_scope);
+	assert(sym);
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
-	LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, node->data.var_decl.resolved_name);
-	char *resolved_name = strdup(node->data.var_decl.resolved_name);
+	LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, sym->resolved_name);
+	char *resolved_name = strdup(sym->resolved_name);
 	hashmap_put(ctx.loaded_values, resolved_name, ptr);
 	if (node->data.var_decl.init) {
 		++ctx.current_scope;
@@ -440,20 +432,11 @@ LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pas
 void free_str(void *str) { free(str); }
 
 LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
-	char *func_name = node->data.func_decl.name;
+	char *func_name = node->data.func_decl.resolved_name;
 	size_t func_name_len = strlen(func_name);
 	char *linkage_name = func_name;
 	size_t linkage_name_len = func_name_len;
-	int should_free_linkage_name = 0;
-	if (node->data.func_decl.is_exported) {
-		size_t len = 0;
-		const char *mod_name = LLVMGetModuleIdentifier(cg->module, &len);
-		linkage_name_len = len + func_name_len + 4; // underscores in the beginning and middle, \0
-		linkage_name = malloc(sizeof(char) * linkage_name_len);
-		sprintf(linkage_name, "__%s_%s", mod_name, func_name);
-		int should_free_linkage_name = 1;
-	}
-	Symbol *sym = lookup_symbol_weak(table, linkage_name, 0);
+	Symbol *sym = lookup_symbol(table, linkage_name, 0);
 	assert(sym);
 	assert(sym->type);
 	Type *ret_type = sym->type->function.return_type;
@@ -492,11 +475,9 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	}
 	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE, NULL, NULL, NULL};
 	codegen_ast(cg, node->data.func_decl.body, table, ctx);
-	if (should_free_linkage_name)
-		free(linkage_name);
 	if (hashmap_size(values_map))
 		hashmap_destroy(values_map, free_str, NULL);
-	if (ret_type->kind == TYPE_PRIMITIVE && strcmp(ret_type->type_name, "void") == 0) {
+	if (ret_type->type_kind == TYPE_PRIMITIVE && strcmp(ret_type->type_name, "void") == 0) {
 		LLVMBuildRetVoid(cg->builder);
 	}
 	return fn;
@@ -509,7 +490,7 @@ LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCo
 		LLVMValueRef ptr = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
 		Type *type = get_type(table, node->data.unary_op.operand, ctx.current_scope, "");
 		assert(type);
-		assert(type->kind == TYPE_POINTER);
+		assert(type->type_kind == TYPE_POINTER);
 		LLVMTypeRef val_type = map_to_llvm(cg, type->pointee, table);
 		assert(val_type);
 		LLVMTypeRef ptr_type = LLVMTypeOf(ptr);
@@ -708,7 +689,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	}
 
 	case AST_FN_CALL: {
-		Symbol *fn_sym = lookup_symbol_weak(table, node->data.func_call.callee->data.ident.name, ctx.current_scope);
+		Symbol *fn_sym = lookup_symbol(table, node->data.func_call.callee->data.ident.resolved_name, ctx.current_scope);
 		assert(fn_sym);
 		LLVMTypeRef fn_type = map_to_llvm(cg, fn_sym->type, table);
 		assert(fn_type);
@@ -726,7 +707,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			}
 			args[i] = codegen_ast(cg, param, table, param_ctx);
 		}
-		int is_void = fn_sym->type->function.return_type->kind == TYPE_PRIMITIVE && strcmp(fn_sym->type->function.return_type->type_name, "void") == 0;
+		int is_void = fn_sym->type->function.return_type->type_kind == TYPE_PRIMITIVE && strcmp(fn_sym->type->function.return_type->type_name, "void") == 0;
 		return LLVMBuildCall2(cg->builder, fn_type, callee, args, node->data.func_call.arg_count, is_void ? "" : "calltmp");
 	} break;
 
@@ -765,7 +746,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 
 	case AST_ENUM_VALUE: {
 		LLVMTypeRef base_ty = map_to_llvm(cg, node->data.enum_value.enum_type, table);
-		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_name, ctx.current_scope);
+		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_resolved_name, ctx.current_scope);
 		assert(sym);
 		for (int i = 0; i < sym->node->data.enum_decl.member_count; ++i) {
 			if (strcmp(sym->node->data.enum_decl.members[i]->name, node->data.enum_value.member) == 0) {
@@ -781,7 +762,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	} break;
 
 	case AST_EXTERN_FUNC_DECL: {
-		Symbol *sym = lookup_symbol_weak(table, node->data.extern_func.name, ctx.current_scope);
+		Symbol *sym = lookup_symbol(table, node->data.extern_func.resolved_name, ctx.current_scope);
 		assert(sym);
 		LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
 		assert(fn_ty);
@@ -793,7 +774,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 
 	case AST_FOR_LOOP: {
 		// init
-		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.name);
+		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.resolved_name);
 		codegen_ast(cg, node->data.for_loop.init, table, ctx);
 		LLVMBasicBlockRef condBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "forcond");
 		LLVMBasicBlockRef bodyBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "forbody");
@@ -829,7 +810,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	} break;
 
 	case AST_WHILE_LOOP: {
-		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.name);
+		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.resolved_name);
 		LLVMBasicBlockRef condBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "whilecond");
 		LLVMBasicBlockRef bodyBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "whilebody");
 		LLVMBasicBlockRef endBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "whileend");
@@ -854,7 +835,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	} break;
 
 	case AST_IF_STMT: {
-		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.name);
+		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.resolved_name);
 		PassContext condition_ctx = ctx;
 		condition_ctx.expected_type = get_primitive_bool();
 		condition_ctx.intention = PI_LOAD_VAL;
@@ -918,9 +899,9 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			}
 		}
 		// int<->ptr
-		if (exp_val_type->kind == TYPE_POINTER && is_int(node->data.cast.target_type))
+		if (exp_val_type->type_kind == TYPE_POINTER && is_int(node->data.cast.target_type))
 			return LLVMBuildPtrToInt(cg->builder, v, target_ty, "inttoptr");
-		if (node->data.cast.target_type->kind == TYPE_POINTER && is_int(exp_val_type))
+		if (node->data.cast.target_type->type_kind == TYPE_POINTER && is_int(exp_val_type))
 			return LLVMBuildIntToPtr(cg->builder, v, target_ty, "ptrtoint");
 		// pointer casts
 		if (LLVMGetTypeKind(LLVMTypeOf(v)) == LLVMPointerTypeKind && LLVMGetTypeKind(target_ty) == LLVMPointerTypeKind) {

@@ -33,21 +33,14 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		break;
 
 	case AST_EXPR_IDENT: {
-		char name_with_namespace[128] = "";
-		if (node->data.ident.namespace[0] != '\0') {
-			sprintf(name_with_namespace, "__%s_%s", node->data.ident.namespace, node->data.ident.name);
-		} else {
-			sprintf(name_with_namespace, "%s", node->data.ident.name);
-		}
-
-		Symbol *sym = lookup_symbol_weak(table, name_with_namespace, scope_level);
+		Symbol *sym = lookup_symbol(table, node->data.ident.resolved_name, scope_level);
 		if (!sym) {
 			if (node->data.ident.resolved_name[0] == '\0') {
 				char resolved_name[128] = "";
 				if (scope_specifier[0] != '\0') {
 					sprintf(resolved_name, "__%s", scope_specifier);
 					if (node->data.ident.namespace[0] != '\0') {
-						sprintf(resolved_name, "%s::%s_%s", node->data.ident.namespace, resolved_name, node->data.ident.name);
+						sprintf(resolved_name, "__%s_%s", node->data.ident.namespace, node->data.ident.name);
 					} else {
 						sprintf(resolved_name, "%s_%s", resolved_name, node->data.ident.name);
 					}
@@ -75,7 +68,7 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		return get_type(table, node->data.assignment.lvalue, scope_level, scope_specifier);
 
 	case AST_FN_DECL: {
-		Symbol *sym = lookup_symbol(table, node->data.func_decl.name, scope_level);
+		Symbol *sym = lookup_symbol(table, node->data.func_decl.resolved_name, scope_level);
 		if (!sym) {
 			return NULL;
 		}
@@ -94,7 +87,7 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		if (!base_type) {
 			return NULL;
 		}
-		Symbol *decl_sym = lookup_symbol(table, base_type->type_name, scope_level);
+		Symbol *decl_sym = lookup_named_type(table, base_type, scope_level);
 		if (!decl_sym)
 			return NULL;
 		ASTNode *decl_node = decl_sym->node;
@@ -126,7 +119,7 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 
 	case AST_ARRAY_ACCESS: {
 		Type *base_type = get_type(table, node->data.array_access.base, scope_level, scope_specifier);
-		if (!base_type || base_type->kind != TYPE_ARRAY)
+		if (!base_type || base_type->type_kind != TYPE_ARRAY)
 			return NULL;
 		return base_type->array.element_type;
 	} break;
@@ -181,7 +174,7 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 	}
 	switch (node->data.unary_op.op) {
 	case '-': // -x
-		if (op_ty->kind != TYPE_PRIMITIVE) {
+		if (op_ty->type_kind != TYPE_PRIMITIVE) {
 			report(node->location, "unary '-' requires built-in operand", 0);
 			return RESULT_FAILURE;
 		}
@@ -189,7 +182,7 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 
 	case '~': // ~x
 		// only integer types allowed
-		if (op_ty->kind != TYPE_PRIMITIVE || strcmp(op_ty->type_name, "i8") && strcmp(op_ty->type_name, "i16") && strcmp(op_ty->type_name, "i32") && strcmp(op_ty->type_name, "i64")) {
+		if (op_ty->type_kind != TYPE_PRIMITIVE || strcmp(op_ty->type_name, "i8") && strcmp(op_ty->type_name, "i16") && strcmp(op_ty->type_name, "i32") && strcmp(op_ty->type_name, "i64")) {
 			report(node->location, "unary '~' requires integer operand", 0);
 			return RESULT_FAILURE;
 		}
@@ -216,7 +209,7 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 
 	case '*': // *p
 		// operand must be pointer
-		if (op_ty->kind != TYPE_POINTER) {
+		if (op_ty->type_kind != TYPE_POINTER) {
 			report(node->location, "unary '*' requires a pointer operand", 0);
 			return RESULT_FAILURE;
 		}
@@ -229,10 +222,10 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 	if (node->data.unary_op.op == '&') {
 		Type *expr_type_cpy = copy_type(op_ty);
 		node->data.unary_op.result_type = calloc(1, sizeof(Type));
-		node->data.unary_op.result_type->kind = TYPE_POINTER;
+		node->data.unary_op.result_type->type_kind = TYPE_POINTER;
 		node->data.unary_op.result_type->pointee = expr_type_cpy;
 	} else if (node->data.unary_op.op == '*') {
-		if (op_ty->kind != TYPE_POINTER) {
+		if (op_ty->type_kind != TYPE_POINTER) {
 			char type_str[128] = "";
 			type_print(type_str, op_ty);
 			char msg[256] = "";
@@ -250,7 +243,7 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNode *node, int scope_level, const char *scope_specifier) {
 	assert(node->type == AST_STRUCT_LITERAL);
 	int init_count = node->data.struct_literal.count;
-	Symbol *decl_sym = lookup_symbol(table, expected_type->type_name, scope_level);
+	Symbol *decl_sym = lookup_named_type(table, expected_type, scope_level);
 	if (!decl_sym) {
 		char msg[256] = "";
 		sprintf(msg, "unknown struct type %s.", expected_type->type_name);
@@ -346,8 +339,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, "const variable must have an initializer.", 0);
 			return RESULT_FAILURE;
 		}
-		if (node->data.var_decl.type->kind == TYPE_UNDECIDED) {
-			Symbol *sym = lookup_symbol(table, node->data.var_decl.type->type_name, 0);
+		if (node->data.var_decl.type->type_kind == TYPE_UNDECIDED) {
+			Symbol *sym = lookup_named_type(table, node->data.var_decl.type, 0);
 			if (!sym) {
 				char type_str[128] = "";
 				type_print(type_str, node->data.var_decl.type);
@@ -356,10 +349,10 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				report(node->location, msg, 0);
 				return RESULT_FAILURE;
 			}
-			node->data.var_decl.type->kind = sym->type->kind;
+			node->data.var_decl.type->type_kind = sym->type->type_kind;
 			Symbol *var_sym = lookup_symbol(table, node->data.var_decl.resolved_name, scope_level);
 			assert(var_sym);
-			var_sym->type->kind = sym->type->kind;
+			var_sym->type->type_kind = sym->type->type_kind;
 		}
 		if (node->data.var_decl.init) {
 			CompilerResult result;
@@ -379,7 +372,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				result = analyze_struct_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
 			} else if (node->data.var_decl.init->type == AST_CHAR_LIT) {
 				Type *type = node->data.var_decl.type;
-				if (type->kind != TYPE_PRIMITIVE)
+				if (type->type_kind != TYPE_PRIMITIVE)
 					return RESULT_FAILURE;
 				int is_u8 = strcmp(type->type_name, "u8") == 0;
 				int is_i8 = strcmp(type->type_name, "i8") == 0;
@@ -388,7 +381,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				result = RESULT_SUCCESS;
 			} else if (node->data.var_decl.init->type == AST_ARRAY_LITERAL) {
 				ASTNode *array_literal = node->data.var_decl.init;
-				if (node->data.var_decl.type->kind != TYPE_ARRAY) {
+				if (node->data.var_decl.type->type_kind != TYPE_ARRAY) {
 					char msg[256] = "";
 					sprintf(msg, "lvalue is not an array.");
 					report(node->location, msg, 0);
@@ -418,8 +411,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				}
 			} else if (node->data.var_decl.init->type == AST_STRING_LIT) {
 				Type *lhs_type = node->data.var_decl.type;
-				if (lhs_type->kind == TYPE_ARRAY) {
-					if (lhs_type->array.element_type->kind != TYPE_PRIMITIVE || (strcmp(lhs_type->array.element_type->type_name, "i8") != 0 && strcmp(lhs_type->array.element_type->type_name, "u8") != 0)) {
+				if (lhs_type->type_kind == TYPE_ARRAY) {
+					if (lhs_type->array.element_type->type_kind != TYPE_PRIMITIVE || (strcmp(lhs_type->array.element_type->type_name, "i8") != 0 && strcmp(lhs_type->array.element_type->type_name, "u8") != 0)) {
 						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
 						report(node->location, msg, 0);
 						return RESULT_FAILURE;
@@ -431,8 +424,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						report(node->location, msg, 0);
 						return RESULT_FAILURE;
 					}
-				} else if (lhs_type->kind == TYPE_POINTER) {
-					if (lhs_type->pointee->kind != TYPE_PRIMITIVE || (strcmp(lhs_type->pointee->type_name, "i8") != 0 && strcmp(lhs_type->pointee->type_name, "u8") != 0)) {
+				} else if (lhs_type->type_kind == TYPE_POINTER) {
+					if (lhs_type->pointee->type_kind != TYPE_PRIMITIVE || (strcmp(lhs_type->pointee->type_name, "i8") != 0 && strcmp(lhs_type->pointee->type_name, "u8") != 0)) {
 						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
 						report(node->location, msg, 0);
 						return RESULT_FAILURE;
@@ -466,7 +459,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		return RESULT_SUCCESS;
 	} break;
 
-    case AST_DEFERRED_SEQUENCE:
+	case AST_DEFERRED_SEQUENCE:
 	case AST_BLOCK: {
 		CompilerResult result;
 		for (int i = 0; i < node->data.block.count; ++i) {
@@ -477,19 +470,25 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	} break;
 
 	case AST_EXPR_IDENT: {
-		if (node->data.ident.resolved_name[0] != '\0') {
-			// We've either already done this or it's a global we don't want to touch
-			Symbol *non_var_sym = lookup_symbol_weak(table, node->data.ident.name, scope_level);
-			if (non_var_sym) {
+		if (node->data.ident.resolved_name[0] == '\0') {
+			Symbol *sym = lookup_symbol_weak(table, node->data.ident.name, scope_level);
+			if (sym) {
+				strncpy(node->data.ident.resolved_name, sym->resolved_name, sizeof(node->data.ident.resolved_name));
 				return RESULT_SUCCESS;
+			}
+			Symbol *enum_symbol = lookup_symbol_weak(table, node->data.ident.namespace, scope_level);
+			if (enum_symbol && enum_symbol->kind == SYMB_ENUM) {
+				node->type = AST_ENUM_VALUE;
+				strncpy(node->data.enum_value.member, node->data.ident.name, sizeof(node->data.enum_value.member));
+				node->data.enum_value.enum_type = copy_type(enum_symbol->type);
+				CompilerResult result = analyze_ast(table, node, scope_level, scope_specifier);
+				return result;
 			}
 		}
-		if (node->data.ident.resolved_name[0] != '\0') {
-			// We've either already done this or it's a global we don't want to touch
-			Symbol *var_sym = lookup_symbol(table, node->data.ident.resolved_name, scope_level);
-			if (var_sym) {
-				return RESULT_SUCCESS;
-			}
+		// We've either already done this or it's a global we don't want to touch
+		Symbol *var_sym = lookup_symbol(table, node->data.ident.resolved_name, scope_level);
+		if (var_sym) {
+			return RESULT_SUCCESS;
 		}
 		Symbol *global_sym_resolved = lookup_symbol(table, node->data.ident.resolved_name, 0);
 		if (global_sym_resolved)
@@ -503,12 +502,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		if (node->data.ident.namespace[0] != '\0') {
 			Symbol *maybe_enum = lookup_symbol(table, node->data.ident.namespace, 0);
 			if (maybe_enum && maybe_enum->kind == SYMB_ENUM) {
-				node->type = AST_ENUM_VALUE;
-				strncpy(node->data.enum_value.member, node->data.ident.name, sizeof(node->data.enum_value.member));
-				node->data.enum_value.enum_type = copy_type(maybe_enum->type);
-				strncpy(node->data.enum_value.enum_type->type_name, maybe_enum->name, sizeof(node->data.enum_value.enum_type->type_name));
-				CompilerResult result = analyze_ast(table, node, scope_level, scope_specifier);
-				return result;
 			}
 		}
 		char resolved_name[256] = "";
@@ -516,7 +509,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.ident.name);
 		else
 			strncpy(resolved_name, node->data.ident.name, sizeof(resolved_name));
-		Symbol *var_sym = lookup_symbol(table, resolved_name, scope_level);
+		var_sym = lookup_symbol(table, resolved_name, scope_level);
 		if (!var_sym) {
 			char msg[64] = "";
 			sprintf(msg, "undeclared identifier %s.", node->data.ident.name);
@@ -535,15 +528,15 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		// This is a gamble
 		Symbol *sym = lookup_symbol_weak(table, scope_specifier, scope_level);
-		if (!sym || sym->kind != SYMB_FN || sym->type->kind != TYPE_FUNCTION) {
+		if (!sym || sym->kind != SYMB_FN || sym->type->type_kind != TYPE_FUNCTION) {
 			char msg[128] = "";
 			sprintf(msg, "%s is not a function.", scope_specifier);
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
 		Type *expr_type = get_type(table, node, scope_level, scope_specifier);
-		if (expr_type->kind == TYPE_ENUM) {
-			Symbol *enum_decl = lookup_symbol(table, expr_type->type_name, scope_level);
+		if (expr_type->type_kind == TYPE_ENUM) {
+			Symbol *enum_decl = lookup_named_type(table, expr_type, scope_level);
 			if (!enum_decl) {
 				char msg[128] = "";
 				sprintf(msg, "undeclared enum %s.", expr_type->type_name);
@@ -551,7 +544,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				return RESULT_FAILURE;
 			}
 			expr_type = enum_decl->node->data.enum_decl.base_type;
-			expr_type->kind = TYPE_PRIMITIVE;
+			expr_type->type_kind = TYPE_PRIMITIVE;
 		}
 		if (!is_convertible(expr_type, sym->type->function.return_type, 0, table)) {
 			char msg[128] = "";
@@ -624,7 +617,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		} else if (node->data.assignment.rvalue->type == AST_STRUCT_LITERAL) {
 			result = analyze_struct_literal(table, ltype, node->data.assignment.rvalue, scope_level, scope_specifier);
 		} else if (node->data.assignment.rvalue->type == AST_CHAR_LIT) {
-			if (ltype->kind != TYPE_PRIMITIVE)
+			if (ltype->type_kind != TYPE_PRIMITIVE)
 				return RESULT_FAILURE;
 			int is_u8 = strcmp(ltype->type_name, "u8") == 0;
 			int is_i8 = strcmp(ltype->type_name, "i8") == 0;
@@ -633,7 +626,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			result = RESULT_SUCCESS;
 		} else if (node->data.assignment.rvalue->type == AST_ARRAY_LITERAL) {
 			ASTNode *array_literal = node->data.assignment.rvalue;
-			if (ltype->kind != TYPE_ARRAY) {
+			if (ltype->type_kind != TYPE_ARRAY) {
 				char msg[256] = "";
 				sprintf(msg, "lvalue is not an array.");
 				report(node->location, msg, 0);
@@ -655,8 +648,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				}
 			}
 		} else if (node->data.assignment.lvalue->type == AST_STRING_LIT) {
-			if (ltype->kind == TYPE_ARRAY) {
-				if (ltype->array.element_type->kind != TYPE_PRIMITIVE || (strcmp(ltype->array.element_type->type_name, "i8") != 0 && strcmp(ltype->array.element_type->type_name, "u8") != 0)) {
+			if (ltype->type_kind == TYPE_ARRAY) {
+				if (ltype->array.element_type->type_kind != TYPE_PRIMITIVE || (strcmp(ltype->array.element_type->type_name, "i8") != 0 && strcmp(ltype->array.element_type->type_name, "u8") != 0)) {
 					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
@@ -668,8 +661,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
 				}
-			} else if (ltype->kind == TYPE_ARRAY) {
-				if (ltype->pointee->kind != TYPE_PRIMITIVE || (strcmp(ltype->pointee->type_name, "i8") != 0 && strcmp(ltype->pointee->type_name, "u8") != 0)) {
+			} else if (ltype->type_kind == TYPE_ARRAY) {
+				if (ltype->pointee->type_kind != TYPE_PRIMITIVE || (strcmp(ltype->pointee->type_name, "i8") != 0 && strcmp(ltype->pointee->type_name, "u8") != 0)) {
 					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
@@ -756,7 +749,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	} break;
 
 	case AST_FN_DECL: {
-		Symbol *sym = lookup_symbol(table, node->data.func_decl.name, scope_level);
+		Symbol *sym = lookup_symbol(table, node->data.func_decl.resolved_name, scope_level);
 		if (!sym) {
 			char msg[256] = "";
 			sprintf(msg, "function %s undefined.", node->data.func_decl.name);
@@ -770,7 +763,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-		if (sym->kind != SYMB_FN || fn_type->kind != TYPE_FUNCTION) {
+		if (sym->kind != SYMB_FN || fn_type->type_kind != TYPE_FUNCTION) {
 			char msg[256] = "";
 			sprintf(msg, "function %s is not registered as a function. Check syntax.", node->data.func_decl.name);
 			report(node->location, msg, 0);
@@ -793,7 +786,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 
 			if (node->data.func_decl.body->data.block.count) {
 				ASTNode *last_stmt = node->data.func_decl.body->data.block.statements[node->data.func_decl.body->data.block.count - 1];
-				if ((fn_type->function.return_type->kind != TYPE_PRIMITIVE || strcmp(fn_type->function.return_type->type_name, "void") != 0) && (!last_stmt || last_stmt->type != AST_RETURN)) {
+				if ((fn_type->function.return_type->type_kind != TYPE_PRIMITIVE || strcmp(fn_type->function.return_type->type_name, "void") != 0) && (!last_stmt || last_stmt->type != AST_RETURN)) {
 					char msg[256] = "";
 					sprintf(msg, "the last statement in a non-void function must be a return statement.");
 					report(last_stmt->location, msg, 0);
@@ -833,7 +826,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	} break;
 
 	case AST_STRUCT_DECL: {
-		Symbol *sym = lookup_symbol(table, node->data.struct_decl.name, scope_level);
+		Symbol *sym = lookup_symbol(table, node->data.struct_decl.resolved_name, scope_level);
 		if (!sym) {
 			char msg[256] = "";
 			sprintf(msg, "struct %s undefined.", node->data.struct_decl.name);
@@ -841,19 +834,19 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 		sym->kind = SYMB_STRUCT;
-		sym->type->kind = TYPE_STRUCT;
+		sym->type->type_kind = TYPE_STRUCT;
 	} break;
 
 	case AST_ENUM_DECL: {
-		Symbol *sym = lookup_symbol(table, node->data.enum_decl.name, scope_level);
+		Symbol *sym = lookup_symbol(table, node->data.enum_decl.resolved_name, scope_level);
 		if (!sym) {
 			char msg[256] = "";
 			sprintf(msg, "enum %s undefined.", node->data.enum_decl.name);
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-		if (sym->type->kind == TYPE_UNDECIDED) {
-			sym->type->kind = TYPE_ENUM;
+		if (sym->type->type_kind == TYPE_UNDECIDED) {
+			sym->type->type_kind = TYPE_ENUM;
 		}
 	} break;
 
@@ -882,10 +875,10 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		Type *expr_type = get_type(table, node->data.cast.expr, scope_level, scope_specifier);
 		assert(expr_type);
-		if (expr_type->kind == TYPE_PRIMITIVE && node->data.cast.target_type->kind == TYPE_PRIMITIVE)
+		if (expr_type->type_kind == TYPE_PRIMITIVE && node->data.cast.target_type->type_kind == TYPE_PRIMITIVE)
 			return RESULT_SUCCESS;
-		if ((is_int(expr_type) && expr_type->type_name[1] == '6' && expr_type->type_name[2] == '4' && node->data.cast.target_type->kind == TYPE_POINTER) ||
-			(is_int(node->data.cast.target_type) && node->data.cast.target_type->type_name[1] == '6' && node->data.cast.target_type->type_name[2] == '4' && expr_type->kind == TYPE_POINTER)) {
+		if ((is_int(expr_type) && expr_type->type_name[1] == '6' && expr_type->type_name[2] == '4' && node->data.cast.target_type->type_kind == TYPE_POINTER) ||
+			(is_int(node->data.cast.target_type) && node->data.cast.target_type->type_name[1] == '6' && node->data.cast.target_type->type_name[2] == '4' && expr_type->type_kind == TYPE_POINTER)) {
 			return RESULT_SUCCESS;
 		}
 		if (!is_convertible(expr_type, node->data.cast.target_type, 0, table)) {
@@ -963,7 +956,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(base_node->location, "cannot determine type", 0);
 			return RESULT_FAILURE;
 		}
-		Symbol *decl_sym = lookup_symbol(table, base_type->type_name, scope_level);
+		Symbol *decl_sym = lookup_named_type(table, base_type, scope_level);
 		if (!decl_sym) {
 			char msg[128] = "";
 			sprintf(msg, "unknown type %s.", base_type->type_name);
@@ -1011,13 +1004,13 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 		// Must be an array or pointer
-		if (base_ty->kind != TYPE_ARRAY && base_ty->kind != TYPE_POINTER) {
+		if (base_ty->type_kind != TYPE_ARRAY && base_ty->type_kind != TYPE_POINTER) {
 			report(node->location, "subscripted value is not an array or pointer", 0);
 			return RESULT_FAILURE;
 		}
 		// Check index is integer
 		Type *idx_ty = get_type(table, node->data.array_access.index, scope_level, scope_specifier);
-		if (!idx_ty || idx_ty->kind != TYPE_PRIMITIVE || strchr("iu", idx_ty->type_name[0]) == NULL) {
+		if (!idx_ty || idx_ty->type_kind != TYPE_PRIMITIVE || strchr("iu", idx_ty->type_name[0]) == NULL) {
 			report(node->data.array_access.index->location, "array index must be an integer type", 0);
 			return RESULT_FAILURE;
 		}
@@ -1028,7 +1021,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		return analyze_unary_op(table, node, scope_level, scope_specifier);
 
 	case AST_ENUM_VALUE: {
-		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_name, scope_level);
+		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_resolved_name, scope_level);
 		if (!sym) {
 			char msg[128] = "";
 			sprintf(msg, "Unknown enum %s.", node->data.enum_value.enum_type->type_name);
@@ -1111,28 +1104,29 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 }
 
 CompilerResult resolve_type(Symbol *table, Type *type, SourceLocation loc) {
-	if (type->kind == TYPE_UNDECIDED) {
-		Symbol *type_def = lookup_symbol_weak(table, type->type_name, 0);
+	if (type->type_kind == TYPE_UNDECIDED) {
+		Symbol *type_def = lookup_named_type(table, type, 0);
 		if (!type_def) {
 			char msg[128] = "";
 			sprintf(msg, "unknown type %s.", type->type_name);
 			report(loc, msg, 0);
 			return RESULT_FAILURE;
 		}
-		type->kind = type_def->type->kind;
-	} else if (type->kind == TYPE_POINTER) {
+		type->type_kind = type_def->type->type_kind;
+		strncpy(type->type_resolved_name, type_def->resolved_name, sizeof(type->type_resolved_name));
+	} else if (type->type_kind == TYPE_POINTER) {
 		Type *pointee_type = type->pointee;
-		while (pointee_type->kind == TYPE_POINTER) {
+		while (pointee_type->type_kind == TYPE_POINTER) {
 			pointee_type = pointee_type->pointee;
 		}
 		return resolve_type(table, pointee_type, loc);
-	} else if (type->kind == TYPE_ARRAY) {
+	} else if (type->type_kind == TYPE_ARRAY) {
 		Type *arr_type = type->array.element_type;
-		while (arr_type->kind == TYPE_ARRAY) {
+		while (arr_type->type_kind == TYPE_ARRAY) {
 			arr_type = arr_type->array.element_type;
 		}
 		return resolve_type(table, arr_type, loc);
-	} else if (type->kind == TYPE_FUNCTION) {
+	} else if (type->type_kind == TYPE_FUNCTION) {
 		CompilerResult result = resolve_type(table, type->function.return_type, loc);
 		if (result != RESULT_SUCCESS)
 			return result;
@@ -1152,6 +1146,11 @@ CompilerResult resolve_types(Symbol *table, ASTNode *root, int should_traverse_s
 		Symbol *sym = table;
 		while (sym) {
 			CompilerResult result = resolve_type(table, sym->type, sym->node->location);
+			if (sym->kind == SYMB_STRUCT || sym->kind == SYMB_ENUM || sym->kind == SYMB_UNION) {
+				if (sym->type->type_resolved_name[0] == '\0') {
+					strncpy(sym->type->type_resolved_name, sym->resolved_name, sizeof(sym->type->type_resolved_name));
+				}
+			}
 			sym = sym->next;
 		}
 	}

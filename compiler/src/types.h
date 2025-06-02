@@ -10,9 +10,10 @@ typedef struct {
 typedef enum { TYPE_PRIMITIVE, TYPE_POINTER, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_UNION, TYPE_UNDECIDED } TypeKind;
 
 typedef struct Type {
-	TypeKind kind;
+	TypeKind type_kind;
 	char type_name[64];
-	char namespace[64];
+	char type_namespace[64];
+    char type_resolved_name[128];
 	union {
 		// For pointer types
 		struct Type *pointee;

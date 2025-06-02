@@ -18,6 +18,7 @@ typedef struct Symbol {
 	int scope_level;
 	SymbolKind kind;
 	int is_const;
+    int is_imported;
 	struct ASTNode *node; // not owning
 	size_t size;
 	size_t alignment;
@@ -31,6 +32,8 @@ CompilerResult add_symbol(Symbol **table, struct ASTNode *node, const char *name
 CompilerResult deinit_symbol_table(Symbol *table);
 
 Symbol *lookup_symbol(Symbol *table, const char *name, int current_scope);
+
+Symbol *lookup_named_type(Symbol *table, const Type *type, int current_scope);
 
 Symbol *lookup_symbol_weak(Symbol *table, const char *name, int current_scope);
 

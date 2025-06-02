@@ -184,7 +184,7 @@ void test_MultiPointer(void) {
 
 void test_CustomTypePointer(void) {
 	SETUP_TEST("MyStruct** x = 42;");
-	const char *expected = "VarDecl: MyStruct** x:\n"
+	const char *expected = "VarDecl: main::MyStruct** x:\n"
 						   "  Literal Int: 42\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
@@ -340,7 +340,7 @@ void test_MemberAccessSingle_Value(void) {
 			   "fn void test() { my_struct.field = 0; }");
 	const char *expected = "StructDecl: MyStruct\n"
 						   "  FieldDecl: i32* field\n"
-						   "VarDecl: MyStruct my_struct\n"
+						   "VarDecl: main::MyStruct my_struct\n"
 						   "FuncDecl: test\n"
 						   "  Params:\n"
 						   "  Body:\n"
@@ -359,7 +359,7 @@ void test_MemberAccessSingle_Pointer(void) {
 			   "fn void test() { my_struct.field = 0; }");
 	const char *expected = "StructDecl: MyStruct\n"
 						   "  FieldDecl: i32* field\n"
-						   "VarDecl: MyStruct* my_struct\n"
+						   "VarDecl: main::MyStruct* my_struct\n"
 						   "FuncDecl: test\n"
 						   "  Params:\n"
 						   "  Body:\n"
@@ -380,8 +380,8 @@ void test_MemberAccessMulti_Pointer(void) {
 	const char *expected = "StructDecl: MyStruct1\n"
 						   "  FieldDecl: i32 int_field\n"
 						   "StructDecl: MyStruct2\n"
-						   "  FieldDecl: MyStruct1 field\n"
-						   "VarDecl: MyStruct2 my_struct2\n"
+						   "  FieldDecl: main::MyStruct1 field\n"
+						   "VarDecl: main::MyStruct2 my_struct2\n"
 						   "FuncDecl: test\n"
 						   "  Params:\n"
 						   "  Body:\n"
@@ -397,7 +397,7 @@ void test_MemberAccessMulti_Pointer(void) {
 
 void test_StructLiteral_FullyUnnamed(void) {
 	SETUP_TEST("ThreeIntStruct my_struct = {0, 1, 2};");
-	const char *expected = "VarDecl: ThreeIntStruct my_struct:\n"
+	const char *expected = "VarDecl: main::ThreeIntStruct my_struct:\n"
 						   "  StructLiteral with 3 initializer(s):\n"
 						   "    Literal Int: 0\n"
 						   "    Literal Int: 1\n"
@@ -408,7 +408,7 @@ void test_StructLiteral_FullyUnnamed(void) {
 
 void test_StructLiteral_FullyNamed(void) {
 	SETUP_TEST("ThreeIntStruct my_struct = {.second = 1, .first = 0, .third = 2};");
-	const char *expected = "VarDecl: ThreeIntStruct my_struct:\n"
+	const char *expected = "VarDecl: main::ThreeIntStruct my_struct:\n"
 						   "  StructLiteral with 3 initializer(s):\n"
 						   "    Designated, field 'second':\n"
 						   "      Literal Int: 1\n"
@@ -422,7 +422,7 @@ void test_StructLiteral_FullyNamed(void) {
 
 void test_StructLiteral_Mixed(void) {
 	SETUP_TEST("ThreeIntStruct my_struct = {.second = 1, 2, .first = 0};");
-	const char *expected = "VarDecl: ThreeIntStruct my_struct:\n"
+	const char *expected = "VarDecl: main::ThreeIntStruct my_struct:\n"
 						   "  StructLiteral with 3 initializer(s):\n"
 						   "    Designated, field 'second':\n"
 						   "      Literal Int: 1\n"
@@ -441,9 +441,9 @@ void test_StructLiteral_Nested(void) {
 						   "  FieldDecl: i32 x\n"
 						   "  FieldDecl: i32 y\n"
 						   "StructDecl: Outer\n"
-						   "  FieldDecl: Inner a\n"
-						   "  FieldDecl: Inner b\n"
-						   "VarDecl: Outer outer:\n"
+						   "  FieldDecl: main::Inner a\n"
+						   "  FieldDecl: main::Inner b\n"
+						   "VarDecl: main::Outer outer:\n"
 						   "  StructLiteral with 2 initializer(s):\n"
 						   "    StructLiteral with 2 initializer(s):\n"
 						   "      Literal Int: 0\n"
@@ -474,7 +474,7 @@ void test_EnumDecl_VariableDeclaration(void) {
 						   "  Second : 234\n"
 						   "  Third : 235\n"
 						   "  EVEN : 234\n"
-						   "VarDecl: EnumType enum_var:\n"
+						   "VarDecl: main::EnumType enum_var:\n"
 						   "  Ident: EnumType::Second\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
@@ -514,18 +514,18 @@ void test_ExternBlocks_FullIO(void) {
 						   "      ParamDecl: const u8* mode\n"
 						   "  Extern FuncDecl fclose:\n"
 						   "    Params:\n"
-						   "      ParamDecl: FILE* file\n"
+						   "      ParamDecl: main::FILE* file\n"
 						   "  Extern FuncDecl printf:\n"
 						   "    Params:\n"
 						   "      ParamDecl: const u8* str\n"
 						   "      ParamDecl: ...\n"
 						   "  Extern FuncDecl fgetc:\n"
 						   "    Params:\n"
-						   "      ParamDecl: FILE* stream\n"
+						   "      ParamDecl: main::FILE* stream\n"
 						   "  Extern FuncDecl fputc:\n"
 						   "    Params:\n"
 						   "      ParamDecl: i32 ch\n"
-						   "      ParamDecl: FILE* stream\n";
+						   "      ParamDecl: main::FILE* stream\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
@@ -564,18 +564,18 @@ void test_ExportedDecls(void) {
 						   "      ParamDecl: const u8* mode\n"
 						   "  Extern FuncDecl exported fclose:\n"
 						   "    Params:\n"
-						   "      ParamDecl: FILE* file\n"
+						   "      ParamDecl: main::FILE* file\n"
 						   "  Extern FuncDecl exported printf:\n"
 						   "    Params:\n"
 						   "      ParamDecl: const u8* str\n"
 						   "      ParamDecl: ...\n"
 						   "  Extern FuncDecl exported fgetc:\n"
 						   "    Params:\n"
-						   "      ParamDecl: FILE* stream\n"
+						   "      ParamDecl: main::FILE* stream\n"
 						   "  Extern FuncDecl exported fputc:\n"
 						   "    Params:\n"
 						   "      ParamDecl: i32 ch\n"
-						   "      ParamDecl: FILE* stream\n";
+						   "      ParamDecl: main::FILE* stream\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
@@ -769,13 +769,13 @@ void test_ForLoop_Empty(void) {
 
 void test_WhileLoop(void) {
 	SETUP_TEST("fn i32 test() {"
-			   "    int condition = 1; while(condition) { y += 1; }"
+			   "    i32 condition = 1; while(condition) { y += 1; }"
 			   "}");
 	const char *expected = "FuncDecl: test\n"
 						   "  Params:\n"
 						   "  Body:\n"
 						   "    Block with 2 statement(s):\n"
-						   "      VarDecl: int condition:\n"
+						   "      VarDecl: i32 condition:\n"
 						   "        Literal Int: 1\n"
 						   "      WhileLoop:\n"
 						   "        Condition:\n"
@@ -804,7 +804,7 @@ void test_DeferStmts(void) {
 						   "  Params:\n"
 						   "  Body:\n"
 						   "    Block with 6 statement(s):\n"
-						   "      VarDecl: FILE* file:\n"
+						   "      VarDecl: main::FILE* file:\n"
 						   "        Function call with 0 args:\n"
 						   "          Ident: fopen\n"
 						   "      IfElseStmt:\n"
@@ -928,7 +928,7 @@ void test_FnPtr_StructFieldAssignment(void) {
 						   "  Params:\n"
 						   "  Body:\n"
 						   "    Block with 2 statement(s):\n"
-						   "      VarDecl: SomeStruct str:\n"
+						   "      VarDecl: main::SomeStruct str:\n"
 						   "        StructLiteral with 1 initializer(s):\n"
 						   "          Unary Expression: &\n"
 						   "            Ident: foo\n"
