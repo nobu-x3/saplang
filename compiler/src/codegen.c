@@ -595,6 +595,68 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	}
 }
 
+void codegen_imported_symbol(CodegenLLVM *cg, Symbol *sym, Symbol *table) {
+	ASTNode *node = sym->node;
+	switch (node->type) {
+	case AST_VAR_DECL: {
+		LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
+		LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
+		assert(global_var);
+		LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
+		LLVMSetLinkage(global_var, LLVMExternalLinkage);
+		LLVMSetExternallyInitialized(global_var, 1);
+	} break;
+	case AST_UNION_DECL: {
+		char union_name[512] = "";
+		sprintf(union_name, "union.%s", node->data.union_decl.name);
+		LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, union_name);
+		assert(struct_type);
+	} break;
+	case AST_STRUCT_DECL: {
+		LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, sym->resolved_name);
+		assert(struct_type);
+	} break;
+	case AST_FN_DECL:
+	case AST_EXTERN_FUNC_DECL: {
+		char *func_name = node->data.func_decl.resolved_name;
+		size_t func_name_len = strlen(func_name);
+		char *linkage_name = sym->resolved_name;
+		size_t linkage_name_len = strlen(sym->resolved_name);
+		Type *ret_type = sym->type->function.return_type;
+		LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
+		LLVMValueRef fn = LLVMAddFunction(cg->module, func_name, fn_ty);
+		if (cg->should_build_debug) {
+			LLVMMetadataRef di_fn = LLVMDIBuilderCreateFunction(cg->di_builder, (LLVMMetadataRef)cg->di_cu, func_name, func_name_len, linkage_name, linkage_name_len, cg->di_file, 0, NULL, 0, 1, 1, 0, 0);
+			LLVMSetSubprogram(fn, di_fn);
+		}
+		LLVMSetLinkage(fn, LLVMExternalLinkage);
+	} break;
+	case AST_ENUM_DECL:
+		if (cg->should_build_debug) {
+			LLVMTypeRef base_ty = map_to_llvm(cg, node->data.enum_decl.base_type, table);
+			int base_name_len = strlen(node->data.enum_decl.base_type->type_name);
+			LLVMDWARFTypeEncoding encoding = node->data.enum_decl.base_type->type_name[0] == 'u' ? DW_ATE_unsigned : DW_ATE_signed;
+			TypeInfo base_type_info = get_type_info(node->data.enum_decl.base_type, node);
+			LLVMMetadataRef base_type_md = LLVMDIBuilderCreateBasicType(cg->di_builder, node->data.enum_decl.base_type->type_name, base_name_len, BYTE_TO_BIT(base_type_info.size), DW_ATE_signed, 0);
+			LLVMMetadataRef *enumerators = alloca(sizeof(LLVMMetadataRef) * node->data.enum_decl.member_count);
+			for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
+				int name_len = strlen(node->data.enum_decl.members[i]->name);
+				enumerators[i] = LLVMDIBuilderCreateEnumerator(cg->di_builder, node->data.enum_decl.members[i]->name, name_len, node->data.enum_decl.members[i]->value,
+															   0); // isUnsigned: false
+			}
+			int name_len = strlen(node->data.enum_decl.name);
+			LLVMMetadataRef enum_type = LLVMDIBuilderCreateEnumerationType(cg->di_builder, cg->di_cu, node->data.enum_decl.name, name_len, cg->di_file, node->location.line,
+																		   BYTE_TO_BIT(base_type_info.size),  // size in bits
+																		   BYTE_TO_BIT(base_type_info.align), // align in bits
+																		   enumerators, node->data.enum_decl.member_count, NULL);
+		}
+		break;
+
+	default:
+		assert(0 && "Unknown symbol type.");
+	}
+}
+
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	switch (node->type) {
 	case AST_FN_DECL:
@@ -757,6 +819,10 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	} break;
 	case AST_EXTERN_BLOCK: {
 		for (int i = 0; i < node->data.extern_block.count; ++i) {
+			if (node->data.extern_block.block[i]->type == AST_VAR_DECL) {
+				codegen_global_var_decl(cg, node->data.extern_block.block[i], table, 0);
+				continue;
+			}
 			codegen_ast(cg, node->data.extern_block.block[i], table, ctx);
 		}
 	} break;
@@ -929,16 +995,18 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 }
 
 void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
-	ASTNode *current = root;
-	while (current) {
-		// TODO: quick hack
+	for (Symbol *sym = table; sym; sym = sym->next) {
+		if (sym->is_imported) {
+			codegen_imported_symbol(cg, sym, table);
+		}
+	}
+	for (ASTNode *current = root; current; current = current->next) {
 		if (current->type == AST_VAR_DECL) {
 			codegen_global_var_decl(cg, current, table, 0);
 		} else {
 			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL};
 			codegen_ast(cg, current, table, ctx);
 		}
-		current = current->next;
 	}
 }
 

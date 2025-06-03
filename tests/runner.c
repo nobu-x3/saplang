@@ -4,6 +4,7 @@
 #include "sema_tests.h"
 #include "threadpool_tests.h"
 #include "typeinfo_tests.h"
+#include "module_tests.h"
 #include <unity.h>
 
 void setUp(void) {}
@@ -178,5 +179,6 @@ int main(void) {
 	RUN_TEST(test_UnionDecl_codegen);
 	RUN_TEST(test_UnionMemberAccess_codegen);
 
+	RUN_TEST(test_ImportTest_modules);
 	return UNITY_END();
 }

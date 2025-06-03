@@ -1137,21 +1137,24 @@ CompilerResult resolve_type(Symbol *table, Type *type, SourceLocation loc) {
 		}
 		return result;
 	}
-	// others are basically handled
-	return RESULT_SUCCESS;
+    return RESULT_SUCCESS;
 }
 
 CompilerResult resolve_types(Symbol *table, ASTNode *root, int should_traverse_symbols) {
 	if (should_traverse_symbols) {
 		Symbol *sym = table;
+		int result = 1;
 		while (sym) {
-			CompilerResult result = resolve_type(table, sym->type, sym->node->location);
+			result &= resolve_type(table, sym->type, sym->node->location) == RESULT_SUCCESS;
 			if (sym->kind == SYMB_STRUCT || sym->kind == SYMB_ENUM || sym->kind == SYMB_UNION) {
 				if (sym->type->type_resolved_name[0] == '\0') {
 					strncpy(sym->type->type_resolved_name, sym->resolved_name, sizeof(sym->type->type_resolved_name));
 				}
 			}
 			sym = sym->next;
+		}
+		if (!result) {
+			return RESULT_FAILURE;
 		}
 	}
 	for (ASTNode *node = root; node != NULL; node = node->next) {

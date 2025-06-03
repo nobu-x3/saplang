@@ -9,6 +9,7 @@
 #include <string.h>
 
 // @TODO: fix memleaks on return NULL
+// @TODO: optimize resolved_name being populated even when is_extern
 
 void free_ast_node(ASTNode *node);
 
@@ -1158,7 +1159,7 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 	int is_error = 0;
 	char resolved_name[256] = "";
 	sprintf(resolved_name, "__%s_%s", parser->module_name, enum_name);
-	if (lookup_symbol(parser->symbol_table, resolved_name, parser->current_scope)) {
+	if (lookup_symbol(parser->symbol_table, is_extern ? enum_name : resolved_name, parser->current_scope)) {
 		char msg[128];
 		sprintf(msg, "enum redeclaration.");
 		report(parser->current_token.location, msg, 0);
@@ -1266,10 +1267,10 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 	parser->current_token = next_token(&parser->scanner); // consume '}'
 
 	if (!is_error) {
-		ASTNode *decl_node = new_enum_decl_node(enum_name, resolved_name, base_type, members.data, members.count, loc);
-		add_symbol(&parser->symbol_table, decl_node, enum_name, resolved_name, 1, SYMB_ENUM, base_type, parser->current_scope);
+		ASTNode *decl_node = new_enum_decl_node(enum_name, is_extern ? enum_name : resolved_name, base_type, members.data, members.count, loc);
+		add_symbol(&parser->symbol_table, decl_node, enum_name, is_extern ? enum_name : resolved_name, 1, is_extern, SYMB_ENUM, base_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, decl_node, enum_name, resolved_name, 1, SYMB_ENUM, base_type, parser->current_scope);
+			add_symbol(&parser->exported_table, decl_node, enum_name, is_extern ? enum_name : resolved_name, 1, is_extern, SYMB_ENUM, base_type, parser->current_scope);
 		}
 		return decl_node;
 	}
@@ -1771,7 +1772,7 @@ ASTNode *parse_var_decl(Parser *parser, const char *prefix_name, int is_exported
 	} else {
 		sprintf(resolved_name, "__%s_%s_%s", parser->module_name, prefix_name, var_name);
 	}
-	if (lookup_symbol(parser->symbol_table, resolved_name, parser->current_scope)) {
+	if (lookup_symbol(parser->symbol_table, is_extern ? var_name : resolved_name, parser->current_scope)) {
 		char msg[128] = "";
 		sprintf(msg, "variable %s already declared in this scope.", var_name);
 		report(decl_location, msg, 0);
@@ -1787,10 +1788,10 @@ ASTNode *parse_var_decl(Parser *parser, const char *prefix_name, int is_exported
 		return report(parser->current_token.location, "expected ';' after variable declaration.", 0);
 	parser->current_token = next_token(&parser->scanner); // consume ';'
 	if (!is_error) {
-		ASTNode *decl_node = new_var_decl_node(var_type, var_name, resolved_name, is_exported, is_const, init_expr, decl_location);
-		add_symbol(&parser->symbol_table, decl_node, var_name, resolved_name, is_const, SYMB_VAR, var_type, parser->current_scope);
+		ASTNode *decl_node = new_var_decl_node(var_type, var_name, is_extern ? var_name : resolved_name, is_exported, is_const, init_expr, decl_location);
+		add_symbol(&parser->symbol_table, decl_node, var_name, is_extern ? var_name : resolved_name, is_const, is_extern, SYMB_VAR, var_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, decl_node, var_name, resolved_name, is_const, SYMB_VAR, var_type, parser->current_scope);
+			add_symbol(&parser->exported_table, decl_node, var_name, is_extern ? var_name : resolved_name, is_const, is_extern, SYMB_VAR, var_type, parser->current_scope);
 		}
 		return decl_node;
 	} else {
@@ -1918,7 +1919,7 @@ ASTNode *parse_union_decl(Parser *parser, int is_exported, int is_extern) {
 	int is_error = 0;
 	char resolved_name[256] = "";
 	sprintf(resolved_name, "__%s_%s", parser->module_name, union_name);
-	if (lookup_symbol(parser->symbol_table, resolved_name, parser->current_scope)) {
+	if (lookup_symbol(parser->symbol_table, is_extern ? union_name : resolved_name, parser->current_scope)) {
 		report(parser->current_token.location, "union redeclaration.", 0);
 		is_error = 1;
 	}
@@ -1951,10 +1952,13 @@ ASTNode *parse_union_decl(Parser *parser, int is_exported, int is_extern) {
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 	if (!is_error) {
 		Type *union_type = new_named_type(union_name, parser->module_name, TYPE_UNION);
-		ASTNode *node = new_union_decl_node(union_name, resolved_name, field_list, loc);
-		add_symbol(&parser->symbol_table, node, union_name, resolved_name, 1, SYMB_UNION, union_type, parser->current_scope);
+		if (is_extern) {
+			strncpy(union_type->type_resolved_name, union_type->type_name, sizeof(union_type->type_resolved_name));
+		}
+		ASTNode *node = new_union_decl_node(union_name, is_extern ? union_name : resolved_name, field_list, loc);
+		add_symbol(&parser->symbol_table, node, union_name, is_extern ? union_name : resolved_name, 1, is_extern, SYMB_UNION, union_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, node, union_name, resolved_name, 1, SYMB_UNION, union_type, parser->current_scope);
+			add_symbol(&parser->exported_table, node, union_name, is_extern ? union_name : resolved_name, 1, is_extern, SYMB_UNION, union_type, parser->current_scope);
 		}
 		type_deinit(union_type);
 		free(union_type);
@@ -1976,7 +1980,7 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported, int is_extern) {
 	char resolved_name[256] = "";
 	sprintf(resolved_name, "__%s_%s", parser->module_name, struct_name);
 	int is_error = 0;
-	if (lookup_symbol(parser->symbol_table, resolved_name, parser->current_scope)) {
+	if (lookup_symbol(parser->symbol_table, is_extern ? struct_name : resolved_name, parser->current_scope)) {
 		report(parser->current_token.location, "struct redeclaration.", 0);
 		is_error = 1;
 	}
@@ -2009,10 +2013,13 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported, int is_extern) {
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 	if (!is_error) {
 		Type *struct_type = new_named_type(struct_name, parser->module_name, TYPE_STRUCT);
-		ASTNode *node = new_struct_decl_node(struct_name, resolved_name, field_list.data, field_list.count, loc);
-		add_symbol(&parser->symbol_table, node, struct_name, resolved_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
+		if (is_extern) {
+			strncpy(struct_type->type_resolved_name, struct_type->type_name, sizeof(struct_type->type_resolved_name));
+		}
+		ASTNode *node = new_struct_decl_node(struct_name, is_extern ? struct_name : resolved_name, field_list.data, field_list.count, loc);
+		add_symbol(&parser->symbol_table, node, struct_name, is_extern ? struct_name : resolved_name, 1, is_extern, SYMB_STRUCT, struct_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, node, struct_name, resolved_name, 1, SYMB_STRUCT, struct_type, parser->current_scope);
+			add_symbol(&parser->exported_table, node, struct_name, is_extern ? struct_name : resolved_name, 1, is_extern, SYMB_STRUCT, struct_type, parser->current_scope);
 		}
 		type_deinit(struct_type);
 		free(struct_type);
@@ -2414,9 +2421,9 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 		}
 		function_type.function.param_count = param_type_list.count;
 		function_type.function.param_types = param_type_list.data;
-		add_symbol(&parser->symbol_table, decl_node, decl_node->data.func_decl.name, decl_node->data.func_decl.resolved_name, 1, SYMB_FN, &function_type, parser->current_scope);
+		add_symbol(&parser->symbol_table, decl_node, decl_node->data.func_decl.name, decl_node->data.func_decl.resolved_name, 1, 0, SYMB_FN, &function_type, parser->current_scope);
 		if (is_exported)
-			add_symbol(&parser->exported_table, decl_node, decl_node->data.func_decl.name, decl_node->data.func_decl.resolved_name, 1, SYMB_FN, &function_type, parser->current_scope);
+			add_symbol(&parser->exported_table, decl_node, decl_node->data.func_decl.name, decl_node->data.func_decl.resolved_name, 1, 0, SYMB_FN, &function_type, parser->current_scope);
 		da_deinit(param_type_list);
 		type_deinit(ret_type);
 		free(ret_type);
@@ -2473,9 +2480,9 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	}
 	function_type.function.param_count = param_type_list.count;
 	function_type.function.param_types = param_type_list.data;
-	add_symbol(&parser->symbol_table, decl_node, decl_node->data.extern_func.name, decl_node->data.extern_func.resolved_name, 1, SYMB_FN, &function_type, parser->current_scope);
+	add_symbol(&parser->symbol_table, decl_node, decl_node->data.extern_func.name, decl_node->data.extern_func.resolved_name, 1, 1, SYMB_FN, &function_type, parser->current_scope);
 	if (is_exported) {
-		add_symbol(&parser->exported_table, decl_node, decl_node->data.extern_func.name, decl_node->data.extern_func.resolved_name, 1, SYMB_FN, &function_type, parser->current_scope);
+		add_symbol(&parser->exported_table, decl_node, decl_node->data.extern_func.name, decl_node->data.extern_func.resolved_name, 1, 1, SYMB_FN, &function_type, parser->current_scope);
 	}
 	da_deinit(param_type_list);
 	type_deinit(ret_type);

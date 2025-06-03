@@ -63,7 +63,7 @@ CompilerResult symbol_table_print(Symbol *table, char *string) {
 	return RESULT_SUCCESS;
 }
 
-CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, const char *resolved_name, int is_const, SymbolKind kind, Type *type, int scope_level) {
+CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, const char *resolved_name, int is_const, int is_extern, SymbolKind kind, Type *type, int scope_level) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -77,6 +77,7 @@ CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, const
 	symb->kind = kind;
 	symb->scope_level = scope_level;
 	symb->is_const = is_const;
+	symb->is_extern = is_extern;
 	symb->size = 0;
 	symb->alignment = 0;
 	symb->node = node;
@@ -86,7 +87,7 @@ CompilerResult add_symbol(Symbol **table, ASTNode *node, const char *name, const
 	return RESULT_SUCCESS;
 }
 
-CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const char *name, const char *resolved_name, int is_const, int is_imported, SymbolKind kind, Type *type, int scope_level, size_t size, size_t align) {
+CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const char *name, const char *resolved_name, int is_const, int is_imported, int is_extern, SymbolKind kind, Type *type, int scope_level, size_t size, size_t align) {
 	if (!table)
 		return RESULT_PASSED_NULL_PTR;
 
@@ -101,6 +102,7 @@ CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const ch
 	symb->scope_level = scope_level;
 	symb->is_const = is_const;
 	symb->is_imported = is_imported;
+	symb->is_extern = is_extern;
 	symb->size = size;
 	symb->alignment = align;
 	symb->node = node;
@@ -140,6 +142,8 @@ Symbol *lookup_named_type(Symbol *table, const Type *type, int current_scope) {
 		}
 		if (strcmp(s->resolved_name, resolved_name) == 0 && s->scope_level <= current_scope)
 			return s;
+		if (s->is_extern && strcmp(s->type->type_namespace, type->type_namespace) == 0 && strcmp(s->type->type_name, type->type_name) == 0)
+			return s;
 	}
 	return NULL;
 }
@@ -162,6 +166,7 @@ Symbol *symbol_table_copy(Symbol *table) {
 	new_table->alignment = table->alignment;
 	new_table->size = table->size;
 	new_table->scope_level = table->scope_level;
+	new_table->is_extern = table->is_extern;
 	new_table->next = NULL;
 	strncpy(new_table->name, table->name, sizeof(new_table->name));
 	strncpy(new_table->resolved_name, table->resolved_name, sizeof(new_table->resolved_name));
@@ -170,7 +175,7 @@ Symbol *symbol_table_copy(Symbol *table) {
 	while (current) {
 		Type *type_copy = copy_type(current->type);
 		ASTNode *node = current->node;
-		add_symbol_with_type_info(&new_table, node, current->name, current->resolved_name, current->is_const, current->is_imported, current->kind, type_copy, current->scope_level, current->size, current->alignment);
+		add_symbol_with_type_info(&new_table, node, current->name, current->resolved_name, current->is_const, current->is_imported, current->is_extern, current->kind, type_copy, current->scope_level, current->size, current->alignment);
 		current = current->next;
 	}
 

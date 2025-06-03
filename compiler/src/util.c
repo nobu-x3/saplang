@@ -80,11 +80,15 @@ int find_file_callback(const char *fpath, const struct stat *sb, int type_flag, 
 
 char *find_file_in_dir(const char *root_dir, const char *filename) {
 #if defined(__linux__) || defined(__unix__)
-	target_filename = filename;
+	char *filename_cpy = strdup(filename);
+	char *base_name = basename(filename_cpy);
+	target_filename = base_name;
 	found_path[0] = '\0';
 	if (nftw(root_dir, find_file_callback, 16, FTW_PHYS) == 1) {
+		free(filename_cpy);
 		return strdup(found_path);
 	} else {
+		free(filename_cpy);
 		return NULL;
 	}
 #else

@@ -8,12 +8,12 @@
 #include "util.h"
 #include <errno.h>
 #include <linux/limits.h>
-#include <llvm-c-18/llvm-c/Core.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #if defined(__linux__) || defined(__unix__)
+#include <asm-generic/errno-base.h>
 #include <unistd.h>
 #endif
 
@@ -328,7 +328,7 @@ SourceFile driver_init_source(const char *name) {
 	for (int i = 0; i < driver.options.import_paths.count; ++i) {
 		char *full_path = find_file_in_dir(driver.options.import_paths.data[i], name);
 		if (full_path) {
-			strncpy(src_file.name, name, sizeof(src_file.name));
+			strncpy(src_file.name, file_name(name), sizeof(src_file.name));
 			strncpy(src_file.path, full_path, sizeof(src_file.path));
 			FILE *fp = fopen(src_file.path, "r");
 			if (!fp) {
@@ -503,17 +503,20 @@ void codegen_task(void *arg) {
 	codegen_run(&cg_ctx, node->module->ast, node->module->symbol_table);
 	char *output = codegen_output_str(&cg_ctx);
 	codegen_deinit(&cg_ctx);
-	// prepare path for ir files
-	char out_path_copy[PATH_MAX + 1] = "";
-	strncpy(out_path_copy, driver.options.output_file_path, sizeof(out_path_copy));
-	make_dir(LL_DIRECTORY, 0777);
+	int res = make_dir(LL_DIRECTORY, 0777);
+	if (res == -1 && errno != EEXIST) {
+		fprintf(stderr, "failed to create tmp dir for LLVM IR with code: %d", errno);
+		free(output);
+		return;
+	}
+	char tmp_dir[512] = "";
+	char *ptr = full_path(LL_DIRECTORY, tmp_dir);
 	char ll_path[512] = "";
-	sprintf(ll_path, "%s/tmp-%s.ll", LL_DIRECTORY, node->parser.module_name);
+	sprintf(ll_path, "%s/tmp-%s.ll", tmp_dir, node->parser.module_name);
 	FILE *f = fopen(ll_path, "w");
 	if (!f) {
-		fprintf(stderr, "failed to create tmp file for LLVM IR with code: %d", errno);
+		fprintf(stderr, "failed to create tmp file for LLVM IR at path %s with code: %d", ll_path, errno);
 		free(output);
-		codegen_deinit(&cg_ctx);
 		return;
 	}
 	fprintf(f, "%s", output);
@@ -536,7 +539,7 @@ CompilerResult driver_run() {
 	CompilerResult res = build_dependency_graph(input_src_file, &driver.dependency_graph);
 	int available_cores = get_num_of_cores();
 	available_cores = driver.module_count > available_cores ? available_cores : driver.module_count;
-	ThreadPool *thread_pool = threadpool_create(available_cores);
+	ThreadPool *thread_pool = threadpool_create(driver.options.threads ? driver.options.threads : available_cores);
 	if (driver.options.show_timings) {
 		time_prep = (get_time() - before);
 	}
@@ -623,17 +626,21 @@ CompilerResult driver_run() {
 	}
 	threadpool_wait_all(thread_pool);
 	StringList cmd;
+	char output_file_path_cpy[512] = "";
+	strncpy(output_file_path_cpy, driver.options.output_file_path, sizeof(output_file_path_cpy));
+	char output_file_path_full[512] = "";
+	char *ptr = full_path(output_file_path_cpy, output_file_path_full);
 	da_init_result(cmd, 4);
 	da_push_result(cmd, strdup("clang"));
 	combine_ir_paths(&cmd, LL_DIRECTORY);
 	da_push_result(cmd, strdup("-o"));
-	da_push_result(cmd, strdup(driver.options.output_file_path));
+	da_push_result(cmd, strdup(output_file_path_full));
 	char *final_cmd = flatten_stringlist(&cmd);
 	for (int i = 0; i < cmd.count; ++i) {
 		free(cmd.data[i]);
 	}
 	da_deinit(cmd);
-	system(final_cmd);
+	int clang_res = system(final_cmd);
 	free(final_cmd);
 	if (!driver.options.no_cleanup)
 		rmrf(LL_DIRECTORY);
@@ -651,6 +658,9 @@ CompilerResult driver_run() {
 			deinit_symbol_table(current->module->exported_table);
 	}
 	threadpool_destroy(thread_pool);
+	if (clang_res != 0) {
+		return RESULT_FAILURE;
+	}
 
 	return RESULT_SUCCESS;
 }
@@ -670,7 +680,13 @@ CompilerResult driver_init(int argc, const char **argv) {
 	return RESULT_SUCCESS;
 }
 
-void driver_set_compiler_options(CompileOptions opts) { driver.options = opts; }
+void driver_set_compiler_options(CompileOptions opts) {
+	driver.options = opts;
+	if (!driver.options.import_paths.count) {
+		da_init_unsafe(driver.options.import_paths, 1);
+		da_push_unsafe(driver.options.import_paths, strdup("."));
+	}
+}
 
 void driver_deinit() {
 	compile_options_deinit(&driver.options);
