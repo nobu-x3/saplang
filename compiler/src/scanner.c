@@ -1,6 +1,7 @@
 #include "scanner.h"
 #include "util.h"
 #include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 
 #define _INPUT scanner->source.buffer
@@ -18,6 +19,31 @@ char eat_next_char(Scanner *scanner) {
 	return _INPUT[_INDEX++];
 }
 
+char decode_escape_sequence(SourceLocation loc, char second) {
+	switch (second) {
+	case 'n':
+		return '\n';
+	case 't':
+		return '\t';
+	case 'r':
+		return '\r';
+	case '\\':
+		return '\\';
+	case '\"':
+		return '\"';
+	case '\'':
+		return '\'';
+	case '0':
+		return '\0';
+	default: {
+		char msg[128] = "";
+		sprintf(msg, "unknown escape sequence: \\%c\n", second);
+		report(loc, msg, 1);
+		return second;
+	}
+	}
+}
+
 Token next_token(Scanner *scanner) {
 	Token current_token = {0};
 	current_token.location.path = scanner->source.path;
@@ -26,7 +52,7 @@ Token next_token(Scanner *scanner) {
 		eat_next_char(scanner);
 	}
 
-    // skip commented lines
+	// skip commented lines
 	if (_INPUT[_INDEX] && _INPUT[_INDEX] == '/' && _INPUT[_INDEX + 1] && _INPUT[_INDEX + 1] == '/') {
 		while (_INPUT[_INDEX] && _INPUT[_INDEX] != '\n')
 			eat_next_char(scanner);
@@ -60,7 +86,12 @@ Token next_token(Scanner *scanner) {
 		current_token.type = TOK_STRINGLIT;
 		eat_next_char(scanner);
 		while (_INPUT[_INDEX] != '"') {
-			current_token.text[i++] = eat_next_char(scanner);
+			char next_character = eat_next_char(scanner);
+			if (next_character == '\\') {
+				char second_character = eat_next_char(scanner);
+				next_character = decode_escape_sequence(current_token.location, second_character);
+			}
+			current_token.text[i++] = next_character;
 			if (_INDEX > _LEN) {
 				report(current_token.location, "unclosed string.", 0);
 				break;
