@@ -160,6 +160,7 @@ typedef struct {
 	LLVMValueRef passed_value;
 	LLVMBasicBlockRef end_block;
 	LLVMBasicBlockRef loop_beg_block;
+	LLVMBasicBlockRef if_cont_block;
 } PassContext;
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
@@ -398,7 +399,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
-	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL};
+	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL, NULL};
 	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, table, ctx) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
@@ -473,7 +474,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			++index;
 		}
 	}
-	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE, NULL, NULL, NULL};
+	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE, NULL, NULL, NULL, NULL};
 	codegen_ast(cg, node->data.func_decl.body, table, ctx);
 	if (hashmap_size(values_map))
 		hashmap_destroy(values_map, free_str, NULL);
@@ -908,22 +909,26 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMValueRef cond = codegen_ast(cg, node->data.if_stmt.condition, table, condition_ctx);
 		LLVMBasicBlockRef thenBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "then");
 		LLVMBasicBlockRef elseBB = node->data.if_stmt.else_branch ? LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "else") : NULL;
-		LLVMBasicBlockRef mergeBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "ifcont");
+		LLVMBasicBlockRef mergeBB = ctx.if_cont_block ? ctx.if_cont_block : LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "ifcont");
 		LLVMBuildCondBr(cg->builder, cond, thenBB, elseBB ? elseBB : mergeBB);
 		// then
 		LLVMPositionBuilderAtEnd(cg->builder, thenBB);
-		codegen_ast(cg, node->data.if_stmt.then_branch, table, ctx);
+		PassContext then_ctx = ctx;
+		then_ctx.if_cont_block = mergeBB;
+		codegen_ast(cg, node->data.if_stmt.then_branch, table, then_ctx);
 		LLVMValueRef last_inst = LLVMGetLastInstruction(thenBB);
 		LLVMOpcode last_inst_opcode = LLVMGetInstructionOpcode(last_inst);
-		if (last_inst_opcode != LLVMBr)
+		if (last_inst_opcode != LLVMBr && last_inst_opcode != LLVMRet)
 			LLVMBuildBr(cg->builder, mergeBB);
 		// else
 		if (elseBB) {
 			LLVMPositionBuilderAtEnd(cg->builder, elseBB);
-			codegen_ast(cg, node->data.if_stmt.else_branch, table, ctx);
+			PassContext else_ctx = ctx;
+			else_ctx.if_cont_block = mergeBB;
+			codegen_ast(cg, node->data.if_stmt.else_branch, table, else_ctx);
 			last_inst = LLVMGetLastInstruction(elseBB);
 			LLVMOpcode last_inst_opcode = LLVMGetInstructionOpcode(last_inst);
-			if (last_inst_opcode != LLVMBr)
+			if (last_inst_opcode != LLVMBr && last_inst_opcode != LLVMRet)
 				LLVMBuildBr(cg->builder, mergeBB);
 		}
 		// merge
@@ -1004,7 +1009,7 @@ void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 		if (current->type == AST_VAR_DECL) {
 			codegen_global_var_decl(cg, current, table, 0);
 		} else {
-			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL};
+			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL, NULL};
 			codegen_ast(cg, current, table, ctx);
 		}
 	}

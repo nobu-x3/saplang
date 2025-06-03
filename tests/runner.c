@@ -179,6 +179,7 @@ int main(void) {
 	RUN_TEST(test_ForLoopContinueBreak_codegen);
 	RUN_TEST(test_UnionDecl_codegen);
 	RUN_TEST(test_UnionMemberAccess_codegen);
+	RUN_TEST(test_NestedIfs_codegen);
 
 	RUN_TEST(test_ImportTest_modules);
 	return UNITY_END();
