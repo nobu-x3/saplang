@@ -2184,7 +2184,8 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 	NodeList stmts;
 	da_init(stmts, 4);
 
-	DeferStack dstack_local = copy_defer_stack(dstack);
+	DeferStack dstack_local;
+	da_init(dstack_local, 4);
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *stmt = parse_stmt(parser, prefix_name, &dstack_local);
 		if (!stmt)
@@ -2208,8 +2209,11 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 	if (!is_error) {
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *block = new_block_node(stmts.data, stmts.count, loc);
+		int should_unroll_all_defers = block->data.block.count && block->data.block.statements[block->data.block.count - 1]->type == AST_RETURN;
 		unroll_defers(block, &dstack_local);
 		da_deinit(dstack_local);
+		if (should_unroll_all_defers)
+			unroll_defers(block, dstack);
 		return block;
 	}
 	da_deinit(dstack_local);

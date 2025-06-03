@@ -847,6 +847,49 @@ void test_DeferStmts(void) {
 	free(output);
 }
 
+void test_DeferWithOtherBlocks(void) {
+	SETUP_TEST("fn i32 main() {"
+			   "    io::FILE* f = io::fopen(\"imports_test_file.txt\", \"w\");"
+			   "    defer { io::fclose(f); }"
+			   "    if(f) {"
+			   "        io::fprintf(f, \"hello friend\n\");"
+               "        return 0;"
+			   "    }"
+			   "    return 1;"
+			   "}");
+    const char* expected = "FuncDecl: main\n"
+        "  Params:\n"
+        "  Body:\n"
+        "    Block with 4 statement(s):\n"
+        "      VarDecl: io::FILE* f:\n"
+        "        Function call with 2 args:\n"
+        "          Ident: io::fopen\n"
+        "          String Literal: \"imports_test_file.txt\"\n"
+        "          String Literal: \"w\"\n"
+        "      IfElseStmt:\n"
+        "        Condition:\n"
+        "          Ident: f\n"
+        "        Then:\n"
+        "          Block with 3 statement(s):\n"
+        "            Function call with 2 args:\n"
+        "              Ident: io::fprintf\n"
+        "              Ident: f\n"
+        "              String Literal: \"hello friend\n\"\n"
+        "            Function call with 1 args:\n"
+        "              Ident: io::fclose\n"
+        "              Ident: f\n"
+        "            Return:\n"
+        "              Literal Int: 0\n"
+        "        Else:\n"
+        "      Function call with 1 args:\n"
+        "        Ident: io::fclose\n"
+        "        Ident: f\n"
+        "      Return:\n"
+        "        Literal Int: 1\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_FnPtr_BasicDeclNoParam(void) {
 	SETUP_TEST("fn* void() test_fn_ptr;");
 	const char *expected = "VarDecl: fn()->void test_fn_ptr\n";
