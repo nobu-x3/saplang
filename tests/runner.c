@@ -61,6 +61,7 @@ int main(void) {
 	RUN_TEST(test_WhileLoop);
 	RUN_TEST(test_DeferStmts);
 	RUN_TEST(test_DeferWithOtherBlocks);
+	RUN_TEST(test_DeferWithNestedBlocks);
 	RUN_TEST(test_FnPtr_BasicDeclNoParam);
 	RUN_TEST(test_FnPtr_BasicDeclWithParams);
 	RUN_TEST(test_FnPtr_BasicCall);

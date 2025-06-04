@@ -1799,9 +1799,10 @@ ASTNode *parse_var_decl(Parser *parser, const char *prefix_name, int is_exported
 	}
 }
 
-typedef struct {
+typedef struct DeferStack {
 	ASTNode **data;
 	int capacity, count;
+	struct DeferStack *last_scope_dstack;
 } DeferStack;
 
 ASTNode *parse_if_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack);
@@ -2186,6 +2187,7 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 
 	DeferStack dstack_local;
 	da_init(dstack_local, 4);
+	dstack_local.last_scope_dstack = dstack;
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *stmt = parse_stmt(parser, prefix_name, &dstack_local);
 		if (!stmt)
@@ -2211,9 +2213,14 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 		ASTNode *block = new_block_node(stmts.data, stmts.count, loc);
 		int should_unroll_all_defers = block->data.block.count && block->data.block.statements[block->data.block.count - 1]->type == AST_RETURN;
 		unroll_defers(block, &dstack_local);
+		if (should_unroll_all_defers) {
+			DeferStack *curr_dstack = dstack_local.last_scope_dstack;
+			while (curr_dstack) {
+				unroll_defers(block, curr_dstack);
+				curr_dstack = curr_dstack->last_scope_dstack;
+			}
+		}
 		da_deinit(dstack_local);
-		if (should_unroll_all_defers)
-			unroll_defers(block, dstack);
 		return block;
 	}
 	da_deinit(dstack_local);
@@ -2405,6 +2412,7 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	++parser->current_scope;
 	DeferStack defer_stack;
 	da_init(defer_stack, 4);
+    defer_stack.last_scope_dstack = NULL;
 	ASTNode *body = parse_block(parser, func_name, &defer_stack);
 	da_deinit(defer_stack);
 	--parser->current_scope;
