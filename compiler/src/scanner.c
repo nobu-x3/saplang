@@ -344,7 +344,7 @@ Token next_token(Scanner *scanner) {
 	case '/':
 		if (_INPUT[_INDEX + 1] == '=') {
 			current_token.type = TOK_SELFDIV;
-			strncpy(current_token.text, "*=", sizeof(current_token.text));
+			strncpy(current_token.text, "/=", sizeof(current_token.text));
 			eat_next_char(scanner);
 			eat_next_char(scanner);
 		} else {
@@ -357,7 +357,7 @@ Token next_token(Scanner *scanner) {
 	case '|':
 		if (_INPUT[_INDEX + 1] == '=') {
 			current_token.type = TOK_SELFOR;
-			strncpy(current_token.text, "||", sizeof(current_token.text));
+			strncpy(current_token.text, "|=", sizeof(current_token.text));
 			eat_next_char(scanner);
 			eat_next_char(scanner);
 		} else if (_INPUT[_INDEX + 1] == '|') {
