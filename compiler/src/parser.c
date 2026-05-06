@@ -1667,7 +1667,7 @@ ASTNode *parse_equality(Parser *parser, const char *scope_prefix) {
 		SourceLocation loc = parser->current_token.location;
 		TokenType op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
-		ASTNode *right = parse_bitwise_shift(parser, scope_prefix);
+		ASTNode *right = parse_relational(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
 	}
 	return node;
@@ -1679,7 +1679,7 @@ ASTNode *parse_bitwise_and(Parser *parser, const char *scope_prefix) {
 		SourceLocation loc = parser->current_token.location;
 		TokenType op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
-		ASTNode *right = parse_additive(parser, scope_prefix);
+		ASTNode *right = parse_equality(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
 	}
 	return node;
