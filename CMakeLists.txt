@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 
 project(saplang)
 
-find_package(LLVM REQUIRED CONFIG 18.1.8)
+find_package(LLVM REQUIRED CONFIG 19.1.7)
 if(BUILD_OLD)
     include_directories(compiler/src "${LLVM_INCLUDE_DIR}")
 endif(BUILD_OLD)
