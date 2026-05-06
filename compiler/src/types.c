@@ -145,7 +145,7 @@ TypeInfo compute_struct_size_and_alignment(ASTNode *node) {
 		offset += info.size;
 	}
 
-	size_t final_padding = (max_align - (offset % max_align) % max_align);
+	size_t final_padding = (max_align - (offset % max_align)) % max_align;
 	info.size = offset + final_padding;
 	info.align = max_align;
 	return info;
