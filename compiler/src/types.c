@@ -122,6 +122,8 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 	return info;
 }
 
+size_t align_to(size_t offset, size_t alignment) { return (offset + alignment - 1) & ~(alignment - 1); }
+
 TypeInfo compute_struct_size_and_alignment(ASTNode *node) {
 	TypeInfo info = {0, 1};
 	if (!node)
@@ -140,9 +142,8 @@ TypeInfo compute_struct_size_and_alignment(ASTNode *node) {
 		if (field_info.align > max_align)
 			max_align = field_info.align;
 
-		size_t padding = (info.align - (offset % info.align)) % info.align;
-		offset += padding;
-		offset += info.size;
+		offset = align_to(offset, field_info.align);
+		offset += field_info.size;
 	}
 
 	size_t final_padding = (max_align - (offset % max_align)) % max_align;
@@ -150,8 +151,6 @@ TypeInfo compute_struct_size_and_alignment(ASTNode *node) {
 	info.align = max_align;
 	return info;
 }
-
-size_t align_to(size_t offset, size_t alignment) { return (offset + alignment - 1) & ~(alignment - 1); }
 
 Type *copy_type(Type *type) {
 	Type *t = malloc(sizeof(Type));

@@ -115,6 +115,10 @@ int main(void) {
 	RUN_TEST(test_ArrayType_typeinfo);
 	RUN_TEST(test_EnumType_typeinfo);
 	RUN_TEST(test_StructDecl_typeinfo);
+	RUN_TEST(test_StructAlreadyAlignedI32Pair_typeinfo);
+	RUN_TEST(test_StructAlreadyAlignedSingleF64_typeinfo);
+	RUN_TEST(test_StructAlreadyAlignedI32Quad_typeinfo);
+	RUN_TEST(test_StructTrailingPadI32Bool_typeinfo);
 	RUN_TEST(test_UnionDecl_typeinfo);
 
 	RUN_TEST(test_FunctionDecl_codegen);

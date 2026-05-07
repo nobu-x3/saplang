@@ -66,8 +66,51 @@ void test_StructDecl_typeinfo(void) {
     TEST_SETUP_SINGLE_TYPEINFO("struct Struct { i32 first; f64 second; bool third; }");
 	Type type = {.type_kind = TYPE_STRUCT, .type_name = "Struct"};
 	TypeInfo info = get_type_info(&type, module->ast);
+	TEST_ASSERT_EQUAL_UINT32(24, info.size);
+	TEST_ASSERT_EQUAL_UINT32(8, info.align);
+}
+
+// Two i32 fields lay out at offsets 0 and 4; offset after the last field
+// (8) is already a multiple of the struct's alignment (4), so the
+// trailing pad must be zero rather than a full alignment unit.
+void test_StructAlreadyAlignedI32Pair_typeinfo(void) {
+	TEST_SETUP_SINGLE_TYPEINFO("struct S { i32 a; i32 b; }");
+	Type type = {.type_kind = TYPE_STRUCT, .type_name = "S"};
+	TypeInfo info = get_type_info(&type, module->ast);
+	TEST_ASSERT_EQUAL_UINT32(8, info.size);
+	TEST_ASSERT_EQUAL_UINT32(4, info.align);
+}
+
+// A single f64 field is already at the struct's alignment; the trailing
+// pad must be zero, not a duplicate 8-byte unit at the end.
+void test_StructAlreadyAlignedSingleF64_typeinfo(void) {
+	TEST_SETUP_SINGLE_TYPEINFO("struct S { f64 a; }");
+	Type type = {.type_kind = TYPE_STRUCT, .type_name = "S"};
+	TypeInfo info = get_type_info(&type, module->ast);
 	TEST_ASSERT_EQUAL_UINT32(8, info.size);
 	TEST_ASSERT_EQUAL_UINT32(8, info.align);
+}
+
+// Four i32 fields end at offset 16, already aligned to 4; no trailing
+// pad must be added.
+void test_StructAlreadyAlignedI32Quad_typeinfo(void) {
+	TEST_SETUP_SINGLE_TYPEINFO("struct S { i32 a; i32 b; i32 c; i32 d; }");
+	Type type = {.type_kind = TYPE_STRUCT, .type_name = "S"};
+	TypeInfo info = get_type_info(&type, module->ast);
+	TEST_ASSERT_EQUAL_UINT32(16, info.size);
+	TEST_ASSERT_EQUAL_UINT32(4, info.align);
+}
+
+// An i32 followed by a bool ends at offset 5; the trailing pad must
+// round the size up to the struct's alignment (4), giving size 8.
+// Sanity check that the modulo subtraction still works in the common
+// non-degenerate case.
+void test_StructTrailingPadI32Bool_typeinfo(void) {
+	TEST_SETUP_SINGLE_TYPEINFO("struct S { i32 a; bool b; }");
+	Type type = {.type_kind = TYPE_STRUCT, .type_name = "S"};
+	TypeInfo info = get_type_info(&type, module->ast);
+	TEST_ASSERT_EQUAL_UINT32(8, info.size);
+	TEST_ASSERT_EQUAL_UINT32(4, info.align);
 }
 
 void test_UnionDecl_typeinfo(void) {
