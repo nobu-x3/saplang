@@ -137,9 +137,8 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 		Symbol *sym = lookup_symbol(table, type->type_resolved_name, 0);
 		assert(sym && "unknown enum symbol.");
 		assert(sym->kind == SYMB_ENUM && "symbol expected to be enum.");
-		Type type_copy = *sym->type;
-		type_copy.type_kind = TYPE_PRIMITIVE;
-		return map_to_llvm(cg, &type_copy, table);
+		assert(sym->node && sym->node->type == AST_ENUM_DECL && sym->node->data.enum_decl.base_type);
+		return map_to_llvm(cg, sym->node->data.enum_decl.base_type, table);
 	} break;
 
 	case TYPE_UNDECIDED:

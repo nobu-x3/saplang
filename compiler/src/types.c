@@ -68,6 +68,9 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 	case TYPE_STRUCT:
 		return compute_struct_size_and_alignment(node);
 	case TYPE_ENUM: {
+		if (node && node->type == AST_ENUM_DECL && node->data.enum_decl.base_type) {
+			return get_type_info(node->data.enum_decl.base_type, node);
+		}
 		char *type_name = type->type_name;
 		if (strcmp(type_name, "i8") == 0) {
 			info.size = 1;
@@ -237,6 +240,7 @@ Type *new_primitive_type(const char *name) {
 	t->type_kind = TYPE_PRIMITIVE;
 	strncpy(t->type_name, name, sizeof(t->type_name));
 	memset(t->type_namespace, 0, sizeof(t->type_namespace));
+	memset(t->type_resolved_name, 0, sizeof(t->type_resolved_name));
 	return t;
 }
 
@@ -255,6 +259,7 @@ Type *new_pointer_type(Type *pointee) {
 		return NULL;
 	memset(t->type_name, 0, sizeof(t->type_name));
 	memset(t->type_namespace, 0, sizeof(t->type_namespace));
+	memset(t->type_resolved_name, 0, sizeof(t->type_resolved_name));
 	t->type_kind = TYPE_POINTER;
 	t->pointee = pointee;
 	return t;
@@ -266,6 +271,7 @@ Type *new_array_type(Type *element_type, int size) {
 		return NULL;
 	memset(t->type_name, 0, sizeof(t->type_name));
 	memset(t->type_namespace, 0, sizeof(t->type_namespace));
+	memset(t->type_resolved_name, 0, sizeof(t->type_resolved_name));
 	t->type_kind = TYPE_ARRAY;
 	t->array.element_type = element_type;
 	t->array.size = size;
@@ -279,6 +285,7 @@ Type *new_function_type(Type *return_type, Type **param_types, int param_count) 
 	t->type_kind = TYPE_FUNCTION;
 	memset(t->type_name, 0, sizeof(t->type_name));
 	memset(t->type_namespace, 0, sizeof(t->type_namespace));
+	memset(t->type_resolved_name, 0, sizeof(t->type_resolved_name));
 	t->function.return_type = return_type;
 	t->function.param_types = param_types;
 	t->function.param_count = param_count;

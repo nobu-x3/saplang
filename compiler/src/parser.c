@@ -262,7 +262,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			}
 			break;
 		case AST_ENUM_DECL: {
-			print(string, "EnumDecl with %d member(s) - %s%s : ", node->data.enum_decl.member_count, node->data.enum_decl.is_exported ? "exported " : "", node->data.enum_decl.name);
+			print(string, "EnumDecl with %d member(s) - %s%s : enum ", node->data.enum_decl.member_count, node->data.enum_decl.is_exported ? "exported " : "", node->data.enum_decl.name);
 			type_print(string, node->data.enum_decl.base_type);
 			print(string, ":\n");
 			for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
@@ -1172,11 +1172,8 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 		parser->current_token = next_token(&parser->scanner); // consume ':'
 		if (parse_type(parser, &base_type) != RESULT_SUCCESS)
 			is_error = 1;
-		if (!is_error)
-			base_type->type_kind = TYPE_ENUM;
 	} else {
 		base_type = new_primitive_type("i32");
-		base_type->type_kind = TYPE_ENUM;
 	}
 
 	if (parser->current_token.type != TOK_LCURLY) {
@@ -1268,10 +1265,22 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 
 	if (!is_error) {
 		ASTNode *decl_node = new_enum_decl_node(enum_name, is_extern ? enum_name : resolved_name, base_type, members.data, members.count, loc);
-		add_symbol(&parser->symbol_table, decl_node, enum_name, is_extern ? enum_name : resolved_name, 1, is_extern, SYMB_ENUM, base_type, parser->current_scope);
+		const char *enum_resolved = is_extern ? enum_name : resolved_name;
+		Type *enum_type = malloc(sizeof(Type));
+		if (!enum_type)
+			return NULL;
+		memset(enum_type, 0, sizeof(Type));
+		enum_type->type_kind = TYPE_ENUM;
+		strncpy(enum_type->type_name, enum_name, sizeof(enum_type->type_name));
+		if (!is_extern)
+			strncpy(enum_type->type_namespace, parser->module_name, sizeof(enum_type->type_namespace));
+		strncpy(enum_type->type_resolved_name, enum_resolved, sizeof(enum_type->type_resolved_name));
+		add_symbol(&parser->symbol_table, decl_node, enum_name, enum_resolved, 1, is_extern, SYMB_ENUM, enum_type, parser->current_scope);
 		if (is_exported) {
-			add_symbol(&parser->exported_table, decl_node, enum_name, is_extern ? enum_name : resolved_name, 1, is_extern, SYMB_ENUM, base_type, parser->current_scope);
+			add_symbol(&parser->exported_table, decl_node, enum_name, enum_resolved, 1, is_extern, SYMB_ENUM, enum_type, parser->current_scope);
 		}
+		type_deinit(enum_type);
+		free(enum_type);
 		return decl_node;
 	}
 	return NULL;
