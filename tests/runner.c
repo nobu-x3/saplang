@@ -196,5 +196,7 @@ int main(void) {
 	RUN_TEST(test_NestedIfs_codegen);
 
 	RUN_TEST(test_ImportTest_modules);
+	RUN_TEST(test_ImportCycle_modules);
 	return UNITY_END();
+
 }

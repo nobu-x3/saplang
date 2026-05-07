@@ -221,6 +221,11 @@ typedef struct DependencyGraphNodeList {
 	int capacity, count;
 } DependencyGraphNodeList;
 
+typedef enum {
+	DG_IN_PROGRESS,
+	DG_DONE,
+} DGStatus;
+
 // DependencyGraphNode is a linked list which contains a dynamic array of dependencies, parser instance and a string list of imports without extensions. Also contains module, which contains symbol table and AST for that module.
 typedef struct DependencyGraphNode {
 	char name[64];
@@ -229,6 +234,7 @@ typedef struct DependencyGraphNode {
 	DependencyGraphNodeList dependencies;
 	DependencyGraphNode *next;
 	Module *module;
+	DGStatus status;
 
 	// Diagnostics for the current phase are buffered here so that
 	// concurrent workers don't interleave bytes on stderr. Opened by the
@@ -243,6 +249,7 @@ typedef struct {
 	CompileOptions options;
 	SourceList sources;
 	DependencyGraphNode *dependency_graph;
+	DependencyGraphNode *dependency_graph_tail;
 	int module_count;
 } Driver;
 
@@ -430,8 +437,49 @@ void dg_clean(DependencyGraphNode *graph) {
 	}
 }
 
-// Builds a dependency graph of the project starting from root. 'DependencyGraphNode::module' field remains untouched.
-CompilerResult build_dependency_graph(SourceFile input_file, DependencyGraphNode **root) {
+typedef struct DGFrame {
+	DependencyGraphNode *node;
+	struct DGFrame *prev;
+} DGFrame;
+
+// Print the cycle path: target -> ... -> current -> target. We walk
+// the DFS stack from `current` up until we hit `target`, collecting
+// the frames in between, then print forward in import order.
+static void report_import_cycle(DGFrame *current, const DependencyGraphNode *target) {
+	const DependencyGraphNode *path[256];
+	int n = 0;
+	int found_target = 0;
+	for (DGFrame *f = current; f && n < 256; f = f->prev) {
+		path[n++] = f->node;
+		if (f->node == target) {
+			found_target = 1;
+			break;
+		}
+	}
+	if (!found_target) {
+		// shouldn't happen - target must be on the stack, just in case
+		fprintf(stderr, "import cycle detected involving '%s'.\n", target->name);
+		return;
+	}
+	fprintf(stderr, "import cycle detected:\n");
+	// path[0] is `current`, path[n-1] is `target`. Print target first.
+	for (int i = n - 1; i >= 0; --i) {
+		fprintf(stderr, "  %s ->\n", path[i]->name);
+	}
+	fprintf(stderr, "  %s\n", target->name);
+}
+
+static void dg_chain_append(DependencyGraphNode *node) {
+	if (!driver.dependency_graph || driver.dependency_graph == node) {
+		driver.dependency_graph = node;
+		driver.dependency_graph_tail = node;
+		return;
+	}
+	driver.dependency_graph_tail->next = node;
+	driver.dependency_graph_tail = node;
+}
+
+static CompilerResult build_dependency_graph_inner(SourceFile input_file, DependencyGraphNode **root, DGFrame *parent_frame) {
 	++driver.module_count;
 
 	*root = calloc(sizeof(DependencyGraphNode), 1);
@@ -440,60 +488,77 @@ CompilerResult build_dependency_graph(SourceFile input_file, DependencyGraphNode
 		return RESULT_MEMORY_ERROR;
 
 	strncpy((*root)->name, input_file.name, sizeof((*root)->name));
+	(*root)->status = DG_IN_PROGRESS;
 
 	da_init_result((*root)->dependencies, 4);
 
+	// Register before any recursion so dg_find sees IN_PROGRESS
+	// siblings. Cleanup of half-built nodes happens via the outer
+	// wrapper's dg_clean across the whole chain; parser_deinit on a
+	// calloc'd Parser is safe (frees a NULL scanner buffer).
+	dg_chain_append(*root);
+
 	Scanner scanner;
 	CompilerResult res = scanner_init_from_src(&scanner, input_file);
-	if (res != RESULT_SUCCESS) {
-		dg_clean((*root));
+	if (res != RESULT_SUCCESS)
 		return res;
-	}
 
 	res = parser_init(&(*root)->parser, scanner, NULL);
-	if (res != RESULT_SUCCESS) {
-		dg_clean((*root));
+	if (res != RESULT_SUCCESS)
 		return res;
-	}
 
 	res = parse_import_list(&(*root)->parser, &(*root)->imports);
-	if (res != RESULT_SUCCESS) {
-		dg_clean((*root));
+	if (res != RESULT_SUCCESS)
 		return res;
-	}
 
-	DependencyGraphNode *graph_tail = *root;
+	DGFrame frame = {*root, parent_frame};
+
 	for (int i = 0; i < (*root)->imports.count; ++i) {
-		// if the node already exists in the (*graph) it must have already been proccessed but we still want to add it to dependencies of the module that is currently being processed.
 		char name[64] = "";
 		sprintf(name, "%s.sl", (*root)->imports.data[i]);
 		DependencyGraphNode *existing_node = dg_find(name, driver.dependency_graph);
 		if (existing_node) {
-			da_push_safe_result((*root)->dependencies, existing_node, { dg_clean(*root); });
+			if (existing_node->status == DG_IN_PROGRESS) {
+				report_import_cycle(&frame, existing_node);
+				return RESULT_FAILURE;
+			}
+			da_push_safe_result((*root)->dependencies, existing_node, {});
 			continue;
 		}
 		SourceFile dep_src = driver_init_source(name);
 		DependencyGraphNode *subgraph;
+		res = build_dependency_graph_inner(dep_src, &subgraph, &frame);
+		if (res != RESULT_SUCCESS)
+			return res;
 
-		if (build_dependency_graph(dep_src, &subgraph) != RESULT_SUCCESS) {
-			free(dep_src.buffer);
-			dg_clean(*root);
-			return RESULT_FAILURE;
-		}
-
-		da_push_safe_result((*root)->dependencies, subgraph, {
-			free(dep_src.buffer);
-			dg_clean(*root);
-		});
-
-		while (graph_tail->next) {
-			graph_tail = graph_tail->next;
-		}
-		graph_tail->next = subgraph;
-		graph_tail = subgraph;
+		da_push_safe_result((*root)->dependencies, subgraph, {});
 	}
 
+	(*root)->status = DG_DONE;
 	return RESULT_SUCCESS;
+}
+
+// Builds a dependency graph of the project starting from root. On
+// failure, the wrapper drops the whole partially-built chain and clears
+// driver.dependency_graph so callers see a clean slate.
+CompilerResult build_dependency_graph(SourceFile input_file, DependencyGraphNode **root) {
+	// Fresh slate — successive driver_runs (e.g. across test cases) must
+	// not see leftover nodes from prior compiles.
+	if (driver.dependency_graph) {
+		dg_clean(driver.dependency_graph);
+		driver.dependency_graph = NULL;
+	}
+	driver.dependency_graph_tail = NULL;
+	driver.module_count = 0;
+
+	CompilerResult res = build_dependency_graph_inner(input_file, root, NULL);
+	if (res != RESULT_SUCCESS) {
+		dg_clean(driver.dependency_graph);
+		driver.dependency_graph = NULL;
+		driver.dependency_graph_tail = NULL;
+		*root = NULL;
+	}
+	return res;
 }
 
 void parsing_task(void *arg) {
@@ -587,6 +652,12 @@ CompilerResult driver_run() {
 		return 1;
 	}
 	CompilerResult res = build_dependency_graph(input_src_file, &driver.dependency_graph);
+	if (res != RESULT_SUCCESS) {
+		// build_dependency_graph_inner has already dg_clean'd the partial
+		// graph (including the input source buffer the scanner claimed)
+		// and NULL'd driver.dependency_graph.
+		return res;
+	}
 	int available_cores = get_num_of_cores();
 	available_cores = driver.module_count > available_cores ? available_cores : driver.module_count;
 	ThreadPool *thread_pool = threadpool_create(driver.options.threads ? driver.options.threads : available_cores);
