@@ -1,6 +1,7 @@
 #include "codegen_tests.h"
 #include "hashmap_tests.h"
 #include "parser_tests.h"
+#include "scanner_tests.h"
 #include "sema_tests.h"
 #include "threadpool_tests.h"
 #include "typeinfo_tests.h"
@@ -68,6 +69,14 @@ int main(void) {
 	RUN_TEST(test_FnPtr_BasicAssignment);
 	RUN_TEST(test_FnPtr_StructFieldAssignment);
 	RUN_TEST(test_Binops_AndOrSelf);
+	RUN_TEST(test_Precedence_BitwiseAnd_VsEquality);
+	RUN_TEST(test_Precedence_Equality_VsRelational);
+	RUN_TEST(test_Precedence_LeftAssoc_Equality);
+	RUN_TEST(test_Precedence_LeftAssoc_BitwiseAnd);
+	RUN_TEST(test_TokenText_SelfDiv_scanner);
+	RUN_TEST(test_TokenText_SelfOr_scanner);
+	RUN_TEST(test_TokenText_LogicalOr_scanner);
+	RUN_TEST(test_TokenText_SelfMul_scanner);
 	RUN_TEST(test_StringLiteral);
 	RUN_TEST(test_CharLiteral);
 	RUN_TEST(test_BinaryLiteral);

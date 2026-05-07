@@ -1081,6 +1081,106 @@ void test_Binops_AndOrSelf(void) {
 	free(output);
 }
 
+void test_Precedence_BitwiseAnd_VsEquality(void) {
+	SETUP_TEST("fn void main() {"
+			   "   i32 a = 0; i32 b = 0; i32 c = 0;"
+			   "   i32 r = a & b == c;"
+			   "}");
+	const char *expected = "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 4 statement(s):\n"
+						   "      VarDecl: i32 a:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 b:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 c:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 r:\n"
+						   "        Binary Expression: &\n"
+						   "          Ident: a\n"
+						   "          Binary Expression: ==\n"
+						   "            Ident: b\n"
+						   "            Ident: c\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_Precedence_Equality_VsRelational(void) {
+	SETUP_TEST("fn void main() {"
+			   "   i32 a = 0; i32 b = 0; i32 c = 0;"
+			   "   bool r = a == b < c;"
+			   "}");
+	const char *expected = "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 4 statement(s):\n"
+						   "      VarDecl: i32 a:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 b:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 c:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: bool r:\n"
+						   "        Binary Expression: ==\n"
+						   "          Ident: a\n"
+						   "          Binary Expression: <\n"
+						   "            Ident: b\n"
+						   "            Ident: c\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_Precedence_LeftAssoc_Equality(void) {
+	SETUP_TEST("fn void main() {"
+			   "   i32 a = 0; i32 b = 0; i32 c = 0;"
+			   "   bool r = a == b == c;"
+			   "}");
+	const char *expected = "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 4 statement(s):\n"
+						   "      VarDecl: i32 a:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 b:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 c:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: bool r:\n"
+						   "        Binary Expression: ==\n"
+						   "          Binary Expression: ==\n"
+						   "            Ident: a\n"
+						   "            Ident: b\n"
+						   "          Ident: c\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_Precedence_LeftAssoc_BitwiseAnd(void) {
+	SETUP_TEST("fn void main() {"
+			   "   i32 a = 0; i32 b = 0; i32 c = 0;"
+			   "   i32 r = a & b & c;"
+			   "}");
+	const char *expected = "FuncDecl: main\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 4 statement(s):\n"
+						   "      VarDecl: i32 a:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 b:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 c:\n"
+						   "        Literal Int: 0\n"
+						   "      VarDecl: i32 r:\n"
+						   "        Binary Expression: &\n"
+						   "          Binary Expression: &\n"
+						   "            Ident: a\n"
+						   "            Ident: b\n"
+						   "          Ident: c\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_StringLiteral(void) {
 	SETUP_TEST("fn void main() {"
 			   "   const u8* a = \"Hello world\n\";"
