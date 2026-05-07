@@ -304,52 +304,82 @@ int type_equals(const Type *a, const Type *b) {
 	}
 }
 
-int type_get_string_len(Type *type, int initial) {
-	if (!type)
-		return initial;
+typedef struct {
+	char *buf;
+	int to_stdout;
+	size_t total;
+} TypeWriter;
 
+static void tw_write(TypeWriter *w, const char *s) {
+	size_t n = strlen(s);
+	if (w->buf) {
+		memcpy(w->buf, s, n);
+		w->buf += n;
+		*w->buf = '\0';
+	}
+	if (w->to_stdout) {
+		fputs(s, stdout);
+	}
+	w->total += n;
+}
+
+static void type_write(TypeWriter *w, const Type *type) {
+	if (!type)
+		return;
+	char tmp[64];
 	switch (type->type_kind) {
 	case TYPE_PRIMITIVE:
-		if (type->type_namespace[0] != 0)
-			// 2 comes from '::'
-			return initial + strlen(type->type_namespace) + 2 + strlen(type->type_name);
-		return initial + strlen(type->type_name);
+		tw_write(w, type->type_name);
+		break;
 	case TYPE_POINTER:
-		// 1 comes from '*'
-		return type_get_string_len(type->pointee, initial + 1);
+		type_write(w, type->pointee);
+		tw_write(w, "*");
+		break;
 	case TYPE_ARRAY:
-		initial += type_get_string_len(type->array.element_type, initial);
-		char size_str[64] = "";
-		sprintf(size_str, "[%d]", type->array.size);
-		return initial + strlen(size_str);
+		type_write(w, type->array.element_type);
+		snprintf(tmp, sizeof(tmp), "[%d]", type->array.size);
+		tw_write(w, tmp);
+		break;
 	case TYPE_FUNCTION:
-		initial += 3; // "fn("
+		tw_write(w, "fn(");
 		for (int i = 0; i < type->function.param_count; ++i) {
-			initial += type_get_string_len(type->function.param_types[i], initial);
-			if (i != type->function.param_count - 1) {
-				initial += 2; // ", "
-			}
+			type_write(w, type->function.param_types[i]);
+			if (i != type->function.param_count - 1)
+				tw_write(w, ", ");
 		}
-		initial += 3; // ")->"
-		return initial + type_get_string_len(type->function.return_type, initial);
+		tw_write(w, ")->");
+		type_write(w, type->function.return_type);
+		break;
 	case TYPE_STRUCT:
-		initial += 7; // "struct ";
-		if (type->type_namespace[0] != 0)
-			// 2 comes from '::'
-			return initial + strlen(type->type_namespace) + 2 + strlen(type->type_name);
-		return initial + strlen(type->type_name);
+		tw_write(w, "struct ");
+		if (type->type_namespace[0] != '\0') {
+			tw_write(w, type->type_namespace);
+			tw_write(w, "::");
+		}
+		tw_write(w, type->type_name);
+		break;
 	case TYPE_ENUM:
-		initial += 5; // "enum ";
-		if (type->type_namespace[0] != 0)
-			// 2 comes from '::'
-			return initial + strlen(type->type_namespace) + 2 + strlen(type->type_name);
-		return initial + strlen(type->type_name);
+		tw_write(w, "enum ");
+		if (type->type_namespace[0] != '\0') {
+			tw_write(w, type->type_namespace);
+			tw_write(w, "::");
+		}
+		tw_write(w, type->type_name);
+		break;
 	case TYPE_UNDECIDED:
-		if (type->type_namespace[0] != 0)
-			// 2 comes from '::'
-			return initial + strlen(type->type_namespace) + 2 + strlen(type->type_name);
-		return initial + strlen(type->type_name);
+		if (type->type_namespace[0] != '\0') {
+			tw_write(w, type->type_namespace);
+			tw_write(w, "::");
+		}
+		tw_write(w, type->type_name);
+		break;
 	}
+}
+
+int type_get_string_len(Type *type, int initial) {
+	TypeWriter w = {0};
+	type_write(&w, type);
+	return initial + (int)w.total;
 }
 
 int is_builtin(const Type *type) {
@@ -400,52 +430,15 @@ int is_builtin(const Type *type) {
 }
 
 void type_print(char *string, Type *type) {
-	if (!type)
-		return;
-	switch (type->type_kind) {
-	case TYPE_PRIMITIVE:
-		print(string, "%s", type->type_name);
-		break;
-	case TYPE_POINTER:
-		type_print(string, type->pointee);
-		print(string, "*");
-		break;
-	case TYPE_ARRAY:
-		type_print(string, type->array.element_type);
-		print(string, "[%d]", type->array.size);
-		break;
-	case TYPE_FUNCTION:
-		print(string, "fn(");
-		for (int i = 0; i < type->function.param_count; ++i) {
-			type_print(string, type->function.param_types[i]);
-			if (i != type->function.param_count - 1) {
-				print(string, ", ");
-			}
-		}
-		print(string, ")->");
-		type_print(string, type->function.return_type);
-		break;
-	case TYPE_STRUCT:
-		if (type->type_namespace[0] != '\0') {
-			print(string, "struct %s::%s", type->type_namespace, type->type_name);
-		} else {
-			print(string, "struct %s", type->type_name);
-		}
-		break;
-	case TYPE_ENUM:
-		if (type->type_namespace[0] != '\0') {
-			print(string, "enum %s::%s", type->type_namespace, type->type_name);
-		} else {
-			print(string, "enum %s", type->type_name);
-		}
-		break;
-	case TYPE_UNDECIDED:
-		if (type->type_namespace[0] != '\0') {
-			print(string, "%s::%s", type->type_namespace, type->type_name);
-		} else {
-			print(string, "%s", type->type_name);
-		}
+	TypeWriter w = {0};
+	if (string) {
+		// Match the existing append-via-strcat semantic: write at the
+		// end of whatever the caller has accumulated.
+		w.buf = string + strlen(string);
+	} else {
+		w.to_stdout = 1;
 	}
+	type_write(&w, type);
 }
 
 int find_struct_field_index(struct ASTNode *struct_decl, const char *field_name) {
