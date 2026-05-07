@@ -8,10 +8,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-// @TODO: fix memleaks on return NULL
 // @TODO: optimize resolved_name being populated even when is_extern
 
-void free_ast_node(ASTNode *node);
+// Per-thread parser arena. parse_input writes the active module's arena
+// here so the various new_*_node helpers (and the AST dynamic-array
+// macros below) don't have to thread it through every signature. Each
+// worker thread runs at most one parser at a time, so this stays
+// safe under -j without locking.
+static __thread Arena *current_parser_arena = NULL;
+
+#define p_da_init(xs, cap) da_init_arena((xs), (cap), current_parser_arena)
+#define p_da_push(xs, x) da_push_arena((xs), (x), current_parser_arena)
+#define p_da_init_unsafe(xs, cap) da_init_arena_unsafe((xs), (cap), current_parser_arena)
+#define p_da_push_unsafe(xs, x) da_push_arena_unsafe((xs), (x), current_parser_arena)
 
 typedef struct {
 	ASTNode **data;
@@ -374,7 +383,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 
 //////////////////// HELPER FUNCTIONS /////////////////////////////////////////
 FieldInitializer *new_field_initializer(const char *field_name, int is_designated, ASTNode *expr) {
-	FieldInitializer *init = malloc(sizeof(FieldInitializer));
+	FieldInitializer *init = arena_alloc(current_parser_arena, sizeof(FieldInitializer));
 	if (!init)
 		return NULL;
 
@@ -389,11 +398,12 @@ FieldInitializer *new_field_initializer(const char *field_name, int is_designate
 }
 
 ASTNode *new_ast_node(ASTNodeType type, SourceLocation location) {
-	ASTNode *node = malloc(sizeof(ASTNode));
+	ASTNode *node = arena_alloc(current_parser_arena, sizeof(ASTNode));
 	if (!node) {
 		return NULL;
 	}
 
+	memset(node, 0, sizeof(ASTNode));
 	node->location = location;
 	node->type = type;
 	node->next = NULL;
@@ -424,10 +434,10 @@ ASTNode *copy_ast_node(ASTNode *node) {
 			ASTNode **data;
 			int count, capacity;
 		} field_list;
-		da_init(field_list, field_count);
+		p_da_init(field_list, field_count);
 		for (int i = 0; i < field_count; ++i) {
 			ASTNode *field_copy = copy_ast_node(node->data.struct_decl.fields[i]);
-			da_push(field_list, field_copy);
+			p_da_push(field_list, field_copy);
 		}
 	} break;
 	case AST_FN_DECL: {
@@ -453,7 +463,7 @@ ASTNode *copy_ast_node(ASTNode *node) {
 		}
 	} break;
 	case AST_BLOCK: {
-		new_node->data.block.statements = malloc(sizeof(*new_node->data.block.statements) * node->data.block.count);
+		new_node->data.block.statements = arena_alloc(current_parser_arena, sizeof(*new_node->data.block.statements) * node->data.block.count);
 		for (int i = 0; i < node->data.block.count; ++i) {
 			new_node->data.block.statements[i] = copy_ast_node(node->data.block.statements[i]);
 		}
@@ -477,7 +487,7 @@ ASTNode *copy_ast_node(ASTNode *node) {
 		new_node->data.unary_op.operand = copy_ast_node(node->data.unary_op.operand);
 		break;
 	case AST_ARRAY_LITERAL:
-		new_node->data.array_literal.elements = malloc(sizeof(*node->data.array_literal.elements) * node->data.array_literal.count);
+		new_node->data.array_literal.elements = arena_alloc(current_parser_arena, sizeof(*node->data.array_literal.elements) * node->data.array_literal.count);
 		for (int i = 0; i < node->data.array_literal.count; ++i) {
 			new_node->data.array_literal.elements[i] = copy_ast_node(node->data.array_literal.elements[i]);
 		}
@@ -493,7 +503,7 @@ ASTNode *copy_ast_node(ASTNode *node) {
 		break;
 	case AST_FN_CALL:
 		new_node->data.func_call.callee = copy_ast_node(node->data.func_call.callee);
-		new_node->data.func_call.args = malloc(sizeof(*new_node->data.func_call.args) * node->data.func_call.arg_count);
+		new_node->data.func_call.args = arena_alloc(current_parser_arena, sizeof(*new_node->data.func_call.args) * node->data.func_call.arg_count);
 		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
 			new_node->data.func_call.args[i] = copy_ast_node(node->data.func_call.args[i]);
 		}
@@ -504,9 +514,9 @@ ASTNode *copy_ast_node(ASTNode *node) {
 		new_node->data.member_access.base = copy_ast_node(node->data.member_access.base);
 		break;
 	case AST_STRUCT_LITERAL:
-		new_node->data.struct_literal.inits = malloc(sizeof(*new_node->data.struct_literal.inits) * node->data.struct_literal.count);
+		new_node->data.struct_literal.inits = arena_alloc(current_parser_arena, sizeof(*new_node->data.struct_literal.inits) * node->data.struct_literal.count);
 		for (int i = 0; i < node->data.struct_literal.count; ++i) {
-			new_node->data.struct_literal.inits[i] = malloc(sizeof(FieldInitializer));
+			new_node->data.struct_literal.inits[i] = arena_alloc(current_parser_arena, sizeof(FieldInitializer));
 			strncpy(new_node->data.struct_literal.inits[i]->field, node->data.struct_literal.inits[i]->field, sizeof(new_node->data.struct_literal.inits[i]->field));
 			new_node->data.struct_literal.inits[i]->is_designated = node->data.struct_literal.inits[i]->is_designated;
 			new_node->data.struct_literal.inits[i]->expr = copy_ast_node(node->data.struct_literal.inits[i]->expr);
@@ -519,9 +529,9 @@ ASTNode *copy_ast_node(ASTNode *node) {
 		new_node->data.enum_decl.base_type = copy_type(node->data.enum_decl.base_type);
 		new_node->data.enum_decl.member_count = node->data.enum_decl.member_count;
 		new_node->data.enum_decl.is_exported = node->data.enum_decl.is_exported;
-		new_node->data.enum_decl.members = malloc(sizeof(*new_node->data.enum_decl.members) * node->data.enum_decl.member_count);
+		new_node->data.enum_decl.members = arena_alloc(current_parser_arena, sizeof(*new_node->data.enum_decl.members) * node->data.enum_decl.member_count);
 		for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
-			new_node->data.enum_decl.members[i] = malloc(sizeof(EnumMember));
+			new_node->data.enum_decl.members[i] = arena_alloc(current_parser_arena, sizeof(EnumMember));
 			new_node->data.enum_decl.members[i]->value = node->data.enum_decl.members[i]->value;
 			strncpy(new_node->data.enum_decl.members[i]->name, node->data.enum_decl.members[i]->name, sizeof(new_node->data.enum_decl.members[i]->name));
 		}
@@ -529,7 +539,7 @@ ASTNode *copy_ast_node(ASTNode *node) {
 	case AST_EXTERN_BLOCK:
 		strncpy(new_node->data.extern_block.lib_name, node->data.extern_block.lib_name, sizeof(new_node->data.extern_block.lib_name));
 		new_node->data.extern_block.count = node->data.extern_block.count;
-		new_node->data.extern_block.block = malloc(sizeof(*new_node->data.extern_block.block) * new_node->data.extern_block.count);
+		new_node->data.extern_block.block = arena_alloc(current_parser_arena, sizeof(*new_node->data.extern_block.block) * new_node->data.extern_block.count);
 		for (int i = 0; i < node->data.extern_block.count; ++i) {
 			new_node->data.extern_block.block[i] = copy_ast_node(node->data.extern_block.block[i]);
 		}
@@ -565,7 +575,7 @@ ASTNode *copy_ast_node(ASTNode *node) {
 	case AST_DEFER_BLOCK:
 		new_node->data.defer.defer_block = copy_ast_node(node->data.defer.defer_block);
 	case AST_DEFERRED_SEQUENCE:
-		new_node->data.block.statements = malloc(sizeof(*new_node->data.block.statements) * node->data.block.count);
+		new_node->data.block.statements = arena_alloc(current_parser_arena, sizeof(*new_node->data.block.statements) * node->data.block.count);
 		for (int i = 0; i < node->data.block.count; ++i) {
 			new_node->data.block.statements[i] = copy_ast_node(node->data.block.statements[i]);
 		}
@@ -1191,7 +1201,7 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 	} enum_member_list;
 
 	enum_member_list members;
-	da_init(members, 4);
+	p_da_init(members, 4);
 
 	int next_value = 0;
 	while (parser->current_token.type != TOK_RCURLY) {
@@ -1201,8 +1211,8 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 			report(parser->current_token.location, msg, 0);
 			is_error = 1;
 		}
-		EnumMember *member = malloc(sizeof(EnumMember));
-		if (!member) // @TODO: leaks
+		EnumMember *member = arena_alloc(current_parser_arena, sizeof(EnumMember));
+		if (!member)
 			return NULL;
 		strncpy(member->name, parser->current_token.text, sizeof(member->name));
 		for (int i = 0; i < members.count; ++i) {
@@ -1246,7 +1256,7 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 			member->value = next_value++;
 		}
 
-		da_push(members, member);
+		p_da_push(members, member);
 
 		if (parser->current_token.type == TOK_COMMA) {
 			parser->current_token = next_token(&parser->scanner); // consume ','
@@ -1266,7 +1276,7 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 	if (!is_error) {
 		ASTNode *decl_node = new_enum_decl_node(enum_name, is_extern ? enum_name : resolved_name, base_type, members.data, members.count, loc);
 		const char *enum_resolved = is_extern ? enum_name : resolved_name;
-		Type *enum_type = malloc(sizeof(Type));
+		Type *enum_type = arena_alloc(type_arena_get(), sizeof(Type));
 		if (!enum_type)
 			return NULL;
 		memset(enum_type, 0, sizeof(Type));
@@ -1279,8 +1289,6 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 		if (is_exported) {
 			add_symbol(&parser->exported_table, decl_node, enum_name, enum_resolved, 1, is_extern, SYMB_ENUM, enum_type, parser->current_scope);
 		}
-		type_deinit(enum_type);
-		free(enum_type);
 		return decl_node;
 	}
 	return NULL;
@@ -1296,7 +1304,7 @@ ASTNode *parse_struct_literal(Parser *parser, const char *scope_prefix) {
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 	field_init_list inits;
-	da_init(inits, 4);
+	p_da_init(inits, 4);
 
 	while (parser->current_token.type != TOK_RCURLY) {
 		FieldInitializer *init = NULL;
@@ -1329,7 +1337,7 @@ ASTNode *parse_struct_literal(Parser *parser, const char *scope_prefix) {
 			init = new_field_initializer("", 0, expr);
 		}
 
-		da_push(inits, init);
+		p_da_push(inits, init);
 
 		if (parser->current_token.type == TOK_COMMA) {
 			parser->current_token = next_token(&parser->scanner); // consume ','
@@ -1361,11 +1369,11 @@ ASTNode *parse_postfix(Parser *parser, const char *scope_prefix) {
 			parser->current_token = next_token(&parser->scanner);
 
 			NodeList args;
-			da_init(args, 4);
+			p_da_init(args, 4);
 			if (parser->current_token.type != TOK_RPAREN) {
 				while (1) {
 					ASTNode *arg = parse_assignment(parser, scope_prefix);
-					da_push(args, arg);
+					p_da_push(args, arg);
 
 					if (parser->current_token.type == TOK_COMMA) {
 						parser->current_token = next_token(&parser->scanner);
@@ -1428,7 +1436,7 @@ ASTNode *parse_array_literal(Parser *parser, const char *scope_prefix) {
 	parser->current_token = next_token(&parser->scanner); // consume '['
 
 	NodeList elements;
-	da_init(elements, 4);
+	p_da_init(elements, 4);
 
 	if (parser->current_token.type != TOK_RBRACKET) {
 		while (1) {
@@ -1436,7 +1444,7 @@ ASTNode *parse_array_literal(Parser *parser, const char *scope_prefix) {
 			if (!expr)
 				return NULL;
 
-			da_push(elements, expr);
+			p_da_push(elements, expr);
 
 			if (parser->current_token.type == TOK_COMMA) {
 				parser->current_token = next_token(&parser->scanner); // consume ','
@@ -1866,20 +1874,13 @@ ASTNode *parse_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack)
 		Type *type = NULL;
 		parse_type(parser, &type);
 		if (parser->current_token.type == TOK_IDENTIFIER) {
-			// most likely var decl, restore state and reparse
-			if (type) {
-				type_deinit(type);
-				free(type);
-			}
+			// most likely var decl, restore state and reparse — the
+			// speculatively-built `type` stays in the type_arena
 			parser->scanner.id = save;
 			parser->current_token = temp;
 			return parse_var_decl(parser, prefix_name, 0, 0);
 		}
-		// restore and parse expression
-		if (type) {
-			type_deinit(type);
-			free(type);
-		}
+		// restore and parse expression — `type` stays in the type_arena
 		parser->scanner.id = save;
 		parser->current_token = temp;
 	}
@@ -1970,8 +1971,6 @@ ASTNode *parse_union_decl(Parser *parser, int is_exported, int is_extern) {
 		if (is_exported) {
 			add_symbol(&parser->exported_table, node, union_name, is_extern ? union_name : resolved_name, 1, is_extern, SYMB_UNION, union_type, parser->current_scope);
 		}
-		type_deinit(union_type);
-		free(union_type);
 		return node;
 	}
 	return NULL;
@@ -2004,7 +2003,7 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported, int is_extern) {
 		ASTNode **data;
 		int count, capacity;
 	} field_list;
-	da_init(field_list, 4);
+	p_da_init(field_list, 4);
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *field = parse_field_declaration(parser);
 		for (int i = 0; i < field_list.count; ++i) {
@@ -2014,7 +2013,7 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported, int is_extern) {
 				is_error = 1;
 			}
 		}
-		da_push(field_list, field);
+		p_da_push(field_list, field);
 	}
 	if (parser->current_token.type != TOK_RCURLY) {
 		report(parser->current_token.location, "expected '}' at the end of struct declaration.", 0);
@@ -2031,8 +2030,6 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported, int is_extern) {
 		if (is_exported) {
 			add_symbol(&parser->exported_table, node, struct_name, is_extern ? struct_name : resolved_name, 1, is_extern, SYMB_STRUCT, struct_type, parser->current_scope);
 		}
-		type_deinit(struct_type);
-		free(struct_type);
 		return node;
 	}
 	return NULL;
@@ -2113,7 +2110,9 @@ void push_stmt(ASTNode *block, ASTNode *stmt, CompilerResult *success) {
 	}
 
 	int new_count = block->data.block.count + 1;
-	block->data.block.statements = realloc(block->data.block.statements, new_count * sizeof(ASTNode *));
+	size_t old_bytes = (size_t)block->data.block.count * sizeof(ASTNode *);
+	size_t new_bytes = (size_t)new_count * sizeof(ASTNode *);
+	block->data.block.statements = arena_realloc_grow(current_parser_arena, block->data.block.statements, old_bytes, new_bytes);
 	if (!block->data.block.statements) {
 		*success = RESULT_MEMORY_ERROR;
 		return;
@@ -2132,7 +2131,8 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 		int capacity, count;
 	} new_statements;
 
-	da_init_unsafe(new_statements, node->data.block.count);
+	int initial_cap = node->data.block.count > 0 ? node->data.block.count : 1;
+	p_da_init_unsafe(new_statements, initial_cap);
 
 	for (int i = 0; i < node->data.block.count; ++i) {
 		ASTNode *stmt = node->data.block.statements[i];
@@ -2147,19 +2147,18 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 			}
 
 			if (seq->data.block.count > 0) {
-				da_push_unsafe(new_statements, seq);
-			} else {
-				free(seq);
+				p_da_push_unsafe(new_statements, seq);
 			}
+			// seq with no statements stays in the arena, leaked until module_deinit
 
-			da_push_unsafe(new_statements, stmt);
+			p_da_push_unsafe(new_statements, stmt);
 		} else if (stmt->type == AST_BLOCK) {
 			DeferStack nested = copy_defer_stack(stack);
 			unroll_defers(stmt, &nested);
 			da_deinit(nested);
-			da_push_unsafe(new_statements, stmt);
+			p_da_push_unsafe(new_statements, stmt);
 		} else {
-			da_push_unsafe(new_statements, stmt);
+			p_da_push_unsafe(new_statements, stmt);
 		}
 	}
 
@@ -2172,10 +2171,11 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 				assert(res == RESULT_SUCCESS);
 			}
 		}
-		da_push_unsafe(new_statements, tail);
+		p_da_push_unsafe(new_statements, tail);
 	}
 
-	free(node->data.block.statements);
+	// Old statements array stays in the arena; just rebind the block to
+	// the new array (also arena-owned).
 	node->data.block.statements = new_statements.data;
 	node->data.block.count = new_statements.count;
 }
@@ -2192,7 +2192,7 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
 	NodeList stmts;
-	da_init(stmts, 4);
+	p_da_init(stmts, 4);
 
 	DeferStack dstack_local;
 	da_init(dstack_local, 4);
@@ -2206,10 +2206,10 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 			for (int j = 0; j < stmt->data.defer.defer_block->data.block.count; ++j) {
 				da_push_unsafe(dstack_local, stmt->data.defer.defer_block->data.block.statements[j]);
 			}
-			free(stmt);
+			// stmt itself stays in the arena; nothing to free here
 			continue;
 		}
-		da_push(stmts, stmt);
+		p_da_push(stmts, stmt);
 	}
 
 	if (parser->current_token.type != TOK_RCURLY) {
@@ -2362,7 +2362,7 @@ ASTNode *parse_if_stmt(Parser *parser, const char *prefix_name, DeferStack *dsta
 
 	ASTNode *then_branch = parse_block(parser, prefix_name, dstack);
 	if (!then_branch) {
-		free_ast_node(condition);
+		// condition stays in the arena; nothing to free here
 		return NULL;
 	}
 
@@ -2446,8 +2446,6 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 		if (is_exported)
 			add_symbol(&parser->exported_table, decl_node, decl_node->data.func_decl.name, decl_node->data.func_decl.resolved_name, 1, 0, SYMB_FN, &function_type, parser->current_scope);
 		da_deinit(param_type_list);
-		type_deinit(ret_type);
-		free(ret_type);
 		return decl_node;
 	}
 	return NULL;
@@ -2506,8 +2504,6 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 		add_symbol(&parser->exported_table, decl_node, decl_node->data.extern_func.name, decl_node->data.extern_func.resolved_name, 1, 1, SYMB_FN, &function_type, parser->current_scope);
 	}
 	da_deinit(param_type_list);
-	type_deinit(ret_type);
-	free(ret_type);
 	return decl_node;
 }
 
@@ -2527,7 +2523,7 @@ ASTNode *parse_extern_block(Parser *parser, const char *prefix_name) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 	NodeList decls;
-	da_init(decls, 4);
+	p_da_init(decls, 4);
 	while (parser->current_token.type != TOK_RCURLY) {
 		ASTNode *decl = NULL;
 		int is_exported = 0;
@@ -2562,7 +2558,7 @@ ASTNode *parse_extern_block(Parser *parser, const char *prefix_name) {
 			decl->data.var_decl.is_exported = is_exported;
 		}
 		assert(decl);
-		da_push(decls, decl);
+		p_da_push(decls, decl);
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '}'
 	return new_extern_block_node(lib_name, decls.data, decls.count, loc);
@@ -2662,6 +2658,15 @@ CompilerResult parse_import_list(Parser *parser, ImportList *out_import_list) {
 
 // <globalDecl>* <EOF>
 Module *parse_input(Parser *parser) {
+	Module *module = malloc(sizeof(Module));
+	if (!module)
+		return NULL;
+	memset(module, 0, sizeof(Module));
+	arena_init(&module->ast_arena, 0);
+	arena_init(&module->type_arena, 0);
+	current_parser_arena = &module->ast_arena;
+	type_arena_set(&module->type_arena);
+
 	ASTNode *global_list = NULL, *last = NULL;
 
 	parser->current_token = next_token(&parser->scanner);
@@ -2673,13 +2678,19 @@ Module *parse_input(Parser *parser) {
 			if (parser->current_token.type != TOK_IDENTIFIER) {
 				char msg[128];
 				sprintf(msg, "expected identifier in import, got %s", parser->current_token.text);
-				return report(parser->current_token.location, msg, 0);
+				report(parser->current_token.location, msg, 0);
+				current_parser_arena = NULL;
+				module_deinit(module);
+				return NULL;
 			}
 			parser->current_token = next_token(&parser->scanner); // consume import name
 			if (parser->current_token.type != TOK_SEMICOLON) {
 				char msg[128];
 				sprintf(msg, "expected ';' after import's identifier, got %s", parser->current_token.text);
-				return report(parser->current_token.location, msg, 0);
+				report(parser->current_token.location, msg, 0);
+				current_parser_arena = NULL;
+				module_deinit(module);
+				return NULL;
 			}
 			parser->current_token = next_token(&parser->scanner); // consume ';'
 			continue;
@@ -2697,212 +2708,19 @@ Module *parse_input(Parser *parser) {
 			last = decl;
 		}
 	}
-	Module *module = malloc(sizeof(Module));
 	module->ast = global_list;
 	module->symbol_table = parser->symbol_table;
 	module->exported_table = parser->exported_table;
 	module->has_errors = has_errors;
+	current_parser_arena = NULL;
 	return module;
 }
 
-void free_ast_node(ASTNode *node) {
-	if (!node)
+void module_deinit(Module *module) {
+	if (!module)
 		return;
-
-	switch (node->type) {
-	case AST_VAR_DECL:
-		free_ast_node(node->data.var_decl.init);
-		node->data.var_decl.init = NULL;
-
-		type_deinit(node->data.var_decl.type);
-		free(node->data.var_decl.type);
-		node->data.var_decl.type = NULL;
-
-		break;
-	case AST_STRUCT_DECL: {
-		for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
-			free_ast_node(node->data.struct_decl.fields[i]);
-		}
-		free(node->data.struct_decl.fields);
-		node->data.struct_decl.fields = NULL;
-	} break;
-	case AST_FIELD_DECL:
-		type_deinit(node->data.field_decl.type);
-		free(node->data.field_decl.type);
-		node->data.field_decl.type = NULL;
-		break;
-	case AST_PARAM_DECL:
-		type_deinit(node->data.param_decl.type);
-		free(node->data.param_decl.type);
-		node->data.param_decl.type = NULL;
-		break;
-	case AST_FN_DECL: {
-		ASTNode *curr_param = node->data.func_decl.params;
-		while (curr_param) {
-			ASTNode *next = curr_param->next;
-			free_ast_node(curr_param);
-			curr_param = next;
-		}
-		node->data.func_decl.params = NULL;
-		ASTNode *body = node->data.func_decl.body;
-		free_ast_node(body);
-		node->data.func_decl.body = NULL;
-	} break;
-	case AST_BLOCK: {
-		for (int i = 0; i < node->data.block.count; ++i) {
-			free_ast_node(node->data.block.statements[i]);
-			node->data.block.statements[i] = NULL;
-		}
-		free(node->data.block.statements);
-		node->data.block.statements = NULL;
-	} break;
-	case AST_RETURN:
-		free_ast_node(node->data.ret.return_expr);
-		node->data.ret.return_expr = NULL;
-		break;
-	case AST_BINARY_EXPR:
-		free_ast_node(node->data.binary_op.left);
-		node->data.binary_op.left = NULL;
-		free_ast_node(node->data.binary_op.right);
-		node->data.binary_op.right = NULL;
-		break;
-	case AST_UNARY_EXPR:
-		free_ast_node(node->data.unary_op.operand);
-		node->data.unary_op.operand = NULL;
-		if (node->data.unary_op.result_type) {
-			type_deinit(node->data.unary_op.result_type);
-			free(node->data.unary_op.result_type);
-		}
-		break;
-	case AST_ARRAY_LITERAL:
-		for (int i = 0; i < node->data.array_literal.count; ++i) {
-			free_ast_node(node->data.array_literal.elements[i]);
-			node->data.array_literal.elements[i] = NULL;
-		}
-		free(node->data.array_literal.elements);
-		node->data.array_literal.elements = NULL;
-		break;
-	case AST_ARRAY_ACCESS:
-		free_ast_node(node->data.array_access.base);
-		node->data.array_access.base = NULL;
-		free_ast_node(node->data.array_access.index);
-		node->data.array_access.index = NULL;
-		break;
-	case AST_ASSIGNMENT:
-		free_ast_node(node->data.assignment.lvalue);
-		node->data.assignment.lvalue = NULL;
-		free_ast_node(node->data.assignment.rvalue);
-		node->data.assignment.rvalue = NULL;
-		break;
-	case AST_FN_CALL:
-		free_ast_node(node->data.func_call.callee);
-		node->data.func_call.callee = NULL;
-		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
-			free_ast_node(node->data.func_call.args[i]);
-			node->data.func_call.args[i] = NULL;
-		}
-		free(node->data.func_call.args);
-		node->data.func_call.args = NULL;
-		break;
-	case AST_MEMBER_ACCESS:
-		free_ast_node(node->data.member_access.base);
-		node->data.member_access.base = NULL;
-		break;
-	case AST_STRUCT_LITERAL:
-		for (int i = 0; i < node->data.struct_literal.count; ++i) {
-			free_ast_node(node->data.struct_literal.inits[i]->expr);
-			node->data.struct_literal.inits[i]->expr = NULL;
-		}
-		free(node->data.struct_literal.inits);
-		node->data.struct_literal.inits = NULL;
-		break;
-	case AST_ENUM_DECL:
-		for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
-			free(node->data.enum_decl.members[i]);
-			node->data.enum_decl.members[i] = NULL;
-		}
-		free(node->data.enum_decl.members);
-		node->data.enum_decl.members = NULL;
-		type_deinit(node->data.enum_decl.base_type);
-		free(node->data.enum_decl.base_type);
-		node->data.enum_decl.base_type = NULL;
-		break;
-	case AST_ENUM_VALUE:
-		type_deinit(node->data.enum_value.enum_type);
-		free(node->data.enum_value.enum_type);
-		node->data.enum_value.enum_type = NULL;
-		break;
-	case AST_EXTERN_BLOCK:
-		for (int i = 0; i < node->data.extern_block.count; ++i) {
-			free_ast_node(node->data.extern_block.block[i]);
-			node->data.extern_block.block[i] = NULL;
-		}
-		free(node->data.extern_block.block);
-		node->data.extern_block.block = NULL;
-		break;
-	case AST_EXTERN_FUNC_DECL: {
-		ASTNode *curr_param = node->data.extern_func.params;
-		while (curr_param) {
-			ASTNode *next = curr_param->next;
-			free_ast_node(curr_param);
-			curr_param = next;
-		}
-		node->data.extern_func.params = NULL;
-	} break;
-	case AST_IF_STMT:
-		free_ast_node(node->data.if_stmt.condition);
-		node->data.if_stmt.condition = NULL;
-		free_ast_node(node->data.if_stmt.then_branch);
-		node->data.if_stmt.then_branch = NULL;
-		free_ast_node(node->data.if_stmt.else_branch);
-		node->data.if_stmt.else_branch = NULL;
-		break;
-	case AST_FOR_LOOP:
-		free_ast_node(node->data.for_loop.init);
-		node->data.for_loop.init = NULL;
-		free_ast_node(node->data.for_loop.condition);
-		node->data.for_loop.condition = NULL;
-		free_ast_node(node->data.for_loop.post);
-		node->data.for_loop.post = NULL;
-		free_ast_node(node->data.for_loop.body);
-		node->data.for_loop.body = NULL;
-		break;
-	case AST_WHILE_LOOP:
-		free_ast_node(node->data.while_loop.condition);
-		node->data.while_loop.condition = NULL;
-		free_ast_node(node->data.while_loop.body);
-		node->data.while_loop.body = NULL;
-		break;
-	case AST_DEFER_BLOCK:
-		break;
-	case AST_DEFERRED_SEQUENCE:
-		for (int i = 0; i < node->data.block.count; ++i) {
-			free_ast_node(node->data.block.statements[i]);
-			node->data.block.statements[i] = NULL;
-		}
-		free(node->data.block.statements);
-		node->data.block.statements = NULL;
-	case AST_CAST:
-		type_deinit(node->data.cast.target_type);
-		free(node->data.cast.target_type);
-		node->data.cast.target_type = NULL;
-		free_ast_node(node->data.cast.expr);
-		node->data.cast.expr = NULL;
-		break;
-	default:
-		break;
-	}
-	free(node);
+	arena_deinit(&module->ast_arena);
+	arena_deinit(&module->type_arena);
+	free(module);
 }
 
-void ast_deinit(ASTNode *node) {
-	if (!node)
-		return;
-
-	ASTNode *current_node = node;
-	while (current_node != NULL) {
-		ASTNode *next = current_node->next;
-		free_ast_node(current_node);
-		current_node = next;
-	}
-}

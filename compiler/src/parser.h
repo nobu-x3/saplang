@@ -1,4 +1,5 @@
 #pragma once
+#include "arena.h"
 #include "scanner.h"
 #include "symbol_table.h"
 #include "types.h"
@@ -234,6 +235,13 @@ typedef struct {
 	ImportList imports;
 	ASTNode *ast;
 	int has_errors;
+	// Backing storage for every AST node and AST-tied dynamic array
+	// produced by the parser. Dropped by module_deinit.
+	Arena ast_arena;
+	// Backing storage for every Type * reachable from this module's AST
+	// or symbol tables, including copies made during cross-module
+	// symbol-table merge. Dropped by module_deinit.
+	Arena type_arena;
 } Module;
 
 // This is so I don't have to change the signature of parser_init in all tests
@@ -249,6 +257,8 @@ CompilerResult parser_init(Parser *parser, Scanner scanner, SymbolTableWrapper *
 
 CompilerResult parser_deinit(Parser *parser);
 
+void module_deinit(Module *module);
+
 CompilerResult symbol_table_print(Symbol *table, char *string);
 
 CompilerResult parse_import_list(Parser *parser, ImportList *import_list);
@@ -257,6 +267,5 @@ Module *parse_input(Parser *parser);
 
 CompilerResult ast_print(ASTNode *node, int indent, char *string);
 
-void ast_deinit(ASTNode *node);
 
 ASTNode *copy_ast_node(ASTNode *node);

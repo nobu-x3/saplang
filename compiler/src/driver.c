@@ -335,35 +335,36 @@ SourceFile driver_init_source(const char *name) {
 	/* } */
 	for (int i = 0; i < driver.options.import_paths.count; ++i) {
 		char *full_path = find_file_in_dir(driver.options.import_paths.data[i], name);
-		if (full_path) {
-			strncpy(src_file.name, file_name(name), sizeof(src_file.name));
-			strncpy(src_file.path, full_path, sizeof(src_file.path));
-			FILE *fp = fopen(src_file.path, "r");
-			if (!fp) {
-				fprintf(stderr, "could not open file with path %s.\n", src_file.path);
-				return src_file;
-			}
-			fseek(fp, 0, SEEK_END);
-			long file_size = ftell(fp);
-			rewind(fp);
-			char *buffer = malloc(file_size + 1);
-			if (!buffer) {
-				fprintf(stderr, "failed to allocate memory when reading file %s.", src_file.path);
-				fclose(fp);
-				return src_file;
-			}
-			if (fread(buffer, 1, file_size, fp) != file_size) {
-				fprintf(stderr, "failed to read file %s.", src_file.path);
-				free(buffer);
-				fclose(fp);
-				return src_file;
-			}
-			buffer[file_size] = '\0';
-			src_file.buffer = buffer;
-			src_file.len = file_size;
+		if (!full_path)
+			continue;
+		strncpy(src_file.name, file_name(name), sizeof(src_file.name));
+		strncpy(src_file.path, full_path, sizeof(src_file.path));
+		free(full_path);
+		FILE *fp = fopen(src_file.path, "r");
+		if (!fp) {
+			fprintf(stderr, "could not open file with path %s.\n", src_file.path);
+			return src_file;
+		}
+		fseek(fp, 0, SEEK_END);
+		long file_size = ftell(fp);
+		rewind(fp);
+		char *buffer = malloc(file_size + 1);
+		if (!buffer) {
+			fprintf(stderr, "failed to allocate memory when reading file %s.", src_file.path);
 			fclose(fp);
 			return src_file;
 		}
+		if (fread(buffer, 1, file_size, fp) != file_size) {
+			fprintf(stderr, "failed to read file %s.", src_file.path);
+			free(buffer);
+			fclose(fp);
+			return src_file;
+		}
+		buffer[file_size] = '\0';
+		src_file.buffer = buffer;
+		src_file.len = file_size;
+		fclose(fp);
+		return src_file;
 	}
 	return src_file;
 }
@@ -413,11 +414,8 @@ void dg_clean(DependencyGraphNode *graph) {
 	}
 	da_deinit(graph->imports);
 
-	if (graph->module->ast)
-		ast_deinit(graph->module->ast);
-
 	if (graph->module)
-		free(graph->module);
+		module_deinit(graph->module);
 
 	da_deinit(graph->dependencies);
 
@@ -503,8 +501,9 @@ void parsing_task(void *arg) {
 	if (!node)
 		return;
 	diag_set_sink(node->diag_sink);
-	// Assume scanner is in 0 pos.
+	// parse_input creates the module and points the type arena at it.
 	node->module = parse_input(&node->parser);
+	type_arena_set(NULL);
 	diag_set_sink(NULL);
 }
 
@@ -514,8 +513,10 @@ void sema_task(void *arg) {
 		return;
 
 	diag_set_sink(node->diag_sink);
+	type_arena_set(&node->module->type_arena);
 
 	if (!node->module->ast) {
+		type_arena_set(NULL);
 		diag_set_sink(NULL);
 		return;
 	}
@@ -528,6 +529,7 @@ void sema_task(void *arg) {
 		node->module->has_errors |= sema_failed || type_resolution_failed;
 	}
 
+	type_arena_set(NULL);
 	diag_set_sink(NULL);
 }
 
@@ -536,6 +538,7 @@ void codegen_task(void *arg) {
 	if (!node)
 		return;
 	diag_set_sink(node->diag_sink);
+	type_arena_set(&node->module->type_arena);
 	char source_file_path[PATH_MAX + 1] = "";
 	strncpy(source_file_path, node->parser.scanner.source.path, sizeof(source_file_path));
 	char *source_dir = dir_name(source_file_path);
@@ -548,6 +551,7 @@ void codegen_task(void *arg) {
 	if (res == -1 && errno != EEXIST) {
 		fprintf(diag_stream(), "failed to create tmp dir for LLVM IR with code: %d", errno);
 		free(output);
+		type_arena_set(NULL);
 		diag_set_sink(NULL);
 		return;
 	}
@@ -559,12 +563,14 @@ void codegen_task(void *arg) {
 	if (!f) {
 		fprintf(diag_stream(), "failed to create tmp file for LLVM IR at path %s with code: %d", ll_path, errno);
 		free(output);
+		type_arena_set(NULL);
 		diag_set_sink(NULL);
 		return;
 	}
 	fprintf(f, "%s", output);
 	fclose(f);
 	free(output);
+	type_arena_set(NULL);
 	diag_set_sink(NULL);
 }
 
@@ -607,9 +613,13 @@ CompilerResult driver_run() {
 			should_quit = 1;
 		}
 		if (!should_quit) {
+			// symbol_table_merge -> symbol_table_copy -> copy_type, so
+			// the copies of imported Types end up in this module's arena.
+			type_arena_set(&current->module->type_arena);
 			for (int i = 0; i < current->dependencies.count; ++i) {
 				current->module->symbol_table = symbol_table_merge(current->dependencies.data[i]->module->exported_table, current->module->symbol_table);
 			}
+			type_arena_set(NULL);
 		}
 	}
 	if (driver.options.show_timings) {

@@ -7,6 +7,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+static __thread Arena *current_type_arena = NULL;
+
+void type_arena_set(Arena *arena) { current_type_arena = arena; }
+
+Arena *type_arena_get(void) { return current_type_arena; }
+
 TypeInfo compute_struct_size_and_alignment(ASTNode *node);
 
 TypeInfo get_type_info(Type *type, ASTNode *node) {
@@ -156,7 +162,7 @@ TypeInfo compute_struct_size_and_alignment(ASTNode *node) {
 }
 
 Type *copy_type(Type *type) {
-	Type *t = malloc(sizeof(Type));
+	Type *t = arena_alloc(current_type_arena, sizeof(Type));
 	if (!t)
 		return NULL;
 
@@ -185,11 +191,15 @@ Type *copy_type(Type *type) {
 		t->function.return_type = copy_type(type->function.return_type);
 		assert(t->function.return_type);
 		t->function.param_count = type->function.param_count;
-		t->function.param_types = malloc(sizeof(Type) * t->function.param_count);
-		assert(t->function.param_types);
-		for (int i = 0; i < t->function.param_count; ++i) {
-			t->function.param_types[i] = copy_type(type->function.param_types[i]);
-			assert(t->function.param_types[i]);
+		if (t->function.param_count > 0) {
+			t->function.param_types = arena_alloc(current_type_arena, sizeof(Type *) * (size_t)t->function.param_count);
+			assert(t->function.param_types);
+			for (int i = 0; i < t->function.param_count; ++i) {
+				t->function.param_types[i] = copy_type(type->function.param_types[i]);
+				assert(t->function.param_types[i]);
+			}
+		} else {
+			t->function.param_types = NULL;
 		}
 		break;
 	}
@@ -197,50 +207,18 @@ Type *copy_type(Type *type) {
 }
 
 void type_deinit(Type *type) {
-	if (!type)
-		return;
-
-	memset(type->type_name, 0, sizeof(type->type_name));
-	memset(type->type_namespace, 0, sizeof(type->type_namespace));
-	memset(type->type_resolved_name, 0, sizeof(type->type_resolved_name));
-
-	switch (type->type_kind) {
-	case TYPE_STRUCT:
-	case TYPE_ENUM:
-	case TYPE_UNDECIDED:
-	case TYPE_PRIMITIVE:
-		break;
-	case TYPE_POINTER:
-		type_deinit(type->pointee);
-		free(type->pointee);
-		type->pointee = NULL;
-		break;
-	case TYPE_ARRAY:
-		type_deinit(type->array.element_type);
-		free(type->array.element_type);
-		type->array.element_type = NULL;
-		break;
-	case TYPE_FUNCTION:
-		type_deinit(type->function.return_type);
-		for (int i = 0; i < type->function.param_count; ++i) {
-			type_deinit(type->function.param_types[i]);
-			free(type->function.param_types[i]);
-			type->function.param_types[i] = NULL;
-		}
-		free(type->function.param_types);
-		type->function.param_types = NULL;
-		break;
-	}
+	(void)type;
+	// no-op: Types live in the active module's type_arena and are
+	// dropped in bulk by module_deinit.
 }
 
 Type *new_primitive_type(const char *name) {
-	Type *t = malloc(sizeof(Type));
+	Type *t = arena_alloc(current_type_arena, sizeof(Type));
 	if (!t)
 		return NULL;
+	memset(t, 0, sizeof(Type));
 	t->type_kind = TYPE_PRIMITIVE;
 	strncpy(t->type_name, name, sizeof(t->type_name));
-	memset(t->type_namespace, 0, sizeof(t->type_namespace));
-	memset(t->type_resolved_name, 0, sizeof(t->type_resolved_name));
 	return t;
 }
 
@@ -254,24 +232,20 @@ Type get_primitive_type(const char *name) {
 }
 
 Type *new_pointer_type(Type *pointee) {
-	Type *t = malloc(sizeof(Type));
+	Type *t = arena_alloc(current_type_arena, sizeof(Type));
 	if (!t)
 		return NULL;
-	memset(t->type_name, 0, sizeof(t->type_name));
-	memset(t->type_namespace, 0, sizeof(t->type_namespace));
-	memset(t->type_resolved_name, 0, sizeof(t->type_resolved_name));
+	memset(t, 0, sizeof(Type));
 	t->type_kind = TYPE_POINTER;
 	t->pointee = pointee;
 	return t;
 }
 
 Type *new_array_type(Type *element_type, int size) {
-	Type *t = malloc(sizeof(Type));
+	Type *t = arena_alloc(current_type_arena, sizeof(Type));
 	if (!t)
 		return NULL;
-	memset(t->type_name, 0, sizeof(t->type_name));
-	memset(t->type_namespace, 0, sizeof(t->type_namespace));
-	memset(t->type_resolved_name, 0, sizeof(t->type_resolved_name));
+	memset(t, 0, sizeof(Type));
 	t->type_kind = TYPE_ARRAY;
 	t->array.element_type = element_type;
 	t->array.size = size;
@@ -279,13 +253,11 @@ Type *new_array_type(Type *element_type, int size) {
 }
 
 Type *new_function_type(Type *return_type, Type **param_types, int param_count) {
-	Type *t = malloc(sizeof(Type));
+	Type *t = arena_alloc(current_type_arena, sizeof(Type));
 	if (!t)
 		return NULL;
+	memset(t, 0, sizeof(Type));
 	t->type_kind = TYPE_FUNCTION;
-	memset(t->type_name, 0, sizeof(t->type_name));
-	memset(t->type_namespace, 0, sizeof(t->type_namespace));
-	memset(t->type_resolved_name, 0, sizeof(t->type_resolved_name));
 	t->function.return_type = return_type;
 	t->function.param_types = param_types;
 	t->function.param_count = param_count;
@@ -293,10 +265,10 @@ Type *new_function_type(Type *return_type, Type **param_types, int param_count) 
 }
 
 Type *new_named_type(const char *name, const char *namespace, TypeKind kind) { // structs/enums
-	Type *t = malloc(sizeof(Type));
+	Type *t = arena_alloc(current_type_arena, sizeof(Type));
 	if (!t)
 		return NULL;
-
+	memset(t, 0, sizeof(Type));
 	t->type_kind = kind;
 	strncpy(t->type_name, name, sizeof(t->type_name));
 	strncpy(t->type_namespace, namespace, sizeof(t->type_namespace));

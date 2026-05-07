@@ -112,10 +112,11 @@ CompilerResult add_symbol_with_type_info(Symbol **table, ASTNode *node, const ch
 }
 
 CompilerResult deinit_symbol_table(Symbol *table) {
+	// Symbols are heap-allocated, but their Type pointers live in the
+	// owning module's type_arena and get dropped in bulk by
+	// module_deinit. We only free the Symbol cells here.
 	for (Symbol *sym = table; sym != NULL;) {
 		Symbol *next = sym->next;
-		type_deinit(sym->type);
-		free(sym->type);
 		free(sym);
 		sym = next;
 	}
