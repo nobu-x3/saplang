@@ -229,6 +229,14 @@ typedef struct DependencyGraphNode {
 	DependencyGraphNodeList dependencies;
 	DependencyGraphNode *next;
 	Module *module;
+
+	// Diagnostics for the current phase are buffered here so that
+	// concurrent workers don't interleave bytes on stderr. Opened by the
+	// driver before each phase, drained (and freed) in graph order
+	// after threadpool_wait_all.
+	FILE *diag_sink;
+	char *diag_buf;
+	size_t diag_buf_size;
 } DependencyGraphNode;
 
 typedef struct {
@@ -369,6 +377,31 @@ DependencyGraphNode *dg_find(const char *name, DependencyGraphNode *root) {
 	return NULL;
 }
 
+// Open a fresh memstream-backed sink on the node. The driver calls this
+// before submitting tasks for a phase; tasks point their thread-local
+// sink at node->diag_sink for the duration of their work.
+static void dg_diag_open(DependencyGraphNode *node) {
+	node->diag_buf = NULL;
+	node->diag_buf_size = 0;
+	node->diag_sink = open_memstream(&node->diag_buf, &node->diag_buf_size);
+}
+
+// Close the sink (which flushes the memstream into diag_buf), copy the
+// buffered bytes to `out`, then free the buffer. Idempotent for nodes
+// that were never opened or already drained.
+static void dg_diag_drain(DependencyGraphNode *node, FILE *out) {
+	if (!node->diag_sink)
+		return;
+	fclose(node->diag_sink);
+	node->diag_sink = NULL;
+	if (node->diag_buf && node->diag_buf_size > 0) {
+		fwrite(node->diag_buf, 1, node->diag_buf_size, out);
+	}
+	free(node->diag_buf);
+	node->diag_buf = NULL;
+	node->diag_buf_size = 0;
+}
+
 void dg_clean(DependencyGraphNode *graph) {
 	if (!graph)
 		return;
@@ -387,6 +420,8 @@ void dg_clean(DependencyGraphNode *graph) {
 		free(graph->module);
 
 	da_deinit(graph->dependencies);
+
+	dg_diag_drain(graph, stderr);
 
 	DependencyGraphNode *next = graph->next;
 
@@ -465,12 +500,12 @@ CompilerResult build_dependency_graph(SourceFile input_file, DependencyGraphNode
 
 void parsing_task(void *arg) {
 	DependencyGraphNode *node = (DependencyGraphNode *)arg;
-	// @TODO: make this thread safe
-	/* fprintf(stderr, "incorrect argument int parse_task - could not cast to DependencyGraphNode*.\n"); */
 	if (!node)
 		return;
+	diag_set_sink(node->diag_sink);
 	// Assume scanner is in 0 pos.
 	node->module = parse_input(&node->parser);
+	diag_set_sink(NULL);
 }
 
 void sema_task(void *arg) {
@@ -478,9 +513,12 @@ void sema_task(void *arg) {
 	if (!node)
 		return;
 
-	// @TODO: print error in a thread safe manner
-	if (!node->module->ast)
+	diag_set_sink(node->diag_sink);
+
+	if (!node->module->ast) {
+		diag_set_sink(NULL);
 		return;
+	}
 
 	symbol_table_set_type_info(node->module->symbol_table);
 
@@ -489,12 +527,15 @@ void sema_task(void *arg) {
 		int type_resolution_failed = resolve_types(node->module->symbol_table, ast_node, ast_node == node->module->ast) != RESULT_SUCCESS;
 		node->module->has_errors |= sema_failed || type_resolution_failed;
 	}
+
+	diag_set_sink(NULL);
 }
 
 void codegen_task(void *arg) {
 	DependencyGraphNode *node = (DependencyGraphNode *)arg;
 	if (!node)
 		return;
+	diag_set_sink(node->diag_sink);
 	char source_file_path[PATH_MAX + 1] = "";
 	strncpy(source_file_path, node->parser.scanner.source.path, sizeof(source_file_path));
 	char *source_dir = dir_name(source_file_path);
@@ -505,8 +546,9 @@ void codegen_task(void *arg) {
 	codegen_deinit(&cg_ctx);
 	int res = make_dir(LL_DIRECTORY, 0777);
 	if (res == -1 && errno != EEXIST) {
-		fprintf(stderr, "failed to create tmp dir for LLVM IR with code: %d", errno);
+		fprintf(diag_stream(), "failed to create tmp dir for LLVM IR with code: %d", errno);
 		free(output);
+		diag_set_sink(NULL);
 		return;
 	}
 	char tmp_dir[512] = "";
@@ -515,13 +557,15 @@ void codegen_task(void *arg) {
 	sprintf(ll_path, "%s/tmp-%s.ll", tmp_dir, node->parser.module_name);
 	FILE *f = fopen(ll_path, "w");
 	if (!f) {
-		fprintf(stderr, "failed to create tmp file for LLVM IR at path %s with code: %d", ll_path, errno);
+		fprintf(diag_stream(), "failed to create tmp file for LLVM IR at path %s with code: %d", ll_path, errno);
 		free(output);
+		diag_set_sink(NULL);
 		return;
 	}
 	fprintf(f, "%s", output);
 	fclose(f);
 	free(output);
+	diag_set_sink(NULL);
 }
 
 CompilerResult driver_run() {
@@ -547,11 +591,17 @@ CompilerResult driver_run() {
 	////////////////////////////////////////////////////////
 	////////////////////////// PARSING
 	before = get_time();
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		dg_diag_open(current);
+	}
 	// Issue parsing tasks
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		threadpool_submit_task(thread_pool, parsing_task, current);
 	}
 	threadpool_wait_all(thread_pool);
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		dg_diag_drain(current, stderr);
+	}
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		if (current->module->has_errors) {
 			should_quit = 1;
@@ -583,9 +633,15 @@ CompilerResult driver_run() {
 	////////////////////////// SEMA
 	before = get_time();
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		dg_diag_open(current);
+	}
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		threadpool_submit_task(thread_pool, sema_task, current);
 	}
 	threadpool_wait_all(thread_pool);
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		dg_diag_drain(current, stderr);
+	}
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		if (current->module->has_errors) {
 			fprintf(stderr, "%s failed semantic analysis.\n", current->name);
@@ -620,11 +676,17 @@ CompilerResult driver_run() {
 	/////////////////////////////////////////////////////
 	////////////////////// CODEGEN
 	before = get_time();
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		dg_diag_open(current);
+	}
 	// do codegen
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		threadpool_submit_task(thread_pool, codegen_task, current);
 	}
 	threadpool_wait_all(thread_pool);
+	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
+		dg_diag_drain(current, stderr);
+	}
 	StringList cmd;
 	char output_file_path_cpy[512] = "";
 	strncpy(output_file_path_cpy, driver.options.output_file_path, sizeof(output_file_path_cpy));

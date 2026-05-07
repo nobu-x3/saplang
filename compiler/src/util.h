@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdio.h>
+
 typedef enum {
 	RESULT_SUCCESS,
 	RESULT_PASSED_NULL_PTR,
@@ -32,6 +34,14 @@ typedef struct {
 } SourceLocation;
 
 void *report(SourceLocation location, const char *msg, int is_warning);
+
+// Per-thread diagnostic sink. When set (typically by a worker task to a
+// per-module memstream), report() and other diagnostics route here
+// instead of stderr; the driver drains the buffer in graph order after
+// the threadpool join, so stderr never sees interleaved bytes from
+// multiple workers.
+void diag_set_sink(FILE *sink);
+FILE *diag_stream(void);
 
 unsigned long djb2(const char *str);
 

@@ -12,9 +12,19 @@
 #include <ftw.h>
 #endif
 
+static __thread FILE *thread_diag_sink = NULL;
+
+void diag_set_sink(FILE *sink) {
+	thread_diag_sink = sink;
+}
+
+FILE *diag_stream(void) {
+	return thread_diag_sink ? thread_diag_sink : stderr;
+}
+
 void *report(SourceLocation location, const char *msg, int is_warning) {
 	const char *verbosity = is_warning ? "Warning:" : "Error:";
-	fprintf(stderr, "%s:%d:%d:%s %s\n", location.path, location.line, location.col, verbosity, msg);
+	fprintf(diag_stream(), "%s:%d:%d:%s %s\n", location.path, location.line, location.col, verbosity, msg);
 	return NULL;
 }
 
