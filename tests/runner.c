@@ -120,6 +120,9 @@ int main(void) {
 	RUN_TEST(test_StructAlreadyAlignedI32Quad_typeinfo);
 	RUN_TEST(test_StructTrailingPadI32Bool_typeinfo);
 	RUN_TEST(test_UnionDecl_typeinfo);
+	RUN_TEST(test_NamedType_ResolvedNameMangling_types);
+	RUN_TEST(test_NamedType_MangledNameOverflow_types);
+	RUN_TEST(test_NamedType_MangledNameBoundary_types);
 
 	RUN_TEST(test_FunctionDecl_codegen);
 	RUN_TEST(test_BuiltinGlobalVarNoInit_codegen);

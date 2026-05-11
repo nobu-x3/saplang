@@ -1977,8 +1977,12 @@ ASTNode *parse_union_decl(Parser *parser, int is_exported, int is_extern) {
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 	if (!is_error) {
 		Type *union_type = new_named_type(union_name, parser->module_name, TYPE_UNION);
+		if (!union_type) {
+			report(loc, "failed to construct union type.", 0);
+			return NULL;
+		}
 		if (is_extern) {
-			strncpy(union_type->type_resolved_name, union_type->type_name, sizeof(union_type->type_resolved_name));
+			strncpy(union_type->type_resolved_name, union_type->type_name, sizeof(union_type->type_resolved_name) - 1);
 		}
 		ASTNode *node = new_union_decl_node(union_name, is_extern ? union_name : resolved_name, field_list, loc);
 		add_symbol(&parser->symbol_table, node, union_name, is_extern ? union_name : resolved_name, 1, is_extern, SYMB_UNION, union_type, parser->current_scope);
@@ -2036,8 +2040,12 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported, int is_extern) {
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 	if (!is_error) {
 		Type *struct_type = new_named_type(struct_name, parser->module_name, TYPE_STRUCT);
+		if (!struct_type) {
+			report(loc, "failed to construct struct type.", 0);
+			return NULL;
+		}
 		if (is_extern) {
-			strncpy(struct_type->type_resolved_name, struct_type->type_name, sizeof(struct_type->type_resolved_name));
+			strncpy(struct_type->type_resolved_name, struct_type->type_name, sizeof(struct_type->type_resolved_name) - 1);
 		}
 		ASTNode *node = new_struct_decl_node(struct_name, is_extern ? struct_name : resolved_name, field_list.data, field_list.count, loc);
 		add_symbol(&parser->symbol_table, node, struct_name, is_extern ? struct_name : resolved_name, 1, is_extern, SYMB_STRUCT, struct_type, parser->current_scope);

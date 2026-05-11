@@ -1,5 +1,6 @@
 #pragma once
 #include "test_util.h"
+#include <arena.h>
 #include <parser.h>
 #include <sema.h>
 #include <types.h>
@@ -119,4 +120,71 @@ void test_UnionDecl_typeinfo(void) {
 	TypeInfo info = get_type_info(&type, module->ast);
 	TEST_ASSERT_EQUAL_UINT32(8, info.size);
 	TEST_ASSERT_EQUAL_UINT32(8, info.align);
+}
+
+void test_NamedType_ResolvedNameMangling_types(void) {
+	Arena arena;
+	arena_init(&arena, 0);
+	type_arena_set(&arena);
+
+	Type *t = new_named_type("Point", "geom", TYPE_STRUCT);
+	TEST_ASSERT_NOT_NULL(t);
+	TEST_ASSERT_EQUAL_STRING("Point", t->type_name);
+	TEST_ASSERT_EQUAL_STRING("geom", t->type_namespace);
+	TEST_ASSERT_EQUAL_STRING("__geom_Point", t->type_resolved_name);
+
+	type_arena_set(NULL);
+	arena_deinit(&arena);
+}
+
+// Worst-case lengths: a 63-byte namespace plus a 63-byte name plus the
+// 3-byte "__%s_%s" wrapper is 129 bytes — one byte over the 128-byte
+// type_resolved_name buffer. Pre-fix this overflowed via sprintf; the fix
+// is to snprintf-bound the write and refuse to produce a Type whose mangled
+// name would silently collide with another similarly-prefixed symbol.
+void test_NamedType_MangledNameOverflow_types(void) {
+	Arena arena;
+	arena_init(&arena, 0);
+	type_arena_set(&arena);
+
+	char long_name[64];
+	char long_namespace[64];
+	memset(long_name, 'A', sizeof(long_name) - 1);
+	long_name[sizeof(long_name) - 1] = '\0';
+	memset(long_namespace, 'B', sizeof(long_namespace) - 1);
+	long_namespace[sizeof(long_namespace) - 1] = '\0';
+
+	FILE *old_stderr = capture_error_begin();
+	Type *t = new_named_type(long_name, long_namespace, TYPE_STRUCT);
+	char *err = capture_error_end(old_stderr);
+
+	TEST_ASSERT_NULL(t);
+	TEST_ASSERT_NOT_NULL(strstr(err, "exceeds"));
+
+	free(err);
+	type_arena_set(NULL);
+	arena_deinit(&arena);
+}
+
+// One byte under the cap: 62-byte namespace + 62-byte name + 3 wrapper bytes
+// = 127, which fits with the trailing null. The boundary should be respected
+// without false-positive truncation diagnostics.
+void test_NamedType_MangledNameBoundary_types(void) {
+	Arena arena;
+	arena_init(&arena, 0);
+	type_arena_set(&arena);
+
+	char name[63];
+	char namespace[63];
+	memset(name, 'C', sizeof(name) - 1);
+	name[sizeof(name) - 1] = '\0';
+	memset(namespace, 'D', sizeof(namespace) - 1);
+	namespace[sizeof(namespace) - 1] = '\0';
+
+	Type *t = new_named_type(name, namespace, TYPE_STRUCT);
+	TEST_ASSERT_NOT_NULL(t);
+	TEST_ASSERT_EQUAL_UINT32(127, strlen(t->type_resolved_name));
+
+	type_arena_set(NULL);
+	arena_deinit(&arena);
 }

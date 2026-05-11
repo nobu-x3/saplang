@@ -270,9 +270,15 @@ Type *new_named_type(const char *name, const char *namespace, TypeKind kind) { /
 		return NULL;
 	memset(t, 0, sizeof(Type));
 	t->type_kind = kind;
-	strncpy(t->type_name, name, sizeof(t->type_name));
-	strncpy(t->type_namespace, namespace, sizeof(t->type_namespace));
-	sprintf(t->type_resolved_name, "__%s_%s", t->type_namespace, t->type_name);
+	strncpy(t->type_name, name, sizeof(t->type_name) - 1);
+	strncpy(t->type_namespace, namespace, sizeof(t->type_namespace) - 1);
+	int written = snprintf(t->type_resolved_name, sizeof(t->type_resolved_name), "__%s_%s", t->type_namespace, t->type_name);
+	if (written < 0 || (size_t)written >= sizeof(t->type_resolved_name)) {
+		// Truncation would silently collide with another mangled name, so bail
+		// rather than producing a Type with a non-unique resolved_name.
+		fprintf(diag_stream(), "Error: mangled type name '__%s_%s' exceeds %zu-byte buffer.\n", t->type_namespace, t->type_name, sizeof(t->type_resolved_name));
+		return NULL;
+	}
 	return t;
 }
 
