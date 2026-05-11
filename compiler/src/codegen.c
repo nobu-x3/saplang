@@ -164,6 +164,27 @@ typedef struct {
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
 
+static LLVMValueRef codegen_cond_to_bool(CodegenLLVM *cg, ASTNode *cond, Symbol *table, PassContext ctx) {
+	Type *natural = get_type(table, cond, ctx.current_scope, "");
+	PassContext c = ctx;
+	c.intention = PI_LOAD_VAL;
+	c.expected_type = natural;
+	LLVMValueRef val = codegen_ast(cg, cond, table, c);
+
+	LLVMTypeRef val_ty = LLVMTypeOf(val);
+	if (val_ty == LLVMInt1TypeInContext(cg->llvm_context))
+		return val;
+
+	LLVMTypeKind kind = LLVMGetTypeKind(val_ty);
+	if (kind == LLVMIntegerTypeKind)
+		return LLVMBuildICmp(cg->builder, LLVMIntNE, val, LLVMConstInt(val_ty, 0, 0), "tobool");
+	if (kind == LLVMFloatTypeKind || kind == LLVMDoubleTypeKind || kind == LLVMHalfTypeKind)
+		return LLVMBuildFCmp(cg->builder, LLVMRealONE, val, LLVMConstReal(val_ty, 0.0), "tobool");
+	if (kind == LLVMPointerTypeKind)
+		return LLVMBuildICmp(cg->builder, LLVMIntNE, val, LLVMConstPointerNull(val_ty), "tobool");
+	return val;
+}
+
 LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	ASTNode *lvalue = node->data.assignment.lvalue;
 	assert(lvalue->type == AST_EXPR_IDENT || lvalue->type == AST_MEMBER_ACCESS);
@@ -850,10 +871,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		// cond
 		LLVMPositionBuilderAtEnd(cg->builder, condBB);
 		if (node->data.for_loop.condition) {
-			PassContext condition_ctx = ctx;
-			condition_ctx.expected_type = get_primitive_bool();
-			condition_ctx.intention = PI_LOAD_VAL;
-			LLVMValueRef condition = codegen_ast(cg, node->data.for_loop.condition, table, condition_ctx);
+			LLVMValueRef condition = codegen_cond_to_bool(cg, node->data.for_loop.condition, table, ctx);
 			LLVMBuildCondBr(cg->builder, condition, bodyBB, endBB);
 		} else {
 			LLVMBuildBr(cg->builder, bodyBB);
@@ -883,10 +901,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMBuildBr(cg->builder, condBB);
 		// cond
 		LLVMPositionBuilderAtEnd(cg->builder, condBB);
-		PassContext condition_ctx = ctx;
-		condition_ctx.expected_type = get_primitive_bool();
-		condition_ctx.intention = PI_LOAD_VAL;
-		LLVMValueRef cond = codegen_ast(cg, node->data.while_loop.condition, table, condition_ctx);
+		LLVMValueRef cond = codegen_cond_to_bool(cg, node->data.while_loop.condition, table, ctx);
 		LLVMBuildCondBr(cg->builder, cond, bodyBB, endBB);
 		// body
 		LLVMPositionBuilderAtEnd(cg->builder, bodyBB);
@@ -902,10 +917,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 
 	case AST_IF_STMT: {
 		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.resolved_name);
-		PassContext condition_ctx = ctx;
-		condition_ctx.expected_type = get_primitive_bool();
-		condition_ctx.intention = PI_LOAD_VAL;
-		LLVMValueRef cond = codegen_ast(cg, node->data.if_stmt.condition, table, condition_ctx);
+		LLVMValueRef cond = codegen_cond_to_bool(cg, node->data.if_stmt.condition, table, ctx);
 		LLVMBasicBlockRef thenBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "then");
 		LLVMBasicBlockRef elseBB = node->data.if_stmt.else_branch ? LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "else") : NULL;
 		LLVMBasicBlockRef mergeBB = ctx.if_cont_block ? ctx.if_cont_block : LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "ifcont");

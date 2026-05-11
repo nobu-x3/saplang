@@ -502,6 +502,57 @@ int is_int(const Type *type) {
 
 int is_float(const Type *type) { return type->type_kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "f32") == 0 || strcmp(type->type_name, "f64") == 0); }
 
+static int is_bool_type(const Type *t) { return t && t->type_kind == TYPE_PRIMITIVE && strcmp(t->type_name, "bool") == 0; }
+
+static int is_signed_int_type(const Type *t) {
+	if (!t || t->type_kind != TYPE_PRIMITIVE)
+		return 0;
+	return strcmp(t->type_name, "i8") == 0 || strcmp(t->type_name, "i16") == 0 || strcmp(t->type_name, "i32") == 0 || strcmp(t->type_name, "i64") == 0;
+}
+
+static int is_unsigned_int_type(const Type *t) {
+	if (!t || t->type_kind != TYPE_PRIMITIVE)
+		return 0;
+	return strcmp(t->type_name, "u8") == 0 || strcmp(t->type_name, "u16") == 0 || strcmp(t->type_name, "u32") == 0 || strcmp(t->type_name, "u64") == 0;
+}
+
+static int int_bit_width(const Type *t) {
+	if (!t || t->type_kind != TYPE_PRIMITIVE)
+		return 0;
+	if (strcmp(t->type_name, "i8") == 0 || strcmp(t->type_name, "u8") == 0)
+		return 8;
+	if (strcmp(t->type_name, "i16") == 0 || strcmp(t->type_name, "u16") == 0)
+		return 16;
+	if (strcmp(t->type_name, "i32") == 0 || strcmp(t->type_name, "u32") == 0)
+		return 32;
+	if (strcmp(t->type_name, "i64") == 0 || strcmp(t->type_name, "u64") == 0)
+		return 64;
+	return 0;
+}
+
+static int float_bit_width(const Type *t) {
+	if (!t || t->type_kind != TYPE_PRIMITIVE)
+		return 0;
+	if (strcmp(t->type_name, "f32") == 0)
+		return 32;
+	if (strcmp(t->type_name, "f64") == 0)
+		return 64;
+	return 0;
+}
+
+int is_widening_int_conversion(const Type *src, const Type *tgt) {
+	if ((is_signed_int_type(src) && is_signed_int_type(tgt)) || (is_unsigned_int_type(src) && is_unsigned_int_type(tgt))) {
+		return int_bit_width(src) <= int_bit_width(tgt);
+	}
+	return 0;
+}
+
+int is_widening_float_conversion(const Type *src, const Type *tgt) {
+	int src_w = float_bit_width(src);
+	int tgt_w = float_bit_width(tgt);
+	return src_w > 0 && tgt_w > 0 && src_w <= tgt_w;
+}
+
 int is_convertible(const Type *source, const Type *target, int permissive, Symbol *table) {
 	if (!source || !target)
 		return 0;
@@ -530,12 +581,17 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 		return pointer_count == decay_count && type_equals(underlying_array_type, underlying_pointer_type);
 	}
 	if (target->type_kind == TYPE_PRIMITIVE) {
-		if (strcmp(target->type_name, "bool") == 0) {
+		if (is_bool_type(target)) {
+			// Numeric primitives are "truthy"
+			// in condition contexts (if/while/for/!) — those callers pass
+			// permissive=1 and codegen lowers the load + icmp/fcmp against zero.
+			// Assignment, argument passing, and return paths use permissive=0,
+			// so `bool x = some_int;` still requires an explicit cast.
 			if (source->type_kind == TYPE_POINTER)
 				return 1;
-
-			if (source->type_kind == TYPE_PRIMITIVE)
+			if (permissive && source->type_kind == TYPE_PRIMITIVE)
 				return 1;
+			return 0;
 		}
 
 		if (source->type_kind == TYPE_ENUM) {
@@ -545,12 +601,13 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 			return type_equals(enum_sym->node->data.enum_decl.base_type, target);
 		}
 
-		if (permissive) {
-			if (source->type_kind == TYPE_PRIMITIVE) {
-				return (is_int(target) && is_int(source)) || (is_float(target) && is_float(source));
-			}
-			return 0;
+		if (permissive && source->type_kind == TYPE_PRIMITIVE) {
+			// Same-signedness widening only — narrowing and cross-signedness
+			// conversions must be spelled out with an explicit `(T)` cast.
+			return is_widening_int_conversion(source, target) || is_widening_float_conversion(source, target);
 		}
+
+		return 0;
 	}
 
 	if (source->type_kind == TYPE_POINTER) {
