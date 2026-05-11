@@ -54,6 +54,11 @@ CompilerResult parser_deinit(Parser *parser) {
 	if (!parser)
 		return RESULT_PASSED_NULL_PTR;
 
+	// If the parser bailed mid-stream with a string literal still in the
+	// lookahead slot, its heap-allocated payload would otherwise leak.
+	free(parser->current_token.string_data);
+	parser->current_token.string_data = NULL;
+
 	scanner_deinit(&parser->scanner);
 	return RESULT_SUCCESS;
 }
@@ -603,13 +608,20 @@ ASTNode *new_char_lit_node(char lit, SourceLocation loc) {
 	return node;
 }
 
-ASTNode *new_string_lit_node(const char *text, SourceLocation loc) {
+ASTNode *new_string_lit_node(const char *text, size_t len, SourceLocation loc) {
 	ASTNode *node = new_ast_node(AST_STRING_LIT, loc);
 	if (!node) {
 		return NULL;
 	}
 
-	strncpy(node->data.string_literal.text, text, sizeof(node->data.string_literal.text));
+	char *buf = arena_alloc(current_parser_arena, len + 1);
+	if (!buf)
+		return NULL;
+	if (len > 0)
+		memcpy(buf, text, len);
+	buf[len] = '\0';
+	node->data.string_literal.text = buf;
+	node->data.string_literal.len = len;
 	return node;
 }
 
@@ -1615,7 +1627,9 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 		return parse_struct_literal(parser, scope_prefix);
 	} else if (parser->current_token.type == TOK_STRINGLIT) {
 		SourceLocation loc = parser->current_token.location;
-		ASTNode *string_lit_node = new_string_lit_node(parser->current_token.text, loc);
+		ASTNode *string_lit_node = new_string_lit_node(parser->current_token.string_data, parser->current_token.string_len, loc);
+		free(parser->current_token.string_data);
+		parser->current_token.string_data = NULL;
 		parser->current_token = next_token(&parser->scanner);
 		return string_lit_node;
 	} else if (parser->current_token.type == TOK_CHARLIT) {

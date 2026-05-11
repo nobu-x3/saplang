@@ -208,7 +208,10 @@ typedef struct ASTNode {
 			struct ASTNode *defer_block;
 		} defer;
 		struct {
-			char text[64];
+			// Arena-allocated, NUL-terminated. `len` excludes the
+			// terminator. The buffer outlives the originating Token.
+			const char *text;
+			size_t len;
 		} string_literal;
 		struct {
 			char literal;

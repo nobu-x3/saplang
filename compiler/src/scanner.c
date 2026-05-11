@@ -69,35 +69,68 @@ Token next_token(Scanner *scanner) {
 	}
 
 	if (_INPUT[_INDEX] == '\'') {
-		int i = 0;
+		SourceLocation start_loc = {scanner->source.path, scanner->line, scanner->col, _INDEX};
+		size_t i = 0;
+		int reported = 0;
 		current_token.type = TOK_CHARLIT;
 		eat_next_char(scanner);
-		while (_INPUT[_INDEX] != '\'') {
-			current_token.text[i++] = eat_next_char(scanner);
+		while (_INPUT[_INDEX] && _INPUT[_INDEX] != '\'') {
+			char ch = eat_next_char(scanner);
+			if (i + 1 >= sizeof(current_token.text)) {
+				if (!reported) {
+					report(start_loc, "char literal exceeds 63 characters.", 0);
+					reported = 1;
+				}
+				continue;
+			}
+			current_token.text[i++] = ch;
 		}
-		current_token.text[i++] = '\0';
+		current_token.text[i] = '\0';
 
 		eat_next_char(scanner);
 		return current_token;
 	}
 
 	if (_INPUT[_INDEX] == '"') {
-		int i = 0;
+		SourceLocation start_loc = {scanner->source.path, scanner->line, scanner->col, _INDEX};
 		current_token.type = TOK_STRINGLIT;
+		current_token.location = start_loc;
 		eat_next_char(scanner);
-		while (_INPUT[_INDEX] != '"') {
+		size_t cap = 64;
+		size_t len = 0;
+		char *buf = malloc(cap);
+		if (!buf) {
+			report(start_loc, "out of memory scanning string literal.", 0);
+			current_token.type = TOK_UNKNOWN;
+			return current_token;
+		}
+		while (_INPUT[_INDEX] && _INPUT[_INDEX] != '"') {
 			char next_character = eat_next_char(scanner);
 			if (next_character == '\\') {
 				char second_character = eat_next_char(scanner);
-				next_character = decode_escape_sequence(current_token.location, second_character);
+				next_character = decode_escape_sequence(start_loc, second_character);
 			}
-			current_token.text[i++] = next_character;
+			if (len + 1 >= cap) {
+				size_t new_cap = cap * 2;
+				char *grown = realloc(buf, new_cap);
+				if (!grown) {
+					free(buf);
+					report(start_loc, "out of memory scanning string literal.", 0);
+					current_token.type = TOK_UNKNOWN;
+					return current_token;
+				}
+				buf = grown;
+				cap = new_cap;
+			}
+			buf[len++] = next_character;
 			if (_INDEX > _LEN) {
-				report(current_token.location, "unclosed string.", 0);
+				report(start_loc, "unclosed string.", 0);
 				break;
 			}
 		}
-		current_token.text[i++] = '\0';
+		buf[len] = '\0';
+		current_token.string_data = buf;
+		current_token.string_len = len;
 
 		eat_next_char(scanner);
 		return current_token;
@@ -105,8 +138,18 @@ Token next_token(Scanner *scanner) {
 
 	// If letter: read identifier/keyword.
 	if (isalpha(_INPUT[_INDEX]) || _INPUT[_INDEX] == '_') {
-		int i = 0;
+		SourceLocation start_loc = {scanner->source.path, scanner->line, scanner->col, _INDEX};
+		size_t i = 0;
+		int reported = 0;
 		while (_INPUT[_INDEX] && (isalnum(_INPUT[_INDEX]) || _INPUT[_INDEX] == '_')) {
+			if (i + 1 >= sizeof(current_token.text)) {
+				if (!reported) {
+					report(start_loc, "identifier exceeds 63 characters.", 0);
+					reported = 1;
+				}
+				eat_next_char(scanner);
+				continue;
+			}
 			current_token.text[i++] = _INPUT[_INDEX];
 			eat_next_char(scanner);
 		}
@@ -188,11 +231,24 @@ Token next_token(Scanner *scanner) {
 
 	// If digit: read a number (supporting potential decimal point).
 	if (isdigit(_INPUT[_INDEX])) {
-		int i = 0;
+		SourceLocation start_loc = {scanner->source.path, scanner->line, scanner->col, _INDEX};
+		size_t i = 0;
 		int hasDot = 0;
+		int reported = 0;
+#define _NUM_PUSH(ch)                                                                                                                                                                                                                              \
+	do {                                                                                                                                                                                                                                           \
+		if (i + 1 >= sizeof(current_token.text)) {                                                                                                                                                                                                 \
+			if (!reported) {                                                                                                                                                                                                                       \
+				report(start_loc, "numeric literal exceeds 63 characters.", 0);                                                                                                                                                                    \
+				reported = 1;                                                                                                                                                                                                                      \
+			}                                                                                                                                                                                                                                      \
+		} else {                                                                                                                                                                                                                                   \
+			current_token.text[i++] = (ch);                                                                                                                                                                                                        \
+		}                                                                                                                                                                                                                                          \
+	} while (0)
 		if (_INPUT[_INDEX] == '0' && (_INPUT[_INDEX + 1] == 'x' || _INPUT[_INDEX + 1] == 'X')) {
-			current_token.text[i++] = eat_next_char(scanner);
-			current_token.text[i++] = eat_next_char(scanner);
+			_NUM_PUSH(eat_next_char(scanner));
+			_NUM_PUSH(eat_next_char(scanner));
 
 			while ((_INPUT[_INDEX] >= '0' && _INPUT[_INDEX] <= '9') || (_INPUT[_INDEX] >= 'a' && _INPUT[_INDEX] <= 'f') || (_INPUT[_INDEX] >= 'A' && _INPUT[_INDEX] <= 'F') || _INPUT[_INDEX] == '_') {
 				// skip underscores
@@ -201,12 +257,12 @@ Token next_token(Scanner *scanner) {
 					continue;
 				}
 
-				current_token.text[i++] = _INPUT[_INDEX];
+				_NUM_PUSH(_INPUT[_INDEX]);
 				eat_next_char(scanner);
 			}
 		} else if (_INPUT[_INDEX] == '0' && (_INPUT[_INDEX + 1] == 'b' || _INPUT[_INDEX + 1] == 'B')) {
-			current_token.text[i++] = eat_next_char(scanner);
-			current_token.text[i++] = eat_next_char(scanner);
+			_NUM_PUSH(eat_next_char(scanner));
+			_NUM_PUSH(eat_next_char(scanner));
 
 			while (_INPUT[_INDEX] == '0' || _INPUT[_INDEX] == '1' || _INPUT[_INDEX] == '_') {
 				// skip underscores
@@ -215,7 +271,7 @@ Token next_token(Scanner *scanner) {
 					continue;
 				}
 
-				current_token.text[i++] = _INPUT[_INDEX];
+				_NUM_PUSH(_INPUT[_INDEX]);
 				eat_next_char(scanner);
 			}
 
@@ -224,10 +280,11 @@ Token next_token(Scanner *scanner) {
 				if (_INPUT[_INDEX] == '.') {
 					hasDot = 1;
 				}
-				current_token.text[i++] = _INPUT[_INDEX];
+				_NUM_PUSH(_INPUT[_INDEX]);
 				eat_next_char(scanner);
 			}
 		}
+#undef _NUM_PUSH
 		current_token.text[i] = '\0';
 		current_token.type = TOK_NUMBER;
 		current_token.location.id = _INDEX;
