@@ -17,7 +17,7 @@
 #include <unistd.h>
 #endif
 
-#define LL_DIRECTORY ".tmp"
+#define OBJ_DIRECTORY ".tmp"
 
 int get_num_of_cores() {
 #if defined(__linux__) || defined(__unix__)
@@ -278,10 +278,10 @@ int module_name_is_unique(const char *name) {
 	return count == 1;
 }
 
-void combine_ir_paths(StringList *string_list, char *ll_dir) {
-	DIR *dir = opendir(ll_dir);
+void combine_object_paths(StringList *string_list, char *obj_dir) {
+	DIR *dir = opendir(obj_dir);
 	if (!dir) {
-		fprintf(stderr, "could not open ll directory: %d", errno);
+		fprintf(stderr, "could not open obj directory: %d", errno);
 		return;
 	}
 	struct dirent *entry;
@@ -292,7 +292,7 @@ void combine_ir_paths(StringList *string_list, char *ll_dir) {
 
 		const char *filename = entry->d_name;
 		char filepath[1024];
-		snprintf(filepath, sizeof(filepath), "%s/%s", ll_dir, filename);
+		snprintf(filepath, sizeof(filepath), "%s/%s", obj_dir, filename);
 		char *filepath_cpy = strdup(filepath);
 		da_push_unsafe_ptr(string_list, filepath_cpy);
 	}
@@ -610,31 +610,20 @@ void codegen_task(void *arg) {
 	CodegenInitContext cg_init_ctx = {node->parser.module_name, node->parser.scanner.source.name, source_dir, 0};
 	CodegenLLVM cg_ctx = codegen_init(&cg_init_ctx);
 	codegen_run(&cg_ctx, node->module->ast, node->module->symbol_table);
-	char *output = codegen_output_str(&cg_ctx);
-	codegen_deinit(&cg_ctx);
-	int res = make_dir(LL_DIRECTORY, 0777);
+	int res = make_dir(OBJ_DIRECTORY, 0777);
 	if (res == -1 && errno != EEXIST) {
-		fprintf(diag_stream(), "failed to create tmp dir for LLVM IR with code: %d", errno);
-		free(output);
+		fprintf(diag_stream(), "failed to create tmp dir for object files with code: %d", errno);
+		codegen_deinit(&cg_ctx);
 		type_arena_set(NULL);
 		diag_set_sink(NULL);
 		return;
 	}
 	char tmp_dir[512] = "";
-	char *ptr = full_path(LL_DIRECTORY, tmp_dir);
-	char ll_path[512] = "";
-	sprintf(ll_path, "%s/tmp-%s.ll", tmp_dir, node->parser.module_name);
-	FILE *f = fopen(ll_path, "w");
-	if (!f) {
-		fprintf(diag_stream(), "failed to create tmp file for LLVM IR at path %s with code: %d", ll_path, errno);
-		free(output);
-		type_arena_set(NULL);
-		diag_set_sink(NULL);
-		return;
-	}
-	fprintf(f, "%s", output);
-	fclose(f);
-	free(output);
+	full_path(OBJ_DIRECTORY, tmp_dir);
+	char obj_path[512] = "";
+	snprintf(obj_path, sizeof(obj_path), "%s/tmp-%s.o", tmp_dir, node->parser.module_name);
+	codegen_emit_object_file(&cg_ctx, obj_path);
+	codegen_deinit(&cg_ctx);
 	type_arena_set(NULL);
 	diag_set_sink(NULL);
 }
@@ -642,6 +631,10 @@ void codegen_task(void *arg) {
 CompilerResult driver_run() {
 	if (driver.options.display_help) {
 		return RESULT_SUCCESS;
+	}
+	if (codegen_init_native_target() != RESULT_SUCCESS) {
+		fprintf(stderr, "failed to initialize native LLVM target / asm printer.\n");
+		return RESULT_FAILURE;
 	}
 	double time_prep, time_comp, time_sema, time_cfg, time_gen = 0;
 	double before = get_time();
@@ -772,10 +765,10 @@ CompilerResult driver_run() {
 	char output_file_path_cpy[512] = "";
 	strncpy(output_file_path_cpy, driver.options.output_file_path, sizeof(output_file_path_cpy));
 	char output_file_path_full[512] = "";
-	char *ptr = full_path(output_file_path_cpy, output_file_path_full);
+	full_path(output_file_path_cpy, output_file_path_full);
 	da_init_result(cmd, 4);
 	da_push_result(cmd, strdup("clang"));
-	combine_ir_paths(&cmd, LL_DIRECTORY);
+	combine_object_paths(&cmd, OBJ_DIRECTORY);
 	da_push_result(cmd, strdup("-o"));
 	da_push_result(cmd, strdup(output_file_path_full));
 	char *final_cmd = flatten_stringlist(&cmd);
@@ -786,7 +779,7 @@ CompilerResult driver_run() {
 	int clang_res = system(final_cmd);
 	free(final_cmd);
 	if (!driver.options.no_cleanup)
-		rmrf(LL_DIRECTORY);
+		rmrf(OBJ_DIRECTORY);
 	if (driver.options.show_timings) {
 		time_gen = (get_time() - before);
 		double total_comp = time_prep + time_comp + time_sema + time_cfg + time_gen;

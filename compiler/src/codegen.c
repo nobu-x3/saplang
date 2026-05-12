@@ -9,6 +9,8 @@
 #include <assert.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
+#include <llvm-c/Target.h>
+#include <llvm-c/TargetMachine.h>
 #include <llvm-c/Types.h>
 #include <stdio.h>
 #include <string.h>
@@ -1031,4 +1033,55 @@ char *codegen_output_str(CodegenLLVM *cg) {
 		LLVMDIBuilderFinalize(cg->di_builder);
 	}
 	return LLVMPrintModuleToString(cg->module);
+}
+
+CompilerResult codegen_init_native_target(void) {
+	if (LLVMInitializeNativeTarget())
+		return RESULT_FAILURE;
+	if (LLVMInitializeNativeAsmPrinter())
+		return RESULT_FAILURE;
+	return RESULT_SUCCESS;
+}
+
+CompilerResult codegen_emit_object_file(CodegenLLVM *cg, const char *path) {
+	if (cg->should_build_debug) {
+		LLVMDIBuilderFinalize(cg->di_builder);
+	}
+
+	char *triple = LLVMGetDefaultTargetTriple();
+	LLVMTargetRef target = NULL;
+	char *err = NULL;
+	if (LLVMGetTargetFromTriple(triple, &target, &err)) {
+		fprintf(diag_stream(), "could not get LLVM target for triple '%s': %s\n", triple, err ? err : "(no message)");
+		if (err)
+			LLVMDisposeMessage(err);
+		LLVMDisposeMessage(triple);
+		return RESULT_FAILURE;
+	}
+
+	char *cpu = LLVMGetHostCPUName();
+	char *features = LLVMGetHostCPUFeatures();
+	LLVMTargetMachineRef tm = LLVMCreateTargetMachine(target, triple, cpu, features, LLVMCodeGenLevelDefault, LLVMRelocPIC, LLVMCodeModelDefault);
+	LLVMDisposeMessage(cpu);
+	LLVMDisposeMessage(features);
+
+	LLVMTargetDataRef data_layout = LLVMCreateTargetDataLayout(tm);
+	LLVMSetModuleDataLayout(cg->module, data_layout);
+	LLVMSetTarget(cg->module, triple);
+	LLVMDisposeTargetData(data_layout);
+	LLVMDisposeMessage(triple);
+
+	err = NULL;
+	// LLVMTargetMachineEmitToFile takes a non-const char *Filename in some
+	// historical headers; cast away const defensively. In 19.x it's const.
+	if (LLVMTargetMachineEmitToFile(tm, cg->module, (char *)path, LLVMObjectFile, &err)) {
+		fprintf(diag_stream(), "failed to emit object file '%s': %s\n", path, err ? err : "(no message)");
+		if (err)
+			LLVMDisposeMessage(err);
+		LLVMDisposeTargetMachine(tm);
+		return RESULT_FAILURE;
+	}
+
+	LLVMDisposeTargetMachine(tm);
+	return RESULT_SUCCESS;
 }

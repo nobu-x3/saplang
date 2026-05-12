@@ -1,7 +1,7 @@
 
 file(GLOB compiler_src CONFIGURE_DEPENDS "src/*.c")
 
-llvm_map_components_to_libnames(llvm_libs core support)
+llvm_map_components_to_libnames(llvm_libs core support native target codegen asmprinter)
 
 if(BUILD_TESTS)
 	add_library(saplangc_lib STATIC ${compiler_src})
