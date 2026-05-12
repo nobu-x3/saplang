@@ -55,6 +55,7 @@ typedef enum {
 	TOK_BOOL,
 	TOK_TRUE,
 	TOK_FALSE,
+	TOK_NULL,
 	TOK_ENUM,
 	TOK_COLON,
     TOK_TILDA,

@@ -71,6 +71,9 @@ Type *get_primitive_i32();
 Type *get_primitive_f32();
 Type *get_primitive_u8();
 Type *get_string_type();
+// Type of the `null` literal: pointer-to-void. Convertible to any
+// pointer type via the existing pointer→pointer rule in is_convertible.
+Type *get_null_type();
 
 int is_builtin(const Type *type);
 int is_int(const Type *type);

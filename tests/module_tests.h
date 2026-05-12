@@ -63,6 +63,15 @@ void test_ImportTest_modules(void) {
     test("module_tests/import_test", "import_test");
 }
 
+// End-to-end exercise of the `null` literal: typed-pointer init,
+// equality / inequality, truthy / falsy branches, reassignment,
+// returning from a pointer-returning fn, designated and positional
+// struct-field init. The fixture's main() returns 0 only if every
+// check holds, so a regression shows up as a non-zero exit code.
+void test_NullTest_modules(void) {
+    test("module_tests/null_test", "null_test");
+}
+
 // Mutual import: main imports a, a imports b, b imports a. Driver
 // should refuse to build the dependency graph rather than spinning or
 // silently short-circuiting.

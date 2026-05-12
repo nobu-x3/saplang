@@ -35,6 +35,8 @@ int main(void) {
 	RUN_TEST(test_UnaryExpression_AddressOf);
 	RUN_TEST(test_SinglePointer);
 	RUN_TEST(test_MultiPointer);
+	RUN_TEST(test_NullLiteral_parser);
+	RUN_TEST(test_NullInComparison_parser);
 	RUN_TEST(test_CustomTypePointer);
 	RUN_TEST(test_ArrayLiterals);
 	RUN_TEST(test_ArrayAccessAssignment);
@@ -77,6 +79,8 @@ int main(void) {
 	RUN_TEST(test_TokenText_SelfOr_scanner);
 	RUN_TEST(test_TokenText_LogicalOr_scanner);
 	RUN_TEST(test_TokenText_SelfMul_scanner);
+	RUN_TEST(test_TokenText_Null_scanner);
+	RUN_TEST(test_TokenText_NullPrefix_NotAKeyword_scanner);
 	RUN_TEST(test_StringLiteral);
 	RUN_TEST(test_CharLiteral);
 	RUN_TEST(test_BinaryLiteral);
@@ -109,6 +113,21 @@ int main(void) {
 	RUN_TEST(test_StructLiteralNestedCorrect_sema);
 	RUN_TEST(test_StructLiteralNestedInnerWrongType_sema);
 	RUN_TEST(test_StructLiteralDesignatedUnknownFieldBeforeTypeCheck_sema);
+	RUN_TEST(test_NullAssignToPointer_sema);
+	RUN_TEST(test_NullAssignToDoublePointer_sema);
+	RUN_TEST(test_NullAssignToIntFails_sema);
+	RUN_TEST(test_NullAssignToFloatFails_sema);
+	RUN_TEST(test_NullReassignToPointer_sema);
+	RUN_TEST(test_NullCompareEqualsPointer_sema);
+	RUN_TEST(test_NullCompareNotEqualsPointer_sema);
+	RUN_TEST(test_PointerTruthyIfStillWorks_sema);
+	RUN_TEST(test_NullAsArgument_sema);
+	RUN_TEST(test_NullAsReturn_sema);
+	RUN_TEST(test_NullReturnFromIntFn_sema);
+	RUN_TEST(test_NullInStructFieldInit_sema);
+	RUN_TEST(test_NullInStructFieldInitDesignated_sema);
+	RUN_TEST(test_NullInStructFieldInitWrongType_sema);
+	RUN_TEST(test_NullableIsStillIdent_sema);
 	RUN_TEST(test_EnumRedeclaration_sema);
 	RUN_TEST(test_StructFieldRedeclaration_sema);
 	RUN_TEST(test_EnumMemberRedeclaration_sema);
@@ -212,8 +231,13 @@ int main(void) {
 	RUN_TEST(test_UnionDecl_codegen);
 	RUN_TEST(test_UnionMemberAccess_codegen);
 	RUN_TEST(test_NestedIfs_codegen);
+	RUN_TEST(test_NullLiteralVarInit_codegen);
+	RUN_TEST(test_NullLiteralReturn_codegen);
+	RUN_TEST(test_NullLiteralCompareEq_codegen);
+	RUN_TEST(test_PointerTruthyIfStillEmits_codegen);
 
 	RUN_TEST(test_ImportTest_modules);
+	RUN_TEST(test_NullTest_modules);
 	RUN_TEST(test_ImportCycle_modules);
 	return UNITY_END();
 

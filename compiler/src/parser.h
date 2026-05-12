@@ -111,13 +111,14 @@ typedef struct ASTNode {
 			struct ASTNode **statements;
 			int count;
 		} block;
-		// Literal expression: integer, float, or bool
+		// Literal expression: integer, float, bool, or null
 		struct {
 			long long_value;
 			double float_value;
 			int is_float;	// 1 if float literal
 			int bool_value; // 1 for true, 0 for false
 			int is_bool;	// 1 if bool literal
+			int is_null;	// 1 if `null` literal (pointer, fits any pointer type)
 		} literal;
 		// Identifier expression.
 		struct {

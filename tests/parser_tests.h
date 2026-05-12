@@ -174,6 +174,29 @@ void test_SinglePointer(void) {
 	free(output);
 }
 
+void test_NullLiteral_parser(void) {
+	SETUP_TEST("i32* p = null;");
+	const char *expected = "VarDecl: i32* p:\n"
+						   "  Literal Null\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullInComparison_parser(void) {
+	SETUP_TEST("fn bool test(i32* p) { return p == null; }");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "    ParamDecl: i32* p\n"
+						   "  Body:\n"
+						   "    Block with 1 statement(s):\n"
+						   "      Return:\n"
+						   "        Binary Expression: ==\n"
+						   "          Ident: p\n"
+						   "          Literal Null\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_MultiPointer(void) {
 	SETUP_TEST("i32** x = 42;");
 	const char *expected = "VarDecl: i32** x:\n"

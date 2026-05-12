@@ -128,7 +128,9 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			}
 			break;
 		case AST_EXPR_LITERAL:
-			if (node->data.literal.is_bool) {
+			if (node->data.literal.is_null) {
+				print(string, "Literal Null\n");
+			} else if (node->data.literal.is_bool) {
 				print(string, "Literal Bool: %s\n", node->data.literal.bool_value ? "true" : "false");
 			} else if (node->data.literal.is_float) {
 				print(string, "Literal Float: %f\n", node->data.literal.float_value);
@@ -887,6 +889,14 @@ ASTNode *new_literal_node_bool(int value, SourceLocation loc) {
 	return node;
 }
 
+ASTNode *new_literal_node_null(SourceLocation loc) {
+	ASTNode *node = new_ast_node(AST_EXPR_LITERAL, loc);
+	if (!node)
+		return NULL;
+	node->data.literal.is_null = 1;
+	return node;
+}
+
 ASTNode *new_array_access_node(ASTNode *base, ASTNode *index, SourceLocation loc) {
 	ASTNode *node = new_ast_node(AST_ARRAY_ACCESS, loc);
 	if (!node)
@@ -1556,6 +1566,10 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 		SourceLocation loc = parser->current_token.location;
 		parser->current_token = next_token(&parser->scanner);
 		return new_literal_node_bool(0, loc);
+	} else if (parser->current_token.type == TOK_NULL) {
+		SourceLocation loc = parser->current_token.location;
+		parser->current_token = next_token(&parser->scanner);
+		return new_literal_node_null(loc);
 	} else if (parser->current_token.type == TOK_IDENTIFIER) {
 		// @TODO: this is deferred until sema.
 		// In the semantic analysis phase, when resolving a qualified identifier, look up the namespace string in your symbol table.

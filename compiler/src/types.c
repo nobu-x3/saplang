@@ -494,6 +494,12 @@ Type *get_string_type() {
 	return &string_literal_type;
 }
 
+Type *get_null_type() {
+	static Type primitive_void_type = {TYPE_PRIMITIVE, "void", ""};
+	static Type null_type = {TYPE_POINTER, "", "", .pointee = &primitive_void_type};
+	return &null_type;
+}
+
 int is_int(const Type *type) {
 	return type->type_kind == TYPE_PRIMITIVE &&
 		   (strcmp(type->type_name, "i8") == 0 || strcmp(type->type_name, "i16") == 0 || strcmp(type->type_name, "i32") == 0 || strcmp(type->type_name, "i64") == 0 || strcmp(type->type_name, "u8") == 0 ||

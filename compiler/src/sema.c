@@ -25,7 +25,9 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		return NULL;
 	switch (node->type) {
 	case AST_EXPR_LITERAL:
-		if (node->data.literal.is_bool) {
+		if (node->data.literal.is_null) {
+			return get_null_type();
+		} else if (node->data.literal.is_bool) {
 			return get_primitive_bool();
 		} else if (node->data.literal.is_float) {
 			return get_primitive_f32();
@@ -275,12 +277,6 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 	assert(decl_node); // sanity
 	int current_field_index = 0;
 	for (int i = 0; i < init_count; ++i) {
-		if (current_field_index >= decl_node->data.struct_decl.field_count) {
-			char msg[256] = "";
-			sprintf(msg, "struct '%s' has %d fields, check initialization.", expected_type->type_name, decl_node->data.struct_decl.field_count);
-			report(node->location, msg, 0);
-			return RESULT_FAILURE;
-		}
 		FieldInitializer *init = node->data.struct_literal.inits[i];
 		if (init->is_designated) {
 			current_field_index = find_struct_field_index(decl_node, init->field);
@@ -290,6 +286,14 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 				report(node->location, msg, 0);
 				return RESULT_FAILURE;
 			}
+		}
+		// Bounds-check after the designator (designators can move the
+		// cursor backward, so the check has to run on the final index).
+		if (current_field_index >= decl_node->data.struct_decl.field_count) {
+			char msg[256] = "";
+			sprintf(msg, "struct '%s' has %d fields, check initialization.", expected_type->type_name, decl_node->data.struct_decl.field_count);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
 		}
 
 		ASTNode *field_decl = decl_node->data.struct_decl.fields[current_field_index];
@@ -339,11 +343,16 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 
 // Literals are conceptually untyped in Stage 1: an integer literal adapts
 // to any int target, a float literal to any float target, a bool literal to
-// bool. Saves the user from writing `u8 a = (u8)0;` everywhere until proper
-// comptime-int support lands. The non-literal narrowing footgun #22 was
-// about still requires an explicit cast — that's enforced by is_convertible.
+// bool, a null literal to any pointer. Saves the user from writing
+// `u8 a = (u8)0;` everywhere until proper comptime-int support lands. The
+// non-literal narrowing footgun #22 was about still requires an explicit
+// cast — that's enforced by is_convertible.
 int literal_fits_type(ASTNode *node, Type *target) {
-	if (!node || !target || node->type != AST_EXPR_LITERAL || target->type_kind != TYPE_PRIMITIVE)
+	if (!node || !target || node->type != AST_EXPR_LITERAL)
+		return 0;
+	if (node->data.literal.is_null)
+		return target->type_kind == TYPE_POINTER;
+	if (target->type_kind != TYPE_PRIMITIVE)
 		return 0;
 	if (node->data.literal.is_bool)
 		return strcmp(target->type_name, "bool") == 0;

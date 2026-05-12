@@ -205,6 +205,111 @@ void test_StructLiteralDesignatedUnknownFieldBeforeTypeCheck_sema(void) {
 	free(output);
 }
 
+void test_NullAssignToPointer_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { i32* p = null; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullAssignToDoublePointer_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { i32** p = null; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullAssignToIntFails_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { i32 a = null; }");
+	const char *expected = "parser_tests.sl:0:30:Error: assignment type mismatch: cannot implicitly convert void* to i32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullAssignToFloatFails_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { f32 a = null; }");
+	const char *expected = "parser_tests.sl:0:30:Error: assignment type mismatch: cannot implicitly convert void* to f32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullReassignToPointer_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { i32* p; p = null; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullCompareEqualsPointer_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { i32* p; if (p == null) {} }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullCompareNotEqualsPointer_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { i32* p; if (p != null) {} }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_PointerTruthyIfStillWorks_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { i32* p; if (p) {} if (!p) {} }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullAsArgument_sema(void) {
+	TEST_SETUP_SINGLE("fn void g(i32* p) {} fn void f() { g(null); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullAsReturn_sema(void) {
+	TEST_SETUP_SINGLE("fn i32* foo() { return null; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullReturnFromIntFn_sema(void) {
+	TEST_SETUP_SINGLE("fn i32 foo() { return null; }");
+	const char *expected = "parser_tests.sl:0:21:Error: cannot implicitly convert from void* to i32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullInStructFieldInit_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32* p; } S s = {null};");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullInStructFieldInitDesignated_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; i32* p; } S s = {.p = null, .a = 1};");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullInStructFieldInitWrongType_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; } S s = {null};");
+	const char *expected = "parser_tests.sl:0:31:Error: assignment type mismatch: cannot implicitly convert void* to i32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_NullableIsStillIdent_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { i32 nullable = 0; nullable = 1; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_EnumRedeclaration_sema(void) {
 	TEST_SETUP_SINGLE("enum Str {} enum Str {} ");
 	const char *expected = "parser_tests.sl:0:20:Error: enum redeclaration.\n";

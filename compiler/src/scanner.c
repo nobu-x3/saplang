@@ -73,6 +73,7 @@ Token next_token(Scanner *scanner) {
 		size_t i = 0;
 		int reported = 0;
 		current_token.type = TOK_CHARLIT;
+		current_token.location = start_loc;
 		eat_next_char(scanner);
 		while (_INPUT[_INDEX] && _INPUT[_INDEX] != '\'') {
 			char ch = eat_next_char(scanner);
@@ -192,6 +193,8 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_TRUE;
 		else if (strcmp(current_token.text, "false") == 0)
 			current_token.type = TOK_FALSE;
+		else if (strcmp(current_token.text, "null") == 0)
+			current_token.type = TOK_NULL;
 		else if (strcmp(current_token.text, "const") == 0)
 			current_token.type = TOK_CONST;
 		else if (strcmp(current_token.text, "return") == 0)

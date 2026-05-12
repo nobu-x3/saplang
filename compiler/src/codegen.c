@@ -309,6 +309,15 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 	LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
 	switch (node->type) {
 	case AST_EXPR_LITERAL:
+		if (node->data.literal.is_null) {
+			// Use the expected pointer type so `null` takes the shape of
+			// its surrounding context (`Foo* p = null` allocates as Foo*,
+			// not void*). If sema let a non-pointer expected_type through,
+			// fall back to a generic null pointer.
+			if (ctx.expected_type && ctx.expected_type->type_kind == TYPE_POINTER)
+				return LLVMConstPointerNull(ty);
+			return LLVMConstPointerNull(LLVMPointerType(LLVMInt8TypeInContext(cg->llvm_context), 0));
+		}
 		if (node->data.literal.is_bool) {
 			return LLVMConstInt(ty, node->data.literal.bool_value, 0);
 		} else if (node->data.literal.is_float) {
@@ -527,8 +536,12 @@ LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCo
 		return codegen_ast(cg, node->data.unary_op.operand, table, ctx);
 		break;
 	case '!': {
-		ctx.intention = PI_LOAD_VAL;
-		LLVMValueRef val = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
+		// Logical not. Route the operand through codegen_cond_to_bool so
+		// any scalar (int / float / pointer / bool) gets normalized to
+		// an i1 first; this is what makes `!p` for a pointer p work
+		// alongside the existing `if (p)` truthy lowering. The bitwise
+		// counterpart is `~`.
+		LLVMValueRef val = codegen_cond_to_bool(cg, node->data.unary_op.operand, table, ctx);
 		return LLVMBuildNot(cg->builder, val, "nottmp");
 	} break;
 	case '-': {

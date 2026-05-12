@@ -37,3 +37,15 @@ void test_TokenText_SelfMul_scanner(void) {
 	TEST_ASSERT_EQUAL_INT(TOK_SELFMUL, tok.type);
 	TEST_ASSERT_EQUAL_STRING("*=", tok.text);
 }
+
+void test_TokenText_Null_scanner(void) {
+	Token tok = scan_first("null");
+	TEST_ASSERT_EQUAL_INT(TOK_NULL, tok.type);
+	TEST_ASSERT_EQUAL_STRING("null", tok.text);
+}
+
+void test_TokenText_NullPrefix_NotAKeyword_scanner(void) {
+	Token tok = scan_first("nullable");
+	TEST_ASSERT_EQUAL_INT(TOK_IDENTIFIER, tok.type);
+	TEST_ASSERT_EQUAL_STRING("nullable", tok.text);
+}

@@ -1920,3 +1920,81 @@ void test_NestedIfs_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
 }
+
+void test_NullLiteralVarInit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { i32* p = null; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define void @__main_foo() {\n"
+						   "entry:\n"
+						   "  %__main_foo_p = alloca ptr, align 8\n"
+						   "  store ptr null, ptr %__main_foo_p, align 8\n"
+						   "  ret void\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_NullLiteralReturn_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32* foo() { return null; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define ptr @__main_foo() {\n"
+						   "entry:\n"
+						   "  ret ptr null\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_NullLiteralCompareEq_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32* p = null; if (p == null) { return 1; } return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_main_p = alloca ptr, align 8\n"
+						   "  store ptr null, ptr %__main_main_p, align 8\n"
+						   "  %0 = load ptr, ptr %__main_main_p, align 8\n"
+						   "  %1 = icmp eq ptr %0, null\n"
+						   "  br i1 %1, label %then, label %ifcont\n"
+						   "\n"
+						   "then:                                             ; preds = %entry\n"
+						   "  ret i32 1\n"
+						   "\n"
+						   "ifcont:                                           ; preds = %entry\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_PointerTruthyIfStillEmits_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32* p = null; if (p) { return 1; } return 0; }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "define i32 @main() {\n"
+						   "entry:\n"
+						   "  %__main_main_p = alloca ptr, align 8\n"
+						   "  store ptr null, ptr %__main_main_p, align 8\n"
+						   "  %0 = load ptr, ptr %__main_main_p, align 8\n"
+						   "  %tobool = icmp ne ptr %0, null\n"
+						   "  br i1 %tobool, label %then, label %ifcont\n"
+						   "\n"
+						   "then:                                             ; preds = %entry\n"
+						   "  ret i32 1\n"
+						   "\n"
+						   "ifcont:                                           ; preds = %entry\n"
+						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
