@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
+CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level, const char *scope_specifier);
+
 int is_known_type(Symbol *table, const Type *source, int current_scope) {
 	if (is_builtin(source))
 		return 1;
@@ -289,7 +291,47 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 				return RESULT_FAILURE;
 			}
 		}
-		// TODO: add struct literal's field type checks
+
+		ASTNode *field_decl = decl_node->data.struct_decl.fields[current_field_index];
+		Type *field_type = field_decl->data.field_decl.type;
+		ASTNode *expr = init->expr;
+
+		CompilerResult init_result = RESULT_SUCCESS;
+		if (expr->type == AST_EXPR_LITERAL) {
+			init_result = analyze_expr_literal(table, field_type, expr, scope_level, scope_specifier);
+		} else if (expr->type == AST_STRUCT_LITERAL) {
+			init_result = analyze_struct_literal(table, field_type, expr, scope_level, scope_specifier);
+		} else if (expr->type == AST_CHAR_LIT) {
+			if (field_type->type_kind != TYPE_PRIMITIVE || (strcmp(field_type->type_name, "u8") != 0 && strcmp(field_type->type_name, "i8") != 0)) {
+				char type_str[128] = "";
+				type_print(type_str, field_type);
+				char msg[256] = "";
+				sprintf(msg, "cannot initialize field '%s' of type %s with a char literal.", field_decl->data.field_decl.name, type_str);
+				report(expr->location, msg, 0);
+				init_result = RESULT_FAILURE;
+			}
+		} else {
+			init_result = analyze_ast(table, expr, scope_level, scope_specifier);
+			if (init_result == RESULT_SUCCESS) {
+				Type *expr_type = get_type(table, expr, scope_level, scope_specifier);
+				if (!expr_type || !is_convertible(expr_type, field_type, 0, table)) {
+					char field_ty_str[128] = "";
+					char expr_ty_str[128] = "";
+					type_print(field_ty_str, field_type);
+					if (expr_type)
+						type_print(expr_ty_str, expr_type);
+					else
+						strcpy(expr_ty_str, "(unknown)");
+					char msg[256] = "";
+					sprintf(msg, "type mismatch initializing field '%s': cannot implicitly convert %s to %s.", field_decl->data.field_decl.name, expr_ty_str, field_ty_str);
+					report(expr->location, msg, 0);
+					init_result = RESULT_FAILURE;
+				}
+			}
+		}
+		if (init_result != RESULT_SUCCESS)
+			return init_result;
+
 		++current_field_index;
 	}
 	return RESULT_SUCCESS;

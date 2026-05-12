@@ -100,6 +100,111 @@ void test_StructLiteralInitMoreInitsThanFields_sema(void) {
 	free(output);
 }
 
+void test_StructLiteralPositionalCorrect_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; f32 b; } S s = {1, 2.0};");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralDesignatedCorrect_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; f32 b; } S s = {.a = 1, .b = 2.0};");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralLiteralAdaptsToFieldWidth_sema(void) {
+	TEST_SETUP_SINGLE("struct S { u8 a; u16 b; u32 c; u64 d; } S s = {1, 2, 3, 4};");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralPositionalWrongType_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; } S s = {1.0};");
+	const char *expected = "parser_tests.sl:0:30:Error: assignment type mismatch: cannot implicitly convert f32 to i32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralPositionalSecondFieldWrongType_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; i32 b; } S s = {1, 2.0};");
+	const char *expected = "parser_tests.sl:0:40:Error: assignment type mismatch: cannot implicitly convert f32 to i32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralDesignatedWrongType_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; f32 b; } S s = {.b = 1, .a = 2.0};");
+	const char *expected = "parser_tests.sl:0:40:Error: assignment type mismatch: cannot implicitly convert i32 to f32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralBoolLitIntoIntField_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; } S s = {true};");
+	const char *expected = "parser_tests.sl:0:31:Error: assignment type mismatch: cannot implicitly convert bool to i32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralIntLitIntoBoolField_sema(void) {
+	TEST_SETUP_SINGLE("struct S { bool a; } S s = {1};");
+	const char *expected = "parser_tests.sl:0:29:Error: assignment type mismatch: cannot implicitly convert i32 to bool.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralCharLitIntoIntField_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; } S s = {'c'};");
+	const char *expected = "parser_tests.sl:0:27:Error: cannot initialize field 'a' of type i32 with a char literal.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralCharLitIntoU8Field_sema(void) {
+	TEST_SETUP_SINGLE("struct S { u8 a; } S s = {'c'};");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralIdentWrongType_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; } fn void foo() { f32 f = 0.0; S s = {f}; }");
+	const char *expected = "parser_tests.sl:0:61:Error: type mismatch initializing field 'a': cannot implicitly convert f32 to i32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralNestedInnerWrongType_sema(void) {
+	TEST_SETUP_SINGLE("struct Inner { i32 x; } struct Outer { Inner a; } Outer o = {{1.0}};");
+	const char *expected = "parser_tests.sl:0:65:Error: assignment type mismatch: cannot implicitly convert f32 to i32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralIdentCorrectType_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; } fn void foo() { i32 x = 7; S s = {x}; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralNestedCorrect_sema(void) {
+	TEST_SETUP_SINGLE("struct Inner { i32 x; i32 y; } struct Outer { Inner a; Inner b; } Outer o = {{0, 1}, {2, 3}};");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_StructLiteralDesignatedUnknownFieldBeforeTypeCheck_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; } S s = {.b = 1.0};");
+	const char *expected = "parser_tests.sl:0:27:Error: cannot find a field with name 'b' in the definition of struct 'S'.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_EnumRedeclaration_sema(void) {
 	TEST_SETUP_SINGLE("enum Str {} enum Str {} ");
 	const char *expected = "parser_tests.sl:0:20:Error: enum redeclaration.\n";
