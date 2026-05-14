@@ -13,7 +13,7 @@ typedef enum {
 
 typedef struct Symbol {
 	char name[64];
-	char resolved_name[128];
+	char resolved_name[512];
 	Type *type;
 	int scope_level;
 	SymbolKind kind;

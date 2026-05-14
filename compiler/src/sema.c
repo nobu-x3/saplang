@@ -40,16 +40,18 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		Symbol *sym = lookup_symbol(table, node->data.ident.resolved_name, scope_level);
 		if (!sym) {
 			if (node->data.ident.resolved_name[0] == '\0') {
-				char resolved_name[128] = "";
-				if (scope_specifier[0] != '\0') {
-					sprintf(resolved_name, "__%s", scope_specifier);
-					if (node->data.ident.namespace[0] != '\0') {
-						sprintf(resolved_name, "__%s_%s", node->data.ident.namespace, node->data.ident.name);
-					} else {
-						sprintf(resolved_name, "%s_%s", resolved_name, node->data.ident.name);
-					}
+				char resolved_name[512] = "";
+				int written;
+				if (node->data.ident.namespace[0] != '\0') {
+					written = snprintf(resolved_name, sizeof(resolved_name), "__%s_%s", node->data.ident.namespace, node->data.ident.name);
+				} else if (scope_specifier[0] != '\0') {
+					written = snprintf(resolved_name, sizeof(resolved_name), "%s_%s", scope_specifier, node->data.ident.name);
 				} else {
-					strncpy(resolved_name, node->data.ident.name, sizeof(resolved_name));
+					written = snprintf(resolved_name, sizeof(resolved_name), "%s", node->data.ident.name);
+				}
+				if (written < 0 || (size_t)written >= sizeof(resolved_name)) {
+					report(node->location, "resolved identifier name exceeds buffer size.", 0);
+					return NULL;
 				}
 				sym = lookup_symbol(table, resolved_name, scope_level);
 				if (!sym)
@@ -582,11 +584,16 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (maybe_enum && maybe_enum->kind == SYMB_ENUM) {
 			}
 		}
-		char resolved_name[256] = "";
+		char resolved_name[512] = "";
+		int written;
 		if (scope_specifier[0] != '\0')
-			sprintf(resolved_name, "__%s_%s", scope_specifier, node->data.ident.name);
+			written = snprintf(resolved_name, sizeof(resolved_name), "%s_%s", scope_specifier, node->data.ident.name);
 		else
-			strncpy(resolved_name, node->data.ident.name, sizeof(resolved_name));
+			written = snprintf(resolved_name, sizeof(resolved_name), "%s", node->data.ident.name);
+		if (written < 0 || (size_t)written >= sizeof(resolved_name)) {
+			report(node->location, "resolved identifier name exceeds buffer size.", 0);
+			return RESULT_FAILURE;
+		}
 		var_sym = lookup_symbol(table, resolved_name, scope_level);
 		if (!var_sym) {
 			char msg[64] = "";
@@ -597,15 +604,14 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		CompilerResult result = resolve_type(table, var_sym->type, var_sym->node->location);
 		if (result != RESULT_SUCCESS)
 			return result;
-		strncpy(node->data.ident.resolved_name, resolved_name, sizeof(resolved_name));
+		strncpy(node->data.ident.resolved_name, resolved_name, sizeof(node->data.ident.resolved_name));
 	} break;
 
 	case AST_RETURN: {
 		CompilerResult result = analyze_ast(table, node->data.ret.return_expr, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
-		// This is a gamble
-		Symbol *sym = lookup_symbol_weak(table, scope_specifier, scope_level);
+		Symbol *sym = lookup_symbol(table, scope_specifier, scope_level);
 		if (!sym || sym->kind != SYMB_FN || sym->type->type_kind != TYPE_FUNCTION) {
 			char msg[128] = "";
 			sprintf(msg, "%s is not a function.", scope_specifier);
@@ -664,15 +670,20 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		if (result != RESULT_SUCCESS)
 			return result;
 		if (node->data.assignment.lvalue->type == AST_EXPR_IDENT) {
-			char resolved_name[256] = "";
+			char resolved_name[512] = "";
 			ASTNode *lvalue = node->data.assignment.lvalue;
 			if (analyze_expr_ident(table, lvalue, scope_level) == RESULT_SUCCESS) {
 				strncpy(resolved_name, lvalue->data.ident.resolved_name, sizeof(resolved_name));
 			} else {
+				int written;
 				if (scope_specifier[0] != '\0')
-					sprintf(resolved_name, "__%s_%s", scope_specifier, lvalue->data.ident.name);
+					written = snprintf(resolved_name, sizeof(resolved_name), "%s_%s", scope_specifier, lvalue->data.ident.name);
 				else
-					strncpy(resolved_name, lvalue->data.ident.name, sizeof(resolved_name));
+					written = snprintf(resolved_name, sizeof(resolved_name), "%s", lvalue->data.ident.name);
+				if (written < 0 || (size_t)written >= sizeof(resolved_name)) {
+					report(node->location, "resolved identifier name exceeds buffer size.", 0);
+					return RESULT_FAILURE;
+				}
 				strncpy(lvalue->data.ident.resolved_name, resolved_name, sizeof(lvalue->data.ident.resolved_name));
 			}
 			Symbol *sym = lookup_symbol(table, resolved_name, scope_level);
@@ -852,14 +863,14 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			CompilerResult result;
 			ASTNode *param = node->data.func_decl.params;
 			while (param) {
-				result = analyze_ast(table, param, scope_level + 1, node->data.func_decl.name);
+				result = analyze_ast(table, param, scope_level + 1, node->data.func_decl.resolved_name);
 				param = param->next;
 			}
 			if (result != RESULT_SUCCESS)
 				return result;
 		}
 		if (node->data.func_decl.body) {
-			CompilerResult result = analyze_ast(table, node->data.func_decl.body, scope_level + 1, node->data.func_decl.name);
+			CompilerResult result = analyze_ast(table, node->data.func_decl.body, scope_level + 1, node->data.func_decl.resolved_name);
 			if (result != RESULT_SUCCESS)
 				return result;
 
@@ -872,7 +883,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					return RESULT_FAILURE;
 				}
 				if (last_stmt && last_stmt->type == AST_RETURN) {
-					Type *stmt_type = get_type(table, last_stmt, scope_level + 1, scope_specifier);
+					Type *stmt_type = get_type(table, last_stmt, scope_level + 1, node->data.func_decl.resolved_name);
 					if (!stmt_type) {
 						char msg[256] = "";
 						sprintf(msg, "in function %s, the last return statement is typeless.", node->data.func_decl.name);
@@ -940,9 +951,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		break;
 
 	case AST_PARAM_DECL:
-		if (scope_specifier[0] != '\0' && !node->data.param_decl.is_va) {
-			snprintf(node->data.param_decl.resolved_name, sizeof(node->data.param_decl.resolved_name), "__%s_%s", scope_specifier, node->data.param_decl.name);
-		}
 		break;
 
 	case AST_CAST: {

@@ -104,7 +104,7 @@ typedef struct ASTNode {
 			int is_va;
 			Type *type;
 			char name[128];
-			char resolved_name[256];
+			char resolved_name[512];
 		} param_decl;
 		// Block: a list of statements
 		struct {
@@ -124,7 +124,7 @@ typedef struct ASTNode {
 		struct {
 			char name[64];
 			char namespace[64];
-			char resolved_name[256];
+			char resolved_name[512];
 		} ident;
 		// Return statement
 		struct {

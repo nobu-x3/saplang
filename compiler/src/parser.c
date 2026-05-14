@@ -2455,9 +2455,15 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 	++parser->current_scope;
+	for (ASTNode *p = params; p; p = p->next) {
+		if (p->data.param_decl.is_va)
+			continue;
+		snprintf(p->data.param_decl.resolved_name, sizeof(p->data.param_decl.resolved_name), "%s_%s", resolved_name, p->data.param_decl.name);
+		add_symbol(&parser->symbol_table, p, p->data.param_decl.name, p->data.param_decl.resolved_name, p->data.param_decl.is_const, 0, SYMB_VAR, p->data.param_decl.type, parser->current_scope);
+	}
 	DeferStack defer_stack;
 	da_init(defer_stack, 4);
-    defer_stack.last_scope_dstack = NULL;
+	defer_stack.last_scope_dstack = NULL;
 	ASTNode *body = parse_block(parser, func_name, &defer_stack);
 	da_deinit(defer_stack);
 	--parser->current_scope;

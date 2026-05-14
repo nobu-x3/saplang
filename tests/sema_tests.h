@@ -407,3 +407,24 @@ void test_GlobalVariableInitWithGlobalVar_sema(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_ParamReferencedInBody_sema(void) {
+	TEST_SETUP_SINGLE("fn i32 foo(i32 a, i32 b) { return a + b; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_PointerParamDereferencedInBody_sema(void) {
+	TEST_SETUP_SINGLE("fn void take(i32* p) { i32 x = *p; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ParamPassedToOtherCall_sema(void) {
+	TEST_SETUP_SINGLE("fn void sink(i32 v) {} fn void source(i32 a) { sink(a); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

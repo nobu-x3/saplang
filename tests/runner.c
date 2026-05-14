@@ -142,6 +142,9 @@ int main(void) {
 	RUN_TEST(test_ExplicitCastCorrectTypes_PointerToValue_sema);
 	RUN_TEST(test_ExplicitCastWrongTypes_ReturnType_sema);
 	RUN_TEST(test_GlobalVariableInitWithGlobalVar_sema);
+	RUN_TEST(test_ParamReferencedInBody_sema);
+	RUN_TEST(test_PointerParamDereferencedInBody_sema);
+	RUN_TEST(test_ParamPassedToOtherCall_sema);
 
 	RUN_TEST(test_Primitivei32_typeinfo);
 	RUN_TEST(test_Primitivei64_typeinfo);
