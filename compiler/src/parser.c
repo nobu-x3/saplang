@@ -1892,7 +1892,8 @@ ASTNode *parse_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack)
 
 	if (parser->current_token.type == TOK_I8 || parser->current_token.type == TOK_I16 || parser->current_token.type == TOK_I32 || parser->current_token.type == TOK_I64 || parser->current_token.type == TOK_U8 ||
 		parser->current_token.type == TOK_U16 || parser->current_token.type == TOK_U32 || parser->current_token.type == TOK_U64 || parser->current_token.type == TOK_F32 || parser->current_token.type == TOK_F64 ||
-		parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_VOID || parser->current_token.type == TOK_IDENTIFIER || parser->current_token.type == TOK_CONST) {
+		parser->current_token.type == TOK_BOOL || parser->current_token.type == TOK_VOID || parser->current_token.type == TOK_IDENTIFIER || parser->current_token.type == TOK_CONST ||
+		parser->current_token.type == TOK_FN_PTR) {
 		if (parser->current_token.type == TOK_CONST) {
 			return parse_var_decl(parser, prefix_name, 0, 0);
 		}
@@ -2413,6 +2414,22 @@ ASTNode *parse_if_stmt(Parser *parser, const char *prefix_name, DeferStack *dsta
 	return new_if_stmt_node(condition, then_branch, else_branch, loc);
 }
 
+static int mangle_param_names(ASTNode *params, char *out_mangled_suffix, size_t cap, int *out_count) {
+	int count = 0;
+	int overflow = 0;
+	for (ASTNode *node = params; node != NULL; node = node->next) {
+		assert(node->type == AST_PARAM_DECL);
+		if (node->data.param_decl.is_va)
+			continue;
+		if (type_mangle_append(node->data.param_decl.type, out_mangled_suffix, cap))
+			overflow = 1;
+		++count;
+	}
+	if (out_count)
+		*out_count = count;
+	return overflow;
+}
+
 // <functionDecl>
 // ::= <genericFuncDecl>
 // | <basicFuncDecl>
@@ -2435,14 +2452,6 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner); // consume function name
 	int is_error = 0;
-	char resolved_name[256] = "";
-	sprintf(resolved_name, "__%s_%s", parser->module_name, func_name);
-	if (lookup_symbol(parser->symbol_table, resolved_name, parser->current_scope)) {
-		char msg[128] = "";
-		sprintf(msg, "function %s already declared in this scope.", func_name);
-		report(loc, msg, 0);
-		is_error = 1;
-	}
 	if (parser->current_token.type != TOK_LPAREN) {
 		report(parser->current_token.location, "expected '(' after function name.", 0);
 		is_error = 1;
@@ -2454,6 +2463,30 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 		is_error = 1;
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
+	char mangled_types[512] = "";
+	int param_count = 0;
+	int mangle_overflow = mangle_param_names(params, mangled_types, sizeof(mangled_types), &param_count);
+	char resolved_name[512] = "";
+	int written = snprintf(resolved_name, sizeof(resolved_name), "__%s_%s", parser->module_name, func_name);
+	if (written < 0 || (size_t)written >= sizeof(resolved_name))
+		mangle_overflow = 1;
+	if (param_count > 0 && !mangle_overflow) {
+		int n = snprintf(resolved_name + written, sizeof(resolved_name) - (size_t)written, "_%s", mangled_types);
+		if (n < 0 || (size_t)n >= sizeof(resolved_name) - (size_t)written)
+			mangle_overflow = 1;
+	}
+	if (mangle_overflow) {
+		char msg[160] = "";
+		sprintf(msg, "mangled name for function %s exceeds buffer size; overloads may collide.", func_name);
+		report(loc, msg, 0);
+		is_error = 1;
+	}
+	if (lookup_symbol(parser->symbol_table, resolved_name, parser->current_scope)) {
+		char msg[128] = "";
+		sprintf(msg, "function %s already declared in this scope.", func_name);
+		report(loc, msg, 0);
+		is_error = 1;
+	}
 	++parser->current_scope;
 	for (ASTNode *p = params; p; p = p->next) {
 		if (p->data.param_decl.is_va)
@@ -2765,4 +2798,3 @@ void module_deinit(Module *module) {
 	arena_deinit(&module->type_arena);
 	free(module);
 }
-

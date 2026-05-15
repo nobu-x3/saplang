@@ -303,11 +303,12 @@ int type_equals(const Type *a, const Type *b) {
 		}
 		return 1;
 	case TYPE_STRUCT:
-		return a->type_kind == TYPE_STRUCT && b->type_kind == TYPE_STRUCT && strcmp(a->type_resolved_name, b->type_resolved_name) == 0;
-	case TYPE_UNDECIDED:
+	case TYPE_UNION:
 	case TYPE_ENUM:
-		return a->type_kind == TYPE_ENUM && b->type_kind == TYPE_ENUM && strcmp(a->type_resolved_name, b->type_resolved_name) == 0;
+	case TYPE_UNDECIDED:
+		return strcmp(a->type_resolved_name, b->type_resolved_name) == 0;
 	}
+	return 0;
 }
 
 typedef struct {
@@ -433,6 +434,35 @@ int is_builtin(const Type *type) {
 	case TYPE_UNDECIDED:
 		return 0;
 	}
+}
+
+int type_mangle_append(Type *type, char *name, size_t cap) {
+	assert(type);
+	if (cap == 0)
+		return 1;
+	size_t len = strlen(name);
+	if (len >= cap - 1)
+		return 1;
+	int written;
+	if (type->type_kind == TYPE_PRIMITIVE || type->type_kind == TYPE_STRUCT || type->type_kind == TYPE_UNION || type->type_kind == TYPE_ENUM) {
+		written = snprintf(name + len, cap - len, "_%s", type->type_name);
+		return written < 0 || (size_t)written >= cap - len;
+	}
+	if (type->type_kind == TYPE_POINTER) {
+		int overflow = type_mangle_append(type->pointee, name, cap);
+		len = strlen(name);
+		if (len >= cap - 1)
+			return 1;
+		written = snprintf(name + len, cap - len, "*");
+		return overflow || written < 0 || (size_t)written >= cap - len;
+	}
+	if (type->type_kind == TYPE_UNDECIDED) {
+		written = snprintf(name + len, cap - len, "_%s", type->type_resolved_name);
+		return written < 0 || (size_t)written >= cap - len;
+	}
+	// TYPE_ARRAY / TYPE_FUNCTION can't appear as a param type today.
+	assert(0 && "type_mangle_append: unsupported Type kind for overload mangling");
+	return 1;
 }
 
 void type_print(char *string, Type *type) {

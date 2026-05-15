@@ -428,3 +428,38 @@ void test_ParamPassedToOtherCall_sema(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_FunctionOverload_sema(void) {
+	TEST_SETUP_SINGLE("struct S {i32 i;}"
+					  "union TestUnion { i32 a; i64 b; }"
+					  "enum Str { One }"
+					  "fn void foo(){}"
+					  "fn void foo(i32 i){ foo(); }"
+					  "fn void foo(i32* p_i){ foo(*p_i); }"
+					  "fn void foo(i32** p_p_i){ foo(*p_p_i); }"
+					  "fn void foo(S s){ foo(s.i); }"
+					  "fn void foo(S* p_s){ foo(*p_s); }"
+					  "fn void foo(S** p_p_s){ foo(*p_p_s); }"
+					  "fn void foo(Str s){ foo((i32)s); }"
+					  "fn void foo(Str* p_s){ foo(*p_s); }"
+					  "fn void foo(Str** p_p_s){ foo(*p_p_s); }"
+					  "fn void foo(TestUnion s){ foo(s.a); }"
+					  "fn void foo(TestUnion* p_s){ foo(*p_s); }"
+					  "fn void foo(TestUnion** p_p_s){ foo(*p_p_s); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FunctionOverload_FnPointer_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo(){}"
+					  "fn void foo(i32 x){}"
+					  "fn i32 main() {"
+					  "    fn* void(i32) f = &foo;"
+					  "    f(0);"
+					  "    return 0;"
+					  "}");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

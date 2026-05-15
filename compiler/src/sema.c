@@ -518,6 +518,28 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
 				}
+				// pick the foo overload whose signature matches the declared fn pointer type so the right resolved_name
+				// flows through to codegen.
+				if (node->data.var_decl.type->type_kind == TYPE_FUNCTION && node->data.var_decl.init->type == AST_UNARY_EXPR && node->data.var_decl.init->data.unary_op.op == '&' &&
+					node->data.var_decl.init->data.unary_op.operand && node->data.var_decl.init->data.unary_op.operand->type == AST_EXPR_IDENT) {
+					ASTNode *ident = node->data.var_decl.init->data.unary_op.operand;
+					Type *target = node->data.var_decl.type;
+					Symbol *match = NULL;
+					for (Symbol *s = table; s != NULL; s = s->next) {
+						if (s->kind != SYMB_FN)
+							continue;
+						if (strcmp(s->name, ident->data.ident.name) != 0)
+							continue;
+						if (!s->type || s->type->type_kind != TYPE_FUNCTION)
+							continue;
+						if (type_equals(s->type, target)) {
+							match = s;
+							break;
+						}
+					}
+					if (match)
+						strncpy(ident->data.ident.resolved_name, match->resolved_name, sizeof(ident->data.ident.resolved_name));
+				}
 				result = analyze_ast(table, node->data.var_decl.init, scope_level, scope_specifier);
 			}
 			if (result != RESULT_SUCCESS) {
@@ -551,6 +573,18 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 
 	case AST_EXPR_IDENT: {
 		if (node->data.ident.resolved_name[0] == '\0') {
+			// Per-overload params can collide on short name; prefer the scoped match.
+			if (scope_specifier[0] != '\0') {
+				char scoped[512];
+				int n = snprintf(scoped, sizeof(scoped), "%s_%s", scope_specifier, node->data.ident.name);
+				if (n > 0 && (size_t)n < sizeof(scoped)) {
+					Symbol *scoped_sym = lookup_symbol(table, scoped, scope_level);
+					if (scoped_sym) {
+						strncpy(node->data.ident.resolved_name, scoped_sym->resolved_name, sizeof(node->data.ident.resolved_name));
+						return RESULT_SUCCESS;
+					}
+				}
+			}
 			Symbol *sym = lookup_symbol_weak(table, node->data.ident.name, scope_level);
 			if (sym) {
 				strncpy(node->data.ident.resolved_name, sym->resolved_name, sizeof(node->data.ident.resolved_name));
@@ -782,18 +816,96 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	} break;
 
 	case AST_FN_CALL: {
-		CompilerResult result = analyze_ast(table, node->data.func_call.callee, scope_level, scope_specifier);
+		ASTNode *callee = node->data.func_call.callee;
+		// Args must be analyzed before overload resolution can read their types.
+		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
+			CompilerResult r = analyze_ast(table, node->data.func_call.args[i], scope_level, scope_specifier);
+			if (r != RESULT_SUCCESS)
+				return r;
+		}
+		// Overload pick by exact type-match. Single-candidate (e.g. extern decls)
+		// falls through to the legacy is_convertible-based check below. Any
+		// resolved_name the parser pre-set is overridden - it just grabs the
+		// first matching overload.
+		if (callee->type == AST_EXPR_IDENT) {
+			int candidate_count = 0;
+			for (Symbol *s = table; s != NULL; s = s->next) {
+				if (s->kind == SYMB_FN && strcmp(s->name, callee->data.ident.name) == 0)
+					++candidate_count;
+			}
+			if (candidate_count > 1) {
+				Symbol *match = NULL;
+				int ambiguous = 0;
+				for (Symbol *s = table; s != NULL; s = s->next) {
+					if (s->kind != SYMB_FN)
+						continue;
+					if (strcmp(s->name, callee->data.ident.name) != 0)
+						continue;
+					int has_va = 0;
+					int non_va = 0;
+					for (ASTNode *p = s->node->data.func_decl.params; p; p = p->next) {
+						if (p->data.param_decl.is_va) {
+							has_va = 1;
+							break;
+						}
+						++non_va;
+					}
+					if (!has_va && non_va != node->data.func_call.arg_count)
+						continue;
+					if (has_va && non_va > node->data.func_call.arg_count)
+						continue;
+					int ok = 1;
+					ASTNode *p = s->node->data.func_decl.params;
+					for (int i = 0; i < non_va && p; ++i, p = p->next) {
+						Type *arg_type = get_type(table, node->data.func_call.args[i], scope_level, scope_specifier);
+						if (!arg_type) {
+							ok = 0;
+							break;
+						}
+						// resolve_types runs after analyze_ast, so types here may still be UNDECIDED.
+						resolve_type(table, arg_type, node->location);
+						resolve_type(table, p->data.param_decl.type, node->location);
+						if (!type_equals(arg_type, p->data.param_decl.type)) {
+							ok = 0;
+							break;
+						}
+					}
+					if (!ok)
+						continue;
+					if (match && match != s)
+						ambiguous = 1;
+					match = s;
+				}
+				if (ambiguous) {
+					char msg[256] = "";
+					snprintf(msg, sizeof(msg), "ambiguous call to %s.", callee->data.ident.name);
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+				if (match) {
+					strncpy(callee->data.ident.resolved_name, match->resolved_name, sizeof(callee->data.ident.resolved_name));
+				} else {
+					char msg[256] = "";
+					snprintf(msg, sizeof(msg), "no overload of %s matches the call signature.", callee->data.ident.name);
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+			}
+		}
+		CompilerResult result = analyze_ast(table, callee, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
-		// Previous call to analyze_ast would fail if the symbol didn't exist
+		// Previous call to analyze_ast would fail if the symbol didn't exist.
+		// Try module scope first (regular fns); fall back to current scope for fn-ptr locals.
 		Symbol *sym = NULL;
-		if (node->data.func_call.callee->data.ident.resolved_name[0] != '\0') {
-			sym = lookup_symbol(table, node->data.func_call.callee->data.ident.resolved_name, 0);
-		} else {
-			sym = lookup_symbol(table, node->data.func_call.callee->data.ident.name, 0);
-		}
+		const char *key = callee->data.ident.resolved_name[0] != '\0' ? callee->data.ident.resolved_name : callee->data.ident.name;
+		sym = lookup_symbol(table, key, 0);
+		if (!sym)
+			sym = lookup_symbol(table, key, scope_level);
 		assert(sym);
-		if ((sym->node->type != AST_FN_DECL && sym->node->type != AST_EXTERN_FUNC_DECL) || sym->kind != SYMB_FN) {
+		// Function pointers are stored as SYMB_VAR with a TYPE_FUNCTION, treat them as callable.
+		int is_fn_ptr = sym->kind == SYMB_VAR && sym->type && sym->type->type_kind == TYPE_FUNCTION;
+		if (!is_fn_ptr && ((sym->node->type != AST_FN_DECL && sym->node->type != AST_EXTERN_FUNC_DECL) || sym->kind != SYMB_FN)) {
 			char msg[256] = "";
 			sprintf(msg, "symbol %s is not a function but used as a function.", node->data.func_call.callee->data.ident.name);
 			report(node->location, msg, 0);
@@ -801,12 +913,16 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		}
 		// @TODO: cache this probably
 		int non_va_param_count = 0;
-		ASTNode *param = sym->node->data.func_decl.params;
-		while (param) {
-			if (param->data.param_decl.is_va)
-				break;
-			++non_va_param_count;
-			param = param->next;
+		ASTNode *param = is_fn_ptr ? NULL : sym->node->data.func_decl.params;
+		if (is_fn_ptr) {
+			non_va_param_count = sym->type->function.param_count;
+		} else {
+			while (param) {
+				if (param->data.param_decl.is_va)
+					break;
+				++non_va_param_count;
+				param = param->next;
+			}
 		}
 		if (non_va_param_count > node->data.func_call.arg_count) {
 			char msg[256] = "";
@@ -814,13 +930,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
-		param = sym->node->data.func_decl.params;
+		// Args already analyzed above; re-analyzing would clobber unary result_types.
+		param = is_fn_ptr ? NULL : sym->node->data.func_decl.params;
 		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
-			result = analyze_ast(table, node->data.func_call.args[i], scope_level, scope_specifier);
-			if (result != RESULT_SUCCESS)
-				return result;
 			if (i < non_va_param_count) {
-				Type *param_type = param->data.param_decl.type;
+				Type *param_type = is_fn_ptr ? sym->type->function.param_types[i] : param->data.param_decl.type;
 				Type *arg_type = get_type(table, node->data.func_call.args[i], sym->scope_level + 1, scope_specifier);
 				if (!is_convertible(arg_type, param_type, 0, table)) {
 					char left_str[128] = "";
@@ -832,7 +946,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					report(node->location, msg, 0);
 					result = RESULT_FAILURE;
 				}
-				param = param->next;
+				if (!is_fn_ptr)
+					param = param->next;
 			}
 		}
 		return result;
@@ -962,6 +1077,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		Type *expr_type = get_type(table, node->data.cast.expr, scope_level, scope_specifier);
 		assert(expr_type);
+		// Param-typed exprs are still UNDECIDED until resolve_types runs.
+		if (expr_type->type_kind == TYPE_UNDECIDED)
+			resolve_type(table, expr_type, node->location);
 		if (expr_type->type_kind == TYPE_PRIMITIVE && node->data.cast.target_type->type_kind == TYPE_PRIMITIVE)
 			return RESULT_SUCCESS;
 		if ((is_int(expr_type) && expr_type->type_name[1] == '6' && expr_type->type_name[2] == '4' && node->data.cast.target_type->type_kind == TYPE_POINTER) ||

@@ -59,6 +59,9 @@ int is_builtin(const Type *type);
 // Used for printing symbol table
 int type_get_string_len(Type *type, int initial);
 
+// Appends a mangled "_<type_name>[*...]" form for overload suffixes. Returns 1 on overflow.
+int type_mangle_append(Type *type, char *name, size_t cap);
+
 struct ASTNode;
 TypeInfo get_type_info(Type *type, struct ASTNode *node);
 

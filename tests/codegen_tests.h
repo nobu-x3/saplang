@@ -64,12 +64,12 @@ void test_FunctionDecl_codegen(void) {
 		CODEGEN_TEST_SETUP_SINGLE("fn i32 some_func(i32 a, i32 b) {}");
 		const char *expected = "; ModuleID = 'test'\n"
 							   "source_filename = \"test\"\n\n"
-							   "define i32 @__main_some_func(i32 %0, i32 %1) {\n"
+							   "define i32 @__main_some_func__i32_i32(i32 %0, i32 %1) {\n"
 							   "entry:\n"
-							   "  %__main_some_func_a = alloca i32, align 4\n"
-							   "  store i32 %0, ptr %__main_some_func_a, align 4\n"
-							   "  %__main_some_func_b = alloca i32, align 4\n"
-							   "  store i32 %1, ptr %__main_some_func_b, align 4\n"
+							   "  %__main_some_func__i32_i32_a = alloca i32, align 4\n"
+							   "  store i32 %0, ptr %__main_some_func__i32_i32_a, align 4\n"
+							   "  %__main_some_func__i32_i32_b = alloca i32, align 4\n"
+							   "  store i32 %1, ptr %__main_some_func__i32_i32_b, align 4\n"
 							   "}\n";
 		const char *expected_error = "";
 		TEST_ASSERT_EQUAL_STRING(expected, output);
@@ -1162,12 +1162,12 @@ void test_VoidFnCallWithParams_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn void foo(i32 a, i32 b) {} fn i32 main() { i32 a = 0; i32 b = 0; foo(a, b); return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "define void @__main_foo(i32 %0, i32 %1) {\n"
+						   "define void @__main_foo__i32_i32(i32 %0, i32 %1) {\n"
 						   "entry:\n"
-						   "  %__main_foo_a = alloca i32, align 4\n"
-						   "  store i32 %0, ptr %__main_foo_a, align 4\n"
-						   "  %__main_foo_b = alloca i32, align 4\n"
-						   "  store i32 %1, ptr %__main_foo_b, align 4\n"
+						   "  %__main_foo__i32_i32_a = alloca i32, align 4\n"
+						   "  store i32 %0, ptr %__main_foo__i32_i32_a, align 4\n"
+						   "  %__main_foo__i32_i32_b = alloca i32, align 4\n"
+						   "  store i32 %1, ptr %__main_foo__i32_i32_b, align 4\n"
 						   "  ret void\n"
 						   "}\n"
 						   "\n"
@@ -1179,7 +1179,7 @@ void test_VoidFnCallWithParams_codegen(void) {
 						   "  store i32 0, ptr %__main_main_b, align 4\n"
 						   "  %0 = load i32, ptr %__main_main_a, align 4\n"
 						   "  %1 = load i32, ptr %__main_main_b, align 4\n"
-						   "  call void @__main_foo(i32 %0, i32 %1)\n"
+						   "  call void @__main_foo__i32_i32(i32 %0, i32 %1)\n"
 						   "  ret i32 0\n"
 						   "}\n";
 	const char *expected_error = "";
@@ -1192,12 +1192,12 @@ void test_NonVoidFnCallWithParams_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn i32 foo(i32 a, i32 b) { return 5; } fn i32 main() { i32 a = 0; i32 b = 0; a = foo(a, b); return foo(a, b); }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "define i32 @__main_foo(i32 %0, i32 %1) {\n"
+						   "define i32 @__main_foo__i32_i32(i32 %0, i32 %1) {\n"
 						   "entry:\n"
-						   "  %__main_foo_a = alloca i32, align 4\n"
-						   "  store i32 %0, ptr %__main_foo_a, align 4\n"
-						   "  %__main_foo_b = alloca i32, align 4\n"
-						   "  store i32 %1, ptr %__main_foo_b, align 4\n"
+						   "  %__main_foo__i32_i32_a = alloca i32, align 4\n"
+						   "  store i32 %0, ptr %__main_foo__i32_i32_a, align 4\n"
+						   "  %__main_foo__i32_i32_b = alloca i32, align 4\n"
+						   "  store i32 %1, ptr %__main_foo__i32_i32_b, align 4\n"
 						   "  ret i32 5\n"
 						   "}\n"
 						   "\n"
@@ -1209,11 +1209,11 @@ void test_NonVoidFnCallWithParams_codegen(void) {
 						   "  store i32 0, ptr %__main_main_b, align 4\n"
 						   "  %0 = load i32, ptr %__main_main_a, align 4\n"
 						   "  %1 = load i32, ptr %__main_main_b, align 4\n"
-						   "  %calltmp = call i32 @__main_foo(i32 %0, i32 %1)\n"
+						   "  %calltmp = call i32 @__main_foo__i32_i32(i32 %0, i32 %1)\n"
 						   "  store i32 %calltmp, ptr %__main_main_a, align 4\n"
 						   "  %2 = load i32, ptr %__main_main_a, align 4\n"
 						   "  %3 = load i32, ptr %__main_main_b, align 4\n"
-						   "  %calltmp1 = call i32 @__main_foo(i32 %2, i32 %3)\n"
+						   "  %calltmp1 = call i32 @__main_foo__i32_i32(i32 %2, i32 %3)\n"
 						   "  ret i32 %calltmp1\n"
 						   "}\n";
 	const char *expected_error = "";
@@ -1517,7 +1517,7 @@ void test_IfStmtInWhileLoop_codegen(void) {
 						   "  store i32 %add, ptr %__main_main_a, align 4\n"
 						   "  br label %whilecond\n"
 						   "}\n";
-    const char *expected_error = "";
+	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
@@ -1895,26 +1895,26 @@ void test_NestedIfs_codegen(void) {
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
 						   "define i32 @main() {\n"
-                           "entry:\n"
-                           "  %__main_main_a = alloca i32, align 4\n"
-                           "  store i32 0, ptr %__main_main_a, align 4\n"
-                           "  %0 = load i32, ptr %__main_main_a, align 4\n"
-                           "  %tobool = icmp ne i32 %0, 0\n"
-                           "  br i1 %tobool, label %then, label %ifcont\n"
-                           "\n"
-                           "then:                                             ; preds = %entry\n"
-                           "  %__main_main_b = alloca i32, align 4\n"
-                           "  store i32 1, ptr %__main_main_b, align 4\n"
-                           "  %1 = load i32, ptr %__main_main_b, align 4\n"
-                           "  %tobool1 = icmp ne i32 %1, 0\n"
-                           "  br i1 %tobool1, label %then2, label %ifcont\n"
-                           "\n"
-                           "ifcont:                                           ; preds = %then, %entry\n"
-                           "  ret i32 1\n"
-                           "\n"
-                           "then2:                                            ; preds = %then\n"
-                           "  ret i32 2\n"
-                           "}\n";
+						   "entry:\n"
+						   "  %__main_main_a = alloca i32, align 4\n"
+						   "  store i32 0, ptr %__main_main_a, align 4\n"
+						   "  %0 = load i32, ptr %__main_main_a, align 4\n"
+						   "  %tobool = icmp ne i32 %0, 0\n"
+						   "  br i1 %tobool, label %then, label %ifcont\n"
+						   "\n"
+						   "then:                                             ; preds = %entry\n"
+						   "  %__main_main_b = alloca i32, align 4\n"
+						   "  store i32 1, ptr %__main_main_b, align 4\n"
+						   "  %1 = load i32, ptr %__main_main_b, align 4\n"
+						   "  %tobool1 = icmp ne i32 %1, 0\n"
+						   "  br i1 %tobool1, label %then2, label %ifcont\n"
+						   "\n"
+						   "ifcont:                                           ; preds = %then, %entry\n"
+						   "  ret i32 1\n"
+						   "\n"
+						   "then2:                                            ; preds = %then\n"
+						   "  ret i32 2\n"
+						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
@@ -1992,6 +1992,101 @@ void test_PointerTruthyIfStillEmits_codegen(void) {
 						   "\n"
 						   "ifcont:                                           ; preds = %entry\n"
 						   "  ret i32 0\n"
+						   "}\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_FunctionOverload_FnPointer_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo(){}"
+							  "fn void foo(i32 x){}"
+							  "fn i32 main() {"
+							  "    fn* void(i32) f = &foo;"
+							  "    f(0);"
+							  "    return 0;"
+							  "}");
+	const char *expected_call = "call void %0(i32 0)";
+	const char *expected_store = "store ptr @__main_foo__i32";
+	TEST_ASSERT_NOT_NULL(strstr(output, expected_call));
+	TEST_ASSERT_NOT_NULL(strstr(output, expected_store));
+	free(error);
+}
+
+void test_FunctionOverload_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct S {i32 i;}"
+							  "fn void foo(){}"
+							  "fn void foo(i32 i){ foo(); }"
+							  "fn void foo(i32* p_i){ foo(*p_i); }"
+							  "fn void foo(i32** p_p_i){ foo(*p_p_i); }"
+							  "fn void foo(S s){ foo(s.i); }"
+							  "fn void foo(S* p_s){ foo(*p_s); }"
+							  "fn void foo(S** p_p_s){ foo(*p_p_s); }");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "%__main_S = type { i32 }\n\n"
+						   "define void @__main_foo() {\n"
+						   "entry:\n"
+						   "  ret void\n"
+						   "}\n"
+						   "\n"
+						   "define void @__main_foo__i32(i32 %0) {\n"
+						   "entry:\n"
+						   "  %__main_foo__i32_i = alloca i32, align 4\n"
+						   "  store i32 %0, ptr %__main_foo__i32_i, align 4\n"
+						   "  call void @__main_foo()\n"
+						   "  ret void\n"
+						   "}\n"
+						   "\n"
+						   "define void @\"__main_foo__i32*\"(ptr %0) {\n"
+						   "entry:\n"
+						   "  %\"__main_foo__i32*_p_i\" = alloca ptr, align 8\n"
+						   "  store ptr %0, ptr %\"__main_foo__i32*_p_i\", align 8\n"
+						   "  %1 = load ptr, ptr %\"__main_foo__i32*_p_i\", align 8\n"
+						   "  %deref = load i32, ptr %1, align 4\n"
+						   "  call void @__main_foo__i32(i32 %deref)\n"
+						   "  ret void\n"
+						   "}\n"
+						   "\n"
+						   "define void @\"__main_foo__i32**\"(ptr %0) {\n"
+						   "entry:\n"
+						   "  %\"__main_foo__i32**_p_p_i\" = alloca ptr, align 8\n"
+						   "  store ptr %0, ptr %\"__main_foo__i32**_p_p_i\", align 8\n"
+						   "  %1 = load ptr, ptr %\"__main_foo__i32**_p_p_i\", align 8\n"
+						   "  %deref = load ptr, ptr %1, align 8\n"
+						   "  call void @\"__main_foo__i32*\"(ptr %deref)\n"
+						   "  ret void\n"
+						   "}\n"
+						   "\n"
+						   "define void @__main_foo____main_S(%__main_S %0) {\n"
+						   "entry:\n"
+						   "  %__main_foo____main_S_s = alloca %__main_S, align 8\n"
+						   "  store %__main_S %0, ptr %__main_foo____main_S_s, align 4\n"
+						   "  %i = getelementptr inbounds %__main_S, ptr %__main_foo____main_S_s, i32 0, i32 0\n"
+						   "  %1 = load i32, ptr %i, align 4\n"
+						   "  call void @__main_foo__i32(i32 %1)\n"
+						   "  ret void\n"
+						   "}\n"
+						   "\n"
+						   "define void @\"__main_foo____main_S*\"(ptr %0) {\n"
+						   "entry:\n"
+						   "  %\"__main_foo____main_S*_p_s\" = alloca ptr, align 8\n"
+						   "  store ptr %0, ptr %\"__main_foo____main_S*_p_s\", align 8\n"
+						   "  %1 = load ptr, ptr %\"__main_foo____main_S*_p_s\", align 8\n"
+						   "  %deref = load %__main_S, ptr %1, align 4\n"
+						   "  call void @__main_foo____main_S(%__main_S %deref)\n"
+						   "  ret void\n"
+						   "}\n"
+						   "\n"
+						   "define void @\"__main_foo____main_S**\"(ptr %0) {\n"
+						   "entry:\n"
+						   "  %\"__main_foo____main_S**_p_p_s\" = alloca ptr, align 8\n"
+						   "  store ptr %0, ptr %\"__main_foo____main_S**_p_p_s\", align 8\n"
+						   "  %1 = load ptr, ptr %\"__main_foo____main_S**_p_p_s\", align 8\n"
+						   "  %deref = load ptr, ptr %1, align 8\n"
+						   "  call void @\"__main_foo____main_S*\"(ptr %deref)\n"
+						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);

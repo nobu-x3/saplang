@@ -87,6 +87,7 @@ int main(void) {
 	RUN_TEST(test_HexadecimalLiteral);
 	RUN_TEST(test_ContinueBreak);
 	RUN_TEST(test_ExplicitCast);
+	RUN_TEST(test_FunctionOverloading);
 
 	RUN_TEST(test_TypePrinting_sema);
 	RUN_TEST(test_UndeclaredVariable_sema);
@@ -145,6 +146,8 @@ int main(void) {
 	RUN_TEST(test_ParamReferencedInBody_sema);
 	RUN_TEST(test_PointerParamDereferencedInBody_sema);
 	RUN_TEST(test_ParamPassedToOtherCall_sema);
+	RUN_TEST(test_FunctionOverload_sema);
+	RUN_TEST(test_FunctionOverload_FnPointer_sema);
 
 	RUN_TEST(test_Primitivei32_typeinfo);
 	RUN_TEST(test_Primitivei64_typeinfo);
@@ -238,6 +241,8 @@ int main(void) {
 	RUN_TEST(test_NullLiteralReturn_codegen);
 	RUN_TEST(test_NullLiteralCompareEq_codegen);
 	RUN_TEST(test_PointerTruthyIfStillEmits_codegen);
+	RUN_TEST(test_FunctionOverload_codegen);
+	RUN_TEST(test_FunctionOverload_FnPointer_codegen);
 
 	RUN_TEST(test_ImportTest_modules);
 	RUN_TEST(test_NullTest_modules);

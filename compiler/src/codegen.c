@@ -444,6 +444,8 @@ LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pas
 	Symbol *sym = lookup_symbol(table, node->data.var_decl.resolved_name, ctx.current_scope);
 	assert(sym);
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
+	if (node->data.var_decl.type->type_kind == TYPE_FUNCTION)
+		ty = LLVMPointerType(ty, 0);
 	LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, sym->resolved_name);
 	char *resolved_name = strdup(sym->resolved_name);
 	hashmap_put(ctx.loaded_values, resolved_name, ptr);
@@ -721,6 +723,11 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			}
 			return ptr;
 		}
+		// `&foo` for a function: return the LLVM function value directly so the
+		// surrounding store/call can take its address.
+		LLVMValueRef named_fn = LLVMGetNamedFunction(cg->module, node->data.ident.resolved_name);
+		if (named_fn)
+			return named_fn;
 		LLVMValueRef named_global = LLVMGetNamedGlobal(cg->module, node->data.ident.resolved_name);
 		assert(named_global); // @NOTE: I think that's the only option here - can only be global var
 		if (ctx.intention == PI_LOAD_VAL) {
@@ -791,7 +798,16 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		assert(fn_sym);
 		LLVMTypeRef fn_type = map_to_llvm(cg, fn_sym->type, table);
 		assert(fn_type);
-		LLVMValueRef callee = LLVMGetNamedFunction(cg->module, fn_sym->resolved_name);
+		LLVMValueRef callee;
+		int is_fn_ptr = fn_sym->kind == SYMB_VAR && fn_sym->type->type_kind == TYPE_FUNCTION;
+		if (is_fn_ptr) {
+			// Function pointer: load the pointer value out of the variable's alloca.
+			LLVMValueRef ptr = hashmap_get(ctx.loaded_values, fn_sym->resolved_name);
+			assert(ptr);
+			callee = LLVMBuildLoad2(cg->builder, LLVMPointerType(fn_type, 0), ptr, "");
+		} else {
+			callee = LLVMGetNamedFunction(cg->module, fn_sym->resolved_name);
+		}
 		assert(callee);
 		LLVMValueRef *args = alloca(sizeof(LLVMValueRef) * node->data.func_call.arg_count);
 		for (int i = 0; i < node->data.func_call.arg_count; i++) {
@@ -802,6 +818,10 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 				Symbol *param_sym = lookup_symbol(table, param->data.ident.resolved_name, ctx.current_scope);
 				assert(param_sym);
 				param_ctx.expected_type = param_sym->type;
+			} else if (i < fn_sym->type->function.param_count) {
+				// Literals and other expressions need the declared param type to
+				// pick the right LLVM constant width / kind.
+				param_ctx.expected_type = fn_sym->type->function.param_types[i];
 			}
 			args[i] = codegen_ast(cg, param, table, param_ctx);
 		}
