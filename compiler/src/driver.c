@@ -355,13 +355,18 @@ SourceFile driver_init_source(const char *name) {
 		fseek(fp, 0, SEEK_END);
 		long file_size = ftell(fp);
 		rewind(fp);
-		char *buffer = malloc(file_size + 1);
+		if (file_size < 0) {
+			fprintf(stderr, "failed to determine size of file %s.", src_file.path);
+			fclose(fp);
+			return src_file;
+		}
+		char *buffer = malloc((size_t)file_size + 1);
 		if (!buffer) {
 			fprintf(stderr, "failed to allocate memory when reading file %s.", src_file.path);
 			fclose(fp);
 			return src_file;
 		}
-		if (fread(buffer, 1, file_size, fp) != file_size) {
+		if (fread(buffer, 1, (size_t)file_size, fp) != (size_t)file_size) {
 			fprintf(stderr, "failed to read file %s.", src_file.path);
 			free(buffer);
 			fclose(fp);
