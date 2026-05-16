@@ -13,11 +13,14 @@ typedef enum {
 } CompilerResult;
 
 #define CHK(res, deinit_seq)                                                                                                                                                                                                                   \
-	if (res != RESULT_SUCCESS) {                                                                                                                                                                                                               \
-		printf("%s:%d: Failure code: %d\n", __FILE__, __LINE__, res);                                                                                                                                                                          \
-		deinit_seq;                                                                                                                                                                                                                            \
-		return res;                                                                                                                                                                                                                            \
-	}
+	do {                                                                                                                                                                                                                                       \
+		CompilerResult _chk_res = (res);                                                                                                                                                                                                       \
+		if (_chk_res != RESULT_SUCCESS) {                                                                                                                                                                                                      \
+			printf("%s:%d: Failure code: %d\n", __FILE__, __LINE__, _chk_res);                                                                                                                                                                 \
+			deinit_seq;                                                                                                                                                                                                                        \
+			return _chk_res;                                                                                                                                                                                                                   \
+		}                                                                                                                                                                                                                                      \
+	} while (0)
 
 typedef struct {
 	char name[64];
