@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 
 // Linked list of pages; allocations bump within the head page, falling
@@ -33,48 +34,36 @@ void *arena_alloc(Arena *arena, size_t size);
 // arrays sensibly to limit the wasted space across grows.
 void *arena_realloc_grow(Arena *arena, void *old, size_t old_size, size_t new_size);
 
-// Arena-backed analogues of util.h's da_init / da_push. The caller
-// passes an Arena* — initial buffer comes from the arena, and grows
-// allocate a fresh chunk in the arena (the old chunk is left behind,
-// freed in bulk by arena_deinit). Returns NULL from the enclosing
-// function if allocation fails — same convention as the heap variants.
+// Arena-backed analogues of util.h's da_init / da_push. The initial
+// buffer comes from `arena_ptr`, and grows allocate a fresh chunk in the
+// arena (the old chunk is left behind, freed in bulk by arena_deinit).
+// Both macros yield a bool — true on success, false on arena exhaustion
+// — so callers translate to whatever error code their function returns:
+//   if (!da_init_arena(xs, 4, a))  return RESULT_MEMORY_ERROR;
+//   if (!da_push_arena(xs, x, a))  return NULL;
 #define da_init_arena(xs, cap, arena_ptr)                                                                                                                                                                                                      \
-	do {                                                                                                                                                                                                                                       \
+	({                                                                                                                                                                                                                                         \
 		(xs).count = 0;                                                                                                                                                                                                                        \
 		(xs).capacity = (cap);                                                                                                                                                                                                                 \
-		(xs).data = arena_alloc((arena_ptr), (size_t)(xs).capacity * sizeof(*(xs).data));                                                                                                                                                      \
-		if (!(xs).data)                                                                                                                                                                                                                        \
-			return NULL;                                                                                                                                                                                                                       \
-	} while (0)
+		(xs).data = (xs).capacity ? arena_alloc((arena_ptr), (size_t)(xs).capacity * sizeof(*(xs).data)) : NULL;                                                                                                                               \
+		(xs).capacity == 0 || (xs).data != NULL;                                                                                                                                                                                               \
+	})
 
 #define da_push_arena(xs, x, arena_ptr)                                                                                                                                                                                                        \
-	do {                                                                                                                                                                                                                                       \
+	({                                                                                                                                                                                                                                         \
+		bool _da_ok = true;                                                                                                                                                                                                                    \
 		if ((xs).count >= (xs).capacity) {                                                                                                                                                                                                     \
 			size_t _da_old_bytes = (size_t)(xs).capacity * sizeof(*(xs).data);                                                                                                                                                                 \
-			(xs).capacity *= 2;                                                                                                                                                                                                                \
-			(xs).data = arena_realloc_grow((arena_ptr), (xs).data, _da_old_bytes, (size_t)(xs).capacity * sizeof(*(xs).data));                                                                                                                 \
-			if (!(xs).data)                                                                                                                                                                                                                    \
-				return NULL;                                                                                                                                                                                                                   \
+			int _da_new_cap = (xs).capacity ? (xs).capacity * 2 : 4;                                                                                                                                                                           \
+			void *_da_new_data = arena_realloc_grow((arena_ptr), (xs).data, _da_old_bytes, (size_t)_da_new_cap * sizeof(*(xs).data));                                                                                                          \
+			if (!_da_new_data) {                                                                                                                                                                                                               \
+				_da_ok = false;                                                                                                                                                                                                                \
+			} else {                                                                                                                                                                                                                           \
+				(xs).capacity = _da_new_cap;                                                                                                                                                                                                   \
+				(xs).data = _da_new_data;                                                                                                                                                                                                      \
+			}                                                                                                                                                                                                                                  \
 		}                                                                                                                                                                                                                                      \
-		(xs).data[(xs).count++] = (x);                                                                                                                                                                                                         \
-	} while (0)
-
-// _unsafe variants for callers that return void and don't propagate
-// allocation failures (e.g., late-stage AST rewriting). Identical to the
-// safe versions except they don't bail on a NULL return from the arena.
-#define da_init_arena_unsafe(xs, cap, arena_ptr)                                                                                                                                                                                               \
-	do {                                                                                                                                                                                                                                       \
-		(xs).count = 0;                                                                                                                                                                                                                        \
-		(xs).capacity = (cap);                                                                                                                                                                                                                 \
-		(xs).data = arena_alloc((arena_ptr), (size_t)(xs).capacity * sizeof(*(xs).data));                                                                                                                                                      \
-	} while (0)
-
-#define da_push_arena_unsafe(xs, x, arena_ptr)                                                                                                                                                                                                 \
-	do {                                                                                                                                                                                                                                       \
-		if ((xs).count >= (xs).capacity) {                                                                                                                                                                                                     \
-			size_t _da_old_bytes = (size_t)(xs).capacity * sizeof(*(xs).data);                                                                                                                                                                 \
-			(xs).capacity *= 2;                                                                                                                                                                                                                \
-			(xs).data = arena_realloc_grow((arena_ptr), (xs).data, _da_old_bytes, (size_t)(xs).capacity * sizeof(*(xs).data));                                                                                                                 \
-		}                                                                                                                                                                                                                                      \
-		(xs).data[(xs).count++] = (x);                                                                                                                                                                                                         \
-	} while (0)
+		if (_da_ok)                                                                                                                                                                                                                            \
+			(xs).data[(xs).count++] = (x);                                                                                                                                                                                                     \
+	    _da_ok;                                                                                                                                                                                                                                \
+	})

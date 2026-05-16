@@ -42,8 +42,8 @@ static void test_expect_driver_failure(const char *path, char *output_path) {
     // searches recursively by basename and would happily resolve a
     // sibling fixture's `main.sl` when multiple module tests share the
     // build/bin tree.
-    da_init_unsafe(opts.import_paths, 1);
-    da_push_unsafe(opts.import_paths, strdup(path));
+    (void)da_init(opts.import_paths, 1);
+    (void)da_push(opts.import_paths, strdup(path));
     driver_set_compiler_options(opts);
 
     int saved_stderr = dup(fileno(stderr));

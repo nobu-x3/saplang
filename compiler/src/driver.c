@@ -50,8 +50,7 @@ void driver_print_help() {
 
 StringList split(const char *s, char delim) {
 	StringList result;
-	da_init_unsafe(result, 4);
-	if (!result.data)
+	if (!da_init(result, 4))
 		return result;
 
 	char *cpy = strdup(s);
@@ -60,7 +59,10 @@ StringList split(const char *s, char delim) {
 	char *found;
 	while ((found = strsep(&cpy, delim_str)) != NULL) {
 		char *found_cpy = strdup(found);
-		da_push_unsafe(result, found_cpy);
+		if (!da_push(result, found_cpy)) {
+			free(found_cpy);
+			break;
+		}
 	}
 
 	free(tmp);
@@ -283,7 +285,10 @@ void combine_object_paths(StringList *string_list, char *obj_dir) {
 		char filepath[1024];
 		snprintf(filepath, sizeof(filepath), "%s/%s", obj_dir, filename);
 		char *filepath_cpy = strdup(filepath);
-		da_push_unsafe_ptr(string_list, filepath_cpy);
+		if (!da_push(*string_list, filepath_cpy)) {
+			free(filepath_cpy);
+			break;
+		}
 	}
 	closedir(dir);
 }
@@ -479,7 +484,8 @@ static CompilerResult build_dependency_graph_inner(SourceFile input_file, Depend
 	strncpy((*root)->name, input_file.name, sizeof((*root)->name));
 	(*root)->status = DG_IN_PROGRESS;
 
-	da_init_result((*root)->dependencies, 4);
+	if (!da_init((*root)->dependencies, 4))
+		return RESULT_MEMORY_ERROR;
 
 	// Register before any recursion so dg_find sees IN_PROGRESS
 	// siblings. Cleanup of half-built nodes happens via the outer
@@ -511,7 +517,8 @@ static CompilerResult build_dependency_graph_inner(SourceFile input_file, Depend
 				report_import_cycle(&frame, existing_node);
 				return RESULT_FAILURE;
 			}
-			da_push_safe_result((*root)->dependencies, existing_node, {});
+			if (!da_push((*root)->dependencies, existing_node))
+				return RESULT_MEMORY_ERROR;
 			continue;
 		}
 		SourceFile dep_src = driver_init_source(name);
@@ -520,7 +527,8 @@ static CompilerResult build_dependency_graph_inner(SourceFile input_file, Depend
 		if (res != RESULT_SUCCESS)
 			return res;
 
-		da_push_safe_result((*root)->dependencies, subgraph, {});
+		if (!da_push((*root)->dependencies, subgraph))
+			return RESULT_MEMORY_ERROR;
 	}
 
 	(*root)->status = DG_DONE;
@@ -755,11 +763,15 @@ CompilerResult driver_run() {
 	strncpy(output_file_path_cpy, driver.options.output_file_path, sizeof(output_file_path_cpy));
 	char output_file_path_full[512] = "";
 	full_path(output_file_path_cpy, output_file_path_full);
-	da_init_result(cmd, 4);
-	da_push_result(cmd, strdup("clang"));
+	if (!da_init(cmd, 4))
+		return RESULT_MEMORY_ERROR;
+	if (!da_push(cmd, strdup("clang")))
+		return RESULT_MEMORY_ERROR;
 	combine_object_paths(&cmd, OBJ_DIRECTORY);
-	da_push_result(cmd, strdup("-o"));
-	da_push_result(cmd, strdup(output_file_path_full));
+	if (!da_push(cmd, strdup("-o")))
+		return RESULT_MEMORY_ERROR;
+	if (!da_push(cmd, strdup(output_file_path_full)))
+		return RESULT_MEMORY_ERROR;
 	char *final_cmd = flatten_stringlist(&cmd);
 	for (int i = 0; i < cmd.count; ++i) {
 		free(cmd.data[i]);
@@ -793,7 +805,11 @@ CompilerResult driver_run() {
 CompilerResult driver_init(int argc, const char **argv) {
 	CHK(compile_options_get(argc, argv, &driver.options), { compile_options_deinit(&driver.options); });
 	char *this_path = strdup(".");
-	da_push_safe_result(driver.options.import_paths, this_path, { compile_options_deinit(&driver.options); });
+	if (!da_push(driver.options.import_paths, this_path)) {
+		free(this_path);
+		compile_options_deinit(&driver.options);
+		return RESULT_MEMORY_ERROR;
+	}
 
 	if (driver.options.display_help) {
 		driver_print_help();
@@ -808,8 +824,8 @@ CompilerResult driver_init(int argc, const char **argv) {
 void driver_set_compiler_options(CompileOptions opts) {
 	driver.options = opts;
 	if (!driver.options.import_paths.count) {
-		da_init_unsafe(driver.options.import_paths, 1);
-		da_push_unsafe(driver.options.import_paths, strdup("."));
+		(void)da_init(driver.options.import_paths, 1);
+		(void)da_push(driver.options.import_paths, strdup("."));
 	}
 }
 

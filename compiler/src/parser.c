@@ -19,8 +19,6 @@ static __thread Arena *current_parser_arena = NULL;
 
 #define p_da_init(xs, cap) da_init_arena((xs), (cap), current_parser_arena)
 #define p_da_push(xs, x) da_push_arena((xs), (x), current_parser_arena)
-#define p_da_init_unsafe(xs, cap) da_init_arena_unsafe((xs), (cap), current_parser_arena)
-#define p_da_push_unsafe(xs, x) da_push_arena_unsafe((xs), (x), current_parser_arena)
 
 typedef struct {
 	ASTNode **data;
@@ -469,10 +467,12 @@ ASTNode *copy_ast_node(ASTNode *node) {
 			ASTNode **data;
 			int count, capacity;
 		} field_list;
-		p_da_init(field_list, field_count);
+		if (!p_da_init(field_list, field_count))
+			return NULL;
 		for (int i = 0; i < field_count; ++i) {
 			ASTNode *field_copy = copy_ast_node(node->data.struct_decl.fields[i]);
-			p_da_push(field_list, field_copy);
+			if (!p_da_push(field_list, field_copy))
+				return NULL;
 		}
 	} break;
 	case AST_FN_DECL: {
@@ -1011,7 +1011,8 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 				int capacity, count;
 			} params;
 
-			da_init_result(params, 4);
+			if (!da_init(params, 4))
+				return RESULT_MEMORY_ERROR;
 
 			while (parser->current_token.type != TOK_RPAREN) {
 				Type *param_type = NULL;
@@ -1024,7 +1025,8 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 					return RESULT_PARSING_ERROR;
 				}
 
-				da_push_result(params, param_type);
+				if (!da_push(params, param_type))
+					return RESULT_MEMORY_ERROR;
 
 				if (parser->current_token.type == TOK_COMMA) {
 					parser->current_token = next_token(&parser->scanner); // consume ','
@@ -1267,7 +1269,8 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 	} enum_member_list;
 
 	enum_member_list members;
-	p_da_init(members, 4);
+	if (!p_da_init(members, 4))
+		return NULL;
 
 	int next_value = 0;
 	while (parser->current_token.type != TOK_RCURLY) {
@@ -1322,7 +1325,8 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 			member->value = next_value++;
 		}
 
-		p_da_push(members, member);
+		if (!p_da_push(members, member))
+			return NULL;
 
 		if (parser->current_token.type == TOK_COMMA) {
 			parser->current_token = next_token(&parser->scanner); // consume ','
@@ -1370,7 +1374,8 @@ ASTNode *parse_struct_literal(Parser *parser, const char *scope_prefix) {
 	SourceLocation loc = parser->current_token.location;
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 	field_init_list inits;
-	p_da_init(inits, 4);
+	if (!p_da_init(inits, 4))
+		return NULL;
 
 	while (parser->current_token.type != TOK_RCURLY) {
 		FieldInitializer *init = NULL;
@@ -1403,7 +1408,8 @@ ASTNode *parse_struct_literal(Parser *parser, const char *scope_prefix) {
 			init = new_field_initializer("", 0, expr);
 		}
 
-		p_da_push(inits, init);
+		if (!p_da_push(inits, init))
+			return NULL;
 
 		if (parser->current_token.type == TOK_COMMA) {
 			parser->current_token = next_token(&parser->scanner); // consume ','
@@ -1435,11 +1441,13 @@ ASTNode *parse_postfix(Parser *parser, const char *scope_prefix) {
 			parser->current_token = next_token(&parser->scanner);
 
 			NodeList args;
-			p_da_init(args, 4);
+			if (!p_da_init(args, 4))
+				return NULL;
 			if (parser->current_token.type != TOK_RPAREN) {
 				while (1) {
 					ASTNode *arg = parse_assignment(parser, scope_prefix);
-					p_da_push(args, arg);
+					if (!p_da_push(args, arg))
+						return NULL;
 
 					if (parser->current_token.type == TOK_COMMA) {
 						parser->current_token = next_token(&parser->scanner);
@@ -1502,7 +1510,8 @@ ASTNode *parse_array_literal(Parser *parser, const char *scope_prefix) {
 	parser->current_token = next_token(&parser->scanner); // consume '['
 
 	NodeList elements;
-	p_da_init(elements, 4);
+	if (!p_da_init(elements, 4))
+		return NULL;
 
 	if (parser->current_token.type != TOK_RBRACKET) {
 		while (1) {
@@ -1510,7 +1519,8 @@ ASTNode *parse_array_literal(Parser *parser, const char *scope_prefix) {
 			if (!expr)
 				return NULL;
 
-			p_da_push(elements, expr);
+			if (!p_da_push(elements, expr))
+				return NULL;
 
 			if (parser->current_token.type == TOK_COMMA) {
 				parser->current_token = next_token(&parser->scanner); // consume ','
@@ -2068,7 +2078,8 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported, int is_extern) {
 		ASTNode **data;
 		int count, capacity;
 	} field_list;
-	p_da_init(field_list, 4);
+	if (!p_da_init(field_list, 4))
+		return NULL;
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *field = parse_field_declaration(parser);
 		for (int i = 0; i < field_list.count; ++i) {
@@ -2078,7 +2089,8 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported, int is_extern) {
 				is_error = 1;
 			}
 		}
-		p_da_push(field_list, field);
+		if (!p_da_push(field_list, field))
+			return NULL;
 	}
 	if (parser->current_token.type != TOK_RCURLY) {
 		report(parser->current_token.location, "expected '}' at the end of struct declaration.", 0);
@@ -2165,9 +2177,9 @@ ASTNode *parse_parameter_list(Parser *parser) {
 
 DeferStack copy_defer_stack(DeferStack *stack) {
 	DeferStack copy;
-	da_init_unsafe(copy, stack->capacity);
+	(void)da_init(copy, stack->capacity);
 	for (int i = 0; i < stack->count; ++i) {
-		da_push_unsafe(copy, stack->data[i]);
+		(void)da_push(copy, stack->data[i]);
 	}
 	return copy;
 }
@@ -2201,7 +2213,7 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 	} new_statements;
 
 	int initial_cap = node->data.block.count > 0 ? node->data.block.count : 1;
-	p_da_init_unsafe(new_statements, initial_cap);
+	(void)p_da_init(new_statements, initial_cap);
 
 	for (int i = 0; i < node->data.block.count; ++i) {
 		ASTNode *stmt = node->data.block.statements[i];
@@ -2216,18 +2228,18 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 			}
 
 			if (seq->data.block.count > 0) {
-				p_da_push_unsafe(new_statements, seq);
+				(void)p_da_push(new_statements, seq);
 			}
 			// seq with no statements stays in the arena, leaked until module_deinit
 
-			p_da_push_unsafe(new_statements, stmt);
+			(void)p_da_push(new_statements, stmt);
 		} else if (stmt->type == AST_BLOCK) {
 			DeferStack nested = copy_defer_stack(stack);
 			unroll_defers(stmt, &nested);
 			da_deinit(nested);
-			p_da_push_unsafe(new_statements, stmt);
+			(void)p_da_push(new_statements, stmt);
 		} else {
-			p_da_push_unsafe(new_statements, stmt);
+			(void)p_da_push(new_statements, stmt);
 		}
 	}
 
@@ -2240,7 +2252,7 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 				assert(res == RESULT_SUCCESS);
 			}
 		}
-		p_da_push_unsafe(new_statements, tail);
+		(void)p_da_push(new_statements, tail);
 	}
 
 	// Old statements array stays in the arena; just rebind the block to
@@ -2261,10 +2273,12 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 
 	NodeList stmts;
-	p_da_init(stmts, 4);
+	if (!p_da_init(stmts, 4))
+		return NULL;
 
 	DeferStack dstack_local;
-	da_init(dstack_local, 4);
+	if (!da_init(dstack_local, 4))
+		return NULL;
 	dstack_local.last_scope_dstack = dstack;
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *stmt = parse_stmt(parser, prefix_name, &dstack_local);
@@ -2273,12 +2287,13 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 
 		if (stmt->type == AST_DEFER_BLOCK) {
 			for (int j = 0; j < stmt->data.defer.defer_block->data.block.count; ++j) {
-				da_push_unsafe(dstack_local, stmt->data.defer.defer_block->data.block.statements[j]);
+				(void)da_push(dstack_local, stmt->data.defer.defer_block->data.block.statements[j]);
 			}
 			// stmt itself stays in the arena; nothing to free here
 			continue;
 		}
-		p_da_push(stmts, stmt);
+		if (!p_da_push(stmts, stmt))
+			return NULL;
 	}
 
 	if (parser->current_token.type != TOK_RCURLY) {
@@ -2482,9 +2497,11 @@ ASTNode *parse_switch_stmt(Parser *parser, const char *prefix_name, DeferStack *
 		int capacity;
 		int count;
 	} cases;
-	p_da_init(cases, 4);
+	if (!p_da_init(cases, 4))
+		return NULL;
 	NodeList pending_values;
-	p_da_init(pending_values, 4);
+	if (!p_da_init(pending_values, 4))
+		return NULL;
 	SourceLocation pending_first_loc = {0};
 	ASTNode *else_body = NULL;
 	// On any error inside the body we still need to consume the switch's
@@ -2515,7 +2532,8 @@ ASTNode *parse_switch_stmt(Parser *parser, const char *prefix_name, DeferStack *
 			parser->current_token = next_token(&parser->scanner); // consume ':'
 			if (pending_values.count == 0)
 				pending_first_loc = case_loc;
-			p_da_push(pending_values, value);
+			if (!p_da_push(pending_values, value))
+				return NULL;
 			if (parser->current_token.type == TOK_LCURLY) {
 				ASTNode *body = parse_block(parser, prefix_name, dstack);
 				if (!body)
@@ -2529,8 +2547,10 @@ ASTNode *parse_switch_stmt(Parser *parser, const char *prefix_name, DeferStack *
 					slot.values[i] = pending_values.data[i];
 				slot.body = body;
 				slot.location = pending_first_loc;
-				p_da_push(cases, slot);
-				p_da_init(pending_values, 4);
+				if (!p_da_push(cases, slot))
+					return NULL;
+				if (!p_da_init(pending_values, 4))
+					return NULL;
 			}
 		} else if (parser->current_token.type == TOK_ELSE) {
 			if (pending_values.count > 0)
@@ -2655,7 +2675,8 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 		add_symbol(&parser->symbol_table, p, p->data.param_decl.name, p->data.param_decl.resolved_name, p->data.param_decl.is_const, 0, SYMB_VAR, p->data.param_decl.type, parser->current_scope);
 	}
 	DeferStack defer_stack;
-	da_init(defer_stack, 4);
+	if (!da_init(defer_stack, 4))
+		return NULL;
 	defer_stack.last_scope_dstack = NULL;
 	ASTNode *body = parse_block(parser, func_name, &defer_stack);
 	da_deinit(defer_stack);
@@ -2669,10 +2690,14 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 			Type **data;
 			int count, capacity;
 		} param_type_list;
-		da_init_unsafe(param_type_list, 4);
+		if (!da_init(param_type_list, 4))
+			return NULL;
 		ASTNode *curr_param = params;
 		while (curr_param) {
-			da_push_unsafe(param_type_list, curr_param->data.param_decl.type);
+			if (!da_push(param_type_list, curr_param->data.param_decl.type)) {
+				da_deinit(param_type_list);
+				return NULL;
+			}
 			curr_param = curr_param->next;
 		}
 		function_type.function.param_count = param_type_list.count;
@@ -2724,12 +2749,16 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 		Type **data;
 		int count, capacity;
 	} param_type_list;
-	da_init_unsafe(param_type_list, 4);
+	if (!da_init(param_type_list, 4))
+		return NULL;
 	ASTNode *curr_param = params;
 	while (curr_param) {
 		if (curr_param->data.param_decl.is_va)
 			break;
-		da_push_unsafe(param_type_list, curr_param->data.param_decl.type);
+		if (!da_push(param_type_list, curr_param->data.param_decl.type)) {
+			da_deinit(param_type_list);
+			return NULL;
+		}
 		curr_param = curr_param->next;
 	}
 	function_type.function.param_count = param_type_list.count;
@@ -2758,7 +2787,8 @@ ASTNode *parse_extern_block(Parser *parser, const char *prefix_name) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '{'
 	NodeList decls;
-	p_da_init(decls, 4);
+	if (!p_da_init(decls, 4))
+		return NULL;
 	while (parser->current_token.type != TOK_RCURLY) {
 		ASTNode *decl = NULL;
 		int is_exported = 0;
@@ -2793,7 +2823,8 @@ ASTNode *parse_extern_block(Parser *parser, const char *prefix_name) {
 			decl->data.var_decl.is_exported = is_exported;
 		}
 		assert(decl);
-		p_da_push(decls, decl);
+		if (!p_da_push(decls, decl))
+			return NULL;
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '}'
 	return new_extern_block_node(lib_name, decls.data, decls.count, loc);
@@ -2864,7 +2895,8 @@ char *parse_import(Parser *parser) {
 
 CompilerResult parse_import_list(Parser *parser, ImportList *out_import_list) {
 	ImportList import_list;
-	da_init_result(import_list, 4);
+	if (!da_init(import_list, 4))
+		return RESULT_MEMORY_ERROR;
 
 	parser->current_token = next_token(&parser->scanner);
 
@@ -2875,7 +2907,11 @@ CompilerResult parse_import_list(Parser *parser, ImportList *out_import_list) {
 				free(import_list.data);
 				return RESULT_FAILURE;
 			}
-			da_push_result(import_list, import_name);
+			if (!da_push(import_list, import_name)) {
+				free(import_name);
+				free(import_list.data);
+				return RESULT_MEMORY_ERROR;
+			}
 		} else {
 			parser->current_token = next_token(&parser->scanner);
 		}

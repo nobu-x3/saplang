@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -48,90 +49,46 @@ FILE *diag_stream(void);
 
 unsigned long djb2(const char *str);
 
-#define da_push(xs, x)                                                                                                                                                                                                                         \
-	do {                                                                                                                                                                                                                                       \
-		if (xs.count >= xs.capacity) {                                                                                                                                                                                                         \
-			xs.capacity *= 2;                                                                                                                                                                                                                  \
-			xs.data = realloc(xs.data, xs.capacity * sizeof(*xs.data));                                                                                                                                                                        \
-			if (!xs.data)                                                                                                                                                                                                                      \
-				return NULL;                                                                                                                                                                                                                   \
-		}                                                                                                                                                                                                                                      \
-		xs.data[xs.count++] = x;                                                                                                                                                                                                               \
-	} while (0)
-
-#define da_push_unsafe(xs, x)                                                                                                                                                                                                                  \
-	do {                                                                                                                                                                                                                                       \
-		if (xs.count >= xs.capacity) {                                                                                                                                                                                                         \
-			xs.capacity *= 2;                                                                                                                                                                                                                  \
-			xs.data = realloc(xs.data, xs.capacity * sizeof(*xs.data));                                                                                                                                                                        \
-		}                                                                                                                                                                                                                                      \
-		xs.data[xs.count++] = x;                                                                                                                                                                                                               \
-	} while (0)
-
-#define da_push_unsafe_ptr(xs, x)                                                                                                                                                                                                              \
-	do {                                                                                                                                                                                                                                       \
-		if (xs->count >= xs->capacity) {                                                                                                                                                                                                       \
-			xs->capacity *= 2;                                                                                                                                                                                                                 \
-			xs->data = realloc(xs->data, xs->capacity * sizeof(*xs->data));                                                                                                                                                                    \
-		}                                                                                                                                                                                                                                      \
-		xs->data[xs->count++] = x;                                                                                                                                                                                                             \
-	} while (0)
-
+// Dynamic-array helpers. `xs` is a struct with `.count`, `.capacity`, `.data`.
+// Both macros yield a bool — true on success, false on allocation failure —
+// so callers translate to whatever error code their function returns:
+//   if (!da_init(xs, 4))  return RESULT_MEMORY_ERROR;
+//   if (!da_push(xs, x))  return RESULT_MEMORY_ERROR;
+// Callers that genuinely can't propagate (void returns) may discard the
+// bool; the array is left in a consistent state either way.
 #define da_init(xs, cap)                                                                                                                                                                                                                       \
-	do {                                                                                                                                                                                                                                       \
-		xs.count = 0;                                                                                                                                                                                                                          \
-		xs.capacity = cap;                                                                                                                                                                                                                     \
-		xs.data = malloc(xs.capacity * sizeof(*xs.data));                                                                                                                                                                                      \
-		if (!xs.data)                                                                                                                                                                                                                          \
-			return NULL;                                                                                                                                                                                                                       \
-	} while (0)
+	({                                                                                                                                                                                                                                         \
+		(xs).count = 0;                                                                                                                                                                                                                        \
+		(xs).capacity = (cap);                                                                                                                                                                                                                 \
+		(xs).data = (xs).capacity ? malloc((size_t)(xs).capacity * sizeof(*(xs).data)) : NULL;                                                                                                                                                 \
+		(xs).capacity == 0 || (xs).data != NULL;                                                                                                                                                                                               \
+	})
 
-#define da_init_result(xs, cap)                                                                                                                                                                                                                \
-	do {                                                                                                                                                                                                                                       \
-		xs.count = 0;                                                                                                                                                                                                                          \
-		xs.capacity = cap;                                                                                                                                                                                                                     \
-		xs.data = malloc(xs.capacity * sizeof(*xs.data));                                                                                                                                                                                      \
-		if (!xs.data)                                                                                                                                                                                                                          \
-			return RESULT_MEMORY_ERROR;                                                                                                                                                                                                        \
-	} while (0)
-
-#define da_push_result(xs, x)                                                                                                                                                                                                                  \
-	do {                                                                                                                                                                                                                                       \
-		if (xs.count >= xs.capacity) {                                                                                                                                                                                                         \
-			xs.capacity *= 2;                                                                                                                                                                                                                  \
-			xs.data = realloc(xs.data, xs.capacity * sizeof(*xs.data));                                                                                                                                                                        \
-			if (!xs.data)                                                                                                                                                                                                                      \
-				return RESULT_MEMORY_ERROR;                                                                                                                                                                                                    \
-		}                                                                                                                                                                                                                                      \
-		xs.data[xs.count++] = x;                                                                                                                                                                                                               \
-	} while (0)
-
-#define da_push_safe_result(xs, x, on_error)                                                                                                                                                                                                   \
-	do {                                                                                                                                                                                                                                       \
-		if (xs.count >= xs.capacity) {                                                                                                                                                                                                         \
-			xs.capacity *= 2;                                                                                                                                                                                                                  \
-			xs.data = realloc(xs.data, xs.capacity * sizeof(*xs.data));                                                                                                                                                                        \
-			if (!xs.data) {                                                                                                                                                                                                                    \
-				on_error return RESULT_MEMORY_ERROR;                                                                                                                                                                                           \
+#define da_push(xs, x)                                                                                                                                                                                                                         \
+	({                                                                                                                                                                                                                                         \
+		bool _da_ok = true;                                                                                                                                                                                                                    \
+		if ((xs).count >= (xs).capacity) {                                                                                                                                                                                                     \
+			int _da_new_cap = (xs).capacity ? (xs).capacity * 2 : 4;                                                                                                                                                                           \
+			void *_da_new_data = realloc((xs).data, (size_t)_da_new_cap * sizeof(*(xs).data));                                                                                                                                                 \
+			if (!_da_new_data) {                                                                                                                                                                                                               \
+				_da_ok = false;                                                                                                                                                                                                                \
+			} else {                                                                                                                                                                                                                           \
+				(xs).capacity = _da_new_cap;                                                                                                                                                                                                   \
+				(xs).data = _da_new_data;                                                                                                                                                                                                      \
 			}                                                                                                                                                                                                                                  \
 		}                                                                                                                                                                                                                                      \
-		xs.data[xs.count++] = x;                                                                                                                                                                                                               \
-	} while (0)
-
-#define da_init_unsafe(xs, cap)                                                                                                                                                                                                                \
-	do {                                                                                                                                                                                                                                       \
-		xs.count = 0;                                                                                                                                                                                                                          \
-		xs.capacity = cap;                                                                                                                                                                                                                     \
-		xs.data = malloc(xs.capacity * sizeof(*xs.data));                                                                                                                                                                                      \
-	} while (0)
+		if (_da_ok)                                                                                                                                                                                                                            \
+			(xs).data[(xs).count++] = (x);                                                                                                                                                                                                     \
+		_da_ok;                                                                                                                                                                                                                                \
+	})
 
 #define da_deinit(xs)                                                                                                                                                                                                                          \
 	do {                                                                                                                                                                                                                                       \
-		if (xs.data && xs.capacity) {                                                                                                                                                                                                          \
-			xs.count = 0;                                                                                                                                                                                                                      \
-			xs.capacity = 0;                                                                                                                                                                                                                   \
-			free(xs.data);                                                                                                                                                                                                                     \
-			xs.data = NULL;                                                                                                                                                                                                                    \
+		if ((xs).data && (xs).capacity) {                                                                                                                                                                                                      \
+			(xs).count = 0;                                                                                                                                                                                                                    \
+			(xs).capacity = 0;                                                                                                                                                                                                                 \
+			free((xs).data);                                                                                                                                                                                                                   \
+			(xs).data = NULL;                                                                                                                                                                                                                  \
 		}                                                                                                                                                                                                                                      \
 	} while (0)
 
