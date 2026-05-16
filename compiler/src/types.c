@@ -287,6 +287,8 @@ Type *new_named_type(const char *name, const char *namespace, TypeKind kind) { /
 
 int type_equals(const Type *a, const Type *b) {
 	if (!a && !b)
+		return 1;
+	if (!a || !b)
 		return 0;
 	if (a->type_kind != b->type_kind)
 		return 0;
