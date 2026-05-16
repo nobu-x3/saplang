@@ -223,6 +223,10 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_CONTINUE;
 		else if (strcmp(current_token.text, "break") == 0)
 			current_token.type = TOK_BREAK;
+		else if (strcmp(current_token.text, "switch") == 0)
+			current_token.type = TOK_SWITCH;
+		else if (strcmp(current_token.text, "case") == 0)
+			current_token.type = TOK_CASE;
 		else {
 			current_token.type = TOK_IDENTIFIER;
 		}

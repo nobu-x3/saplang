@@ -1038,6 +1038,62 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMBuildBr(cg->builder, ctx.end_block);
 	} break;
 
+	case AST_SWITCH_STMT: {
+		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.resolved_name);
+		Type *subject_type = get_type(table, node->data.switch_stmt.subject, ctx.current_scope, "");
+		PassContext subject_ctx = ctx;
+		subject_ctx.intention = PI_LOAD_VAL;
+		subject_ctx.expected_type = subject_type;
+		LLVMValueRef subject = codegen_ast(cg, node->data.switch_stmt.subject, table, subject_ctx);
+		LLVMBasicBlockRef endBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "switchend");
+		LLVMBasicBlockRef elseBB = node->data.switch_stmt.else_body ? LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "switchelse") : NULL;
+		LLVMBasicBlockRef defaultBB = elseBB ? elseBB : endBB;
+		int total_values = 0;
+		for (int c = 0; c < node->data.switch_stmt.case_count; ++c)
+			total_values += node->data.switch_stmt.cases[c].value_count;
+		LLVMBasicBlockRef *group_bbs = malloc(sizeof(LLVMBasicBlockRef) * (size_t)node->data.switch_stmt.case_count);
+		for (int c = 0; c < node->data.switch_stmt.case_count; ++c)
+			group_bbs[c] = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "switchcase");
+		LLVMValueRef switch_inst = LLVMBuildSwitch(cg->builder, subject, defaultBB, (unsigned)total_values);
+		for (int c = 0; c < node->data.switch_stmt.case_count; ++c) {
+			for (int v = 0; v < node->data.switch_stmt.cases[c].value_count; ++v) {
+				ASTNode *val_node = node->data.switch_stmt.cases[c].values[v];
+				PassContext val_ctx = ctx;
+				val_ctx.expected_type = subject_type;
+				val_ctx.intention = PI_LOAD_VAL;
+				LLVMValueRef val = codegen_ast(cg, val_node, table, val_ctx);
+				LLVMAddCase(switch_inst, val, group_bbs[c]);
+			}
+		}
+		for (int c = 0; c < node->data.switch_stmt.case_count; ++c) {
+			LLVMPositionBuilderAtEnd(cg->builder, group_bbs[c]);
+			codegen_ast(cg, node->data.switch_stmt.cases[c].body, table, ctx);
+			LLVMValueRef last_inst = LLVMGetLastInstruction(group_bbs[c]);
+			if (!last_inst) {
+				LLVMBuildBr(cg->builder, endBB);
+			} else {
+				LLVMOpcode last_opcode = LLVMGetInstructionOpcode(last_inst);
+				if (last_opcode != LLVMBr && last_opcode != LLVMRet)
+					LLVMBuildBr(cg->builder, endBB);
+			}
+		}
+		if (elseBB) {
+			LLVMPositionBuilderAtEnd(cg->builder, elseBB);
+			codegen_ast(cg, node->data.switch_stmt.else_body, table, ctx);
+			LLVMValueRef last_inst = LLVMGetLastInstruction(elseBB);
+			if (!last_inst) {
+				LLVMBuildBr(cg->builder, endBB);
+			} else {
+				LLVMOpcode last_opcode = LLVMGetInstructionOpcode(last_inst);
+				if (last_opcode != LLVMBr && last_opcode != LLVMRet)
+					LLVMBuildBr(cg->builder, endBB);
+			}
+		}
+		free(group_bbs);
+		LLVMPositionBuilderAtEnd(cg->builder, endBB);
+		return NULL;
+	} break;
+
 	case AST_FIELD_DECL:
 	case AST_DEFER_BLOCK:
 		break;

@@ -2,6 +2,7 @@
 
 #include "test_util.h"
 #include <parser.h>
+#include <string.h>
 #include <unity.h>
 
 //---------------------------------------------------------------------
@@ -1463,4 +1464,87 @@ void test_FunctionOverloading(void) {
 						   "          Ident: p_p_s\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
+}
+
+void test_Switch_BasicSingleCase_parser(void) {
+	SETUP_TEST("fn void test() {"
+			   "    i32 a = 0;"
+			   "    switch (a) {"
+			   "    case 1: { a = 10; }"
+			   "    }"
+			   "}");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 2 statement(s):\n"
+						   "      VarDecl: i32 a:\n"
+						   "        Literal Int: 0\n"
+						   "      SwitchStmt:\n"
+						   "        Subject:\n"
+						   "          Ident: a\n"
+						   "        Case:\n"
+						   "          Value:\n"
+						   "            Literal Int: 1\n"
+						   "          Body:\n"
+						   "            Block with 1 statement(s):\n"
+						   "              Assignment:\n"
+						   "                Ident: a\n"
+						   "                Literal Int: 10\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_Switch_FallthroughLabelsGroupedWithBlock_parser(void) {
+	SETUP_TEST("fn void test() {"
+			   "    i32 a = 0;"
+			   "    switch (a) {"
+			   "    case 1:"
+			   "    case 2:"
+			   "    case 3: { a = 10; }"
+			   "    else { a = 99; }"
+			   "    }"
+			   "}");
+	const char *expected = "FuncDecl: test\n"
+						   "  Params:\n"
+						   "  Body:\n"
+						   "    Block with 2 statement(s):\n"
+						   "      VarDecl: i32 a:\n"
+						   "        Literal Int: 0\n"
+						   "      SwitchStmt:\n"
+						   "        Subject:\n"
+						   "          Ident: a\n"
+						   "        Case:\n"
+						   "          Value:\n"
+						   "            Literal Int: 1\n"
+						   "          Value:\n"
+						   "            Literal Int: 2\n"
+						   "          Value:\n"
+						   "            Literal Int: 3\n"
+						   "          Body:\n"
+						   "            Block with 1 statement(s):\n"
+						   "              Assignment:\n"
+						   "                Ident: a\n"
+						   "                Literal Int: 10\n"
+						   "        Else:\n"
+						   "          Block with 1 statement(s):\n"
+						   "            Assignment:\n"
+						   "              Ident: a\n"
+						   "              Literal Int: 99\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_Switch_BareCaseAtEndIsError_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("fn void test() {"
+			   "    i32 a = 0;"
+			   "    switch (a) {"
+			   "    case 1:"
+			   "    }"
+			   "}");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	TEST_ASSERT_NOT_NULL(strstr(err, "case labels with no body must be followed by a case with a body."));
+	free(output);
+	free(err);
 }

@@ -81,6 +81,8 @@ int main(void) {
 	RUN_TEST(test_TokenText_SelfMul_scanner);
 	RUN_TEST(test_TokenText_Null_scanner);
 	RUN_TEST(test_TokenText_NullPrefix_NotAKeyword_scanner);
+	RUN_TEST(test_TokenText_Switch_scanner);
+	RUN_TEST(test_TokenText_Case_scanner);
 	RUN_TEST(test_StringLiteral);
 	RUN_TEST(test_CharLiteral);
 	RUN_TEST(test_BinaryLiteral);
@@ -88,6 +90,9 @@ int main(void) {
 	RUN_TEST(test_ContinueBreak);
 	RUN_TEST(test_ExplicitCast);
 	RUN_TEST(test_FunctionOverloading);
+	RUN_TEST(test_Switch_BasicSingleCase_parser);
+	RUN_TEST(test_Switch_FallthroughLabelsGroupedWithBlock_parser);
+	RUN_TEST(test_Switch_BareCaseAtEndIsError_parser);
 
 	RUN_TEST(test_TypePrinting_sema);
 	RUN_TEST(test_UndeclaredVariable_sema);
@@ -148,6 +153,12 @@ int main(void) {
 	RUN_TEST(test_ParamPassedToOtherCall_sema);
 	RUN_TEST(test_FunctionOverload_sema);
 	RUN_TEST(test_FunctionOverload_FnPointer_sema);
+	RUN_TEST(test_Switch_IntSubject_Correct_sema);
+	RUN_TEST(test_Switch_NonIntSubject_sema);
+	RUN_TEST(test_Switch_NonConstCaseValue_sema);
+	RUN_TEST(test_Switch_DuplicateCaseValue_sema);
+	RUN_TEST(test_Switch_EnumSubject_Correct_sema);
+	RUN_TEST(test_Switch_EnumSubject_WrongEnumMember_sema);
 
 	RUN_TEST(test_Primitivei32_typeinfo);
 	RUN_TEST(test_Primitivei64_typeinfo);
@@ -247,6 +258,7 @@ int main(void) {
 	RUN_TEST(test_ImportTest_modules);
 	RUN_TEST(test_NullTest_modules);
 	RUN_TEST(test_ImportCycle_modules);
+	RUN_TEST(test_SwitchTest_modules);
 	return UNITY_END();
 
 }

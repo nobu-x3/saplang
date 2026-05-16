@@ -78,3 +78,7 @@ void test_NullTest_modules(void) {
 void test_ImportCycle_modules(void) {
     test_expect_driver_failure("module_tests/cycle_test", "cycle_test");
 }
+
+void test_SwitchTest_modules(void) {
+    test("module_tests/switch_test", "switch_test");
+}

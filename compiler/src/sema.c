@@ -8,6 +8,7 @@
 #include <string.h>
 
 CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level, const char *scope_specifier);
+CompilerResult analyze_switch_stmt(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier);
 
 int is_known_type(Symbol *table, const Type *source, int current_scope) {
 	if (is_builtin(source))
@@ -404,6 +405,115 @@ CompilerResult analyze_union_decl(Symbol *table, ASTNode *node, int scope_level,
 		}
 		++field_count;
 		field = field->next;
+	}
+	return RESULT_SUCCESS;
+}
+
+// Extract the constant integer value of a switch case value AST node. Returns 1 on success.
+static int switch_case_value_const(Symbol *table, ASTNode *node, int scope_level, long *out_value) {
+	if (!node)
+		return 0;
+	if (node->type == AST_EXPR_LITERAL) {
+		if (node->data.literal.is_float || node->data.literal.is_bool || node->data.literal.is_null)
+			return 0;
+		*out_value = node->data.literal.long_value;
+		return 1;
+	}
+	if (node->type == AST_ENUM_VALUE) {
+		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_resolved_name, scope_level);
+		if (!sym || sym->kind != SYMB_ENUM)
+			return 0;
+		for (int i = 0; i < sym->node->data.enum_decl.member_count; ++i) {
+			if (strcmp(sym->node->data.enum_decl.members[i]->name, node->data.enum_value.member) == 0) {
+				*out_value = sym->node->data.enum_decl.members[i]->value;
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
+CompilerResult analyze_switch_stmt(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier) {
+	CompilerResult result = analyze_ast(table, node->data.switch_stmt.subject, scope_level, scope_specifier);
+	if (result != RESULT_SUCCESS)
+		return result;
+	Type *subject_type = get_type(table, node->data.switch_stmt.subject, scope_level, scope_specifier);
+	if (!subject_type) {
+		report(node->data.switch_stmt.subject->location, "could not determine type of switch subject.", 0);
+		return RESULT_FAILURE;
+	}
+	if (subject_type->type_kind == TYPE_UNDECIDED)
+		resolve_type(table, subject_type, node->data.switch_stmt.subject->location);
+	int subject_is_enum = subject_type->type_kind == TYPE_ENUM;
+	int subject_is_int = is_int(subject_type) && strcmp(subject_type->type_name, "bool") != 0;
+	if (!subject_is_enum && !subject_is_int) {
+		char type_msg[128] = "";
+		type_print(type_msg, subject_type);
+		char msg[256] = "";
+		sprintf(msg, "switch subject must be an integer or enum type, got %s.", type_msg);
+		report(node->data.switch_stmt.subject->location, msg, 0);
+		return RESULT_FAILURE;
+	}
+	int total_values = 0;
+	for (int c = 0; c < node->data.switch_stmt.case_count; ++c)
+		total_values += node->data.switch_stmt.cases[c].value_count;
+	long stack_seen[256];
+	if (total_values > 256) {
+		report(node->location, "switch has too many case values (limit 256 in Stage 1).", 0);
+		return RESULT_FAILURE;
+	}
+	long *seen = stack_seen;
+	int seen_count = 0;
+	for (int c = 0; c < node->data.switch_stmt.case_count; ++c) {
+		for (int v = 0; v < node->data.switch_stmt.cases[c].value_count; ++v) {
+			ASTNode *val = node->data.switch_stmt.cases[c].values[v];
+			result = analyze_ast(table, val, scope_level, scope_specifier);
+			if (result != RESULT_SUCCESS)
+				return result;
+			if (subject_is_enum) {
+				if (val->type != AST_ENUM_VALUE) {
+					report(val->location, "case value for an enum switch must be an enum member (e.g. EnumT::Member).", 0);
+					return RESULT_FAILURE;
+				}
+				if (strcmp(val->data.enum_value.enum_type->type_resolved_name, subject_type->type_resolved_name) != 0) {
+					char msg[256] = "";
+					sprintf(msg, "case value belongs to enum %s but switch subject is of enum %s.", val->data.enum_value.enum_type->type_name, subject_type->type_name);
+					report(val->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+			} else {
+				if (val->type != AST_EXPR_LITERAL || !literal_fits_type(val, subject_type)) {
+					char type_msg[128] = "";
+					type_print(type_msg, subject_type);
+					char msg[256] = "";
+					sprintf(msg, "case value must be an integer literal compatible with switch subject type %s.", type_msg);
+					report(val->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+			}
+			long const_val = 0;
+			if (!switch_case_value_const(table, val, scope_level, &const_val)) {
+				report(val->location, "case value must be a constant.", 0);
+				return RESULT_FAILURE;
+			}
+			for (int i = 0; i < seen_count; ++i) {
+				if (seen[i] == const_val) {
+					char msg[128] = "";
+					sprintf(msg, "duplicate case value %ld in switch.", const_val);
+					report(val->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+			}
+			seen[seen_count++] = const_val;
+		}
+		result = analyze_ast(table, node->data.switch_stmt.cases[c].body, scope_level + 1, scope_specifier);
+		if (result != RESULT_SUCCESS)
+			return result;
+	}
+	if (node->data.switch_stmt.else_body) {
+		result = analyze_ast(table, node->data.switch_stmt.else_body, scope_level + 1, scope_specifier);
+		if (result != RESULT_SUCCESS)
+			return result;
 	}
 	return RESULT_SUCCESS;
 }
@@ -1296,6 +1406,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				return result;
 		}
 	} break;
+
+	case AST_SWITCH_STMT:
+		return analyze_switch_stmt(table, node, scope_level, scope_specifier);
 
 	case AST_UNION_DECL:
 		return analyze_union_decl(table, node, scope_level, scope_specifier);

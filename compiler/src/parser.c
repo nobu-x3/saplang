@@ -354,6 +354,34 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			print(string, "Body:\n");
 			ast_print(node->data.while_loop.body, indent + 2, string);
 			break;
+		case AST_SWITCH_STMT:
+			print(string, "SwitchStmt:\n");
+			for (int i = 0; i < indent + 1; i++)
+				print(string, "  ");
+			print(string, "Subject:\n");
+			ast_print(node->data.switch_stmt.subject, indent + 2, string);
+			for (int c = 0; c < node->data.switch_stmt.case_count; ++c) {
+				for (int i = 0; i < indent + 1; i++)
+					print(string, "  ");
+				print(string, "Case:\n");
+				for (int v = 0; v < node->data.switch_stmt.cases[c].value_count; ++v) {
+					for (int i = 0; i < indent + 2; i++)
+						print(string, "  ");
+					print(string, "Value:\n");
+					ast_print(node->data.switch_stmt.cases[c].values[v], indent + 3, string);
+				}
+				for (int i = 0; i < indent + 2; i++)
+					print(string, "  ");
+				print(string, "Body:\n");
+				ast_print(node->data.switch_stmt.cases[c].body, indent + 3, string);
+			}
+			if (node->data.switch_stmt.else_body) {
+				for (int i = 0; i < indent + 1; i++)
+					print(string, "  ");
+				print(string, "Else:\n");
+				ast_print(node->data.switch_stmt.else_body, indent + 2, string);
+			}
+			break;
 		case AST_DEFER_BLOCK:
 			break;
 		case AST_DEFERRED_SEQUENCE:
@@ -578,6 +606,22 @@ ASTNode *copy_ast_node(ASTNode *node) {
 	case AST_WHILE_LOOP:
 		new_node->data.while_loop.condition = copy_ast_node(node->data.while_loop.condition);
 		new_node->data.while_loop.body = copy_ast_node(node->data.while_loop.body);
+		break;
+	case AST_SWITCH_STMT:
+		new_node->data.switch_stmt.subject = copy_ast_node(node->data.switch_stmt.subject);
+		new_node->data.switch_stmt.case_count = node->data.switch_stmt.case_count;
+		new_node->data.switch_stmt.cases =
+			arena_alloc(current_parser_arena, sizeof(*new_node->data.switch_stmt.cases) * (size_t)new_node->data.switch_stmt.case_count);
+		for (int i = 0; i < node->data.switch_stmt.case_count; ++i) {
+			new_node->data.switch_stmt.cases[i].value_count = node->data.switch_stmt.cases[i].value_count;
+			new_node->data.switch_stmt.cases[i].location = node->data.switch_stmt.cases[i].location;
+			new_node->data.switch_stmt.cases[i].values =
+				arena_alloc(current_parser_arena, sizeof(ASTNode *) * (size_t)node->data.switch_stmt.cases[i].value_count);
+			for (int v = 0; v < node->data.switch_stmt.cases[i].value_count; ++v)
+				new_node->data.switch_stmt.cases[i].values[v] = copy_ast_node(node->data.switch_stmt.cases[i].values[v]);
+			new_node->data.switch_stmt.cases[i].body = copy_ast_node(node->data.switch_stmt.cases[i].body);
+		}
+		new_node->data.switch_stmt.else_body = copy_ast_node(node->data.switch_stmt.else_body);
 		break;
 	case AST_DEFER_BLOCK:
 		new_node->data.defer.defer_block = copy_ast_node(node->data.defer.defer_block);
@@ -1854,6 +1898,7 @@ ASTNode *parse_if_stmt(Parser *parser, const char *prefix_name, DeferStack *dsta
 ASTNode *parse_for_loop(Parser *parse, const char *prefix_name, DeferStack *dstackr);
 ASTNode *parse_while_loop(Parser *parse, const char *prefix_name, DeferStack *dstackr);
 ASTNode *parse_defer_block(Parser *parse, const char *prefix_name, DeferStack *dstackr);
+ASTNode *parse_switch_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack);
 
 ASTNode *parse_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack) {
 	if (parser->current_token.type == TOK_BREAK) {
@@ -1885,6 +1930,9 @@ ASTNode *parse_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack)
 	}
 	if (parser->current_token.type == TOK_WHILE) {
 		return parse_while_loop(parser, prefix_name, dstack);
+	}
+	if (parser->current_token.type == TOK_SWITCH) {
+		return parse_switch_stmt(parser, prefix_name, dstack);
 	}
 	if (parser->current_token.type == TOK_RETURN) {
 		return parse_return_stmt(parser, prefix_name);
@@ -2412,6 +2460,134 @@ ASTNode *parse_if_stmt(Parser *parser, const char *prefix_name, DeferStack *dsta
 			else_branch = parse_block(parser, prefix_name, dstack);
 	}
 	return new_if_stmt_node(condition, then_branch, else_branch, loc);
+}
+
+ASTNode *parse_switch_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack) {
+	SourceLocation loc = parser->current_token.location;
+	parser->current_token = next_token(&parser->scanner); // consume 'switch'
+	if (parser->current_token.type != TOK_LPAREN) {
+		char msg[128];
+		sprintf(msg, "expected '(' after 'switch', got %s.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume '('
+	ASTNode *subject = parse_assignment(parser, prefix_name);
+	if (!subject)
+		return NULL;
+	if (parser->current_token.type != TOK_RPAREN) {
+		char msg[128];
+		sprintf(msg, "expected ')' after switch subject, got %s.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume ')'
+	if (parser->current_token.type != TOK_LCURLY) {
+		char msg[128];
+		sprintf(msg, "expected '{' to begin switch body, got %s.", parser->current_token.text);
+		return report(parser->current_token.location, msg, 0);
+	}
+	parser->current_token = next_token(&parser->scanner); // consume '{'
+	// Staging buffer: shape mirrors the anonymous struct on the AST node.
+	struct switch_case_slot {
+		ASTNode **values;
+		int value_count;
+		ASTNode *body;
+		SourceLocation location;
+	};
+	struct {
+		struct switch_case_slot *data;
+		int capacity;
+		int count;
+	} cases;
+	p_da_init(cases, 4);
+	NodeList pending_values;
+	p_da_init(pending_values, 4);
+	SourceLocation pending_first_loc = {0};
+	ASTNode *else_body = NULL;
+	// On any error inside the body we still need to consume the switch's
+	// closing '}' before bailing — otherwise the outer parser sees a stray
+	// '}' and falls into an infinite "unexpected token" loop in parse_input.
+#define SWITCH_BAIL(loc, msg)                                                                                                                                                                                                                  \
+	do {                                                                                                                                                                                                                                       \
+		report((loc), (msg), 0);                                                                                                                                                                                                               \
+		while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF)                                                                                                                                              \
+			parser->current_token = next_token(&parser->scanner);                                                                                                                                                                              \
+		if (parser->current_token.type == TOK_RCURLY)                                                                                                                                                                                          \
+			parser->current_token = next_token(&parser->scanner);                                                                                                                                                                              \
+		return NULL;                                                                                                                                                                                                                           \
+	} while (0)
+
+	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
+		if (parser->current_token.type == TOK_CASE) {
+			SourceLocation case_loc = parser->current_token.location;
+			parser->current_token = next_token(&parser->scanner); // consume 'case'
+			ASTNode *value = parse_assignment(parser, prefix_name);
+			if (!value)
+				SWITCH_BAIL(case_loc, "invalid case value.");
+			if (parser->current_token.type != TOK_COLON) {
+				char msg[128];
+				sprintf(msg, "expected ':' after case value, got %s.", parser->current_token.text);
+				SWITCH_BAIL(parser->current_token.location, msg);
+			}
+			parser->current_token = next_token(&parser->scanner); // consume ':'
+			if (pending_values.count == 0)
+				pending_first_loc = case_loc;
+			p_da_push(pending_values, value);
+			if (parser->current_token.type == TOK_LCURLY) {
+				ASTNode *body = parse_block(parser, prefix_name, dstack);
+				if (!body)
+					SWITCH_BAIL(case_loc, "invalid case body.");
+				struct switch_case_slot slot;
+				slot.value_count = pending_values.count;
+				slot.values = arena_alloc(current_parser_arena, sizeof(ASTNode *) * (size_t)slot.value_count);
+				if (!slot.values)
+					return NULL;
+				for (int i = 0; i < slot.value_count; ++i)
+					slot.values[i] = pending_values.data[i];
+				slot.body = body;
+				slot.location = pending_first_loc;
+				p_da_push(cases, slot);
+				p_da_init(pending_values, 4);
+			}
+		} else if (parser->current_token.type == TOK_ELSE) {
+			if (pending_values.count > 0)
+				SWITCH_BAIL(pending_first_loc, "case labels with no body cannot fall through into 'else'.");
+			parser->current_token = next_token(&parser->scanner); // consume 'else'
+			if (parser->current_token.type != TOK_LCURLY)
+				SWITCH_BAIL(parser->current_token.location, "expected '{' after 'else' in switch.");
+			else_body = parse_block(parser, prefix_name, dstack);
+			if (!else_body)
+				SWITCH_BAIL(parser->current_token.location, "invalid 'else' body in switch.");
+			if (parser->current_token.type != TOK_RCURLY)
+				SWITCH_BAIL(parser->current_token.location, "'else' must be the last clause in a switch.");
+			break;
+		} else {
+			char msg[128];
+			sprintf(msg, "expected 'case' or 'else' in switch body, got %s.", parser->current_token.text);
+			SWITCH_BAIL(parser->current_token.location, msg);
+		}
+	}
+	if (pending_values.count > 0)
+		SWITCH_BAIL(pending_first_loc, "case labels with no body must be followed by a case with a body.");
+	if (parser->current_token.type != TOK_RCURLY)
+		SWITCH_BAIL(parser->current_token.location, "expected '}' to close switch.");
+	parser->current_token = next_token(&parser->scanner); // consume '}'
+#undef SWITCH_BAIL
+	ASTNode *node = new_ast_node(AST_SWITCH_STMT, loc);
+	if (!node)
+		return NULL;
+	node->data.switch_stmt.subject = subject;
+	node->data.switch_stmt.case_count = cases.count;
+	node->data.switch_stmt.cases = arena_alloc(current_parser_arena, sizeof(*node->data.switch_stmt.cases) * (size_t)cases.count);
+	if (cases.count && !node->data.switch_stmt.cases)
+		return NULL;
+	for (int i = 0; i < cases.count; ++i) {
+		node->data.switch_stmt.cases[i].values = cases.data[i].values;
+		node->data.switch_stmt.cases[i].value_count = cases.data[i].value_count;
+		node->data.switch_stmt.cases[i].body = cases.data[i].body;
+		node->data.switch_stmt.cases[i].location = cases.data[i].location;
+	}
+	node->data.switch_stmt.else_body = else_body;
+	return node;
 }
 
 static int mangle_param_names(ASTNode *params, char *out_mangled_suffix, size_t cap, int *out_count) {

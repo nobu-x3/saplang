@@ -2,6 +2,7 @@
 #include "test_util.h"
 #include <parser.h>
 #include <sema.h>
+#include <string.h>
 #include <types.h>
 #include <unity.h>
 #include <util.h>
@@ -461,5 +462,83 @@ void test_FunctionOverload_FnPointer_sema(void) {
 					  "}");
 	const char *expected = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_Switch_IntSubject_Correct_sema(void) {
+	TEST_SETUP_SINGLE("fn void test() {"
+					  "    i32 a = 0;"
+					  "    switch (a) {"
+					  "    case 1:"
+					  "    case 2: { a = 10; }"
+					  "    case 3: { a = 20; }"
+					  "    else { a = 99; }"
+					  "    }"
+					  "}");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_Switch_NonIntSubject_sema(void) {
+	TEST_SETUP_SINGLE("fn void test() {"
+					  "    f32 a = 1.0;"
+					  "    switch (a) {"
+					  "    case 1: { a = 1.0; }"
+					  "    }"
+					  "}");
+	TEST_ASSERT_NOT_NULL(strstr(output, "switch subject must be an integer or enum"));
+	free(output);
+}
+
+void test_Switch_NonConstCaseValue_sema(void) {
+	TEST_SETUP_SINGLE("fn void test() {"
+					  "    i32 a = 0;"
+					  "    i32 b = 1;"
+					  "    switch (a) {"
+					  "    case b: { a = 10; }"
+					  "    }"
+					  "}");
+	TEST_ASSERT_NOT_NULL(strstr(output, "case value must be an integer literal compatible with switch subject type"));
+	free(output);
+}
+
+void test_Switch_DuplicateCaseValue_sema(void) {
+	TEST_SETUP_SINGLE("fn void test() {"
+					  "    i32 a = 0;"
+					  "    switch (a) {"
+					  "    case 1: { a = 10; }"
+					  "    case 1: { a = 20; }"
+					  "    }"
+					  "}");
+	TEST_ASSERT_NOT_NULL(strstr(output, "duplicate case value 1 in switch"));
+	free(output);
+}
+
+void test_Switch_EnumSubject_Correct_sema(void) {
+	TEST_SETUP_SINGLE("enum Color : i32 { Red, Green, Blue }"
+					  "fn void test() {"
+					  "    Color c = Color::Red;"
+					  "    switch (c) {"
+					  "    case Color::Red: { c = Color::Green; }"
+					  "    case Color::Blue: { c = Color::Red; }"
+					  "    else { c = Color::Red; }"
+					  "    }"
+					  "}");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_Switch_EnumSubject_WrongEnumMember_sema(void) {
+	TEST_SETUP_SINGLE("enum Color : i32 { Red, Green, Blue }"
+					  "enum Mode : i32 { On, Off }"
+					  "fn void test() {"
+					  "    Color c = Color::Red;"
+					  "    switch (c) {"
+					  "    case Mode::On: { c = Color::Red; }"
+					  "    }"
+					  "}");
+	TEST_ASSERT_NOT_NULL(strstr(output, "case value belongs to enum Mode but switch subject is of enum Color"));
 	free(output);
 }

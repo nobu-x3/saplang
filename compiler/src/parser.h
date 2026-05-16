@@ -55,6 +55,7 @@ typedef enum {
 	AST_CONTINUE,
 	AST_BREAK,
 	AST_CAST,
+	AST_SWITCH_STMT,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -221,6 +222,17 @@ typedef struct ASTNode {
 			Type *target_type;
 			struct ASTNode *expr;
 		} cast;
+		struct {
+			struct ASTNode *subject;
+			struct {
+				struct ASTNode **values;
+				int value_count;
+				struct ASTNode *body;
+				SourceLocation location;
+			} *cases;
+			int case_count;
+			struct ASTNode *else_body;
+		} switch_stmt;
 	} data;
 } ASTNode;
 

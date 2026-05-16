@@ -49,3 +49,15 @@ void test_TokenText_NullPrefix_NotAKeyword_scanner(void) {
 	TEST_ASSERT_EQUAL_INT(TOK_IDENTIFIER, tok.type);
 	TEST_ASSERT_EQUAL_STRING("nullable", tok.text);
 }
+
+void test_TokenText_Switch_scanner(void) {
+	Token tok = scan_first("switch");
+	TEST_ASSERT_EQUAL_INT(TOK_SWITCH, tok.type);
+	TEST_ASSERT_EQUAL_STRING("switch", tok.text);
+}
+
+void test_TokenText_Case_scanner(void) {
+	Token tok = scan_first("case");
+	TEST_ASSERT_EQUAL_INT(TOK_CASE, tok.type);
+	TEST_ASSERT_EQUAL_STRING("case", tok.text);
+}
