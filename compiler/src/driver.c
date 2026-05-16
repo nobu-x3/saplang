@@ -405,29 +405,24 @@ static void dg_diag_drain(DependencyGraphNode *node, FILE *out) {
 }
 
 void dg_clean(DependencyGraphNode *graph) {
-	if (!graph)
-		return;
+	while (graph) {
+		parser_deinit(&graph->parser);
 
-	parser_deinit(&graph->parser);
+		for (int i = 0; i < graph->imports.count; ++i) {
+			free(graph->imports.data[i]);
+		}
+		da_deinit(graph->imports);
 
-	for (int i = 0; i < graph->imports.count; ++i) {
-		free(graph->imports.data[i]);
-	}
-	da_deinit(graph->imports);
+		if (graph->module)
+			module_deinit(graph->module);
 
-	if (graph->module)
-		module_deinit(graph->module);
+		da_deinit(graph->dependencies);
 
-	da_deinit(graph->dependencies);
+		dg_diag_drain(graph, stderr);
 
-	dg_diag_drain(graph, stderr);
-
-	DependencyGraphNode *next = graph->next;
-
-	free(graph);
-
-	if (next) {
-		dg_clean(next);
+		DependencyGraphNode *next = graph->next;
+		free(graph);
+		graph = next;
 	}
 }
 
