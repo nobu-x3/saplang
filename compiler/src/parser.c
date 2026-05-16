@@ -1559,16 +1559,16 @@ int is_type_spec(Parser *parser) {
 //  | <stringLiteral>
 ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 	// @TODO: add array and struct literals
-	if (parser->current_token.type == TOK_NUMBER) {
+	SourceLocation loc = parser->current_token.location;
+	switch (parser->current_token.type) {
+	case TOK_NUMBER:
 		if (strchr(parser->current_token.text, '.') != NULL) {
 			double value = atof(parser->current_token.text);
-			SourceLocation loc = parser->current_token.location;
 			parser->current_token = next_token(&parser->scanner);
 			return new_literal_node_float(value, loc);
 		} else {
 			int base = 10;
 			int offset = 0;
-			SourceLocation loc = parser->current_token.location;
 			if (parser->current_token.text[0] == '0' && (parser->current_token.text[1] == 'b' || parser->current_token.text[1] == 'B')) {
 				base = 2;
 				offset = 2;
@@ -1579,36 +1579,23 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 			parser->current_token = next_token(&parser->scanner);
 			return new_literal_node_long(value, loc);
 		}
-	} else if (parser->current_token.type == TOK_TRUE) {
-		SourceLocation loc = parser->current_token.location;
+	case TOK_TRUE:
 		parser->current_token = next_token(&parser->scanner);
 		return new_literal_node_bool(1, loc);
-	} else if (parser->current_token.type == TOK_FALSE) {
-		SourceLocation loc = parser->current_token.location;
+	case TOK_FALSE:
 		parser->current_token = next_token(&parser->scanner);
 		return new_literal_node_bool(0, loc);
-	} else if (parser->current_token.type == TOK_NULL) {
-		SourceLocation loc = parser->current_token.location;
+	case TOK_NULL:
 		parser->current_token = next_token(&parser->scanner);
 		return new_literal_node_null(loc);
-	} else if (parser->current_token.type == TOK_IDENTIFIER) {
-		// @TODO: this is deferred until sema.
-		// In the semantic analysis phase, when resolving a qualified identifier, look up the namespace string in your symbol table.
-		// - Case A: Module Namespace.
-		// If the namespace matches one of the imported modules (or the current module’s name if unqualified), then resolve the name as a member of that module.
-		// - Case B: Enum Type.
-		// If the namespace matches an enum type declared in the current module (or an imported module), then resolve the identifier as an enum value.
-		// For example, if SomeEnum is an enum type in the current scope, then SomeEnum::Value should be resolved by:
-		//      - Looking up the enum declaration for SomeEnum.
-		//      - Searching the enumerators for one with the name Value.
-		//      - If found, retrieving the corresponding integer value.
-		//
-
+	case TOK_IDENTIFIER:
+		// Qualified identifier resolution (module:: vs Enum::) is
+		// deferred to sema, which has the symbol table.
 		return parse_qualified_identifier(parser, scope_prefix);
-	} else if (parser->current_token.type == TOK_LPAREN) {
+	case TOK_LPAREN: {
 		parser->current_token = next_token(&parser->scanner);
 		if (is_type_spec(parser)) {
-			SourceLocation loc = parser->current_token.location;
+			SourceLocation cast_loc = parser->current_token.location;
 			Type *target_type = NULL;
 			int is_error = 0;
 			if (parse_type(parser, &target_type) != RESULT_SUCCESS) {
@@ -1630,36 +1617,37 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 			if (is_error)
 				return NULL;
 
-			return new_cast_node(target_type, expr, loc);
-		} else {
-			ASTNode *expr = parse_expr(parser, scope_prefix);
-			if (!expr)
-				return NULL;
-			if (parser->current_token.type != TOK_RPAREN)
-				return report(parser->current_token.location, "expected ')'.", 0);
-			parser->current_token = next_token(&parser->scanner);
-			return expr;
+			return new_cast_node(target_type, expr, cast_loc);
 		}
-	} else if (parser->current_token.type == TOK_LBRACKET) {
+		ASTNode *expr = parse_expr(parser, scope_prefix);
+		if (!expr)
+			return NULL;
+		if (parser->current_token.type != TOK_RPAREN)
+			return report(parser->current_token.location, "expected ')'.", 0);
+		parser->current_token = next_token(&parser->scanner);
+		return expr;
+	}
+	case TOK_LBRACKET:
 		return parse_array_literal(parser, scope_prefix);
-	} else if (parser->current_token.type == TOK_LCURLY) {
+	case TOK_LCURLY:
 		return parse_struct_literal(parser, scope_prefix);
-	} else if (parser->current_token.type == TOK_STRINGLIT) {
-		SourceLocation loc = parser->current_token.location;
+	case TOK_STRINGLIT: {
 		ASTNode *string_lit_node = new_string_lit_node(parser->current_token.string_data, parser->current_token.string_len, loc);
 		free(parser->current_token.string_data);
 		parser->current_token.string_data = NULL;
 		parser->current_token = next_token(&parser->scanner);
 		return string_lit_node;
-	} else if (parser->current_token.type == TOK_CHARLIT) {
-		SourceLocation loc = parser->current_token.location;
+	}
+	case TOK_CHARLIT: {
 		ASTNode *char_lit_node = new_char_lit_node(parser->current_token.text[0], loc);
 		parser->current_token = next_token(&parser->scanner);
 		return char_lit_node;
-	} else {
+	}
+	default: {
 		char expr[128];
 		sprintf(expr, "unexpected token in expression: %s", parser->current_token.text);
 		return report(parser->current_token.location, expr, 0);
+	}
 	}
 }
 

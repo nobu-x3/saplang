@@ -613,43 +613,44 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 
 		return pointer_count == decay_count && type_equals(underlying_array_type, underlying_pointer_type);
 	}
-	if (target->type_kind == TYPE_PRIMITIVE) {
-		if (is_bool_type(target)) {
-			// Numeric primitives are "truthy"
-			// in condition contexts (if/while/for/!) — those callers pass
-			// permissive=1 and codegen lowers the load + icmp/fcmp against zero.
-			// Assignment, argument passing, and return paths use permissive=0,
-			// so `bool x = some_int;` still requires an explicit cast.
-			if (source->type_kind == TYPE_POINTER)
-				return 1;
-			if (permissive && source->type_kind == TYPE_PRIMITIVE)
-				return 1;
-			return 0;
-		}
 
-		if (source->type_kind == TYPE_ENUM) {
+	switch (source->type_kind) {
+	case TYPE_PRIMITIVE:
+		if (target->type_kind != TYPE_PRIMITIVE)
+			return 0;
+		// bool target: numeric primitives are "truthy" in condition
+		// contexts (if/while/for/!) — those callers pass permissive=1
+		// and codegen lowers the load + icmp/fcmp against zero.
+		// Assignment, argument, and return paths use permissive=0, so
+		// `bool x = some_int;` still requires an explicit cast.
+		if (is_bool_type(target))
+			return permissive;
+		if (permissive) {
+			// Same-signedness widening only — narrowing and
+			// cross-signedness conversions must be spelled out with
+			// an explicit `(T)` cast.
+			return is_widening_int_conversion(source, target) || is_widening_float_conversion(source, target);
+		}
+		return 0;
+	case TYPE_POINTER:
+		if (is_bool_type(target))
+			return 1;
+		return target->type_kind == TYPE_POINTER;
+	case TYPE_ENUM:
+		if (target->type_kind != TYPE_PRIMITIVE || is_bool_type(target))
+			return 0;
+		{
 			Symbol *enum_sym = lookup_symbol(table, source->type_resolved_name, 0);
 			if (!enum_sym)
 				return 0;
 			return type_equals(enum_sym->node->data.enum_decl.base_type, target);
 		}
-
-		if (permissive && source->type_kind == TYPE_PRIMITIVE) {
-			// Same-signedness widening only — narrowing and cross-signedness
-			// conversions must be spelled out with an explicit `(T)` cast.
-			return is_widening_int_conversion(source, target) || is_widening_float_conversion(source, target);
-		}
-
+	case TYPE_ARRAY:
+	case TYPE_FUNCTION:
+	case TYPE_STRUCT:
+	case TYPE_UNION:
+	case TYPE_UNDECIDED:
 		return 0;
 	}
-
-	if (source->type_kind == TYPE_POINTER) {
-		return target->type_kind == TYPE_POINTER;
-	}
-
-	if (source->type_kind != TYPE_POINTER && target->type_kind == TYPE_POINTER) {
-		return 0;
-	}
-
 	return 0;
 }
