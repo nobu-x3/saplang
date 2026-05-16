@@ -61,353 +61,320 @@ CompilerResult parser_deinit(Parser *parser) {
 	return RESULT_SUCCESS;
 }
 
+static void print_indent(char *string, int level) {
+	for (int i = 0; i < level; ++i)
+		print(string, "  ");
+}
+
+static const char *binary_op_name(TokenType op) {
+	switch (op) {
+	case TOK_OR: return "||";
+	case TOK_SELFOR: return "|=";
+	case TOK_AND: return "&&";
+	case TOK_SELFAND: return "&=";
+	case TOK_PLUS: return "+";
+	case TOK_MINUS: return "-";
+	case TOK_ASTERISK: return "*";
+	case TOK_SLASH: return "/";
+	case TOK_LESSTHAN: return "<";
+	case TOK_GREATERTHAN: return ">";
+	case TOK_EQUAL: return "==";
+	case TOK_NOTEQUAL: return "!=";
+	case TOK_LTOE: return "<=";
+	case TOK_GTOE: return ">=";
+	case TOK_SELFADD: return "+=";
+	case TOK_SELFSUB: return "-=";
+	case TOK_SELFMUL: return "*=";
+	case TOK_SELFDIV: return "/=";
+	case TOK_BITWISE_XOR: return "^";
+	case TOK_BITWISE_NEG: return "~";
+	case TOK_BITWISE_OR: return "|";
+	case TOK_BITWISE_LSHIFT: return "<<";
+	case TOK_BITWISE_RSHIFT: return ">>";
+	case TOK_AMPERSAND: return "&";
+	case TOK_MODULO: return "%";
+	default: return NULL;
+	}
+}
+
+static void ast_print_var_decl(ASTNode *node, int indent, char *string) {
+	print(string, "VarDecl: %s%s", node->data.var_decl.is_exported ? "exported " : "", node->data.var_decl.is_const ? "const " : "");
+	type_print(string, node->data.var_decl.type);
+	print(string, " %s", node->data.var_decl.name);
+	if (node->data.var_decl.init) {
+		print(string, ":\n");
+		ast_print(node->data.var_decl.init, indent + 1, string);
+	} else {
+		print(string, "\n");
+	}
+}
+
+static void ast_print_struct_decl(ASTNode *node, int indent, char *string) {
+	print(string, "StructDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.struct_decl.name);
+	for (int i = 0; i < node->data.struct_decl.field_count; ++i)
+		ast_print(node->data.struct_decl.fields[i], indent + 1, string);
+}
+
+static void ast_print_union_decl(ASTNode *node, int indent, char *string) {
+	print(string, "UnionDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.union_decl.name);
+	ast_print(node->data.union_decl.fields, indent + 1, string);
+}
+
+static void ast_print_fn_decl(ASTNode *node, int indent, char *string) {
+	print(string, "FuncDecl: %s%s\n", node->data.func_decl.is_exported ? "exported " : "", node->data.func_decl.name);
+	print_indent(string, indent + 1);
+	print(string, "Params:\n");
+	ast_print(node->data.func_decl.params, indent + 2, string);
+	print_indent(string, indent + 1);
+	print(string, "Body:\n");
+	ast_print(node->data.func_decl.body, indent + 2, string);
+}
+
+static void ast_print_field_decl(ASTNode *node, char *string) {
+	print(string, "FieldDecl: ");
+	type_print(string, node->data.field_decl.type);
+	print(string, " %s\n", node->data.field_decl.name);
+}
+
+static void ast_print_param_decl(ASTNode *node, char *string) {
+	if (node->data.param_decl.is_va) {
+		print(string, "ParamDecl: ...\n");
+		return;
+	}
+	print(string, "ParamDecl: %s", node->data.param_decl.is_const ? "const " : "");
+	type_print(string, node->data.param_decl.type);
+	print(string, " %s\n", node->data.param_decl.name);
+}
+
+static void ast_print_block(ASTNode *node, int indent, char *string) {
+	print(string, "Block with %d statement(s):\n", node->data.block.count);
+	for (int i = 0; i < node->data.block.count; i++)
+		ast_print(node->data.block.statements[i], indent + 1, string);
+}
+
+static void ast_print_literal(ASTNode *node, char *string) {
+	if (node->data.literal.is_null)
+		print(string, "Literal Null\n");
+	else if (node->data.literal.is_bool)
+		print(string, "Literal Bool: %s\n", node->data.literal.bool_value ? "true" : "false");
+	else if (node->data.literal.is_float)
+		print(string, "Literal Float: %f\n", node->data.literal.float_value);
+	else
+		print(string, "Literal Int: %ld\n", node->data.literal.long_value);
+}
+
+static void ast_print_ident(ASTNode *node, char *string) {
+	char prefix[64] = "";
+	if (*node->data.ident.namespace)
+		sprintf(prefix, "%s::", node->data.ident.namespace);
+	print(string, "Ident: %s%s\n", prefix, node->data.ident.name);
+}
+
+static void ast_print_return(ASTNode *node, int indent, char *string) {
+	print(string, "Return:\n");
+	ast_print(node->data.ret.return_expr, indent + 1, string);
+}
+
+static void ast_print_binary(ASTNode *node, int indent, char *string) {
+	const char *op = binary_op_name(node->data.binary_op.op);
+	if (op)
+		print(string, "Binary Expression: %s\n", op);
+	ast_print(node->data.binary_op.left, indent + 1, string);
+	ast_print(node->data.binary_op.right, indent + 1, string);
+}
+
+static void ast_print_unary(ASTNode *node, int indent, char *string) {
+	print(string, "Unary Expression: %c\n", node->data.unary_op.op);
+	ast_print(node->data.unary_op.operand, indent + 1, string);
+}
+
+static void ast_print_array_literal(ASTNode *node, int indent, char *string) {
+	print(string, "Array literal of size %d:\n", node->data.array_literal.count);
+	for (int i = 0; i < node->data.array_literal.count; ++i)
+		ast_print(node->data.array_literal.elements[i], indent + 1, string);
+}
+
+static void ast_print_array_access(ASTNode *node, int indent, char *string) {
+	print(string, "Array access:\n");
+	ast_print(node->data.array_access.base, indent + 1, string);
+	ast_print(node->data.array_access.index, indent + 1, string);
+}
+
+static void ast_print_assignment(ASTNode *node, int indent, char *string) {
+	print(string, "Assignment:\n");
+	ast_print(node->data.assignment.lvalue, indent + 1, string);
+	ast_print(node->data.assignment.rvalue, indent + 1, string);
+}
+
+static void ast_print_fn_call(ASTNode *node, int indent, char *string) {
+	print(string, "Function call with %d args:\n", node->data.func_call.arg_count);
+	ast_print(node->data.func_call.callee, indent + 1, string);
+	for (int i = 0; i < node->data.func_call.arg_count; ++i)
+		ast_print(node->data.func_call.args[i], indent + 1, string);
+}
+
+static void ast_print_member_access(ASTNode *node, int indent, char *string) {
+	print(string, "Member access: %s\n", node->data.member_access.member);
+	ast_print(node->data.member_access.base, indent + 1, string);
+}
+
+static void ast_print_struct_literal(ASTNode *node, int indent, char *string) {
+	print(string, "StructLiteral with %d initializer(s):\n", node->data.struct_literal.count);
+	for (int i = 0; i < node->data.struct_literal.count; ++i) {
+		FieldInitializer *init = node->data.struct_literal.inits[i];
+		if (init->is_designated) {
+			print_indent(string, indent + 1);
+			print(string, "Designated, field '%s':\n", init->field);
+		}
+		ast_print(init->expr, indent + 1 + init->is_designated, string);
+	}
+}
+
+static void ast_print_enum_decl(ASTNode *node, int indent, char *string) {
+	print(string, "EnumDecl with %d member(s) - %s%s : enum ", node->data.enum_decl.member_count, node->data.enum_decl.is_exported ? "exported " : "", node->data.enum_decl.name);
+	type_print(string, node->data.enum_decl.base_type);
+	print(string, ":\n");
+	for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
+		print_indent(string, indent + 1);
+		print(string, "%s : %ld\n", node->data.enum_decl.members[i]->name, node->data.enum_decl.members[i]->value);
+	}
+}
+
+static void ast_print_enum_value(ASTNode *node, char *string) {
+	print(string, "EnumValue: ");
+	type_print(string, node->data.enum_value.enum_type);
+	print(string, "::%s", node->data.enum_value.member);
+}
+
+static void ast_print_extern_block(ASTNode *node, int indent, char *string) {
+	print(string, "ExternBlock from lib %s:\n", node->data.extern_block.lib_name);
+	for (int i = 0; i < node->data.extern_block.count; ++i)
+		ast_print(node->data.extern_block.block[i], indent + 1, string);
+}
+
+static void ast_print_extern_func(ASTNode *node, int indent, char *string) {
+	print(string, "Extern FuncDecl %s%s:\n", node->data.extern_func.is_exported ? "exported " : "", node->data.extern_func.name);
+	print_indent(string, indent + 1);
+	print(string, "Params:\n");
+	ast_print(node->data.extern_func.params, indent + 2, string);
+}
+
+static void ast_print_if(ASTNode *node, int indent, char *string) {
+	print(string, "IfElseStmt:\n");
+	print_indent(string, indent + 1);
+	print(string, "Condition:\n");
+	ast_print(node->data.if_stmt.condition, indent + 2, string);
+	print_indent(string, indent + 1);
+	print(string, "Then:\n");
+	ast_print(node->data.if_stmt.then_branch, indent + 2, string);
+	print_indent(string, indent + 1);
+	print(string, "Else:\n");
+	ast_print(node->data.if_stmt.else_branch, indent + 2, string);
+}
+
+static void ast_print_for(ASTNode *node, int indent, char *string) {
+	print(string, "ForLoop:\n");
+	print_indent(string, indent + 1);
+	print(string, "Init:\n");
+	ast_print(node->data.for_loop.init, indent + 2, string);
+	print_indent(string, indent + 1);
+	print(string, "Condition:\n");
+	ast_print(node->data.for_loop.condition, indent + 2, string);
+	print_indent(string, indent + 1);
+	print(string, "Post:\n");
+	ast_print(node->data.for_loop.post, indent + 2, string);
+	print_indent(string, indent + 1);
+	print(string, "Body:\n");
+	ast_print(node->data.for_loop.body, indent + 2, string);
+}
+
+static void ast_print_while(ASTNode *node, int indent, char *string) {
+	print(string, "WhileLoop:\n");
+	print_indent(string, indent + 1);
+	print(string, "Condition:\n");
+	ast_print(node->data.while_loop.condition, indent + 2, string);
+	print_indent(string, indent + 1);
+	print(string, "Body:\n");
+	ast_print(node->data.while_loop.body, indent + 2, string);
+}
+
+static void ast_print_switch(ASTNode *node, int indent, char *string) {
+	print(string, "SwitchStmt:\n");
+	print_indent(string, indent + 1);
+	print(string, "Subject:\n");
+	ast_print(node->data.switch_stmt.subject, indent + 2, string);
+	for (int c = 0; c < node->data.switch_stmt.case_count; ++c) {
+		print_indent(string, indent + 1);
+		print(string, "Case:\n");
+		for (int v = 0; v < node->data.switch_stmt.cases[c].value_count; ++v) {
+			print_indent(string, indent + 2);
+			print(string, "Value:\n");
+			ast_print(node->data.switch_stmt.cases[c].values[v], indent + 3, string);
+		}
+		print_indent(string, indent + 2);
+		print(string, "Body:\n");
+		ast_print(node->data.switch_stmt.cases[c].body, indent + 3, string);
+	}
+	if (node->data.switch_stmt.else_body) {
+		print_indent(string, indent + 1);
+		print(string, "Else:\n");
+		ast_print(node->data.switch_stmt.else_body, indent + 2, string);
+	}
+}
+
+static void ast_print_deferred_seq(ASTNode *node, int indent, char *string) {
+	for (int i = 0; i < node->data.block.count; ++i)
+		ast_print(node->data.block.statements[i], indent, string);
+}
+
+static void ast_print_cast(ASTNode *node, int indent, char *string) {
+	char type_str[128] = "";
+	type_print(type_str, node->data.cast.target_type);
+	print(string, "Explicit cast to %s:\n", type_str);
+	ast_print(node->data.cast.expr, indent + 1, string);
+}
+
 CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 	if (!node)
 		return RESULT_PASSED_NULL_PTR;
 	while (node) {
-		if (node->type != AST_DEFERRED_SEQUENCE) {
-			for (int i = 0; i < indent; ++i) {
-				print(string, "  ");
-			}
-		}
+		if (node->type != AST_DEFERRED_SEQUENCE)
+			print_indent(string, indent);
 		switch (node->type) {
-		case AST_VAR_DECL: {
-			print(string, "VarDecl: %s%s", node->data.var_decl.is_exported ? "exported " : "", node->data.var_decl.is_const ? "const " : "");
-			type_print(string, node->data.var_decl.type);
-			print(string, " %s", node->data.var_decl.name);
-			if (node->data.var_decl.init) {
-				print(string, ":\n");
-				ast_print(node->data.var_decl.init, indent + 1, string);
-			} else {
-				print(string, "\n");
-			}
-			break;
-		}
-		case AST_STRUCT_DECL:
-			print(string, "StructDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.struct_decl.name);
-			for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
-				ast_print(node->data.struct_decl.fields[i], indent + 1, string);
-			}
-			break;
-		case AST_UNION_DECL:
-			print(string, "UnionDecl: %s%s\n", node->data.struct_decl.is_exported ? "exported " : "", node->data.union_decl.name);
-			ast_print(node->data.union_decl.fields, indent + 1, string);
-			break;
-		case AST_FN_DECL:
-			print(string, "FuncDecl: %s%s\n", node->data.func_decl.is_exported ? "exported " : "", node->data.func_decl.name);
-			for (int i = 0; i < indent + 1; i++) {
-				print(string, "  ");
-			}
-			print(string, "Params:\n");
-			ast_print(node->data.func_decl.params, indent + 2, string);
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Body:\n");
-			ast_print(node->data.func_decl.body, indent + 2, string);
-			break;
-		case AST_FIELD_DECL: {
-			print(string, "FieldDecl: ");
-			type_print(string, node->data.field_decl.type);
-			print(string, " %s\n", node->data.field_decl.name);
-		} break;
-		case AST_PARAM_DECL:
-			if (node->data.param_decl.is_va) {
-				print(string, "ParamDecl: ...\n");
-			} else {
-				print(string, "ParamDecl: %s", node->data.param_decl.is_const ? "const " : "");
-				type_print(string, node->data.param_decl.type);
-				print(string, " %s\n", node->data.param_decl.name);
-			}
-			break;
-		case AST_BLOCK:
-			print(string, "Block with %d statement(s):\n", node->data.block.count);
-			for (int i = 0; i < node->data.block.count; i++) {
-				ast_print(node->data.block.statements[i], indent + 1, string);
-			}
-			break;
-		case AST_EXPR_LITERAL:
-			if (node->data.literal.is_null) {
-				print(string, "Literal Null\n");
-			} else if (node->data.literal.is_bool) {
-				print(string, "Literal Bool: %s\n", node->data.literal.bool_value ? "true" : "false");
-			} else if (node->data.literal.is_float) {
-				print(string, "Literal Float: %f\n", node->data.literal.float_value);
-			} else {
-				print(string, "Literal Int: %ld\n", node->data.literal.long_value);
-			}
-			break;
-		case AST_EXPR_IDENT: {
-			char prefix[64] = "";
-			if (*node->data.ident.namespace) {
-				sprintf(prefix, "%s::", node->data.ident.namespace);
-			}
-			print(string, "Ident: %s%s\n", prefix, node->data.ident.name);
-		} break;
-		case AST_RETURN:
-			print(string, "Return:\n");
-			ast_print(node->data.ret.return_expr, indent + 1, string);
-			break;
-		case AST_BINARY_EXPR:
-			switch (node->data.binary_op.op) {
-			case TOK_OR:
-				print(string, "Binary Expression: ||\n");
-				break;
-			case TOK_SELFOR:
-				print(string, "Binary Expression: |=\n");
-				break;
-			case TOK_AND:
-				print(string, "Binary Expression: &&\n");
-				break;
-			case TOK_SELFAND:
-				print(string, "Binary Expression: &=\n");
-				break;
-			case TOK_PLUS:
-				print(string, "Binary Expression: +\n");
-				break;
-			case TOK_MINUS:
-				print(string, "Binary Expression: -\n");
-				break;
-			case TOK_ASTERISK:
-				print(string, "Binary Expression: *\n");
-				break;
-			case TOK_SLASH:
-				print(string, "Binary Expression: /\n");
-				break;
-			case TOK_LESSTHAN:
-				print(string, "Binary Expression: <\n");
-				break;
-			case TOK_GREATERTHAN:
-				print(string, "Binary Expression: >\n");
-				break;
-			case TOK_EQUAL:
-				print(string, "Binary Expression: ==\n");
-				break;
-			case TOK_NOTEQUAL:
-				print(string, "Binary Expression: !=\n");
-				break;
-			case TOK_LTOE:
-				print(string, "Binary Expression: <=\n");
-				break;
-			case TOK_GTOE:
-				print(string, "Binary Expression: >=\n");
-				break;
-			case TOK_SELFADD:
-				print(string, "Binary Expression: +=\n");
-				break;
-			case TOK_SELFSUB:
-				print(string, "Binary Expression: -=\n");
-				break;
-			case TOK_SELFMUL:
-				print(string, "Binary Expression: *=\n");
-				break;
-			case TOK_SELFDIV:
-				print(string, "Binary Expression: /=\n");
-				break;
-			case TOK_BITWISE_XOR:
-				print(string, "Binary Expression: ^\n");
-				break;
-			case TOK_BITWISE_NEG:
-				print(string, "Binary Expression: ~\n");
-				break;
-			case TOK_BITWISE_OR:
-				print(string, "Binary Expression: |\n");
-				break;
-			case TOK_BITWISE_LSHIFT:
-				print(string, "Binary Expression: <<\n");
-				break;
-			case TOK_BITWISE_RSHIFT:
-				print(string, "Binary Expression: >>\n");
-				break;
-			case TOK_AMPERSAND:
-				print(string, "Binary Expression: &\n");
-				break;
-			case TOK_MODULO:
-				print(string, "Binary Expression: %\n");
-				break;
-			default:
-				break;
-			}
-			ast_print(node->data.binary_op.left, indent + 1, string);
-			ast_print(node->data.binary_op.right, indent + 1, string);
-			break;
-		case AST_UNARY_EXPR:
-			print(string, "Unary Expression: %c\n", node->data.unary_op.op);
-			ast_print(node->data.unary_op.operand, indent + 1, string);
-			break;
-		case AST_ARRAY_LITERAL:
-			print(string, "Array literal of size %d:\n", node->data.array_literal.count);
-			for (int i = 0; i < node->data.array_literal.count; ++i) {
-				ast_print(node->data.array_literal.elements[i], indent + 1, string);
-			}
-			break;
-		case AST_ARRAY_ACCESS:
-			print(string, "Array access:\n");
-			ast_print(node->data.array_access.base, indent + 1, string);
-			ast_print(node->data.array_access.index, indent + 1, string);
-			break;
-		case AST_ASSIGNMENT:
-			print(string, "Assignment:\n");
-			ast_print(node->data.assignment.lvalue, indent + 1, string);
-			ast_print(node->data.assignment.rvalue, indent + 1, string);
-			break;
-		case AST_FN_CALL:
-			print(string, "Function call with %d args:\n", node->data.func_call.arg_count);
-			ast_print(node->data.func_call.callee, indent + 1, string);
-			for (int i = 0; i < node->data.func_call.arg_count; ++i) {
-				ast_print(node->data.func_call.args[i], indent + 1, string);
-			}
-			break;
-		case AST_MEMBER_ACCESS:
-			print(string, "Member access: %s\n", node->data.member_access.member);
-			ast_print(node->data.member_access.base, indent + 1, string);
-			break;
-		case AST_STRUCT_LITERAL:
-			print(string, "StructLiteral with %d initializer(s):\n", node->data.struct_literal.count);
-			for (int i = 0; i < node->data.struct_literal.count; ++i) {
-				if (node->data.struct_literal.inits[i]->is_designated) {
-					for (int i = 0; i < indent + 1; ++i) {
-						print(string, "  ");
-					}
-					char prefix[128] = "";
-					sprintf(prefix, "Designated, field '%s':", node->data.struct_literal.inits[i]->field);
-					print(string, "%s\n", prefix);
-				}
-				ast_print(node->data.struct_literal.inits[i]->expr, indent + 1 + node->data.struct_literal.inits[i]->is_designated, string);
-			}
-			break;
-		case AST_ENUM_DECL: {
-			print(string, "EnumDecl with %d member(s) - %s%s : enum ", node->data.enum_decl.member_count, node->data.enum_decl.is_exported ? "exported " : "", node->data.enum_decl.name);
-			type_print(string, node->data.enum_decl.base_type);
-			print(string, ":\n");
-			for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
-				for (int i = 0; i < indent + 1; ++i) {
-					print(string, "  ");
-				}
-				char prefix[128] = "";
-				sprintf(prefix, "%s : %ld", node->data.enum_decl.members[i]->name, node->data.enum_decl.members[i]->value);
-				print(string, "%s\n", prefix);
-			}
-		} break;
-		case AST_ENUM_VALUE: {
-			print(string, "EnumValue: ");
-			type_print(string, node->data.enum_value.enum_type);
-			print(string, "::%s", node->data.enum_value.member);
-		} break;
-		case AST_EXTERN_BLOCK:
-			print(string, "ExternBlock from lib %s:\n", node->data.extern_block.lib_name);
-			for (int i = 0; i < node->data.extern_block.count; ++i) {
-				ast_print(node->data.extern_block.block[i], indent + 1, string);
-			}
-			break;
-		case AST_EXTERN_FUNC_DECL:
-			print(string, "Extern FuncDecl %s%s:\n", node->data.extern_func.is_exported ? "exported " : "", node->data.extern_func.name);
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Params:\n");
-			ast_print(node->data.extern_func.params, indent + 2, string);
-			break;
-		case AST_IF_STMT:
-			print(string, "IfElseStmt:\n");
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Condition:\n");
-			ast_print(node->data.if_stmt.condition, indent + 2, string);
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Then:\n");
-			ast_print(node->data.if_stmt.then_branch, indent + 2, string);
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Else:\n");
-			ast_print(node->data.if_stmt.else_branch, indent + 2, string);
-			break;
-
-		case AST_FOR_LOOP:
-			print(string, "ForLoop:\n");
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Init:\n");
-			ast_print(node->data.for_loop.init, indent + 2, string);
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Condition:\n");
-			ast_print(node->data.for_loop.condition, indent + 2, string);
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Post:\n");
-			ast_print(node->data.for_loop.post, indent + 2, string);
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Body:\n");
-			ast_print(node->data.for_loop.body, indent + 2, string);
-			break;
-		case AST_WHILE_LOOP:
-			print(string, "WhileLoop:\n");
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Condition:\n");
-			ast_print(node->data.while_loop.condition, indent + 2, string);
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Body:\n");
-			ast_print(node->data.while_loop.body, indent + 2, string);
-			break;
-		case AST_SWITCH_STMT:
-			print(string, "SwitchStmt:\n");
-			for (int i = 0; i < indent + 1; i++)
-				print(string, "  ");
-			print(string, "Subject:\n");
-			ast_print(node->data.switch_stmt.subject, indent + 2, string);
-			for (int c = 0; c < node->data.switch_stmt.case_count; ++c) {
-				for (int i = 0; i < indent + 1; i++)
-					print(string, "  ");
-				print(string, "Case:\n");
-				for (int v = 0; v < node->data.switch_stmt.cases[c].value_count; ++v) {
-					for (int i = 0; i < indent + 2; i++)
-						print(string, "  ");
-					print(string, "Value:\n");
-					ast_print(node->data.switch_stmt.cases[c].values[v], indent + 3, string);
-				}
-				for (int i = 0; i < indent + 2; i++)
-					print(string, "  ");
-				print(string, "Body:\n");
-				ast_print(node->data.switch_stmt.cases[c].body, indent + 3, string);
-			}
-			if (node->data.switch_stmt.else_body) {
-				for (int i = 0; i < indent + 1; i++)
-					print(string, "  ");
-				print(string, "Else:\n");
-				ast_print(node->data.switch_stmt.else_body, indent + 2, string);
-			}
-			break;
-		case AST_DEFER_BLOCK:
-			break;
-		case AST_DEFERRED_SEQUENCE:
-			for (int i = 0; i < node->data.block.count; ++i) {
-				ast_print(node->data.block.statements[i], indent, string);
-			}
-			break;
-		case AST_STRING_LIT:
-			print(string, "String Literal: \"%s\"\n", node->data.string_literal.text);
-			break;
-		case AST_CHAR_LIT:
-			print(string, "Char Literal: '%c'\n", node->data.char_literal.literal);
-			break;
-		case AST_CONTINUE:
-			print(string, "continue\n");
-			break;
-		case AST_BREAK:
-			print(string, "break\n");
-			break;
-		case AST_CAST: {
-			char type_str[128] = "";
-			type_print(type_str, node->data.cast.target_type);
-			print(string, "Explicit cast to %s:\n", type_str);
-			ast_print(node->data.cast.expr, indent + 1, string);
-		} break;
-		default: {
-			print(string, "Unknown AST Node\n");
-		} break;
+		case AST_VAR_DECL: ast_print_var_decl(node, indent, string); break;
+		case AST_STRUCT_DECL: ast_print_struct_decl(node, indent, string); break;
+		case AST_UNION_DECL: ast_print_union_decl(node, indent, string); break;
+		case AST_FN_DECL: ast_print_fn_decl(node, indent, string); break;
+		case AST_FIELD_DECL: ast_print_field_decl(node, string); break;
+		case AST_PARAM_DECL: ast_print_param_decl(node, string); break;
+		case AST_BLOCK: ast_print_block(node, indent, string); break;
+		case AST_EXPR_LITERAL: ast_print_literal(node, string); break;
+		case AST_EXPR_IDENT: ast_print_ident(node, string); break;
+		case AST_RETURN: ast_print_return(node, indent, string); break;
+		case AST_BINARY_EXPR: ast_print_binary(node, indent, string); break;
+		case AST_UNARY_EXPR: ast_print_unary(node, indent, string); break;
+		case AST_ARRAY_LITERAL: ast_print_array_literal(node, indent, string); break;
+		case AST_ARRAY_ACCESS: ast_print_array_access(node, indent, string); break;
+		case AST_ASSIGNMENT: ast_print_assignment(node, indent, string); break;
+		case AST_FN_CALL: ast_print_fn_call(node, indent, string); break;
+		case AST_MEMBER_ACCESS: ast_print_member_access(node, indent, string); break;
+		case AST_STRUCT_LITERAL: ast_print_struct_literal(node, indent, string); break;
+		case AST_ENUM_DECL: ast_print_enum_decl(node, indent, string); break;
+		case AST_ENUM_VALUE: ast_print_enum_value(node, string); break;
+		case AST_EXTERN_BLOCK: ast_print_extern_block(node, indent, string); break;
+		case AST_EXTERN_FUNC_DECL: ast_print_extern_func(node, indent, string); break;
+		case AST_IF_STMT: ast_print_if(node, indent, string); break;
+		case AST_FOR_LOOP: ast_print_for(node, indent, string); break;
+		case AST_WHILE_LOOP: ast_print_while(node, indent, string); break;
+		case AST_SWITCH_STMT: ast_print_switch(node, indent, string); break;
+		case AST_DEFER_BLOCK: break;
+		case AST_DEFERRED_SEQUENCE: ast_print_deferred_seq(node, indent, string); break;
+		case AST_STRING_LIT: print(string, "String Literal: \"%s\"\n", node->data.string_literal.text); break;
+		case AST_CHAR_LIT: print(string, "Char Literal: '%c'\n", node->data.char_literal.literal); break;
+		case AST_CONTINUE: print(string, "continue\n"); break;
+		case AST_BREAK: print(string, "break\n"); break;
+		case AST_CAST: ast_print_cast(node, indent, string); break;
+		default: print(string, "Unknown AST Node\n"); break;
 		}
 		node = node->next;
 	}
