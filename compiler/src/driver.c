@@ -197,7 +197,7 @@ void compile_options_print(CompileOptions *opt) {
 	printf("show_timings: %d\n", opt->show_timings);
 	printf("gen_debug: %d\n", opt->gen_debug);
 	printf("display_help: %d\n", opt->display_help);
-	printf("ast_dump: %d\n", opt->display_help);
+	printf("ast_dump: %d\n", opt->ast_dump);
 	printf("res_dump: %d\n", opt->res_dump);
 	printf("cfg_dump: %d\n", opt->cfg_dump);
 	printf("llvm_dump: %d\n", opt->llvm_dump);
