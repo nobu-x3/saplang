@@ -4,10 +4,11 @@
 #include "symbol_table.h"
 #include "types.h"
 #include "util.h"
+#include <stdbool.h>
 
 typedef struct {
 	char field[64]; // if designated, holds field name, otherwise empty
-	int is_designated;
+	bool is_designated;
 	struct ASTNode *expr;
 } FieldInitializer;
 
@@ -67,29 +68,29 @@ typedef struct ASTNode {
 			Type *type;
 			char name[64];
 			char resolved_name[512];
-			int is_const;
-			int is_exported;
+			bool is_const;
+			bool is_exported;
 			struct ASTNode *init; // Expression node
 		} var_decl;
 		// Struct declaration: struct Name { fields }
 		struct {
 			char name[64];
 			char resolved_name[512];
-			int is_exported;
+			bool is_exported;
 			int field_count;
 			struct ASTNode **fields; // Linked list of field declarations
 		} struct_decl;
 		struct {
 			char name[64];
 			char resolved_name[512];
-			int is_exported;
+			bool is_exported;
 			struct ASTNode *fields; // Linked list of field declarations
 		} union_decl;
 		// Function declaration: func name(params) { body }
 		struct {
 			char name[64];
 			char resolved_name[512];
-			int is_exported;
+			bool is_exported;
 			struct ASTNode *params; // Linked list of parameter declarations
 			struct ASTNode *body;	// Block node
 		} func_decl;
@@ -100,8 +101,8 @@ typedef struct ASTNode {
 		} field_decl;
 		// Parameter declaration: <type> name
 		struct {
-			int is_const;
-			int is_va;
+			bool is_const;
+			bool is_va;
 			Type *type;
 			char name[128];
 			char resolved_name[512];
@@ -115,10 +116,10 @@ typedef struct ASTNode {
 		struct {
 			long long_value;
 			double float_value;
-			int is_float;	// 1 if float literal
+			bool is_float;	// true if float literal
 			int bool_value; // 1 for true, 0 for false
-			int is_bool;	// 1 if bool literal
-			int is_null;	// 1 if `null` literal (pointer, fits any pointer type)
+			bool is_bool;	// true if bool literal
+			bool is_null;	// true if `null` literal (pointer, fits any pointer type)
 		} literal;
 		// Identifier expression.
 		struct {
@@ -171,7 +172,7 @@ typedef struct ASTNode {
 			char resolved_name[512];
 			Type *base_type;
 			EnumMember **members; // Dynamic array of members
-			int is_exported;
+			bool is_exported;
 			int member_count;
 		} enum_decl;
 		struct {
@@ -187,7 +188,7 @@ typedef struct ASTNode {
 		struct {
 			char name[64];
 			char resolved_name[512];
-			int is_exported;
+			bool is_exported;
 			struct ASTNode *params; // Linked list of parameter declarations
 		} extern_func;
 		struct {
@@ -249,7 +250,7 @@ typedef struct {
 	Symbol *exported_table; // not owned
 	ImportList imports;
 	ASTNode *ast;
-	int has_errors;
+	bool has_errors;
 	// Backing storage for every AST node and AST-tied dynamic array
 	// produced by the parser. Dropped by module_deinit.
 	Arena ast_arena;
