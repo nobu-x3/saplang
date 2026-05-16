@@ -10,11 +10,29 @@ typedef struct {
 
 typedef enum { TYPE_PRIMITIVE, TYPE_POINTER, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_UNION, TYPE_UNDECIDED } TypeKind;
 
+// PRIM_NONE for non-primitive Types
+typedef enum {
+	PRIM_NONE = 0,
+	PRIM_I8,
+	PRIM_I16,
+	PRIM_I32,
+	PRIM_I64,
+	PRIM_U8,
+	PRIM_U16,
+	PRIM_U32,
+	PRIM_U64,
+	PRIM_F32,
+	PRIM_F64,
+	PRIM_BOOL,
+	PRIM_VOID,
+} PrimitiveKind;
+
 typedef struct Type {
 	TypeKind type_kind;
+	PrimitiveKind prim;
 	char type_name[64];
 	char type_namespace[64];
-    char type_resolved_name[128];
+	char type_resolved_name[128];
 	union {
 		// For pointer types
 		struct Type *pointee;
@@ -48,6 +66,7 @@ Type *copy_type(Type *type);
 void type_deinit(Type *type);
 Type *new_primitive_type(const char *name);
 Type get_primitive_type(const char *name);
+PrimitiveKind primitive_kind_from_name(const char *name);
 Type *new_pointer_type(Type *pointee);
 Type *new_array_type(Type *element_type, int size);
 Type *new_function_type(Type *return_type, Type **param_types, int param_count);

@@ -67,42 +67,30 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 	assert(type);
 	switch (type->type_kind) {
 	case TYPE_PRIMITIVE:
-		if (strcmp(type->type_name, "i8") == 0) {
+		switch (type->prim) {
+		case PRIM_I8:
+		case PRIM_U8:
 			return LLVMInt8TypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "i16") == 0) {
+		case PRIM_I16:
+		case PRIM_U16:
 			return LLVMInt16TypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "i32") == 0) {
+		case PRIM_I32:
+		case PRIM_U32:
 			return LLVMInt32TypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "i64") == 0) {
+		case PRIM_I64:
+		case PRIM_U64:
 			return LLVMInt64TypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "u8") == 0) {
-			return LLVMInt8TypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "u16") == 0) {
-			return LLVMInt16TypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "u32") == 0) {
-			return LLVMInt32TypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "u64") == 0) {
-			return LLVMInt64TypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "bool") == 0) {
+		case PRIM_BOOL:
 			return LLVMInt1TypeInContext(cg->llvm_context);
-		}
 		// TODO: add f16
-		if (strcmp(type->type_name, "f32") == 0) {
+		case PRIM_F32:
 			return LLVMFloatTypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "f64") == 0) {
+		case PRIM_F64:
 			return LLVMDoubleTypeInContext(cg->llvm_context);
-		}
-		if (strcmp(type->type_name, "void") == 0) {
+		case PRIM_VOID:
 			return LLVMVoidTypeInContext(cg->llvm_context);
+		case PRIM_NONE:
+			break;
 		}
 		break;
 
@@ -511,7 +499,7 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	codegen_ast(cg, node->data.func_decl.body, table, ctx);
 	if (hashmap_size(values_map))
 		hashmap_destroy(values_map, free_str, NULL);
-	if (ret_type->type_kind == TYPE_PRIMITIVE && strcmp(ret_type->type_name, "void") == 0) {
+	if (ret_type->type_kind == TYPE_PRIMITIVE && ret_type->prim == PRIM_VOID) {
 		LLVMBuildRetVoid(cg->builder);
 	}
 	return fn;
@@ -825,7 +813,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			}
 			args[i] = codegen_ast(cg, param, table, param_ctx);
 		}
-		int is_void = fn_sym->type->function.return_type->type_kind == TYPE_PRIMITIVE && strcmp(fn_sym->type->function.return_type->type_name, "void") == 0;
+		int is_void = fn_sym->type->function.return_type->type_kind == TYPE_PRIMITIVE && fn_sym->type->function.return_type->prim == PRIM_VOID;
 		return LLVMBuildCall2(cg->builder, fn_type, callee, args, node->data.func_call.arg_count, is_void ? "" : "calltmp");
 	} break;
 

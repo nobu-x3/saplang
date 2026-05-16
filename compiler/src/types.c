@@ -13,6 +13,68 @@ void type_arena_set(Arena *arena) { current_type_arena = arena; }
 
 Arena *type_arena_get(void) { return current_type_arena; }
 
+PrimitiveKind primitive_kind_from_name(const char *name) {
+	if (!name)
+		return PRIM_NONE;
+	if (strcmp(name, "i8") == 0)
+		return PRIM_I8;
+	if (strcmp(name, "i16") == 0)
+		return PRIM_I16;
+	if (strcmp(name, "i32") == 0)
+		return PRIM_I32;
+	if (strcmp(name, "i64") == 0)
+		return PRIM_I64;
+	if (strcmp(name, "u8") == 0)
+		return PRIM_U8;
+	if (strcmp(name, "u16") == 0)
+		return PRIM_U16;
+	if (strcmp(name, "u32") == 0)
+		return PRIM_U32;
+	if (strcmp(name, "u64") == 0)
+		return PRIM_U64;
+	if (strcmp(name, "f32") == 0)
+		return PRIM_F32;
+	if (strcmp(name, "f64") == 0)
+		return PRIM_F64;
+	if (strcmp(name, "bool") == 0)
+		return PRIM_BOOL;
+	if (strcmp(name, "void") == 0)
+		return PRIM_VOID;
+	return PRIM_NONE;
+}
+
+static int prim_size_align(PrimitiveKind k, size_t *size, size_t *align) {
+	switch (k) {
+	case PRIM_I8:
+	case PRIM_U8:
+	case PRIM_BOOL:
+		*size = 1;
+		*align = 1;
+		return 1;
+	case PRIM_I16:
+	case PRIM_U16:
+		*size = 2;
+		*align = 2;
+		return 1;
+	case PRIM_I32:
+	case PRIM_U32:
+	case PRIM_F32:
+		*size = 4;
+		*align = 4;
+		return 1;
+	case PRIM_I64:
+	case PRIM_U64:
+	case PRIM_F64:
+		*size = 8;
+		*align = 8;
+		return 1;
+	case PRIM_VOID:
+	case PRIM_NONE:
+		return 0;
+	}
+	return 0;
+}
+
 TypeInfo compute_struct_size_and_alignment(ASTNode *node);
 
 TypeInfo get_type_info(Type *type, ASTNode *node) {
@@ -21,44 +83,9 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 		return info;
 
 	switch (type->type_kind) {
-	case TYPE_PRIMITIVE: {
-		char *type_name = type->type_name;
-		if (strcmp(type_name, "i8") == 0) {
-			info.size = 1;
-			info.align = 1;
-		} else if (strcmp(type_name, "u8") == 0) {
-			info.size = 1;
-			info.align = 1;
-		} else if (strcmp(type_name, "i16") == 0) {
-			info.size = 2;
-			info.align = 2;
-		} else if (strcmp(type_name, "u16") == 0) {
-			info.size = 2;
-			info.align = 2;
-		} else if (strcmp(type_name, "i32") == 0) {
-			info.size = 4;
-			info.align = 4;
-		} else if (strcmp(type_name, "u32") == 0) {
-			info.size = 4;
-			info.align = 4;
-		} else if (strcmp(type_name, "i64") == 0) {
-			info.size = 8;
-			info.align = 8;
-		} else if (strcmp(type_name, "u64") == 0) {
-			info.size = 8;
-			info.align = 8;
-		} else if (strcmp(type_name, "f32") == 0) {
-			info.size = 4;
-			info.align = 4;
-		} else if (strcmp(type_name, "f64") == 0) {
-			info.size = 8;
-			info.align = 8;
-		} else if (strcmp(type_name, "bool") == 0) {
-			info.size = 1;
-			info.align = 1;
-		}
+	case TYPE_PRIMITIVE:
+		prim_size_align(type->prim, &info.size, &info.align);
 		return info;
-	};
 	case TYPE_POINTER:
 		info.size = sizeof(void *);
 		info.align = sizeof(void *);
@@ -73,37 +100,11 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 		return info;
 	case TYPE_STRUCT:
 		return compute_struct_size_and_alignment(node);
-	case TYPE_ENUM: {
+	case TYPE_ENUM:
 		if (node && node->type == AST_ENUM_DECL && node->data.enum_decl.base_type) {
 			return get_type_info(node->data.enum_decl.base_type, node);
 		}
-		char *type_name = type->type_name;
-		if (strcmp(type_name, "i8") == 0) {
-			info.size = 1;
-			info.align = 1;
-		} else if (strcmp(type_name, "u8") == 0) {
-			info.size = 1;
-			info.align = 1;
-		} else if (strcmp(type_name, "i16") == 0) {
-			info.size = 2;
-			info.align = 2;
-		} else if (strcmp(type_name, "u16") == 0) {
-			info.size = 2;
-			info.align = 2;
-		} else if (strcmp(type_name, "i32") == 0) {
-			info.size = 4;
-			info.align = 4;
-		} else if (strcmp(type_name, "u32") == 0) {
-			info.size = 4;
-			info.align = 4;
-		} else if (strcmp(type_name, "i64") == 0) {
-			info.size = 8;
-			info.align = 8;
-		} else if (strcmp(type_name, "u64") == 0) {
-			info.size = 8;
-			info.align = 8;
-		}
-	} break;
+		return info;
 
 	case TYPE_UNION: {
 		info.size = 0;
@@ -167,6 +168,7 @@ Type *copy_type(Type *type) {
 		return NULL;
 
 	t->type_kind = type->type_kind;
+	t->prim = type->prim;
 
 	strncpy(t->type_name, type->type_name, sizeof(t->type_name));
 	strncpy(t->type_namespace, type->type_namespace, sizeof(t->type_namespace));
@@ -218,12 +220,13 @@ Type *new_primitive_type(const char *name) {
 		return NULL;
 	memset(t, 0, sizeof(Type));
 	t->type_kind = TYPE_PRIMITIVE;
+	t->prim = primitive_kind_from_name(name);
 	strncpy(t->type_name, name, sizeof(t->type_name));
 	return t;
 }
 
 Type get_primitive_type(const char *name) {
-	Type t = {TYPE_PRIMITIVE};
+	Type t = {.type_kind = TYPE_PRIMITIVE, .prim = primitive_kind_from_name(name)};
 
 	strncpy(t.type_name, name, sizeof(t.type_name));
 	memset(t.type_namespace, 0, sizeof(t.type_namespace));
@@ -391,49 +394,21 @@ int type_get_string_len(Type *type, int initial) {
 
 int is_builtin(const Type *type) {
 	switch (type->type_kind) {
-	case TYPE_PRIMITIVE: {
-		int is_builtin = 0;
-		const char *type_name = type->type_name;
-		if (strcmp(type_name, "i8") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "u8") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "i16") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "u16") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "i32") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "u32") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "i64") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "u64") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "f32") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "f64") == 0) {
-			is_builtin = 1;
-		} else if (strcmp(type_name, "bool") == 0) {
-			is_builtin = 1;
-		}
-		return is_builtin;
-	} break;
+	case TYPE_PRIMITIVE:
+		return type->prim != PRIM_NONE;
 	case TYPE_POINTER:
 		return is_builtin(type->pointee);
-		break;
 	case TYPE_ARRAY:
 		return is_builtin(type->array.element_type);
-		break;
 	case TYPE_FUNCTION:
 		return 1;
 	case TYPE_STRUCT:
-		return 0;
+	case TYPE_UNION:
 	case TYPE_ENUM:
-		return 0;
 	case TYPE_UNDECIDED:
 		return 0;
 	}
+	return 0;
 }
 
 int type_mangle_append(Type *type, char *name, size_t cap) {
@@ -499,79 +474,99 @@ int find_union_field_index(struct ASTNode *fields, const char *field_name) {
 }
 
 Type *get_primitive_bool() {
-	static Type primitive_bool_type = {TYPE_PRIMITIVE, "bool", ""};
+	static Type primitive_bool_type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_BOOL, .type_name = "bool"};
 	return &primitive_bool_type;
 }
 
 Type *get_primitive_i32() {
-	static Type primitive_i32_type = {TYPE_PRIMITIVE, "i32", ""};
+	static Type primitive_i32_type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_I32, .type_name = "i32"};
 	return &primitive_i32_type;
 }
 
 Type *get_primitive_f32() {
-	static Type primitive_f32_type = {TYPE_PRIMITIVE, "f32", ""};
+	static Type primitive_f32_type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_F32, .type_name = "f32"};
 	return &primitive_f32_type;
 }
 
 Type *get_primitive_u8() {
-	static Type primitive_u8_type = {TYPE_PRIMITIVE, "u8", ""};
+	static Type primitive_u8_type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_U8, .type_name = "u8"};
 	return &primitive_u8_type;
 }
 
 Type *get_string_type() {
-	static Type primitive_u8_type = {TYPE_PRIMITIVE, "u8", ""};
-	static Type string_literal_type = {TYPE_POINTER, "", "", .pointee = &primitive_u8_type};
+	static Type primitive_u8_type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_U8, .type_name = "u8"};
+	static Type string_literal_type = {.type_kind = TYPE_POINTER, .pointee = &primitive_u8_type};
 	return &string_literal_type;
 }
 
 Type *get_null_type() {
-	static Type primitive_void_type = {TYPE_PRIMITIVE, "void", ""};
-	static Type null_type = {TYPE_POINTER, "", "", .pointee = &primitive_void_type};
+	static Type primitive_void_type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_VOID, .type_name = "void"};
+	static Type null_type = {.type_kind = TYPE_POINTER, .pointee = &primitive_void_type};
 	return &null_type;
 }
 
 int is_int(const Type *type) {
-	return type->type_kind == TYPE_PRIMITIVE &&
-		   (strcmp(type->type_name, "i8") == 0 || strcmp(type->type_name, "i16") == 0 || strcmp(type->type_name, "i32") == 0 || strcmp(type->type_name, "i64") == 0 || strcmp(type->type_name, "u8") == 0 ||
-			strcmp(type->type_name, "u16") == 0 || strcmp(type->type_name, "u32") == 0 || strcmp(type->type_name, "u64") == 0 || strcmp(type->type_name, "bool") == 0);
+	if (!type || type->type_kind != TYPE_PRIMITIVE)
+		return 0;
+	switch (type->prim) {
+	case PRIM_I8:
+	case PRIM_I16:
+	case PRIM_I32:
+	case PRIM_I64:
+	case PRIM_U8:
+	case PRIM_U16:
+	case PRIM_U32:
+	case PRIM_U64:
+	case PRIM_BOOL:
+		return 1;
+	default:
+		return 0;
+	}
 }
 
-int is_float(const Type *type) { return type->type_kind == TYPE_PRIMITIVE && (strcmp(type->type_name, "f32") == 0 || strcmp(type->type_name, "f64") == 0); }
+int is_float(const Type *type) { return type && type->type_kind == TYPE_PRIMITIVE && (type->prim == PRIM_F32 || type->prim == PRIM_F64); }
 
-static int is_bool_type(const Type *t) { return t && t->type_kind == TYPE_PRIMITIVE && strcmp(t->type_name, "bool") == 0; }
+static int is_bool_type(const Type *t) { return t && t->type_kind == TYPE_PRIMITIVE && t->prim == PRIM_BOOL; }
 
 static int is_signed_int_type(const Type *t) {
 	if (!t || t->type_kind != TYPE_PRIMITIVE)
 		return 0;
-	return strcmp(t->type_name, "i8") == 0 || strcmp(t->type_name, "i16") == 0 || strcmp(t->type_name, "i32") == 0 || strcmp(t->type_name, "i64") == 0;
+	return t->prim == PRIM_I8 || t->prim == PRIM_I16 || t->prim == PRIM_I32 || t->prim == PRIM_I64;
 }
 
 static int is_unsigned_int_type(const Type *t) {
 	if (!t || t->type_kind != TYPE_PRIMITIVE)
 		return 0;
-	return strcmp(t->type_name, "u8") == 0 || strcmp(t->type_name, "u16") == 0 || strcmp(t->type_name, "u32") == 0 || strcmp(t->type_name, "u64") == 0;
+	return t->prim == PRIM_U8 || t->prim == PRIM_U16 || t->prim == PRIM_U32 || t->prim == PRIM_U64;
 }
 
 static int int_bit_width(const Type *t) {
 	if (!t || t->type_kind != TYPE_PRIMITIVE)
 		return 0;
-	if (strcmp(t->type_name, "i8") == 0 || strcmp(t->type_name, "u8") == 0)
+	switch (t->prim) {
+	case PRIM_I8:
+	case PRIM_U8:
 		return 8;
-	if (strcmp(t->type_name, "i16") == 0 || strcmp(t->type_name, "u16") == 0)
+	case PRIM_I16:
+	case PRIM_U16:
 		return 16;
-	if (strcmp(t->type_name, "i32") == 0 || strcmp(t->type_name, "u32") == 0)
+	case PRIM_I32:
+	case PRIM_U32:
 		return 32;
-	if (strcmp(t->type_name, "i64") == 0 || strcmp(t->type_name, "u64") == 0)
+	case PRIM_I64:
+	case PRIM_U64:
 		return 64;
-	return 0;
+	default:
+		return 0;
+	}
 }
 
 static int float_bit_width(const Type *t) {
 	if (!t || t->type_kind != TYPE_PRIMITIVE)
 		return 0;
-	if (strcmp(t->type_name, "f32") == 0)
+	if (t->prim == PRIM_F32)
 		return 32;
-	if (strcmp(t->type_name, "f64") == 0)
+	if (t->prim == PRIM_F64)
 		return 64;
 	return 0;
 }

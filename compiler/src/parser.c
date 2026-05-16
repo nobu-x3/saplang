@@ -2678,7 +2678,7 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	--parser->current_scope;
 	if (!is_error && body) {
 		ASTNode *decl_node = new_func_decl_node(func_name, resolved_name, params, body, loc);
-		Type function_type = {TYPE_FUNCTION, "", ""};
+		Type function_type = {.type_kind = TYPE_FUNCTION};
 		function_type.function.return_type = ret_type;
 		function_type.function.param_count = 0;
 		struct {
@@ -2733,7 +2733,7 @@ ASTNode *parse_extern_func_decl(Parser *parser, int is_exported) {
 	}
 	parser->current_token = next_token(&parser->scanner); // consume ')'
 	ASTNode *decl_node = new_extern_func_decl_node(func_name, func_name, params, loc);
-	Type function_type = {TYPE_FUNCTION, "", ""};
+	Type function_type = {.type_kind = TYPE_FUNCTION};
 	function_type.function.return_type = ret_type;
 	function_type.function.param_count = 0;
 	struct {

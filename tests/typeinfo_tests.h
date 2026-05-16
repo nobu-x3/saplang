@@ -24,7 +24,7 @@
 
 void test_Primitivei32_typeinfo(void) {
     ASTNode dummynody;
-	Type type = {.type_kind = TYPE_PRIMITIVE, .type_name = "i32"};
+	Type type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_I32, .type_name = "i32"};
 	TypeInfo info = get_type_info(&type, &dummynody);
 	TEST_ASSERT_EQUAL_UINT32(4, info.size);
 	TEST_ASSERT_EQUAL_UINT32(4, info.align);
@@ -32,7 +32,7 @@ void test_Primitivei32_typeinfo(void) {
 
 void test_Primitivei64_typeinfo(void) {
     ASTNode dummynody;
-	Type type = {.type_kind = TYPE_PRIMITIVE, .type_name = "i64"};
+	Type type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_I64, .type_name = "i64"};
 	TypeInfo info = get_type_info(&type, &dummynody);
 	TEST_ASSERT_EQUAL_UINT32(8, info.size);
 	TEST_ASSERT_EQUAL_UINT32(8, info.align);
@@ -48,7 +48,7 @@ void test_Pointer_typeinfo(void) {
 
 void test_ArrayType_typeinfo(void) {
     ASTNode dummynody;
-	Type elem = {.type_kind = TYPE_PRIMITIVE, .type_name = "u8"};
+	Type elem = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_U8, .type_name = "u8"};
 	Type type = {.type_kind = TYPE_ARRAY, .array = {.element_type = &elem, .size = 10}};
 	TypeInfo info = get_type_info(&type, &dummynody);
 	TEST_ASSERT_EQUAL_UINT32(10, info.size);

@@ -200,8 +200,8 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 		break;
 
 	case '~': // ~x
-		// only integer types allowed
-		if (op_ty->type_kind != TYPE_PRIMITIVE || strcmp(op_ty->type_name, "i8") && strcmp(op_ty->type_name, "i16") && strcmp(op_ty->type_name, "i32") && strcmp(op_ty->type_name, "i64")) {
+		// only signed integer types allowed
+		if (op_ty->type_kind != TYPE_PRIMITIVE || (op_ty->prim != PRIM_I8 && op_ty->prim != PRIM_I16 && op_ty->prim != PRIM_I32 && op_ty->prim != PRIM_I64)) {
 			report(node->location, "unary '~' requires integer operand", 0);
 			return RESULT_FAILURE;
 		}
@@ -309,7 +309,7 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 		} else if (expr->type == AST_STRUCT_LITERAL) {
 			init_result = analyze_struct_literal(table, field_type, expr, scope_level, scope_specifier);
 		} else if (expr->type == AST_CHAR_LIT) {
-			if (field_type->type_kind != TYPE_PRIMITIVE || (strcmp(field_type->type_name, "u8") != 0 && strcmp(field_type->type_name, "i8") != 0)) {
+			if (field_type->type_kind != TYPE_PRIMITIVE || (field_type->prim != PRIM_U8 && field_type->prim != PRIM_I8)) {
 				char type_str[128] = "";
 				type_print(type_str, field_type);
 				char msg[256] = "";
@@ -358,10 +358,10 @@ int literal_fits_type(ASTNode *node, Type *target) {
 	if (target->type_kind != TYPE_PRIMITIVE)
 		return 0;
 	if (node->data.literal.is_bool)
-		return strcmp(target->type_name, "bool") == 0;
+		return target->prim == PRIM_BOOL;
 	if (node->data.literal.is_float)
 		return is_float(target);
-	return is_int(target) && strcmp(target->type_name, "bool") != 0;
+	return is_int(target) && target->prim != PRIM_BOOL;
 }
 
 CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level, const char *scope_specifier) {
@@ -445,7 +445,7 @@ CompilerResult analyze_switch_stmt(Symbol *table, ASTNode *node, int scope_level
 	if (subject_type->type_kind == TYPE_UNDECIDED)
 		resolve_type(table, subject_type, node->data.switch_stmt.subject->location);
 	int subject_is_enum = subject_type->type_kind == TYPE_ENUM;
-	int subject_is_int = is_int(subject_type) && strcmp(subject_type->type_name, "bool") != 0;
+	int subject_is_int = is_int(subject_type) && subject_type->prim != PRIM_BOOL;
 	if (!subject_is_enum && !subject_is_int) {
 		char type_msg[128] = "";
 		type_print(type_msg, subject_type);
@@ -562,9 +562,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				Type *type = node->data.var_decl.type;
 				if (type->type_kind != TYPE_PRIMITIVE)
 					return RESULT_FAILURE;
-				int is_u8 = strcmp(type->type_name, "u8") == 0;
-				int is_i8 = strcmp(type->type_name, "i8") == 0;
-				if (!is_u8 && !is_i8)
+				if (type->prim != PRIM_U8 && type->prim != PRIM_I8)
 					return RESULT_FAILURE;
 				result = RESULT_SUCCESS;
 			} else if (node->data.var_decl.init->type == AST_ARRAY_LITERAL) {
@@ -602,7 +600,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			} else if (node->data.var_decl.init->type == AST_STRING_LIT) {
 				Type *lhs_type = node->data.var_decl.type;
 				if (lhs_type->type_kind == TYPE_ARRAY) {
-					if (lhs_type->array.element_type->type_kind != TYPE_PRIMITIVE || (strcmp(lhs_type->array.element_type->type_name, "i8") != 0 && strcmp(lhs_type->array.element_type->type_name, "u8") != 0)) {
+					Type *elem = lhs_type->array.element_type;
+					if (elem->type_kind != TYPE_PRIMITIVE || (elem->prim != PRIM_I8 && elem->prim != PRIM_U8)) {
 						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
 						report(node->location, msg, 0);
 						return RESULT_FAILURE;
@@ -615,7 +614,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						return RESULT_FAILURE;
 					}
 				} else if (lhs_type->type_kind == TYPE_POINTER) {
-					if (lhs_type->pointee->type_kind != TYPE_PRIMITIVE || (strcmp(lhs_type->pointee->type_name, "i8") != 0 && strcmp(lhs_type->pointee->type_name, "u8") != 0)) {
+					Type *pointee = lhs_type->pointee;
+					if (pointee->type_kind != TYPE_PRIMITIVE || (pointee->prim != PRIM_I8 && pointee->prim != PRIM_U8)) {
 						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
 						report(node->location, msg, 0);
 						return RESULT_FAILURE;
@@ -852,9 +852,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		} else if (node->data.assignment.rvalue->type == AST_CHAR_LIT) {
 			if (ltype->type_kind != TYPE_PRIMITIVE)
 				return RESULT_FAILURE;
-			int is_u8 = strcmp(ltype->type_name, "u8") == 0;
-			int is_i8 = strcmp(ltype->type_name, "i8") == 0;
-			if (!is_u8 && !is_i8)
+			if (ltype->prim != PRIM_U8 && ltype->prim != PRIM_I8)
 				return RESULT_FAILURE;
 			result = RESULT_SUCCESS;
 		} else if (node->data.assignment.rvalue->type == AST_ARRAY_LITERAL) {
@@ -883,7 +881,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			}
 		} else if (node->data.assignment.lvalue->type == AST_STRING_LIT) {
 			if (ltype->type_kind == TYPE_ARRAY) {
-				if (ltype->array.element_type->type_kind != TYPE_PRIMITIVE || (strcmp(ltype->array.element_type->type_name, "i8") != 0 && strcmp(ltype->array.element_type->type_name, "u8") != 0)) {
+				Type *elem = ltype->array.element_type;
+				if (elem->type_kind != TYPE_PRIMITIVE || (elem->prim != PRIM_I8 && elem->prim != PRIM_U8)) {
 					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
@@ -896,7 +895,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					return RESULT_FAILURE;
 				}
 			} else if (ltype->type_kind == TYPE_ARRAY) {
-				if (ltype->pointee->type_kind != TYPE_PRIMITIVE || (strcmp(ltype->pointee->type_name, "i8") != 0 && strcmp(ltype->pointee->type_name, "u8") != 0)) {
+				Type *pointee = ltype->pointee;
+				if (pointee->type_kind != TYPE_PRIMITIVE || (pointee->prim != PRIM_I8 && pointee->prim != PRIM_U8)) {
 					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
@@ -1101,7 +1101,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 
 			if (node->data.func_decl.body->data.block.count) {
 				ASTNode *last_stmt = node->data.func_decl.body->data.block.statements[node->data.func_decl.body->data.block.count - 1];
-				if ((fn_type->function.return_type->type_kind != TYPE_PRIMITIVE || strcmp(fn_type->function.return_type->type_name, "void") != 0) && (!last_stmt || last_stmt->type != AST_RETURN)) {
+				if ((fn_type->function.return_type->type_kind != TYPE_PRIMITIVE || fn_type->function.return_type->prim != PRIM_VOID) && (!last_stmt || last_stmt->type != AST_RETURN)) {
 					char msg[256] = "";
 					sprintf(msg, "the last statement in a non-void function must be a return statement.");
 					report(last_stmt->location, msg, 0);
