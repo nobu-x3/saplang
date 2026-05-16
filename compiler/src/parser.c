@@ -1628,22 +1628,6 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 		//
 
 		return parse_qualified_identifier(parser, scope_prefix);
-		/* char ident_name[64]; */
-		/* strncpy(ident_name, parser->current_token.text, sizeof(ident_name)); */
-		/* parser->current_token = next_token(&parser->scanner); // consume identifier */
-		/* if (parser->current_token.type == TOK_COLONCOLON) { */
-		/* 	parser->current_token = next_token(&parser->scanner); // consume '::' */
-		/* 	if (parser->current_token.type != TOK_IDENTIFIER) { */
-		/* 		char msg[128]; */
-		/* 		sprintf(msg, "expected identifier after '::', got '%s'.", parser->current_token.text); */
-		/* 		return report(parser->current_token.location, msg, 0); */
-		/* 	} */
-		/* 	char member_name[64]; */
-		/* 	strncpy(member_name, parser->current_token.text, sizeof(member_name)); */
-		/* 	parser->current_token = next_token(&parser->scanner); // consume identifier */
-		/* 	return new_enum_value_node(ident_name, member_name); */
-		/* } */
-		/* return new_ident_node(ident_name); */
 	} else if (parser->current_token.type == TOK_LPAREN) {
 		parser->current_token = next_token(&parser->scanner);
 		if (is_type_spec(parser)) {

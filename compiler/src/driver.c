@@ -89,18 +89,7 @@ CompilerResult compile_options_get(int argc, const char **argv, CompileOptions *
 			return RESULT_SUCCESS;
 		} else if (strcmp(arg, "-o") == 0) {
 			options->output_file_path = idx + 1 >= argc ? "" : strdup(argv[++idx]);
-		}
-		/* else if (arg == "-config") { */
-		/*   std::string config = idx + 1 >= argc ? "" : argv[++idx]; */
-		/*   if (config == "Debug") */
-		/*     optimization_config = OptimizationConfig::Debug; */
-		/*   else if (config == "Release") */
-		/*     optimization_config = OptimizationConfig::Release; */
-		/*   else if (config == "ReleaseWithDebugInfo") */
-		/*     optimization_config = OptimizationConfig::ReleaseWithDebugInfo; */
-		/*   else */
-		/*     error("unexpected argument '" + std::string{arg} + ".'\n"); */
-		else if (strcmp(arg, "-string") == 0) {
+		} else if (strcmp(arg, "-string") == 0) {
 			if (options->input_file_path) {
 				fprintf(stderr, "input file is already set, cannot additionally set an input string.\n");
 				compile_options_deinit(options);
