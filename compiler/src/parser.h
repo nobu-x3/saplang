@@ -283,5 +283,4 @@ Module *parse_input(Parser *parser);
 
 CompilerResult ast_print(ASTNode *node, int indent, char *string);
 
-
 ASTNode *copy_ast_node(ASTNode *node);
