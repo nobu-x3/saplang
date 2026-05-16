@@ -241,9 +241,7 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 	}
 	if (node->data.unary_op.op == '&') {
 		Type *expr_type_cpy = copy_type(op_ty);
-		node->data.unary_op.result_type = calloc(1, sizeof(Type));
-		node->data.unary_op.result_type->type_kind = TYPE_POINTER;
-		node->data.unary_op.result_type->pointee = expr_type_cpy;
+		node->data.unary_op.result_type = new_pointer_type(expr_type_cpy);
 	} else if (node->data.unary_op.op == '*') {
 		if (op_ty->type_kind != TYPE_POINTER) {
 			char type_str[128] = "";
