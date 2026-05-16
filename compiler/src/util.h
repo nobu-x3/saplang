@@ -143,13 +143,15 @@ typedef struct {
 char *flatten_stringlist(const StringList *list);
 
 #define print(string, format, ...)                                                                                                                                                                                                             \
-	if (string) {                                                                                                                                                                                                                              \
-		char formatted[256] = "";                                                                                                                                                                                                              \
-		sprintf(formatted, format, ##__VA_ARGS__);                                                                                                                                                                                             \
-		strcat(string, formatted);                                                                                                                                                                                                             \
-	} else {                                                                                                                                                                                                                                   \
-		printf(format, ##__VA_ARGS__);                                                                                                                                                                                                         \
-	}
+	do {                                                                                                                                                                                                                                       \
+		if (string) {                                                                                                                                                                                                                          \
+			char formatted[256] = "";                                                                                                                                                                                                          \
+			snprintf(formatted, sizeof(formatted), format, ##__VA_ARGS__);                                                                                                                                                                     \
+			strcat(string, formatted);                                                                                                                                                                                                         \
+		} else {                                                                                                                                                                                                                               \
+			printf(format, ##__VA_ARGS__);                                                                                                                                                                                                     \
+		}                                                                                                                                                                                                                                      \
+	} while (0)
 
 char* full_path(const char *restrict file_name, char* restrict resolved_name);
 // Searches for filename recursively in root_dir. NOT thread safe. Allocates memory.

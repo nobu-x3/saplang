@@ -110,7 +110,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 		case AST_FIELD_DECL: {
 			print(string, "FieldDecl: ");
 			type_print(string, node->data.field_decl.type);
-			print(string, " %s\n", node->data.field_decl.name)
+			print(string, " %s\n", node->data.field_decl.name);
 		} break;
 		case AST_PARAM_DECL:
 			if (node->data.param_decl.is_va) {
@@ -118,7 +118,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 			} else {
 				print(string, "ParamDecl: %s", node->data.param_decl.is_const ? "const " : "");
 				type_print(string, node->data.param_decl.type);
-				print(string, " %s\n", node->data.param_decl.name)
+				print(string, " %s\n", node->data.param_decl.name);
 			}
 			break;
 		case AST_BLOCK:
@@ -293,7 +293,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 		case AST_ENUM_VALUE: {
 			print(string, "EnumValue: ");
 			type_print(string, node->data.enum_value.enum_type);
-			print(string, "::%s", node->data.enum_value.member)
+			print(string, "::%s", node->data.enum_value.member);
 		} break;
 		case AST_EXTERN_BLOCK:
 			print(string, "ExternBlock from lib %s:\n", node->data.extern_block.lib_name);
