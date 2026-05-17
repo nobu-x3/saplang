@@ -381,6 +381,10 @@ typedef struct {
 	LLVMBasicBlockRef end_block;
 	LLVMBasicBlockRef loop_beg_block;
 	LLVMBasicBlockRef if_cont_block;
+	// DI scope chain. NULL outside a function or when debug info is off.
+	// Seeded with the DISubprogram in codegen_function and replaced with
+	// a DILexicalBlock when entering an AST_BLOCK.
+	LLVMMetadataRef di_scope;
 } PassContext;
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *stable, PassContext ctx);
@@ -764,7 +768,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
 	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
-	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL, NULL};
+	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL, NULL, NULL};
 	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, table, ctx) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
@@ -811,14 +815,20 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	Type *ret_type = sym->type->function.return_type;
 	LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
 	LLVMValueRef fn = LLVMAddFunction(cg->module, func_name, fn_ty);
+	LLVMMetadataRef di_fn = NULL;
 	if (cg->should_build_debug) {
 		LLVMMetadataRef sub_ty = map_to_ditype(cg, sym->type, table);
 		unsigned line = node->location.line;
-		LLVMMetadataRef di_fn = LLVMDIBuilderCreateFunction(cg->di_builder, (LLVMMetadataRef)cg->di_cu, func_name, func_name_len, linkage_name, linkage_name_len, cg->di_file, line, sub_ty, 0, 1, line, 0, 0);
+		di_fn = LLVMDIBuilderCreateFunction(cg->di_builder, (LLVMMetadataRef)cg->di_cu, func_name, func_name_len, linkage_name, linkage_name_len, cg->di_file, line, sub_ty, 0, 1, line, 0, 0);
 		LLVMSetSubprogram(fn, di_fn);
 	}
 	LLVMBasicBlockRef entry = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "entry");
 	LLVMPositionBuilderAtEnd(cg->builder, entry);
+	// Don't inherit a stale location from a sibling function's last
+	// instruction — alloca/store IR for params/locals should have no
+	// source location until the body's first real statement sets one.
+	if (cg->should_build_debug)
+		LLVMSetCurrentDebugLocation2(cg->builder, NULL);
 	hashmap_t *values_map = hashmap_create(64, NULL, NULL);
 	// function parameters
 	{
@@ -840,13 +850,15 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			++index;
 		}
 	}
-	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE, NULL, NULL, NULL, NULL};
+	PassContext ctx = {1, NULL, values_map, NULL, node, PI_NONE, NULL, NULL, NULL, NULL, di_fn};
 	codegen_ast(cg, node->data.func_decl.body, table, ctx);
 	if (hashmap_size(values_map))
 		hashmap_destroy(values_map, free_str, NULL);
 	if (ret_type->type_kind == TYPE_PRIMITIVE && ret_type->prim == PRIM_VOID) {
 		LLVMBuildRetVoid(cg->builder);
 	}
+	if (cg->should_build_debug)
+		LLVMSetCurrentDebugLocation2(cg->builder, NULL);
 	return fn;
 }
 
@@ -1003,6 +1015,10 @@ void codegen_imported_symbol(CodegenLLVM *cg, Symbol *sym, Symbol *table) {
 }
 
 LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+	if (cg->should_build_debug && ctx.di_scope && node->location.line > 0) {
+		LLVMMetadataRef loc = LLVMDIBuilderCreateDebugLocation(cg->llvm_context, node->location.line, node->location.col, ctx.di_scope, NULL);
+		LLVMSetCurrentDebugLocation2(cg->builder, loc);
+	}
 	switch (node->type) {
 	case AST_FN_DECL:
 		return codegen_function(cg, node, table);
@@ -1461,7 +1477,7 @@ void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 		if (current->type == AST_VAR_DECL) {
 			codegen_global_var_decl(cg, current, table, 0);
 		} else {
-			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL, NULL};
+			PassContext ctx = {0, NULL, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL, NULL, NULL};
 			codegen_ast(cg, current, table, ctx);
 		}
 	}
