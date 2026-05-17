@@ -138,12 +138,6 @@ static void test_DebugInfoTypes_modules(void) {
     opts.gen_debug = 1;
     opts.threads = 1;
     opts.output_file_path = "debug_info_types";
-    // Pin import resolution to the fixture dir. driver_init_source's
-    // find_file_in_dir basename-strips its input (see ISSUES.md §25),
-    // so without this pin it would pick up the first `main.sl` it sees
-    // under `.` — likely a sibling fixture's, not ours.
-    (void)da_init(opts.import_paths, 1);
-    (void)da_push(opts.import_paths, strdup("module_tests/debug_info_types"));
     driver_set_compiler_options(opts);
     TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
     TEST_ASSERT_EQUAL_INT(system("./debug_info_types"), 0);

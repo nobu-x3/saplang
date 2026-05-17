@@ -5,7 +5,7 @@
 
 fn i64 sum(i32[] s) {
 	i64 total = 0;
-	for (i64 i = 0; i < s.len; i = i + 1) {
+	for (u64 i = 0; i < s.len; i = i + 1) {
 		total = total + (i64)s[i];
 	}
 	return total;

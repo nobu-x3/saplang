@@ -12,20 +12,20 @@ struct Node {
 fn i32 main() {
     i32* p = null;
     if (p != null) { return 1; }
-    if (p == null) { /* expected */ } else { return 2; }
+    if (p == null) {} else { return 2; }
     if (p) { return 3; }
-    if (!p) { /* expected */ } else { return 4; }
+    if (!p) {} else { return 4; }
 
     i32 v = 42;
     i32* q = &v;
     if (q == null) { return 5; }
-    if (q != null) { /* expected */ } else { return 6; }
-    if (q) { /* expected */ } else { return 7; }
+    if (q != null) {} else { return 6; }
+    if (q) {} else { return 7; }
     if (!q) { return 8; }
 
     q = null;
     if (q != null) { return 9; }
-    if (!q) { /* expected */ } else { return 10; }
+    if (!q) {} else { return 10; }
 
     i32* r = always_null();
     if (r != null) { return 11; }

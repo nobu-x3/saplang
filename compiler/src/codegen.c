@@ -485,32 +485,38 @@ LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, P
 LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	LLVMTypeRef element_types[256];
 	assert(node->data.struct_decl.field_count < 257 && "can only have 256 fields max.");
+	// Pre-register the named LLVM type before resolving fields so a
+	// self-referential field (`Self*`) finds the opaque named type via
+	// LLVMGetTypeByName2 in map_to_llvm instead of wrapping NULL.
+	LLVMTypeRef struct_type = LLVMGetTypeByName2(cg->llvm_context, node->data.struct_decl.resolved_name);
+	if (!struct_type)
+		struct_type = LLVMStructCreateNamed(cg->llvm_context, node->data.struct_decl.resolved_name);
+	assert(struct_type);
 	for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
 		ASTNode *current_field = node->data.struct_decl.fields[i];
 		element_types[i] = map_to_llvm(cg, current_field->data.field_decl.type, table);
 	}
-	LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, node->data.struct_decl.resolved_name);
-	assert(struct_type);
-	// NOTE: not sure if packed
 	LLVMStructSetBody(struct_type, element_types, node->data.struct_decl.field_count, 0);
 	return struct_type;
 }
 
 LLVMTypeRef codegen_union_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
+	char union_name[512] = "";
+	sprintf(union_name, "union.%s", node->data.union_decl.resolved_name);
+	LLVMTypeRef struct_type = LLVMGetTypeByName2(cg->llvm_context, union_name);
+	if (!struct_type)
+		struct_type = LLVMStructCreateNamed(cg->llvm_context, union_name);
+	assert(struct_type);
 	LLVMTypeRef max_type_ref = NULL;
 	int max_size = 0;
 	for (ASTNode *field = node->data.union_decl.fields; field; field = field->next) {
 		TypeInfo ti = get_type_info(field->data.field_decl.type, field);
 		if (ti.size > max_size) {
 			max_type_ref = map_to_llvm(cg, field->data.field_decl.type, table);
+			max_size = ti.size;
 		}
 	}
 	assert(max_type_ref);
-	char union_name[512] = "";
-	sprintf(union_name, "union.%s", node->data.union_decl.resolved_name);
-	LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, union_name);
-	assert(struct_type);
-	// NOTE: not sure if packed
 	LLVMStructSetBody(struct_type, &max_type_ref, 1, 0);
 	return struct_type;
 }
@@ -1120,6 +1126,14 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMValueRef base_ptr = codegen_ast(cg, node->data.array_access.base, table, base_ctx);
 		PassContext idx_ctx = ctx;
 		idx_ctx.intention = PI_LOAD_VAL;
+		// Index is always an integer. For literal indices, pin expected_type
+		// to u64 so the literal isn't materialized as a constant of the
+		// outer context's type (which for `&arr[2]` is i32* — that would
+		// produce a zero index and silently break the access). For non-
+		// literal indices, leave expected_type alone so loads respect the
+		// variable's declared type.
+		if (node->data.array_access.index->type == AST_EXPR_LITERAL)
+			idx_ctx.expected_type = get_primitive_u64();
 		LLVMValueRef idx = codegen_ast(cg, node->data.array_access.index, table, idx_ctx);
 		LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
 		LLVMValueRef idx64 = LLVMBuildSExtOrBitCast(cg->builder, idx, i64_ty, "idx64");
@@ -1301,8 +1315,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		then_ctx.if_cont_block = mergeBB;
 		codegen_ast(cg, node->data.if_stmt.then_branch, table, then_ctx);
 		LLVMValueRef last_inst = LLVMGetLastInstruction(thenBB);
-		LLVMOpcode last_inst_opcode = LLVMGetInstructionOpcode(last_inst);
-		if (last_inst_opcode != LLVMBr && last_inst_opcode != LLVMRet)
+		if (!last_inst || (LLVMGetInstructionOpcode(last_inst) != LLVMBr && LLVMGetInstructionOpcode(last_inst) != LLVMRet))
 			LLVMBuildBr(cg->builder, mergeBB);
 		// else
 		if (elseBB) {
@@ -1311,8 +1324,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			else_ctx.if_cont_block = mergeBB;
 			codegen_ast(cg, node->data.if_stmt.else_branch, table, else_ctx);
 			last_inst = LLVMGetLastInstruction(elseBB);
-			LLVMOpcode last_inst_opcode = LLVMGetInstructionOpcode(last_inst);
-			if (last_inst_opcode != LLVMBr && last_inst_opcode != LLVMRet)
+			if (!last_inst || (LLVMGetInstructionOpcode(last_inst) != LLVMBr && LLVMGetInstructionOpcode(last_inst) != LLVMRet))
 				LLVMBuildBr(cg->builder, mergeBB);
 		}
 		// merge
