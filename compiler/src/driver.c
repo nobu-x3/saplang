@@ -604,7 +604,7 @@ void codegen_task(void *arg) {
 	char source_file_path[PATH_MAX + 1] = "";
 	strncpy(source_file_path, node->parser.scanner.source.path, sizeof(source_file_path));
 	char *source_dir = dir_name(source_file_path);
-	CodegenInitContext cg_init_ctx = {node->parser.module_name, node->parser.scanner.source.name, source_dir, 0};
+	CodegenInitContext cg_init_ctx = {node->parser.module_name, node->parser.scanner.source.name, source_dir, driver.options.gen_debug};
 	CodegenLLVM cg_ctx = codegen_init(&cg_init_ctx);
 	codegen_run(&cg_ctx, node->module->ast, node->module->symbol_table);
 	int res = make_dir(OBJ_DIRECTORY, 0777);
@@ -767,6 +767,10 @@ CompilerResult driver_run() {
 		return RESULT_MEMORY_ERROR;
 	if (!da_push(cmd, strdup("clang")))
 		return RESULT_MEMORY_ERROR;
+	if (driver.options.gen_debug) {
+		if (!da_push(cmd, strdup("-g")))
+			return RESULT_MEMORY_ERROR;
+	}
 	combine_object_paths(&cmd, OBJ_DIRECTORY);
 	if (!da_push(cmd, strdup("-o")))
 		return RESULT_MEMORY_ERROR;

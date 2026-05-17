@@ -45,6 +45,11 @@ CodegenLLVM codegen_init(CodegenInitContext *init_params) {
 	cg.module = LLVMModuleCreateWithNameInContext(init_params->module_name, cg.llvm_context);
 	cg.builder = LLVMCreateBuilderInContext(cg.llvm_context);
 	if (cg.should_build_debug) {
+		LLVMTypeRef i32 = LLVMInt32TypeInContext(cg.llvm_context);
+		LLVMMetadataRef dwarf_ver = LLVMValueAsMetadata(LLVMConstInt(i32, 5, 0));
+		LLVMAddModuleFlag(cg.module, LLVMModuleFlagBehaviorWarning, "Dwarf Version", strlen("Dwarf Version"), dwarf_ver);
+		LLVMMetadataRef di_ver = LLVMValueAsMetadata(LLVMConstInt(i32, LLVMDebugMetadataVersion(), 0));
+		LLVMAddModuleFlag(cg.module, LLVMModuleFlagBehaviorWarning, "Debug Info Version", strlen("Debug Info Version"), di_ver);
 		cg.di_builder = LLVMCreateDIBuilder(cg.module);
 		int filename_len = strlen(init_params->filename);
 		int dirname_len = strlen(init_params->dir);
@@ -581,7 +586,9 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
 	LLVMValueRef fn = LLVMAddFunction(cg->module, func_name, fn_ty);
 	if (cg->should_build_debug) {
-		LLVMMetadataRef di_fn = LLVMDIBuilderCreateFunction(cg->di_builder, (LLVMMetadataRef)cg->di_cu, func_name, func_name_len, linkage_name, linkage_name_len, cg->di_file, 0, NULL, 0, 1, 1, 0, 0);
+		LLVMMetadataRef placeholder_sub_ty = LLVMDIBuilderCreateSubroutineType(cg->di_builder, cg->di_file, NULL, 0, 0);
+		unsigned line = node->location.line;
+		LLVMMetadataRef di_fn = LLVMDIBuilderCreateFunction(cg->di_builder, (LLVMMetadataRef)cg->di_cu, func_name, func_name_len, linkage_name, linkage_name_len, cg->di_file, line, placeholder_sub_ty, 0, 1, line, 0, 0);
 		LLVMSetSubprogram(fn, di_fn);
 	}
 	LLVMBasicBlockRef entry = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "entry");
@@ -603,10 +610,6 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			char *param_name = strdup(curr_param->data.param_decl.resolved_name);
 			hashmap_put(values_map, param_name, ptr);
 			LLVMBuildStore(cg->builder, args[index], ptr);
-			// if (cg->should_build_debug) {
-			// 	int name_len = strlen(curr_param->data.param_decl.name);
-			// 	LLVMDIBuilderCreateParameterVariable(cg->di_builder, (LLVMMetadataRef)cg->di_cu, curr_param->data.param_decl.name, name_len, index, cg->di_file, curr_param->location.line, args_types[index], 1, 0);
-			// }
 			curr_param = curr_param->next;
 			++index;
 		}
@@ -761,37 +764,11 @@ void codegen_imported_symbol(CodegenLLVM *cg, Symbol *sym, Symbol *table) {
 	case AST_FN_DECL:
 	case AST_EXTERN_FUNC_DECL: {
 		char *func_name = node->data.func_decl.resolved_name;
-		size_t func_name_len = strlen(func_name);
-		char *linkage_name = sym->resolved_name;
-		size_t linkage_name_len = strlen(sym->resolved_name);
-		Type *ret_type = sym->type->function.return_type;
 		LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
 		LLVMValueRef fn = LLVMAddFunction(cg->module, func_name, fn_ty);
-		if (cg->should_build_debug) {
-			LLVMMetadataRef di_fn = LLVMDIBuilderCreateFunction(cg->di_builder, (LLVMMetadataRef)cg->di_cu, func_name, func_name_len, linkage_name, linkage_name_len, cg->di_file, 0, NULL, 0, 1, 1, 0, 0);
-			LLVMSetSubprogram(fn, di_fn);
-		}
 		LLVMSetLinkage(fn, LLVMExternalLinkage);
 	} break;
 	case AST_ENUM_DECL:
-		if (cg->should_build_debug) {
-			LLVMTypeRef base_ty = map_to_llvm(cg, node->data.enum_decl.base_type, table);
-			int base_name_len = strlen(node->data.enum_decl.base_type->type_name);
-			LLVMDWARFTypeEncoding encoding = node->data.enum_decl.base_type->type_name[0] == 'u' ? DW_ATE_unsigned : DW_ATE_signed;
-			TypeInfo base_type_info = get_type_info(node->data.enum_decl.base_type, node);
-			LLVMMetadataRef base_type_md = LLVMDIBuilderCreateBasicType(cg->di_builder, node->data.enum_decl.base_type->type_name, base_name_len, BYTE_TO_BIT(base_type_info.size), DW_ATE_signed, 0);
-			LLVMMetadataRef *enumerators = alloca(sizeof(LLVMMetadataRef) * node->data.enum_decl.member_count);
-			for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
-				int name_len = strlen(node->data.enum_decl.members[i]->name);
-				enumerators[i] = LLVMDIBuilderCreateEnumerator(cg->di_builder, node->data.enum_decl.members[i]->name, name_len, node->data.enum_decl.members[i]->value,
-															   0); // isUnsigned: false
-			}
-			int name_len = strlen(node->data.enum_decl.name);
-			LLVMMetadataRef enum_type = LLVMDIBuilderCreateEnumerationType(cg->di_builder, cg->di_cu, node->data.enum_decl.name, name_len, cg->di_file, node->location.line,
-																		   BYTE_TO_BIT(base_type_info.size),  // size in bits
-																		   BYTE_TO_BIT(base_type_info.align), // align in bits
-																		   enumerators, node->data.enum_decl.member_count, NULL);
-		}
 		break;
 
 	default:
@@ -1001,24 +978,6 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	} break;
 
 	case AST_ENUM_DECL: {
-		if (cg->should_build_debug) {
-			LLVMTypeRef base_ty = map_to_llvm(cg, node->data.enum_decl.base_type, table);
-			int base_name_len = strlen(node->data.enum_decl.base_type->type_name);
-			LLVMDWARFTypeEncoding encoding = node->data.enum_decl.base_type->type_name[0] == 'u' ? DW_ATE_unsigned : DW_ATE_signed;
-			TypeInfo base_type_info = get_type_info(node->data.enum_decl.base_type, node);
-			LLVMMetadataRef base_type_md = LLVMDIBuilderCreateBasicType(cg->di_builder, node->data.enum_decl.base_type->type_name, base_name_len, BYTE_TO_BIT(base_type_info.size), DW_ATE_signed, 0);
-			LLVMMetadataRef *enumerators = alloca(sizeof(LLVMMetadataRef) * node->data.enum_decl.member_count);
-			for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
-				int name_len = strlen(node->data.enum_decl.members[i]->name);
-				enumerators[i] = LLVMDIBuilderCreateEnumerator(cg->di_builder, node->data.enum_decl.members[i]->name, name_len, node->data.enum_decl.members[i]->value,
-															   0); // isUnsigned: false
-			}
-			int name_len = strlen(node->data.enum_decl.name);
-			LLVMMetadataRef enum_type = LLVMDIBuilderCreateEnumerationType(cg->di_builder, cg->di_cu, node->data.enum_decl.name, name_len, cg->di_file, node->location.line,
-																		   BYTE_TO_BIT(base_type_info.size),  // size in bits
-																		   BYTE_TO_BIT(base_type_info.align), // align in bits
-																		   enumerators, node->data.enum_decl.member_count, NULL);
-		}
 	} break;
 
 	case AST_ENUM_VALUE: {

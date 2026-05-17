@@ -91,3 +91,35 @@ void test_SwitchTest_modules(void) {
 void test_SliceTest_modules(void) {
     test("module_tests/slice_test", "slice_test");
 }
+
+// Verify -dbg actually emits DWARF: compile with gen_debug, run the
+// produced binary (must still exit 0), then llvm-dwarfdump the .o and
+// confirm a compile unit + at least one subprogram with main's linkage
+// name. Without the module flags + a valid DISubroutineType this either
+// silently emits no DI or segfaults LLVM's DwarfDebug.
+static void test_DebugInfoBasic_modules(void) {
+    CompileOptions opts = {0};
+    char input_file_path[256] = "";
+    sprintf(input_file_path, "%s/main.sl", "module_tests/debug_info_basic");
+    opts.input_file_path = input_file_path;
+    opts.no_cleanup = 1;
+    opts.gen_debug = 1;
+    opts.threads = 1;
+    opts.output_file_path = "debug_info_basic";
+    driver_set_compiler_options(opts);
+    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
+    TEST_ASSERT_EQUAL_INT(system("./debug_info_basic"), 0);
+
+    FILE *dump = popen("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
+    TEST_ASSERT_NOT_NULL(dump);
+    char buf[8192] = {0};
+    size_t n = fread(buf, 1, sizeof(buf) - 1, dump);
+    pclose(dump);
+    TEST_ASSERT_GREATER_THAN(0, n);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_compile_unit"), "expected DW_TAG_compile_unit in dwarfdump output");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_subprogram"), "expected DW_TAG_subprogram in dwarfdump output");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_linkage_name\t(\"main\")"), "expected main subprogram with linkage_name in dwarfdump output");
+
+    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the emitted object");
+}
