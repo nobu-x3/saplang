@@ -89,6 +89,9 @@ int type_mangle_append(Type *type, char *name, size_t cap);
 struct ASTNode;
 TypeInfo get_type_info(Type *type, struct ASTNode *node);
 
+// Primitive size/align lookup. Returns 1 on success, 0 for PRIM_VOID / PRIM_NONE
+int prim_size_align(PrimitiveKind k, size_t *size, size_t *align);
+
 // return -1 if field not present
 int find_struct_field_index(struct ASTNode *struct_decl, const char *field_name);
 int find_union_field_index(struct ASTNode *fields, const char *field_name);

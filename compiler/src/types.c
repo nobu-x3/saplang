@@ -43,7 +43,7 @@ PrimitiveKind primitive_kind_from_name(const char *name) {
 	return PRIM_NONE;
 }
 
-static int prim_size_align(PrimitiveKind k, size_t *size, size_t *align) {
+int prim_size_align(PrimitiveKind k, size_t *size, size_t *align) {
 	switch (k) {
 	case PRIM_I8:
 	case PRIM_U8:

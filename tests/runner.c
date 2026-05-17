@@ -308,6 +308,7 @@ int main(void) {
 	RUN_TEST(test_SwitchTest_modules);
 	RUN_TEST(test_SliceTest_modules);
 	RUN_TEST(test_DebugInfoBasic_modules);
+	RUN_TEST(test_DebugInfoTypes_modules);
 	return UNITY_END();
 
 }

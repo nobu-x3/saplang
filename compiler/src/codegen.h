@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hashmap.h"
 #include "parser.h"
 #include "util.h"
 #include <llvm-c/Core.h>
@@ -20,6 +21,8 @@ typedef struct {
 	LLVMDIBuilderRef di_builder;
 	LLVMMetadataRef di_file;
 	LLVMMetadataRef di_cu;
+	// NULL when should_build_debug is 0.
+	hashmap_t *ditype_cache;
 } CodegenLLVM;
 
 // Initialize the native LLVM target / asm printer. Call once on the

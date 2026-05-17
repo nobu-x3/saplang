@@ -39,6 +39,13 @@ typedef enum DebugEncodingType {
 	DW_ATE_hi_user = 0xff
 } DebugEncodingType;
 
+// Identity hash for pointer keys in the DIType cache. Shift off the
+// low alignment bits so the bucket selection actually varies.
+static size_t ptr_hash(const void *key) {
+	uintptr_t p = (uintptr_t)key;
+	return (size_t)(p >> 3);
+}
+
 CodegenLLVM codegen_init(CodegenInitContext *init_params) {
 	CodegenLLVM cg = {init_params->should_build_debug, 0};
 	cg.llvm_context = LLVMContextCreate();
@@ -55,12 +62,15 @@ CodegenLLVM codegen_init(CodegenInitContext *init_params) {
 		int dirname_len = strlen(init_params->dir);
 		cg.di_file = LLVMDIBuilderCreateFile(cg.di_builder, init_params->filename, filename_len, init_params->dir, dirname_len);
 		cg.di_cu = LLVMDIBuilderCreateCompileUnit(cg.di_builder, LLVMDWARFSourceLanguageC, cg.di_file, "saplang", 7, 0, "", 0, 0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
+		cg.ditype_cache = hashmap_create(64, ptr_hash, ptr_equals);
 	}
 	return cg;
 }
 
 void codegen_deinit(CodegenLLVM *cg) {
 	if (cg->should_build_debug) {
+		if (cg->ditype_cache)
+			hashmap_destroy(cg->ditype_cache, NULL, NULL);
 		LLVMDisposeDIBuilder(cg->di_builder);
 	}
 	LLVMDisposeBuilder(cg->builder);
@@ -146,6 +156,216 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 		assert(0 && "should not be any undecided types in codegen.");
 	}
 	return NULL;
+}
+
+// DWARF tags we need from <dwarf.h> (LLVM doesn't expose them in the C API).
+#define DW_TAG_structure_type 0x13
+#define DW_TAG_union_type 0x17
+#define DW_TAG_enumeration_type 0x04
+
+LLVMMetadataRef map_to_ditype(CodegenLLVM *cg, Type *type, Symbol *table) {
+	assert(cg->should_build_debug);
+	if (!type)
+		return NULL;
+
+	LLVMMetadataRef cached = (LLVMMetadataRef)hashmap_get(cg->ditype_cache, type);
+	if (cached)
+		return cached;
+
+	LLVMMetadataRef result = NULL;
+
+	switch (type->type_kind) {
+	case TYPE_PRIMITIVE: {
+		// void to NULL: DWARF represents void by the absence of a type entry.
+		// Pointer and subroutine constructors both accept NULL with that meaning.
+		if (type->prim == PRIM_VOID)
+			return NULL;
+		const char *name = type->type_name;
+		size_t name_len = strlen(name);
+		size_t size = 0;
+		size_t align = 0;
+		prim_size_align(type->prim, &size, &align);
+		LLVMDWARFTypeEncoding enc;
+		switch (type->prim) {
+		case PRIM_I8:
+		case PRIM_I16:
+		case PRIM_I32:
+		case PRIM_I64:
+			enc = DW_ATE_signed;
+			break;
+		case PRIM_U8:
+		case PRIM_U16:
+		case PRIM_U32:
+		case PRIM_U64:
+			enc = DW_ATE_unsigned;
+			break;
+		case PRIM_F32:
+		case PRIM_F64:
+			enc = DW_ATE_float;
+			break;
+		case PRIM_BOOL:
+			enc = DW_ATE_boolean;
+			break;
+		default:
+			assert(0 && "unknown primitive kind in DI lowering");
+			return NULL;
+		}
+		result = LLVMDIBuilderCreateBasicType(cg->di_builder, name, name_len, BYTE_TO_BIT(size), enc, 0);
+	} break;
+
+	case TYPE_POINTER: {
+		LLVMMetadataRef pointee_di = map_to_ditype(cg, type->pointee, table);
+		result = LLVMDIBuilderCreatePointerType(cg->di_builder, pointee_di, PLATFORM_POINTER_SIZE, 0, 0, "", 0);
+	} break;
+
+	case TYPE_ARRAY: {
+		LLVMMetadataRef elem_di = map_to_ditype(cg, type->array.element_type, table);
+		size_t elem_size = 0;
+		size_t elem_align = 0;
+		if (type->array.element_type->type_kind == TYPE_PRIMITIVE) {
+			prim_size_align(type->array.element_type->prim, &elem_size, &elem_align);
+		} else if (type->array.element_type->type_kind == TYPE_POINTER) {
+			elem_size = sizeof(void *);
+			elem_align = sizeof(void *);
+		}
+		uint64_t total_size_bits = BYTE_TO_BIT((uint64_t)elem_size * (uint64_t)type->array.size);
+		LLVMMetadataRef subrange = LLVMDIBuilderGetOrCreateSubrange(cg->di_builder, 0, type->array.size);
+		result = LLVMDIBuilderCreateArrayType(cg->di_builder, total_size_bits, BYTE_TO_BIT(elem_align), elem_di, &subrange, 1);
+	} break;
+
+	case TYPE_SLICE: {
+		// Layout matches map_to_llvm above: { ptr, i64 }. 16 bytes on a 64-bit target.
+		LLVMMetadataRef elem_di = map_to_ditype(cg, type->slice.element_type, table);
+		LLVMMetadataRef ptr_di = LLVMDIBuilderCreatePointerType(cg->di_builder, elem_di, PLATFORM_POINTER_SIZE, 0, 0, "", 0);
+		LLVMMetadataRef u64_di = LLVMDIBuilderCreateBasicType(cg->di_builder, "u64", 3, 64, DW_ATE_unsigned, 0);
+		LLVMMetadataRef members[2];
+		members[0] = LLVMDIBuilderCreateMemberType(cg->di_builder, cg->di_cu, "ptr", 3, cg->di_file, 0, PLATFORM_POINTER_SIZE, PLATFORM_POINTER_SIZE, 0, 0, ptr_di);
+		members[1] = LLVMDIBuilderCreateMemberType(cg->di_builder, cg->di_cu, "len", 3, cg->di_file, 0, 64, 64, PLATFORM_POINTER_SIZE, 0, u64_di);
+		const char *name = "slice";
+		result = LLVMDIBuilderCreateStructType(cg->di_builder, cg->di_cu, name, strlen(name), cg->di_file, 0, PLATFORM_POINTER_SIZE + 64, PLATFORM_POINTER_SIZE, 0, NULL, members, 2, 0, NULL, "", 0);
+	} break;
+
+	case TYPE_STRUCT: {
+		Symbol *sym = lookup_symbol(table, type->type_resolved_name, 0);
+		assert(sym && "unknown struct symbol for DI lowering.");
+		ASTNode *struct_decl = sym->node;
+		assert(struct_decl && struct_decl->type == AST_STRUCT_DECL);
+		TypeInfo info = get_type_info(type, struct_decl);
+		const char *name = struct_decl->data.struct_decl.name;
+		size_t name_len = strlen(name);
+		unsigned line = struct_decl->location.line;
+
+		// Forward-decl placeholder so a self-reference through a pointer
+		// resolves to *this* type during member-type construction.
+		LLVMMetadataRef placeholder = LLVMDIBuilderCreateReplaceableCompositeType(cg->di_builder, DW_TAG_structure_type, name, name_len, cg->di_cu, cg->di_file, line, 0, BYTE_TO_BIT(info.size),
+																				  BYTE_TO_BIT(info.align), 0, NULL, 0);
+		hashmap_put(cg->ditype_cache, type, placeholder);
+
+		int field_count = struct_decl->data.struct_decl.field_count;
+		LLVMMetadataRef *members = NULL;
+		if (field_count > 0)
+			members = alloca(sizeof(LLVMMetadataRef) * (size_t)field_count);
+		uint64_t cur_offset_bits = 0;
+		for (int i = 0; i < field_count; ++i) {
+			ASTNode *field = struct_decl->data.struct_decl.fields[i];
+			assert(field && field->type == AST_FIELD_DECL);
+			TypeInfo field_info = get_type_info(field->data.field_decl.type, field);
+			uint64_t field_align_bits = BYTE_TO_BIT(field_info.align);
+			if (field_align_bits)
+				cur_offset_bits = (cur_offset_bits + field_align_bits - 1) & ~(field_align_bits - 1);
+			LLVMMetadataRef field_di = map_to_ditype(cg, field->data.field_decl.type, table);
+			members[i] = LLVMDIBuilderCreateMemberType(cg->di_builder, cg->di_cu, field->data.field_decl.name, strlen(field->data.field_decl.name), cg->di_file, field->location.line,
+													   BYTE_TO_BIT(field_info.size), field_align_bits, cur_offset_bits, 0, field_di);
+			cur_offset_bits += BYTE_TO_BIT(field_info.size);
+		}
+
+		result =
+			LLVMDIBuilderCreateStructType(cg->di_builder, cg->di_cu, name, name_len, cg->di_file, line, BYTE_TO_BIT(info.size), BYTE_TO_BIT(info.align), 0, NULL, members, field_count, 0, NULL, "", 0);
+		LLVMMetadataReplaceAllUsesWith(placeholder, result);
+		hashmap_put(cg->ditype_cache, type, result);
+		return result;
+	} break;
+
+	case TYPE_UNION: {
+		Symbol *sym = lookup_symbol(table, type->type_resolved_name, 0);
+		assert(sym && "unknown union symbol for DI lowering.");
+		ASTNode *union_decl = sym->node;
+		assert(union_decl && union_decl->type == AST_UNION_DECL);
+		TypeInfo info = get_type_info(type, union_decl);
+		const char *name = union_decl->data.union_decl.name;
+		size_t name_len = strlen(name);
+		unsigned line = union_decl->location.line;
+
+		LLVMMetadataRef placeholder =
+			LLVMDIBuilderCreateReplaceableCompositeType(cg->di_builder, DW_TAG_union_type, name, name_len, cg->di_cu, cg->di_file, line, 0, BYTE_TO_BIT(info.size), BYTE_TO_BIT(info.align), 0, NULL, 0);
+		hashmap_put(cg->ditype_cache, type, placeholder);
+
+		int field_count = 0;
+		for (ASTNode *f = union_decl->data.union_decl.fields; f; f = f->next)
+			if (f->type == AST_FIELD_DECL)
+				++field_count;
+
+		LLVMMetadataRef *members = NULL;
+		if (field_count > 0)
+			members = alloca(sizeof(LLVMMetadataRef) * (size_t)field_count);
+		int i = 0;
+		for (ASTNode *f = union_decl->data.union_decl.fields; f; f = f->next) {
+			if (f->type != AST_FIELD_DECL)
+				continue;
+			TypeInfo field_info = get_type_info(f->data.field_decl.type, f);
+			LLVMMetadataRef field_di = map_to_ditype(cg, f->data.field_decl.type, table);
+			members[i++] = LLVMDIBuilderCreateMemberType(cg->di_builder, cg->di_cu, f->data.field_decl.name, strlen(f->data.field_decl.name), cg->di_file, f->location.line,
+														 BYTE_TO_BIT(field_info.size), BYTE_TO_BIT(field_info.align), 0, 0, field_di);
+		}
+
+		result = LLVMDIBuilderCreateUnionType(cg->di_builder, cg->di_cu, name, name_len, cg->di_file, line, BYTE_TO_BIT(info.size), BYTE_TO_BIT(info.align), 0, members, field_count, 0, "", 0);
+		LLVMMetadataReplaceAllUsesWith(placeholder, result);
+		hashmap_put(cg->ditype_cache, type, result);
+		return result;
+	} break;
+
+	case TYPE_ENUM: {
+		Symbol *sym = lookup_symbol(table, type->type_resolved_name, 0);
+		assert(sym && "unknown enum symbol for DI lowering.");
+		ASTNode *enum_decl = sym->node;
+		assert(enum_decl && enum_decl->type == AST_ENUM_DECL && enum_decl->data.enum_decl.base_type);
+		Type *base = enum_decl->data.enum_decl.base_type;
+		TypeInfo base_info = get_type_info(base, enum_decl);
+		LLVMDWARFTypeEncoding base_enc = (base->type_name[0] == 'u') ? DW_ATE_unsigned : DW_ATE_signed;
+		int is_unsigned = base->type_name[0] == 'u';
+		LLVMMetadataRef base_di = LLVMDIBuilderCreateBasicType(cg->di_builder, base->type_name, strlen(base->type_name), BYTE_TO_BIT(base_info.size), base_enc, 0);
+
+		int n = enum_decl->data.enum_decl.member_count;
+		LLVMMetadataRef *enumerators = NULL;
+		if (n > 0)
+			enumerators = alloca(sizeof(LLVMMetadataRef) * (size_t)n);
+		for (int i = 0; i < n; ++i) {
+			EnumMember *m = enum_decl->data.enum_decl.members[i];
+			enumerators[i] = LLVMDIBuilderCreateEnumerator(cg->di_builder, m->name, strlen(m->name), m->value, is_unsigned);
+		}
+		const char *name = enum_decl->data.enum_decl.name;
+		result = LLVMDIBuilderCreateEnumerationType(cg->di_builder, cg->di_cu, name, strlen(name), cg->di_file, enum_decl->location.line, BYTE_TO_BIT(base_info.size), BYTE_TO_BIT(base_info.align),
+													enumerators, n, base_di);
+	} break;
+
+	case TYPE_FUNCTION: {
+		// Subroutine type wants [ret_di, param0_di, ...]. Element 0 == NULL means void.
+		int n = type->function.param_count + 1;
+		LLVMMetadataRef *params = alloca(sizeof(LLVMMetadataRef) * (size_t)n);
+		params[0] = map_to_ditype(cg, type->function.return_type, table);
+		for (int i = 0; i < type->function.param_count; ++i)
+			params[i + 1] = map_to_ditype(cg, type->function.param_types[i], table);
+		result = LLVMDIBuilderCreateSubroutineType(cg->di_builder, cg->di_file, params, n, 0);
+	} break;
+
+	case TYPE_UNDECIDED:
+		assert(0 && "undecided type should not reach DI lowering.");
+		return NULL;
+	}
+
+	if (result)
+		hashmap_put(cg->ditype_cache, type, result);
+	return result;
 }
 
 typedef enum { PI_NONE, PI_LOAD_PTR, PI_LOAD_VAL, PI_STORE_VAL, PI_STORE_PTR } PassIntention;
@@ -586,9 +806,9 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
 	LLVMValueRef fn = LLVMAddFunction(cg->module, func_name, fn_ty);
 	if (cg->should_build_debug) {
-		LLVMMetadataRef placeholder_sub_ty = LLVMDIBuilderCreateSubroutineType(cg->di_builder, cg->di_file, NULL, 0, 0);
+		LLVMMetadataRef sub_ty = map_to_ditype(cg, sym->type, table);
 		unsigned line = node->location.line;
-		LLVMMetadataRef di_fn = LLVMDIBuilderCreateFunction(cg->di_builder, (LLVMMetadataRef)cg->di_cu, func_name, func_name_len, linkage_name, linkage_name_len, cg->di_file, line, placeholder_sub_ty, 0, 1, line, 0, 0);
+		LLVMMetadataRef di_fn = LLVMDIBuilderCreateFunction(cg->di_builder, (LLVMMetadataRef)cg->di_cu, func_name, func_name_len, linkage_name, linkage_name_len, cg->di_file, line, sub_ty, 0, 1, line, 0, 0);
 		LLVMSetSubprogram(fn, di_fn);
 	}
 	LLVMBasicBlockRef entry = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "entry");
