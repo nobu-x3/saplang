@@ -106,6 +106,8 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		if (!base_type) {
 			return NULL;
 		}
+		if ((base_type->type_kind == TYPE_SLICE || base_type->type_kind == TYPE_ARRAY) && strcmp(node->data.member_access.member, "len") == 0)
+			return get_primitive_u64();
 		Symbol *decl_sym = lookup_named_type(table, base_type, scope_level);
 		if (!decl_sym)
 			return NULL;
@@ -138,9 +140,23 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 
 	case AST_ARRAY_ACCESS: {
 		Type *base_type = get_type(table, node->data.array_access.base, scope_level, scope_specifier);
-		if (!base_type || base_type->type_kind != TYPE_ARRAY)
+		if (!base_type)
 			return NULL;
-		return base_type->array.element_type;
+		if (base_type->type_kind == TYPE_ARRAY)
+			return base_type->array.element_type;
+		if (base_type->type_kind == TYPE_SLICE)
+			return base_type->slice.element_type;
+		return NULL;
+	} break;
+
+	case AST_SLICE_RANGE: {
+		Type *base_type = get_type(table, node->data.slice_range.base, scope_level, scope_specifier);
+		if (!base_type)
+			return NULL;
+		Type *elem = base_type->type_kind == TYPE_ARRAY ? base_type->array.element_type : base_type->type_kind == TYPE_SLICE ? base_type->slice.element_type : NULL;
+		if (!elem)
+			return NULL;
+		return new_slice_type(elem);
 	} break;
 
 	case AST_ENUM_VALUE:
@@ -258,8 +274,100 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 	return RESULT_SUCCESS;
 }
 
+// `T[] s = {ptr, len}` / `{.ptr = p, .len = n}`: analyzed like a struct
+// literal against an implicit `{ T* ptr; u64 len; }` record. Positional
+// form fills ptr then len; designated form only accepts those two field
+// names. Returns 1 if `node was a slice literal and was analyzed, 0 if expected_type isn't a
+// slice so the caller should fall through to the struct path.
+static int try_analyze_slice_literal(Symbol *table, Type *expected_type, ASTNode *node, int scope_level, const char *scope_specifier, CompilerResult *out_result) {
+	if (!expected_type || expected_type->type_kind != TYPE_SLICE)
+		return 0;
+	int init_count = node->data.struct_literal.count;
+	if (init_count != 2) {
+		char msg[128] = "";
+		snprintf(msg, sizeof(msg), "slice literal needs exactly 2 fields (ptr, len), got %d.", init_count);
+		report(node->location, msg, 0);
+		*out_result = RESULT_FAILURE;
+		return 1;
+	}
+	Type *elem = expected_type->slice.element_type;
+	Type *expected_ptr = new_pointer_type(elem);
+	Type *expected_len = get_primitive_u64();
+	// 0 = ptr slot, 1 = len slot
+	int seen[2] = {0, 0};
+	int positional_index = 0;
+	for (int i = 0; i < init_count; ++i) {
+		FieldInitializer *init = node->data.struct_literal.inits[i];
+		int slot;
+		if (init->is_designated) {
+			if (strcmp(init->field, "ptr") == 0)
+				slot = 0;
+			else if (strcmp(init->field, "len") == 0)
+				slot = 1;
+			else {
+				char msg[160] = "";
+				snprintf(msg, sizeof(msg), "slice literal: unknown field '%s', expected 'ptr' or 'len'.", init->field);
+				report(node->location, msg, 0);
+				*out_result = RESULT_FAILURE;
+				return 1;
+			}
+		} else {
+			slot = positional_index++;
+		}
+		if (slot < 0 || slot > 1 || seen[slot]) {
+			report(node->location, "slice literal: too many or duplicate field initializers.", 0);
+			*out_result = RESULT_FAILURE;
+			return 1;
+		}
+		seen[slot] = 1;
+		Type *expected_field_ty = slot == 0 ? expected_ptr : expected_len;
+		ASTNode *expr = init->expr;
+		CompilerResult r;
+		if (expr->type == AST_EXPR_LITERAL) {
+			r = analyze_expr_literal(table, expected_field_ty, expr, scope_level, scope_specifier);
+		} else {
+			r = analyze_ast(table, expr, scope_level, scope_specifier);
+			if (r == RESULT_SUCCESS) {
+				Type *expr_ty = get_type(table, expr, scope_level, scope_specifier);
+				// The ptr slot demands exact element-type match
+				int ok;
+				if (slot == 0)
+					ok = expr_ty && expr_ty->type_kind == TYPE_POINTER && type_equals(expr_ty->pointee, elem);
+				else
+					ok = expr_ty && is_convertible(expr_ty, expected_field_ty, 0, table);
+				if (!ok) {
+					char want[64] = "", got[64] = "";
+					type_print(want, expected_field_ty);
+					if (expr_ty)
+						type_print(got, expr_ty);
+					else
+						strcpy(got, "(unknown)");
+					char msg[256] = "";
+					snprintf(msg, sizeof(msg), "slice literal: field %s expects %s, got %s.", slot == 0 ? "ptr" : "len", want, got);
+					report(expr->location, msg, 0);
+					r = RESULT_FAILURE;
+				}
+			}
+		}
+		if (r != RESULT_SUCCESS) {
+			*out_result = r;
+			return 1;
+		}
+	}
+	if (!seen[0] || !seen[1]) {
+		report(node->location, "slice literal: missing field initializer.", 0);
+		*out_result = RESULT_FAILURE;
+		return 1;
+	}
+	*out_result = RESULT_SUCCESS;
+	return 1;
+}
+
 CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNode *node, int scope_level, const char *scope_specifier) {
 	assert(node->type == AST_STRUCT_LITERAL);
+	CompilerResult slice_result;
+	if (try_analyze_slice_literal(table, expected_type, node, scope_level, scope_specifier, &slice_result))
+		return slice_result;
 	int init_count = node->data.struct_literal.count;
 	Symbol *decl_sym = lookup_named_type(table, expected_type, scope_level);
 	if (!decl_sym) {
@@ -345,14 +453,12 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 // Literals are conceptually untyped in Stage 1: an integer literal adapts
 // to any int target, a float literal to any float target, a bool literal to
 // bool, a null literal to any pointer. Saves the user from writing
-// `u8 a = (u8)0;` everywhere until proper comptime-int support lands. The
-// non-literal narrowing footgun #22 was about still requires an explicit
-// cast — that's enforced by is_convertible.
+// `u8 a = (u8)0;` everywhere until proper comptime-int support lands.
 int literal_fits_type(ASTNode *node, Type *target) {
 	if (!node || !target || node->type != AST_EXPR_LITERAL)
 		return 0;
 	if (node->data.literal.is_null)
-		return target->type_kind == TYPE_POINTER;
+		return target->type_kind == TYPE_POINTER || target->type_kind == TYPE_SLICE;
 	if (target->type_kind != TYPE_PRIMITIVE)
 		return 0;
 	if (node->data.literal.is_bool)
@@ -1176,6 +1282,30 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	case AST_PARAM_DECL:
 		break;
 
+	case AST_SLICE_RANGE: {
+		CompilerResult r = analyze_ast(table, node->data.slice_range.base, scope_level, scope_specifier);
+		if (r != RESULT_SUCCESS)
+			return r;
+		r = analyze_ast(table, node->data.slice_range.lo, scope_level, scope_specifier);
+		if (r != RESULT_SUCCESS)
+			return r;
+		r = analyze_ast(table, node->data.slice_range.hi, scope_level, scope_specifier);
+		if (r != RESULT_SUCCESS)
+			return r;
+		Type *base_ty = get_type(table, node->data.slice_range.base, scope_level, scope_specifier);
+		if (!base_ty || (base_ty->type_kind != TYPE_ARRAY && base_ty->type_kind != TYPE_SLICE)) {
+			report(node->location, "slice range can only be applied to arrays or slices.", 0);
+			return RESULT_FAILURE;
+		}
+		Type *lo_ty = get_type(table, node->data.slice_range.lo, scope_level, scope_specifier);
+		Type *hi_ty = get_type(table, node->data.slice_range.hi, scope_level, scope_specifier);
+		if (!lo_ty || !is_int(lo_ty) || !hi_ty || !is_int(hi_ty)) {
+			report(node->location, "slice range bounds must be integers.", 0);
+			return RESULT_FAILURE;
+		}
+		return RESULT_SUCCESS;
+	}
+
 	case AST_CAST: {
 		CompilerResult result = resolve_type(table, node->data.cast.target_type, node->location);
 		if (result != RESULT_SUCCESS)
@@ -1269,6 +1399,19 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(base_node->location, "cannot determine type", 0);
 			return RESULT_FAILURE;
 		}
+		// .len is the only member that slices and arrays expose, so reject
+		// any other member name with a targeted diagnostic so we don't
+		// fall through to "can only access members of structs or unions
+		// which would be confusing here.
+		if (base_type->type_kind == TYPE_SLICE || base_type->type_kind == TYPE_ARRAY) {
+			if (strcmp(node->data.member_access.member, "len") != 0) {
+				char msg[128] = "";
+				snprintf(msg, sizeof(msg), "%s only exposes the 'len' member.", base_type->type_kind == TYPE_SLICE ? "slice" : "array");
+				report(base_node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			return RESULT_SUCCESS;
+		}
 		Symbol *decl_sym = lookup_named_type(table, base_type, scope_level);
 		if (!decl_sym) {
 			char msg[128] = "";
@@ -1316,9 +1459,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, "cannot determine type of array base", 0);
 			return RESULT_FAILURE;
 		}
-		// Must be an array or pointer
-		if (base_ty->type_kind != TYPE_ARRAY && base_ty->type_kind != TYPE_POINTER) {
-			report(node->location, "subscripted value is not an array or pointer", 0);
+		// Must be an array, slice, or pointer
+		if (base_ty->type_kind != TYPE_ARRAY && base_ty->type_kind != TYPE_POINTER && base_ty->type_kind != TYPE_SLICE) {
+			report(node->location, "subscripted value is not an array, slice, or pointer", 0);
 			return RESULT_FAILURE;
 		}
 		// Check index is integer
@@ -1442,6 +1585,8 @@ CompilerResult resolve_type(Symbol *table, Type *type, SourceLocation loc) {
 			arr_type = arr_type->array.element_type;
 		}
 		return resolve_type(table, arr_type, loc);
+	} else if (type->type_kind == TYPE_SLICE) {
+		return resolve_type(table, type->slice.element_type, loc);
 	} else if (type->type_kind == TYPE_FUNCTION) {
 		CompilerResult result = resolve_type(table, type->function.return_type, loc);
 		if (result != RESULT_SUCCESS)

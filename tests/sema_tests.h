@@ -530,6 +530,162 @@ void test_Switch_EnumSubject_Correct_sema(void) {
 	free(output);
 }
 
+// A fixed-size array `T[N]` is convertible to the matching slice type
+// `T[]` at any conversion site (var init, return, argument). Element types
+// must match exactly — no implicit element coercion.
+void test_SliceAssignFromArray_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32[3] arr = [1, 2, 3]; i32[] s = arr; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_SliceAssignFromArrayWrongElement_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u8[3] arr = [1, 2, 3]; i32[] s = arr; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "Error"));
+	free(output);
+}
+
+// Passing a fixed-size array to a slice-typed parameter must succeed —
+// the same conversion rule used at var-init.
+void test_SlicePassArrayAsArg_sema(void) {
+	TEST_SETUP_SINGLE("fn void take(i32[] s) {} fn void f() { i32[3] arr = [1, 2, 3]; take(arr); }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+// `null` is convertible to any slice — it produces the zero slice
+// `{ null, 0 }`. Same shape as the `null → pointer` rule.
+void test_SliceFromNull_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32[] s = null; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+// A bare pointer is *not* implicitly a slice — slices carry a length and
+// the language can't synthesize one out of thin air. This must be a sema
+// error so users go through an explicit constructor instead.
+void test_SliceFromPointerRejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32 x = 0; i32* p = &x; i32[] s = p; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "Error"));
+	free(output);
+}
+
+// Two `T[]` overloads with different element types must mangle distinctly
+// from each other and from the `T*` overload — otherwise overload
+// resolution silently collides them. Stage 1's resolver uses strict
+// exact-match, so the call sites here pass slice / pointer values
+// directly rather than relying on the array→slice decay.
+void test_SliceOverloadMangling_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32[] s) {} fn void f(u8[] s) {} fn void f(i32* p) {} fn void g() { i32[] sa = null; u8[] sb = null; i32 x = 0; f(sa); f(sb); f(&x); }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+// A struct literal against a slice lvalue is the slice constructor.
+// Positional form is `{ptr, len}`, designated is `{.ptr=p, .len=n}`.
+// Sema is the layer that connects the syntax to the slice type.
+void test_SliceLiteralPositional_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32* p) { i32[] s = {p, 4}; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_SliceLiteralDesignated_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32* p) { i32[] s = {.ptr = p, .len = 4}; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_SliceLiteralWrongPtrType_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(u8* p) { i32[] s = {p, 4}; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "Error"));
+	free(output);
+}
+
+void test_SliceLiteralWrongLenType_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32* p) { i32[] s = {p, 1.5}; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "Error"));
+	free(output);
+}
+
+void test_SliceLiteralUnknownField_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32* p) { i32[] s = {.data = p, .len = 4}; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "unknown field 'data'"));
+	free(output);
+}
+
+void test_SliceLiteralWrongArity_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32* p) { i32[] s = {p}; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "needs exactly 2 fields"));
+	free(output);
+}
+
+// Sub-slicing accepts both array and slice bases and produces a `T[]`.
+// Bounds must be integral; non-integer bounds are rejected.
+void test_SliceRangeFromArray_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32[5] arr = [1,2,3,4,5]; i32[] s = arr[1..3]; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_SliceRangeFromSlice_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32[] s) { i32[] t = s[0..1]; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_SliceRangeOnPointerRejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32* p) { i32[] s = p[0..1]; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "slice range can only be applied to arrays or slices"));
+	free(output);
+}
+
+void test_SliceRangeNonIntBoundRejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32[] s) { i32[] t = s[0..1.5]; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "slice range bounds must be integers"));
+	free(output);
+}
+
+// Indexing into a slice yields its element type — same shape as the
+// existing array/pointer rules — and the index still has to be integral.
+void test_SliceIndexValid_sema(void) {
+	TEST_SETUP_SINGLE("fn i32 f(i32[] s) { return s[0]; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_SliceIndexAssignableLvalue_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32[] s) { s[2] = 7; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_SliceIndexNonIntRejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32[] s) { i32 x = s[1.5]; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "array index must be an integer type"));
+	free(output);
+}
+
+// `.len` is the only valid member on slices and arrays. Sema must allow
+// it on both and reject any other member name with a targeted message.
+void test_SliceDotLen_sema(void) {
+	TEST_SETUP_SINGLE("fn u64 f(i32[] s) { return s.len; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_ArrayDotLen_sema(void) {
+	TEST_SETUP_SINGLE("fn u64 f() { i32[5] a = [1,2,3,4,5]; return a.len; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_SliceDotUnknownMemberRejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32[] s) { u64 x = s.cap; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "slice only exposes the 'len' member"));
+	free(output);
+}
+
 void test_Switch_EnumSubject_WrongEnumMember_sema(void) {
 	TEST_SETUP_SINGLE("enum Color : i32 { Red, Green, Blue }"
 					  "enum Mode : i32 { On, Off }"
