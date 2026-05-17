@@ -47,20 +47,17 @@ char decode_escape_sequence(SourceLocation loc, char second) {
 Token next_token(Scanner *scanner) {
 	Token current_token = {0};
 	current_token.location.path = scanner->source.path;
-	// Skip whitespace.
-	while (_INPUT[_INDEX] && isspace(_INPUT[_INDEX])) {
-		eat_next_char(scanner);
-	}
-
-	// skip commented lines
-	if (_INPUT[_INDEX] && _INPUT[_INDEX] == '/' && _INPUT[_INDEX + 1] && _INPUT[_INDEX + 1] == '/') {
-		while (_INPUT[_INDEX] && _INPUT[_INDEX] != '\n')
+	// Skip whitespace and line comments
+	for (;;) {
+		while (_INPUT[_INDEX] && isspace(_INPUT[_INDEX])) {
 			eat_next_char(scanner);
-		eat_next_char(scanner);
-	}
-
-	while (_INPUT[_INDEX] && isspace(_INPUT[_INDEX])) {
-		eat_next_char(scanner);
+		}
+		if (_INPUT[_INDEX] == '/' && _INPUT[_INDEX + 1] == '/') {
+			while (_INPUT[_INDEX] && _INPUT[_INDEX] != '\n')
+				eat_next_char(scanner);
+			continue;
+		}
+		break;
 	}
 
 	if (_INPUT[_INDEX] == '\0') {
