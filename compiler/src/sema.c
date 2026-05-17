@@ -901,7 +901,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		Type *ltype = get_type(table, node->data.binary_op.left, scope_level, scope_specifier);
 		Type *rtype = get_type(table, node->data.binary_op.right, scope_level, scope_specifier);
-		if (!is_convertible(rtype, ltype, 1, table)) {
+		// Integer / float / null literals take on the other side's primitive type at use-site
+		int literal_match = literal_fits_type(node->data.binary_op.right, ltype) || literal_fits_type(node->data.binary_op.left, rtype);
+		if (!literal_match && !is_convertible(rtype, ltype, 1, table)) {
 			char left_str[128] = "";
 			char right_str[128] = "";
 			type_print(left_str, ltype);
