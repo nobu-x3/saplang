@@ -167,6 +167,28 @@ int main(void) {
 	RUN_TEST(test_Switch_DuplicateCaseValue_sema);
 	RUN_TEST(test_Switch_EnumSubject_Correct_sema);
 	RUN_TEST(test_Switch_EnumSubject_WrongEnumMember_sema);
+	RUN_TEST(test_SliceAssignFromArray_sema);
+	RUN_TEST(test_SliceAssignFromArrayWrongElement_sema);
+	RUN_TEST(test_SlicePassArrayAsArg_sema);
+	RUN_TEST(test_SliceFromNull_sema);
+	RUN_TEST(test_SliceFromPointerRejected_sema);
+	RUN_TEST(test_SliceOverloadMangling_sema);
+	RUN_TEST(test_SliceDotLen_sema);
+	RUN_TEST(test_ArrayDotLen_sema);
+	RUN_TEST(test_SliceDotUnknownMemberRejected_sema);
+	RUN_TEST(test_SliceIndexValid_sema);
+	RUN_TEST(test_SliceIndexAssignableLvalue_sema);
+	RUN_TEST(test_SliceIndexNonIntRejected_sema);
+	RUN_TEST(test_SliceLiteralPositional_sema);
+	RUN_TEST(test_SliceLiteralDesignated_sema);
+	RUN_TEST(test_SliceLiteralWrongPtrType_sema);
+	RUN_TEST(test_SliceLiteralWrongLenType_sema);
+	RUN_TEST(test_SliceLiteralUnknownField_sema);
+	RUN_TEST(test_SliceLiteralWrongArity_sema);
+	RUN_TEST(test_SliceRangeFromArray_sema);
+	RUN_TEST(test_SliceRangeFromSlice_sema);
+	RUN_TEST(test_SliceRangeOnPointerRejected_sema);
+	RUN_TEST(test_SliceRangeNonIntBoundRejected_sema);
 
 	RUN_TEST(test_Primitivei32_typeinfo);
 	RUN_TEST(test_Primitivei64_typeinfo);
@@ -228,6 +250,20 @@ int main(void) {
 	RUN_TEST(test_SelfMul_codegen);
 	RUN_TEST(test_SelfDiv_codegen);
 	RUN_TEST(test_CharList_codegen);
+	RUN_TEST(test_SliceVarDeclNoInit_codegen);
+	RUN_TEST(test_SliceVarDeclFromArray_codegen);
+	RUN_TEST(test_SlicePassArrayAsArg_codegen);
+	RUN_TEST(test_SliceFromNull_codegen);
+	RUN_TEST(test_ArrayDotLen_codegen);
+	RUN_TEST(test_SliceDotLen_codegen);
+	RUN_TEST(test_SliceDotLenAfterDecay_codegen);
+	RUN_TEST(test_SliceIndexRead_codegen);
+	RUN_TEST(test_SliceIndexWrite_codegen);
+	RUN_TEST(test_SliceLiteralPositional_codegen);
+	RUN_TEST(test_SliceLiteralDesignated_codegen);
+	RUN_TEST(test_SliceLiteralLengthIsReadable_codegen);
+	RUN_TEST(test_SliceRangeFromArray_codegen);
+	RUN_TEST(test_SliceRangeFromSlice_codegen);
 	RUN_TEST(test_LocalArrayLiteralInit_codegen);
 	RUN_TEST(test_LocalArrayLiteralInitWithVar_codegen);
 	RUN_TEST(test_LocalArrayLiteralNested_codegen);
@@ -270,6 +306,7 @@ int main(void) {
 	RUN_TEST(test_NullTest_modules);
 	RUN_TEST(test_ImportCycle_modules);
 	RUN_TEST(test_SwitchTest_modules);
+	RUN_TEST(test_SliceTest_modules);
 	return UNITY_END();
 
 }

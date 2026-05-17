@@ -104,6 +104,12 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 		return LLVMArrayType(elem, type->array.size);
 	} break;
 
+	case TYPE_SLICE: {
+		LLVMTypeRef elem = map_to_llvm(cg, type->slice.element_type, table);
+		LLVMTypeRef fields[2] = {LLVMPointerType(elem, 0), LLVMInt64TypeInContext(cg->llvm_context)};
+		return LLVMStructTypeInContext(cg->llvm_context, fields, 2, 0);
+	} break;
+
 	case TYPE_FUNCTION: {
 		LLVMTypeRef ret_type = map_to_llvm(cg, type->function.return_type, table);
 		LLVMTypeRef *param_types = alloca(sizeof(LLVMTypeRef) * (size_t)type->function.param_count);
@@ -175,9 +181,50 @@ static LLVMValueRef codegen_cond_to_bool(CodegenLLVM *cg, ASTNode *cond, Symbol 
 	return val;
 }
 
+// If `expected` is a slice and `expr` evaluates to something that decays
+// to a slice (a fixed-size array, or a typed-null literal), construct the
+// fat-pointer { ptr, u64 } value and return it. Otherwise return the
+// already-computed `computed_val` unchanged.
+//
+// The array case has to re-enter codegen with PI_LOAD_PTR because the
+// caller already produced a by-value load — we want the *address* of the
+// array, not its contents.
+static LLVMValueRef maybe_decay_to_slice(CodegenLLVM *cg, ASTNode *expr, LLVMValueRef computed_val, Type *expected, Symbol *table, PassContext ctx) {
+	if (!expected || expected->type_kind != TYPE_SLICE)
+		return computed_val;
+	Type *actual = get_type(table, expr, ctx.current_scope, "");
+	if (!actual)
+		return computed_val;
+
+	LLVMTypeRef slice_ty = map_to_llvm(cg, expected, table);
+	LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
+
+	if (actual->type_kind == TYPE_POINTER && actual->pointee && actual->pointee->type_kind == TYPE_PRIMITIVE && actual->pointee->prim == PRIM_VOID) {
+		LLVMTypeRef elem_ptr_ty = LLVMPointerType(map_to_llvm(cg, expected->slice.element_type, table), 0);
+		LLVMValueRef slice = LLVMGetUndef(slice_ty);
+		slice = LLVMBuildInsertValue(cg->builder, slice, LLVMConstPointerNull(elem_ptr_ty), 0, "slice.ptr");
+		slice = LLVMBuildInsertValue(cg->builder, slice, LLVMConstInt(i64_ty, 0, 0), 1, "slice.len");
+		return slice;
+	}
+
+	if (actual->type_kind != TYPE_ARRAY)
+		return computed_val;
+
+	PassContext ptr_ctx = ctx;
+	ptr_ctx.intention = PI_LOAD_PTR;
+	ptr_ctx.expected_type = actual;
+	LLVMValueRef arr_ptr = codegen_ast(cg, expr, table, ptr_ctx);
+
+	int len = actual->array.size;
+	LLVMValueRef slice = LLVMGetUndef(slice_ty);
+	slice = LLVMBuildInsertValue(cg->builder, slice, arr_ptr, 0, "slice.ptr");
+	slice = LLVMBuildInsertValue(cg->builder, slice, LLVMConstInt(i64_ty, len, 0), 1, "slice.len");
+	return slice;
+}
+
 LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	ASTNode *lvalue = node->data.assignment.lvalue;
-	assert(lvalue->type == AST_EXPR_IDENT || lvalue->type == AST_MEMBER_ACCESS);
+	assert(lvalue->type == AST_EXPR_IDENT || lvalue->type == AST_MEMBER_ACCESS || lvalue->type == AST_ARRAY_ACCESS);
 	if (lvalue->type == AST_EXPR_IDENT) {
 		Symbol *sym = lookup_symbol(table, lvalue->data.ident.resolved_name, ctx.current_scope);
 		assert(sym);
@@ -188,14 +235,25 @@ LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, P
 		assert(type);
 		ctx.expected_type = type;
 		ctx.auxiliary_node = node->data.member_access.base;
+	} else if (lvalue->type == AST_ARRAY_ACCESS) {
+		// `a[i] = v` — the lvalue codegen produces the element pointer
+		// (PI_LOAD_PTR falls through the array/slice cases as `gep`), and
+		// the rvalue needs to be loaded as the element type so the store
+		// width is right.
+		Type *type = get_type(table, lvalue, ctx.current_scope, "");
+		assert(type);
+		ctx.expected_type = type;
+		ctx.auxiliary_node = lvalue->data.array_access.base;
 	}
 	ASTNode *rvalue = node->data.assignment.rvalue;
 	LLVMValueRef lhs = codegen_ast(cg, lvalue, table, ctx);
+	Type *target_type = ctx.expected_type;
 	ctx.intention = PI_LOAD_VAL;
 	LLVMValueRef rhs = codegen_ast(cg, rvalue, table, ctx);
 	// There is no need for store here since struct literal assignment is already handled
 	if (lvalue->type == AST_EXPR_IDENT && rvalue->type == AST_STRUCT_LITERAL)
 		return NULL;
+	rhs = maybe_decay_to_slice(cg, rvalue, rhs, target_type, table, ctx);
 	return LLVMBuildStore(cg->builder, rhs, lhs);
 }
 
@@ -240,6 +298,23 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 	ctx.intention = tmp_intention;
 	Type *base_type = get_type(table, node->data.member_access.base, ctx.current_scope, "");
 	assert(base_type);
+	LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
+	if (base_type->type_kind == TYPE_ARRAY) {
+		// `arr.len` folds to the compile-time constant size.
+		assert(strcmp(node->data.member_access.member, "len") == 0);
+		return LLVMConstInt(i64_ty, (unsigned long long)base_type->array.size, 0);
+	}
+	if (base_type->type_kind == TYPE_SLICE) {
+		// `s.len` reads field 1 of the fat pointer. base_value is a pointer
+		// to the slice header alloca; GEP to the len field and load (or
+		// hand back the field pointer if the caller wants an lvalue).
+		assert(strcmp(node->data.member_access.member, "len") == 0);
+		LLVMTypeRef slice_ty = map_to_llvm(cg, base_type, table);
+		LLVMValueRef len_ptr = LLVMBuildStructGEP2(cg->builder, slice_ty, base_value, 1, "slice.len.ptr");
+		if (ctx.intention != PI_LOAD_VAL)
+			return len_ptr;
+		return LLVMBuildLoad2(cg->builder, i64_ty, len_ptr, "slice.len");
+	}
 	assert(base_type->type_kind == TYPE_STRUCT || base_type->type_kind == TYPE_UNION);
 	LLVMTypeRef struct_ty = map_to_llvm(cg, base_type, table);
 	assert(struct_ty);
@@ -289,6 +364,7 @@ LLVMValueRef codegen_return(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	ASTNodeType ret_expr_type = node->data.ret.return_expr->type;
 	LLVMValueRef expr = codegen_ast(cg, node->data.ret.return_expr, table, ctx);
 	assert(expr);
+	expr = maybe_decay_to_slice(cg, node->data.ret.return_expr, expr, ctx.expected_type, table, ctx);
 	return LLVMBuildRet(cg->builder, expr);
 }
 
@@ -314,6 +390,45 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 		return LLVMConstInt(ty, node->data.literal.long_value, 1);
 		break;
 	case AST_STRUCT_LITERAL: {
+		if (ctx.expected_type && ctx.expected_type->type_kind == TYPE_SLICE) {
+			// Slice literal: `{ptr, len}` or `{.ptr=p, .len=n}`. Build the
+			// fat-pointer aggregate directly via insertvalue. Sema has
+			// already validated arity, types, and field names.
+			Type *elem = ctx.expected_type->slice.element_type;
+			LLVMTypeRef slice_ty = map_to_llvm(cg, ctx.expected_type, table);
+			LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
+			LLVMTypeRef elem_ptr_ty = LLVMPointerType(map_to_llvm(cg, elem, table), 0);
+			Type *ptr_type_ast = new_pointer_type(elem);
+			Type *u64_ty_ast = get_primitive_u64();
+			ASTNode *ptr_expr = NULL, *len_expr = NULL;
+			int pos_index = 0;
+			for (int i = 0; i < node->data.struct_literal.count; ++i) {
+				FieldInitializer *init = node->data.struct_literal.inits[i];
+				int slot;
+				if (init->is_designated)
+					slot = strcmp(init->field, "ptr") == 0 ? 0 : 1;
+				else
+					slot = pos_index++;
+				if (slot == 0)
+					ptr_expr = init->expr;
+				else
+					len_expr = init->expr;
+			}
+			PassContext sub = ctx;
+			sub.intention = PI_LOAD_VAL;
+			sub.expected_type = ptr_type_ast;
+			LLVMValueRef ptr_val = ptr_expr->type == AST_EXPR_LITERAL ? LLVMConstPointerNull(elem_ptr_ty) : codegen_ast(cg, ptr_expr, table, sub);
+			sub.expected_type = u64_ty_ast;
+			LLVMValueRef len_val_raw = codegen_ast(cg, len_expr, table, sub);
+			LLVMValueRef len_val = LLVMBuildSExtOrBitCast(cg->builder, len_val_raw, i64_ty, "slice.lit.len");
+			LLVMValueRef slice = LLVMGetUndef(slice_ty);
+			slice = LLVMBuildInsertValue(cg->builder, slice, ptr_val, 0, "slice.lit.ptr");
+			slice = LLVMBuildInsertValue(cg->builder, slice, len_val, 1, "slice.lit");
+			LLVMValueRef var_ptr = ctx.passed_value ? ctx.passed_value : (ctx.auxiliary_node ? hashmap_get(ctx.loaded_values, ctx.auxiliary_node->data.var_decl.resolved_name) : NULL);
+			if (var_ptr)
+				LLVMBuildStore(cg->builder, slice, var_ptr);
+			return slice;
+		}
 		int init_count = node->data.struct_literal.count;
 		Symbol *decl_sym = lookup_named_type(table, ctx.expected_type, ctx.current_scope);
 		assert(decl_sym);
@@ -445,6 +560,7 @@ LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pas
 		LLVMValueRef val = codegen_ast(cg, node->data.var_decl.init, table, ctx);
 		if (node->data.var_decl.init->type != AST_STRUCT_LITERAL && node->data.var_decl.init->type != AST_ARRAY_LITERAL) {
 			assert(val);
+			val = maybe_decay_to_slice(cg, node->data.var_decl.init, val, node->data.var_decl.type, table, ctx);
 			LLVMBuildStore(cg->builder, val, ptr);
 		}
 	}
@@ -742,6 +858,47 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		}
 	} break;
 
+	case AST_SLICE_RANGE: {
+		// `base[lo..hi]` — produces a `T[]`. For an array base we GEP from
+		// its alloca; for a slice base we first load the data pointer out
+		// of the slice header. Length is `hi - lo` as i64.
+		PassContext base_ctx = ctx;
+		base_ctx.intention = PI_LOAD_PTR;
+		base_ctx.expected_type = get_type(table, node->data.slice_range.base, ctx.current_scope, "");
+		assert(base_ctx.expected_type);
+		LLVMValueRef base_ptr = codegen_ast(cg, node->data.slice_range.base, table, base_ctx);
+
+		LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
+		Type *elem_ast = base_ctx.expected_type->type_kind == TYPE_SLICE ? base_ctx.expected_type->slice.element_type : base_ctx.expected_type->array.element_type;
+		LLVMTypeRef elem_ty = map_to_llvm(cg, elem_ast, table);
+
+		PassContext idx_ctx = ctx;
+		idx_ctx.intention = PI_LOAD_VAL;
+		LLVMValueRef lo = codegen_ast(cg, node->data.slice_range.lo, table, idx_ctx);
+		LLVMValueRef hi = codegen_ast(cg, node->data.slice_range.hi, table, idx_ctx);
+		LLVMValueRef lo64 = LLVMBuildSExtOrBitCast(cg->builder, lo, i64_ty, "range.lo");
+		LLVMValueRef hi64 = LLVMBuildSExtOrBitCast(cg->builder, hi, i64_ty, "range.hi");
+		LLVMValueRef len = LLVMBuildSub(cg->builder, hi64, lo64, "range.len");
+
+		LLVMValueRef data_ptr;
+		if (base_ctx.expected_type->type_kind == TYPE_SLICE) {
+			LLVMTypeRef slice_ty_ref = map_to_llvm(cg, base_ctx.expected_type, table);
+			LLVMValueRef data_field = LLVMBuildStructGEP2(cg->builder, slice_ty_ref, base_ptr, 0, "range.data.ptr");
+			data_ptr = LLVMBuildLoad2(cg->builder, LLVMPointerType(elem_ty, 0), data_field, "range.data");
+		} else {
+			LLVMTypeRef arr_ty = map_to_llvm(cg, base_ctx.expected_type, table);
+			data_ptr = LLVMBuildInBoundsGEP2(cg->builder, arr_ty, base_ptr, (LLVMValueRef[]){LLVMConstInt(i64_ty, 0, 0), LLVMConstInt(i64_ty, 0, 0)}, 2, "range.arr.base");
+		}
+		LLVMValueRef sub_ptr = LLVMBuildInBoundsGEP2(cg->builder, elem_ty, data_ptr, &lo64, 1, "range.sub.ptr");
+
+		Type *result_ast = new_slice_type(elem_ast);
+		LLVMTypeRef result_ty = map_to_llvm(cg, result_ast, table);
+		LLVMValueRef slice = LLVMGetUndef(result_ty);
+		slice = LLVMBuildInsertValue(cg->builder, slice, sub_ptr, 0, "range.slice.ptr");
+		slice = LLVMBuildInsertValue(cg->builder, slice, len, 1, "range.slice");
+		return slice;
+	}
+
 	case AST_MEMBER_ACCESS:
 		return codegen_member_access(cg, node, table, ctx);
 
@@ -763,16 +920,28 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		PassContext base_ctx = ctx;
 		base_ctx.intention = PI_LOAD_PTR;
 		base_ctx.expected_type = get_type(table, node->data.array_access.base, ctx.current_scope, "");
-		LLVMTypeRef arr_ty = map_to_llvm(cg, base_ctx.expected_type, table);
 		LLVMValueRef base_ptr = codegen_ast(cg, node->data.array_access.base, table, base_ctx);
-		// compute index
 		PassContext idx_ctx = ctx;
 		idx_ctx.intention = PI_LOAD_VAL;
 		LLVMValueRef idx = codegen_ast(cg, node->data.array_access.index, table, idx_ctx);
-		// extend index to i64 if needed
 		LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
 		LLVMValueRef idx64 = LLVMBuildSExtOrBitCast(cg->builder, idx, i64_ty, "idx64");
-		// first GEP: [0, idx]
+
+		if (base_ctx.expected_type->type_kind == TYPE_SLICE) {
+			// Pull the data pointer out of the slice header (field 0), then
+			// single-index GEP into it. Different shape from the array case
+			// because the slice points at a flat run of T, not at [N x T].
+			LLVMTypeRef slice_ty = map_to_llvm(cg, base_ctx.expected_type, table);
+			LLVMValueRef data_ptr_field = LLVMBuildStructGEP2(cg->builder, slice_ty, base_ptr, 0, "slice.data.ptr");
+			LLVMTypeRef elem_ty = map_to_llvm(cg, base_ctx.expected_type->slice.element_type, table);
+			LLVMValueRef data_ptr = LLVMBuildLoad2(cg->builder, LLVMPointerType(elem_ty, 0), data_ptr_field, "slice.data");
+			LLVMValueRef gep = LLVMBuildInBoundsGEP2(cg->builder, elem_ty, data_ptr, &idx64, 1, "slicegep");
+			if (ctx.intention == PI_LOAD_VAL)
+				return LLVMBuildLoad2(cg->builder, elem_ty, gep, "sliceload");
+			return gep;
+		}
+
+		LLVMTypeRef arr_ty = map_to_llvm(cg, base_ctx.expected_type, table);
 		LLVMValueRef gep = LLVMBuildInBoundsGEP2(cg->builder, arr_ty, base_ptr, (LLVMValueRef[]){LLVMConstInt(i64_ty, 0, 0), idx64}, 2, "arrgep");
 		if (ctx.intention == PI_LOAD_VAL) {
 			LLVMTypeRef elem_ty = map_to_llvm(cg, ctx.expected_type, table);
@@ -802,16 +971,18 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			PassContext param_ctx = ctx;
 			param_ctx.intention = PI_LOAD_VAL;
 			ASTNode *param = node->data.func_call.args[i];
+			Type *declared_param_ty = i < fn_sym->type->function.param_count ? fn_sym->type->function.param_types[i] : NULL;
 			if (param->type == AST_EXPR_IDENT) {
 				Symbol *param_sym = lookup_symbol(table, param->data.ident.resolved_name, ctx.current_scope);
 				assert(param_sym);
 				param_ctx.expected_type = param_sym->type;
-			} else if (i < fn_sym->type->function.param_count) {
+			} else if (declared_param_ty) {
 				// Literals and other expressions need the declared param type to
 				// pick the right LLVM constant width / kind.
-				param_ctx.expected_type = fn_sym->type->function.param_types[i];
+				param_ctx.expected_type = declared_param_ty;
 			}
 			args[i] = codegen_ast(cg, param, table, param_ctx);
+			args[i] = maybe_decay_to_slice(cg, param, args[i], declared_param_ty, table, ctx);
 		}
 		int is_void = fn_sym->type->function.return_type->type_kind == TYPE_PRIMITIVE && fn_sym->type->function.return_type->prim == PRIM_VOID;
 		return LLVMBuildCall2(cg->builder, fn_type, callee, args, node->data.func_call.arg_count, is_void ? "" : "calltmp");

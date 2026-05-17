@@ -82,3 +82,12 @@ void test_ImportCycle_modules(void) {
 void test_SwitchTest_modules(void) {
     test("module_tests/switch_test", "switch_test");
 }
+
+// End-to-end exercise of slices: T[] declarations, array→slice decay at
+// var-init and call sites, .len on both arrays and slices, indexed read
+// and write, slice literals (positional and designated), sub-slicing,
+// and the zero slice from null. main() returns 0 only if every check
+// holds.
+void test_SliceTest_modules(void) {
+    test("module_tests/slice_test", "slice_test");
+}

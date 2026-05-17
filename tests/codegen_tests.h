@@ -981,6 +981,170 @@ void test_CharList_codegen(void) {
 	free(error);
 }
 
+// A slice variable allocas a two-field struct `{ ptr, i64 }`. With no
+// initializer, no store is emitted — matches the existing default-init
+// behavior for other aggregate locals.
+void test_SliceVarDeclNoInit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { i32[] s; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca { ptr, i64 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// Initialising a slice from a fixed-size array materialises the fat
+// pointer in-place: an `insertvalue` for the data pointer (the array
+// alloca) and another for the length. The store then commits the whole
+// { ptr, i64 } aggregate.
+void test_SliceVarDeclFromArray_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { i32[3] arr = [1, 2, 3]; i32[] s = arr; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca [3 x i32]"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca { ptr, i64 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "insertvalue { ptr, i64 } undef, ptr %__main_foo_arr, 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "i64 3, 1"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store { ptr, i64 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// Calling `take(arr)` with a fixed-size array against a slice parameter
+// emits the same materialisation at the call site and passes the
+// { ptr, i64 } value as the argument.
+void test_SlicePassArrayAsArg_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void take(i32[] s) {} fn void foo() { i32[3] arr = [1, 2, 3]; take(arr); }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "define void @\"__main_take__i32[]\"({ ptr, i64 } %0)"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "insertvalue { ptr, i64 } undef, ptr %__main_foo_arr, 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "i64 3, 1"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "call void @\"__main_take__i32[]\"({ ptr, i64 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// `null → slice` produces a zero slice: null data pointer, zero length.
+// Same shape as the array case, just with a null constant.
+// `null` typed as a slice should produce the zero slice. LLVM
+// constant-folds the two `insertvalue`s into a `zeroinitializer` for
+// the { ptr, i64 } aggregate, which is semantically the same.
+void test_SliceFromNull_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { i32[] s = null; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca { ptr, i64 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store { ptr, i64 } zeroinitializer"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// A slice literal lowers to the same `insertvalue` shape used for
+// array→slice decay: ptr into field 0, len into field 1. The store lands
+// on the slice's alloca.
+void test_SliceLiteralPositional_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo(i32* p) { i32[] s = {p, 4}; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca { ptr, i64 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "insertvalue { ptr, i64 } undef, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "i64 4, 1"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store { ptr, i64 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// Designated form lowers identically — the field name only selects which
+// expression goes into which slot. The IR shape is the same.
+void test_SliceLiteralDesignated_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo(i32* p) { i32[] s = {.len = 7, .ptr = p}; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "insertvalue { ptr, i64 } undef, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "i64 7, 1"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// End-to-end: build a slice from raw ptr + len, then read `.len` from it.
+// Verifies the constructed slice is structurally usable.
+void test_SliceLiteralLengthIsReadable_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn u64 foo(i32* p) { i32[] s = {p, 9}; return s.len; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "i64 9, 1"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds { ptr, i64 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load i64"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// Sub-slicing an array bases the new data pointer at `&arr[lo]` and
+// sets length to `hi - lo`. The output ptr is a GEP from the array
+// alloca, and the length subtraction shows up explicitly.
+void test_SliceRangeFromArray_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { i32[5] arr = [1,2,3,4,5]; i32[] s = arr[1..4]; }");
+	// Compile-time bounds (4 - 1) constant-fold to 3, so no explicit
+	// `sub` shows up — verify the constant length and the offset GEP.
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds [5 x i32]"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds i32, ptr %range.arr.base, i64 1"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "insertvalue { ptr, i64 } %range.slice.ptr, i64 3, 1"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// Sub-slicing a slice loads the source slice's data pointer first, then
+// GEPs by lo. Constant bounds fold the length to a literal i64.
+void test_SliceRangeFromSlice_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32[] foo(i32[] s) { return s[1..3]; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds { ptr, i64 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds i32"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "i64 2, 1"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// Slice indexing is a single-index GEP into the loaded data pointer,
+// distinct from the two-index `[0, i]` pattern arrays use. Reads emit
+// `getelementptr inbounds i32, ptr ...` and a load of the element type.
+void test_SliceIndexRead_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 foo(i32[] s) { return s[2]; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds { ptr, i64 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds i32, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load i32, ptr"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// Indexed slice writes use the same GEP shape as reads; the store lands
+// on the element pointer, not on the slice header.
+void test_SliceIndexWrite_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo(i32[] s) { s[1] = 42; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds i32, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 42, ptr"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// `arr.len` for a fixed-size array folds to a compile-time `i64`
+// constant — no load, no GEP, just the literal length.
+void test_ArrayDotLen_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn u64 foo() { i32[5] a = [1,2,3,4,5]; return a.len; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 5"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// `s.len` reads field 1 of the slice header. That's a struct-GEP + load
+// — exactly the same shape as struct-field reads elsewhere.
+void test_SliceDotLen_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn u64 foo(i32[] s) { return s.len; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds { ptr, i64 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "i32 0, i32 1"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load i64"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+// End-to-end: decay an array into a slice, then read `.len` from the
+// slice — the length should still be the array's original size.
+void test_SliceDotLenAfterDecay_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn u64 foo() { i32[3] arr = [1,2,3]; i32[] s = arr; return s.len; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "insertvalue { ptr, i64 } %slice.ptr, i64 3, 1"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds { ptr, i64 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
 void test_LocalArrayLiteralInit_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { u8[3] lit = [1, 2, 3]; }");
 	const char *expected = "; ModuleID = 'test'\n"
