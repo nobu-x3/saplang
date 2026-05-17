@@ -1071,9 +1071,16 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 
 	case AST_DEFERRED_SEQUENCE:
 	case AST_BLOCK: {
+		// Push a DILexicalBlock scope so the body's locations (and the
+		// locals Phase 4 will introduce) attach to a real scope. Skip
+		// deferred-sequence sublists — they're inlined statements that
+		// don't introduce a `{}` scope in source.
+		PassContext block_ctx = ctx;
+		if (cg->should_build_debug && ctx.di_scope && node->type == AST_BLOCK && node->location.line > 0)
+			block_ctx.di_scope = LLVMDIBuilderCreateLexicalBlock(cg->di_builder, ctx.di_scope, cg->di_file, node->location.line, node->location.col);
 		for (int i = 0; i < node->data.block.count; ++i) {
 			ASTNode *stmt = node->data.block.statements[i];
-			codegen_ast(cg, stmt, table, ctx);
+			codegen_ast(cg, stmt, table, block_ctx);
 		}
 	} break;
 

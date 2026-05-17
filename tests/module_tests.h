@@ -165,3 +165,43 @@ static void test_DebugInfoTypes_modules(void) {
     int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the Phase 2 fixture");
 }
+
+// Phase 3 exercise: line tables. Compile a multi-statement fixture
+// with `-dbg`, run it, then assert the .debug_line table has rows for
+// several distinct source lines (so `step` in gdb actually advances
+// one source line at a time), the DIE tree references the source
+// file, and the verifier is clean. Lexical-block scopes are emitted
+// in the bitcode too, but LLVM strips them from the .o until a
+// DILocalVariable anchors them — Phase 4's test will assert those.
+static void test_DebugInfoLines_modules(void) {
+    CompileOptions opts = {0};
+    char input_file_path[256] = "";
+    sprintf(input_file_path, "%s/main.sl", "module_tests/debug_info_lines");
+    opts.input_file_path = input_file_path;
+    opts.no_cleanup = 1;
+    opts.gen_debug = 1;
+    opts.threads = 1;
+    opts.output_file_path = "debug_info_lines";
+    driver_set_compiler_options(opts);
+    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
+    TEST_ASSERT_EQUAL_INT(system("./debug_info_lines"), 0);
+
+    FILE *dump = popen("llvm-dwarfdump --debug-line .tmp/tmp-main.o", "r");
+    TEST_ASSERT_NOT_NULL(dump);
+    char buf[16384] = {0};
+    size_t n = fread(buf, 1, sizeof(buf) - 1, dump);
+    pclose(dump);
+    TEST_ASSERT_GREATER_THAN(0, n);
+    // The line program prologue must reference main.sl, and several
+    // statements (we want is_stmt markers on at least a handful of
+    // distinct rows) should make it through.
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "main.sl"), "expected main.sl referenced in line table prologue");
+    int is_stmt_rows = 0;
+    for (char *p = buf; (p = strstr(p, "is_stmt")) != NULL; ++p, ++is_stmt_rows) {}
+    // Includes the standard_opcode_lengths header row, so >= 4 means at
+    // least 3 real line-program rows carry is_stmt.
+    TEST_ASSERT_GREATER_THAN_MESSAGE(3, is_stmt_rows, "expected multiple is_stmt rows in line table");
+
+    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the Phase 3 fixture");
+}
