@@ -122,6 +122,63 @@ void test_UnionDecl_typeinfo(void) {
 	TEST_ASSERT_EQUAL_UINT32(8, info.align);
 }
 
+// A slice is a fat pointer { T*, u64 }. On a 64-bit target that lays out
+// as 16 bytes with pointer alignment, regardless of the element type's
+// own size — the element type only matters for what the data pointer
+// points at, not the slice header layout itself.
+void test_SliceType_typeinfo(void) {
+	ASTNode dummynode;
+	Type elem = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_I32, .type_name = "i32"};
+	Type type = {.type_kind = TYPE_SLICE, .slice = {.element_type = &elem}};
+	TypeInfo info = get_type_info(&type, &dummynode);
+	TEST_ASSERT_EQUAL_UINT32(sizeof(void *) + 8, info.size);
+	TEST_ASSERT_EQUAL_UINT32(sizeof(void *), info.align);
+}
+
+void test_SliceType_LayoutIsElementIndependent_typeinfo(void) {
+	ASTNode dummynode;
+	Type i8_elem = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_I8, .type_name = "i8"};
+	Type i8_slice = {.type_kind = TYPE_SLICE, .slice = {.element_type = &i8_elem}};
+	Type f64_elem = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_F64, .type_name = "f64"};
+	Type f64_slice = {.type_kind = TYPE_SLICE, .slice = {.element_type = &f64_elem}};
+	TypeInfo a = get_type_info(&i8_slice, &dummynode);
+	TypeInfo b = get_type_info(&f64_slice, &dummynode);
+	TEST_ASSERT_EQUAL_UINT32(a.size, b.size);
+	TEST_ASSERT_EQUAL_UINT32(a.align, b.align);
+}
+
+// new_slice_type, type_equals, type_print, and type_mangle_append should
+// all agree that slices distinguish by element type and are spelled "T[]".
+void test_SliceType_ConstructorAndPrinting_typeinfo(void) {
+	Arena arena;
+	arena_init(&arena, 0);
+	type_arena_set(&arena);
+
+	Type *i32_t = new_primitive_type("i32");
+	Type *u8_t = new_primitive_type("u8");
+	Type *i32_slice = new_slice_type(i32_t);
+	Type *i32_slice_dup = new_slice_type(new_primitive_type("i32"));
+	Type *u8_slice = new_slice_type(u8_t);
+
+	TEST_ASSERT_NOT_NULL(i32_slice);
+	TEST_ASSERT_EQUAL_INT(TYPE_SLICE, i32_slice->type_kind);
+	TEST_ASSERT_EQUAL_PTR(i32_t, i32_slice->slice.element_type);
+	TEST_ASSERT_TRUE(type_equals(i32_slice, i32_slice_dup));
+	TEST_ASSERT_FALSE(type_equals(i32_slice, u8_slice));
+
+	char printed[64] = {0};
+	type_print(printed, i32_slice);
+	TEST_ASSERT_EQUAL_STRING("i32[]", printed);
+
+	char mangled[64] = "";
+	int overflow = type_mangle_append(i32_slice, mangled, sizeof(mangled));
+	TEST_ASSERT_EQUAL_INT(0, overflow);
+	TEST_ASSERT_EQUAL_STRING("_i32[]", mangled);
+
+	type_arena_set(NULL);
+	arena_deinit(&arena);
+}
+
 void test_NamedType_ResolvedNameMangling_types(void) {
 	Arena arena;
 	arena_init(&arena, 0);

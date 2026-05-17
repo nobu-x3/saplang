@@ -61,3 +61,16 @@ void test_TokenText_Case_scanner(void) {
 	TEST_ASSERT_EQUAL_INT(TOK_CASE, tok.type);
 	TEST_ASSERT_EQUAL_STRING("case", tok.text);
 }
+
+// `..` lexes as TOK_DOTDOT (used for slice ranges). Must be distinct from
+// `...` (varargs) and a bare `.` (member access / float decimal point).
+void test_TokenText_DotDot_scanner(void) {
+	Token tok = scan_first("..");
+	TEST_ASSERT_EQUAL_INT(TOK_DOTDOT, tok.type);
+	TEST_ASSERT_EQUAL_STRING("..", tok.text);
+}
+
+void test_TokenText_DotDotDot_StillTriDot_scanner(void) {
+	Token tok = scan_first("...");
+	TEST_ASSERT_EQUAL_INT(TOK_DOTDOTDOT, tok.type);
+}

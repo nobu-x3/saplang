@@ -285,6 +285,10 @@ Token next_token(Scanner *scanner) {
 		} else {
 			while (_INPUT[_INDEX] && (isdigit(_INPUT[_INDEX]) || (_INPUT[_INDEX] == '.' && !hasDot))) {
 				if (_INPUT[_INDEX] == '.') {
+					// if the . is followed by another ., leave both for the
+					// scanner's . arm to lex as TOK_DOTDOT.
+					if (_INPUT[_INDEX + 1] == '.')
+						break;
 					hasDot = 1;
 				}
 				_NUM_PUSH(_INPUT[_INDEX]);
@@ -529,6 +533,11 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_DOTDOTDOT;
 			strncpy(current_token.text, "...", sizeof(current_token.text));
 			eat_next_char(scanner);
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else if (_INPUT[_INDEX + 1] && _INPUT[_INDEX + 1] == '.') {
+			current_token.type = TOK_DOTDOT;
+			strncpy(current_token.text, "..", sizeof(current_token.text));
 			eat_next_char(scanner);
 			eat_next_char(scanner);
 		} else {

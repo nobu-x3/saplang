@@ -39,6 +39,12 @@ int main(void) {
 	RUN_TEST(test_NullInComparison_parser);
 	RUN_TEST(test_CustomTypePointer);
 	RUN_TEST(test_ArrayLiterals);
+	RUN_TEST(test_SliceTypeDecl_parser);
+	RUN_TEST(test_SliceOfPointers_parser);
+	RUN_TEST(test_SliceArrayMix_parser);
+	RUN_TEST(test_SliceLiteralPositional_parser);
+	RUN_TEST(test_SliceLiteralDesignated_parser);
+	RUN_TEST(test_SliceRange_parser);
 	RUN_TEST(test_ArrayAccessAssignment);
 	RUN_TEST(test_FunctionCallsWithLiteralArguments);
 	RUN_TEST(test_FunctionCallsWithExprArguments);
@@ -83,6 +89,8 @@ int main(void) {
 	RUN_TEST(test_TokenText_NullPrefix_NotAKeyword_scanner);
 	RUN_TEST(test_TokenText_Switch_scanner);
 	RUN_TEST(test_TokenText_Case_scanner);
+	RUN_TEST(test_TokenText_DotDot_scanner);
+	RUN_TEST(test_TokenText_DotDotDot_StillTriDot_scanner);
 	RUN_TEST(test_StringLiteral);
 	RUN_TEST(test_CharLiteral);
 	RUN_TEST(test_BinaryLiteral);
@@ -171,6 +179,9 @@ int main(void) {
 	RUN_TEST(test_StructAlreadyAlignedI32Quad_typeinfo);
 	RUN_TEST(test_StructTrailingPadI32Bool_typeinfo);
 	RUN_TEST(test_UnionDecl_typeinfo);
+	RUN_TEST(test_SliceType_typeinfo);
+	RUN_TEST(test_SliceType_LayoutIsElementIndependent_typeinfo);
+	RUN_TEST(test_SliceType_ConstructorAndPrinting_typeinfo);
 	RUN_TEST(test_NamedType_ResolvedNameMangling_types);
 	RUN_TEST(test_NamedType_MangledNameOverflow_types);
 	RUN_TEST(test_NamedType_MangledNameBoundary_types);

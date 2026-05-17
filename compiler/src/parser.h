@@ -56,6 +56,7 @@ typedef enum {
 	AST_BREAK,
 	AST_CAST,
 	AST_SWITCH_STMT,
+	AST_SLICE_RANGE,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -233,6 +234,14 @@ typedef struct ASTNode {
 			int case_count;
 			struct ASTNode *else_body;
 		} switch_stmt;
+		// `base[lo..hi]` — produces `T[]` over the half-open range.
+		// `base` is the array or slice being sliced; `lo` and `hi` are
+		// integral index expressions.
+		struct {
+			struct ASTNode *base;
+			struct ASTNode *lo;
+			struct ASTNode *hi;
+		} slice_range;
 	} data;
 } ASTNode;
 

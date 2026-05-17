@@ -8,7 +8,7 @@ typedef struct {
 	size_t align;
 } TypeInfo;
 
-typedef enum { TYPE_PRIMITIVE, TYPE_POINTER, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_UNION, TYPE_UNDECIDED } TypeKind;
+typedef enum { TYPE_PRIMITIVE, TYPE_POINTER, TYPE_ARRAY, TYPE_SLICE, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_UNION, TYPE_UNDECIDED } TypeKind;
 
 // PRIM_NONE for non-primitive Types
 typedef enum {
@@ -43,6 +43,10 @@ typedef struct Type {
 		} array;
 
 		struct {
+			struct Type *element_type;
+		} slice;
+
+		struct {
 			int param_count;
 			struct Type *return_type;
 			struct Type **param_types;
@@ -69,6 +73,7 @@ Type get_primitive_type(const char *name);
 PrimitiveKind primitive_kind_from_name(const char *name);
 Type *new_pointer_type(Type *pointee);
 Type *new_array_type(Type *element_type, int size);
+Type *new_slice_type(Type *element_type);
 Type *new_function_type(Type *return_type, Type **param_types, int param_count);
 Type *new_named_type(const char *name, const char *namespace, TypeKind kind); // structs/enums
 int type_equals(const Type *a, const Type *b);
@@ -92,6 +97,7 @@ Type *get_primitive_bool();
 Type *get_primitive_i32();
 Type *get_primitive_f32();
 Type *get_primitive_u8();
+Type *get_primitive_u64();
 Type *get_string_type();
 // Type of the `null` literal: pointer-to-void. Convertible to any
 // pointer type via the existing pointer→pointer rule in is_convertible.

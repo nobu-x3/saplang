@@ -96,6 +96,10 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 		info.align = elem_info.align;
 		return info;
 	}
+	case TYPE_SLICE:
+		info.size = sizeof(void *) + 8;
+		info.align = sizeof(void *);
+		return info;
 	case TYPE_FUNCTION:
 		return info;
 	case TYPE_STRUCT:
@@ -189,6 +193,10 @@ Type *copy_type(Type *type) {
 		t->array.element_type = copy_type(type->array.element_type);
 		assert(t->array.element_type);
 		break;
+	case TYPE_SLICE:
+		t->slice.element_type = copy_type(type->slice.element_type);
+		assert(t->slice.element_type);
+		break;
 	case TYPE_FUNCTION:
 		t->function.return_type = copy_type(type->function.return_type);
 		assert(t->function.return_type);
@@ -255,6 +263,16 @@ Type *new_array_type(Type *element_type, int size) {
 	return t;
 }
 
+Type *new_slice_type(Type *element_type) {
+	Type *t = arena_alloc(current_type_arena, sizeof(Type));
+	if (!t)
+		return NULL;
+	memset(t, 0, sizeof(Type));
+	t->type_kind = TYPE_SLICE;
+	t->slice.element_type = element_type;
+	return t;
+}
+
 Type *new_function_type(Type *return_type, Type **param_types, int param_count) {
 	Type *t = arena_alloc(current_type_arena, sizeof(Type));
 	if (!t)
@@ -299,6 +317,8 @@ int type_equals(const Type *a, const Type *b) {
 		return type_equals(a->pointee, b->pointee);
 	case TYPE_ARRAY:
 		return type_equals(a->array.element_type, b->array.element_type) && a->array.size == b->array.size;
+	case TYPE_SLICE:
+		return type_equals(a->slice.element_type, b->slice.element_type);
 	case TYPE_FUNCTION:
 		if (!type_equals(a->function.return_type, b->function.return_type) || a->function.param_count != b->function.param_count)
 			return 0;
@@ -352,6 +372,10 @@ static void type_write(TypeWriter *w, const Type *type) {
 		snprintf(tmp, sizeof(tmp), "[%d]", type->array.size);
 		tw_write(w, tmp);
 		break;
+	case TYPE_SLICE:
+		type_write(w, type->slice.element_type);
+		tw_write(w, "[]");
+		break;
 	case TYPE_FUNCTION:
 		tw_write(w, "fn(");
 		for (int i = 0; i < type->function.param_count; ++i) {
@@ -402,6 +426,8 @@ int is_builtin(const Type *type) {
 		return is_builtin(type->pointee);
 	case TYPE_ARRAY:
 		return is_builtin(type->array.element_type);
+	case TYPE_SLICE:
+		return is_builtin(type->slice.element_type);
 	case TYPE_FUNCTION:
 		return 1;
 	case TYPE_STRUCT:
@@ -431,6 +457,14 @@ int type_mangle_append(Type *type, char *name, size_t cap) {
 		if (len >= cap - 1)
 			return 1;
 		written = snprintf(name + len, cap - len, "*");
+		return overflow || written < 0 || (size_t)written >= cap - len;
+	}
+	if (type->type_kind == TYPE_SLICE) {
+		int overflow = type_mangle_append(type->slice.element_type, name, cap);
+		len = strlen(name);
+		if (len >= cap - 1)
+			return 1;
+		written = snprintf(name + len, cap - len, "[]");
 		return overflow || written < 0 || (size_t)written >= cap - len;
 	}
 	if (type->type_kind == TYPE_UNDECIDED) {
@@ -493,6 +527,11 @@ Type *get_primitive_f32() {
 Type *get_primitive_u8() {
 	static Type primitive_u8_type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_U8, .type_name = "u8"};
 	return &primitive_u8_type;
+}
+
+Type *get_primitive_u64() {
+	static Type primitive_u64_type = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_U64, .type_name = "u64"};
+	return &primitive_u64_type;
 }
 
 Type *get_string_type() {
@@ -594,6 +633,17 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 	if (type_equals(source, target))
 		return 1;
 
+	// Allow array -> slice decay but element types must match.
+	if (source->type_kind == TYPE_ARRAY && target->type_kind == TYPE_SLICE) {
+		return type_equals(source->array.element_type, target->slice.element_type);
+	}
+
+	// Allow null -> slice (zero slice { null, 0 }). The null literal is
+	// typed as pointer-to-void, so we recognise it explicitly here.
+	if (source->type_kind == TYPE_POINTER && source->pointee && source->pointee->type_kind == TYPE_PRIMITIVE && source->pointee->prim == PRIM_VOID && target->type_kind == TYPE_SLICE) {
+		return 1;
+	}
+
 	// Allow array decay
 	if (source->type_kind == TYPE_ARRAY && target->type_kind == TYPE_POINTER) {
 		// Could call for is_convertible on underlying types but easier to debug non-recursive code
@@ -646,6 +696,7 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 			return type_equals(enum_sym->node->data.enum_decl.base_type, target);
 		}
 	case TYPE_ARRAY:
+	case TYPE_SLICE:
 	case TYPE_FUNCTION:
 	case TYPE_STRUCT:
 	case TYPE_UNION:

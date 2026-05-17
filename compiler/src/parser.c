@@ -200,6 +200,13 @@ static void ast_print_array_access(ASTNode *node, int indent, char *string) {
 	ast_print(node->data.array_access.index, indent + 1, string);
 }
 
+static void ast_print_slice_range(ASTNode *node, int indent, char *string) {
+	print(string, "Slice range:\n");
+	ast_print(node->data.slice_range.base, indent + 1, string);
+	ast_print(node->data.slice_range.lo, indent + 1, string);
+	ast_print(node->data.slice_range.hi, indent + 1, string);
+}
+
 static void ast_print_assignment(ASTNode *node, int indent, char *string) {
 	print(string, "Assignment:\n");
 	ast_print(node->data.assignment.lvalue, indent + 1, string);
@@ -374,6 +381,7 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 		case AST_CONTINUE: print(string, "continue\n"); break;
 		case AST_BREAK: print(string, "break\n"); break;
 		case AST_CAST: ast_print_cast(node, indent, string); break;
+		case AST_SLICE_RANGE: ast_print_slice_range(node, indent, string); break;
 		default: print(string, "Unknown AST Node\n"); break;
 		}
 		node = node->next;
@@ -763,6 +771,16 @@ ASTNode *new_cast_node(Type *target_type, ASTNode *expr, SourceLocation loc) {
 	return node;
 }
 
+ASTNode *new_slice_range_node(ASTNode *base, ASTNode *lo, ASTNode *hi, SourceLocation loc) {
+	ASTNode *node = new_ast_node(AST_SLICE_RANGE, loc);
+	if (!node)
+		return NULL;
+	node->data.slice_range.base = base;
+	node->data.slice_range.lo = lo;
+	node->data.slice_range.hi = hi;
+	return node;
+}
+
 ASTNode *new_return_node(ASTNode *expr, SourceLocation loc) {
 	ASTNode *node = new_ast_node(AST_RETURN, loc);
 	if (!node)
@@ -1064,6 +1082,13 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 
 	while (parser->current_token.type == TOK_LBRACKET) {
 		parser->current_token = next_token(&parser->scanner); // consume '['
+
+		// Empty brackets — `T[]` — denote a slice (fat pointer { T*, u64 }).
+		if (parser->current_token.type == TOK_RBRACKET) {
+			parser->current_token = next_token(&parser->scanner); // consume ']'
+			*out_type = new_slice_type(*out_type);
+			continue;
+		}
 
 		if (parser->current_token.type != TOK_NUMBER) {
 			char msg[128];
@@ -1439,6 +1464,24 @@ ASTNode *parse_postfix(Parser *parser, const char *scope_prefix) {
 			ASTNode *index_expr = parse_expr(parser, scope_prefix);
 			if (!index_expr)
 				return NULL;
+
+			// `[lo..hi]` — sub-slice. Detected after parsing the first
+			// expression so the simple `[i]` element-access path doesn't
+			// have to peek.
+			if (parser->current_token.type == TOK_DOTDOT) {
+				parser->current_token = next_token(&parser->scanner);
+				ASTNode *hi_expr = parse_expr(parser, scope_prefix);
+				if (!hi_expr)
+					return NULL;
+				if (parser->current_token.type != TOK_RBRACKET) {
+					char msg[128];
+					sprintf(msg, "expected ']' after slice range, got '%s'.", parser->current_token.text);
+					return report(parser->current_token.location, msg, 0);
+				}
+				parser->current_token = next_token(&parser->scanner);
+				node = new_slice_range_node(node, index_expr, hi_expr, loc);
+				continue;
+			}
 
 			if (parser->current_token.type != TOK_RBRACKET) {
 				char msg[128];

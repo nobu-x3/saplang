@@ -237,6 +237,61 @@ void test_ArrayLiterals(void) {
 	free(output);
 }
 
+// `T[]` denotes a slice (fat pointer), distinct from the fixed-size `T[N]`
+// array and from the bare pointer `T*`. The AST printer reuses the
+// type-write path, so it should render the slice form verbatim.
+void test_SliceTypeDecl_parser(void) {
+	SETUP_TEST("i32[] s;");
+	const char *expected = "VarDecl: i32[] s\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+// A slice-of-pointers: pointer postfix binds tighter than the slice
+// brackets, so `i32*[]` is a slice whose elements are i32 pointers.
+void test_SliceOfPointers_parser(void) {
+	SETUP_TEST("i32*[] s;");
+	const char *expected = "VarDecl: i32*[] s\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+// Slices and fixed-size arrays compose: `i32[][3]` is "fixed-size-3 array
+// of slices of i32" — the array printer reverses its own dimensions per
+// the existing parser hack, so the printed `[3]` lands on the outside.
+void test_SliceArrayMix_parser(void) {
+	SETUP_TEST("i32[][3] s;");
+	const char *expected = "VarDecl: i32[][3] s\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+// A slice literal reuses struct-literal syntax: positional `{ptr, len}`
+// or designated `{.ptr=p, .len=n}`. The parser is type-agnostic at this
+// point — sema/codegen route the literal based on the lvalue type.
+void test_SliceLiteralPositional_parser(void) {
+	SETUP_TEST("fn void f(i32* p) { i32[] s = {p, 4}; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "VarDecl: i32[] s:"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "StructLiteral with 2 initializer(s):"));
+	free(output);
+}
+
+void test_SliceLiteralDesignated_parser(void) {
+	SETUP_TEST("fn void f(i32* p) { i32[] s = {.ptr = p, .len = 4}; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "VarDecl: i32[] s:"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "Designated, field 'ptr':"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "Designated, field 'len':"));
+	free(output);
+}
+
+// `arr[1..3]` is a slice range, not array access — the parser detects
+// `..` after the first index expression and emits AST_SLICE_RANGE.
+void test_SliceRange_parser(void) {
+	SETUP_TEST("fn void f() { i32[5] arr = [1,2,3,4,5]; i32[] s = arr[1..3]; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "Slice range:"));
+	free(output);
+}
+
 void test_ArrayAccessAssignment(void) {
 	SETUP_TEST("fn i32 test() {"
 			   "    i32[4] arr1 = [0, 1, 2, 3];"
