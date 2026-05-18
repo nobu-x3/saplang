@@ -542,12 +542,20 @@ LLVMTypeRef codegen_union_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 
 LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	PassIntention tmp_intention = ctx.intention;
-	ctx.intention = PI_LOAD_PTR;
-	LLVMValueRef base_value = codegen_ast(cg, node->data.member_access.base, table, ctx);
-	assert(base_value);
-	ctx.intention = tmp_intention;
 	Type *base_type = get_type(table, node->data.member_access.base, ctx.current_scope, "");
 	assert(base_type);
+	LLVMValueRef base_value;
+	if (base_type->type_kind == TYPE_POINTER && base_type->pointee &&
+		(base_type->pointee->type_kind == TYPE_STRUCT || base_type->pointee->type_kind == TYPE_UNION)) {
+		ctx.intention = PI_LOAD_VAL;
+		base_value = codegen_ast(cg, node->data.member_access.base, table, ctx);
+		base_type = base_type->pointee;
+	} else {
+		ctx.intention = PI_LOAD_PTR;
+		base_value = codegen_ast(cg, node->data.member_access.base, table, ctx);
+	}
+	assert(base_value);
+	ctx.intention = tmp_intention;
 	LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
 	if (base_type->type_kind == TYPE_ARRAY) {
 		// `arr.len` folds to the compile-time constant size.

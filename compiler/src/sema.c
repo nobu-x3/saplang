@@ -108,6 +108,8 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		}
 		if ((base_type->type_kind == TYPE_SLICE || base_type->type_kind == TYPE_ARRAY) && strcmp(node->data.member_access.member, "len") == 0)
 			return get_primitive_u64();
+		if (base_type->type_kind == TYPE_POINTER && base_type->pointee)
+			base_type = base_type->pointee;
 		Symbol *decl_sym = lookup_named_type(table, base_type, scope_level);
 		if (!decl_sym)
 			return NULL;
@@ -1414,6 +1416,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			}
 			return RESULT_SUCCESS;
 		}
+		if (base_type->type_kind == TYPE_POINTER && base_type->pointee)
+			base_type = base_type->pointee;
 		Symbol *decl_sym = lookup_named_type(table, base_type, scope_level);
 		if (!decl_sym) {
 			char msg[128] = "";

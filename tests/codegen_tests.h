@@ -3059,14 +3059,11 @@ void test_PointerWrite_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
-// CODEGEN_BUGS.md §17 — `.` on a pointer-to-struct does not auto-deref
-// in sema, contradicting SPEC §5.3. `p.a` with `S* p` fails with
-// "unknown type ." today.
-void test_PointerDotMember_pinning_CODEGEN_BUGS_17_codegen(void) {
+void test_PointerDotMember_codegen(void) {
 	EXH_TEST_SETUP("struct S { i32 a; }"
 				   "fn i32 main() { S x = {3}; S* p = &x; return p.a; }");
-	TEST_ASSERT_FALSE_MESSAGE(parse_ok && sema_ok, "`p.a` for `S* p` should currently FAIL sema");
-	TEST_ASSERT_NOT_NULL(strstr(captured_err, "unknown type"));
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds %__main_S"));
 	EXH_TEST_TEARDOWN();
 }
 
