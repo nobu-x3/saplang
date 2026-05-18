@@ -1618,9 +1618,9 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 			} else if (parser->current_token.text[0] == '0' && (parser->current_token.text[1] == 'x' || parser->current_token.text[1] == 'X')) {
 				base = 16;
 			}
-			long value = strtol(parser->current_token.text + offset, NULL, base);
+			unsigned long long uvalue = strtoull(parser->current_token.text + offset, NULL, base);
 			parser->current_token = next_token(&parser->scanner);
-			return new_literal_node_long(value, loc);
+			return new_literal_node_long((long)uvalue, loc);
 		}
 	case TOK_TRUE:
 		parser->current_token = next_token(&parser->scanner);

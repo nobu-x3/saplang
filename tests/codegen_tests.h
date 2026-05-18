@@ -2378,14 +2378,10 @@ void test_DecimalUnderscoreSeparator_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
-// CODEGEN_BUGS.md §10 — u64 literals are clamped to i64 max.
-// 0xFFFFFFFFFFFFFFFF should be u64 max (18446744073709551615) but
-// today emits i64 max (9223372036854775807).
-void test_U64MaxLiteral_pinning_CODEGEN_BUGS_10_codegen(void) {
+void test_U64MaxLiteral_codegen(void) {
 	EXH_TEST_SETUP("fn u64 foo() { u64 a = 0xFFFFFFFFFFFFFFFF; return a; }");
 	EXH_REQUIRE_OK();
-	TEST_ASSERT_NOT_NULL_MESSAGE(strstr(output, "store i64 9223372036854775807"), "expected current bug: literal clamped to i64 max");
-	TEST_ASSERT_NULL_MESSAGE(strstr(output, "store i64 -1"), "fix would emit -1 (the i64 reinterpretation of u64 max)");
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i64 -1"));
 	EXH_TEST_TEARDOWN();
 }
 
