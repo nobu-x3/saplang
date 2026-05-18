@@ -3010,21 +3010,26 @@ void test_DeferInForBody_pinning_CODEGEN_BUGS_12_codegen(void) {
 //    in one block).
 // ---------------------------------------------------------------------------
 
-void test_ForBodyReturnEmitsStrayBr_pinning_CODEGEN_BUGS_16_codegen(void) {
+void test_ForBodyReturnNoStrayBr_codegen(void) {
 	EXH_TEST_SETUP("fn i32 main() {"
 				   "  for (i32 i = 0; i < 1; i += 1) { return 0; }"
 				   "  return 0;"
 				   "}");
 	EXH_REQUIRE_OK();
-	// Find the forbody block and check it ends with `br label %forstep`
-	// AFTER a `ret`. The printer keeps both — the verifier would reject.
 	const char *body = strstr(output, "forbody:");
 	TEST_ASSERT_NOT_NULL(body);
+	const char *next_block = strstr(body, "forstep:");
+	TEST_ASSERT_NOT_NULL(next_block);
 	const char *ret_inst = strstr(body, "ret i32 0");
-	const char *br_inst = strstr(body, "br label %forstep");
 	TEST_ASSERT_NOT_NULL(ret_inst);
-	TEST_ASSERT_NOT_NULL_MESSAGE(br_inst, "expected current bug: stray `br` emitted after `ret` in forbody. Fix: stop emitting the loop-back branch when the body terminates.");
-	TEST_ASSERT_TRUE_MESSAGE(ret_inst < br_inst, "ret precedes the stray br");
+	TEST_ASSERT_TRUE(ret_inst < next_block);
+	char between[1024];
+	size_t len = (size_t)(next_block - ret_inst);
+	if (len >= sizeof(between))
+		len = sizeof(between) - 1;
+	memcpy(between, ret_inst, len);
+	between[len] = '\0';
+	TEST_ASSERT_NULL(strstr(between, "br label %forstep"));
 	EXH_TEST_TEARDOWN();
 }
 

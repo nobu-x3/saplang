@@ -1342,12 +1342,14 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		for_ctx.loop_beg_block = stepBB;
 		for_ctx.end_block = endBB;
 		codegen_ast(cg, node->data.for_loop.body, table, for_ctx);
-		LLVMBuildBr(cg->builder, stepBB);
+		if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(cg->builder)))
+			LLVMBuildBr(cg->builder, stepBB);
 		// step
 		LLVMPositionBuilderAtEnd(cg->builder, stepBB);
 		if (node->data.for_loop.post)
 			codegen_ast(cg, node->data.for_loop.post, table, ctx);
-		LLVMBuildBr(cg->builder, condBB);
+		if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(cg->builder)))
+			LLVMBuildBr(cg->builder, condBB);
 		// end
 		LLVMPositionBuilderAtEnd(cg->builder, endBB);
 		return NULL;
@@ -1369,7 +1371,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		body_ctx.end_block = endBB;
 		body_ctx.loop_beg_block = condBB;
 		codegen_ast(cg, node->data.while_loop.body, table, body_ctx);
-		LLVMBuildBr(cg->builder, condBB);
+		if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(cg->builder)))
+			LLVMBuildBr(cg->builder, condBB);
 		// end
 		LLVMPositionBuilderAtEnd(cg->builder, endBB);
 		return NULL;
