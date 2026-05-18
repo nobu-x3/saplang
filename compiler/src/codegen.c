@@ -805,7 +805,10 @@ LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pas
 		if (node->data.var_decl.init->type != AST_STRUCT_LITERAL && node->data.var_decl.init->type != AST_ARRAY_LITERAL) {
 			assert(val);
 			val = maybe_decay_to_slice(cg, node->data.var_decl.init, val, node->data.var_decl.type, table, ctx);
-			LLVMBuildStore(cg->builder, val, ptr);
+			LLVMValueRef store = LLVMBuildStore(cg->builder, val, ptr);
+			unsigned alloca_align = LLVMGetAlignment(ptr);
+			if (alloca_align > 0)
+				LLVMSetAlignment(store, alloca_align);
 		}
 	}
 	return ptr;
