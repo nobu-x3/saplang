@@ -3039,11 +3039,19 @@ void test_ForBodyReturnNoStrayBr_codegen(void) {
 // 22. Parser bugs reachable from codegen-shaped programs.
 // ---------------------------------------------------------------------------
 
-// CODEGEN_BUGS.md §11 — `(a)` and `(a + b)` are misparsed as
-// `(typename) ...` casts because `is_type_spec` claims every
-// identifier is a type. Use a fragment that makes the misparse loud.
-void test_ParenExprWithIdent_pinning_CODEGEN_BUGS_11_codegen(void) {
-	TEST_IGNORE_MESSAGE("disabled: parser hangs on `(a + b)`.");
+void test_ParenExprWithIdent_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; i32 b = 2; i32 c = (a + b); return c; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%add = add i32"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 %add, ptr %__main_main_c"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_ParenExprSingleIdent_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 5; i32 b = (a); return b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 %0, ptr %__main_main_b"));
+	EXH_TEST_TEARDOWN();
 }
 
 void test_NakedBlockStmt_codegen(void) {

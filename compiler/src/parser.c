@@ -1638,28 +1638,70 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 	case TOK_LPAREN: {
 		parser->current_token = next_token(&parser->scanner);
 		if (is_type_spec(parser)) {
+			// Built-in types are unambiguously casts. Identifier-led groupings
+			// (`(a + b)`, `(a)`) might be either a cast or a parenthesized
+			// expression — speculate on the cast path with a scratch diag
+			// sink, roll back to a paren-expr if it doesn't pan out.
+			int is_ident_led = parser->current_token.type == TOK_IDENTIFIER;
+			Scanner saved_scanner = parser->scanner;
+			Token saved_token = parser->current_token;
+			FILE *saved_sink = NULL;
+			FILE *scratch = NULL;
+			if (is_ident_led) {
+				saved_sink = diag_stream();
+				scratch = tmpfile();
+				if (scratch)
+					diag_set_sink(scratch);
+			}
 			SourceLocation cast_loc = parser->current_token.location;
 			Type *target_type = NULL;
-			int is_error = 0;
-			if (parse_type(parser, &target_type) != RESULT_SUCCESS) {
-				is_error = 1;
+			int cast_ok = parse_type(parser, &target_type) == RESULT_SUCCESS && parser->current_token.type == TOK_RPAREN;
+			if (is_ident_led && cast_ok) {
+				// Peek past `)` to confirm an expression follows. If the
+				// next token isn't a valid unary-expression starter, this
+				// was a parenthesized expression after all.
+				Scanner peek_scanner = parser->scanner;
+				Token peek_token = next_token(&peek_scanner);
+				TokenType t = peek_token.type;
+				int looks_like_operand = t == TOK_NUMBER || t == TOK_TRUE || t == TOK_FALSE || t == TOK_NULL || t == TOK_IDENTIFIER ||
+										 t == TOK_LPAREN || t == TOK_STRINGLIT || t == TOK_LCURLY || t == TOK_LBRACKET || t == TOK_CHARLIT ||
+										 t == TOK_EXCLAMATION || t == TOK_AMPERSAND || t == TOK_ASTERISK || t == TOK_BITWISE_NEG || t == TOK_MINUS;
+				if (peek_token.string_data)
+					free(peek_token.string_data);
+				if (!looks_like_operand)
+					cast_ok = 0;
 			}
-			if (parser->current_token.type != TOK_RPAREN) {
-				char msg[128] = "";
-				sprintf(msg, "expected ')' after cast type, got %s", parser->current_token.text);
-				report(parser->current_token.location, msg, 0);
-				is_error = 1;
+			if (is_ident_led && !cast_ok) {
+				parser->scanner = saved_scanner;
+				parser->current_token = saved_token;
+				diag_set_sink(saved_sink);
+				if (scratch)
+					fclose(scratch);
+				ASTNode *expr = parse_expr(parser, scope_prefix);
+				if (!expr)
+					return NULL;
+				if (parser->current_token.type != TOK_RPAREN)
+					return report(parser->current_token.location, "expected ')'.", 0);
+				parser->current_token = next_token(&parser->scanner);
+				return expr;
 			}
-
+			if (is_ident_led) {
+				diag_set_sink(saved_sink);
+				if (scratch)
+					fclose(scratch);
+			}
+			if (!cast_ok) {
+				if (parser->current_token.type != TOK_RPAREN) {
+					char msg[128] = "";
+					sprintf(msg, "expected ')' after cast type, got %s", parser->current_token.text);
+					report(parser->current_token.location, msg, 0);
+				}
+				return NULL;
+			}
 			parser->current_token = next_token(&parser->scanner);
 			ASTNode *expr = parse_expr(parser, scope_prefix);
-			if (!expr) {
-				is_error = 1;
-			}
-
-			if (is_error)
+			if (!expr)
 				return NULL;
-
 			return new_cast_node(target_type, expr, cast_loc);
 		}
 		ASTNode *expr = parse_expr(parser, scope_prefix);
