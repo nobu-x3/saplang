@@ -317,9 +317,10 @@ int main(void) {
 	RUN_TEST(test_LiteralUnsignedU8_HighBitSet_codegen);
 	RUN_TEST(test_LiteralBool_codegen);
 	RUN_TEST(test_CharLiteralBasic_codegen);
-	RUN_TEST(test_CharLiteralEscape_pinning_CODEGEN_BUGS_8_codegen);
-	RUN_TEST(test_CharLiteralEscapeTab_pinning_CODEGEN_BUGS_8_codegen);
-	RUN_TEST(test_CharLiteralEscapeNul_pinning_CODEGEN_BUGS_8_codegen);
+	RUN_TEST(test_CharLiteralEscapeNewline_codegen);
+	RUN_TEST(test_CharLiteralEscapeTab_codegen);
+	RUN_TEST(test_CharLiteralEscapeNul_codegen);
+	RUN_TEST(test_CharLiteralEscapeBackslash_codegen);
 	RUN_TEST(test_LiteralF64_codegen);
 	RUN_TEST(test_FloatAdd_codegen);
 	RUN_TEST(test_FloatSub_codegen);

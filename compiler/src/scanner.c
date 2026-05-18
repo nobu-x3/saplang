@@ -74,6 +74,10 @@ Token next_token(Scanner *scanner) {
 		eat_next_char(scanner);
 		while (_INPUT[_INDEX] && _INPUT[_INDEX] != '\'') {
 			char ch = eat_next_char(scanner);
+			if (ch == '\\' && _INPUT[_INDEX] && _INPUT[_INDEX] != '\'') {
+				char second = eat_next_char(scanner);
+				ch = decode_escape_sequence(start_loc, second);
+			}
 			if (i + 1 >= sizeof(current_token.text)) {
 				if (!reported) {
 					report(start_loc, "char literal exceeds 63 characters.", 0);

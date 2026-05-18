@@ -2426,28 +2426,31 @@ void test_CharLiteralBasic_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
-// CODEGEN_BUGS.md §8 — char-literal escape sequences are not decoded.
-// '\n' should be ASCII 10. Today the scanner copies '\' and 'n' into
-// the token buffer and the parser takes text[0] → '\' (ASCII 92).
-void test_CharLiteralEscape_pinning_CODEGEN_BUGS_8_codegen(void) {
+void test_CharLiteralEscapeNewline_codegen(void) {
 	EXH_TEST_SETUP("fn i32 main() { u8 c = '\\n'; return 0; }");
 	EXH_REQUIRE_OK();
-	TEST_ASSERT_NOT_NULL_MESSAGE(strstr(output, "store i8 92"), "expected current bug: '\\n' evaluates to 92 ('\\\\') instead of 10");
-	TEST_ASSERT_NULL_MESSAGE(strstr(output, "store i8 10"), "fix would emit 10 (newline)");
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 10"));
 	EXH_TEST_TEARDOWN();
 }
 
-void test_CharLiteralEscapeTab_pinning_CODEGEN_BUGS_8_codegen(void) {
+void test_CharLiteralEscapeTab_codegen(void) {
 	EXH_TEST_SETUP("fn i32 main() { u8 c = '\\t'; return 0; }");
 	EXH_REQUIRE_OK();
-	TEST_ASSERT_NOT_NULL_MESSAGE(strstr(output, "store i8 92"), "expected current bug: '\\t' evaluates to 92 instead of 9");
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 9"));
 	EXH_TEST_TEARDOWN();
 }
 
-void test_CharLiteralEscapeNul_pinning_CODEGEN_BUGS_8_codegen(void) {
+void test_CharLiteralEscapeNul_codegen(void) {
 	EXH_TEST_SETUP("fn i32 main() { u8 c = '\\0'; return 0; }");
 	EXH_REQUIRE_OK();
-	TEST_ASSERT_NOT_NULL_MESSAGE(strstr(output, "store i8 92"), "expected current bug: '\\0' evaluates to 92 instead of 0");
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 0"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CharLiteralEscapeBackslash_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { u8 c = '\\\\'; return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 92"));
 	EXH_TEST_TEARDOWN();
 }
 
