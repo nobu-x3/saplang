@@ -956,6 +956,30 @@ LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCo
 }
 
 LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
+	TokenType op = node->data.binary_op.op;
+	if (op == TOK_AND || op == TOK_OR) {
+		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.resolved_name);
+		LLVMValueRef lhs_bool = codegen_cond_to_bool(cg, node->data.binary_op.left, table, ctx);
+		LLVMBasicBlockRef lhs_end_bb = LLVMGetInsertBlock(cg->builder);
+		LLVMBasicBlockRef rhs_bb = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, op == TOK_AND ? "land.rhs" : "lor.rhs");
+		LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, op == TOK_AND ? "land.end" : "lor.end");
+		if (op == TOK_AND)
+			LLVMBuildCondBr(cg->builder, lhs_bool, rhs_bb, merge_bb);
+		else
+			LLVMBuildCondBr(cg->builder, lhs_bool, merge_bb, rhs_bb);
+		LLVMPositionBuilderAtEnd(cg->builder, rhs_bb);
+		LLVMValueRef rhs_bool = codegen_cond_to_bool(cg, node->data.binary_op.right, table, ctx);
+		LLVMBasicBlockRef rhs_end_bb = LLVMGetInsertBlock(cg->builder);
+		LLVMBuildBr(cg->builder, merge_bb);
+		LLVMPositionBuilderAtEnd(cg->builder, merge_bb);
+		LLVMTypeRef i1_ty = LLVMInt1TypeInContext(cg->llvm_context);
+		LLVMValueRef phi = LLVMBuildPhi(cg->builder, i1_ty, op == TOK_AND ? "land" : "lor");
+		LLVMValueRef short_circuit = LLVMConstInt(i1_ty, op == TOK_AND ? 0 : 1, 0);
+		LLVMValueRef incoming_vals[2] = {short_circuit, rhs_bool};
+		LLVMBasicBlockRef incoming_blocks[2] = {lhs_end_bb, rhs_end_bb};
+		LLVMAddIncoming(phi, incoming_vals, incoming_blocks, 2);
+		return phi;
+	}
 	Type *l_type = get_type(table, node->data.binary_op.left, ctx.current_scope, "");
 	assert(l_type);
 	PassContext lhs_ctx = ctx;

@@ -3133,10 +3133,23 @@ void test_StringLiteralEscapeSequences_codegen(void) {
 }
 
 // ---------------------------------------------------------------------------
-// 25. Stage-1 placeholder for `&&` / `||`. Don't run the codegen — it
-//    asserts. Just document.
+// 25. Short-circuit `&&` and `||` lowering.
 // ---------------------------------------------------------------------------
 
-void test_LogicalAndCrashes_pinning_CODEGEN_BUGS_7_codegen(void) {
-	TEST_IGNORE_MESSAGE("disabled: codegen aborts on `&&` / `||` (assert in codegen_binary). See CODEGEN_BUGS.md §7.");
+void test_LogicalAndShortCircuit_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; i32 b = 2; if (a < b && b > 0) { return 1; } return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "land.rhs"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "land.end"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "%land = phi i1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LogicalOrShortCircuit_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; i32 b = 2; if (a < b || b > 0) { return 1; } return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "lor.rhs"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "lor.end"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "%lor = phi i1"));
+	EXH_TEST_TEARDOWN();
 }

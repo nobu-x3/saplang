@@ -392,7 +392,8 @@ int main(void) {
 	RUN_TEST(test_NullReassign_codegen);
 	RUN_TEST(test_NullCompareNotEq_codegen);
 	RUN_TEST(test_StringLiteralEscapeSequences_codegen);
-	RUN_TEST(test_LogicalAndCrashes_pinning_CODEGEN_BUGS_7_codegen);
+	RUN_TEST(test_LogicalAndShortCircuit_codegen);
+	RUN_TEST(test_LogicalOrShortCircuit_codegen);
 
 	RUN_TEST(test_ImportTest_modules);
 	RUN_TEST(test_NullTest_modules);
