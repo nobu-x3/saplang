@@ -607,6 +607,11 @@ void codegen_task(void *arg) {
 	CodegenInitContext cg_init_ctx = {node->parser.module_name, node->parser.scanner.source.name, source_dir, driver.options.gen_debug};
 	CodegenLLVM cg_ctx = codegen_init(&cg_init_ctx);
 	codegen_run(&cg_ctx, node->module->ast, node->module->symbol_table);
+	if (driver.options.llvm_dump) {
+		char *ir = codegen_output_str(&cg_ctx);
+		fputs(ir, stdout);
+		LLVMDisposeMessage(ir);
+	}
 	int res = make_dir(OBJ_DIRECTORY, 0777);
 	if (res == -1 && errno != EEXIST) {
 		fprintf(diag_stream(), "failed to create tmp dir for object files with code: %d", errno);
