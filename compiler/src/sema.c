@@ -1364,28 +1364,35 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	} break;
 
 	case AST_FOR_LOOP: {
-		CompilerResult result = analyze_ast(table, node->data.for_loop.init, scope_level, scope_specifier);
-		if (result != RESULT_SUCCESS)
-			return result;
-
-		result = analyze_ast(table, node->data.for_loop.condition, scope_level, scope_specifier);
-		if (result != RESULT_SUCCESS)
-			return result;
-
-		Type bool_type = get_primitive_type("bool");
-		Type *condition_type = get_type(table, node->data.for_loop.condition, scope_level, scope_specifier);
-		if (!is_convertible(condition_type, &bool_type, 1, table)) {
-			char condition_type_str[128] = "";
-			type_print(condition_type_str, condition_type);
-			char msg[128] = "";
-			sprintf(msg, "for loop condition must convert to bool but is of type %s .", condition_type_str);
-			report(node->data.while_loop.condition->location, msg, 0);
-			return RESULT_FAILURE;
+		CompilerResult result = RESULT_SUCCESS;
+		if (node->data.for_loop.init) {
+			result = analyze_ast(table, node->data.for_loop.init, scope_level, scope_specifier);
+			if (result != RESULT_SUCCESS)
+				return result;
 		}
 
-		result = analyze_ast(table, node->data.for_loop.post, scope_level, scope_specifier);
-		if (result != RESULT_SUCCESS)
-			return result;
+		if (node->data.for_loop.condition) {
+			result = analyze_ast(table, node->data.for_loop.condition, scope_level, scope_specifier);
+			if (result != RESULT_SUCCESS)
+				return result;
+
+			Type bool_type = get_primitive_type("bool");
+			Type *condition_type = get_type(table, node->data.for_loop.condition, scope_level, scope_specifier);
+			if (!is_convertible(condition_type, &bool_type, 1, table)) {
+				char condition_type_str[128] = "";
+				type_print(condition_type_str, condition_type);
+				char msg[128] = "";
+				sprintf(msg, "for loop condition must convert to bool but is of type %s .", condition_type_str);
+				report(node->data.for_loop.condition->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+		}
+
+		if (node->data.for_loop.post) {
+			result = analyze_ast(table, node->data.for_loop.post, scope_level, scope_specifier);
+			if (result != RESULT_SUCCESS)
+				return result;
+		}
 
 		result = analyze_ast(table, node->data.for_loop.body, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)

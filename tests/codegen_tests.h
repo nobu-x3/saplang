@@ -3069,14 +3069,19 @@ void test_PointerDotMember_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
-// CODEGEN_BUGS.md §18 — empty parts of a `for` header all fail sema
-// even though SPEC §4.4 documents them as optional.
-void test_ForEmptyAll_pinning_CODEGEN_BUGS_18_codegen(void) {
-	TEST_IGNORE_MESSAGE("disabled: parser hangs on `for(;;)`.");
+void test_ForEmptyAll_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { for(;;){ return 0; } return 1; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "forcond:"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "br label %forbody"));
+	EXH_TEST_TEARDOWN();
 }
 
-void test_ForEmptyStep_pinning_CODEGEN_BUGS_18_codegen(void) {
-	TEST_IGNORE_MESSAGE("disabled: parser hangs on empty `for` step.");
+void test_ForEmptyStep_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { for(i32 i = 0; i < 1;) { return 0; } return 1; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "forstep:"));
+	EXH_TEST_TEARDOWN();
 }
 
 // CODEGEN_BUGS.md §19 — returning a struct by value is rejected at

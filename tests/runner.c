@@ -385,8 +385,8 @@ int main(void) {
 	RUN_TEST(test_NakedBlockStmt_pinning_CODEGEN_BUGS_14_codegen);
 	RUN_TEST(test_PointerWrite_codegen);
 	RUN_TEST(test_PointerDotMember_codegen);
-	RUN_TEST(test_ForEmptyAll_pinning_CODEGEN_BUGS_18_codegen);
-	RUN_TEST(test_ForEmptyStep_pinning_CODEGEN_BUGS_18_codegen);
+	RUN_TEST(test_ForEmptyAll_codegen);
+	RUN_TEST(test_ForEmptyStep_codegen);
 	RUN_TEST(test_FnReturnsStructByValue_pinning_CODEGEN_BUGS_19_codegen);
 	RUN_TEST(test_NullAsParameter_codegen);
 	RUN_TEST(test_NullReassign_codegen);

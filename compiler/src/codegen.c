@@ -1372,7 +1372,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	case AST_FOR_LOOP: {
 		// init
 		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.resolved_name);
-		codegen_ast(cg, node->data.for_loop.init, table, ctx);
+		if (node->data.for_loop.init)
+			codegen_ast(cg, node->data.for_loop.init, table, ctx);
 		LLVMBasicBlockRef condBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "forcond");
 		LLVMBasicBlockRef bodyBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "forbody");
 		LLVMBasicBlockRef stepBB = LLVMAppendBasicBlockInContext(cg->llvm_context, fn, "forstep");
