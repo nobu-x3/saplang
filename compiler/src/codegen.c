@@ -453,7 +453,8 @@ static LLVMValueRef maybe_decay_to_slice(CodegenLLVM *cg, ASTNode *expr, LLVMVal
 
 LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	ASTNode *lvalue = node->data.assignment.lvalue;
-	assert(lvalue->type == AST_EXPR_IDENT || lvalue->type == AST_MEMBER_ACCESS || lvalue->type == AST_ARRAY_ACCESS);
+	assert(lvalue->type == AST_EXPR_IDENT || lvalue->type == AST_MEMBER_ACCESS || lvalue->type == AST_ARRAY_ACCESS ||
+		   (lvalue->type == AST_UNARY_EXPR && lvalue->data.unary_op.op == '*'));
 	if (lvalue->type == AST_EXPR_IDENT) {
 		Symbol *sym = lookup_symbol(table, lvalue->data.ident.resolved_name, ctx.current_scope);
 		assert(sym);
@@ -473,9 +474,23 @@ LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, P
 		assert(type);
 		ctx.expected_type = type;
 		ctx.auxiliary_node = lvalue->data.array_access.base;
+	} else {
+		// `*p = v` — the destination is the pointer value held by p.
+		Type *ptr_type = get_type(table, lvalue->data.unary_op.operand, ctx.current_scope, "");
+		assert(ptr_type && ptr_type->type_kind == TYPE_POINTER);
+		ctx.expected_type = ptr_type->pointee;
+		ctx.auxiliary_node = lvalue->data.unary_op.operand;
 	}
 	ASTNode *rvalue = node->data.assignment.rvalue;
-	LLVMValueRef lhs = codegen_ast(cg, lvalue, table, ctx);
+	LLVMValueRef lhs;
+	if (lvalue->type == AST_UNARY_EXPR) {
+		PassContext ptr_ctx = ctx;
+		ptr_ctx.intention = PI_LOAD_VAL;
+		ptr_ctx.expected_type = get_type(table, lvalue->data.unary_op.operand, ctx.current_scope, "");
+		lhs = codegen_ast(cg, lvalue->data.unary_op.operand, table, ptr_ctx);
+	} else {
+		lhs = codegen_ast(cg, lvalue, table, ctx);
+	}
 	Type *target_type = ctx.expected_type;
 	ctx.intention = PI_LOAD_VAL;
 	LLVMValueRef rhs = codegen_ast(cg, rvalue, table, ctx);

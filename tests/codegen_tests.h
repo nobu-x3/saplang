@@ -3050,14 +3050,13 @@ void test_NakedBlockStmt_pinning_CODEGEN_BUGS_14_codegen(void) {
 	TEST_IGNORE_MESSAGE("disabled: parser hangs on naked `{...}`.");
 }
 
-// CODEGEN_BUGS.md §15 — `*p = v;` (writing through a pointer)
-// crashes codegen at the lvalue-kind assertion in codegen_assignment.
-// We can't catch the assertion, so the test only asserts that the
-// program parses+typechecks; codegen itself would abort the process.
-// NOTE: this test is DISABLED — running it terminates the test
-// process. It's here as a placeholder so the bug stays documented.
-void test_PointerWrite_pinning_CODEGEN_BUGS_15_codegen(void) {
-	TEST_IGNORE_MESSAGE("disabled: codegen aborts on `*p = v` (assertion in codegen_assignment). See CODEGEN_BUGS.md §15.");
+void test_PointerWrite_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 v = 5; i32* p = &v; *p = 10; return v; }");
+	EXH_REQUIRE_OK();
+	const char *load_p = strstr(output, "load ptr, ptr %__main_main_p");
+	TEST_ASSERT_NOT_NULL(load_p);
+	TEST_ASSERT_NOT_NULL(strstr(load_p, "store i32 10, ptr"));
+	EXH_TEST_TEARDOWN();
 }
 
 // CODEGEN_BUGS.md §17 — `.` on a pointer-to-struct does not auto-deref
