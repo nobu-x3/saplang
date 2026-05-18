@@ -792,6 +792,7 @@ LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pas
 		ctx.expected_type = node->data.var_decl.type;
 		ctx.auxiliary_node = node;
 		ctx.passed_value = ptr;
+		ctx.intention = PI_LOAD_VAL;
 		LLVMValueRef val = codegen_ast(cg, node->data.var_decl.init, table, ctx);
 		if (node->data.var_decl.init->type != AST_STRUCT_LITERAL && node->data.var_decl.init->type != AST_ARRAY_LITERAL) {
 			assert(val);

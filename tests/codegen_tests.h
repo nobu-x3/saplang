@@ -252,7 +252,8 @@ void test_LocalVarDeclWithInitOfIdent_codegen(void) {
 						   "entry:\n"
 						   "  %__main_some_func_a = alloca i32, align 4\n"
 						   "  %__main_some_func_i = alloca i32, align 4\n"
-						   "  store ptr %__main_some_func_a, ptr %__main_some_func_i, align 8\n"
+						   "  %0 = load i32, ptr %__main_some_func_a, align 4\n"
+						   "  store i32 %0, ptr %__main_some_func_i, align 4\n"
 						   "  ret void\n"
 						   "}\n";
 	const char *expected_error = "";
