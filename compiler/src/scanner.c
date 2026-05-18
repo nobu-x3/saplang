@@ -284,7 +284,11 @@ Token next_token(Scanner *scanner) {
 			}
 
 		} else {
-			while (_INPUT[_INDEX] && (isdigit(_INPUT[_INDEX]) || (_INPUT[_INDEX] == '.' && !hasDot))) {
+			while (_INPUT[_INDEX] && (isdigit(_INPUT[_INDEX]) || _INPUT[_INDEX] == '_' || (_INPUT[_INDEX] == '.' && !hasDot))) {
+				if (_INPUT[_INDEX] == '_') {
+					eat_next_char(scanner);
+					continue;
+				}
 				if (_INPUT[_INDEX] == '.') {
 					// if the . is followed by another ., leave both for the
 					// scanner's . arm to lex as TOK_DOTDOT.

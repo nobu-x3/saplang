@@ -2371,13 +2371,10 @@ void test_LiteralHexWithUnderscore_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
-// CODEGEN_BUGS.md §9 — decimal literals reject `_` separator even
-// though hex/binary accept it. SPEC §1.5 lists `1_000_000` as legal.
-// Pin the parser failure so any fix flips this test red.
-void test_DecimalUnderscoreSeparator_pinning_CODEGEN_BUGS_9_codegen(void) {
+void test_DecimalUnderscoreSeparator_codegen(void) {
 	EXH_TEST_SETUP("fn i32 main() { i32 a = 1_000_000; return a; }");
-	TEST_ASSERT_FALSE_MESSAGE(parse_ok && sema_ok, "decimal underscore-separator should currently FAIL parse — fix in scanner.c");
-	TEST_ASSERT_NOT_NULL(strstr(captured_err, "_000_000"));
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 1000000"));
 	EXH_TEST_TEARDOWN();
 }
 

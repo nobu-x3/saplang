@@ -311,7 +311,7 @@ int main(void) {
 	RUN_TEST(test_LiteralBinary_codegen);
 	RUN_TEST(test_LiteralBinaryWithUnderscore_codegen);
 	RUN_TEST(test_LiteralHexWithUnderscore_codegen);
-	RUN_TEST(test_DecimalUnderscoreSeparator_pinning_CODEGEN_BUGS_9_codegen);
+	RUN_TEST(test_DecimalUnderscoreSeparator_codegen);
 	RUN_TEST(test_U64MaxLiteral_pinning_CODEGEN_BUGS_10_codegen);
 	RUN_TEST(test_LiteralNegativeI8_codegen);
 	RUN_TEST(test_LiteralUnsignedU8_HighBitSet_codegen);
