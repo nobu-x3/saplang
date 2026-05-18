@@ -1891,6 +1891,7 @@ ASTNode *parse_for_loop(Parser *parse, const char *prefix_name, DeferStack *dsta
 ASTNode *parse_while_loop(Parser *parse, const char *prefix_name, DeferStack *dstackr);
 ASTNode *parse_defer_block(Parser *parse, const char *prefix_name, DeferStack *dstackr);
 ASTNode *parse_switch_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack);
+ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack);
 
 ASTNode *parse_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack) {
 	if (parser->current_token.type == TOK_BREAK) {
@@ -1928,6 +1929,9 @@ ASTNode *parse_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack)
 	}
 	if (parser->current_token.type == TOK_RETURN) {
 		return parse_return_stmt(parser, prefix_name);
+	}
+	if (parser->current_token.type == TOK_LCURLY) {
+		return parse_block(parser, prefix_name, dstack);
 	}
 
 	if (parser->current_token.type == TOK_I8 || parser->current_token.type == TOK_I16 || parser->current_token.type == TOK_I32 || parser->current_token.type == TOK_I64 || parser->current_token.type == TOK_U8 ||

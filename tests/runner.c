@@ -382,7 +382,7 @@ int main(void) {
 	RUN_TEST(test_DeferInForBody_codegen);
 	RUN_TEST(test_ForBodyReturnNoStrayBr_codegen);
 	RUN_TEST(test_ParenExprWithIdent_pinning_CODEGEN_BUGS_11_codegen);
-	RUN_TEST(test_NakedBlockStmt_pinning_CODEGEN_BUGS_14_codegen);
+	RUN_TEST(test_NakedBlockStmt_codegen);
 	RUN_TEST(test_PointerWrite_codegen);
 	RUN_TEST(test_PointerDotMember_codegen);
 	RUN_TEST(test_ForEmptyAll_codegen);

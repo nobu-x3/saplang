@@ -3046,10 +3046,12 @@ void test_ParenExprWithIdent_pinning_CODEGEN_BUGS_11_codegen(void) {
 	TEST_IGNORE_MESSAGE("disabled: parser hangs on `(a + b)`.");
 }
 
-// CODEGEN_BUGS.md §14 — naked `{ ... }` blocks at statement position
-// are not parseable. Spec lists `block` as a statement form.
-void test_NakedBlockStmt_pinning_CODEGEN_BUGS_14_codegen(void) {
-	TEST_IGNORE_MESSAGE("disabled: parser hangs on naked `{...}`.");
+void test_NakedBlockStmt_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { { i32 x = 0; } return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca i32"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i32 0"));
+	EXH_TEST_TEARDOWN();
 }
 
 void test_PointerWrite_codegen(void) {
