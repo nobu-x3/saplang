@@ -2627,7 +2627,7 @@ static int mangle_param_names(ASTNode *params, char *out_mangled_suffix, size_t 
 // @TODO: implement generic functions
 ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	parser->current_token = next_token(&parser->scanner); // consume 'fn'
-	if ((parser->current_token.type < TOKENS_BUILTIN_TYPE_BEGIN || parser->current_token.type > TOKENS_BUILTIN_TYPE_END) && parser->current_token.type == TOK_IDENTIFIER)
+	if ((parser->current_token.type < TOKENS_BUILTIN_TYPE_BEGIN || parser->current_token.type > TOKENS_BUILTIN_TYPE_END) && parser->current_token.type != TOK_IDENTIFIER)
 		return report(parser->current_token.location, "expected return type.", 0);
 	Type *ret_type = NULL;
 	if (parse_type(parser, &ret_type) != RESULT_SUCCESS) {

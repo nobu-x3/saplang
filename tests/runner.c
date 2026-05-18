@@ -387,7 +387,7 @@ int main(void) {
 	RUN_TEST(test_PointerDotMember_codegen);
 	RUN_TEST(test_ForEmptyAll_codegen);
 	RUN_TEST(test_ForEmptyStep_codegen);
-	RUN_TEST(test_FnReturnsStructByValue_pinning_CODEGEN_BUGS_19_codegen);
+	RUN_TEST(test_FnReturnsStructByValue_codegen);
 	RUN_TEST(test_NullAsParameter_codegen);
 	RUN_TEST(test_NullReassign_codegen);
 	RUN_TEST(test_NullCompareNotEq_codegen);

@@ -3086,11 +3086,12 @@ void test_ForEmptyStep_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
-// CODEGEN_BUGS.md §19 — returning a struct by value is rejected at
-// parse time because the parser doesn't accept a user-typed name in
-// the return-type slot in this position.
-void test_FnReturnsStructByValue_pinning_CODEGEN_BUGS_19_codegen(void) {
-	TEST_IGNORE_MESSAGE("disabled: parser hangs on `fn S make()`.");
+void test_FnReturnsStructByValue_codegen(void) {
+	EXH_TEST_SETUP("struct S { i32 a; }"
+				   "fn S make() { S s = {1}; return s; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_make"));
+	EXH_TEST_TEARDOWN();
 }
 
 // ---------------------------------------------------------------------------
