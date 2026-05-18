@@ -38,12 +38,6 @@ static void test_expect_driver_failure(const char *path, char *output_path) {
     opts.no_cleanup = 0;
     opts.threads = 1;
     opts.output_file_path = output_path;
-    // Pin import resolution to the fixture dir; the default "." path
-    // searches recursively by basename and would happily resolve a
-    // sibling fixture's `main.sl` when multiple module tests share the
-    // build/bin tree.
-    (void)da_init(opts.import_paths, 1);
-    (void)da_push(opts.import_paths, strdup(path));
     driver_set_compiler_options(opts);
 
     int saved_stderr = dup(fileno(stderr));
@@ -92,11 +86,6 @@ void test_SliceTest_modules(void) {
     test("module_tests/slice_test", "slice_test");
 }
 
-// Verify -dbg actually emits DWARF: compile with gen_debug, run the
-// produced binary (must still exit 0), then llvm-dwarfdump the .o and
-// confirm a compile unit + at least one subprogram with main's linkage
-// name. Without the module flags + a valid DISubroutineType this either
-// silently emits no DI or segfaults LLVM's DwarfDebug.
 static void test_DebugInfoBasic_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";
@@ -124,11 +113,6 @@ static void test_DebugInfoBasic_modules(void) {
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the emitted object");
 }
 
-// Phase 2 exercise: structs, unions, enums, and a function signature
-// with parameters. Asserts the corresponding DWARF type entries
-// (DW_TAG_structure_type, DW_TAG_union_type, DW_TAG_enumeration_type,
-// DW_TAG_subroutine_type) all show up in the dump and that the
-// subprogram for `add` carries a non-trivial signature.
 static void test_DebugInfoTypes_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";
@@ -148,15 +132,6 @@ static void test_DebugInfoTypes_modules(void) {
     size_t n = fread(buf, 1, sizeof(buf) - 1, dump);
     pclose(dump);
     TEST_ASSERT_GREATER_THAN(0, n);
-    // Phase 2 anchors what we can verify today: every function gets a
-    // subprogram with a non-NULL DISubroutineType (a regression here
-    // segfaults LLVM's DwarfDebug), the return type lowers to a real
-    // DIBasicType, and `add`'s subprogram survives even though the
-    // function is only called once. Phase 4 will introduce dbg.declare
-    // for locals/params, at which point Point/Num/Color DI become
-    // visible in the dump too; until then LLVM strips them as
-    // unreferenced. So we only assert what's reachable from
-    // subprograms today and the verifier passes.
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_linkage_name\t(\"main\")"), "expected main subprogram");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "(\"__main_add__i32_i32\")"), "expected add subprogram with mangled signature");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_base_type"), "expected DW_TAG_base_type for primitives");
@@ -166,13 +141,6 @@ static void test_DebugInfoTypes_modules(void) {
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the Phase 2 fixture");
 }
 
-// Phase 3 exercise: line tables. Compile a multi-statement fixture
-// with `-dbg`, run it, then assert the .debug_line table has rows for
-// several distinct source lines (so `step` in gdb actually advances
-// one source line at a time), the DIE tree references the source
-// file, and the verifier is clean. Lexical-block scopes are emitted
-// in the bitcode too, but LLVM strips them from the .o until a
-// DILocalVariable anchors them — Phase 4's test will assert those.
 static void test_DebugInfoLines_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";
@@ -204,4 +172,37 @@ static void test_DebugInfoLines_modules(void) {
 
     int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the Phase 3 fixture");
+}
+static void test_DebugInfoLocals_modules(void) {
+    CompileOptions opts = {0};
+    char input_file_path[256] = "";
+    sprintf(input_file_path, "%s/main.sl", "module_tests/debug_info_locals");
+    opts.input_file_path = input_file_path;
+    opts.no_cleanup = 1;
+    opts.gen_debug = 1;
+    opts.threads = 1;
+    opts.output_file_path = "debug_info_locals";
+    driver_set_compiler_options(opts);
+    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
+    TEST_ASSERT_EQUAL_INT(system("./debug_info_locals"), 0);
+
+    FILE *info = popen("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
+    TEST_ASSERT_NOT_NULL(info);
+    char buf[32768] = {0};
+    size_t n = fread(buf, 1, sizeof(buf) - 1, info);
+    pclose(info);
+    TEST_ASSERT_GREATER_THAN(0, n);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_formal_parameter"), "expected DW_TAG_formal_parameter for params");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_variable"), "expected DW_TAG_variable for locals");
+    // Display names should be the source-level identifiers, not the mangled ones.
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"a\")"), "expected param `a` by display name");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"prod\")"), "expected local `prod` by display name");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"p\")"), "expected local `p` of struct type by display name");
+    // The Point struct should now surface because `p` anchors it.
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_structure_type"), "expected DW_TAG_structure_type for Point (anchored via local)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"Point\")"), "expected Point struct named");
+
+    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the Phase 4 fixture");
 }

@@ -787,6 +787,14 @@ LLVMValueRef codegen_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pas
 	LLVMValueRef ptr = LLVMBuildAlloca(cg->builder, ty, sym->resolved_name);
 	char *resolved_name = strdup(sym->resolved_name);
 	hashmap_put(ctx.loaded_values, resolved_name, ptr);
+	if (cg->should_build_debug && ctx.di_scope && node->location.line > 0) {
+		const char *display = node->data.var_decl.name;
+		LLVMMetadataRef var_ty_di = map_to_ditype(cg, node->data.var_decl.type, table);
+		LLVMMetadataRef di_var = LLVMDIBuilderCreateAutoVariable(cg->di_builder, ctx.di_scope, display, strlen(display), cg->di_file, node->location.line, var_ty_di, 1, 0, 0);
+		LLVMMetadataRef expr = LLVMDIBuilderCreateExpression(cg->di_builder, NULL, 0);
+		LLVMMetadataRef loc = LLVMDIBuilderCreateDebugLocation(cg->llvm_context, node->location.line, node->location.col, ctx.di_scope, NULL);
+		LLVMDIBuilderInsertDeclareRecordAtEnd(cg->di_builder, ptr, di_var, expr, loc, LLVMGetInsertBlock(cg->builder));
+	}
 	if (node->data.var_decl.init) {
 		++ctx.current_scope;
 		ctx.expected_type = node->data.var_decl.type;
@@ -847,6 +855,16 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 			char *param_name = strdup(curr_param->data.param_decl.resolved_name);
 			hashmap_put(values_map, param_name, ptr);
 			LLVMBuildStore(cg->builder, args[index], ptr);
+			if (cg->should_build_debug && di_fn) {
+				const char *display = curr_param->data.param_decl.name;
+				LLVMMetadataRef param_ty_di = map_to_ditype(cg, sym->type->function.param_types[index], table);
+				unsigned param_line = curr_param->location.line ? curr_param->location.line : node->location.line;
+				unsigned param_col = curr_param->location.col;
+				LLVMMetadataRef di_var = LLVMDIBuilderCreateParameterVariable(cg->di_builder, di_fn, display, strlen(display), (unsigned)(index + 1), cg->di_file, param_line, param_ty_di, 1, 0);
+				LLVMMetadataRef expr = LLVMDIBuilderCreateExpression(cg->di_builder, NULL, 0);
+				LLVMMetadataRef loc = LLVMDIBuilderCreateDebugLocation(cg->llvm_context, param_line, param_col, di_fn, NULL);
+				LLVMDIBuilderInsertDeclareRecordAtEnd(cg->di_builder, ptr, di_var, expr, loc, entry);
+			}
 			curr_param = curr_param->next;
 			++index;
 		}

@@ -310,6 +310,7 @@ int main(void) {
 	RUN_TEST(test_DebugInfoBasic_modules);
 	RUN_TEST(test_DebugInfoTypes_modules);
 	RUN_TEST(test_DebugInfoLines_modules);
+	RUN_TEST(test_DebugInfoLocals_modules);
 	return UNITY_END();
 
 }
