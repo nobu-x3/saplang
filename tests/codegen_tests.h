@@ -773,13 +773,13 @@ void test_Div_codegen(void) {
 						   "  store float 2.000000e+00, ptr %__main_foo_y, align 4\n"
 						   "  %0 = load float, ptr %__main_foo_x, align 4\n"
 						   "  %1 = load float, ptr %__main_foo_y, align 4\n"
-						   "  %div = sdiv float %0, %1\n"
+						   "  %div = fdiv float %0, %1\n"
 						   "  store float %div, ptr %__main_foo_y, align 4\n"
 						   "  %2 = load float, ptr %__main_foo_y, align 4\n"
-						   "  %div1 = sdiv float %2, 1.000000e+00\n"
+						   "  %div1 = fdiv float %2, 1.000000e+00\n"
 						   "  store float %div1, ptr %__main_foo_y, align 4\n"
 						   "  %3 = load float, ptr %__main_foo_y, align 4\n"
-						   "  %div2 = sdiv float 1.000000e+00, %3\n"
+						   "  %div2 = fdiv float 1.000000e+00, %3\n"
 						   "  store float %div2, ptr %__main_foo_y, align 4\n"
 						   "  %4 = load float, ptr %__main_foo_y, align 4\n"
 						   "  ret float %4\n"
@@ -2257,4 +2257,885 @@ void test_FunctionOverload_codegen(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	TEST_ASSERT_EQUAL_STRING(expected_error, error);
 	free(error);
+}
+#define EXH_TEST_SETUP(input_string)                                                                                                                                                                                                              \
+	const char *input = input_string;                                                                                                                                                                                                              \
+	const char *path = "exhaustive_tests.sl";                                                                                                                                                                                                      \
+	Scanner scanner;                                                                                                                                                                                                                               \
+	scanner_init_from_string(&scanner, path, input);                                                                                                                                                                                               \
+	Parser parser;                                                                                                                                                                                                                                 \
+	FILE *old_stderr = capture_error_begin();                                                                                                                                                                                                      \
+	parser_init(&parser, scanner, NULL);                                                                                                                                                                                                           \
+	Module *module = parse_input(&parser);                                                                                                                                                                                                         \
+	int parse_ok = (module && !module->has_errors);                                                                                                                                                                                                \
+	int sema_ok = 1;                                                                                                                                                                                                                               \
+	char *output = NULL;                                                                                                                                                                                                                           \
+	CodegenLLVM cg_ctx;                                                                                                                                                                                                                            \
+	if (parse_ok) {                                                                                                                                                                                                                                \
+		symbol_table_set_type_info(module->symbol_table);                                                                                                                                                                                          \
+		for (ASTNode *node = module->ast; node != NULL; node = node->next) {                                                                                                                                                                       \
+			sema_ok &= analyze_ast(module->symbol_table, node, 0, "") == RESULT_SUCCESS;                                                                                                                                                           \
+			sema_ok &= resolve_types(module->symbol_table, node, 1) == RESULT_SUCCESS;                                                                                                                                                             \
+		}                                                                                                                                                                                                                                          \
+		if (sema_ok) {                                                                                                                                                                                                                             \
+			CodegenInitContext cg_init_ctx = {"test", "test", ".", 0};                                                                                                                                                                             \
+			cg_ctx = codegen_init(&cg_init_ctx);                                                                                                                                                                                                   \
+			codegen_run(&cg_ctx, module->ast, module->symbol_table);                                                                                                                                                                               \
+			output = codegen_output_str(&cg_ctx);                                                                                                                                                                                                  \
+		}                                                                                                                                                                                                                                          \
+	}                                                                                                                                                                                                                                              \
+	char *captured_err = capture_error_end(old_stderr)
+
+#define EXH_TEST_TEARDOWN()                                                                                                                                                                                                                       \
+	do {                                                                                                                                                                                                                                           \
+		if (output) {                                                                                                                                                                                                                              \
+			codegen_deinit(&cg_ctx);                                                                                                                                                                                                               \
+		}                                                                                                                                                                                                                                          \
+		free(captured_err);                                                                                                                                                                                                                        \
+	} while (0)
+
+#define EXH_REQUIRE_OK()                                                                                                                                                                                                                          \
+	do {                                                                                                                                                                                                                                           \
+		if (!parse_ok)                                                                                                                                                                                                                             \
+			TEST_FAIL_MESSAGE("parse failed");                                                                                                                                                                                                     \
+		if (!sema_ok)                                                                                                                                                                                                                              \
+			TEST_FAIL_MESSAGE(captured_err);                                                                                                                                                                                                       \
+	} while (0)
+
+// ---------------------------------------------------------------------------
+// 1. Built-in primitive types: globals (no init) emit `zeroinitializer`
+//    constants of the natural type.
+// ---------------------------------------------------------------------------
+
+void test_GlobalNoInit_AllIntWidths_codegen(void) {
+	EXH_TEST_SETUP("i8 a; i16 b; i32 c; i64 d; u8 e; u16 f; u32 g; u64 h;");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_a = global i8 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_b = global i16 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_c = global i32 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_d = global i64 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_e = global i8 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_f = global i16 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_g = global i32 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_h = global i64 0"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_GlobalNoInit_FloatWidths_codegen(void) {
+	EXH_TEST_SETUP("f32 a; f64 b;");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_a = global float 0.000000e+00"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_b = global double 0.000000e+00"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_GlobalNoInit_PointerIsNull_codegen(void) {
+	EXH_TEST_SETUP("i32* p; u8** pp;");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_p = global ptr null"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_pp = global ptr null"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 2. Integer literals: decimal, hex, binary. Sign-extended into the
+//    declared type.
+// ---------------------------------------------------------------------------
+
+void test_LiteralHex_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 0xDEAD_BEEF; return a; }");
+	EXH_REQUIRE_OK();
+	// 0xDEADBEEF as i32 is -559038737 in signed two's complement.
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 -559038737"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LiteralBinary_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 0b1010; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 10"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LiteralBinaryWithUnderscore_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 0b1010_1010; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 170"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LiteralHexWithUnderscore_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 0xDEAD_BEEF; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 -559038737"));
+	EXH_TEST_TEARDOWN();
+}
+
+// CODEGEN_BUGS.md §9 — decimal literals reject `_` separator even
+// though hex/binary accept it. SPEC §1.5 lists `1_000_000` as legal.
+// Pin the parser failure so any fix flips this test red.
+void test_DecimalUnderscoreSeparator_pinning_CODEGEN_BUGS_9_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1_000_000; return a; }");
+	TEST_ASSERT_FALSE_MESSAGE(parse_ok && sema_ok, "decimal underscore-separator should currently FAIL parse — fix in scanner.c");
+	TEST_ASSERT_NOT_NULL(strstr(captured_err, "_000_000"));
+	EXH_TEST_TEARDOWN();
+}
+
+// CODEGEN_BUGS.md §10 — u64 literals are clamped to i64 max.
+// 0xFFFFFFFFFFFFFFFF should be u64 max (18446744073709551615) but
+// today emits i64 max (9223372036854775807).
+void test_U64MaxLiteral_pinning_CODEGEN_BUGS_10_codegen(void) {
+	EXH_TEST_SETUP("fn u64 foo() { u64 a = 0xFFFFFFFFFFFFFFFF; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL_MESSAGE(strstr(output, "store i64 9223372036854775807"), "expected current bug: literal clamped to i64 max");
+	TEST_ASSERT_NULL_MESSAGE(strstr(output, "store i64 -1"), "fix would emit -1 (the i64 reinterpretation of u64 max)");
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LiteralNegativeI8_codegen(void) {
+	EXH_TEST_SETUP("fn i8 foo() { i8 a = -128; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 -128"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LiteralUnsignedU8_HighBitSet_codegen(void) {
+	EXH_TEST_SETUP("fn u8 foo() { u8 a = 255; return a; }");
+	EXH_REQUIRE_OK();
+	// 255 reinterpreted as i8 is -1 (the printer always uses signed).
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 -1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LiteralBool_codegen(void) {
+	EXH_TEST_SETUP("fn bool foo() { bool a = true; bool b = false; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i1 true"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i1 false"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 3. Char literals.
+// ---------------------------------------------------------------------------
+
+void test_CharLiteralBasic_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { u8 c = 'A'; return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 65"));
+	EXH_TEST_TEARDOWN();
+}
+
+// CODEGEN_BUGS.md §8 — char-literal escape sequences are not decoded.
+// '\n' should be ASCII 10. Today the scanner copies '\' and 'n' into
+// the token buffer and the parser takes text[0] → '\' (ASCII 92).
+void test_CharLiteralEscape_pinning_CODEGEN_BUGS_8_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { u8 c = '\\n'; return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL_MESSAGE(strstr(output, "store i8 92"), "expected current bug: '\\n' evaluates to 92 ('\\\\') instead of 10");
+	TEST_ASSERT_NULL_MESSAGE(strstr(output, "store i8 10"), "fix would emit 10 (newline)");
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CharLiteralEscapeTab_pinning_CODEGEN_BUGS_8_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { u8 c = '\\t'; return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL_MESSAGE(strstr(output, "store i8 92"), "expected current bug: '\\t' evaluates to 92 instead of 9");
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CharLiteralEscapeNul_pinning_CODEGEN_BUGS_8_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { u8 c = '\\0'; return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL_MESSAGE(strstr(output, "store i8 92"), "expected current bug: '\\0' evaluates to 92 instead of 0");
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 4. Float literals and arithmetic.
+// ---------------------------------------------------------------------------
+
+void test_LiteralF64_codegen(void) {
+	EXH_TEST_SETUP("fn f64 foo() { f64 a = 3.14; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store double 3.140000e+00"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FloatAdd_codegen(void) {
+	EXH_TEST_SETUP("fn f32 foo() { f32 a = 4.0; f32 b = 2.0; return a + b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "fadd float"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FloatSub_codegen(void) {
+	EXH_TEST_SETUP("fn f32 foo() { f32 a = 4.0; f32 b = 2.0; return a - b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "fsub float"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FloatMul_codegen(void) {
+	EXH_TEST_SETUP("fn f32 foo() { f32 a = 4.0; f32 b = 2.0; return a * b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "fmul float"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FloatDiv_codegen(void) {
+	EXH_TEST_SETUP("fn f32 foo() { f32 a = 4.0; f32 b = 2.0; return a / b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "fdiv float"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FloatNeg_codegen(void) {
+	EXH_TEST_SETUP("fn f32 foo() { f32 a = 1.0; return -a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "fneg float"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FloatCmp_codegen(void) {
+	EXH_TEST_SETUP("fn bool foo() { f32 a = 1.0; f32 b = 2.0; return a < b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "fcmp olt float"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 5. Integer arithmetic — correct cases.
+// ---------------------------------------------------------------------------
+
+void test_IntAdd_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; i32 b = 2; return a + b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%add = add i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_IntSub_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; i32 b = 2; return a - b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%sub = sub i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_IntMul_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 2; i32 b = 3; return a * b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%mul = mul i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SignedDiv_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 10; i32 b = 3; return a / b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%div = sdiv i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SignedMod_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 10; i32 b = 3; return a % b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%rem = srem i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnsignedDiv_codegen(void) {
+	EXH_TEST_SETUP("fn u32 main() { u32 a = 10; u32 b = 3; return a / b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "udiv i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnsignedMod_codegen(void) {
+	EXH_TEST_SETUP("fn u32 main() { u32 a = 10; u32 b = 3; return a % b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "urem i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 6. Bitwise and shift ops.
+// ---------------------------------------------------------------------------
+
+void test_BitwiseAnd_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 7; i32 b = 5; return a & b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%and = and i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_BitwiseOr_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; i32 b = 2; return a | b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%or = or i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_BitwiseXor_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; i32 b = 2; return a ^ b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%xor = xor i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LeftShift_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; return a << 4; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%shl = shl i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SignedRightShift_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = -16; return a >> 2; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%shr = ashr i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnsignedRShift_codegen(void) {
+	EXH_TEST_SETUP("fn u32 main() { u32 a = 16; return a >> 2; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "lshr i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 7. Comparisons.
+// ---------------------------------------------------------------------------
+
+void test_SignedLT_codegen(void) {
+	EXH_TEST_SETUP("fn bool main() { i32 a = 1; i32 b = 2; return a < b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%cmplt = icmp slt i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SignedLE_codegen(void) {
+	EXH_TEST_SETUP("fn bool main() { i32 a = 1; i32 b = 2; return a <= b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%cmple = icmp sle i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SignedGT_codegen(void) {
+	EXH_TEST_SETUP("fn bool main() { i32 a = 1; i32 b = 2; return a > b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%cmpgt = icmp sgt i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SignedGE_codegen(void) {
+	EXH_TEST_SETUP("fn bool main() { i32 a = 1; i32 b = 2; return a >= b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%cmpge = icmp sge i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnsignedCmp_codegen(void) {
+	EXH_TEST_SETUP("fn bool main() { u32 a = 1; u32 b = 2; return a < b; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ult i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 8. Logical ops — CODEGEN_BUGS.md §7. `&&` / `||` crash with
+//    `Unknown binary op` assert. No pinning test (assertion abort
+//    can't be caught from unity).
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// 9. Compound assignment.
+// ---------------------------------------------------------------------------
+
+void test_SelfOr_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; a |= 8; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%or = or i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SelfAnd_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 7; a &= 3; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%and = and i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 10. Unary expressions.
+// ---------------------------------------------------------------------------
+
+void test_UnaryIntNeg_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 5; return -a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%negtmp = sub i32 0,"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnaryBitwiseNot_i32_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 0; return ~a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%lnot = xor i32"));
+	TEST_ASSERT_NOT_NULL(strstr(output, ", -1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnaryLogicalNot_OnInt_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; if (!a) { return 1; } return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ne i32"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "nottmp = xor i1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnaryLogicalNot_OnPointer_codegen(void) {
+	EXH_TEST_SETUP("fn bool main() { i32* p = null; return !p; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ne ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "nottmp = xor i1"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 11. Pointer ops. CODEGEN_BUGS.md §15 — writing through a pointer
+//    `*p = v;` crashes the codegen assertion. Spec says deref is a
+//    valid l-value.
+// ---------------------------------------------------------------------------
+
+void test_PointerAddressOfThenDeref_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 v = 7; i32* p = &v; return *p; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "%deref = load i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 12. Casts. The four valid cast shapes from SPEC §2.10.
+// ---------------------------------------------------------------------------
+
+void test_CastIntWidening_codegen(void) {
+	EXH_TEST_SETUP("fn i64 main() { i32 a = 1; return (i64)a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "sext i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CastIntNarrowing_codegen(void) {
+	EXH_TEST_SETUP("fn i8 main() { i32 a = 1; return (i8)a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "trunc i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CastFloatWidening_codegen(void) {
+	EXH_TEST_SETUP("fn f64 main() { f32 a = 1.0; return (f64)a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "fpext float"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CastFloatNarrowing_codegen(void) {
+	EXH_TEST_SETUP("fn f32 main() { f64 a = 1.0; return (f32)a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "fptrunc double"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CastFloatToInt_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { f32 a = 1.5; return (i32)a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "fptosi float"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CastIntToFloat_codegen(void) {
+	EXH_TEST_SETUP("fn f32 main() { i32 a = 5; return (f32)a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "sitofp i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 13. Enum codegen — `EnumType::Member` literally resolves to its
+//    integer value at the expression site.
+// ---------------------------------------------------------------------------
+
+void test_EnumImplicitBaseValue_codegen(void) {
+	EXH_TEST_SETUP("enum E { A, B, C } fn i32 main() { return E::C; }");
+	EXH_REQUIRE_OK();
+	// A=0, B=1, C=2 with implicit i32 base.
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i32 2"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_EnumExplicitU8Base_codegen(void) {
+	EXH_TEST_SETUP("enum E : u8 { A, B } fn i32 main() { E e = E::B; return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca i8"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_EnumExplicitJump_codegen(void) {
+	EXH_TEST_SETUP("enum E { A, B = 5, C } fn i32 main() { return E::C; }");
+	EXH_REQUIRE_OK();
+	// B=5 explicitly, C auto-increments → 6.
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i32 6"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 14. Struct literals and member access.
+// ---------------------------------------------------------------------------
+
+void test_StructDeclLayout_codegen(void) {
+	EXH_TEST_SETUP("struct S { i32 a; i32 b; }"
+				   "fn i32 main() { S s; return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%__main_S = type { i32, i32 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca %__main_S"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_StructLiteralAllDesignated_codegen(void) {
+	EXH_TEST_SETUP("struct S { i32 a; i32 b; }"
+				   "fn i32 main() { S s = {.b = 4, .a = 3}; return s.a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 3,"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 4,"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_StructPassedByValue_codegen(void) {
+	EXH_TEST_SETUP("struct S { i32 a; i32 b; }"
+				   "fn i32 foo(S s) { return s.a + s.b; }"
+				   "fn i32 main() { S x = {3, 4}; return foo(x); }");
+	EXH_REQUIRE_OK();
+	// The struct is loaded as a single aggregate value at the call
+	// site and passed to the parameter slot. (Stage 1's SysV-ABI
+	// fidelity is best-effort; this just asserts the shape, not the
+	// exact ABI lowering.)
+	TEST_ASSERT_NOT_NULL(strstr(output, "load %__main_S, ptr %__main_main_x"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "call i32 @__main_foo____main_S(%__main_S"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 15. Union codegen — laid out as a struct of just the largest member.
+// ---------------------------------------------------------------------------
+
+void test_UnionDeclLayout_codegen(void) {
+	EXH_TEST_SETUP("union U { i32 a; i64 b; }"
+				   "fn i32 main() { U u; return 0; }");
+	EXH_REQUIRE_OK();
+	// The union picks the widest field (i64) for its storage.
+	TEST_ASSERT_NOT_NULL(strstr(output, "%union.__main_U = type { i64 }"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 16. Arrays.
+// ---------------------------------------------------------------------------
+
+void test_ArrayLiteralStorage_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32[3] arr = [10, 20, 30]; return arr[0]; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca [3 x i32]"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 10"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 20"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 30"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_ArrayElementWriteAndRead_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32[2] arr; arr[0] = 1; arr[1] = arr[0]; return arr[1]; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 1, ptr %arrgep"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load i32, ptr %arrgep"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_ArrayLenIsCompileTimeConstant_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { i32[5] arr = [1,2,3,4,5]; return arr.len; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 5"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 17. Function declarations / calls.
+// ---------------------------------------------------------------------------
+
+void test_MainNotMangled_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	// `main` is the program entry; its name must NOT be mangled.
+	TEST_ASSERT_NOT_NULL(strstr(output, "define i32 @main()"));
+	TEST_ASSERT_NULL(strstr(output, "@__main_main()"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FnMangledByModuleAndParams_codegen(void) {
+	EXH_TEST_SETUP("fn i32 add(i32 a, i32 b) { return a + b; }"
+				   "fn i32 main() { return add(1, 2); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "define i32 @__main_add__i32_i32(i32 %0, i32 %1)"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "call i32 @__main_add__i32_i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_VoidFunction_codegen(void) {
+	EXH_TEST_SETUP("fn void foo() {} fn i32 main() { foo(); return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "define void @__main_foo()"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret void"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "call void @__main_foo()"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_ChainedFnCalls_codegen(void) {
+	EXH_TEST_SETUP("fn i32 a() { return 1; }"
+				   "fn i32 b() { return a(); }"
+				   "fn i32 main() { return b(); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "call i32 @__main_a()"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "call i32 @__main_b()"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 18. Extern blocks.
+// ---------------------------------------------------------------------------
+
+void test_ExternFnDeclaresUnmangled_codegen(void) {
+	EXH_TEST_SETUP("extern { fn i32 puts(const u8* s); }"
+				   "fn i32 main() { return puts(\"hi\"); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "declare i32 @puts(ptr)"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "call i32 @puts(ptr"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_MultipleStringLiteralsGetSuffixedNames_codegen(void) {
+	EXH_TEST_SETUP("extern { fn i32 puts(const u8* s); }"
+				   "fn i32 main() { puts(\"hi\"); puts(\"bye\"); return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "@.str = constant [3 x i8] c\"hi\\00\""));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@.str.1 = constant [4 x i8] c\"bye\\00\""));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 19. Control flow — if / else / while / for.
+// ---------------------------------------------------------------------------
+
+void test_IfEmptyThenAndElse_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 1; if (a) {} else {} return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "br i1 %tobool, label %then, label %else"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "then:"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "else:"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ifcont:"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_NestedWhileLoops_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() {"
+				   "  i32 a = 0; i32 b = 0;"
+				   "  while (a < 2) { while (b < 2) { b += 1; } a += 1; }"
+				   "  return a; }");
+	EXH_REQUIRE_OK();
+	// The outer and inner condition blocks both exist and don't share
+	// names.
+	TEST_ASSERT_NOT_NULL(strstr(output, "whilecond:"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "whilecond1:"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 20. Defer. Defer at function-block level inlines before returns; the
+//    inside-loop case is broken (CODEGEN_BUGS.md §12).
+// ---------------------------------------------------------------------------
+
+void test_DeferAtFnEnd_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 0; defer { a = 99; } return a; }");
+	EXH_REQUIRE_OK();
+	// Defer runs before the return — the assignment goes ahead of the
+	// load that feeds `ret`.
+	const char *store = strstr(output, "store i32 99, ptr %__main_main_a");
+	const char *load = strstr(output, "load i32, ptr %__main_main_a");
+	TEST_ASSERT_NOT_NULL(store);
+	TEST_ASSERT_NOT_NULL(load);
+	TEST_ASSERT_TRUE_MESSAGE(store < load, "defer body must run before the final load that feeds the return");
+	EXH_TEST_TEARDOWN();
+}
+
+void test_DeferAcrossEarlyReturn_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 0; defer { a = 1; } if (a) { return 5; } return a; }");
+	EXH_REQUIRE_OK();
+	// The defer body is inlined into BOTH the early-return path and
+	// the natural end of the function. Both blocks should contain the
+	// `store i32 1` for `a = 1;`.
+	const char *first = strstr(output, "store i32 1, ptr %__main_main_a");
+	TEST_ASSERT_NOT_NULL(first);
+	const char *second = strstr(first + 1, "store i32 1, ptr %__main_main_a");
+	TEST_ASSERT_NOT_NULL_MESSAGE(second, "defer body must be inlined at every exit path");
+	EXH_TEST_TEARDOWN();
+}
+
+// CODEGEN_BUGS.md §12 — defer placed inside a for-loop body is
+// silently dropped; the loop body emits as if the defer wasn't there.
+void test_DeferInForBody_pinning_CODEGEN_BUGS_12_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() {"
+				   "  i32 a = 0;"
+				   "  for (i32 i = 0; i < 3; i += 1) { defer { a = 1; } }"
+				   "  return a;"
+				   "}");
+	EXH_REQUIRE_OK();
+	// If the bug were fixed, we'd see `store i32 1, ptr %__main_main_a`
+	// in `forbody`. Today the body is empty.
+	TEST_ASSERT_NULL_MESSAGE(strstr(output, "store i32 1, ptr %__main_main_a"), "expected current bug: defer in for-body produces no IR. Fix would inline `a = 1` inside forbody.");
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 21. Stray-branch-after-`ret` bug. The forbody emits `ret i32 0`
+//    followed by `br label %forstep` — invalid LLVM IR (two terminators
+//    in one block).
+// ---------------------------------------------------------------------------
+
+void test_ForBodyReturnEmitsStrayBr_pinning_CODEGEN_BUGS_16_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() {"
+				   "  for (i32 i = 0; i < 1; i += 1) { return 0; }"
+				   "  return 0;"
+				   "}");
+	EXH_REQUIRE_OK();
+	// Find the forbody block and check it ends with `br label %forstep`
+	// AFTER a `ret`. The printer keeps both — the verifier would reject.
+	const char *body = strstr(output, "forbody:");
+	TEST_ASSERT_NOT_NULL(body);
+	const char *ret_inst = strstr(body, "ret i32 0");
+	const char *br_inst = strstr(body, "br label %forstep");
+	TEST_ASSERT_NOT_NULL(ret_inst);
+	TEST_ASSERT_NOT_NULL_MESSAGE(br_inst, "expected current bug: stray `br` emitted after `ret` in forbody. Fix: stop emitting the loop-back branch when the body terminates.");
+	TEST_ASSERT_TRUE_MESSAGE(ret_inst < br_inst, "ret precedes the stray br");
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 22. Parser bugs reachable from codegen-shaped programs.
+// ---------------------------------------------------------------------------
+
+// CODEGEN_BUGS.md §11 — `(a)` and `(a + b)` are misparsed as
+// `(typename) ...` casts because `is_type_spec` claims every
+// identifier is a type. Use a fragment that makes the misparse loud.
+void test_ParenExprWithIdent_pinning_CODEGEN_BUGS_11_codegen(void) {
+	TEST_IGNORE_MESSAGE("disabled: parser hangs on `(a + b)`.");
+}
+
+// CODEGEN_BUGS.md §14 — naked `{ ... }` blocks at statement position
+// are not parseable. Spec lists `block` as a statement form.
+void test_NakedBlockStmt_pinning_CODEGEN_BUGS_14_codegen(void) {
+	TEST_IGNORE_MESSAGE("disabled: parser hangs on naked `{...}`.");
+}
+
+// CODEGEN_BUGS.md §15 — `*p = v;` (writing through a pointer)
+// crashes codegen at the lvalue-kind assertion in codegen_assignment.
+// We can't catch the assertion, so the test only asserts that the
+// program parses+typechecks; codegen itself would abort the process.
+// NOTE: this test is DISABLED — running it terminates the test
+// process. It's here as a placeholder so the bug stays documented.
+void test_PointerWrite_pinning_CODEGEN_BUGS_15_codegen(void) {
+	TEST_IGNORE_MESSAGE("disabled: codegen aborts on `*p = v` (assertion in codegen_assignment). See CODEGEN_BUGS.md §15.");
+}
+
+// CODEGEN_BUGS.md §17 — `.` on a pointer-to-struct does not auto-deref
+// in sema, contradicting SPEC §5.3. `p.a` with `S* p` fails with
+// "unknown type ." today.
+void test_PointerDotMember_pinning_CODEGEN_BUGS_17_codegen(void) {
+	EXH_TEST_SETUP("struct S { i32 a; }"
+				   "fn i32 main() { S x = {3}; S* p = &x; return p.a; }");
+	TEST_ASSERT_FALSE_MESSAGE(parse_ok && sema_ok, "`p.a` for `S* p` should currently FAIL sema");
+	TEST_ASSERT_NOT_NULL(strstr(captured_err, "unknown type"));
+	EXH_TEST_TEARDOWN();
+}
+
+// CODEGEN_BUGS.md §18 — empty parts of a `for` header all fail sema
+// even though SPEC §4.4 documents them as optional.
+void test_ForEmptyAll_pinning_CODEGEN_BUGS_18_codegen(void) {
+	TEST_IGNORE_MESSAGE("disabled: parser hangs on `for(;;)`.");
+}
+
+void test_ForEmptyStep_pinning_CODEGEN_BUGS_18_codegen(void) {
+	TEST_IGNORE_MESSAGE("disabled: parser hangs on empty `for` step.");
+}
+
+// CODEGEN_BUGS.md §19 — returning a struct by value is rejected at
+// parse time because the parser doesn't accept a user-typed name in
+// the return-type slot in this position.
+void test_FnReturnsStructByValue_pinning_CODEGEN_BUGS_19_codegen(void) {
+	TEST_IGNORE_MESSAGE("disabled: parser hangs on `fn S make()`.");
+}
+
+// ---------------------------------------------------------------------------
+// 23. `null` literal — pinned across the three usage sites.
+// ---------------------------------------------------------------------------
+
+void test_NullAsParameter_codegen(void) {
+	EXH_TEST_SETUP("fn void take(i32* p) {}"
+				   "fn i32 main() { take(null); return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "call void @\"__main_take__i32*\"(ptr null)"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_NullReassign_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32* p = null; p = null; return 0; }");
+	EXH_REQUIRE_OK();
+	// Two stores: the init, then the reassignment.
+	const char *first = strstr(output, "store ptr null, ptr %__main_main_p");
+	TEST_ASSERT_NOT_NULL(first);
+	const char *second = strstr(first + 1, "store ptr null, ptr %__main_main_p");
+	TEST_ASSERT_NOT_NULL(second);
+	EXH_TEST_TEARDOWN();
+}
+
+void test_NullCompareNotEq_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32* p = null; if (p != null) { return 1; } return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ne ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, ", null"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 24. String literal lowering. `"…"` becomes a global byte array with
+//    the trailing NUL and `align 1`; use sites pass `ptr` to the
+//    callee.
+// ---------------------------------------------------------------------------
+
+void test_StringLiteralEscapeSequences_codegen(void) {
+	EXH_TEST_SETUP("extern { fn i32 puts(const u8* s); }"
+				   "fn i32 main() { return puts(\"a\\nb\"); }");
+	EXH_REQUIRE_OK();
+	// `\n` inside a string literal IS decoded (the string-literal path
+	// in the scanner handles escapes correctly — only char literals
+	// don't). Expect the byte `\0A` in the constant array.
+	TEST_ASSERT_NOT_NULL(strstr(output, "c\"a\\0Ab\\00\""));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// 25. Stage-1 placeholder for `&&` / `||`. Don't run the codegen — it
+//    asserts. Just document.
+// ---------------------------------------------------------------------------
+
+void test_LogicalAndCrashes_pinning_CODEGEN_BUGS_7_codegen(void) {
+	TEST_IGNORE_MESSAGE("disabled: codegen aborts on `&&` / `||` (assert in codegen_binary). See CODEGEN_BUGS.md §7.");
 }
