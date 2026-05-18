@@ -913,6 +913,9 @@ LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCo
 	case '-': {
 		ctx.intention = PI_LOAD_VAL;
 		LLVMValueRef val = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
+		Type *op_type = get_type(table, node->data.unary_op.operand, ctx.current_scope, "");
+		if (op_type && op_type->type_kind == TYPE_PRIMITIVE && (op_type->prim == PRIM_F32 || op_type->prim == PRIM_F64))
+			return LLVMBuildFNeg(cg->builder, val, "negtmp");
 		return LLVMBuildNeg(cg->builder, val, "negtmp");
 	} break;
 	case '~': {
@@ -935,29 +938,53 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	PassContext rhs_ctx = ctx;
 	rhs_ctx.expected_type = l_type;
 	LLVMValueRef R = codegen_ast(cg, node->data.binary_op.right, table, rhs_ctx);
+	int is_float = l_type->type_kind == TYPE_PRIMITIVE && (l_type->prim == PRIM_F32 || l_type->prim == PRIM_F64);
+	int is_unsigned = l_type->type_kind == TYPE_PRIMITIVE && (l_type->prim == PRIM_U8 || l_type->prim == PRIM_U16 || l_type->prim == PRIM_U32 || l_type->prim == PRIM_U64);
 	switch (node->data.binary_op.op) {
 	case TOK_EQUAL:
+		if (is_float)
+			return LLVMBuildFCmp(cg->builder, LLVMRealOEQ, L, R, "");
 		return LLVMBuildICmp(cg->builder, LLVMIntEQ, L, R, "");
 	case TOK_NOTEQUAL:
+		if (is_float)
+			return LLVMBuildFCmp(cg->builder, LLVMRealONE, L, R, "");
 		return LLVMBuildICmp(cg->builder, LLVMIntNE, L, R, "");
 	case TOK_LESSTHAN:
-		return LLVMBuildICmp(cg->builder, LLVMIntSLT, L, R, "cmplt");
+		if (is_float)
+			return LLVMBuildFCmp(cg->builder, LLVMRealOLT, L, R, "cmplt");
+		return LLVMBuildICmp(cg->builder, is_unsigned ? LLVMIntULT : LLVMIntSLT, L, R, "cmplt");
 	case TOK_LTOE:
-		return LLVMBuildICmp(cg->builder, LLVMIntSLE, L, R, "cmple");
+		if (is_float)
+			return LLVMBuildFCmp(cg->builder, LLVMRealOLE, L, R, "cmple");
+		return LLVMBuildICmp(cg->builder, is_unsigned ? LLVMIntULE : LLVMIntSLE, L, R, "cmple");
 	case TOK_GREATERTHAN:
-		return LLVMBuildICmp(cg->builder, LLVMIntSGT, L, R, "cmpgt");
+		if (is_float)
+			return LLVMBuildFCmp(cg->builder, LLVMRealOGT, L, R, "cmpgt");
+		return LLVMBuildICmp(cg->builder, is_unsigned ? LLVMIntUGT : LLVMIntSGT, L, R, "cmpgt");
 	case TOK_GTOE:
-		return LLVMBuildICmp(cg->builder, LLVMIntSGE, L, R, "cmpge");
+		if (is_float)
+			return LLVMBuildFCmp(cg->builder, LLVMRealOGE, L, R, "cmpge");
+		return LLVMBuildICmp(cg->builder, is_unsigned ? LLVMIntUGE : LLVMIntSGE, L, R, "cmpge");
 	case TOK_PLUS:
+		if (is_float)
+			return LLVMBuildFAdd(cg->builder, L, R, "add");
 		return LLVMBuildAdd(cg->builder, L, R, "add");
 	case TOK_MINUS:
+		if (is_float)
+			return LLVMBuildFSub(cg->builder, L, R, "sub");
 		return LLVMBuildSub(cg->builder, L, R, "sub");
 	case TOK_ASTERISK:
+		if (is_float)
+			return LLVMBuildFMul(cg->builder, L, R, "mul");
 		return LLVMBuildMul(cg->builder, L, R, "mul");
 	case TOK_SLASH:
-		return LLVMBuildSDiv(cg->builder, L, R, "div");
+		if (is_float)
+			return LLVMBuildFDiv(cg->builder, L, R, "div");
+		return is_unsigned ? LLVMBuildUDiv(cg->builder, L, R, "div") : LLVMBuildSDiv(cg->builder, L, R, "div");
 	case TOK_MODULO:
-		return LLVMBuildSRem(cg->builder, L, R, "rem");
+		if (is_float)
+			return LLVMBuildFRem(cg->builder, L, R, "rem");
+		return is_unsigned ? LLVMBuildURem(cg->builder, L, R, "rem") : LLVMBuildSRem(cg->builder, L, R, "rem");
 	case TOK_AMPERSAND:
 		return LLVMBuildAnd(cg->builder, L, R, "and");
 	case TOK_BITWISE_OR:
@@ -967,21 +994,25 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	case TOK_BITWISE_LSHIFT:
 		return LLVMBuildShl(cg->builder, L, R, "shl");
 	case TOK_BITWISE_RSHIFT:
-		return LLVMBuildAShr(cg->builder, L, R, "shr");
+		return is_unsigned ? LLVMBuildLShr(cg->builder, L, R, "shr") : LLVMBuildAShr(cg->builder, L, R, "shr");
 	case TOK_SELFADD: {
-		LLVMValueRef add = LLVMBuildAdd(cg->builder, L, R, "add");
+		LLVMValueRef add = is_float ? LLVMBuildFAdd(cg->builder, L, R, "add") : LLVMBuildAdd(cg->builder, L, R, "add");
 		return LLVMBuildStore(cg->builder, add, L);
 	}
 	case TOK_SELFSUB: {
-		LLVMValueRef sub = LLVMBuildSub(cg->builder, L, R, "sub");
+		LLVMValueRef sub = is_float ? LLVMBuildFSub(cg->builder, L, R, "sub") : LLVMBuildSub(cg->builder, L, R, "sub");
 		return LLVMBuildStore(cg->builder, sub, L);
 	}
 	case TOK_SELFDIV: {
-		LLVMValueRef div = LLVMBuildSDiv(cg->builder, L, R, "div");
+		LLVMValueRef div;
+		if (is_float)
+			div = LLVMBuildFDiv(cg->builder, L, R, "div");
+		else
+			div = is_unsigned ? LLVMBuildUDiv(cg->builder, L, R, "div") : LLVMBuildSDiv(cg->builder, L, R, "div");
 		return LLVMBuildStore(cg->builder, div, L);
 	}
 	case TOK_SELFMUL: {
-		LLVMValueRef mul = LLVMBuildMul(cg->builder, L, R, "mul");
+		LLVMValueRef mul = is_float ? LLVMBuildFMul(cg->builder, L, R, "mul") : LLVMBuildMul(cg->builder, L, R, "mul");
 		return LLVMBuildStore(cg->builder, mul, L);
 	}
 	case TOK_SELFOR: {
