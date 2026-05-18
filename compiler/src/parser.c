@@ -2241,7 +2241,13 @@ void unroll_defers(ASTNode *node, DeferStack *stack) {
 		}
 	}
 
-	if (stack->count > 0 && new_statements.count > 0 && new_statements.data[new_statements.count - 1]->type != AST_DEFERRED_SEQUENCE && new_statements.data[new_statements.count - 1]->type != AST_RETURN) {
+	int needs_tail = stack->count > 0;
+	if (needs_tail && new_statements.count > 0) {
+		ASTNodeType last_type = new_statements.data[new_statements.count - 1]->type;
+		if (last_type == AST_DEFERRED_SEQUENCE || last_type == AST_RETURN)
+			needs_tail = 0;
+	}
+	if (needs_tail) {
 		ASTNode *tail = new_ast_node(AST_DEFERRED_SEQUENCE, stack->data[stack->count - 1]->location);
 		for (int i = stack->count - 1; i >= 0; --i) {
 			if (stack->data[i]->type != AST_DEFER_BLOCK) {

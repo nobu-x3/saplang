@@ -379,7 +379,7 @@ int main(void) {
 	RUN_TEST(test_NestedWhileLoops_codegen);
 	RUN_TEST(test_DeferAtFnEnd_codegen);
 	RUN_TEST(test_DeferAcrossEarlyReturn_codegen);
-	RUN_TEST(test_DeferInForBody_pinning_CODEGEN_BUGS_12_codegen);
+	RUN_TEST(test_DeferInForBody_codegen);
 	RUN_TEST(test_ForBodyReturnNoStrayBr_codegen);
 	RUN_TEST(test_ParenExprWithIdent_pinning_CODEGEN_BUGS_11_codegen);
 	RUN_TEST(test_NakedBlockStmt_pinning_CODEGEN_BUGS_14_codegen);

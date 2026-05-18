@@ -2985,18 +2985,24 @@ void test_DeferAcrossEarlyReturn_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
-// CODEGEN_BUGS.md §12 — defer placed inside a for-loop body is
-// silently dropped; the loop body emits as if the defer wasn't there.
-void test_DeferInForBody_pinning_CODEGEN_BUGS_12_codegen(void) {
+void test_DeferInForBody_codegen(void) {
 	EXH_TEST_SETUP("fn i32 main() {"
 				   "  i32 a = 0;"
 				   "  for (i32 i = 0; i < 3; i += 1) { defer { a = 1; } }"
 				   "  return a;"
 				   "}");
 	EXH_REQUIRE_OK();
-	// If the bug were fixed, we'd see `store i32 1, ptr %__main_main_a`
-	// in `forbody`. Today the body is empty.
-	TEST_ASSERT_NULL_MESSAGE(strstr(output, "store i32 1, ptr %__main_main_a"), "expected current bug: defer in for-body produces no IR. Fix would inline `a = 1` inside forbody.");
+	const char *body = strstr(output, "forbody:");
+	TEST_ASSERT_NOT_NULL(body);
+	const char *step = strstr(body, "forstep:");
+	TEST_ASSERT_NOT_NULL(step);
+	char between[2048];
+	size_t len = (size_t)(step - body);
+	if (len >= sizeof(between))
+		len = sizeof(between) - 1;
+	memcpy(between, body, len);
+	between[len] = '\0';
+	TEST_ASSERT_NOT_NULL(strstr(between, "store i32 1, ptr %__main_main_a"));
 	EXH_TEST_TEARDOWN();
 }
 
