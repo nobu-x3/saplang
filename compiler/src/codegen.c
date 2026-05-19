@@ -795,7 +795,9 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
-	LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
+	LLVMValueRef global_var = LLVMGetNamedGlobal(cg->module, node->data.var_decl.resolved_name);
+	if (!global_var)
+		global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
 	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL, NULL, NULL};
 	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, table, ctx) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
@@ -854,7 +856,9 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	assert(sym->type);
 	Type *ret_type = sym->type->function.return_type;
 	LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
-	LLVMValueRef fn = LLVMAddFunction(cg->module, func_name, fn_ty);
+	LLVMValueRef fn = LLVMGetNamedFunction(cg->module, func_name);
+	if (!fn)
+		fn = LLVMAddFunction(cg->module, func_name, fn_ty);
 	LLVMMetadataRef di_fn = NULL;
 	if (cg->should_build_debug) {
 		LLVMMetadataRef sub_ty = map_to_ditype(cg, sym->type, table);
@@ -1371,7 +1375,9 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		assert(sym);
 		LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
 		assert(fn_ty);
-		LLVMValueRef fn = LLVMAddFunction(cg->module, sym->resolved_name, fn_ty);
+		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, sym->resolved_name);
+		if (!fn)
+			fn = LLVMAddFunction(cg->module, sym->resolved_name, fn_ty);
 		assert(fn);
 		LLVMSetLinkage(fn, LLVMExternalLinkage);
 		return fn;
@@ -1586,10 +1592,65 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	return NULL;
 }
 
+static void codegen_predeclare_fn(CodegenLLVM *cg, const char *resolved_name, Symbol *table, int set_extern) {
+	Symbol *sym = lookup_symbol(table, resolved_name, 0);
+	if (!sym || !sym->type)
+		return;
+	LLVMTypeRef fn_ty = map_to_llvm(cg, sym->type, table);
+	if (!fn_ty)
+		return;
+	if (LLVMGetNamedFunction(cg->module, resolved_name))
+		return;
+	LLVMValueRef llvm_fn = LLVMAddFunction(cg->module, resolved_name, fn_ty);
+	if (set_extern)
+		LLVMSetLinkage(llvm_fn, LLVMExternalLinkage);
+}
+
 void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 	for (Symbol *sym = table; sym; sym = sym->next) {
 		if (sym->is_imported) {
 			codegen_imported_symbol(cg, sym, table);
+		}
+	}
+	// Pre-create named struct/union types (top-level and inside extern
+	// blocks) so function signatures referencing them resolve.
+	for (ASTNode *current = root; current; current = current->next) {
+		ASTNode **scan = NULL;
+		int scan_count = 1;
+		ASTNode *single[1] = {current};
+		if (current->type == AST_EXTERN_BLOCK) {
+			scan = current->data.extern_block.block;
+			scan_count = current->data.extern_block.count;
+		} else {
+			scan = single;
+		}
+		for (int i = 0; i < scan_count; ++i) {
+			ASTNode *n = scan[i];
+			if (n->type == AST_STRUCT_DECL) {
+				const char *name = n->data.struct_decl.resolved_name;
+				if (!LLVMGetTypeByName2(cg->llvm_context, name))
+					LLVMStructCreateNamed(cg->llvm_context, name);
+			} else if (n->type == AST_UNION_DECL) {
+				char union_name[512] = "";
+				sprintf(union_name, "union.%s", n->data.union_decl.resolved_name);
+				if (!LLVMGetTypeByName2(cg->llvm_context, union_name))
+					LLVMStructCreateNamed(cg->llvm_context, union_name);
+			}
+		}
+	}
+	for (ASTNode *current = root; current; current = current->next) {
+		if (current->type == AST_FN_DECL) {
+			codegen_predeclare_fn(cg, current->data.func_decl.resolved_name, table, 0);
+		} else if (current->type == AST_VAR_DECL) {
+			LLVMTypeRef ty = map_to_llvm(cg, current->data.var_decl.type, table);
+			if (ty && !LLVMGetNamedGlobal(cg->module, current->data.var_decl.resolved_name))
+				LLVMAddGlobal(cg->module, ty, current->data.var_decl.resolved_name);
+		} else if (current->type == AST_EXTERN_BLOCK) {
+			for (int i = 0; i < current->data.extern_block.count; ++i) {
+				ASTNode *inner = current->data.extern_block.block[i];
+				if (inner->type == AST_EXTERN_FUNC_DECL)
+					codegen_predeclare_fn(cg, inner->data.extern_func.resolved_name, table, 1);
+			}
 		}
 	}
 	for (ASTNode *current = root; current; current = current->next) {

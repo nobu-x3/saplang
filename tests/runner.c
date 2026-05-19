@@ -288,6 +288,10 @@ int main(void) {
 	RUN_TEST(test_SliceFromNull_codegen);
 	RUN_TEST(test_ArrayDotLen_codegen);
 	RUN_TEST(test_SliceDotLen_codegen);
+	RUN_TEST(test_ForwardFnCall_codegen);
+	RUN_TEST(test_ForwardExternFnCall_codegen);
+	RUN_TEST(test_MutualRecursion_codegen);
+	RUN_TEST(test_ForwardGlobalReference_codegen);
 	RUN_TEST(test_SliceDotPtr_codegen);
 	RUN_TEST(test_SliceDotLenAfterDecay_codegen);
 	RUN_TEST(test_SliceIndexRead_codegen);

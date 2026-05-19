@@ -3446,3 +3446,39 @@ void test_SizeOf_InArithmetic_codegen(void) {
 	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 9"));
 	EXH_TEST_TEARDOWN();
 }
+
+// Forward / out-of-order fn calls — caller appears before callee, mutual
+// recursion, and extern decl appears after its use site. All should
+// resolve via the pre-declaration pass in codegen_run.
+
+void test_ForwardFnCall_codegen(void) {
+	EXH_TEST_SETUP("fn i32 caller() { return callee(); } fn i32 callee() { return 7; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "call i32 @__main_callee"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i32 7"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_ForwardExternFnCall_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { do_thing(); return 0; } extern { fn void do_thing(); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "call void @do_thing"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "declare void @do_thing"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_MutualRecursion_codegen(void) {
+	EXH_TEST_SETUP("fn i32 even(i32 n) { if (n == 0) { return 1; } return odd(n - 1); } fn i32 odd(i32 n) { if (n == 0) { return 0; } return even(n - 1); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_even"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_odd"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_ForwardGlobalReference_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return SIZE; } const u64 SIZE = 42;");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_SIZE"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load i64, ptr @__main_SIZE"));
+	EXH_TEST_TEARDOWN();
+}
