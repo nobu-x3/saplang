@@ -3171,3 +3171,89 @@ void test_LogicalOrShortCircuit_codegen(void) {
 	TEST_ASSERT_NOT_NULL(strstr(output, "%lor = phi i1"));
 	EXH_TEST_TEARDOWN();
 }
+
+// ---------------------------------------------------------------------------
+// `&&` / `||` accept pointers and any bool-convertible operand on either side.
+// ---------------------------------------------------------------------------
+
+void test_LogicalAnd_PointerAndComparison_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32* p = null; i32 a = 1; i32 b = 2; if (p && (a < b)) { return 1; } return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ne ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "land.rhs"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "%land = phi i1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LogicalAnd_ComparisonAndPointer_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32* p = null; i32 a = 1; i32 b = 2; if ((a < b) && p) { return 1; } return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ne ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "land.rhs"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LogicalOr_TwoPointers_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32* p = null; i32* q = null; if (p || q) { return 1; } return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ne ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "lor.rhs"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "%lor = phi i1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_LogicalAnd_NumericTruthy_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 0; u64 b = 1; if (a && b) { return 1; } return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ne i32"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ne i64"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "land.rhs"));
+	EXH_TEST_TEARDOWN();
+}
+
+// ---------------------------------------------------------------------------
+// Unary `~` lowers for every integer width, signed and unsigned.
+// ---------------------------------------------------------------------------
+
+void test_UnaryBitwiseNot_u8_codegen(void) {
+	EXH_TEST_SETUP("fn u8 main() { u8 a = 0; return ~a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%lnot = xor i8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnaryBitwiseNot_u16_codegen(void) {
+	EXH_TEST_SETUP("fn u16 main() { u16 a = 0; return ~a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%lnot = xor i16"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnaryBitwiseNot_u32_codegen(void) {
+	EXH_TEST_SETUP("fn u32 main() { u32 a = 0; return ~a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%lnot = xor i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnaryBitwiseNot_u64_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { u64 a = 0; return ~a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%lnot = xor i64"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnaryBitwiseNot_i8_codegen(void) {
+	EXH_TEST_SETUP("fn i8 main() { i8 a = 0; return ~a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%lnot = xor i8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_UnaryBitwiseNot_i64_codegen(void) {
+	EXH_TEST_SETUP("fn i64 main() { i64 a = 0; return ~a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%lnot = xor i64"));
+	EXH_TEST_TEARDOWN();
+}
+

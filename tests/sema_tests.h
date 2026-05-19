@@ -698,3 +698,90 @@ void test_Switch_EnumSubject_WrongEnumMember_sema(void) {
 	TEST_ASSERT_NOT_NULL(strstr(output, "case value belongs to enum Mode but switch subject is of enum Color"));
 	free(output);
 }
+
+void test_LogicalAnd_PointerAndComparison_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32* p = null; i32 a = 0; i32 b = 1; if (p && (a < b)) {} }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_LogicalAnd_ComparisonAndPointer_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32* p = null; i32 a = 0; i32 b = 1; if ((a < b) && p) {} }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_LogicalOr_TwoPointers_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32* p = null; i32* q = null; if (p || q) {} }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_LogicalAnd_NumericTruthy_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32 a = 0; u64 b = 1; if (a && b) {} }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_LogicalAnd_StructOperand_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 x; } fn void f() { S s = {0}; i32 a = 1; if (s && a) {} }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "logical '&&' requires a boolean-convertible left operand"));
+	free(output);
+}
+
+void test_LogicalOr_StructOnRight_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 x; } fn void f() { S s = {0}; i32 a = 1; if (a || s) {} }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "logical '||' requires a boolean-convertible right operand"));
+	free(output);
+}
+
+void test_UnaryTilde_OnU8_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u8 a = 0; u8 b = ~a; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_UnaryTilde_OnU16_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u16 a = 0; u16 b = ~a; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_UnaryTilde_OnU32_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u32 a = 0; u32 b = ~a; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_UnaryTilde_OnU64_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 a = 0; u64 b = ~a; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_UnaryTilde_OnFloat_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { f64 a = 0.0; f64 b = ~a; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "unary '~' requires integer operand"));
+	free(output);
+}
+
+void test_UnaryTilde_OnBool_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { bool a = true; bool b = ~a; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "unary '~' requires integer operand"));
+	free(output);
+}
+
+void test_UnaryTilde_OnPointer_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32* p = null; i32* q = ~p; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "unary '~' requires integer operand"));
+	free(output);
+}
+

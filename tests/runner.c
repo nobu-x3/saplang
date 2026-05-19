@@ -190,6 +190,19 @@ int main(void) {
 	RUN_TEST(test_SliceRangeOnPointerRejected_sema);
 	RUN_TEST(test_SliceRangeNonIntBoundRejected_sema);
 
+	RUN_TEST(test_LogicalAnd_PointerAndComparison_sema);
+	RUN_TEST(test_LogicalAnd_ComparisonAndPointer_sema);
+	RUN_TEST(test_LogicalOr_TwoPointers_sema);
+	RUN_TEST(test_LogicalAnd_NumericTruthy_sema);
+	RUN_TEST(test_LogicalAnd_StructOperand_Rejected_sema);
+	RUN_TEST(test_LogicalOr_StructOnRight_Rejected_sema);
+	RUN_TEST(test_UnaryTilde_OnU8_sema);
+	RUN_TEST(test_UnaryTilde_OnU16_sema);
+	RUN_TEST(test_UnaryTilde_OnU32_sema);
+	RUN_TEST(test_UnaryTilde_OnU64_sema);
+	RUN_TEST(test_UnaryTilde_OnFloat_Rejected_sema);
+	RUN_TEST(test_UnaryTilde_OnBool_Rejected_sema);
+	RUN_TEST(test_UnaryTilde_OnPointer_Rejected_sema);
 	RUN_TEST(test_Primitivei32_typeinfo);
 	RUN_TEST(test_Primitivei64_typeinfo);
 	RUN_TEST(test_Pointer_typeinfo);
@@ -395,6 +408,18 @@ int main(void) {
 	RUN_TEST(test_StringLiteralEscapeSequences_codegen);
 	RUN_TEST(test_LogicalAndShortCircuit_codegen);
 	RUN_TEST(test_LogicalOrShortCircuit_codegen);
+
+	RUN_TEST(test_LogicalAnd_PointerAndComparison_codegen);
+	RUN_TEST(test_LogicalAnd_ComparisonAndPointer_codegen);
+	RUN_TEST(test_LogicalOr_TwoPointers_codegen);
+	RUN_TEST(test_LogicalAnd_NumericTruthy_codegen);
+
+	RUN_TEST(test_UnaryBitwiseNot_u8_codegen);
+	RUN_TEST(test_UnaryBitwiseNot_u16_codegen);
+	RUN_TEST(test_UnaryBitwiseNot_u32_codegen);
+	RUN_TEST(test_UnaryBitwiseNot_u64_codegen);
+	RUN_TEST(test_UnaryBitwiseNot_i8_codegen);
+	RUN_TEST(test_UnaryBitwiseNot_i64_codegen);
 
 	RUN_TEST(test_ImportTest_modules);
 	RUN_TEST(test_NullTest_modules);

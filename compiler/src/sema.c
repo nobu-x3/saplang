@@ -217,9 +217,10 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 		}
 		break;
 
-	case '~': // ~x
-		// only signed integer types allowed
-		if (op_ty->type_kind != TYPE_PRIMITIVE || (op_ty->prim != PRIM_I8 && op_ty->prim != PRIM_I16 && op_ty->prim != PRIM_I32 && op_ty->prim != PRIM_I64)) {
+	case '~':
+		if (op_ty->type_kind != TYPE_PRIMITIVE ||
+			(op_ty->prim != PRIM_I8 && op_ty->prim != PRIM_I16 && op_ty->prim != PRIM_I32 && op_ty->prim != PRIM_I64 &&
+			 op_ty->prim != PRIM_U8 && op_ty->prim != PRIM_U16 && op_ty->prim != PRIM_U32 && op_ty->prim != PRIM_U64)) {
 			report(node->location, "unary '~' requires integer operand", 0);
 			return RESULT_FAILURE;
 		}
@@ -903,6 +904,29 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return result;
 		Type *ltype = get_type(table, node->data.binary_op.left, scope_level, scope_specifier);
 		Type *rtype = get_type(table, node->data.binary_op.right, scope_level, scope_specifier);
+		// `&&` / `||` accept anything bool-convertible on either side
+		// independently — the generic mutual-convertibility check below
+		// would wrongly reject e.g. `ptr && (a < b)`.
+		if (node->data.binary_op.op == TOK_AND || node->data.binary_op.op == TOK_OR) {
+			Type bool_type = get_primitive_type("bool");
+			if (!is_convertible(ltype, &bool_type, 1, table)) {
+				char type_str[128] = "";
+				type_print(type_str, ltype);
+				char msg[256] = "";
+				sprintf(msg, "logical '%s' requires a boolean-convertible left operand, got %s.", node->data.binary_op.op == TOK_AND ? "&&" : "||", type_str);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			if (!is_convertible(rtype, &bool_type, 1, table)) {
+				char type_str[128] = "";
+				type_print(type_str, rtype);
+				char msg[256] = "";
+				sprintf(msg, "logical '%s' requires a boolean-convertible right operand, got %s.", node->data.binary_op.op == TOK_AND ? "&&" : "||", type_str);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			break;
+		}
 		// Integer / float / null literals take on the other side's primitive type at use-site
 		int literal_match = literal_fits_type(node->data.binary_op.right, ltype) || literal_fits_type(node->data.binary_op.left, rtype);
 		if (!literal_match && !is_convertible(rtype, ltype, 1, table)) {
