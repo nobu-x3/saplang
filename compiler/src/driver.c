@@ -812,6 +812,10 @@ CompilerResult driver_run() {
 }
 
 CompilerResult driver_init(int argc, const char **argv) {
+    if(argc < 2) {
+        driver_print_help();
+        return RESULT_FAILURE;
+    }
 	CHK(compile_options_get(argc, argv, &driver.options), { compile_options_deinit(&driver.options); });
 	char *this_path = strdup(".");
 	if (!da_push(driver.options.import_paths, this_path)) {
