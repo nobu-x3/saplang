@@ -91,6 +91,9 @@ int main(void) {
 	RUN_TEST(test_TokenText_Case_scanner);
 	RUN_TEST(test_TokenText_DotDot_scanner);
 	RUN_TEST(test_TokenText_DotDotDot_StillTriDot_scanner);
+	RUN_TEST(test_TokenText_Sizeof_scanner);
+	RUN_TEST(test_TokenText_Alignof_scanner);
+	RUN_TEST(test_TokenText_SizeofPrefix_NotAKeyword_scanner);
 	RUN_TEST(test_StringLiteral);
 	RUN_TEST(test_CharLiteral);
 	RUN_TEST(test_BinaryLiteral);
@@ -203,6 +206,19 @@ int main(void) {
 	RUN_TEST(test_UnaryTilde_OnFloat_Rejected_sema);
 	RUN_TEST(test_UnaryTilde_OnBool_Rejected_sema);
 	RUN_TEST(test_UnaryTilde_OnPointer_Rejected_sema);
+	RUN_TEST(test_SizeOf_PrimitiveType_sema);
+	RUN_TEST(test_AlignOf_PrimitiveType_sema);
+	RUN_TEST(test_SizeOf_StructType_sema);
+	RUN_TEST(test_SizeOf_PointerType_sema);
+	RUN_TEST(test_SizeOf_ArrayType_sema);
+	RUN_TEST(test_SizeOf_SliceType_sema);
+	RUN_TEST(test_SizeOf_UnknownType_Rejected_sema);
+	RUN_TEST(test_SizeOf_OfExpression_sema);
+	RUN_TEST(test_SizeOf_ResultIsU64_sema);
+	RUN_TEST(test_SizeOf_UnknownPointerType_Rejected_sema);
+	RUN_TEST(test_AlignOf_OfExpression_sema);
+	RUN_TEST(test_SizeOf_InsideArithmetic_sema);
+
 	RUN_TEST(test_Primitivei32_typeinfo);
 	RUN_TEST(test_Primitivei64_typeinfo);
 	RUN_TEST(test_Pointer_typeinfo);
@@ -420,6 +436,32 @@ int main(void) {
 	RUN_TEST(test_UnaryBitwiseNot_u64_codegen);
 	RUN_TEST(test_UnaryBitwiseNot_i8_codegen);
 	RUN_TEST(test_UnaryBitwiseNot_i64_codegen);
+
+	RUN_TEST(test_SizeOf_I8_codegen);
+	RUN_TEST(test_SizeOf_I16_codegen);
+	RUN_TEST(test_SizeOf_I32_codegen);
+	RUN_TEST(test_SizeOf_I64_codegen);
+	RUN_TEST(test_SizeOf_U8_codegen);
+	RUN_TEST(test_SizeOf_U64_codegen);
+	RUN_TEST(test_SizeOf_F32_codegen);
+	RUN_TEST(test_SizeOf_F64_codegen);
+	RUN_TEST(test_SizeOf_Bool_codegen);
+	RUN_TEST(test_SizeOf_Pointer_codegen);
+	RUN_TEST(test_SizeOf_DoublePointer_codegen);
+	RUN_TEST(test_SizeOf_Slice_codegen);
+	RUN_TEST(test_SizeOf_Array_codegen);
+	RUN_TEST(test_SizeOf_Struct_codegen);
+	RUN_TEST(test_SizeOf_StructWithPadding_codegen);
+	RUN_TEST(test_SizeOf_Union_codegen);
+	RUN_TEST(test_SizeOf_OfExpression_codegen);
+	RUN_TEST(test_SizeOf_OfStructExpression_codegen);
+	RUN_TEST(test_AlignOf_I8_codegen);
+	RUN_TEST(test_AlignOf_I32_codegen);
+	RUN_TEST(test_AlignOf_I64_codegen);
+	RUN_TEST(test_AlignOf_Pointer_codegen);
+	RUN_TEST(test_AlignOf_Struct_codegen);
+	RUN_TEST(test_AlignOf_OfExpression_codegen);
+	RUN_TEST(test_SizeOf_InArithmetic_codegen);
 
 	RUN_TEST(test_ImportTest_modules);
 	RUN_TEST(test_NullTest_modules);

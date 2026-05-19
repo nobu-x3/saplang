@@ -164,6 +164,9 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 	case AST_ENUM_VALUE:
 		return node->data.enum_value.enum_type;
 
+	case AST_TYPE_QUERY:
+		return get_primitive_u64();
+
 	case AST_STRING_LIT:
 		return get_string_type();
 
@@ -1512,6 +1515,40 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 
 	case AST_UNARY_EXPR:
 		return analyze_unary_op(table, node, scope_level, scope_specifier);
+
+	case AST_TYPE_QUERY: {
+		Type *target = node->data.type_query.target_type;
+		ASTNode *decl_node = NULL;
+		if (node->data.type_query.target_expr) {
+			CompilerResult r = analyze_ast(table, node->data.type_query.target_expr, scope_level, scope_specifier);
+			if (r != RESULT_SUCCESS)
+				return r;
+			target = get_type(table, node->data.type_query.target_expr, scope_level, scope_specifier);
+			if (!target) {
+				report(node->location, "cannot determine type of operand", 0);
+				return RESULT_FAILURE;
+			}
+		} else if (target) {
+			if (resolve_type(table, target, node->location) != RESULT_SUCCESS)
+				return RESULT_FAILURE;
+		} else {
+			report(node->location, "missing operand", 0);
+			return RESULT_FAILURE;
+		}
+		if (target->type_kind == TYPE_STRUCT || target->type_kind == TYPE_UNION || target->type_kind == TYPE_ENUM) {
+			Symbol *sym = lookup_named_type(table, target, scope_level);
+			if (!sym) {
+				char msg[160] = "";
+				sprintf(msg, "%s: unknown type %s.", node->data.type_query.is_align ? "alignof" : "sizeof", target->type_name);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			decl_node = sym->node;
+		}
+		TypeInfo info = get_type_info(target, decl_node);
+		node->data.type_query.value = node->data.type_query.is_align ? (unsigned long long)info.align : (unsigned long long)info.size;
+		return RESULT_SUCCESS;
+	}
 
 	case AST_ENUM_VALUE: {
 		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_resolved_name, scope_level);

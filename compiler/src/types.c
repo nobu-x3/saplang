@@ -79,7 +79,7 @@ TypeInfo compute_struct_size_and_alignment(ASTNode *node);
 
 TypeInfo get_type_info(Type *type, ASTNode *node) {
 	TypeInfo info = {0, 1};
-	if (!type || !node)
+	if (!type)
 		return info;
 
 	switch (type->type_kind) {
@@ -103,6 +103,8 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 	case TYPE_FUNCTION:
 		return info;
 	case TYPE_STRUCT:
+		if (!node)
+			return info;
 		return compute_struct_size_and_alignment(node);
 	case TYPE_ENUM:
 		if (node && node->type == AST_ENUM_DECL && node->data.enum_decl.base_type) {

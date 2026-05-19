@@ -228,6 +228,10 @@ Token next_token(Scanner *scanner) {
 			current_token.type = TOK_SWITCH;
 		else if (strcmp(current_token.text, "case") == 0)
 			current_token.type = TOK_CASE;
+		else if (strcmp(current_token.text, "sizeof") == 0)
+			current_token.type = TOK_SIZEOF;
+		else if (strcmp(current_token.text, "alignof") == 0)
+			current_token.type = TOK_ALIGNOF;
 		else {
 			current_token.type = TOK_IDENTIFIER;
 		}

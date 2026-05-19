@@ -1242,6 +1242,9 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		return LLVMConstInt(u8_type, node->data.char_literal.literal, 0);
 	}
 
+	case AST_TYPE_QUERY:
+		return LLVMConstInt(LLVMInt64TypeInContext(cg->llvm_context), node->data.type_query.value, 0);
+
 	case AST_ARRAY_ACCESS: {
 		PassContext base_ctx = ctx;
 		base_ctx.intention = PI_LOAD_PTR;

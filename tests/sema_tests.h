@@ -785,3 +785,83 @@ void test_UnaryTilde_OnPointer_Rejected_sema(void) {
 	free(output);
 }
 
+void test_SizeOf_PrimitiveType_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 s = sizeof(i32); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_AlignOf_PrimitiveType_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 a = alignof(i64); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SizeOf_StructType_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; i64 b; } fn void f() { u64 s = sizeof(S); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SizeOf_PointerType_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 s = sizeof(i32*); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SizeOf_ArrayType_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 s = sizeof(i32[8]); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SizeOf_SliceType_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 s = sizeof(i32[]); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SizeOf_UnknownType_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 s = sizeof(NoSuchType); }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "undeclared identifier NoSuchType"));
+	free(output);
+}
+
+void test_SizeOf_UnknownPointerType_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 s = sizeof(NoSuchType*); }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "unknown type NoSuchType"));
+	free(output);
+}
+
+void test_SizeOf_OfExpression_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32 x = 0; u64 s = sizeof(x); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SizeOf_ResultIsU64_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32 s = sizeof(i64); }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "type mismatch in initializer"));
+	free(output);
+}
+
+void test_AlignOf_OfExpression_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i64 x = 0; u64 a = alignof(x); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SizeOf_InsideArithmetic_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 s = sizeof(i64) + (u64)8; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}

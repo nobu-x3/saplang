@@ -3257,3 +3257,181 @@ void test_UnaryBitwiseNot_i64_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
+// ---------------------------------------------------------------------------
+// `sizeof` / `alignof` resolve at sema and emit `i64` constants.
+// ---------------------------------------------------------------------------
+
+void test_SizeOf_I8_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(i8); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_I16_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(i16); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 2"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_I32_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(i32); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 4"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_I64_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(i64); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_U8_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(u8); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_U64_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(u64); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_F32_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(f32); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 4"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_F64_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(f64); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_Bool_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(bool); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_Pointer_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(i32*); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_DoublePointer_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(i32**); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_Slice_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(i32[]); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 16"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_Array_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(i32[8]); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_Struct_codegen(void) {
+	EXH_TEST_SETUP("struct S { i32 a; i64 b; } fn u64 main() { return sizeof(S); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 16"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_StructWithPadding_codegen(void) {
+	EXH_TEST_SETUP("struct S { i8 a; i32 b; } fn u64 main() { return sizeof(S); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_Union_codegen(void) {
+	EXH_TEST_SETUP("union U { i32 a; i64 b; } fn u64 main() { return sizeof(U); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_OfExpression_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { i32 x = 0; return sizeof(x); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 4"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_OfStructExpression_codegen(void) {
+	EXH_TEST_SETUP("struct S { i32 a; i32 b; } fn u64 main() { S s = {0, 0}; return sizeof(s); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_AlignOf_I8_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return alignof(i8); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 1"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_AlignOf_I32_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return alignof(i32); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 4"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_AlignOf_I64_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return alignof(i64); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_AlignOf_Pointer_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return alignof(i32*); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_AlignOf_Struct_codegen(void) {
+	EXH_TEST_SETUP("struct S { i8 a; i64 b; } fn u64 main() { return alignof(S); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_AlignOf_OfExpression_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { i32 x = 0; return alignof(x); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 4"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_SizeOf_InArithmetic_codegen(void) {
+	EXH_TEST_SETUP("fn u64 main() { return sizeof(i64) + (u64)1; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 9"));
+	EXH_TEST_TEARDOWN();
+}

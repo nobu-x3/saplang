@@ -57,6 +57,7 @@ typedef enum {
 	AST_CAST,
 	AST_SWITCH_STMT,
 	AST_SLICE_RANGE,
+	AST_TYPE_QUERY,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -242,6 +243,15 @@ typedef struct ASTNode {
 			struct ASTNode *lo;
 			struct ASTNode *hi;
 		} slice_range;
+		// `sizeof(T)` / `alignof(T)` / `sizeof(expr)` / `alignof(expr)`.
+		// One of target_type / target_expr is set. `value` is filled in by
+		// sema and consumed by codegen as a u64 constant.
+		struct {
+			bool is_align;
+			Type *target_type;
+			struct ASTNode *target_expr;
+			unsigned long long value;
+		} type_query;
 	} data;
 } ASTNode;
 

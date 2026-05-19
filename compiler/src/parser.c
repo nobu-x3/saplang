@@ -382,6 +382,9 @@ CompilerResult ast_print(ASTNode *node, int indent, char *string) {
 		case AST_BREAK: print(string, "break\n"); break;
 		case AST_CAST: ast_print_cast(node, indent, string); break;
 		case AST_SLICE_RANGE: ast_print_slice_range(node, indent, string); break;
+		case AST_TYPE_QUERY:
+			print(string, "%s -> %llu\n", node->data.type_query.is_align ? "AlignOf" : "SizeOf", node->data.type_query.value);
+			break;
 		default: print(string, "Unknown AST Node\n"); break;
 		}
 		node = node->next;
@@ -607,6 +610,12 @@ ASTNode *copy_ast_node(ASTNode *node) {
 		}
 		new_node->data.block.count = node->data.block.count;
 		break;
+	case AST_TYPE_QUERY:
+		new_node->data.type_query.is_align = node->data.type_query.is_align;
+		new_node->data.type_query.target_type = node->data.type_query.target_type ? copy_type(node->data.type_query.target_type) : NULL;
+		new_node->data.type_query.target_expr = node->data.type_query.target_expr ? copy_ast_node(node->data.type_query.target_expr) : NULL;
+		new_node->data.type_query.value = node->data.type_query.value;
+		break;
 	// In continue and break we don't really need to copy anything but node type which is already done
 	case AST_CONTINUE:
 	case AST_BREAK:
@@ -778,6 +787,17 @@ ASTNode *new_slice_range_node(ASTNode *base, ASTNode *lo, ASTNode *hi, SourceLoc
 	node->data.slice_range.base = base;
 	node->data.slice_range.lo = lo;
 	node->data.slice_range.hi = hi;
+	return node;
+}
+
+ASTNode *new_type_query_node(bool is_align, Type *target_type, ASTNode *target_expr, SourceLocation loc) {
+	ASTNode *node = new_ast_node(AST_TYPE_QUERY, loc);
+	if (!node)
+		return NULL;
+	node->data.type_query.is_align = is_align;
+	node->data.type_query.target_type = target_type;
+	node->data.type_query.target_expr = target_expr;
+	node->data.type_query.value = 0;
 	return node;
 }
 
@@ -1604,6 +1624,54 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 	// @TODO: add array and struct literals
 	SourceLocation loc = parser->current_token.location;
 	switch (parser->current_token.type) {
+	case TOK_SIZEOF:
+	case TOK_ALIGNOF: {
+		bool is_align = parser->current_token.type == TOK_ALIGNOF;
+		parser->current_token = next_token(&parser->scanner);
+		if (parser->current_token.type != TOK_LPAREN) {
+			char msg[128];
+			sprintf(msg, "expected '(' after %s, got '%s'.", is_align ? "alignof" : "sizeof", parser->current_token.text);
+			return report(parser->current_token.location, msg, 0);
+		}
+		parser->current_token = next_token(&parser->scanner);
+		// Identifier-led operands are ambiguous (type name vs. variable);
+		// try the expression path first and fall back to a type if that
+		// doesn't reach `)`. Built-in type tokens are unambiguous types.
+		Scanner saved_scanner = parser->scanner;
+		Token saved_token = parser->current_token;
+		Type *target_type = NULL;
+		ASTNode *target_expr = NULL;
+		int prefer_expr_first = parser->current_token.type == TOK_IDENTIFIER;
+		if (prefer_expr_first) {
+			FILE *saved_sink = diag_stream();
+			FILE *scratch = tmpfile();
+			if (scratch)
+				diag_set_sink(scratch);
+			ASTNode *attempt = parse_expr(parser, scope_prefix);
+			long scratch_pos = scratch ? ftell(scratch) : 0;
+			int expr_ok = attempt && parser->current_token.type == TOK_RPAREN && scratch_pos == 0;
+			diag_set_sink(saved_sink);
+			if (scratch)
+				fclose(scratch);
+			if (expr_ok) {
+				target_expr = attempt;
+			} else {
+				parser->scanner = saved_scanner;
+				parser->current_token = saved_token;
+			}
+		}
+		if (!target_expr) {
+			if (is_type_spec(parser) && parse_type(parser, &target_type) == RESULT_SUCCESS && parser->current_token.type == TOK_RPAREN) {
+				// type path taken
+			} else {
+				char msg[128];
+				sprintf(msg, "expected ')' after %s operand, got '%s'.", is_align ? "alignof" : "sizeof", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+		}
+		parser->current_token = next_token(&parser->scanner);
+		return new_type_query_node(is_align, target_type, target_expr, loc);
+	}
 	case TOK_NUMBER:
 		if (strchr(parser->current_token.text, '.') != NULL) {
 			double value = atof(parser->current_token.text);

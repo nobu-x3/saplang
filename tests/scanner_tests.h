@@ -74,3 +74,21 @@ void test_TokenText_DotDotDot_StillTriDot_scanner(void) {
 	Token tok = scan_first("...");
 	TEST_ASSERT_EQUAL_INT(TOK_DOTDOTDOT, tok.type);
 }
+
+void test_TokenText_Sizeof_scanner(void) {
+	Token tok = scan_first("sizeof");
+	TEST_ASSERT_EQUAL_INT(TOK_SIZEOF, tok.type);
+	TEST_ASSERT_EQUAL_STRING("sizeof", tok.text);
+}
+
+void test_TokenText_Alignof_scanner(void) {
+	Token tok = scan_first("alignof");
+	TEST_ASSERT_EQUAL_INT(TOK_ALIGNOF, tok.type);
+	TEST_ASSERT_EQUAL_STRING("alignof", tok.text);
+}
+
+void test_TokenText_SizeofPrefix_NotAKeyword_scanner(void) {
+	Token tok = scan_first("sizeofx");
+	TEST_ASSERT_EQUAL_INT(TOK_IDENTIFIER, tok.type);
+	TEST_ASSERT_EQUAL_STRING("sizeofx", tok.text);
+}
