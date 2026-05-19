@@ -563,15 +563,20 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 		return LLVMConstInt(i64_ty, (unsigned long long)base_type->array.size, 0);
 	}
 	if (base_type->type_kind == TYPE_SLICE) {
-		// `s.len` reads field 1 of the fat pointer. base_value is a pointer
-		// to the slice header alloca; GEP to the len field and load (or
-		// hand back the field pointer if the caller wants an lvalue).
-		assert(strcmp(node->data.member_access.member, "len") == 0);
+		const char *m = node->data.member_access.member;
 		LLVMTypeRef slice_ty = map_to_llvm(cg, base_type, table);
-		LLVMValueRef len_ptr = LLVMBuildStructGEP2(cg->builder, slice_ty, base_value, 1, "slice.len.ptr");
+		if (strcmp(m, "len") == 0) {
+			LLVMValueRef len_ptr = LLVMBuildStructGEP2(cg->builder, slice_ty, base_value, 1, "slice.len.ptr");
+			if (ctx.intention != PI_LOAD_VAL)
+				return len_ptr;
+			return LLVMBuildLoad2(cg->builder, i64_ty, len_ptr, "slice.len");
+		}
+		assert(strcmp(m, "ptr") == 0);
+		LLVMTypeRef elem_ptr_ty = LLVMPointerType(map_to_llvm(cg, base_type->slice.element_type, table), 0);
+		LLVMValueRef ptr_field = LLVMBuildStructGEP2(cg->builder, slice_ty, base_value, 0, "slice.ptr.field");
 		if (ctx.intention != PI_LOAD_VAL)
-			return len_ptr;
-		return LLVMBuildLoad2(cg->builder, i64_ty, len_ptr, "slice.len");
+			return ptr_field;
+		return LLVMBuildLoad2(cg->builder, elem_ptr_ty, ptr_field, "slice.ptr");
 	}
 	assert(base_type->type_kind == TYPE_STRUCT || base_type->type_kind == TYPE_UNION);
 	LLVMTypeRef struct_ty = map_to_llvm(cg, base_type, table);

@@ -1136,6 +1136,17 @@ void test_SliceDotLen_codegen(void) {
 	free(error);
 }
 
+// `.ptr` on a slice GEPs to field 0 of the fat pointer and loads the
+// element-pointer. Mirrors `.len` lowering.
+void test_SliceDotPtr_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32* foo(i32[] s) { return s.ptr; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds { ptr, i64 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "i32 0, i32 0"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load ptr"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
 // End-to-end: decay an array into a slice, then read `.len` from the
 // slice — the length should still be the array's original size.
 void test_SliceDotLenAfterDecay_codegen(void) {

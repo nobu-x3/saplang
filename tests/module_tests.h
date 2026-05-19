@@ -86,6 +86,10 @@ void test_SliceTest_modules(void) {
     test("module_tests/slice_test", "slice_test");
 }
 
+void test_SliceLenChain_modules(void) {
+    test("module_tests/slice_len_chain", "slice_len_chain");
+}
+
 static void test_DebugInfoBasic_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";

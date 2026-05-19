@@ -108,6 +108,8 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		}
 		if ((base_type->type_kind == TYPE_SLICE || base_type->type_kind == TYPE_ARRAY) && strcmp(node->data.member_access.member, "len") == 0)
 			return get_primitive_u64();
+		if (base_type->type_kind == TYPE_SLICE && strcmp(node->data.member_access.member, "ptr") == 0)
+			return new_pointer_type(base_type->slice.element_type);
 		if (base_type->type_kind == TYPE_POINTER && base_type->pointee)
 			base_type = base_type->pointee;
 		Symbol *decl_sym = lookup_named_type(table, base_type, scope_level);
@@ -1437,15 +1439,17 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(base_node->location, "cannot determine type", 0);
 			return RESULT_FAILURE;
 		}
-		// .len is the only member that slices and arrays expose, so reject
-		// any other member name with a targeted diagnostic so we don't
-		// fall through to "can only access members of structs or unions
-		// which would be confusing here.
-		if (base_type->type_kind == TYPE_SLICE || base_type->type_kind == TYPE_ARRAY) {
+		if (base_type->type_kind == TYPE_SLICE) {
+			const char *m = node->data.member_access.member;
+			if (strcmp(m, "len") != 0 && strcmp(m, "ptr") != 0) {
+				report(base_node->location, "slice only exposes the 'len' and 'ptr' members.", 0);
+				return RESULT_FAILURE;
+			}
+			return RESULT_SUCCESS;
+		}
+		if (base_type->type_kind == TYPE_ARRAY) {
 			if (strcmp(node->data.member_access.member, "len") != 0) {
-				char msg[128] = "";
-				snprintf(msg, sizeof(msg), "%s only exposes the 'len' member.", base_type->type_kind == TYPE_SLICE ? "slice" : "array");
-				report(base_node->location, msg, 0);
+				report(base_node->location, "array only exposes the 'len' member.", 0);
 				return RESULT_FAILURE;
 			}
 			return RESULT_SUCCESS;

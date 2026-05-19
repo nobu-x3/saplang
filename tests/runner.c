@@ -179,6 +179,9 @@ int main(void) {
 	RUN_TEST(test_SliceDotLen_sema);
 	RUN_TEST(test_ArrayDotLen_sema);
 	RUN_TEST(test_SliceDotUnknownMemberRejected_sema);
+	RUN_TEST(test_SliceDotPtr_sema);
+	RUN_TEST(test_SliceDotPtr_IndexAddrOf_sema);
+	RUN_TEST(test_SliceWholeSlicePlusIntegerRejected_sema);
 	RUN_TEST(test_SliceIndexValid_sema);
 	RUN_TEST(test_SliceIndexAssignableLvalue_sema);
 	RUN_TEST(test_SliceIndexNonIntRejected_sema);
@@ -285,6 +288,7 @@ int main(void) {
 	RUN_TEST(test_SliceFromNull_codegen);
 	RUN_TEST(test_ArrayDotLen_codegen);
 	RUN_TEST(test_SliceDotLen_codegen);
+	RUN_TEST(test_SliceDotPtr_codegen);
 	RUN_TEST(test_SliceDotLenAfterDecay_codegen);
 	RUN_TEST(test_SliceIndexRead_codegen);
 	RUN_TEST(test_SliceIndexWrite_codegen);
@@ -468,6 +472,7 @@ int main(void) {
 	RUN_TEST(test_ImportCycle_modules);
 	RUN_TEST(test_SwitchTest_modules);
 	RUN_TEST(test_SliceTest_modules);
+	RUN_TEST(test_SliceLenChain_modules);
 	RUN_TEST(test_DebugInfoBasic_modules);
 	RUN_TEST(test_DebugInfoTypes_modules);
 	RUN_TEST(test_DebugInfoLines_modules);

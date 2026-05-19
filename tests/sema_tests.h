@@ -682,7 +682,27 @@ void test_ArrayDotLen_sema(void) {
 
 void test_SliceDotUnknownMemberRejected_sema(void) {
 	TEST_SETUP_SINGLE("fn void f(i32[] s) { u64 x = s.cap; }");
-	TEST_ASSERT_NOT_NULL(strstr(output, "slice only exposes the 'len' member"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "slice only exposes the 'len' and 'ptr' members"));
+	free(output);
+}
+
+void test_SliceDotPtr_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(i32[] s) { i32* p = s.ptr; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SliceDotPtr_IndexAddrOf_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(u8[] s, u64 off) { u8* p = &s[off]; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SliceWholeSlicePlusIntegerRejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f(u8[] s, u64 off) { u8* p = s + off; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "binary operator type mismatch"));
 	free(output);
 }
 
