@@ -1317,40 +1317,51 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	}
 
 	case AST_FN_CALL: {
-		Symbol *fn_sym = lookup_symbol(table, node->data.func_call.callee->data.ident.resolved_name, ctx.current_scope);
-		assert(fn_sym);
-		LLVMTypeRef fn_type = map_to_llvm(cg, fn_sym->type, table);
-		assert(fn_type);
+		ASTNode *callee_node = node->data.func_call.callee;
+		Type *callee_type = NULL;
 		LLVMValueRef callee;
-		int is_fn_ptr = fn_sym->kind == SYMB_VAR && fn_sym->type->type_kind == TYPE_FUNCTION;
-		if (is_fn_ptr) {
-			// Function pointer: load the pointer value out of the variable's alloca.
-			LLVMValueRef ptr = hashmap_get(ctx.loaded_values, fn_sym->resolved_name);
-			assert(ptr);
-			callee = LLVMBuildLoad2(cg->builder, LLVMPointerType(fn_type, 0), ptr, "");
+		if (callee_node->type == AST_EXPR_IDENT) {
+			Symbol *fn_sym = lookup_symbol(table, callee_node->data.ident.resolved_name, ctx.current_scope);
+			assert(fn_sym);
+			callee_type = fn_sym->type;
+			int is_fn_ptr = fn_sym->kind == SYMB_VAR && fn_sym->type->type_kind == TYPE_FUNCTION;
+			if (is_fn_ptr) {
+				LLVMTypeRef fn_ty = map_to_llvm(cg, callee_type, table);
+				LLVMValueRef ptr = hashmap_get(ctx.loaded_values, fn_sym->resolved_name);
+				assert(ptr);
+				callee = LLVMBuildLoad2(cg->builder, LLVMPointerType(fn_ty, 0), ptr, "");
+			} else {
+				callee = LLVMGetNamedFunction(cg->module, fn_sym->resolved_name);
+			}
 		} else {
-			callee = LLVMGetNamedFunction(cg->module, fn_sym->resolved_name);
+			// Indirect call: callee is a member access, subscript, etc. — load the fn-pointer value.
+			callee_type = get_type(table, callee_node, ctx.current_scope, "");
+			assert(callee_type && callee_type->type_kind == TYPE_FUNCTION);
+			PassContext callee_ctx = ctx;
+			callee_ctx.intention = PI_LOAD_VAL;
+			callee_ctx.expected_type = callee_type;
+			callee = codegen_ast(cg, callee_node, table, callee_ctx);
 		}
 		assert(callee);
+		LLVMTypeRef fn_type = map_to_llvm(cg, callee_type, table);
+		assert(fn_type);
 		LLVMValueRef *args = alloca(sizeof(LLVMValueRef) * node->data.func_call.arg_count);
 		for (int i = 0; i < node->data.func_call.arg_count; i++) {
 			PassContext param_ctx = ctx;
 			param_ctx.intention = PI_LOAD_VAL;
 			ASTNode *param = node->data.func_call.args[i];
-			Type *declared_param_ty = i < fn_sym->type->function.param_count ? fn_sym->type->function.param_types[i] : NULL;
+			Type *declared_param_ty = i < callee_type->function.param_count ? callee_type->function.param_types[i] : NULL;
 			if (param->type == AST_EXPR_IDENT) {
 				Symbol *param_sym = lookup_symbol(table, param->data.ident.resolved_name, ctx.current_scope);
 				assert(param_sym);
 				param_ctx.expected_type = param_sym->type;
 			} else if (declared_param_ty) {
-				// Literals and other expressions need the declared param type to
-				// pick the right LLVM constant width / kind.
 				param_ctx.expected_type = declared_param_ty;
 			}
 			args[i] = codegen_ast(cg, param, table, param_ctx);
 			args[i] = maybe_decay_to_slice(cg, param, args[i], declared_param_ty, table, ctx);
 		}
-		int is_void = fn_sym->type->function.return_type->type_kind == TYPE_PRIMITIVE && fn_sym->type->function.return_type->prim == PRIM_VOID;
+		int is_void = callee_type->function.return_type->type_kind == TYPE_PRIMITIVE && callee_type->function.return_type->prim == PRIM_VOID;
 		return LLVMBuildCall2(cg->builder, fn_type, callee, args, node->data.func_call.arg_count, is_void ? "" : "calltmp");
 	} break;
 

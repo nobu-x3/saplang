@@ -308,6 +308,8 @@ int main(void) {
 	RUN_TEST(test_PointerSubscriptReadFromSlicePtr_codegen);
 	RUN_TEST(test_PointerSubscriptInBinaryOp_codegen);
 	RUN_TEST(test_PointerSubscriptWrite_codegen);
+	RUN_TEST(test_IndirectCallStructField_codegen);
+	RUN_TEST(test_IndirectCallReturnTypeIsUnwrapped_codegen);
 	RUN_TEST(test_SliceDotPtr_codegen);
 	RUN_TEST(test_SliceDotLenAfterDecay_codegen);
 	RUN_TEST(test_SliceIndexRead_codegen);

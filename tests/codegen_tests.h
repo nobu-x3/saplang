@@ -3546,3 +3546,22 @@ void test_PointerSubscriptWrite_codegen(void) {
 	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 0"));
 	EXH_TEST_TEARDOWN();
 }
+
+void test_IndirectCallStructField_codegen(void) {
+	// Calling a fn-pointer obtained through a member access; previously asserted
+	// in sema because the call path read callee->data.ident.resolved_name.
+	EXH_TEST_SETUP("struct Op { fn* i32(i32) f; } fn i32 call(Op* o, i32 x) { return o.f(x); } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "call i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_IndirectCallReturnTypeIsUnwrapped_codegen(void) {
+	// `op.f(x) + 1` requires get_type(AST_FN_CALL) to peel off the function type
+	// and yield the return type. Earlier, fn-pointer calls returned the bare
+	// TYPE_FUNCTION, breaking any arithmetic / assignment using the result.
+	EXH_TEST_SETUP("struct Op { fn* i32(i32) f; } fn i32 plus1(Op* o, i32 x) { return o.f(x) + 1; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "add i32"));
+	EXH_TEST_TEARDOWN();
+}

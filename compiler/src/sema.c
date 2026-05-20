@@ -94,8 +94,15 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		return sym->type->function.return_type;
 	}
 
-	case AST_FN_CALL:
-		return get_type(table, node->data.func_call.callee, scope_level, scope_specifier);
+	case AST_FN_CALL: {
+		// A call yields the callee's return type. For ident callees that resolve to SYMB_FN this
+		// is already unwrapped by AST_EXPR_IDENT; for fn-pointer callees (member access, local var
+		// of TYPE_FUNCTION) we get the full function type and need to peel off the return.
+		Type *callee_type = get_type(table, node->data.func_call.callee, scope_level, scope_specifier);
+		if (callee_type && callee_type->type_kind == TYPE_FUNCTION)
+			return callee_type->function.return_type;
+		return callee_type;
+	}
 
 	case AST_CAST:
 		return node->data.cast.target_type;
@@ -1144,27 +1151,44 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		CompilerResult result = analyze_ast(table, callee, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
-		// Previous call to analyze_ast would fail if the symbol didn't exist.
-		// Try module scope first (regular fns); fall back to current scope for fn-ptr locals.
 		Symbol *sym = NULL;
-		const char *key = callee->data.ident.resolved_name[0] != '\0' ? callee->data.ident.resolved_name : callee->data.ident.name;
-		sym = lookup_symbol(table, key, 0);
-		if (!sym)
-			sym = lookup_symbol(table, key, scope_level);
-		assert(sym);
-		// Function pointers are stored as SYMB_VAR with a TYPE_FUNCTION, treat them as callable.
-		int is_fn_ptr = sym->kind == SYMB_VAR && sym->type && sym->type->type_kind == TYPE_FUNCTION;
-		if (!is_fn_ptr && ((sym->node->type != AST_FN_DECL && sym->node->type != AST_EXTERN_FUNC_DECL) || sym->kind != SYMB_FN)) {
-			char msg[256] = "";
-			sprintf(msg, "symbol %s is not a function but used as a function.", node->data.func_call.callee->data.ident.name);
-			report(node->location, msg, 0);
-			return RESULT_FAILURE;
+		Type *fn_type = NULL;
+		const char *display_name = NULL;
+		int is_fn_ptr = 0;
+		if (callee->type == AST_EXPR_IDENT) {
+			const char *key = callee->data.ident.resolved_name[0] != '\0' ? callee->data.ident.resolved_name : callee->data.ident.name;
+			sym = lookup_symbol(table, key, 0);
+			if (!sym)
+				sym = lookup_symbol(table, key, scope_level);
+			assert(sym);
+			is_fn_ptr = sym->kind == SYMB_VAR && sym->type && sym->type->type_kind == TYPE_FUNCTION;
+			if (!is_fn_ptr && ((sym->node->type != AST_FN_DECL && sym->node->type != AST_EXTERN_FUNC_DECL) || sym->kind != SYMB_FN)) {
+				char msg[256] = "";
+				sprintf(msg, "symbol %s is not a function but used as a function.", callee->data.ident.name);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			fn_type = sym->type;
+			display_name = sym->name;
+		} else {
+			// Indirect call (callee is a member access, subscript, etc.) — type comes from the expression, no symbol.
+			fn_type = get_type(table, callee, scope_level, scope_specifier);
+			if (!fn_type || fn_type->type_kind != TYPE_FUNCTION) {
+				char type_str[128] = "";
+				type_print(type_str, fn_type);
+				char msg[256] = "";
+				sprintf(msg, "callee is not callable, got %s.", type_str);
+				report(node->location, msg, 0);
+				return RESULT_FAILURE;
+			}
+			is_fn_ptr = 1;
+			display_name = "<indirect>";
 		}
 		// @TODO: cache this probably
 		int non_va_param_count = 0;
-		ASTNode *param = is_fn_ptr ? NULL : sym->node->data.func_decl.params;
+		ASTNode *param = (is_fn_ptr || !sym) ? NULL : sym->node->data.func_decl.params;
 		if (is_fn_ptr) {
-			non_va_param_count = sym->type->function.param_count;
+			non_va_param_count = fn_type->function.param_count;
 		} else {
 			while (param) {
 				if (param->data.param_decl.is_va)
@@ -1180,18 +1204,19 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 		// Args already analyzed above; re-analyzing would clobber unary result_types.
-		param = is_fn_ptr ? NULL : sym->node->data.func_decl.params;
+		param = (is_fn_ptr || !sym) ? NULL : sym->node->data.func_decl.params;
+		int arg_scope = sym ? sym->scope_level + 1 : scope_level;
 		for (int i = 0; i < node->data.func_call.arg_count; ++i) {
 			if (i < non_va_param_count) {
-				Type *param_type = is_fn_ptr ? sym->type->function.param_types[i] : param->data.param_decl.type;
-				Type *arg_type = get_type(table, node->data.func_call.args[i], sym->scope_level + 1, scope_specifier);
+				Type *param_type = is_fn_ptr ? fn_type->function.param_types[i] : param->data.param_decl.type;
+				Type *arg_type = get_type(table, node->data.func_call.args[i], arg_scope, scope_specifier);
 				if (!is_convertible(arg_type, param_type, 0, table)) {
 					char left_str[128] = "";
 					char right_str[128] = "";
 					type_print(left_str, param_type);
 					type_print(right_str, arg_type);
 					char msg[256] = "";
-					sprintf(msg, "cannot implicitly convert from type %s to type %s in function call %s.", right_str, left_str, sym->name);
+					sprintf(msg, "cannot implicitly convert from type %s to type %s in function call %s.", right_str, left_str, display_name);
 					report(node->location, msg, 0);
 					result = RESULT_FAILURE;
 				}
