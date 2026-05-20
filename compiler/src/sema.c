@@ -197,6 +197,93 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 
 CompilerResult resolve_type(Symbol *table, Type *type, SourceLocation loc);
 
+// Recurses through aggregate shapes (array/slice) and function signatures, but stops at
+// TYPE_POINTER — a pointer field never needs the pointee's layout, so opaque/non-visible
+// peers are fine there. Only TYPE_STRUCT/UNION/ENUM reached by value require visibility.
+static CompilerResult verify_type_visible(Symbol *table, Type *type, SourceLocation loc) {
+	if (!type)
+		return RESULT_SUCCESS;
+	switch (type->type_kind) {
+	case TYPE_ARRAY:
+		return verify_type_visible(table, type->array.element_type, loc);
+	case TYPE_SLICE:
+		return verify_type_visible(table, type->slice.element_type, loc);
+	case TYPE_FUNCTION: {
+		CompilerResult r = verify_type_visible(table, type->function.return_type, loc);
+		if (r != RESULT_SUCCESS)
+			return r;
+		for (int i = 0; i < type->function.param_count; ++i) {
+			r = verify_type_visible(table, type->function.param_types[i], loc);
+			if (r != RESULT_SUCCESS)
+				return r;
+		}
+		return RESULT_SUCCESS;
+	}
+	case TYPE_STRUCT:
+	case TYPE_UNION:
+	case TYPE_ENUM:
+		if (type->type_resolved_name[0] != '\0' && !lookup_symbol(table, type->type_resolved_name, 0)) {
+			char msg[256] = "";
+			if (type->type_namespace[0])
+				snprintf(msg, sizeof(msg), "type %s::%s is not visible in this module; export it from its defining module.", type->type_namespace, type->type_name);
+			else
+				snprintf(msg, sizeof(msg), "type %s is not visible here.", type->type_name);
+			report(loc, msg, 0);
+			return RESULT_FAILURE;
+		}
+		return RESULT_SUCCESS;
+	default:
+		return RESULT_SUCCESS;
+	}
+}
+
+struct VisitedStruct {
+	const char *resolved_name;
+	struct VisitedStruct *next;
+};
+
+static CompilerResult verify_struct_fields_visible(Symbol *table, Type *struct_type, SourceLocation loc, struct VisitedStruct *visited) {
+	if (!struct_type || (struct_type->type_kind != TYPE_STRUCT && struct_type->type_kind != TYPE_UNION))
+		return RESULT_SUCCESS;
+	for (struct VisitedStruct *v = visited; v; v = v->next) {
+		if (strcmp(v->resolved_name, struct_type->type_resolved_name) == 0)
+			return RESULT_SUCCESS;
+	}
+	Symbol *sym = lookup_symbol(table, struct_type->type_resolved_name, 0);
+	if (!sym)
+		return verify_type_visible(table, struct_type, loc);
+	ASTNode *decl = sym->node;
+	if (!decl)
+		return RESULT_SUCCESS;
+	struct VisitedStruct frame = {struct_type->type_resolved_name, visited};
+	if (decl->type == AST_STRUCT_DECL) {
+		for (int i = 0; i < decl->data.struct_decl.field_count; ++i) {
+			Type *ft = decl->data.struct_decl.fields[i]->data.field_decl.type;
+			CompilerResult r = verify_type_visible(table, ft, loc);
+			if (r != RESULT_SUCCESS)
+				return r;
+			if (ft && (ft->type_kind == TYPE_STRUCT || ft->type_kind == TYPE_UNION)) {
+				r = verify_struct_fields_visible(table, ft, loc, &frame);
+				if (r != RESULT_SUCCESS)
+					return r;
+			}
+		}
+	} else if (decl->type == AST_UNION_DECL) {
+		for (ASTNode *f = decl->data.union_decl.fields; f; f = f->next) {
+			Type *ft = f->data.field_decl.type;
+			CompilerResult r = verify_type_visible(table, ft, loc);
+			if (r != RESULT_SUCCESS)
+				return r;
+			if (ft && (ft->type_kind == TYPE_STRUCT || ft->type_kind == TYPE_UNION)) {
+				r = verify_struct_fields_visible(table, ft, loc, &frame);
+				if (r != RESULT_SUCCESS)
+					return r;
+			}
+		}
+	}
+	return RESULT_SUCCESS;
+}
+
 CompilerResult analyze_expr_ident(Symbol *table, ASTNode *node, int scope_level) {
 	// This should never be NULL at this point because we passed the analyze_ast call above
 	if (node->data.ident.resolved_name[0] != '\0') {
@@ -399,6 +486,8 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 		report(node->location, msg, 0);
 		return RESULT_FAILURE;
 	}
+	if (verify_struct_fields_visible(table, expected_type, node->location, NULL) != RESULT_SUCCESS)
+		return RESULT_FAILURE;
 	ASTNode *decl_node = decl_sym->node;
 	assert(decl_node); // sanity
 	int current_field_index = 0;
@@ -662,6 +751,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			Symbol *var_sym = lookup_symbol(table, node->data.var_decl.resolved_name, scope_level);
 			assert(var_sym);
 			var_sym->type->type_kind = sym->type->type_kind;
+		}
+		Type *vt = node->data.var_decl.type;
+		if (vt && (vt->type_kind == TYPE_STRUCT || vt->type_kind == TYPE_UNION)) {
+			if (verify_struct_fields_visible(table, vt, node->location, NULL) != RESULT_SUCCESS)
+				return RESULT_FAILURE;
 		}
 		if (node->data.var_decl.init) {
 			CompilerResult result;

@@ -492,6 +492,7 @@ int main(void) {
 	RUN_TEST(test_ImportTest_modules);
 	RUN_TEST(test_NullTest_modules);
 	RUN_TEST(test_ImportCycle_modules);
+	RUN_TEST(test_MissingExport_modules);
 	RUN_TEST(test_SwitchTest_modules);
 	RUN_TEST(test_SliceTest_modules);
 	RUN_TEST(test_SliceLenChain_modules);

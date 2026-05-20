@@ -138,7 +138,10 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 	}
 
 	case TYPE_STRUCT: {
-		return LLVMGetTypeByName2(cg->llvm_context, type->type_resolved_name);
+		LLVMTypeRef t = LLVMGetTypeByName2(cg->llvm_context, type->type_resolved_name);
+		if (!t)
+			t = LLVMStructCreateNamed(cg->llvm_context, type->type_resolved_name);
+		return t;
 	}
 
 	case TYPE_UNION: {
