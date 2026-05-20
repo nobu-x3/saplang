@@ -563,9 +563,11 @@ void parsing_task(void *arg) {
 	if (!node)
 		return;
 	diag_set_sink(node->diag_sink);
+	diag_set_source(node->parser.scanner.source.path, node->parser.scanner.source.buffer, (size_t)node->parser.scanner.source.len);
 	// parse_input creates the module and points the type arena at it.
 	node->module = parse_input(&node->parser);
 	type_arena_set(NULL);
+	diag_set_source(NULL, NULL, 0);
 	diag_set_sink(NULL);
 }
 
@@ -575,10 +577,12 @@ void sema_task(void *arg) {
 		return;
 
 	diag_set_sink(node->diag_sink);
+	diag_set_source(node->parser.scanner.source.path, node->parser.scanner.source.buffer, (size_t)node->parser.scanner.source.len);
 	type_arena_set(&node->module->type_arena);
 
 	if (!node->module->ast) {
 		type_arena_set(NULL);
+		diag_set_source(NULL, NULL, 0);
 		diag_set_sink(NULL);
 		return;
 	}
@@ -592,6 +596,7 @@ void sema_task(void *arg) {
 	}
 
 	type_arena_set(NULL);
+	diag_set_source(NULL, NULL, 0);
 	diag_set_sink(NULL);
 }
 
@@ -600,6 +605,7 @@ void codegen_task(void *arg) {
 	if (!node)
 		return;
 	diag_set_sink(node->diag_sink);
+	diag_set_source(node->parser.scanner.source.path, node->parser.scanner.source.buffer, (size_t)node->parser.scanner.source.len);
 	type_arena_set(&node->module->type_arena);
 	char source_file_path[PATH_MAX + 1] = "";
 	strncpy(source_file_path, node->parser.scanner.source.path, sizeof(source_file_path));
@@ -617,6 +623,7 @@ void codegen_task(void *arg) {
 		fprintf(diag_stream(), "failed to create tmp dir for object files with code: %d", errno);
 		codegen_deinit(&cg_ctx);
 		type_arena_set(NULL);
+		diag_set_source(NULL, NULL, 0);
 		diag_set_sink(NULL);
 		return;
 	}
@@ -627,6 +634,7 @@ void codegen_task(void *arg) {
 	codegen_emit_object_file(&cg_ctx, obj_path);
 	codegen_deinit(&cg_ctx);
 	type_arena_set(NULL);
+	diag_set_source(NULL, NULL, 0);
 	diag_set_sink(NULL);
 }
 

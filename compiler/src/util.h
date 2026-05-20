@@ -45,6 +45,12 @@ void *report(SourceLocation location, const char *msg, int is_warning);
 // the threadpool join, so stderr never sees interleaved bytes from
 // multiple workers.
 void diag_set_sink(FILE *sink);
+// Per-thread source registration so report() can echo the offending line +
+// caret. Buffer must outlive every report() call on this thread; the driver
+// sets it once per task to the parser's scanner buffer. Path is the gate —
+// errors whose location.path doesn't match the registered path skip the
+// echo (avoids printing the wrong source on cross-module diagnostics).
+void diag_set_source(const char *path, const char *buf, size_t len);
 FILE *diag_stream(void);
 
 unsigned long djb2(const char *str);

@@ -3049,7 +3049,7 @@ CompilerResult parse_import_list(Parser *parser, ImportList *out_import_list) {
 	// Reset scanner to the beginning
 	parser->scanner.id = 0;
 	parser->scanner.col = 0;
-	parser->scanner.line = 0;
+	parser->scanner.line = 1;
 	parser->scanner.is_reading_string = 0;
 	return RESULT_SUCCESS;
 }

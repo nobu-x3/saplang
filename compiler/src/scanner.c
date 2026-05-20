@@ -572,6 +572,7 @@ CompilerResult scanner_init_from_src(Scanner *scanner, SourceFile file) {
 		return RESULT_PASSED_NULL_PTR;
 
 	memset(scanner, 0, sizeof(Scanner));
+	scanner->line = 1;
 
 	scanner->source = file;
 
@@ -583,6 +584,7 @@ CompilerResult scanner_init_from_string(Scanner *scanner, const char *path, cons
 		return RESULT_PASSED_NULL_PTR;
 
 	memset(scanner, 0, sizeof(Scanner));
+	scanner->line = 1;
 
 	strncpy(scanner->source.path, path, sizeof(scanner->source.path));
 	strncpy(scanner->source.name, "main.sl", sizeof(scanner->source.name));

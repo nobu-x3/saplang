@@ -13,9 +13,18 @@
 #endif
 
 static __thread FILE *thread_diag_sink = NULL;
+static __thread const char *thread_src_path = NULL;
+static __thread const char *thread_src_buf = NULL;
+static __thread size_t thread_src_len = 0;
 
 void diag_set_sink(FILE *sink) {
 	thread_diag_sink = sink;
+}
+
+void diag_set_source(const char *path, const char *buf, size_t len) {
+	thread_src_path = path;
+	thread_src_buf = buf;
+	thread_src_len = len;
 }
 
 FILE *diag_stream(void) {
@@ -24,7 +33,30 @@ FILE *diag_stream(void) {
 
 void *report(SourceLocation location, const char *msg, int is_warning) {
 	const char *verbosity = is_warning ? "Warning:" : "Error:";
-	fprintf(diag_stream(), "%s:%d:%d:%s %s\n", location.path, location.line, location.col, verbosity, msg);
+	FILE *out = diag_stream();
+	fprintf(out, "%s:%d:%d:%s %s\n", location.path, location.line, location.col, verbosity, msg);
+	if (thread_src_buf && thread_src_path && strcmp(thread_src_path, location.path) == 0 && location.line > 0 && location.col > 0) {
+		const char *p = thread_src_buf;
+		const char *end = thread_src_buf + thread_src_len;
+		int line = 1;
+		while (p < end && line < location.line) {
+			if (*p++ == '\n')
+				++line;
+		}
+		if (p < end) {
+			const char *line_start = p;
+			while (p < end && *p != '\n')
+				++p;
+			size_t line_len = (size_t)(p - line_start);
+			fwrite(line_start, 1, line_len, out);
+			fputc('\n', out);
+			int target = location.col - 1;
+			for (int i = 0; i < target && (size_t)i < line_len; ++i)
+				fputc(line_start[i] == '\t' ? '\t' : ' ', out);
+			fputc('^', out);
+			fputc('\n', out);
+		}
+	}
 	return NULL;
 }
 
