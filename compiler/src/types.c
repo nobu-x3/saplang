@@ -707,7 +707,13 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 	case TYPE_POINTER:
 		if (is_bool_type(target))
 			return 1;
-		return target->type_kind == TYPE_POINTER;
+		return target->type_kind == TYPE_POINTER || target->type_kind == TYPE_FUNCTION;
+	case TYPE_FUNCTION:
+		// fn types act as pointers for == / != / if(cond) — accept
+		// against bool, raw pointers (null/void*), and other fn types.
+		if (is_bool_type(target))
+			return 1;
+		return target->type_kind == TYPE_POINTER || target->type_kind == TYPE_FUNCTION;
 	case TYPE_ENUM:
 		if (target->type_kind != TYPE_PRIMITIVE || is_bool_type(target))
 			return 0;
@@ -719,7 +725,6 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 		}
 	case TYPE_ARRAY:
 	case TYPE_SLICE:
-	case TYPE_FUNCTION:
 	case TYPE_STRUCT:
 	case TYPE_UNION:
 	case TYPE_UNDECIDED:

@@ -465,6 +465,42 @@ void test_FunctionOverload_FnPointer_sema(void) {
 	free(output);
 }
 
+void test_FnPointer_NullCompare_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo(){}"
+					  "fn i32 main() {"
+					  "    fn* void() f = &foo;"
+					  "    if(f == null) { return 1; }"
+					  "    return 0;"
+					  "}");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FnPointer_BoolCondition_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo(){}"
+					  "fn i32 main() {"
+					  "    fn* void() f = &foo;"
+					  "    if(f) { return 1; }"
+					  "    return 0;"
+					  "}");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_FnPointer_StructField_NullCompare_sema(void) {
+	TEST_SETUP_SINGLE("struct S { fn* i32(i32) body; }"
+					  "fn i32 t(S* s) {"
+					  "    if(s.body == null) { return 1; }"
+					  "    if(s.body) { return 2; }"
+					  "    return 0;"
+					  "}");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_Switch_IntSubject_Correct_sema(void) {
 	TEST_SETUP_SINGLE("fn void test() {"
 					  "    i32 a = 0;"

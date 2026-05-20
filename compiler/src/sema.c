@@ -150,6 +150,8 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 			return base_type->array.element_type;
 		if (base_type->type_kind == TYPE_SLICE)
 			return base_type->slice.element_type;
+		if (base_type->type_kind == TYPE_POINTER)
+			return base_type->pointee;
 		return NULL;
 	} break;
 

@@ -169,6 +169,9 @@ int main(void) {
 	RUN_TEST(test_ParamPassedToOtherCall_sema);
 	RUN_TEST(test_FunctionOverload_sema);
 	RUN_TEST(test_FunctionOverload_FnPointer_sema);
+	RUN_TEST(test_FnPointer_NullCompare_sema);
+	RUN_TEST(test_FnPointer_BoolCondition_sema);
+	RUN_TEST(test_FnPointer_StructField_NullCompare_sema);
 	RUN_TEST(test_Switch_IntSubject_Correct_sema);
 	RUN_TEST(test_Switch_NonIntSubject_sema);
 	RUN_TEST(test_Switch_NonConstCaseValue_sema);
@@ -298,6 +301,13 @@ int main(void) {
 	RUN_TEST(test_MutualRecursion_codegen);
 	RUN_TEST(test_FnPtrParamMangles_codegen);
 	RUN_TEST(test_ForwardGlobalReference_codegen);
+	RUN_TEST(test_FnPtrStructFieldIsPointer_codegen);
+	RUN_TEST(test_FnPtrEqNullStructField_codegen);
+	RUN_TEST(test_FnPtrTruthinessStructField_codegen);
+	RUN_TEST(test_FnPtrEqNullParam_codegen);
+	RUN_TEST(test_PointerSubscriptReadFromSlicePtr_codegen);
+	RUN_TEST(test_PointerSubscriptInBinaryOp_codegen);
+	RUN_TEST(test_PointerSubscriptWrite_codegen);
 	RUN_TEST(test_SliceDotPtr_codegen);
 	RUN_TEST(test_SliceDotLenAfterDecay_codegen);
 	RUN_TEST(test_SliceIndexRead_codegen);

@@ -3489,3 +3489,60 @@ void test_ForwardGlobalReference_codegen(void) {
 	TEST_ASSERT_NOT_NULL(strstr(output, "load i64, ptr @__main_SIZE"));
 	EXH_TEST_TEARDOWN();
 }
+
+void test_FnPtrStructFieldIsPointer_codegen(void) {
+	// fn-typed struct fields must be lowered as pointers (function types
+	// aren't first-class storable in LLVM). The struct body is only emitted
+	// once a field is touched, hence the `s.body` access.
+	EXH_TEST_SETUP("struct S { fn* i32(i32) body; } fn i32 t(S* s) { if(s.body == null) { return 1; } return 0; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%__main_S = type { ptr }"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FnPtrEqNullStructField_codegen(void) {
+	EXH_TEST_SETUP("struct S { fn* i32(i32) body; } fn i32 t(S* s) { if(s.body == null) { return 1; } return 0; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp eq ptr"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FnPtrTruthinessStructField_codegen(void) {
+	EXH_TEST_SETUP("struct S { fn* i32(i32) body; } fn i32 t(S* s) { if(!s.body) { return 1; } return 0; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp ne ptr"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_FnPtrEqNullParam_codegen(void) {
+	EXH_TEST_SETUP("fn i32 use(fn* i32(i32) body) { if(body == null) { return 1; } return 0; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp eq ptr"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_PointerSubscriptReadFromSlicePtr_codegen(void) {
+	// a.ptr[i] where a is a slice — get_type previously returned NULL for
+	// AST_ARRAY_ACCESS over a pointer, breaking the surrounding binary op.
+	EXH_TEST_SETUP("fn u8 first(u8[] a) { return a.ptr[0]; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds i8, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load i8, ptr"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_PointerSubscriptInBinaryOp_codegen(void) {
+	EXH_TEST_SETUP("fn bool t(u8[] a) { for(u64 i = 0; i < a.len; i += 1) { if(a.ptr[i] == 0) { return false; } } return true; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds i8, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "icmp eq i8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_PointerSubscriptWrite_codegen(void) {
+	EXH_TEST_SETUP("fn void zero(u8[] a) { a.ptr[0] = 0; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds i8, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i8 0"));
+	EXH_TEST_TEARDOWN();
+}

@@ -516,7 +516,10 @@ LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	assert(struct_type);
 	for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
 		ASTNode *current_field = node->data.struct_decl.fields[i];
-		element_types[i] = map_to_llvm(cg, current_field->data.field_decl.type, table);
+		LLVMTypeRef ft = map_to_llvm(cg, current_field->data.field_decl.type, table);
+		if (current_field->data.field_decl.type->type_kind == TYPE_FUNCTION)
+			ft = LLVMPointerType(ft, 0);
+		element_types[i] = ft;
 	}
 	LLVMStructSetBody(struct_type, element_types, node->data.struct_decl.field_count, 0);
 	return struct_type;
@@ -1154,6 +1157,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			if (ctx.intention == PI_LOAD_VAL) {
 				assert(ctx.expected_type && "Must give expected type with PI_LOAD_VAL");
 				LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
+				if (ctx.expected_type->type_kind == TYPE_FUNCTION)
+					ty = LLVMPointerType(ty, 0);
 				return LLVMBuildLoad2(cg->builder, ty, ptr, "");
 			}
 			return ptr;
@@ -1168,6 +1173,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		if (ctx.intention == PI_LOAD_VAL) {
 			assert(ctx.expected_type && "Must give expected type with PI_LOAD_VAL");
 			LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
+			if (ctx.expected_type->type_kind == TYPE_FUNCTION)
+				ty = LLVMPointerType(ty, 0);
 			return LLVMBuildLoad2(cg->builder, ty, named_global, "");
 		}
 		return named_global;
@@ -1287,6 +1294,16 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			LLVMValueRef gep = LLVMBuildInBoundsGEP2(cg->builder, elem_ty, data_ptr, &idx64, 1, "slicegep");
 			if (ctx.intention == PI_LOAD_VAL)
 				return LLVMBuildLoad2(cg->builder, elem_ty, gep, "sliceload");
+			return gep;
+		}
+
+		if (base_ctx.expected_type->type_kind == TYPE_POINTER) {
+			// base_ptr is the storage slot (PI_LOAD_PTR); load to get the pointer value before indexing.
+			LLVMTypeRef elem_ty = map_to_llvm(cg, base_ctx.expected_type->pointee, table);
+			LLVMValueRef ptr_val = LLVMBuildLoad2(cg->builder, LLVMPointerType(elem_ty, 0), base_ptr, "ptr.val");
+			LLVMValueRef gep = LLVMBuildInBoundsGEP2(cg->builder, elem_ty, ptr_val, &idx64, 1, "ptrgep");
+			if (ctx.intention == PI_LOAD_VAL)
+				return LLVMBuildLoad2(cg->builder, elem_ty, gep, "ptrload");
 			return gep;
 		}
 
