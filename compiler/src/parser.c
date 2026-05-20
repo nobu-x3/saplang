@@ -2404,9 +2404,13 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 		return NULL;
 	dstack_local.last_scope_dstack = dstack;
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
+		size_t before_offset = parser->current_token.location.id;
 		ASTNode *stmt = parse_stmt(parser, prefix_name, &dstack_local);
-		if (!stmt)
+		if (!stmt) {
+			if (parser->current_token.type != TOK_EOF && parser->current_token.location.id == before_offset)
+				parser->current_token = next_token(&parser->scanner);
 			continue;
+		}
 
 		if (stmt->type == AST_DEFER_BLOCK) {
 			for (int j = 0; j < stmt->data.defer.defer_block->data.block.count; ++j) {
@@ -3090,9 +3094,14 @@ Module *parse_input(Parser *parser) {
 			continue;
 		}
 
+		size_t before_offset = parser->current_token.location.id;
 		ASTNode *decl = parse_global_decl(parser);
 		if (!decl) {
 			has_errors = 1;
+			// Guarantee forward progress: if a failed decl didn't consume
+			// anything, eat one token so we don't loop forever.
+			if (parser->current_token.type != TOK_EOF && parser->current_token.location.id == before_offset)
+				parser->current_token = next_token(&parser->scanner);
 			continue;
 		}
 		if (!global_list) {

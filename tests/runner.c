@@ -103,6 +103,11 @@ int main(void) {
 	RUN_TEST(test_FunctionOverloading);
 	RUN_TEST(test_Switch_BasicSingleCase_parser);
 	RUN_TEST(test_Switch_FallthroughLabelsGroupedWithBlock_parser);
+	RUN_TEST(test_GlobalGarbageDoesNotHang_parser);
+	RUN_TEST(test_ForwardDeclWithSemicolonDoesNotHang_parser);
+	RUN_TEST(test_VariadicPlaceholderDoesNotHang_parser);
+	RUN_TEST(test_BadParamTypeDoesNotHang_parser);
+	RUN_TEST(test_GarbageInsideBlockDoesNotHang_parser);
 	RUN_TEST(test_Switch_BareCaseAtEndIsError_parser);
 
 	RUN_TEST(test_TypePrinting_sema);

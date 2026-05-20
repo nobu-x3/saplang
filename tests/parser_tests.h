@@ -1589,6 +1589,61 @@ void test_Switch_FallthroughLabelsGroupedWithBlock_parser(void) {
 	free(output);
 }
 
+// Junk input at the top level used to hang the parser when the failing
+// decl path didn't advance the token. parse_input now force-advances on
+// no-progress so any bad input terminates with an error.
+void test_GlobalGarbageDoesNotHang_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("@@@");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	(void)output;
+	TEST_ASSERT_NOT_NULL(err);
+	free(err);
+}
+
+// Forward-declared functions (body replaced by `;`) and the `(...)`
+// placeholder syntax both used to hang the parser. Now both terminate.
+void test_ForwardDeclWithSemicolonDoesNotHang_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("fn void f(i32 a);");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	(void)output;
+	TEST_ASSERT_NOT_NULL(err);
+	free(err);
+}
+
+void test_VariadicPlaceholderDoesNotHang_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("fn void f(...)");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	(void)output;
+	TEST_ASSERT_NOT_NULL(err);
+	free(err);
+}
+
+void test_BadParamTypeDoesNotHang_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("fn void f(i32 a, fn b) {}");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	(void)output;
+	TEST_ASSERT_NOT_NULL(err);
+	free(err);
+}
+
+void test_GarbageInsideBlockDoesNotHang_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("fn void f() { @@@ }");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	(void)output;
+	TEST_ASSERT_NOT_NULL(err);
+	free(err);
+}
+
 void test_Switch_BareCaseAtEndIsError_parser(void) {
 	FILE *old_stderr = capture_error_begin();
 	SETUP_TEST("fn void test() {"
