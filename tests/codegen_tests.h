@@ -3556,6 +3556,18 @@ void test_IndirectCallStructField_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
+void test_OverloadedLocalsDontCollide_codegen(void) {
+	// Parser used the function's short name as prefix for local vars; sema's scope-targeted
+	// lookup used the mangled resolved name. For an overloaded function declared before
+	// another function with a same-named local, the second function's `i` would resolve to
+	// the first's symbol, breaking codegen.
+	EXH_TEST_SETUP("fn bool a(u8[] x) { for(u64 i = 0; i < x.len; i += 1) { u64 t = i; } return true; } fn bool b() { for(u64 i = 0; i < 10; i += 1) { u64 t = i; } return false; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "__main_a__u8[]_i"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "__main_b_i"));
+	EXH_TEST_TEARDOWN();
+}
+
 void test_IndirectCallReturnTypeIsUnwrapped_codegen(void) {
 	// `op.f(x) + 1` requires get_type(AST_FN_CALL) to peel off the function type
 	// and yield the return type. Earlier, fn-pointer calls returned the bare

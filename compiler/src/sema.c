@@ -752,10 +752,14 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			assert(var_sym);
 			var_sym->type->type_kind = sym->type->type_kind;
 		}
-		Type *vt = node->data.var_decl.type;
-		if (vt && (vt->type_kind == TYPE_STRUCT || vt->type_kind == TYPE_UNION)) {
-			if (verify_struct_fields_visible(table, vt, node->location, NULL) != RESULT_SUCCESS)
+		Type *var_type = node->data.var_decl.type;
+		if (var_type) {
+			if (resolve_type(table, var_type, node->location) != RESULT_SUCCESS)
 				return RESULT_FAILURE;
+			if (var_type->type_kind == TYPE_STRUCT || var_type->type_kind == TYPE_UNION) {
+				if (verify_struct_fields_visible(table, var_type, node->location, NULL) != RESULT_SUCCESS)
+					return RESULT_FAILURE;
+			}
 		}
 		if (node->data.var_decl.init) {
 			CompilerResult result;

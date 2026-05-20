@@ -2805,7 +2805,12 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 	if (!da_init(defer_stack, 4))
 		return NULL;
 	defer_stack.last_scope_dstack = NULL;
-	ASTNode *body = parse_block(parser, func_name, &defer_stack);
+	char block_prefix[256] = "";
+	if (param_count > 0 && !mangle_overflow)
+		snprintf(block_prefix, sizeof(block_prefix), "%s_%s", func_name, mangled_types);
+	else
+		snprintf(block_prefix, sizeof(block_prefix), "%s", func_name);
+	ASTNode *body = parse_block(parser, block_prefix, &defer_stack);
 	da_deinit(defer_stack);
 	--parser->current_scope;
 	if (!is_error && body) {

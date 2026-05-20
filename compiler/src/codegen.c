@@ -498,11 +498,15 @@ LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, P
 		lhs = codegen_ast(cg, lvalue, table, ctx);
 	}
 	Type *target_type = ctx.expected_type;
+	if (rvalue->type == AST_STRUCT_LITERAL) {
+		PassContext sub = ctx;
+		sub.intention = PI_STORE_PTR;
+		sub.passed_value = lhs;
+		codegen_ast(cg, rvalue, table, sub);
+		return NULL;
+	}
 	ctx.intention = PI_LOAD_VAL;
 	LLVMValueRef rhs = codegen_ast(cg, rvalue, table, ctx);
-	// There is no need for store here since struct literal assignment is already handled
-	if (lvalue->type == AST_EXPR_IDENT && rvalue->type == AST_STRUCT_LITERAL)
-		return NULL;
 	rhs = maybe_decay_to_slice(cg, rvalue, rhs, target_type, table, ctx);
 	return LLVMBuildStore(cg->builder, rhs, lhs);
 }
@@ -557,10 +561,12 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 	if (base_type->type_kind == TYPE_POINTER && base_type->pointee &&
 		(base_type->pointee->type_kind == TYPE_STRUCT || base_type->pointee->type_kind == TYPE_UNION)) {
 		ctx.intention = PI_LOAD_VAL;
+		ctx.expected_type = base_type;
 		base_value = codegen_ast(cg, node->data.member_access.base, table, ctx);
 		base_type = base_type->pointee;
 	} else {
 		ctx.intention = PI_LOAD_PTR;
+		ctx.expected_type = base_type;
 		base_value = codegen_ast(cg, node->data.member_access.base, table, ctx);
 	}
 	assert(base_value);
@@ -1114,8 +1120,7 @@ void codegen_imported_symbol(CodegenLLVM *cg, Symbol *sym, Symbol *table) {
 		assert(struct_type);
 	} break;
 	case AST_STRUCT_DECL: {
-		LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, sym->resolved_name);
-		assert(struct_type);
+		codegen_struct_decl(cg, sym->node, table);
 	} break;
 	case AST_FN_DECL:
 	case AST_EXTERN_FUNC_DECL: {
