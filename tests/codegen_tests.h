@@ -3475,6 +3475,13 @@ void test_MutualRecursion_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
+void test_FnPtrParamMangles_codegen(void) {
+	EXH_TEST_SETUP("fn void take_cb(i32 x, fn* void() cb) {} fn void main() {}");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_take_cb__i32_fn"));
+	EXH_TEST_TEARDOWN();
+}
+
 void test_ForwardGlobalReference_codegen(void) {
 	EXH_TEST_SETUP("fn u64 main() { return SIZE; } const u64 SIZE = 42;");
 	EXH_REQUIRE_OK();

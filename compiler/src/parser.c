@@ -2260,17 +2260,22 @@ ASTNode *parse_parameter_declaration(Parser *parser) {
 ASTNode *parse_parameter_list(Parser *parser) {
 	ASTNode *param_list = NULL, *last_param = NULL;
 
-	// empty param list
 	if (parser->current_token.type == TOK_RPAREN)
 		return NULL;
 
 	ASTNode *param = parse_parameter_declaration(parser);
+	if (!param)
+		return NULL;
 	param_list = last_param = param;
 
 	int is_error = 0;
 	while (parser->current_token.type == TOK_COMMA) {
 		parser->current_token = next_token(&parser->scanner); // consume comma
 		param = parse_parameter_declaration(parser);
+		if (!param) {
+			is_error = 1;
+			break;
+		}
 		for (ASTNode *param_it = param_list; param_it != NULL; param_it = param_it->next) {
 			if (strcmp(param->data.param_decl.name, param_it->data.param_decl.name) == 0) {
 				char msg[128];

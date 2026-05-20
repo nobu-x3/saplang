@@ -129,7 +129,10 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 		LLVMTypeRef ret_type = map_to_llvm(cg, type->function.return_type, table);
 		LLVMTypeRef *param_types = alloca(sizeof(LLVMTypeRef) * (size_t)type->function.param_count);
 		for (int i = 0; i < type->function.param_count; ++i) {
-			param_types[i] = map_to_llvm(cg, type->function.param_types[i], table);
+			LLVMTypeRef pt = map_to_llvm(cg, type->function.param_types[i], table);
+			if (type->function.param_types[i]->type_kind == TYPE_FUNCTION)
+				pt = LLVMPointerType(pt, 0);
+			param_types[i] = pt;
 		}
 		return LLVMFunctionType(ret_type, param_types, type->function.param_count, 0);
 	}

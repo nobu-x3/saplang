@@ -291,6 +291,7 @@ int main(void) {
 	RUN_TEST(test_ForwardFnCall_codegen);
 	RUN_TEST(test_ForwardExternFnCall_codegen);
 	RUN_TEST(test_MutualRecursion_codegen);
+	RUN_TEST(test_FnPtrParamMangles_codegen);
 	RUN_TEST(test_ForwardGlobalReference_codegen);
 	RUN_TEST(test_SliceDotPtr_codegen);
 	RUN_TEST(test_SliceDotLenAfterDecay_codegen);

@@ -473,8 +473,28 @@ int type_mangle_append(Type *type, char *name, size_t cap) {
 		written = snprintf(name + len, cap - len, "_%s", type->type_resolved_name);
 		return written < 0 || (size_t)written >= cap - len;
 	}
-	// TYPE_ARRAY / TYPE_FUNCTION can't appear as a param type today.
-	assert(0 && "type_mangle_append: unsupported Type kind for overload mangling");
+	if (type->type_kind == TYPE_ARRAY) {
+		int overflow = type_mangle_append(type->array.element_type, name, cap);
+		len = strlen(name);
+		if (len >= cap - 1)
+			return 1;
+		written = snprintf(name + len, cap - len, "[%d]", type->array.size);
+		return overflow || written < 0 || (size_t)written >= cap - len;
+	}
+	if (type->type_kind == TYPE_FUNCTION) {
+		written = snprintf(name + len, cap - len, "_fn");
+		if (written < 0 || (size_t)written >= cap - len)
+			return 1;
+		int overflow = type_mangle_append(type->function.return_type, name, cap);
+		for (int i = 0; i < type->function.param_count; ++i) {
+			overflow |= type_mangle_append(type->function.param_types[i], name, cap);
+		}
+		len = strlen(name);
+		if (len >= cap - 1)
+			return 1;
+		written = snprintf(name + len, cap - len, "_end");
+		return overflow || written < 0 || (size_t)written >= cap - len;
+	}
 	return 1;
 }
 

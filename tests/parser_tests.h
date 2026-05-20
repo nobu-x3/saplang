@@ -1603,3 +1603,4 @@ void test_Switch_BareCaseAtEndIsError_parser(void) {
 	free(output);
 	free(err);
 }
+
