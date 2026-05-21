@@ -1767,7 +1767,7 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 				return NULL;
 			}
 			parser->current_token = next_token(&parser->scanner);
-			ASTNode *expr = parse_expr(parser, scope_prefix);
+			ASTNode *expr = parse_unary(parser, scope_prefix);
 			if (!expr)
 				return NULL;
 			return new_cast_node(target_type, expr, cast_loc);

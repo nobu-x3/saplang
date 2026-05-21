@@ -1219,6 +1219,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						// resolve_types runs after analyze_ast, so types here may still be UNDECIDED.
 						resolve_type(table, arg_type, node->location);
 						resolve_type(table, p->data.param_decl.type, node->location);
+						if (literal_fits_type(node->data.func_call.args[i], p->data.param_decl.type))
+							continue;
 						if (!type_equals(arg_type, p->data.param_decl.type)) {
 							ok = 0;
 							break;
@@ -1308,6 +1310,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (i < non_va_param_count) {
 				Type *param_type = is_fn_ptr ? fn_type->function.param_types[i] : param->data.param_decl.type;
 				Type *arg_type = get_type(table, node->data.func_call.args[i], arg_scope, scope_specifier);
+				if (literal_fits_type(node->data.func_call.args[i], param_type)) {
+					if (!is_fn_ptr)
+						param = param->next;
+					continue;
+				}
 				if (!is_convertible(arg_type, param_type, 0, table)) {
 					char left_str[128] = "";
 					char right_str[128] = "";

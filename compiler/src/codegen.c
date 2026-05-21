@@ -253,7 +253,13 @@ LLVMMetadataRef map_to_ditype(CodegenLLVM *cg, Type *type, Symbol *table) {
 
 	case TYPE_STRUCT: {
 		Symbol *sym = lookup_symbol(table, type->type_resolved_name, 0);
-		assert(sym && "unknown struct symbol for DI lowering.");
+		if (!sym) {
+			const char *name = type->type_name ? type->type_name : type->type_resolved_name;
+			size_t name_len = strlen(name);
+			result = LLVMDIBuilderCreateReplaceableCompositeType(cg->di_builder, DW_TAG_structure_type, name, name_len, cg->di_cu, cg->di_file, 0, 0, 0, 0, 0, NULL, 0);
+			hashmap_put(cg->ditype_cache, type, result);
+			return result;
+		}
 		ASTNode *struct_decl = sym->node;
 		assert(struct_decl && struct_decl->type == AST_STRUCT_DECL);
 		TypeInfo info = get_type_info(type, struct_decl);
@@ -294,7 +300,13 @@ LLVMMetadataRef map_to_ditype(CodegenLLVM *cg, Type *type, Symbol *table) {
 
 	case TYPE_UNION: {
 		Symbol *sym = lookup_symbol(table, type->type_resolved_name, 0);
-		assert(sym && "unknown union symbol for DI lowering.");
+		if (!sym) {
+			const char *name = type->type_name ? type->type_name : type->type_resolved_name;
+			size_t name_len = strlen(name);
+			result = LLVMDIBuilderCreateReplaceableCompositeType(cg->di_builder, DW_TAG_union_type, name, name_len, cg->di_cu, cg->di_file, 0, 0, 0, 0, 0, NULL, 0);
+			hashmap_put(cg->ditype_cache, type, result);
+			return result;
+		}
 		ASTNode *union_decl = sym->node;
 		assert(union_decl && union_decl->type == AST_UNION_DECL);
 		TypeInfo info = get_type_info(type, union_decl);
