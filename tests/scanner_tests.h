@@ -38,6 +38,18 @@ void test_TokenText_SelfMul_scanner(void) {
 	TEST_ASSERT_EQUAL_STRING("*=", tok.text);
 }
 
+void test_TokenText_SelfXor_scanner(void) {
+	Token tok = scan_first("^=");
+	TEST_ASSERT_EQUAL_INT(TOK_SELFXOR, tok.type);
+	TEST_ASSERT_EQUAL_STRING("^=", tok.text);
+}
+
+void test_TokenText_BitwiseXor_scanner(void) {
+	Token tok = scan_first("^");
+	TEST_ASSERT_EQUAL_INT(TOK_BITWISE_XOR, tok.type);
+	TEST_ASSERT_EQUAL_STRING("^", tok.text);
+}
+
 void test_TokenText_Null_scanner(void) {
 	Token tok = scan_first("null");
 	TEST_ASSERT_EQUAL_INT(TOK_NULL, tok.type);

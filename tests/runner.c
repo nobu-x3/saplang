@@ -85,6 +85,8 @@ int main(void) {
 	RUN_TEST(test_TokenText_SelfOr_scanner);
 	RUN_TEST(test_TokenText_LogicalOr_scanner);
 	RUN_TEST(test_TokenText_SelfMul_scanner);
+	RUN_TEST(test_TokenText_SelfXor_scanner);
+	RUN_TEST(test_TokenText_BitwiseXor_scanner);
 	RUN_TEST(test_TokenText_Null_scanner);
 	RUN_TEST(test_TokenText_NullPrefix_NotAKeyword_scanner);
 	RUN_TEST(test_TokenText_Switch_scanner);
@@ -424,6 +426,7 @@ int main(void) {
 	RUN_TEST(test_UnsignedCmp_codegen);
 	RUN_TEST(test_SelfOr_codegen);
 	RUN_TEST(test_SelfAnd_codegen);
+	RUN_TEST(test_SelfXor_codegen);
 	RUN_TEST(test_UnaryIntNeg_codegen);
 	RUN_TEST(test_UnaryBitwiseNot_i32_codegen);
 	RUN_TEST(test_UnaryLogicalNot_OnInt_codegen);

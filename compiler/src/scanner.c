@@ -532,9 +532,16 @@ Token next_token(Scanner *scanner) {
 		eat_next_char(scanner);
 		break;
 	case '^':
-		current_token.type = TOK_BITWISE_XOR;
-		strncpy(current_token.text, "^", sizeof(current_token.text));
-		eat_next_char(scanner);
+		if (_INPUT[_INDEX + 1] == '=') {
+			current_token.type = TOK_SELFXOR;
+			strncpy(current_token.text, "^=", sizeof(current_token.text));
+			eat_next_char(scanner);
+			eat_next_char(scanner);
+		} else {
+			current_token.type = TOK_BITWISE_XOR;
+			strncpy(current_token.text, "^", sizeof(current_token.text));
+			eat_next_char(scanner);
+		}
 		break;
 	case '.':
 		current_token.type = TOK_DOT;

@@ -85,6 +85,7 @@ static const char *binary_op_name(TokenType op) {
 	case TOK_SELFADD: return "+=";
 	case TOK_SELFSUB: return "-=";
 	case TOK_SELFMUL: return "*=";
+	case TOK_SELFXOR: return "^=";
 	case TOK_SELFDIV: return "/=";
 	case TOK_BITWISE_XOR: return "^";
 	case TOK_BITWISE_NEG: return "~";
@@ -1206,6 +1207,8 @@ TokenType get_underlying_op(TokenType type, SourceLocation *loc) {
 		return TOK_ASTERISK;
 	case TOK_SELFDIV:
 		return TOK_SLASH;
+	case TOK_SELFXOR:
+		return TOK_BITWISE_XOR;
 	default:
 		report(*loc, "unrecognized compound assignment operator.", 0);
 		return TOK_SELFOR;
@@ -1218,7 +1221,7 @@ ASTNode *parse_assignment(Parser *parser, const char *scope_prefix) {
 		return NULL;
 
 	if (parser->current_token.type == TOK_ASSIGN || parser->current_token.type == TOK_SELFADD || parser->current_token.type == TOK_SELFSUB || parser->current_token.type == TOK_SELFMUL || parser->current_token.type == TOK_SELFDIV ||
-		parser->current_token.type == TOK_SELFAND || parser->current_token.type == TOK_SELFOR) {
+		parser->current_token.type == TOK_SELFAND || parser->current_token.type == TOK_SELFOR || parser->current_token.type == TOK_SELFXOR) {
 		TokenType op = parser->current_token.type;
 		SourceLocation loc = parser->current_token.location;
 		parser->current_token = next_token(&parser->scanner);

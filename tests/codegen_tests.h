@@ -2771,6 +2771,13 @@ void test_SelfAnd_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
+void test_SelfXor_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() { i32 a = 5; a ^= 6; return a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "%xor = xor i32"));
+	EXH_TEST_TEARDOWN();
+}
+
 // ---------------------------------------------------------------------------
 // 10. Unary expressions.
 // ---------------------------------------------------------------------------
