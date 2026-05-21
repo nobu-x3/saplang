@@ -1043,11 +1043,13 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	}
 	Type *l_type = get_type(table, node->data.binary_op.left, ctx.current_scope, "");
 	assert(l_type);
+	Type *r_type = get_type(table, node->data.binary_op.right, ctx.current_scope, "");
+	int is_ptr_arith = (op == TOK_PLUS || op == TOK_MINUS) && l_type->type_kind == TYPE_POINTER && r_type && is_int(r_type);
 	PassContext lhs_ctx = ctx;
 	lhs_ctx.expected_type = l_type;
 	LLVMValueRef L = codegen_ast(cg, node->data.binary_op.left, table, lhs_ctx);
 	PassContext rhs_ctx = ctx;
-	rhs_ctx.expected_type = l_type;
+	rhs_ctx.expected_type = is_ptr_arith ? r_type : l_type;
 	LLVMValueRef R = codegen_ast(cg, node->data.binary_op.right, table, rhs_ctx);
 	int is_float = l_type->type_kind == TYPE_PRIMITIVE && (l_type->prim == PRIM_F32 || l_type->prim == PRIM_F64);
 	int is_unsigned = l_type->type_kind == TYPE_PRIMITIVE && (l_type->prim == PRIM_U8 || l_type->prim == PRIM_U16 || l_type->prim == PRIM_U32 || l_type->prim == PRIM_U64);
@@ -1077,10 +1079,23 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 			return LLVMBuildFCmp(cg->builder, LLVMRealOGE, L, R, "cmpge");
 		return LLVMBuildICmp(cg->builder, is_unsigned ? LLVMIntUGE : LLVMIntSGE, L, R, "cmpge");
 	case TOK_PLUS:
+		if (is_ptr_arith) {
+			Type *pointee_ast = l_type->pointee;
+			int is_void_ptr = pointee_ast && pointee_ast->type_kind == TYPE_PRIMITIVE && pointee_ast->prim == PRIM_VOID;
+			LLVMTypeRef pointee_ty = is_void_ptr ? LLVMInt8TypeInContext(cg->llvm_context) : map_to_llvm(cg, pointee_ast, table);
+			return LLVMBuildGEP2(cg->builder, pointee_ty, L, &R, 1, "ptradd");
+		}
 		if (is_float)
 			return LLVMBuildFAdd(cg->builder, L, R, "add");
 		return LLVMBuildAdd(cg->builder, L, R, "add");
 	case TOK_MINUS:
+		if (is_ptr_arith) {
+			Type *pointee_ast = l_type->pointee;
+			int is_void_ptr = pointee_ast && pointee_ast->type_kind == TYPE_PRIMITIVE && pointee_ast->prim == PRIM_VOID;
+			LLVMTypeRef pointee_ty = is_void_ptr ? LLVMInt8TypeInContext(cg->llvm_context) : map_to_llvm(cg, pointee_ast, table);
+			LLVMValueRef neg = LLVMBuildNeg(cg->builder, R, "negidx");
+			return LLVMBuildGEP2(cg->builder, pointee_ty, L, &neg, 1, "ptrsub");
+		}
 		if (is_float)
 			return LLVMBuildFSub(cg->builder, L, R, "sub");
 		return LLVMBuildSub(cg->builder, L, R, "sub");
@@ -1779,7 +1794,8 @@ CompilerResult codegen_emit_object_file(CodegenLLVM *cg, const char *path) {
 
 	char *cpu = LLVMGetHostCPUName();
 	char *features = LLVMGetHostCPUFeatures();
-	LLVMTargetMachineRef tm = LLVMCreateTargetMachine(target, triple, cpu, features, LLVMCodeGenLevelDefault, LLVMRelocPIC, LLVMCodeModelDefault);
+	LLVMCodeGenOptLevel opt_level = cg->should_build_debug ? LLVMCodeGenLevelLess : LLVMCodeGenLevelDefault;
+	LLVMTargetMachineRef tm = LLVMCreateTargetMachine(target, triple, cpu, features, opt_level, LLVMRelocPIC, LLVMCodeModelDefault);
 	LLVMDisposeMessage(cpu);
 	LLVMDisposeMessage(features);
 

@@ -1055,9 +1055,24 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			}
 			break;
 		}
+		int pointer_arith = (node->data.binary_op.op == TOK_PLUS || node->data.binary_op.op == TOK_MINUS) && ltype && ltype->type_kind == TYPE_POINTER && is_int(rtype);
+		TokenType op = node->data.binary_op.op;
+		int is_arith_op = op == TOK_PLUS || op == TOK_MINUS || op == TOK_ASTERISK || op == TOK_SLASH || op == TOK_MODULO || op == TOK_AMPERSAND || op == TOK_BITWISE_OR || op == TOK_BITWISE_XOR ||
+						  op == TOK_BITWISE_LSHIFT || op == TOK_BITWISE_RSHIFT;
+		int has_ptr_operand = (ltype && ltype->type_kind == TYPE_POINTER) || (rtype && rtype->type_kind == TYPE_POINTER);
+		if (is_arith_op && has_ptr_operand && !pointer_arith) {
+			char left_str[128] = "";
+			char right_str[128] = "";
+			type_print(left_str, ltype);
+			type_print(right_str, rtype);
+			char msg[256] = "";
+			sprintf(msg, "binary operator type mismatch: cannot implicitly convert %s to %s.", right_str, left_str);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
 		// Integer / float / null literals take on the other side's primitive type at use-site
 		int literal_match = literal_fits_type(node->data.binary_op.right, ltype) || literal_fits_type(node->data.binary_op.left, rtype);
-		if (!literal_match && !is_convertible(rtype, ltype, 1, table)) {
+		if (!pointer_arith && !literal_match && !is_convertible(rtype, ltype, 1, table)) {
 			char left_str[128] = "";
 			char right_str[128] = "";
 			type_print(left_str, ltype);

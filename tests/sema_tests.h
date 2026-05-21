@@ -951,3 +951,33 @@ void test_StringLitToI32Slice_Rejected_sema(void) {
 	TEST_ASSERT_NOT_NULL(strstr(output, "string literal can only be assigned to"));
 	free(output);
 }
+
+void test_PointerArith_AddInt_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 a; } fn S* f(S* p) { return p + 1; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_PointerArith_SubInt_sema(void) {
+	TEST_SETUP_SINGLE("fn i32* f(i32* p) { return p - 2; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_PointerArith_IntPlusPointer_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("fn i32* f(i32* p) { return 1 + p; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "binary operator type mismatch"));
+	free(output);
+}
+
+void test_PointerArith_PointerTimesInt_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("fn i32* f(i32* p) { return p * 2; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "binary operator type mismatch"));
+	free(output);
+}
+
+void test_PointerArith_PointerPlusPointer_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("fn i32* f(i32* p, i32* q) { return p + q; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "binary operator type mismatch"));
+	free(output);
+}

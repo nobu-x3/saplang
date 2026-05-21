@@ -1074,6 +1074,38 @@ void test_SliceFromStringLitReturn_codegen(void) {
 	free(error);
 }
 
+void test_PointerAddInt_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct S { i32 a; i32 b; } fn S* foo(S* p) { return p + 1; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr %__main_S, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ptradd"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+void test_PointerSubInt_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("struct S { i32 a; } fn S* foo(S* p, u64 n) { return p - n; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "negidx"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr %__main_S, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ptrsub"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+void test_PointerAddVarIndex_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32* foo(i32* p, u64 n) { return p + n; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr i32, ptr"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ptradd"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+void test_PointerAddVoidPtrIsByteOffset_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void* foo(void* p, u64 n) { return p + n; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr i8, ptr"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
 // A slice literal lowers to the same `insertvalue` shape used for
 // array→slice decay: ptr into field 0, len into field 1. The store lands
 // on the slice's alloca.
