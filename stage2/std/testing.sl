@@ -56,16 +56,17 @@ export fn i32 run() {
             return -1;
         }
         u8[] msg = {null, 0};
+        sys::printf("[__RUN_______] %.*s:%.*s\n", (i32)test_case.suite.len, test_case.suite.ptr, (i32)test_case.name.len, test_case.name.ptr);
         i32 res = test_case.body(&runner.arena, msg);
         if(res != 0) {
             failed_count += 1;
-            sys::printf("[___FAILURE___]: %.*s:%.*s: %s\n", (i32)test_case.suite.len, test_case.suite.ptr, (i32)test_case.name.len, test_case.name.ptr, msg.ptr);
+            sys::printf("[___FAILED___] %.*s:%.*s: %s\n", (i32)test_case.suite.len, test_case.suite.ptr, (i32)test_case.name.len, test_case.name.ptr, msg.ptr);
         } else {
             passed_count += 1;
-            sys::printf("[___SUCCESS___]: %.*s:%.*s\n", (i32)test_case.suite.len, test_case.suite.ptr, (i32)test_case.name.len, test_case.name.ptr);
+            sys::printf("[___PASSED___] %.*s:%.*s\n", (i32)test_case.suite.len, test_case.suite.ptr, (i32)test_case.name.len, test_case.name.ptr);
         }
     }
-    sys::printf("Total: %d, Passed: %d, Failed: %d\n", runner.cases.len, passed_count, failed_count);
+    sys::printf("[============] Total: %d, Passed: %d, Failed: %d\n", runner.cases.len, passed_count, failed_count);
     return (i32)failed_count;
 }
 
@@ -78,56 +79,56 @@ export fn bool expect_eq(i32 actual, i32 expected, u8[] msg) {
     if(actual == expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %d, got %d\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected %d, got %d\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_eq(i64 actual, i64 expected, u8[] msg) {
     if(actual == expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %ld, got %ld\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected %ld, got %ld\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_eq(u32 actual, u32 expected, u8[] msg) {
     if(actual == expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %u, got %u\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected %u, got %u\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_eq(u64 actual, u64 expected, u8[] msg) {
     if(actual == expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %lu, got %lu\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected %lu, got %lu\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_eq(f64 actual, f64 expected, u8[] msg) {
     if(actual == expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %g, got %g\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected %g, got %g\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_eq(bool actual, bool expected, u8[] msg) {
     if(actual == expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %d, got %d\n", (i32)msg.len, msg.ptr, (i32)expected, (i32)actual);
+    sys::printf("[____FAIL____] %.*s: expected %d, got %d\n", (i32)msg.len, msg.ptr, (i32)expected, (i32)actual);
     return false;
 }
 export fn bool expect_eq(u8[] actual, u8[] expected, u8[] msg) {
     if(equal(actual, expected)) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected \"%.*s\", got \"%.*s\"\n", (i32)msg.len, msg.ptr, (i32)expected.len, expected.ptr, (i32)actual.len, actual.ptr);
+    sys::printf("[____FAIL____] %.*s: expected \"%.*s\", got \"%.*s\"\n", (i32)msg.len, msg.ptr, (i32)expected.len, expected.ptr, (i32)actual.len, actual.ptr);
     return false;
 }
 export fn bool expect_eq(void* actual, void* expected, u8[] msg) {
     if(actual == expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %p, got %p\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected %p, got %p\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 
@@ -136,56 +137,56 @@ export fn bool expect_ne(i32 actual, i32 expected, u8[] msg) {
     if(actual != expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected != %d, got %d\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected != %d, got %d\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_ne(i64 actual, i64 expected, u8[] msg) {
     if(actual != expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected != %ld, got %ld\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected != %ld, got %ld\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_ne(u32 actual, u32 expected, u8[] msg) {
     if(actual != expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected != %u, got %u\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected != %u, got %u\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_ne(u64 actual, u64 expected, u8[] msg) {
     if(actual != expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected != %lu, got %lu\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected != %lu, got %lu\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_ne(f64 actual, f64 expected, u8[] msg) {
     if(actual != expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected != %g, got %g\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected != %g, got %g\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 export fn bool expect_ne(bool actual, bool expected, u8[] msg) {
     if(actual != expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected != %d, got %d\n", (i32)msg.len, msg.ptr, (i32)expected, (i32)actual);
+    sys::printf("[____FAIL____] %.*s: expected != %d, got %d\n", (i32)msg.len, msg.ptr, (i32)expected, (i32)actual);
     return false;
 }
 export fn bool expect_ne(u8[] actual, u8[] expected, u8[] msg) {
     if(!equal(actual, expected)) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected != \"%.*s\"\n", (i32)msg.len, msg.ptr, (i32)expected.len, expected.ptr);
+    sys::printf("[____FAIL____] %.*s: expected != \"%.*s\"\n", (i32)msg.len, msg.ptr, (i32)expected.len, expected.ptr);
     return false;
 }
 export fn bool expect_ne(void* actual, void* expected, u8[] msg) {
     if(actual != expected) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected != %p, got %p\n", (i32)msg.len, msg.ptr, expected, actual);
+    sys::printf("[____FAIL____] %.*s: expected != %p, got %p\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
 
@@ -194,35 +195,35 @@ export fn bool expect_lt(i32 a, i32 b, u8[] msg) {
     if(a < b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %d < %d\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %d < %d\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_lt(i64 a, i64 b, u8[] msg) {
     if(a < b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %ld < %ld\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %ld < %ld\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_lt(u32 a, u32 b, u8[] msg) {
     if(a < b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %u < %u\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %u < %u\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_lt(u64 a, u64 b, u8[] msg) {
     if(a < b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %lu < %lu\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %lu < %lu\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_lt(f64 a, f64 b, u8[] msg) {
     if(a < b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %g < %g\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %g < %g\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 
@@ -231,35 +232,35 @@ export fn bool expect_le(i32 a, i32 b, u8[] msg) {
     if(a <= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %d <= %d\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %d <= %d\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_le(i64 a, i64 b, u8[] msg) {
     if(a <= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %ld <= %ld\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %ld <= %ld\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_le(u32 a, u32 b, u8[] msg) {
     if(a <= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %u <= %u\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %u <= %u\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_le(u64 a, u64 b, u8[] msg) {
     if(a <= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %lu <= %lu\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %lu <= %lu\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_le(f64 a, f64 b, u8[] msg) {
     if(a <= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %g <= %g\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %g <= %g\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 
@@ -268,35 +269,35 @@ export fn bool expect_gt(i32 a, i32 b, u8[] msg) {
     if(a > b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %d > %d\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %d > %d\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_gt(i64 a, i64 b, u8[] msg) {
     if(a > b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %ld > %ld\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %ld > %ld\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_gt(u32 a, u32 b, u8[] msg) {
     if(a > b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %u > %u\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %u > %u\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_gt(u64 a, u64 b, u8[] msg) {
     if(a > b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %lu > %lu\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %lu > %lu\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_gt(f64 a, f64 b, u8[] msg) {
     if(a > b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %g > %g\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %g > %g\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 
@@ -305,35 +306,35 @@ export fn bool expect_ge(i32 a, i32 b, u8[] msg) {
     if(a >= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %d >= %d\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %d >= %d\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_ge(i64 a, i64 b, u8[] msg) {
     if(a >= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %ld >= %ld\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %ld >= %ld\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_ge(u32 a, u32 b, u8[] msg) {
     if(a >= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %u >= %u\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %u >= %u\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_ge(u64 a, u64 b, u8[] msg) {
     if(a >= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %lu >= %lu\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %lu >= %lu\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 export fn bool expect_ge(f64 a, f64 b, u8[] msg) {
     if(a >= b) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected %g >= %g\n", (i32)msg.len, msg.ptr, a, b);
+    sys::printf("[____FAIL____] %.*s: expected %g >= %g\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
 
@@ -342,7 +343,7 @@ export fn bool expect_near(f64 actual, f64 expected, f64 tol, u8[] msg) {
     if(d <= tol) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: |%g - %g| = %g > tol %g\n", (i32)msg.len, msg.ptr, actual, expected, d, tol);
+    sys::printf("[____FAIL____] %.*s: |%g - %g| = %g > tol %g\n", (i32)msg.len, msg.ptr, actual, expected, d, tol);
     return false;
 }
 
@@ -350,7 +351,7 @@ export fn bool expect_true(bool cond, u8[] msg) {
     if(cond) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected true\n", (i32)msg.len, msg.ptr);
+    sys::printf("[____FAIL____] %.*s: expected true\n", (i32)msg.len, msg.ptr);
     return false;
 }
 
@@ -358,7 +359,7 @@ export fn bool expect_false(bool cond, u8[] msg) {
     if(!cond) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected false\n", (i32)msg.len, msg.ptr);
+    sys::printf("[____FAIL____] %.*s: expected false\n", (i32)msg.len, msg.ptr);
     return false;
 }
 
@@ -366,7 +367,7 @@ export fn bool expect_null(void* p, u8[] msg) {
     if(!p) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected null, got %p\n", (i32)msg.len, msg.ptr, p);
+    sys::printf("[____FAIL____] %.*s: expected null, got %p\n", (i32)msg.len, msg.ptr, p);
     return false;
 }
 
@@ -374,7 +375,7 @@ export fn bool expect_not_null(void* p, u8[] msg) {
     if(p) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: expected non-null\n", (i32)msg.len, msg.ptr);
+    sys::printf("[____FAIL____] %.*s: expected non-null\n", (i32)msg.len, msg.ptr);
     return false;
 }
 
@@ -382,7 +383,7 @@ export fn bool expect_substr(u8[] haystack, u8[] needle, u8[] msg) {
     if(find(haystack, needle)) {
         return true;
     }
-    sys::printf("[FAIL] %.*s: \"%.*s\" not found in \"%.*s\"\n", (i32)msg.len, msg.ptr, (i32)needle.len, needle.ptr, (i32)haystack.len, haystack.ptr);
+    sys::printf("[____FAIL____] %.*s: \"%.*s\" not found in \"%.*s\"\n", (i32)msg.len, msg.ptr, (i32)needle.len, needle.ptr, (i32)haystack.len, haystack.ptr);
     return false;
 }
 
