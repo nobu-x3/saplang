@@ -439,12 +439,24 @@ static LLVMValueRef codegen_cond_to_bool(CodegenLLVM *cg, ASTNode *cond, Symbol 
 static LLVMValueRef maybe_decay_to_slice(CodegenLLVM *cg, ASTNode *expr, LLVMValueRef computed_val, Type *expected, Symbol *table, PassContext ctx) {
 	if (!expected || expected->type_kind != TYPE_SLICE)
 		return computed_val;
-	Type *actual = get_type(table, expr, ctx.current_scope, "");
-	if (!actual)
-		return computed_val;
 
 	LLVMTypeRef slice_ty = map_to_llvm(cg, expected, table);
 	LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
+
+	if (expr && expr->type == AST_STRING_LIT) {
+		Type *elem = expected->slice.element_type;
+		if (elem && elem->type_kind == TYPE_PRIMITIVE && (elem->prim == PRIM_U8 || elem->prim == PRIM_I8)) {
+			size_t len = expr->data.string_literal.len;
+			LLVMValueRef slice = LLVMGetUndef(slice_ty);
+			slice = LLVMBuildInsertValue(cg->builder, slice, computed_val, 0, "slice.ptr");
+			slice = LLVMBuildInsertValue(cg->builder, slice, LLVMConstInt(i64_ty, len, 0), 1, "slice.len");
+			return slice;
+		}
+	}
+
+	Type *actual = get_type(table, expr, ctx.current_scope, "");
+	if (!actual)
+		return computed_val;
 
 	if (actual->type_kind == TYPE_POINTER && actual->pointee && actual->pointee->type_kind == TYPE_PRIMITIVE && actual->pointee->prim == PRIM_VOID) {
 		LLVMTypeRef elem_ptr_ty = LLVMPointerType(map_to_llvm(cg, expected->slice.element_type, table), 0);
@@ -1390,6 +1402,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		size_t len = strlen(s) + 1;
 		LLVMValueRef gv = LLVMAddGlobal(cg->module, LLVMArrayType(LLVMInt8TypeInContext(cg->llvm_context), len), ".str");
 		LLVMSetGlobalConstant(gv, 1);
+		LLVMSetLinkage(gv, LLVMPrivateLinkage);
+		LLVMSetUnnamedAddr(gv, 1);
 		LLVMValueRef constStr = LLVMConstStringInContext(cg->llvm_context, s, len, 1);
 		LLVMSetInitializer(gv, constStr);
 		LLVMSetAlignment(gv, 1);
@@ -1530,6 +1544,11 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		val_ctx.expected_type = exp_val_type;
 		val_ctx.intention = PI_LOAD_VAL;
 		LLVMValueRef v = codegen_ast(cg, node->data.cast.expr, table, val_ctx);
+		if (node->data.cast.target_type->type_kind == TYPE_SLICE) {
+			LLVMValueRef decayed = maybe_decay_to_slice(cg, node->data.cast.expr, v, node->data.cast.target_type, table, ctx);
+			if (decayed != v)
+				return decayed;
+		}
 		LLVMTypeRef target_ty = map_to_llvm(cg, node->data.cast.target_type, table);
 		// integer<->integer
 		if (is_int(node->data.cast.target_type) && is_int(exp_val_type)) {

@@ -921,3 +921,33 @@ void test_SizeOf_InsideArithmetic_sema(void) {
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
+
+void test_StringLitToU8Slice_VarDecl_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u8[] s = \"hello\"; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_StringLitToU8Slice_ExplicitCast_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u8[] s = (u8[])\"hello\"; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_StringLitToU8Slice_AsArg_sema(void) {
+	TEST_SETUP_SINGLE("fn void take(u8[] s) {} fn void f() { take(\"hello\"); }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_StringLitToU8Slice_Return_sema(void) {
+	TEST_SETUP_SINGLE("fn u8[] f() { return \"hello\"; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_StringLitToI32Slice_Rejected_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { i32[] s = \"hello\"; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "string literal can only be assigned to"));
+	free(output);
+}

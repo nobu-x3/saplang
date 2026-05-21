@@ -1033,6 +1033,47 @@ void test_SliceFromNull_codegen(void) {
 	free(error);
 }
 
+void test_SliceFromStringLitImplicit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { u8[] s = \"hello\"; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "@.str = private unnamed_addr constant [6 x i8] c\"hello\\00\""));
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca { ptr, i64 }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store { ptr, i64 } { ptr @.str, i64 5 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+void test_SliceFromStringLitExplicitCast_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { u8[] s = (u8[])\"hi\"; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "@.str = private unnamed_addr constant [3 x i8] c\"hi\\00\""));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store { ptr, i64 } { ptr @.str, i64 2 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+void test_SliceFromStringLitAsArg_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void take(u8[] s) {} fn void foo() { take(\"ok\"); }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "@.str = private unnamed_addr constant [3 x i8] c\"ok\\00\""));
+	TEST_ASSERT_NOT_NULL(strstr(output, "call void @\"__main_take__u8[]\"({ ptr, i64 } { ptr @.str, i64 2 })"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+void test_SliceFromStringLitAssign_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { u8[] s; s = \"abc\"; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "@.str = private unnamed_addr constant [4 x i8] c\"abc\\00\""));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store { ptr, i64 } { ptr @.str, i64 3 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
+void test_SliceFromStringLitReturn_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn u8[] foo() { return \"yo\"; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "@.str = private unnamed_addr constant [3 x i8] c\"yo\\00\""));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret { ptr, i64 } { ptr @.str, i64 2 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
 // A slice literal lowers to the same `insertvalue` shape used for
 // array→slice decay: ptr into field 0, len into field 1. The store lands
 // on the slice's alloca.
@@ -1434,7 +1475,7 @@ void test_ExternBlockFn_codegen(void) {
 							  "fn i32 main() { printf(\"hello world\"); return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [12 x i8] c\"hello world\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [12 x i8] c\"hello world\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1453,7 +1494,7 @@ void test_ExternBlockFnVa_codegen(void) {
 							  "fn i32 main() { i32 a = 1; printf(\"hello world %d\", a); return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1475,7 +1516,7 @@ void test_ForLoopConstComp_codegen(void) {
 							  "fn i32 main() { for(i32 i = 0; i < 10; i +=1 ){ printf(\"hello world %d\", i); } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1514,7 +1555,7 @@ void test_ForLoopVarComp_codegen(void) {
 							  "fn i32 main() { i32 a = 10; for(i32 i = 0; i < a; i +=1 ){ printf(\"hello world %d\", i); } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1556,7 +1597,7 @@ void test_WhileLoopBasicComp_codegen(void) {
 							  "fn i32 main() { i32 a = 0; while(a < 10){ printf(\"hello world %d\", a); a += 1; } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1590,7 +1631,7 @@ void test_WhileLoopVarComp_codegen(void) {
 							  "fn i32 main() { i32 a = 0; i32 b = 10; while(a < b){ printf(\"hello world %d\", a); a += 1; } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1629,7 +1670,7 @@ void test_IfStmtBasic_codegen(void) {
 							  "fn i32 main() { i32 a = 0; if(a){ printf(\"hello world %d\", a); } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1659,7 +1700,7 @@ void test_IfStmtInWhileLoop_codegen(void) {
 							  "fn i32 main() { i32 a = 0; while(a < 10) { if(a % 2 == 0){ printf(\"hello world %d\", a); } a += 1; } return 0; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [15 x i8] c\"hello world %d\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1704,8 +1745,8 @@ void test_IfElseStmtInWhileLoop_codegen(void) {
 							  "fn i32 main() { i32 a = 0; while(a < 10) { if(a % 2 == 0){ printf(\"hello world %d\", a); } else { printf(\"\n\"); } a += 1; } a = 50; return a; }");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [15 x i8] c\"hello world %d\\00\", align 1\n"
-						   "@.str.1 = constant [2 x i8] c\"\\0A\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [15 x i8] c\"hello world %d\\00\", align 1\n"
+						   "@.str.1 = private unnamed_addr constant [2 x i8] c\"\\0A\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1905,9 +1946,9 @@ void test_WhileLoopContinueBreak_codegen(void) {
 							  "}");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [6 x i8] c\"even\\0A\\00\", align 1\n"
-						   "@.str.1 = constant [13 x i8] c\"more than 7\\0A\\00\", align 1\n"
-						   "@.str.2 = constant [5 x i8] c\"odd\\0A\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [6 x i8] c\"even\\0A\\00\", align 1\n"
+						   "@.str.1 = private unnamed_addr constant [13 x i8] c\"more than 7\\0A\\00\", align 1\n"
+						   "@.str.2 = private unnamed_addr constant [5 x i8] c\"odd\\0A\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -1974,9 +2015,9 @@ void test_ForLoopContinueBreak_codegen(void) {
 							  "}");
 	const char *expected = "; ModuleID = 'test'\n"
 						   "source_filename = \"test\"\n\n"
-						   "@.str = constant [6 x i8] c\"even\\0A\\00\", align 1\n"
-						   "@.str.1 = constant [13 x i8] c\"more than 7\\0A\\00\", align 1\n"
-						   "@.str.2 = constant [5 x i8] c\"odd\\0A\\00\", align 1\n\n"
+						   "@.str = private unnamed_addr constant [6 x i8] c\"even\\0A\\00\", align 1\n"
+						   "@.str.1 = private unnamed_addr constant [13 x i8] c\"more than 7\\0A\\00\", align 1\n"
+						   "@.str.2 = private unnamed_addr constant [5 x i8] c\"odd\\0A\\00\", align 1\n\n"
 						   "declare void @printf(ptr)\n"
 						   "\n"
 						   "define i32 @main() {\n"
@@ -2933,8 +2974,8 @@ void test_MultipleStringLiteralsGetSuffixedNames_codegen(void) {
 	EXH_TEST_SETUP("extern { fn i32 puts(const u8* s); }"
 				   "fn i32 main() { puts(\"hi\"); puts(\"bye\"); return 0; }");
 	EXH_REQUIRE_OK();
-	TEST_ASSERT_NOT_NULL(strstr(output, "@.str = constant [3 x i8] c\"hi\\00\""));
-	TEST_ASSERT_NOT_NULL(strstr(output, "@.str.1 = constant [4 x i8] c\"bye\\00\""));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@.str = private unnamed_addr constant [3 x i8] c\"hi\\00\""));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@.str.1 = private unnamed_addr constant [4 x i8] c\"bye\\00\""));
 	EXH_TEST_TEARDOWN();
 }
 

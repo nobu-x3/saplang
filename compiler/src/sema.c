@@ -574,6 +574,15 @@ int literal_fits_type(ASTNode *node, Type *target) {
 	return is_int(target) && target->prim != PRIM_BOOL;
 }
 
+int string_lit_fits_target(ASTNode *node, Type *target) {
+	if (!node || !target || node->type != AST_STRING_LIT)
+		return 0;
+	if (target->type_kind != TYPE_SLICE)
+		return 0;
+	Type *elem = target->slice.element_type;
+	return elem && elem->type_kind == TYPE_PRIMITIVE && (elem->prim == PRIM_U8 || elem->prim == PRIM_I8);
+}
+
 CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level, const char *scope_specifier) {
 	if (literal_fits_type(node, lvalue_type))
 		return RESULT_SUCCESS;
@@ -821,7 +830,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				if (lhs_type->type_kind == TYPE_ARRAY) {
 					Type *elem = lhs_type->array.element_type;
 					if (elem->type_kind != TYPE_PRIMITIVE || (elem->prim != PRIM_I8 && elem->prim != PRIM_U8)) {
-						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
+						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays, slices, or pointers.";
 						report(node->location, msg, 0);
 						return RESULT_FAILURE;
 					}
@@ -832,10 +841,17 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						report(node->location, msg, 0);
 						return RESULT_FAILURE;
 					}
+				} else if (lhs_type->type_kind == TYPE_SLICE) {
+					Type *elem = lhs_type->slice.element_type;
+					if (!elem || elem->type_kind != TYPE_PRIMITIVE || (elem->prim != PRIM_I8 && elem->prim != PRIM_U8)) {
+						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays, slices, or pointers.";
+						report(node->location, msg, 0);
+						return RESULT_FAILURE;
+					}
 				} else if (lhs_type->type_kind == TYPE_POINTER) {
 					Type *pointee = lhs_type->pointee;
 					if (pointee->type_kind != TYPE_PRIMITIVE || (pointee->prim != PRIM_I8 && pointee->prim != PRIM_U8)) {
-						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
+						char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays, slices, or pointers.";
 						report(node->location, msg, 0);
 						return RESULT_FAILURE;
 					}
@@ -993,7 +1009,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			expr_type = enum_decl->node->data.enum_decl.base_type;
 			expr_type->type_kind = TYPE_PRIMITIVE;
 		}
-		if (!is_convertible(expr_type, sym->type->function.return_type, 0, table)) {
+		if (!string_lit_fits_target(node->data.ret.return_expr, sym->type->function.return_type) && !is_convertible(expr_type, sym->type->function.return_type, 0, table)) {
 			char msg[128] = "";
 			char src_type[128] = "";
 			char trg_type[128] = "";
@@ -1123,11 +1139,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					return result;
 				}
 			}
-		} else if (node->data.assignment.lvalue->type == AST_STRING_LIT) {
+		} else if (node->data.assignment.rvalue->type == AST_STRING_LIT) {
 			if (ltype->type_kind == TYPE_ARRAY) {
 				Type *elem = ltype->array.element_type;
 				if (elem->type_kind != TYPE_PRIMITIVE || (elem->prim != PRIM_I8 && elem->prim != PRIM_U8)) {
-					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
+					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays, slices, or pointers.";
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
 				}
@@ -1138,10 +1154,17 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
 				}
-			} else if (ltype->type_kind == TYPE_ARRAY) {
+			} else if (ltype->type_kind == TYPE_SLICE) {
+				Type *elem = ltype->slice.element_type;
+				if (!elem || elem->type_kind != TYPE_PRIMITIVE || (elem->prim != PRIM_I8 && elem->prim != PRIM_U8)) {
+					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays, slices, or pointers.";
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+			} else if (ltype->type_kind == TYPE_POINTER) {
 				Type *pointee = ltype->pointee;
-				if (pointee->type_kind != TYPE_PRIMITIVE || (pointee->prim != PRIM_I8 && pointee->prim != PRIM_U8)) {
-					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays or pointers.";
+				if (!pointee || pointee->type_kind != TYPE_PRIMITIVE || (pointee->prim != PRIM_I8 && pointee->prim != PRIM_U8)) {
+					char msg[128] = "string literal can only be assigned to (const) u8 or i8 arrays, slices, or pointers.";
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
 				}
@@ -1219,7 +1242,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						// resolve_types runs after analyze_ast, so types here may still be UNDECIDED.
 						resolve_type(table, arg_type, node->location);
 						resolve_type(table, p->data.param_decl.type, node->location);
-						if (literal_fits_type(node->data.func_call.args[i], p->data.param_decl.type))
+						if (literal_fits_type(node->data.func_call.args[i], p->data.param_decl.type) || string_lit_fits_target(node->data.func_call.args[i], p->data.param_decl.type))
 							continue;
 						if (!type_equals(arg_type, p->data.param_decl.type)) {
 							ok = 0;
@@ -1310,7 +1333,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (i < non_va_param_count) {
 				Type *param_type = is_fn_ptr ? fn_type->function.param_types[i] : param->data.param_decl.type;
 				Type *arg_type = get_type(table, node->data.func_call.args[i], arg_scope, scope_specifier);
-				if (literal_fits_type(node->data.func_call.args[i], param_type)) {
+				if (literal_fits_type(node->data.func_call.args[i], param_type) || string_lit_fits_target(node->data.func_call.args[i], param_type)) {
 					if (!is_fn_ptr)
 						param = param->next;
 					continue;
@@ -1384,7 +1407,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						report(last_stmt->location, msg, 0);
 						return RESULT_FAILURE;
 					}
-					if (!is_convertible(stmt_type, fn_type->function.return_type, 0, table)) {
+					if (!string_lit_fits_target(last_stmt->data.ret.return_expr, fn_type->function.return_type) && !is_convertible(stmt_type, fn_type->function.return_type, 0, table)) {
 						char actual_type_str[128] = "";
 						type_print(actual_type_str, stmt_type);
 						char expected_type_str[128] = "";
@@ -1478,8 +1501,13 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		result = analyze_ast(table, node->data.cast.expr, scope_level, scope_specifier);
 		if (result != RESULT_SUCCESS)
 			return result;
+		if (string_lit_fits_target(node->data.cast.expr, node->data.cast.target_type))
+			return RESULT_SUCCESS;
 		Type *expr_type = get_type(table, node->data.cast.expr, scope_level, scope_specifier);
-		assert(expr_type);
+		if (!expr_type) {
+			report(node->data.cast.expr->location, "cast operand has no known type.", 0);
+			return RESULT_FAILURE;
+		}
 		// Param-typed exprs are still UNDECIDED until resolve_types runs.
 		if (expr_type->type_kind == TYPE_UNDECIDED)
 			resolve_type(table, expr_type, node->location);

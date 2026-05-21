@@ -229,6 +229,11 @@ int main(void) {
 	RUN_TEST(test_SizeOf_UnknownPointerType_Rejected_sema);
 	RUN_TEST(test_AlignOf_OfExpression_sema);
 	RUN_TEST(test_SizeOf_InsideArithmetic_sema);
+	RUN_TEST(test_StringLitToU8Slice_VarDecl_sema);
+	RUN_TEST(test_StringLitToU8Slice_ExplicitCast_sema);
+	RUN_TEST(test_StringLitToU8Slice_AsArg_sema);
+	RUN_TEST(test_StringLitToU8Slice_Return_sema);
+	RUN_TEST(test_StringLitToI32Slice_Rejected_sema);
 
 	RUN_TEST(test_Primitivei32_typeinfo);
 	RUN_TEST(test_Primitivei64_typeinfo);
@@ -294,6 +299,11 @@ int main(void) {
 	RUN_TEST(test_SliceVarDeclFromArray_codegen);
 	RUN_TEST(test_SlicePassArrayAsArg_codegen);
 	RUN_TEST(test_SliceFromNull_codegen);
+	RUN_TEST(test_SliceFromStringLitImplicit_codegen);
+	RUN_TEST(test_SliceFromStringLitExplicitCast_codegen);
+	RUN_TEST(test_SliceFromStringLitAsArg_codegen);
+	RUN_TEST(test_SliceFromStringLitAssign_codegen);
+	RUN_TEST(test_SliceFromStringLitReturn_codegen);
 	RUN_TEST(test_ArrayDotLen_codegen);
 	RUN_TEST(test_SliceDotLen_codegen);
 	RUN_TEST(test_ForwardFnCall_codegen);
