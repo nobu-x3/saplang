@@ -489,7 +489,7 @@ ASTNode *copy_ast_node(ASTNode *node) {
 	case AST_EXPR_IDENT:
 		strncpy(new_node->data.ident.name, node->data.ident.name, sizeof(new_node->data.ident.name));
 		strncpy(new_node->data.ident.namespace, node->data.ident.namespace, sizeof(new_node->data.ident.namespace));
-		strncpy(new_node->data.ident.resolved_name, node->data.ident.namespace, sizeof(new_node->data.ident.resolved_name));
+		strncpy(new_node->data.ident.resolved_name, node->data.ident.resolved_name, sizeof(new_node->data.ident.resolved_name));
 		break;
 	case AST_BINARY_EXPR:
 		new_node->data.binary_op.op = node->data.binary_op.op;
@@ -998,6 +998,40 @@ static void report_type_error(Parser *parser, SourceLocation loc, const char *ms
 		report(loc, msg, 0);
 }
 
+// Block-scope plumbing. Each push assigns the new block a sibling id at the
+// current depth (so two for-loops in a row pick up distinct ids), then opens
+// a fresh counter for that block's own children. Pops are tolerant of
+// underflow so a failed parse can't leave the stack in a bad state.
+static void push_block_scope(Parser *parser) {
+	if (parser->block_depth + 1 >= 64)
+		return;
+	int d = parser->block_depth;
+	parser->block_path[d] = parser->block_counter[d]++;
+	parser->block_depth = d + 1;
+	parser->block_counter[d + 1] = 0;
+}
+
+static void pop_block_scope(Parser *parser) {
+	if (parser->block_depth > 0)
+		parser->block_depth -= 1;
+}
+
+// Stamp the current branch's nested-block ids into `buf` as "$b<N>$b<M>..."
+// (or empty at function-body level). Appended to local resolved_names so a
+// var declared in one block doesn't shadow or collide with a var of the same
+// name in a sibling block. `$` is non-identifier so it can never collide with
+// a user name.
+static void block_scope_suffix(Parser *parser, char *buf, size_t cap) {
+	buf[0] = '\0';
+	size_t written = 0;
+	for (int i = 0; i < parser->block_depth; i++) {
+		int n = snprintf(buf + written, cap - written, "$b%d", parser->block_path[i]);
+		if (n < 0 || (size_t)n >= cap - written)
+			return;
+		written += (size_t)n;
+	}
+}
+
 CompilerResult parse_type(Parser *parser, Type **out_type) {
 	{ // fn ptr parsing
 		if (parser->current_token.type == TOK_FN_PTR) {
@@ -1181,16 +1215,27 @@ ASTNode *parse_qualified_identifier(Parser *parser, const char *scope_prefix) {
 		if (scope_prefix[0] == '\0') {
 			sprintf(resolved_name, "__%s_%s", parser->module_name, name);
 		} else {
-			char tmp_resolved_name[256] = "";
-			sprintf(tmp_resolved_name, "__%s_%s_%s", parser->module_name, scope_prefix, name);
-			Symbol *declared_symbol = lookup_symbol(parser->symbol_table, tmp_resolved_name, 2);
-			if (declared_symbol) {
-				strncpy(resolved_name, tmp_resolved_name, sizeof(resolved_name));
-				return new_ident_node(namespace, name, resolved_name, loc);
+			// Walk the nested-block scope chain by stripping trailing $b<N>
+			// segments. Inner-block declarations shadow outer ones; the loop
+			// finds the innermost match. Falls through to a global lookup
+			// (no scope_prefix) if no scoped symbol is found.
+			char scope_suffix[128];
+			block_scope_suffix(parser, scope_suffix, sizeof(scope_suffix));
+			char tmp_resolved_name[512] = "";
+			while (1) {
+				snprintf(tmp_resolved_name, sizeof(tmp_resolved_name), "__%s_%s%s_%s", parser->module_name, scope_prefix, scope_suffix, name);
+				Symbol *declared_symbol = lookup_symbol(parser->symbol_table, tmp_resolved_name, 2);
+				if (declared_symbol) {
+					strncpy(resolved_name, tmp_resolved_name, sizeof(resolved_name));
+					return new_ident_node(namespace, name, resolved_name, loc);
+				}
+				char *last_seg = strrchr(scope_suffix, '$');
+				if (!last_seg)
+					break;
+				*last_seg = '\0';
 			}
 			sprintf(tmp_resolved_name, "__%s_%s", parser->module_name, name);
-			declared_symbol = lookup_symbol(parser->symbol_table, tmp_resolved_name, 2);
-			// If we can't find this symbol at this point, leave resolved_name empty, we'll come back to it in sema
+			Symbol *declared_symbol = lookup_symbol(parser->symbol_table, tmp_resolved_name, 2);
 			if (declared_symbol) {
 				strncpy(resolved_name, tmp_resolved_name, sizeof(resolved_name));
 				return new_ident_node(namespace, name, resolved_name, loc);
@@ -1973,7 +2018,9 @@ ASTNode *parse_var_decl(Parser *parser, const char *prefix_name, int is_exported
 	if (prefix_name[0] == '\0') {
 		sprintf(resolved_name, "__%s_%s", parser->module_name, var_name);
 	} else {
-		sprintf(resolved_name, "__%s_%s_%s", parser->module_name, prefix_name, var_name);
+		char scope_suffix[128];
+		block_scope_suffix(parser, scope_suffix, sizeof(scope_suffix));
+		sprintf(resolved_name, "__%s_%s%s_%s", parser->module_name, prefix_name, scope_suffix, var_name);
 	}
 	if (lookup_symbol(parser->symbol_table, is_extern ? var_name : resolved_name, parser->current_scope)) {
 		char msg[128] = "";
@@ -2408,6 +2455,7 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 		is_error = 1;
 	}
 	parser->current_token = next_token(&parser->scanner); // consume '{'
+	push_block_scope(parser);
 
 	NodeList stmts;
 	if (!p_da_init(stmts, 4))
@@ -2455,9 +2503,11 @@ ASTNode *parse_block(Parser *parser, const char *prefix_name, DeferStack *dstack
 			}
 		}
 		da_deinit(dstack_local);
+		pop_block_scope(parser);
 		return block;
 	}
 	da_deinit(dstack_local);
+	pop_block_scope(parser);
 	return NULL;
 }
 
@@ -2521,6 +2571,11 @@ ASTNode *parse_for_loop(Parser *parser, const char *prefix_name, DeferStack *dst
 
 	parser->current_token = next_token(&parser->scanner); // consume '('
 
+	// The init binding lives in the for-loop's own scope, not the enclosing
+	// block — that's what lets two sibling `for(u64 i=...)` not collide on `i`.
+	// parse_block opens a further inner scope for the body.
+	push_block_scope(parser);
+
 	// All of these are optional technically
 	ASTNode *init = NULL;
 	if (parser->current_token.type != TOK_SEMICOLON) {
@@ -2557,6 +2612,7 @@ ASTNode *parse_for_loop(Parser *parser, const char *prefix_name, DeferStack *dst
 
 	ASTNode *body = parse_block(parser, prefix_name, dstack);
 
+	pop_block_scope(parser);
 	return new_for_loop_node(init, condition, post, body, loc);
 }
 
@@ -2809,6 +2865,11 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 		is_error = 1;
 	}
 	++parser->current_scope;
+	// Functions don't nest, so the block-scope state can reset per fn — that
+	// keeps the first body push at $b0 instead of inheriting a counter bumped
+	// by the previous fn's body.
+	parser->block_depth = 0;
+	parser->block_counter[0] = 0;
 	for (ASTNode *p = params; p; p = p->next) {
 		if (p->data.param_decl.is_va)
 			continue;

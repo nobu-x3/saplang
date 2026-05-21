@@ -266,6 +266,13 @@ typedef struct Parser {
 	// (the var-decl-vs-expression-statement disambiguator). parse_type's
 	// reports are gated on this so failed speculation doesn't leak diagnostics.
 	int speculating;
+	// Nested-block scoping. Every block (function body, for/while/if/else/case
+	// body, bare `{}`) pushes a level here; sibling blocks at the same depth
+	// get distinct ids, stamped into local resolved_names as "$b<N>" so two
+	// sibling `i` declarations don't collide.
+	int block_counter[64];
+	int block_path[64];
+	int block_depth;
 } Parser;
 
 typedef struct {
