@@ -181,6 +181,36 @@ static void test_DebugInfoLines_modules(void) {
     int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the Phase 3 fixture");
 }
+static void test_DebugInfoGlobals_modules(void) {
+    CompileOptions opts = {0};
+    char input_file_path[256] = "";
+    sprintf(input_file_path, "%s/main.sl", "module_tests/debug_info_globals");
+    opts.input_file_path = strdup(input_file_path);
+    opts.no_cleanup = 1;
+    opts.gen_debug = 1;
+    opts.threads = 1;
+    opts.output_file_path = strdup("debug_info_globals");
+    driver_set_compiler_options(opts);
+    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
+    TEST_ASSERT_EQUAL_INT(system("./debug_info_globals"), 0);
+
+    FILE *info = popen("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
+    TEST_ASSERT_NOT_NULL(info);
+    char buf[32768] = {0};
+    size_t n = fread(buf, 1, sizeof(buf) - 1, info);
+    pclose(info);
+    TEST_ASSERT_GREATER_THAN(0, n);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_variable"), "expected DW_TAG_variable entries for globals");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"g_count\")"), "expected primitive global g_count");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"g_outer\")"), "expected struct global g_outer");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"Outer\")"), "expected Outer struct DI");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"Inner\")"), "expected nested Inner struct DI");
+
+    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the globals fixture");
+}
+
 static void test_DebugInfoLocals_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";

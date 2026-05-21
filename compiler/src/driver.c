@@ -607,6 +607,7 @@ void codegen_task(void *arg) {
 	diag_set_sink(node->diag_sink);
 	diag_set_source(node->parser.scanner.source.path, node->parser.scanner.source.buffer, (size_t)node->parser.scanner.source.len);
 	type_arena_set(&node->module->type_arena);
+	type_table_set(node->module->symbol_table);
 	char source_file_path[PATH_MAX + 1] = "";
 	strncpy(source_file_path, node->parser.scanner.source.path, sizeof(source_file_path));
 	char *source_dir = dir_name(source_file_path);
@@ -633,6 +634,7 @@ void codegen_task(void *arg) {
 	snprintf(obj_path, sizeof(obj_path), "%s/tmp-%s.o", tmp_dir, node->parser.module_name);
 	codegen_emit_object_file(&cg_ctx, obj_path);
 	codegen_deinit(&cg_ctx);
+	type_table_set(NULL);
 	type_arena_set(NULL);
 	diag_set_source(NULL, NULL, 0);
 	diag_set_sink(NULL);

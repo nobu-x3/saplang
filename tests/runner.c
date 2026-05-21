@@ -511,6 +511,7 @@ int main(void) {
 	RUN_TEST(test_DebugInfoTypes_modules);
 	RUN_TEST(test_DebugInfoLines_modules);
 	RUN_TEST(test_DebugInfoLocals_modules);
+	RUN_TEST(test_DebugInfoGlobals_modules);
 	return UNITY_END();
 
 }

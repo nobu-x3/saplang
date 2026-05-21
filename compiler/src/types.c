@@ -8,10 +8,13 @@
 #include <string.h>
 
 static __thread Arena *current_type_arena = NULL;
+static __thread Symbol *current_type_table = NULL;
 
 void type_arena_set(Arena *arena) { current_type_arena = arena; }
 
 Arena *type_arena_get(void) { return current_type_arena; }
+
+void type_table_set(Symbol *table) { current_type_table = table; }
 
 PrimitiveKind primitive_kind_from_name(const char *name) {
 	if (!name)
@@ -102,10 +105,19 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 		return info;
 	case TYPE_FUNCTION:
 		return info;
-	case TYPE_STRUCT:
-		if (!node)
+	case TYPE_STRUCT: {
+		ASTNode *layout = node;
+		if (!layout || layout->type != AST_STRUCT_DECL) {
+			if (current_type_table) {
+				Symbol *sym = lookup_symbol(current_type_table, type->type_resolved_name, 0);
+				if (sym && sym->node && sym->node->type == AST_STRUCT_DECL)
+					layout = sym->node;
+			}
+		}
+		if (!layout || layout->type != AST_STRUCT_DECL)
 			return info;
-		return compute_struct_size_and_alignment(node);
+		return compute_struct_size_and_alignment(layout);
+	}
 	case TYPE_ENUM:
 		if (node && node->type == AST_ENUM_DECL && node->data.enum_decl.base_type) {
 			return get_type_info(node->data.enum_decl.base_type, node);
@@ -115,9 +127,17 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 	case TYPE_UNION: {
 		info.size = 0;
 		info.align = 1;
-		if (!node || node->type != AST_UNION_DECL)
+		ASTNode *layout = node;
+		if (!layout || layout->type != AST_UNION_DECL) {
+			if (current_type_table) {
+				Symbol *sym = lookup_symbol(current_type_table, type->type_resolved_name, 0);
+				if (sym && sym->node && sym->node->type == AST_UNION_DECL)
+					layout = sym->node;
+			}
+		}
+		if (!layout || layout->type != AST_UNION_DECL)
 			return info;
-		ASTNode *field = node->data.union_decl.fields;
+		ASTNode *field = layout->data.union_decl.fields;
 		while (field) {
 			if (field->type == AST_FIELD_DECL) {
 				TypeInfo field_info = get_type_info(field->data.field_decl.type, field);

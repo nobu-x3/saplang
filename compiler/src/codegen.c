@@ -281,11 +281,18 @@ LLVMMetadataRef map_to_ditype(CodegenLLVM *cg, Type *type, Symbol *table) {
 		for (int i = 0; i < field_count; ++i) {
 			ASTNode *field = struct_decl->data.struct_decl.fields[i];
 			assert(field && field->type == AST_FIELD_DECL);
-			TypeInfo field_info = get_type_info(field->data.field_decl.type, field);
+			Type *field_type = field->data.field_decl.type;
+			ASTNode *layout_node = field;
+			if (field_type && (field_type->type_kind == TYPE_STRUCT || field_type->type_kind == TYPE_UNION)) {
+				Symbol *fsym = lookup_symbol(table, field_type->type_resolved_name, 0);
+				if (fsym && fsym->node)
+					layout_node = fsym->node;
+			}
+			TypeInfo field_info = get_type_info(field_type, layout_node);
 			uint64_t field_align_bits = BYTE_TO_BIT(field_info.align);
 			if (field_align_bits)
 				cur_offset_bits = (cur_offset_bits + field_align_bits - 1) & ~(field_align_bits - 1);
-			LLVMMetadataRef field_di = map_to_ditype(cg, field->data.field_decl.type, table);
+			LLVMMetadataRef field_di = map_to_ditype(cg, field_type, table);
 			members[i] = LLVMDIBuilderCreateMemberType(cg->di_builder, cg->di_cu, field->data.field_decl.name, strlen(field->data.field_decl.name), cg->di_file, field->location.line,
 													   BYTE_TO_BIT(field_info.size), field_align_bits, cur_offset_bits, 0, field_di);
 			cur_offset_bits += BYTE_TO_BIT(field_info.size);
@@ -842,8 +849,14 @@ LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *tab
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
 	LLVMSetLinkage(global_var, LLVMExternalLinkage);
-	// LLVMSetThreadLocal(global_var, 0);
-	// LLVMSetThreadLocalMode(global_var, LLVMNotThreadLocal);
+	if (cg->should_build_debug && !is_extern && node->location.line > 0) {
+		const char *display = node->data.var_decl.name;
+		size_t display_len = strlen(display);
+		LLVMMetadataRef var_ty_di = map_to_ditype(cg, node->data.var_decl.type, table);
+		LLVMMetadataRef expr = LLVMDIBuilderCreateExpression(cg->di_builder, NULL, 0);
+		LLVMMetadataRef gve = LLVMDIBuilderCreateGlobalVariableExpression(cg->di_builder, cg->di_cu, display, display_len, display, display_len, cg->di_file, node->location.line, var_ty_di, 0, expr, NULL, 0);
+		LLVMGlobalSetMetadata(global_var, LLVMGetMDKindIDInContext(cg->llvm_context, "dbg", 3), gve);
+	}
 	return global_var;
 }
 

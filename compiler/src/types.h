@@ -3,6 +3,8 @@
 #include "arena.h"
 #include <stddef.h>
 
+struct Symbol;
+
 typedef struct {
 	size_t size;
 	size_t align;
@@ -62,6 +64,7 @@ typedef struct Type {
 // take responsibility for setting it.
 void type_arena_set(Arena *arena);
 Arena *type_arena_get(void);
+void type_table_set(struct Symbol *table);
 
 Type *copy_type(Type *type);
 // Kept as an empty function so existing call sites compile, but Types
