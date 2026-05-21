@@ -148,6 +148,8 @@ int main(void) {
 	RUN_TEST(test_NullAsArgument_sema);
 	RUN_TEST(test_NullAsReturn_sema);
 	RUN_TEST(test_NullReturnFromIntFn_sema);
+	RUN_TEST(test_ReturnSliceLiteral_sema);
+	RUN_TEST(test_ReturnSliceLiteralBadField_sema);
 	RUN_TEST(test_NullInStructFieldInit_sema);
 	RUN_TEST(test_NullInStructFieldInitDesignated_sema);
 	RUN_TEST(test_NullInStructFieldInitWrongType_sema);

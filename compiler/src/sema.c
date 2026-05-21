@@ -987,9 +987,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 	} break;
 
 	case AST_RETURN: {
-		CompilerResult result = analyze_ast(table, node->data.ret.return_expr, scope_level, scope_specifier);
-		if (result != RESULT_SUCCESS)
-			return result;
 		Symbol *sym = lookup_symbol(table, scope_specifier, scope_level);
 		if (!sym || sym->kind != SYMB_FN || sym->type->type_kind != TYPE_FUNCTION) {
 			char msg[128] = "";
@@ -997,7 +994,20 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
+		ASTNode *return_expr = node->data.ret.return_expr;
+		// Struct / slice literals have no intrinsic type; the enclosing function's
+		// return type is the only thing that can resolve them. Mirrors var-decl init.
+		if (return_expr && return_expr->type == AST_STRUCT_LITERAL) {
+			return analyze_struct_literal(table, sym->type->function.return_type, return_expr, scope_level, scope_specifier);
+		}
+		CompilerResult result = analyze_ast(table, return_expr, scope_level, scope_specifier);
+		if (result != RESULT_SUCCESS)
+			return result;
 		Type *expr_type = get_type(table, node, scope_level, scope_specifier);
+		if (!expr_type) {
+			report(node->location, "return expression has no inferrable type.", 0);
+			return RESULT_FAILURE;
+		}
 		if (expr_type->type_kind == TYPE_ENUM) {
 			Symbol *enum_decl = lookup_named_type(table, expr_type, scope_level);
 			if (!enum_decl) {
@@ -1415,6 +1425,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					return RESULT_FAILURE;
 				}
 				if (last_stmt && last_stmt->type == AST_RETURN) {
+					ASTNode *ret_expr = last_stmt->data.ret.return_expr;
+					// Struct / slice literal returns were already validated against the
+					// declared return type by analyze_struct_literal in the AST_RETURN branch.
+					if (ret_expr && ret_expr->type == AST_STRUCT_LITERAL)
+						goto skip_return_typecheck;
 					Type *stmt_type = get_type(table, last_stmt, scope_level + 1, node->data.func_decl.resolved_name);
 					if (!stmt_type) {
 						char msg[256] = "";
@@ -1432,6 +1447,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						report(last_stmt->location, msg, 0);
 						return RESULT_FAILURE;
 					}
+				skip_return_typecheck:;
 				}
 				for (int i = 0; i < node->data.func_decl.body->data.block.count; ++i) {
 					if (node->data.func_decl.body->data.block.statements[i]->type == AST_CONTINUE) {

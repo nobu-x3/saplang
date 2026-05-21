@@ -283,6 +283,23 @@ void test_NullReturnFromIntFn_sema(void) {
 	free(output);
 }
 
+// Returning a bare slice literal: the target type comes from the enclosing
+// function's return type, mirroring var-decl init.
+void test_ReturnSliceLiteral_sema(void) {
+	TEST_SETUP_SINGLE("fn u8[] f(u8* p) { return { .ptr = p, .len = 0 }; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+// Wrong field name in a slice-literal return should produce a clean diagnostic,
+// not a crash. Validates the analyze_struct_literal path for AST_RETURN.
+void test_ReturnSliceLiteralBadField_sema(void) {
+	TEST_SETUP_SINGLE("fn u8[] f(u8* p) { return { .pt = p, .len = 0 }; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "slice literal"));
+	free(output);
+}
+
 void test_NullInStructFieldInit_sema(void) {
 	TEST_SETUP_SINGLE("struct S { i32* p; } S s = {null};");
 	const char *expected = "";
