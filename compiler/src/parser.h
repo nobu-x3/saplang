@@ -262,6 +262,10 @@ typedef struct Parser {
 	Symbol *symbol_table;	// even though it's first allocated here, driver owns this memory
 	Symbol *exported_table; // even though it's first allocated here, driver owns this memory
 	Token current_token;
+	// Set by the statement parser around its speculative parse_type call
+	// (the var-decl-vs-expression-statement disambiguator). parse_type's
+	// reports are gated on this so failed speculation doesn't leak diagnostics.
+	int speculating;
 } Parser;
 
 typedef struct {

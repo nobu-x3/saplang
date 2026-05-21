@@ -989,6 +989,15 @@ ASTNode *new_if_stmt_node(ASTNode *condition, ASTNode *then_branch, ASTNode *els
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// parse_type runs both genuinely (var-decl, field-decl, cast, ...) and
+// speculatively (statement-parser disambiguation at parse_statement). During
+// speculation any report() would leak a bogus diagnostic for inputs that turn
+// out to be expressions, so all reports inside parse_type funnel through here.
+static void report_type_error(Parser *parser, SourceLocation loc, const char *msg) {
+	if (!parser->speculating)
+		report(loc, msg, 0);
+}
+
 CompilerResult parse_type(Parser *parser, Type **out_type) {
 	{ // fn ptr parsing
 		if (parser->current_token.type == TOK_FN_PTR) {
@@ -999,14 +1008,14 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 			Type *ret_type = NULL;
 			parse_type(parser, &ret_type);
 			if (!ret_type) {
-				report(loc, "failed to parse type.", 0);
+				report_type_error(parser, loc, "failed to parse type.");
 				return RESULT_PARSING_ERROR;
 			}
 
 			if (parser->current_token.type != TOK_LPAREN) {
 				char msg[128];
 				sprintf(msg, "expected '(' in function pointer argument list, got '%s'.", parser->current_token.text);
-				report(parser->current_token.location, msg, 0);
+				report_type_error(parser, parser->current_token.location, msg);
 				return RESULT_PARSING_ERROR;
 			}
 
@@ -1027,7 +1036,7 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 
 				parse_type(parser, &param_type);
 				if (!param_type) {
-					report(loc, "failed to parse type.", 0);
+					report_type_error(parser, loc, "failed to parse type.");
 					return RESULT_PARSING_ERROR;
 				}
 
@@ -1073,7 +1082,7 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 			if (parser->current_token.type != TOK_IDENTIFIER) {
 				char msg[128];
 				sprintf(msg, "expected identifier after '::' in imported type, got '%s'.", parser->current_token.text);
-				report(parser->current_token.location, msg, 0);
+				report_type_error(parser, parser->current_token.location, msg);
 			}
 			strncpy(namespace, base_type, sizeof(namespace));
 			strncpy(base_type, parser->current_token.text, sizeof(base_type));
@@ -1083,14 +1092,14 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 		}
 		*out_type = new_named_type(base_type, namespace, TYPE_UNDECIDED);
 		if (!*out_type) {
-			report(parser->current_token.location, "failed to parse struct type.", 0);
+			report_type_error(parser, parser->current_token.location, "failed to parse struct type.");
 			return RESULT_PARSING_ERROR;
 		}
 		break;
 	default: {
 		char msg[128];
 		sprintf(msg, "expected type name, got '%s'.", parser->current_token.text);
-		report(parser->current_token.location, msg, 0);
+		report_type_error(parser, parser->current_token.location, msg);
 		return RESULT_PARSING_ERROR;
 	}
 	}
@@ -1114,7 +1123,7 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 		if (parser->current_token.type != TOK_NUMBER) {
 			char msg[128];
 			sprintf(msg, "expected array size number, got '%s'.", parser->current_token.text);
-			report(parser->current_token.location, msg, 0);
+			report_type_error(parser, parser->current_token.location, msg);
 			return RESULT_PARSING_ERROR;
 		}
 
@@ -1124,7 +1133,7 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 		if (parser->current_token.type != TOK_RBRACKET) {
 			char msg[128];
 			sprintf(msg, "expected ']' after array size, got '%s'.", parser->current_token.text);
-			report(parser->current_token.location, msg, 0);
+			report_type_error(parser, parser->current_token.location, msg);
 			return RESULT_PARSING_ERROR;
 		}
 
@@ -2058,8 +2067,10 @@ ASTNode *parse_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack)
 		int save = parser->scanner.id;
 		Token temp = parser->current_token;
 		Type *type = NULL;
-		parse_type(parser, &type);
-		if (parser->current_token.type == TOK_IDENTIFIER) {
+		parser->speculating = 1;
+		CompilerResult r = parse_type(parser, &type);
+		parser->speculating = 0;
+		if (r == RESULT_SUCCESS && parser->current_token.type == TOK_IDENTIFIER) {
 			// most likely var decl, restore state and reparse — the
 			// speculatively-built `type` stays in the type_arena
 			parser->scanner.id = save;
