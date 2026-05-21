@@ -1546,9 +1546,10 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		// then
 		LLVMPositionBuilderAtEnd(cg->builder, thenBB);
 		PassContext then_ctx = ctx;
-		then_ctx.if_cont_block = mergeBB;
+		then_ctx.if_cont_block = NULL;
 		codegen_ast(cg, node->data.if_stmt.then_branch, table, then_ctx);
-		LLVMValueRef last_inst = LLVMGetLastInstruction(thenBB);
+		LLVMBasicBlockRef then_end = LLVMGetInsertBlock(cg->builder);
+		LLVMValueRef last_inst = LLVMGetLastInstruction(then_end);
 		if (!last_inst || (LLVMGetInstructionOpcode(last_inst) != LLVMBr && LLVMGetInstructionOpcode(last_inst) != LLVMRet))
 			LLVMBuildBr(cg->builder, mergeBB);
 		// else
@@ -1557,7 +1558,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			PassContext else_ctx = ctx;
 			else_ctx.if_cont_block = mergeBB;
 			codegen_ast(cg, node->data.if_stmt.else_branch, table, else_ctx);
-			last_inst = LLVMGetLastInstruction(elseBB);
+			LLVMBasicBlockRef else_end = LLVMGetInsertBlock(cg->builder);
+			last_inst = LLVMGetLastInstruction(else_end);
 			if (!last_inst || (LLVMGetInstructionOpcode(last_inst) != LLVMBr && LLVMGetInstructionOpcode(last_inst) != LLVMRet))
 				LLVMBuildBr(cg->builder, mergeBB);
 		}

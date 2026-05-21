@@ -370,6 +370,7 @@ int main(void) {
 	RUN_TEST(test_UnionDecl_codegen);
 	RUN_TEST(test_UnionMemberAccess_codegen);
 	RUN_TEST(test_NestedIfs_codegen);
+	RUN_TEST(test_NestedIfStmtsAfterInner_codegen);
 	RUN_TEST(test_NullLiteralVarInit_codegen);
 	RUN_TEST(test_NullLiteralReturn_codegen);
 	RUN_TEST(test_NullLiteralCompareEq_codegen);

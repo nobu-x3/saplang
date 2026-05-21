@@ -2139,6 +2139,28 @@ void test_UnionMemberAccess_codegen(void) {
 	free(error);
 }
 
+void test_NestedIfStmtsAfterInner_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 a = 0; i32 r = 0; if(a) { if(a) { r = 1; } r = 2; } return r; }");
+	// The `r = 2` after the inner if must land in the inner ifcont (still inside the outer then path), branching to the outer ifcont.
+	// Regression: previously it leaked into the outer ifcont, so the assignment ran unconditionally.
+	const char *inner_cont = strstr(output, "ifcont3:");
+	TEST_ASSERT_NOT_NULL_MESSAGE(inner_cont, "inner if must get its own ifcont block");
+	const char *store_two = strstr(inner_cont, "store i32 2, ptr %__main_main_r");
+	TEST_ASSERT_NOT_NULL_MESSAGE(store_two, "r = 2 must be in inner ifcont (after the nested if, still inside outer body)");
+	const char *next_label = strstr(inner_cont, "\n\n");
+	TEST_ASSERT_TRUE_MESSAGE(!next_label || store_two < next_label, "r = 2 must be inside inner ifcont, not in a later block");
+	// Outer ifcont contains only the return — the assignment must not appear there.
+	const char *outer_cont = strstr(output, "ifcont:");
+	TEST_ASSERT_NOT_NULL(outer_cont);
+	const char *outer_block_end = strstr(outer_cont, "\n\n");
+	TEST_ASSERT_NOT_NULL(outer_block_end);
+	for (const char *p = outer_cont; p + 32 < outer_block_end; ++p) {
+		TEST_ASSERT_TRUE_MESSAGE(strncmp(p, "store i32 2, ptr %__main_main_r", 31) != 0, "r = 2 must not appear in outer ifcont");
+	}
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
 void test_NestedIfs_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn i32 main() { i32 a = 0; if(a) { i32 b = 1; if(b) { return 2; } } return 1;}");
 	const char *expected = "; ModuleID = 'test'\n"
@@ -2156,13 +2178,16 @@ void test_NestedIfs_codegen(void) {
 						   "  store i32 1, ptr %__main_main_b, align 4\n"
 						   "  %1 = load i32, ptr %__main_main_b, align 4\n"
 						   "  %tobool1 = icmp ne i32 %1, 0\n"
-						   "  br i1 %tobool1, label %then2, label %ifcont\n"
+						   "  br i1 %tobool1, label %then2, label %ifcont3\n"
 						   "\n"
-						   "ifcont:                                           ; preds = %then, %entry\n"
+						   "ifcont:                                           ; preds = %ifcont3, %entry\n"
 						   "  ret i32 1\n"
 						   "\n"
 						   "then2:                                            ; preds = %then\n"
 						   "  ret i32 2\n"
+						   "\n"
+						   "ifcont3:                                          ; preds = %then\n"
+						   "  br label %ifcont\n"
 						   "}\n";
 	const char *expected_error = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
