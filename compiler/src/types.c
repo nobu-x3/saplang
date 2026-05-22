@@ -331,6 +331,10 @@ int type_equals(const Type *a, const Type *b) {
 		return 1;
 	if (!a || !b)
 		return 0;
+	int a_named = a->type_kind == TYPE_STRUCT || a->type_kind == TYPE_UNION || a->type_kind == TYPE_ENUM || a->type_kind == TYPE_UNDECIDED;
+	int b_named = b->type_kind == TYPE_STRUCT || b->type_kind == TYPE_UNION || b->type_kind == TYPE_ENUM || b->type_kind == TYPE_UNDECIDED;
+	if (a_named && b_named)
+		return strcmp(a->type_resolved_name, b->type_resolved_name) == 0;
 	if (a->type_kind != b->type_kind)
 		return 0;
 	switch (a->type_kind) {

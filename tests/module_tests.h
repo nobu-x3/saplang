@@ -84,6 +84,18 @@ void test_SliceLenChain_modules(void) {
     test("module_tests/slice_len_chain", "slice_len_chain");
 }
 
+void test_CrossModuleStructField_modules(void) {
+    test("module_tests/cross_module_struct_field", "cross_module_struct_field");
+}
+
+void test_CrossModuleGlobalVar_modules(void) {
+    test("module_tests/cross_module_global_var", "cross_module_global_var");
+}
+
+void test_CrossModuleConstGlobal_modules(void) {
+    test("module_tests/cross_module_const_global", "cross_module_const_global");
+}
+
 static void test_DebugInfoBasic_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";
