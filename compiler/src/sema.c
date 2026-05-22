@@ -11,10 +11,20 @@ CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *n
 CompilerResult analyze_switch_stmt(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier);
 
 int is_known_type(Symbol *table, const Type *source, int current_scope) {
+	if (!source)
+		return 0;
+	if (source->type_kind == TYPE_POINTER)
+		return is_known_type(table, source->pointee, current_scope);
+	if (source->type_kind == TYPE_ARRAY)
+		return is_known_type(table, source->array.element_type, current_scope);
+	if (source->type_kind == TYPE_SLICE)
+		return is_known_type(table, source->slice.element_type, current_scope);
+	if (source->type_kind == TYPE_FUNCTION)
+		return 1;
 	if (is_builtin(source))
 		return 1;
 
-	Symbol *sym = lookup_symbol(table, source->type_name, current_scope);
+	Symbol *sym = lookup_named_type(table, source, current_scope);
 	if (!sym)
 		return 0;
 
@@ -781,7 +791,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			}
 		}
 		if (node->data.var_decl.init) {
-			CompilerResult result;
+			CompilerResult result = RESULT_SUCCESS;
 			if (node->data.var_decl.init->type == AST_EXPR_LITERAL) {
 				// TODO: type matching and implicit conversions
 				assert(node->data.var_decl.type);
@@ -975,8 +985,12 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_SUCCESS;
 		}
 		if (node->data.ident.namespace[0] != '\0') {
-			Symbol *maybe_enum = lookup_symbol(table, node->data.ident.namespace, 0);
-			if (maybe_enum && maybe_enum->kind == SYMB_ENUM) {
+			char ns_resolved[512] = "";
+			snprintf(ns_resolved, sizeof(ns_resolved), "__%s_%s", node->data.ident.namespace, node->data.ident.name);
+			Symbol *ns_sym = lookup_symbol(table, ns_resolved, 0);
+			if (ns_sym) {
+				strncpy(node->data.ident.resolved_name, ns_resolved, sizeof(node->data.ident.resolved_name));
+				return RESULT_SUCCESS;
 			}
 		}
 		char resolved_name[512] = "";

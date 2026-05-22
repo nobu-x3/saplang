@@ -687,6 +687,27 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 		}
 		return LLVMConstInt(ty, node->data.literal.long_value, 1);
 		break;
+	case AST_CHAR_LIT:
+		return LLVMConstInt(ty, (unsigned long long)(unsigned char)node->data.char_literal.literal, 0);
+	case AST_STRING_LIT: {
+		const char *s = node->data.string_literal.text;
+		size_t buf_len = strlen(s) + 1;
+		LLVMValueRef gv = LLVMAddGlobal(cg->module, LLVMArrayType(LLVMInt8TypeInContext(cg->llvm_context), buf_len), ".str");
+		LLVMSetGlobalConstant(gv, 1);
+		LLVMSetLinkage(gv, LLVMPrivateLinkage);
+		LLVMSetUnnamedAddr(gv, 1);
+		LLVMValueRef const_str = LLVMConstStringInContext(cg->llvm_context, s, buf_len, 1);
+		LLVMSetInitializer(gv, const_str);
+		LLVMSetAlignment(gv, 1);
+		LLVMTypeRef i8_ptr = LLVMPointerType(LLVMInt8TypeInContext(cg->llvm_context), 0);
+		LLVMValueRef str_ptr = LLVMConstBitCast(gv, i8_ptr);
+		if (ctx.expected_type && ctx.expected_type->type_kind == TYPE_SLICE) {
+			LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
+			LLVMValueRef slice_fields[2] = {str_ptr, LLVMConstInt(i64_ty, buf_len - 1, 0)};
+			return LLVMConstNamedStruct(ty, slice_fields, 2);
+		}
+		return str_ptr;
+	}
 	case AST_STRUCT_LITERAL: {
 		if (ctx.expected_type && ctx.expected_type->type_kind == TYPE_SLICE) {
 			// Slice literal: `{ptr, len}` or `{.ptr=p, .len=n}`. Build the

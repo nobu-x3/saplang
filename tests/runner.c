@@ -174,6 +174,8 @@ int main(void) {
 	RUN_TEST(test_IntLiteralFitsReturnType_sema);
 	RUN_TEST(test_CharLiteralFitsU8Arg_sema);
 	RUN_TEST(test_CharLiteralFitsI32Arg_sema);
+	RUN_TEST(test_PointerToStructNullInit_sema);
+	RUN_TEST(test_SliceOfPointerToStructNullInit_sema);
 	RUN_TEST(test_GlobalVariableInitWithGlobalVar_sema);
 	RUN_TEST(test_ParamReferencedInBody_sema);
 	RUN_TEST(test_PointerParamDereferencedInBody_sema);
@@ -262,6 +264,8 @@ int main(void) {
 	RUN_TEST(test_StructAlreadyAlignedI32Quad_typeinfo);
 	RUN_TEST(test_StructTrailingPadI32Bool_typeinfo);
 	RUN_TEST(test_UnionDecl_typeinfo);
+	RUN_TEST(test_FunctionType_typeinfo);
+	RUN_TEST(test_StructWithFnPtrField_typeinfo);
 	RUN_TEST(test_SliceType_typeinfo);
 	RUN_TEST(test_SliceType_LayoutIsElementIndependent_typeinfo);
 	RUN_TEST(test_SliceType_ConstructorAndPrinting_typeinfo);
@@ -273,6 +277,8 @@ int main(void) {
 	RUN_TEST(test_BuiltinGlobalVarNoInit_codegen);
 	RUN_TEST(test_BuiltinGlobalVar_codegen);
 	RUN_TEST(test_BuiltinGlobalConst_codegen);
+	RUN_TEST(test_ConstGlobalCharLiteralInit_codegen);
+	RUN_TEST(test_ConstGlobalStringLiteralSliceInit_codegen);
 	RUN_TEST(test_StructDecl_codegen);
 	RUN_TEST(test_GlobalStructDeclInit_codegen);
 	RUN_TEST(test_ConstGlobalStructDeclInit_codegen);

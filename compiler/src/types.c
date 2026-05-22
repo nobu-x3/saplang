@@ -104,6 +104,8 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 		info.align = sizeof(void *);
 		return info;
 	case TYPE_FUNCTION:
+		info.size = sizeof(void *);
+		info.align = sizeof(void *);
 		return info;
 	case TYPE_STRUCT: {
 		ASTNode *layout = node;

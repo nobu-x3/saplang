@@ -464,6 +464,20 @@ void test_CharLiteralFitsI32Arg_sema(void) {
 	free(output);
 }
 
+void test_PointerToStructNullInit_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 x; } fn void f() { S** p = null; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_SliceOfPointerToStructNullInit_sema(void) {
+	TEST_SETUP_SINGLE("struct S { i32 x; } fn void f() { S*[] s = null; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_GlobalVariableInitWithGlobalVar_sema(void) {
 	TEST_SETUP_SINGLE("i32 i = 0; i32 a = i;");
 	const char *expected = "parser_tests.sl:1:16:Error: global variables cannot be initialized with other global variables.\n";

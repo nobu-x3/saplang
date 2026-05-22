@@ -177,6 +177,23 @@ void test_BuiltinGlobalConst_codegen(void) {
 	}
 }
 
+void test_ConstGlobalCharLiteralInit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("const u8 D = ',';");
+	const char *expected = "; ModuleID = 'test'\n"
+						   "source_filename = \"test\"\n\n"
+						   "@__main_D = constant i8 44\n";
+	const char *expected_error = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	TEST_ASSERT_EQUAL_STRING(expected_error, error);
+	free(error);
+}
+
+void test_ConstGlobalStringLiteralSliceInit_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("const u8[] SEP = \"\\n\";");
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_SEP = constant { ptr, i64 } { ptr @.str, i64 1 }"));
+	free(error);
+}
+
 void test_StructDecl_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("struct TestStruct { i32 first; f32 second; } TestStruct str; ");
 	const char *expected = "; ModuleID = 'test'\n"

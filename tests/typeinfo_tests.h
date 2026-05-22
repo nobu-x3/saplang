@@ -126,6 +126,23 @@ void test_UnionDecl_typeinfo(void) {
 // as 16 bytes with pointer alignment, regardless of the element type's
 // own size — the element type only matters for what the data pointer
 // points at, not the slice header layout itself.
+void test_FunctionType_typeinfo(void) {
+	ASTNode dummynode;
+	Type ret = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_VOID, .type_name = "void"};
+	Type type = {.type_kind = TYPE_FUNCTION, .function = {.return_type = &ret, .param_count = 0, .param_types = NULL}};
+	TypeInfo info = get_type_info(&type, &dummynode);
+	TEST_ASSERT_EQUAL_UINT32(sizeof(void *), info.size);
+	TEST_ASSERT_EQUAL_UINT32(sizeof(void *), info.align);
+}
+
+void test_StructWithFnPtrField_typeinfo(void) {
+	TEST_SETUP_SINGLE_TYPEINFO("struct S { u8[] a; u8[] b; fn* i32() body; }");
+	Type type = {.type_kind = TYPE_STRUCT, .type_name = "S"};
+	TypeInfo info = get_type_info(&type, module->ast);
+	TEST_ASSERT_EQUAL_UINT32(16 + 16 + 8, info.size);
+	TEST_ASSERT_EQUAL_UINT32(8, info.align);
+}
+
 void test_SliceType_typeinfo(void) {
 	ASTNode dummynode;
 	Type elem = {.type_kind = TYPE_PRIMITIVE, .prim = PRIM_I32, .type_name = "i32"};
