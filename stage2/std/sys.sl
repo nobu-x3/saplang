@@ -36,4 +36,18 @@ extern {
     // raw read/write
     export fn u64 fread(void* buf, u64 size, u64 nmemb, FILE* stream);
     export fn u64 fwrite(const void* buf, u64 size, u64 nmemb, FILE* stream);
+
+    // fgetc returns the byte zero-extended or -1 on EOF/error.
+    export fn i32 fgetc(FILE* stream);
+    export fn i32 feof(FILE* stream);
+    export fn i32 ferror(FILE* stream);
+
+    export fn i32 fseek(FILE* stream, i64 offset, i32 whence);
+    export fn i64 ftell(FILE* stream);
+
+    export fn i32 remove(const i8* path);
 }
+
+export const i32 SEEK_SET = 0;
+export const i32 SEEK_CUR = 1;
+export const i32 SEEK_END = 2;
