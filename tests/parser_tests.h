@@ -5,11 +5,7 @@
 #include <string.h>
 #include <unity.h>
 
-//---------------------------------------------------------------------
-// Helper function: Capture the output of printAST() into a string.
-// This function temporarily redirects stdout to a temporary file, calls printAST,
-// then reads the file contents into a malloc()ed string.
-//---------------------------------------------------------------------
+// Captures ast_print into a malloc'd string via tmpfile-redirected stdout.
 #define SETUP_TEST(input_string)                                                                                                                                                                                                               \
 	const char *input = input_string;                                                                                                                                                                                                          \
 	const char *path = "parser_tests.sl";                                                                                                                                                                                                      \

@@ -39,29 +39,18 @@ typedef struct {
 
 void *report(SourceLocation location, const char *msg, int is_warning);
 
-// Per-thread diagnostic sink. When set (typically by a worker task to a
-// per-module memstream), report() and other diagnostics route here
-// instead of stderr; the driver drains the buffer in graph order after
-// the threadpool join, so stderr never sees interleaved bytes from
-// multiple workers.
+// Per-thread sink for report() — workers point this at a memstream so the
+// driver can drain in graph order without interleaving.
 void diag_set_sink(FILE *sink);
-// Per-thread source registration so report() can echo the offending line +
-// caret. Buffer must outlive every report() call on this thread; the driver
-// sets it once per task to the parser's scanner buffer. Path is the gate —
-// errors whose location.path doesn't match the registered path skip the
-// echo (avoids printing the wrong source on cross-module diagnostics).
+// Per-thread source registration for caret echo. Buffer must outlive every
+// report() on the thread; path mismatches suppress the echo.
 void diag_set_source(const char *path, const char *buf, size_t len);
 FILE *diag_stream(void);
 
 unsigned long djb2(const char *str);
 
-// Dynamic-array helpers. `xs` is a struct with `.count`, `.capacity`, `.data`.
-// Both macros yield a bool — true on success, false on allocation failure —
-// so callers translate to whatever error code their function returns:
+// Dynamic-array helpers. `xs` has `.count`, `.capacity`, `.data`. Return bool.
 //   if (!da_init(xs, 4))  return RESULT_MEMORY_ERROR;
-//   if (!da_push(xs, x))  return RESULT_MEMORY_ERROR;
-// Callers that genuinely can't propagate (void returns) may discard the
-// bool; the array is left in a consistent state either way.
 #define da_init(xs, cap)                                                                                                                                                                                                                       \
 	({                                                                                                                                                                                                                                         \
 		(xs).count = 0;                                                                                                                                                                                                                        \

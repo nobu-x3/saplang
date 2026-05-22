@@ -559,10 +559,7 @@ void test_SliceVarDeclNoInit_codegen(void) {
 	free(error);
 }
 
-// Initialising a slice from a fixed-size array materialises the fat
-// pointer in-place: an `insertvalue` for the data pointer (the array
-// alloca) and another for the length. The store then commits the whole
-// { ptr, i64 } aggregate.
+// Array→slice init: two insertvalues for ptr/len, then a single { ptr, i64 } store.
 void test_SliceVarDeclFromArray_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { i32[3] arr = [1, 2, 3]; i32[] s = arr; }");
 	TEST_ASSERT_NOT_NULL(strstr(output, "alloca [3 x i32]"));
@@ -587,11 +584,7 @@ void test_SlicePassArrayAsArg_codegen(void) {
 	free(error);
 }
 
-// `null → slice` produces a zero slice: null data pointer, zero length.
-// Same shape as the array case, just with a null constant.
-// `null` typed as a slice should produce the zero slice. LLVM
-// constant-folds the two `insertvalue`s into a `zeroinitializer` for
-// the { ptr, i64 } aggregate, which is semantically the same.
+// `null` as a slice produces { null, 0 }; LLVM folds the two insertvalues into zeroinitializer.
 void test_SliceFromNull_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { i32[] s = null; }");
 	TEST_ASSERT_NOT_NULL(strstr(output, "alloca { ptr, i64 }"));
@@ -1676,12 +1669,7 @@ void test_UnsignedCmp_codegen(void) {
 }
 
 // ---------------------------------------------------------------------------
-// 8. Logical ops — CODEGEN_BUGS.md §7. `&&` / `||` crash with
-//    `Unknown binary op` assert. No pinning test (assertion abort
-//    can't be caught from unity).
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
+// 8. Logical ops — `&&` / `||` not implemented (crash, no pinning test).
 // 9. Compound assignment.
 // ---------------------------------------------------------------------------
 
@@ -1742,9 +1730,7 @@ void test_UnaryLogicalNot_OnPointer_codegen(void) {
 }
 
 // ---------------------------------------------------------------------------
-// 11. Pointer ops. CODEGEN_BUGS.md §15 — writing through a pointer
-//    `*p = v;` crashes the codegen assertion. Spec says deref is a
-//    valid l-value.
+// 11. Pointer ops — read, write through, address-of, then deref.
 // ---------------------------------------------------------------------------
 
 void test_PointerAddressOfThenDeref_codegen(void) {
@@ -1857,10 +1843,7 @@ void test_StructPassedByValue_codegen(void) {
 				   "fn i32 foo(S s) { return s.a + s.b; }"
 				   "fn i32 main() { S x = {3, 4}; return foo(x); }");
 	EXH_REQUIRE_OK();
-	// The struct is loaded as a single aggregate value at the call
-	// site and passed to the parameter slot. (Stage 1's SysV-ABI
-	// fidelity is best-effort; this just asserts the shape, not the
-	// exact ABI lowering.)
+	// Asserts the shape of the aggregate load + by-value call (not the ABI lowering).
 	TEST_ASSERT_NOT_NULL(strstr(output, "load %__main_S, ptr %\"__main_main$b0_x\""));
 	TEST_ASSERT_NOT_NULL(strstr(output, "call i32 @__main_foo____main_S(%__main_S"));
 	EXH_TEST_TEARDOWN();
@@ -1999,8 +1982,7 @@ void test_NestedWhileLoops_codegen(void) {
 }
 
 // ---------------------------------------------------------------------------
-// 20. Defer. Defer at function-block level inlines before returns; the
-//    inside-loop case is broken (CODEGEN_BUGS.md §12).
+// 20. Defer — inlined before returns at fn-block level; inside-loop is broken.
 // ---------------------------------------------------------------------------
 
 void test_DeferAtFnEnd_codegen(void) {
@@ -2051,9 +2033,7 @@ void test_DeferInForBody_codegen(void) {
 }
 
 // ---------------------------------------------------------------------------
-// 21. Stray-branch-after-`ret` bug. The forbody emits `ret i32 0`
-//    followed by `br label %forstep` — invalid LLVM IR (two terminators
-//    in one block).
+// 21. No stray `br` after `ret` in forbody (two-terminator regression).
 // ---------------------------------------------------------------------------
 
 void test_ForBodyReturnNoStrayBr_codegen(void) {
@@ -2178,9 +2158,7 @@ void test_NullCompareNotEq_codegen(void) {
 }
 
 // ---------------------------------------------------------------------------
-// 24. String literal lowering. `"…"` becomes a global byte array with
-//    the trailing NUL and `align 1`; use sites pass `ptr` to the
-//    callee.
+// 24. String literal lowering — global byte array with NUL and `align 1`.
 // ---------------------------------------------------------------------------
 
 void test_StringLiteralEscapeSequences_codegen(void) {
@@ -2590,10 +2568,7 @@ void test_IndirectCallStructField_codegen(void) {
 }
 
 void test_OverloadedLocalsDontCollide_codegen(void) {
-	// Parser used the function's short name as prefix for local vars; sema's scope-targeted
-	// lookup used the mangled resolved name. For an overloaded function declared before
-	// another function with a same-named local, the second function's `i` would resolve to
-	// the first's symbol, breaking codegen.
+	// Sibling fns with same-named locals must mangle distinctly.
 	EXH_TEST_SETUP("fn bool a(u8[] x) { for(u64 i = 0; i < x.len; i += 1) { u64 t = i; } return true; } fn bool b() { for(u64 i = 0; i < 10; i += 1) { u64 t = i; } return false; } fn i32 main() { return 0; }");
 	EXH_REQUIRE_OK();
 	TEST_ASSERT_NOT_NULL(strstr(output, "__main_a__u8[]$b0$b0_i"));
@@ -2602,9 +2577,7 @@ void test_OverloadedLocalsDontCollide_codegen(void) {
 }
 
 void test_IndirectCallReturnTypeIsUnwrapped_codegen(void) {
-	// `op.f(x) + 1` requires get_type(AST_FN_CALL) to peel off the function type
-	// and yield the return type. Earlier, fn-pointer calls returned the bare
-	// TYPE_FUNCTION, breaking any arithmetic / assignment using the result.
+	// `op.f(x) + 1` — fn-pointer call must yield the return type, not TYPE_FUNCTION.
 	EXH_TEST_SETUP("struct Op { fn* i32(i32) f; } fn i32 plus1(Op* o, i32 x) { return o.f(x) + 1; } fn i32 main() { return 0; }");
 	EXH_REQUIRE_OK();
 	TEST_ASSERT_NOT_NULL(strstr(output, "add i32"));

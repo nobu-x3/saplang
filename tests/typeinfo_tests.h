@@ -194,11 +194,7 @@ void test_NamedType_ResolvedNameMangling_types(void) {
 	arena_deinit(&arena);
 }
 
-// Worst-case lengths: a 63-byte namespace plus a 63-byte name plus the
-// 3-byte "__%s_%s" wrapper is 129 bytes — one byte over the 128-byte
-// type_resolved_name buffer. Pre-fix this overflowed via sprintf; the fix
-// is to snprintf-bound the write and refuse to produce a Type whose mangled
-// name would silently collide with another similarly-prefixed symbol.
+// 63 + 63 + 3 = 129 bytes overflows the 128-byte type_resolved_name buffer.
 void test_NamedType_MangledNameOverflow_types(void) {
 	Arena arena;
 	arena_init(&arena, 0);

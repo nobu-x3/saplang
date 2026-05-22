@@ -435,14 +435,9 @@ static LLVMValueRef codegen_cond_to_bool(CodegenLLVM *cg, ASTNode *cond, Symbol 
 	return val;
 }
 
-// If `expected` is a slice and `expr` evaluates to something that decays
-// to a slice (a fixed-size array, or a typed-null literal), construct the
-// fat-pointer { ptr, u64 } value and return it. Otherwise return the
-// already-computed `computed_val` unchanged.
-//
-// The array case has to re-enter codegen with PI_LOAD_PTR because the
-// caller already produced a by-value load — we want the *address* of the
-// array, not its contents.
+// Build a fat-pointer { ptr, u64 } when an array or typed-null decays into a
+// slice target. The array path re-enters codegen with PI_LOAD_PTR because the
+// caller's by-value load gave us contents, not the address we want.
 static LLVMValueRef maybe_decay_to_slice(CodegenLLVM *cg, ASTNode *expr, LLVMValueRef computed_val, Type *expected, Symbol *table, PassContext ctx) {
 	if (!expected || expected->type_kind != TYPE_SLICE)
 		return computed_val;
@@ -503,10 +498,7 @@ LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, P
 		ctx.expected_type = type;
 		ctx.auxiliary_node = node->data.member_access.base;
 	} else if (lvalue->type == AST_ARRAY_ACCESS) {
-		// `a[i] = v` — the lvalue codegen produces the element pointer
-		// (PI_LOAD_PTR falls through the array/slice cases as `gep`), and
-		// the rvalue needs to be loaded as the element type so the store
-		// width is right.
+		// Element-pointer LHS; rvalue loaded at the element type so the store width matches.
 		Type *type = get_type(table, lvalue, ctx.current_scope, "");
 		assert(type);
 		ctx.expected_type = type;
@@ -683,10 +675,7 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 	switch (node->type) {
 	case AST_EXPR_LITERAL:
 		if (node->data.literal.is_null) {
-			// Use the expected pointer type so `null` takes the shape of
-			// its surrounding context (`Foo* p = null` allocates as Foo*,
-			// not void*). If sema let a non-pointer expected_type through,
-			// fall back to a generic null pointer.
+			// `null` takes the shape of expected_type so `Foo* p = null` allocates as Foo*, not void*.
 			if (ctx.expected_type && ctx.expected_type->type_kind == TYPE_POINTER)
 				return LLVMConstPointerNull(ty);
 			return LLVMConstPointerNull(LLVMPointerType(LLVMInt8TypeInContext(cg->llvm_context), 0));
@@ -989,11 +978,7 @@ LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCo
 		return codegen_ast(cg, node->data.unary_op.operand, table, ctx);
 		break;
 	case '!': {
-		// Logical not. Route the operand through codegen_cond_to_bool so
-		// any scalar (int / float / pointer / bool) gets normalized to
-		// an i1 first; this is what makes `!p` for a pointer p work
-		// alongside the existing `if (p)` truthy lowering. The bitwise
-		// counterpart is `~`.
+		// Route through codegen_cond_to_bool so any scalar (incl. pointer) gets normalized to i1.
 		LLVMValueRef val = codegen_cond_to_bool(cg, node->data.unary_op.operand, table, ctx);
 		return LLVMBuildNot(cg->builder, val, "nottmp");
 	} break;
@@ -1250,10 +1235,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 
 	case AST_DEFERRED_SEQUENCE:
 	case AST_BLOCK: {
-		// Push a DILexicalBlock scope so the body's locations (and the
-		// locals Phase 4 will introduce) attach to a real scope. Skip
-		// deferred-sequence sublists — they're inlined statements that
-		// don't introduce a `{}` scope in source.
+		// DILexicalBlock for AST_BLOCK only; deferred sequences are inlined statements.
 		PassContext block_ctx = ctx;
 		if (cg->should_build_debug && ctx.di_scope && node->type == AST_BLOCK && node->location.line > 0)
 			block_ctx.di_scope = LLVMDIBuilderCreateLexicalBlock(cg->di_builder, ctx.di_scope, cg->di_file, node->location.line, node->location.col);
@@ -1331,12 +1313,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMValueRef base_ptr = codegen_ast(cg, node->data.array_access.base, table, base_ctx);
 		PassContext idx_ctx = ctx;
 		idx_ctx.intention = PI_LOAD_VAL;
-		// Index is always an integer. For literal indices, pin expected_type
-		// to u64 so the literal isn't materialized as a constant of the
-		// outer context's type (which for `&arr[2]` is i32* — that would
-		// produce a zero index and silently break the access). For non-
-		// literal indices, leave expected_type alone so loads respect the
-		// variable's declared type.
+		// Pin literal indices to u64 so they don't inherit the outer context's type
+		// (`&arr[2]` would otherwise materialize the 2 as i32* → silent zero index).
 		if (node->data.array_access.index->type == AST_EXPR_LITERAL)
 			idx_ctx.expected_type = get_primitive_u64();
 		LLVMValueRef idx = codegen_ast(cg, node->data.array_access.index, table, idx_ctx);

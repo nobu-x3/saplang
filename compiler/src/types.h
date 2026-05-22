@@ -57,19 +57,13 @@ typedef struct Type {
 
 } Type;
 
-// Per-thread arena pointer used by every Type constructor below
-// (new_*_type and copy_type). Callers must point this at the active
-// module's type_arena before allocating Types — parser, sema task,
-// codegen task, and the symbol-table merge step in the driver each
-// take responsibility for setting it.
+// Set by parser/sema/codegen tasks before any Type constructor call.
 void type_arena_set(Arena *arena);
 Arena *type_arena_get(void);
 void type_table_set(struct Symbol *table);
 
 Type *copy_type(Type *type);
-// Kept as an empty function so existing call sites compile, but Types
-// now live in module-scoped arenas and are dropped in bulk by
-// module_deinit. Per-Type free is no longer required (or correct).
+// No-op — Types live in the module arena, freed in bulk by module_deinit.
 void type_deinit(Type *type);
 Type *new_primitive_type(const char *name);
 Type get_primitive_type(const char *name);

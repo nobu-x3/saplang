@@ -283,8 +283,6 @@ void test_NullReturnFromIntFn_sema(void) {
 	free(output);
 }
 
-// Returning a bare slice literal: the target type comes from the enclosing
-// function's return type, mirroring var-decl init.
 void test_ReturnSliceLiteral_sema(void) {
 	TEST_SETUP_SINGLE("fn u8[] f(u8* p) { return { .ptr = p, .len = 0 }; }");
 	const char *expected = "";
@@ -292,8 +290,6 @@ void test_ReturnSliceLiteral_sema(void) {
 	free(output);
 }
 
-// Wrong field name in a slice-literal return should produce a clean diagnostic,
-// not a crash. Validates the analyze_struct_literal path for AST_RETURN.
 void test_ReturnSliceLiteralBadField_sema(void) {
 	TEST_SETUP_SINGLE("fn u8[] f(u8* p) { return { .pt = p, .len = 0 }; }");
 	TEST_ASSERT_NOT_NULL(strstr(output, "slice literal"));
@@ -623,11 +619,7 @@ void test_SliceFromPointerRejected_sema(void) {
 	free(output);
 }
 
-// Two `T[]` overloads with different element types must mangle distinctly
-// from each other and from the `T*` overload — otherwise overload
-// resolution silently collides them. Stage 1's resolver uses strict
-// exact-match, so the call sites here pass slice / pointer values
-// directly rather than relying on the array→slice decay.
+// `T[]` overloads with different element types must mangle distinctly from each other and `T*`.
 void test_SliceOverloadMangling_sema(void) {
 	TEST_SETUP_SINGLE("fn void f(i32[] s) {} fn void f(u8[] s) {} fn void f(i32* p) {} fn void g() { i32[] sa = null; u8[] sb = null; i32 x = 0; f(sa); f(sb); f(&x); }");
 	TEST_ASSERT_EQUAL_STRING("", output);

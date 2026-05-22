@@ -227,10 +227,8 @@ typedef struct DependencyGraphNode {
 	Module *module;
 	DGStatus status;
 
-	// Diagnostics for the current phase are buffered here so that
-	// concurrent workers don't interleave bytes on stderr. Opened by the
-	// driver before each phase, drained (and freed) in graph order
-	// after threadpool_wait_all.
+	// Per-phase diagnostic buffer; drained in graph order after threadpool_wait_all
+	// so concurrent workers don't interleave on stderr.
 	FILE *diag_sink;
 	char *diag_buf;
 	size_t diag_buf_size;
@@ -487,10 +485,7 @@ static CompilerResult build_dependency_graph_inner(SourceFile input_file, Depend
 	if (!da_init((*root)->dependencies, 4))
 		return RESULT_MEMORY_ERROR;
 
-	// Register before any recursion so dg_find sees IN_PROGRESS
-	// siblings. Cleanup of half-built nodes happens via the outer
-	// wrapper's dg_clean across the whole chain; parser_deinit on a
-	// calloc'd Parser is safe (frees a NULL scanner buffer).
+	// Register before recursion so dg_find sees IN_PROGRESS siblings.
 	dg_chain_append(*root);
 
 	Scanner scanner;

@@ -378,11 +378,9 @@ CompilerResult analyze_unary_op(Symbol *table, ASTNode *node, int scope_level, c
 	return RESULT_SUCCESS;
 }
 
-// `T[] s = {ptr, len}` / `{.ptr = p, .len = n}`: analyzed like a struct
-// literal against an implicit `{ T* ptr; u64 len; }` record. Positional
-// form fills ptr then len; designated form only accepts those two field
-// names. Returns 1 if `node was a slice literal and was analyzed, 0 if expected_type isn't a
-// slice so the caller should fall through to the struct path.
+// Analyze `{ptr, len}` against an implicit { T* ptr; u64 len; } slice header.
+// Returns 1 if the literal was consumed here, 0 if the caller should fall
+// through to the regular struct-literal path.
 static int try_analyze_slice_literal(Symbol *table, Type *expected_type, ASTNode *node, int scope_level, const char *scope_specifier, CompilerResult *out_result) {
 	if (!expected_type || expected_type->type_kind != TYPE_SLICE)
 		return 0;
@@ -556,10 +554,8 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 	return RESULT_SUCCESS;
 }
 
-// Literals are conceptually untyped in Stage 1: an integer literal adapts
-// to any int target, a float literal to any float target, a bool literal to
-// bool, a null literal to any pointer. Saves the user from writing
-// `u8 a = (u8)0;` everywhere until proper comptime-int support lands.
+// Literals are untyped — int/float/bool/null adapt to the target. Stand-in
+// until comptime-int lands.
 int literal_fits_type(ASTNode *node, Type *target) {
 	if (!node || !target || node->type != AST_EXPR_LITERAL)
 		return 0;
@@ -995,8 +991,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 		ASTNode *return_expr = node->data.ret.return_expr;
-		// Struct / slice literals have no intrinsic type; the enclosing function's
-		// return type is the only thing that can resolve them. Mirrors var-decl init.
+		// Struct/slice literals get their type from the fn return type, same as var-decl init.
 		if (return_expr && return_expr->type == AST_STRUCT_LITERAL) {
 			return analyze_struct_literal(table, sym->type->function.return_type, return_expr, scope_level, scope_specifier);
 		}
@@ -1225,10 +1220,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (r != RESULT_SUCCESS)
 				return r;
 		}
-		// Overload pick by exact type-match. Single-candidate (e.g. extern decls)
-		// falls through to the legacy is_convertible-based check below. Any
-		// resolved_name the parser pre-set is overridden - it just grabs the
-		// first matching overload.
+		// Overload pick by exact match; single-candidate falls through to the
+		// is_convertible check below. Parser-set resolved_name is overridden.
 		if (callee->type == AST_EXPR_IDENT) {
 			int candidate_count = 0;
 			for (Symbol *s = table; s != NULL; s = s->next) {
@@ -1426,8 +1419,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				}
 				if (last_stmt && last_stmt->type == AST_RETURN) {
 					ASTNode *ret_expr = last_stmt->data.ret.return_expr;
-					// Struct / slice literal returns were already validated against the
-					// declared return type by analyze_struct_literal in the AST_RETURN branch.
+					// Struct-literal returns are validated inside AST_RETURN; skip the typeless check.
 					if (ret_expr && ret_expr->type == AST_STRUCT_LITERAL)
 						goto skip_return_typecheck;
 					Type *stmt_type = get_type(table, last_stmt, scope_level + 1, node->data.func_decl.resolved_name);

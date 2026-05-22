@@ -93,13 +93,10 @@ typedef enum {
 
 typedef struct {
 	TokenType type;
-	// Inline buffer for identifiers, numbers, operators, char literals.
-	// Bounded by the scanner to sizeof(text)-1 chars; longer input is
-	// truncated with a diagnostic rather than overflowing.
+	// Inline buffer for idents/numbers/operators/chars. Scanner truncates with
+	// a diagnostic at sizeof(text)-1.
 	char text[64];
-	// String literals only: heap-malloc'd decoded payload, NUL-terminated.
-	// Ownership transfers with the Token; whoever consumes a TOK_STRINGLIT
-	// must free this. NULL for every other token kind.
+	// String literals only — heap-malloc'd, NUL-terminated, owned by the Token.
 	char *string_data;
 	size_t string_len;
 	SourceLocation location;

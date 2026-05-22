@@ -10,11 +10,8 @@
 
 // @TODO: optimize resolved_name being populated even when is_extern
 
-// Per-thread parser arena. parse_input writes the active module's arena
-// here so the various new_*_node helpers (and the AST dynamic-array
-// macros below) don't have to thread it through every signature. Each
-// worker thread runs at most one parser at a time, so this stays
-// safe under -j without locking.
+// Set by parse_input so new_*_node and the p_da_* macros don't have to
+// thread the arena through every signature.
 static __thread Arena *current_parser_arena = NULL;
 
 #define p_da_init(xs, cap) da_init_arena((xs), (cap), current_parser_arena)
@@ -989,19 +986,12 @@ ASTNode *new_if_stmt_node(ASTNode *condition, ASTNode *then_branch, ASTNode *els
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// parse_type runs both genuinely (var-decl, field-decl, cast, ...) and
-// speculatively (statement-parser disambiguation at parse_statement). During
-// speculation any report() would leak a bogus diagnostic for inputs that turn
-// out to be expressions, so all reports inside parse_type funnel through here.
+// All reports inside parse_type go through here — silenced during speculation.
 static void report_type_error(Parser *parser, SourceLocation loc, const char *msg) {
 	if (!parser->speculating)
 		report(loc, msg, 0);
 }
 
-// Block-scope plumbing. Each push assigns the new block a sibling id at the
-// current depth (so two for-loops in a row pick up distinct ids), then opens
-// a fresh counter for that block's own children. Pops are tolerant of
-// underflow so a failed parse can't leave the stack in a bad state.
 static void push_block_scope(Parser *parser) {
 	if (parser->block_depth + 1 >= 64)
 		return;
@@ -1016,11 +1006,7 @@ static void pop_block_scope(Parser *parser) {
 		parser->block_depth -= 1;
 }
 
-// Stamp the current branch's nested-block ids into `buf` as "$b<N>$b<M>..."
-// (or empty at function-body level). Appended to local resolved_names so a
-// var declared in one block doesn't shadow or collide with a var of the same
-// name in a sibling block. `$` is non-identifier so it can never collide with
-// a user name.
+// Stamps current branch as "$b<N>$b<M>..." for inclusion in local resolved_names.
 static void block_scope_suffix(Parser *parser, char *buf, size_t cap) {
 	buf[0] = '\0';
 	size_t written = 0;
@@ -1215,10 +1201,8 @@ ASTNode *parse_qualified_identifier(Parser *parser, const char *scope_prefix) {
 		if (scope_prefix[0] == '\0') {
 			sprintf(resolved_name, "__%s_%s", parser->module_name, name);
 		} else {
-			// Walk the nested-block scope chain by stripping trailing $b<N>
-			// segments. Inner-block declarations shadow outer ones; the loop
-			// finds the innermost match. Falls through to a global lookup
-			// (no scope_prefix) if no scoped symbol is found.
+			// Walk the block-scope chain by stripping trailing $b<N> segments;
+			// inner shadows outer. Falls through to a global lookup on miss.
 			char scope_suffix[128];
 			block_scope_suffix(parser, scope_suffix, sizeof(scope_suffix));
 			char tmp_resolved_name[512] = "";
@@ -1763,10 +1747,7 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 	case TOK_LPAREN: {
 		parser->current_token = next_token(&parser->scanner);
 		if (is_type_spec(parser)) {
-			// Built-in types are unambiguously casts. Identifier-led groupings
-			// (`(a + b)`, `(a)`) might be either a cast or a parenthesized
-			// expression — speculate on the cast path with a scratch diag
-			// sink, roll back to a paren-expr if it doesn't pan out.
+			// Identifier-led groupings are cast-or-paren-expr ambiguous; speculate cast.
 			int is_ident_led = parser->current_token.type == TOK_IDENTIFIER;
 			Scanner saved_scanner = parser->scanner;
 			Token saved_token = parser->current_token;
@@ -2571,9 +2552,7 @@ ASTNode *parse_for_loop(Parser *parser, const char *prefix_name, DeferStack *dst
 
 	parser->current_token = next_token(&parser->scanner); // consume '('
 
-	// The init binding lives in the for-loop's own scope, not the enclosing
-	// block — that's what lets two sibling `for(u64 i=...)` not collide on `i`.
-	// parse_block opens a further inner scope for the body.
+	// init binding lives in the for-loop's own scope so sibling fors don't collide on `i`.
 	push_block_scope(parser);
 
 	// All of these are optional technically
@@ -2865,9 +2844,7 @@ ASTNode *parse_function_decl(Parser *parser, int is_exported) {
 		is_error = 1;
 	}
 	++parser->current_scope;
-	// Functions don't nest, so the block-scope state can reset per fn — that
-	// keeps the first body push at $b0 instead of inheriting a counter bumped
-	// by the previous fn's body.
+	// Fresh block-scope state per fn; first body push lands at $b0.
 	parser->block_depth = 0;
 	parser->block_counter[0] = 0;
 	for (ASTNode *p = params; p; p = p->next) {

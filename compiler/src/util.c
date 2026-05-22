@@ -122,13 +122,8 @@ int find_file_callback(const char *fpath, const struct stat *sb, int type_flag, 
 
 char *find_file_in_dir(const char *root_dir, const char *filename) {
 #if defined(__linux__) || defined(__unix__)
-	// Try the literal path first (absolute, cwd-relative, or root_dir-joined).
-	// Without this, the basename-recursive nftw fallback below would
-	// pick the first file with a matching basename anywhere under
-	// root_dir — fine for `import io;` lookups (where the caller passes
-	// "io.sl" and expects a recursive search), wrong for explicit
-	// arguments like `module_tests/foo/main.sl` that collide with other
-	// fixtures' main.sl.
+	// Literal path first — explicit args like `module_tests/foo/main.sl` must
+	// not get swept up by the basename-recursive nftw fallback below.
 	struct stat st;
 	if (stat(filename, &st) == 0 && S_ISREG(st.st_mode)) {
 		return strdup(filename);

@@ -57,18 +57,12 @@ void test_ImportTest_modules(void) {
     test("module_tests/import_test", "import_test");
 }
 
-// End-to-end exercise of the `null` literal: typed-pointer init,
-// equality / inequality, truthy / falsy branches, reassignment,
-// returning from a pointer-returning fn, designated and positional
-// struct-field init. The fixture's main() returns 0 only if every
-// check holds, so a regression shows up as a non-zero exit code.
+// E2E `null` literal: init, eq/ne, truthy/falsy, reassign, fn return, field init.
 void test_NullTest_modules(void) {
     test("module_tests/null_test", "null_test");
 }
 
-// Mutual import: main imports a, a imports b, b imports a. Driver
-// should refuse to build the dependency graph rather than spinning or
-// silently short-circuiting.
+// Mutual import — driver must refuse to build, not spin.
 void test_ImportCycle_modules(void) {
     test_expect_driver_failure("module_tests/cycle_test", "cycle_test");
 }
@@ -81,11 +75,7 @@ void test_SwitchTest_modules(void) {
     test("module_tests/switch_test", "switch_test");
 }
 
-// End-to-end exercise of slices: T[] declarations, array→slice decay at
-// var-init and call sites, .len on both arrays and slices, indexed read
-// and write, slice literals (positional and designated), sub-slicing,
-// and the zero slice from null. main() returns 0 only if every check
-// holds.
+// E2E slices: decl, decay, .len, index r/w, slice literals, sub-slice, null→zero.
 void test_SliceTest_modules(void) {
     test("module_tests/slice_test", "slice_test");
 }

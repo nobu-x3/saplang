@@ -710,11 +710,7 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 	case TYPE_PRIMITIVE:
 		if (target->type_kind != TYPE_PRIMITIVE)
 			return 0;
-		// bool target: numeric primitives are "truthy" in condition
-		// contexts (if/while/for/!) — those callers pass permissive=1
-		// and codegen lowers the load + icmp/fcmp against zero.
-		// Assignment, argument, and return paths use permissive=0, so
-		// `bool x = some_int;` still requires an explicit cast.
+		// Truthy in condition contexts (permissive=1); explicit cast required for assign/arg/return.
 		if (is_bool_type(target))
 			return permissive;
 		if (permissive) {

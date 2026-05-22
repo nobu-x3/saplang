@@ -28,19 +28,13 @@ void arena_deinit(Arena *arena);
 // dedicated page sized to fit.
 void *arena_alloc(Arena *arena, size_t size);
 
-// Allocates a new chunk of `new_size` bytes and copies the first
-// `old_size` bytes of `old` into it. `old` is left in place inside the
-// arena (no individual free), so callers should size their initial
-// arrays sensibly to limit the wasted space across grows.
+// Allocates new_size bytes and copies the first old_size from `old`. The old
+// chunk stays in the arena (no per-allocation free) — size initial buffers
+// generously to keep waste-across-grows bounded.
 void *arena_realloc_grow(Arena *arena, void *old, size_t old_size, size_t new_size);
 
-// Arena-backed analogues of util.h's da_init / da_push. The initial
-// buffer comes from `arena_ptr`, and grows allocate a fresh chunk in the
-// arena (the old chunk is left behind, freed in bulk by arena_deinit).
-// Both macros yield a bool — true on success, false on arena exhaustion
-// — so callers translate to whatever error code their function returns:
+// Arena-backed da_init / da_push. Return bool (true on success).
 //   if (!da_init_arena(xs, 4, a))  return RESULT_MEMORY_ERROR;
-//   if (!da_push_arena(xs, x, a))  return NULL;
 #define da_init_arena(xs, cap, arena_ptr)                                                                                                                                                                                                      \
 	({                                                                                                                                                                                                                                         \
 		(xs).count = 0;                                                                                                                                                                                                                        \

@@ -259,17 +259,13 @@ typedef struct Parser {
 	char module_name[64];
 	int current_scope;
 	Scanner scanner;
-	Symbol *symbol_table;	// even though it's first allocated here, driver owns this memory
-	Symbol *exported_table; // even though it's first allocated here, driver owns this memory
+	Symbol *symbol_table;	// driver-owned despite first allocation here
+	Symbol *exported_table; // driver-owned despite first allocation here
 	Token current_token;
-	// Set by the statement parser around its speculative parse_type call
-	// (the var-decl-vs-expression-statement disambiguator). parse_type's
-	// reports are gated on this so failed speculation doesn't leak diagnostics.
+	// Silences parse_type reports during the statement parser's speculation.
 	int speculating;
-	// Nested-block scoping. Every block (function body, for/while/if/else/case
-	// body, bare `{}`) pushes a level here; sibling blocks at the same depth
-	// get distinct ids, stamped into local resolved_names as "$b<N>" so two
-	// sibling `i` declarations don't collide.
+	// Sibling-block disambiguation — locals get a "$b<N>$b<M>..." suffix so
+	// two `for(u64 i...)` in the same scope don't collide.
 	int block_counter[64];
 	int block_path[64];
 	int block_depth;
@@ -281,12 +277,9 @@ typedef struct {
 	ImportList imports;
 	ASTNode *ast;
 	bool has_errors;
-	// Backing storage for every AST node and AST-tied dynamic array
-	// produced by the parser. Dropped by module_deinit.
+	// AST nodes + parser-side dynamic arrays. Dropped by module_deinit.
 	Arena ast_arena;
-	// Backing storage for every Type * reachable from this module's AST
-	// or symbol tables, including copies made during cross-module
-	// symbol-table merge. Dropped by module_deinit.
+	// Type* storage (incl. cross-module copies). Dropped by module_deinit.
 	Arena type_arena;
 } Module;
 
