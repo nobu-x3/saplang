@@ -1313,10 +1313,12 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMValueRef base_ptr = codegen_ast(cg, node->data.array_access.base, table, base_ctx);
 		PassContext idx_ctx = ctx;
 		idx_ctx.intention = PI_LOAD_VAL;
-		// Pin literal indices to u64 so they don't inherit the outer context's type
-		// (`&arr[2]` would otherwise materialize the 2 as i32* → silent zero index).
+		// Load the index at its own type, not the outer (element) type — otherwise
+		// `chunk[i] = (u8)v` with u64 i loads i as i8 and wraps past 127.
 		if (node->data.array_access.index->type == AST_EXPR_LITERAL)
 			idx_ctx.expected_type = get_primitive_u64();
+		else
+			idx_ctx.expected_type = get_type(table, node->data.array_access.index, ctx.current_scope, "");
 		LLVMValueRef idx = codegen_ast(cg, node->data.array_access.index, table, idx_ctx);
 		LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
 		LLVMValueRef idx64 = LLVMBuildSExtOrBitCast(cg->builder, idx, i64_ty, "idx64");
