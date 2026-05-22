@@ -32,6 +32,7 @@ typedef enum {
 typedef struct Type {
 	TypeKind type_kind;
 	PrimitiveKind prim;
+	int is_const;
 	char type_name[64];
 	char type_namespace[64];
 	char type_resolved_name[128];

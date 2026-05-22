@@ -382,7 +382,7 @@ void test_ParameterNameConflict_sema(void) {
 
 void test_FuncCallInitWrongType_sema(void) {
 	TEST_SETUP_SINGLE("fn i32 foo() { return 1; } fn void main() { f32 float = foo(); }");
-	const char *expected = "parser_tests.sl:1:66:Error: type mismatch in initializer.\n";
+	const char *expected = "parser_tests.sl:1:66:Error: cannot implicitly convert from i32 to f32.\n";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
@@ -411,6 +411,34 @@ void test_ExplicitCastCorrectTypes_PointerToValue_sema(void) {
 void test_ExplicitCastWrongTypes_ReturnType_sema(void) {
 	TEST_SETUP_SINGLE("fn i32 foo() { i64 val; return (f32)val; }");
 	const char *expected = "parser_tests.sl:1:34:Error: cannot implicitly convert from f32 to i32.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ConstCast_AddConst_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo() { i8* p; const i8* q = (const i8*)p; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ConstCast_StripConst_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo(const i8* p) { i8* q = (i8*)p; }");
+	const char *expected = "parser_tests.sl:1:41:Error: cannot convert type const i8* into type i8*.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ConstAssign_StripConst_sema(void) {
+	TEST_SETUP_SINGLE("fn void foo(const i8* p) { i8* q = p; }");
+	const char *expected = "parser_tests.sl:1:39:Error: cannot implicitly convert from const i8* to i8*.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_ConstValue_PassThrough_sema(void) {
+	TEST_SETUP_SINGLE("fn u64 foo() { return SIZE; } const u64 SIZE = 42;");
+	const char *expected = "";
 	TEST_ASSERT_EQUAL_STRING(expected, output);
 	free(output);
 }
@@ -913,7 +941,7 @@ void test_SizeOf_OfExpression_sema(void) {
 
 void test_SizeOf_ResultIsU64_sema(void) {
 	TEST_SETUP_SINGLE("fn void f() { i32 s = sizeof(i64); }");
-	TEST_ASSERT_NOT_NULL(strstr(output, "type mismatch in initializer"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "cannot implicitly convert from u64 to i32"));
 	free(output);
 }
 

@@ -167,6 +167,10 @@ int main(void) {
 	RUN_TEST(test_ExplicitCastCorrectTypes_ValueToPointer_sema);
 	RUN_TEST(test_ExplicitCastCorrectTypes_PointerToValue_sema);
 	RUN_TEST(test_ExplicitCastWrongTypes_ReturnType_sema);
+	RUN_TEST(test_ConstCast_AddConst_sema);
+	RUN_TEST(test_ConstCast_StripConst_sema);
+	RUN_TEST(test_ConstAssign_StripConst_sema);
+	RUN_TEST(test_ConstValue_PassThrough_sema);
 	RUN_TEST(test_GlobalVariableInitWithGlobalVar_sema);
 	RUN_TEST(test_ParamReferencedInBody_sema);
 	RUN_TEST(test_PointerParamDereferencedInBody_sema);

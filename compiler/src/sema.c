@@ -65,6 +65,13 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		}
 		if (sym->kind == SYMB_FN)
 			return sym->type->function.return_type;
+		if (sym->is_const && sym->type && !sym->type->is_const) {
+			Type *t = copy_type(sym->type);
+			if (t) {
+				t->is_const = 1;
+				return t;
+			}
+		}
 		return sym->type;
 	}
 
@@ -894,7 +901,13 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					return RESULT_FAILURE;
 				}
 				if (!is_convertible(init_type, node->data.var_decl.type, 0, table)) {
-					report(node->data.var_decl.init->location, "type mismatch in initializer.", 0);
+					char msg[256] = "";
+					char src_type_str[64] = "";
+					type_print(src_type_str, init_type);
+					char target_type_str[64] = "";
+					type_print(target_type_str, node->data.var_decl.type);
+					sprintf(msg, "cannot implicitly convert from %s to %s.", src_type_str, target_type_str);
+					report(node->data.var_decl.init->location, msg, 0);
 					return RESULT_FAILURE;
 				}
 			}

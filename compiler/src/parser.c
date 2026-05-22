@@ -96,7 +96,7 @@ static const char *binary_op_name(TokenType op) {
 }
 
 static void ast_print_var_decl(ASTNode *node, int indent, char *string) {
-	print(string, "VarDecl: %s%s", node->data.var_decl.is_exported ? "exported " : "", node->data.var_decl.is_const ? "const " : "");
+	print(string, "VarDecl: %s", node->data.var_decl.is_exported ? "exported " : "");
 	type_print(string, node->data.var_decl.type);
 	print(string, " %s", node->data.var_decl.name);
 	if (node->data.var_decl.init) {
@@ -139,7 +139,7 @@ static void ast_print_param_decl(ASTNode *node, char *string) {
 		print(string, "ParamDecl: ...\n");
 		return;
 	}
-	print(string, "ParamDecl: %s", node->data.param_decl.is_const ? "const " : "");
+	print(string, "ParamDecl: ");
 	type_print(string, node->data.param_decl.type);
 	print(string, " %s\n", node->data.param_decl.name);
 }
@@ -1019,6 +1019,11 @@ static void block_scope_suffix(Parser *parser, char *buf, size_t cap) {
 }
 
 CompilerResult parse_type(Parser *parser, Type **out_type) {
+	int leading_const = 0;
+	if (parser->current_token.type == TOK_CONST) {
+		leading_const = 1;
+		parser->current_token = next_token(&parser->scanner);
+	}
 	{ // fn ptr parsing
 		if (parser->current_token.type == TOK_FN_PTR) {
 			parser->current_token = next_token(&parser->scanner); // consume 'fn*'
@@ -1071,6 +1076,8 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 			parser->current_token = next_token(&parser->scanner); // consume ')'
 
 			*out_type = new_function_type(ret_type, params.data, params.count);
+			if (leading_const)
+				(*out_type)->is_const = 1;
 
 			return RESULT_SUCCESS;
 		}
@@ -1166,6 +1173,8 @@ CompilerResult parse_type(Parser *parser, Type **out_type) {
 		}
 	}
 
+	if (leading_const)
+		(*out_type)->is_const = 1;
 	return RESULT_SUCCESS;
 }
 
@@ -1646,6 +1655,7 @@ int is_type_spec(Parser *parser) {
 	case TOK_VOID:
 	case TOK_BOOL:
 	case TOK_IDENTIFIER:
+	case TOK_CONST:
 		return 1;
 	default:
 		return 0;
@@ -1987,6 +1997,8 @@ ASTNode *parse_var_decl(Parser *parser, const char *prefix_name, int is_exported
 	Type *var_type = NULL;
 	if (parse_type(parser, &var_type) != RESULT_SUCCESS)
 		return NULL;
+	if (is_const && var_type)
+		var_type->is_const = 1;
 	if (parser->current_token.type != TOK_IDENTIFIER) {
 		return report(parser->current_token.location, "expected identifier in variable declaration.", 0);
 	}
@@ -2286,6 +2298,8 @@ ASTNode *parse_parameter_declaration(Parser *parser) {
 	Type *type = NULL;
 	if (parse_type(parser, &type) != RESULT_SUCCESS)
 		return NULL;
+	if (is_const && type)
+		type->is_const = 1;
 
 	if (parser->current_token.type != TOK_IDENTIFIER) {
 		char msg[128];

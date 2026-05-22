@@ -195,6 +195,7 @@ Type *copy_type(Type *type) {
 
 	t->type_kind = type->type_kind;
 	t->prim = type->prim;
+	t->is_const = type->is_const;
 
 	strncpy(t->type_name, type->type_name, sizeof(t->type_name));
 	strncpy(t->type_namespace, type->type_namespace, sizeof(t->type_namespace));
@@ -364,7 +365,7 @@ typedef struct {
 	size_t total;
 } TypeWriter;
 
-static void tw_write(TypeWriter *w, const char *s) {
+static void type_writer_emit(TypeWriter *w, const char *s) {
 	size_t n = strlen(s);
 	if (w->buf) {
 		memcpy(w->buf, s, n);
@@ -381,55 +382,57 @@ static void type_write(TypeWriter *w, const Type *type) {
 	if (!type)
 		return;
 	char tmp[64];
+	if (type->is_const)
+		type_writer_emit(w, "const ");
 	switch (type->type_kind) {
 	case TYPE_PRIMITIVE:
-		tw_write(w, type->type_name);
+		type_writer_emit(w, type->type_name);
 		break;
 	case TYPE_POINTER:
 		type_write(w, type->pointee);
-		tw_write(w, "*");
+		type_writer_emit(w, "*");
 		break;
 	case TYPE_ARRAY:
 		type_write(w, type->array.element_type);
 		snprintf(tmp, sizeof(tmp), "[%d]", type->array.size);
-		tw_write(w, tmp);
+		type_writer_emit(w, tmp);
 		break;
 	case TYPE_SLICE:
 		type_write(w, type->slice.element_type);
-		tw_write(w, "[]");
+		type_writer_emit(w, "[]");
 		break;
 	case TYPE_FUNCTION:
-		tw_write(w, "fn(");
+		type_writer_emit(w, "fn(");
 		for (int i = 0; i < type->function.param_count; ++i) {
 			type_write(w, type->function.param_types[i]);
 			if (i != type->function.param_count - 1)
-				tw_write(w, ", ");
+				type_writer_emit(w, ", ");
 		}
-		tw_write(w, ")->");
+		type_writer_emit(w, ")->");
 		type_write(w, type->function.return_type);
 		break;
 	case TYPE_STRUCT:
-		tw_write(w, "struct ");
+		type_writer_emit(w, "struct ");
 		if (type->type_namespace[0] != '\0') {
-			tw_write(w, type->type_namespace);
-			tw_write(w, "::");
+			type_writer_emit(w, type->type_namespace);
+			type_writer_emit(w, "::");
 		}
-		tw_write(w, type->type_name);
+		type_writer_emit(w, type->type_name);
 		break;
 	case TYPE_ENUM:
-		tw_write(w, "enum ");
+		type_writer_emit(w, "enum ");
 		if (type->type_namespace[0] != '\0') {
-			tw_write(w, type->type_namespace);
-			tw_write(w, "::");
+			type_writer_emit(w, type->type_namespace);
+			type_writer_emit(w, "::");
 		}
-		tw_write(w, type->type_name);
+		type_writer_emit(w, type->type_name);
 		break;
 	case TYPE_UNDECIDED:
 		if (type->type_namespace[0] != '\0') {
-			tw_write(w, type->type_namespace);
-			tw_write(w, "::");
+			type_writer_emit(w, type->type_namespace);
+			type_writer_emit(w, "::");
 		}
-		tw_write(w, type->type_name);
+		type_writer_emit(w, type->type_name);
 		break;
 	}
 }
@@ -669,6 +672,12 @@ int is_widening_float_conversion(const Type *src, const Type *tgt) {
 
 int is_convertible(const Type *source, const Type *target, int permissive, Symbol *table) {
 	if (!source || !target)
+		return 0;
+
+	// Reject const-stripping on reference-like types only; value copies of
+	// const primitives/structs are fine. Bool truthiness checks (e.g. !p)
+	// don't count as a strip.
+	if (source->is_const && !target->is_const && !is_bool_type(target) && (source->type_kind == TYPE_POINTER || source->type_kind == TYPE_SLICE))
 		return 0;
 
 	// Allow identical types
