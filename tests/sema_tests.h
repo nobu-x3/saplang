@@ -443,6 +443,13 @@ void test_ConstValue_PassThrough_sema(void) {
 	free(output);
 }
 
+void test_IntLiteralFitsReturnType_sema(void) {
+	TEST_SETUP_SINGLE("fn u64 foo() { return 0; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_GlobalVariableInitWithGlobalVar_sema(void) {
 	TEST_SETUP_SINGLE("i32 i = 0; i32 a = i;");
 	const char *expected = "parser_tests.sl:1:16:Error: global variables cannot be initialized with other global variables.\n";

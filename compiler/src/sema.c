@@ -1027,7 +1027,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			expr_type = enum_decl->node->data.enum_decl.base_type;
 			expr_type->type_kind = TYPE_PRIMITIVE;
 		}
-		if (!string_lit_fits_target(node->data.ret.return_expr, sym->type->function.return_type) && !is_convertible(expr_type, sym->type->function.return_type, 0, table)) {
+		if (!string_lit_fits_target(node->data.ret.return_expr, sym->type->function.return_type) && !literal_fits_type(node->data.ret.return_expr, sym->type->function.return_type) &&
+			!is_convertible(expr_type, sym->type->function.return_type, 0, table)) {
 			char msg[128] = "";
 			char src_type[128] = "";
 			char trg_type[128] = "";
@@ -1442,7 +1443,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 						report(last_stmt->location, msg, 0);
 						return RESULT_FAILURE;
 					}
-					if (!string_lit_fits_target(last_stmt->data.ret.return_expr, fn_type->function.return_type) && !is_convertible(stmt_type, fn_type->function.return_type, 0, table)) {
+					if (!string_lit_fits_target(last_stmt->data.ret.return_expr, fn_type->function.return_type) && !literal_fits_type(last_stmt->data.ret.return_expr, fn_type->function.return_type) &&
+						!is_convertible(stmt_type, fn_type->function.return_type, 0, table)) {
 						char actual_type_str[128] = "";
 						type_print(actual_type_str, stmt_type);
 						char expected_type_str[128] = "";
