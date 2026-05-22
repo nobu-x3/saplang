@@ -37,6 +37,9 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		}
 		break;
 
+	case AST_CHAR_LIT:
+		return get_primitive_u8();
+
 	case AST_EXPR_IDENT: {
 		Symbol *sym = lookup_symbol(table, node->data.ident.resolved_name, scope_level);
 		if (!sym) {
@@ -564,7 +567,11 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 // Literals are untyped — int/float/bool/null adapt to the target. Stand-in
 // until comptime-int lands.
 int literal_fits_type(ASTNode *node, Type *target) {
-	if (!node || !target || node->type != AST_EXPR_LITERAL)
+	if (!node || !target)
+		return 0;
+	if (node->type == AST_CHAR_LIT)
+		return target->type_kind == TYPE_PRIMITIVE && is_int(target) && target->prim != PRIM_BOOL;
+	if (node->type != AST_EXPR_LITERAL)
 		return 0;
 	if (node->data.literal.is_null)
 		return target->type_kind == TYPE_POINTER || target->type_kind == TYPE_SLICE;

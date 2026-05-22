@@ -450,6 +450,20 @@ void test_IntLiteralFitsReturnType_sema(void) {
 	free(output);
 }
 
+void test_CharLiteralFitsU8Arg_sema(void) {
+	TEST_SETUP_SINGLE("fn void take(u8 c) {} fn void caller() { take(';'); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_CharLiteralFitsI32Arg_sema(void) {
+	TEST_SETUP_SINGLE("fn void take(i32 c) {} fn void caller() { take('a'); }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_GlobalVariableInitWithGlobalVar_sema(void) {
 	TEST_SETUP_SINGLE("i32 i = 0; i32 a = i;");
 	const char *expected = "parser_tests.sl:1:16:Error: global variables cannot be initialized with other global variables.\n";
