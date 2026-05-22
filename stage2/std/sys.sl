@@ -7,6 +7,7 @@ extern {
     export fn void  free(void* p);
     export fn void* memcpy(void* dst, const void* src, u64 n);
     export fn void* memset(void* p, i32 byte, u64 n);
+    export fn i32   memcmp(const void *str1, const void *str2, u64 n);
 
     // process
     export fn void exit(i32 code);

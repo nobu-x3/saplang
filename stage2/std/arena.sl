@@ -18,7 +18,7 @@ export fn void* alloc(Arena* arena, u64 size) {
     if(!size) {
         return null;
     }
-    size = round_up(size, ARENA_ALIGN);
+    size = align_up(size, ARENA_ALIGN);
     if(arena.head && arena.head.data.len + size <= arena.head.cap) {
         u8* ptr = &arena.head.data[arena.head.data.len];
         arena.head.data.len += size;
@@ -49,11 +49,11 @@ export fn void* realloc_grow(Arena* arena, void* old, u64 old_size, u64 new_size
     return fresh;
 }
 
-// PRIVATE FUNCTIONS
-fn u64 round_up(u64 v, u64 a) {
-    return (v + a - 1) & ~(a - 1);
+export fn u64 align_up(u64 value, u64 alignment) {
+    return (value + alignment - 1) & ~(alignment - 1);
 }
 
+// PRIVATE FUNCTIONS
 const u64 ARENA_ALIGN = 8;
 
 fn ArenaPage* new_page(u64 cap) {

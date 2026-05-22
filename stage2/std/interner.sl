@@ -1,0 +1,69 @@
+import arena;
+import hash;
+import sys;
+
+export struct Symbol {
+    u64             offset; // index into Interner.slab
+    u32             len;
+    u32             hash;
+    Symbol*         chain; // open chained bucket
+}
+
+export struct Interner {
+    arena::Arena*   slab_arena;
+    u8[]            slab;
+    u64             slab_cap;
+    Symbol*[]       buckets;
+    u64             entry_count;
+}
+
+export fn Symbol* intern(Interner* it, u8[] bytes) {
+    u32 hash = hash::fnv1a_32(bytes);
+    u64 idx = (u64)hash & (it.buckets.len - 1);
+    // walk the chain at this bucket
+    Symbol* cur = it.buckets[idx];
+    while (cur != null) {
+        if (cur.hash == hash && cur.len == (u32)bytes.len) {
+            if (slab_equals(it, cur.offset, bytes)) { return cur; }
+        }
+        cur = cur.chain;
+    }
+    // not found — append to slab, install in bucket
+    u64 off = slab_append(it, bytes);
+    Symbol* sym = arena::alloc(it.slab_arena, sizeof(Symbol));
+    sym.offset = off;
+    sym.len = (u32)bytes.len;
+    sym.hash = hash;
+    sym.chain = it.buckets[idx];
+    it.buckets[idx] = sym;
+    it.entry_count += 1;
+    return sym;
+}
+
+export fn u8[] symbol_str(Symbol* s, Interner* it) {
+    return { .ptr = &it.slab[s.offset], .len = (u64)s.len };
+}
+
+// PRIVATE
+fn u64 slab_append(Interner* it, u8[] bytes) {
+    u64 length_needed = it.slab.len + bytes.len;
+    if(length_needed >= it.slab_cap) {
+        u64 new_cap = it.slab_cap * 2;
+        if(new_cap < 4096) {
+            new_cap = 4096;
+        }
+        if(new_cap < bytes.len) {
+            new_cap = arena::align_up(bytes.len, 4096);
+        }
+        it.slab.ptr = arena::realloc_grow(it.slab_arena, it.slab.ptr, it.slab.len, new_cap);
+        it.slab_cap = new_cap;
+    }
+    u64 off = it.slab.len;
+    sys::memcpy(&it.slab[it.slab.len], bytes.ptr, bytes.len);
+    it.slab.len += bytes.len;
+    return off;
+}
+
+fn bool slab_equals(const Interner* it, u64 offset, const u8[] bytes) {
+    return sys::memcmp(&it.slab[offset], bytes.ptr, bytes.len) == 0;
+}
