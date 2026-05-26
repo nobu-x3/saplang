@@ -111,6 +111,10 @@ int main(void) {
 	RUN_TEST(test_BadParamTypeDoesNotHang_parser);
 	RUN_TEST(test_GarbageInsideBlockDoesNotHang_parser);
 	RUN_TEST(test_Switch_BareCaseAtEndIsError_parser);
+	RUN_TEST(test_StructFieldBadTypeDoesNotCrash_parser);
+	RUN_TEST(test_UnionFieldBadTypeDoesNotCrash_parser);
+	RUN_TEST(test_StructFieldMissingIdentifierDoesNotCrash_parser);
+	RUN_TEST(test_StructFieldMissingSemicolonDoesNotCrash_parser);
 
 	RUN_TEST(test_TypePrinting_sema);
 	RUN_TEST(test_UndeclaredVariable_sema);

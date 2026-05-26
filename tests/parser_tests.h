@@ -1655,3 +1655,45 @@ void test_Switch_BareCaseAtEndIsError_parser(void) {
 	free(err);
 }
 
+// A bad type in a struct field (here: anonymous `union { ... }`) used to make
+// parse_field_declaration return NULL and segfault the caller's dedup loop.
+void test_StructFieldBadTypeDoesNotCrash_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("struct S { union { u64 a; } data; i32 ok; }");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	(void)output;
+	TEST_ASSERT_NOT_NULL(err);
+	free(err);
+}
+
+void test_UnionFieldBadTypeDoesNotCrash_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("union U { struct { i32 x; } inner; i32 ok; }");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	(void)output;
+	TEST_ASSERT_NOT_NULL(err);
+	free(err);
+}
+
+void test_StructFieldMissingIdentifierDoesNotCrash_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("struct S { i32 ; i32 ok; }");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	(void)output;
+	TEST_ASSERT_NOT_NULL(strstr(err, "expected identifier in struct field declaration"));
+	free(err);
+}
+
+void test_StructFieldMissingSemicolonDoesNotCrash_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("struct S { i32 x i32 y; }");
+	char *err = capture_error_end(old_stderr);
+	(void)module;
+	(void)output;
+	TEST_ASSERT_NOT_NULL(strstr(err, "expected ';' after struct field declaration"));
+	free(err);
+}
+

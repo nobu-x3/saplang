@@ -2130,16 +2130,29 @@ ASTNode *parse_stmt(Parser *parser, const char *prefix_name, DeferStack *dstack)
 	return expr;
 }
 
+// Skip to next ';' (consume) or to enclosing '}' / EOF. Ensures forward progress.
+static void recover_field_decl(Parser *parser) {
+	while (parser->current_token.type != TOK_SEMICOLON && parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
+		parser->current_token = next_token(&parser->scanner);
+	}
+	if (parser->current_token.type == TOK_SEMICOLON) {
+		parser->current_token = next_token(&parser->scanner);
+	}
+}
+
 // <fieldDecl>
 // ::= <type> <identifier> ;
 ASTNode *parse_field_declaration(Parser *parser) {
 	Type *type = NULL;
 	if (parse_type(parser, &type) != RESULT_SUCCESS) {
+		recover_field_decl(parser);
 		return NULL;
 	}
 
 	if (parser->current_token.type != TOK_IDENTIFIER) {
-		return report(parser->current_token.location, "expected identifier in struct field declaration.", 0);
+		report(parser->current_token.location, "expected identifier in struct field declaration.", 0);
+		recover_field_decl(parser);
+		return NULL;
 	}
 
 	SourceLocation loc = parser->current_token.location;
@@ -2149,7 +2162,9 @@ ASTNode *parse_field_declaration(Parser *parser) {
 	parser->current_token = next_token(&parser->scanner); // consume field name
 
 	if (parser->current_token.type != TOK_SEMICOLON) {
-		return report(parser->current_token.location, "expected ';' after struct field declaration.", 0);
+		report(parser->current_token.location, "expected ';' after struct field declaration.", 0);
+		recover_field_decl(parser);
+		return NULL;
 	}
 
 	parser->current_token = next_token(&parser->scanner); // consume ';'
@@ -2180,6 +2195,10 @@ ASTNode *parse_union_decl(Parser *parser, int is_exported, int is_extern) {
 	ASTNode *field_list = NULL, *last_field = NULL;
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *field = parse_field_declaration(parser);
+		if (!field) {
+			is_error = 1;
+			continue;
+		}
 		for (ASTNode *field_it = field_list; field_it != NULL; field_it = field_it->next) {
 			if (strcmp(field_it->data.field_decl.name, field->data.field_decl.name) == 0) {
 				report(field->location, "field redeclaration.", 0);
@@ -2248,6 +2267,10 @@ ASTNode *parse_struct_decl(Parser *parser, int is_exported, int is_extern) {
 		return NULL;
 	while (parser->current_token.type != TOK_RCURLY && parser->current_token.type != TOK_EOF) {
 		ASTNode *field = parse_field_declaration(parser);
+		if (!field) {
+			is_error = 1;
+			continue;
+		}
 		for (int i = 0; i < field_list.count; ++i) {
 			ASTNode *field_it = field_list.data[i];
 			if (strcmp(field_it->data.field_decl.name, field->data.field_decl.name) == 0) {
