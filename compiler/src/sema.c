@@ -1954,6 +1954,14 @@ CompilerResult resolve_types(Symbol *table, ASTNode *root, int should_traverse_s
 			}
 		} break;
 
+		case AST_UNION_DECL: {
+			for (ASTNode *field = node->data.union_decl.fields; field; field = field->next) {
+				CompilerResult result = resolve_type(table, field->data.field_decl.type, field->location);
+				if (result != RESULT_SUCCESS)
+					return result;
+			}
+		} break;
+
 		case AST_FN_DECL: {
 			for (ASTNode *param = node->data.func_decl.params; param; param = param->next) {
 				CompilerResult result = resolve_types(table, param, 0);

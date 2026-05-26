@@ -548,6 +548,7 @@ int main(void) {
 	RUN_TEST(test_CrossModuleGlobalVar_modules);
 	RUN_TEST(test_CrossModuleConstGlobal_modules);
 	RUN_TEST(test_CrossModuleConstSlice_modules);
+	RUN_TEST(test_CrossModuleUnionField_modules);
 	RUN_TEST(test_DebugInfoBasic_modules);
 	RUN_TEST(test_DebugInfoTypes_modules);
 	RUN_TEST(test_DebugInfoLines_modules);

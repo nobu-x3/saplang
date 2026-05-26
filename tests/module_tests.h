@@ -100,6 +100,10 @@ void test_CrossModuleConstSlice_modules(void) {
     test("module_tests/cross_module_const_slice", "cross_module_const_slice");
 }
 
+void test_CrossModuleUnionField_modules(void) {
+    test("module_tests/cross_module_union_field", "cross_module_union_field");
+}
+
 static void test_DebugInfoBasic_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";
