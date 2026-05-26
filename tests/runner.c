@@ -200,6 +200,9 @@ int main(void) {
 	RUN_TEST(test_SlicePassArrayAsArg_sema);
 	RUN_TEST(test_SliceFromNull_sema);
 	RUN_TEST(test_SliceFromPointerRejected_sema);
+	RUN_TEST(test_GlobalSliceFromArrayLiteral_sema);
+	RUN_TEST(test_GlobalSliceOfStructsFromArrayLiteral_sema);
+	RUN_TEST(test_ExportedGlobalSliceFromArrayLiteral_sema);
 	RUN_TEST(test_SliceOverloadMangling_sema);
 	RUN_TEST(test_SliceDotLen_sema);
 	RUN_TEST(test_ArrayDotLen_sema);
@@ -325,6 +328,7 @@ int main(void) {
 	RUN_TEST(test_SliceVarDeclFromArray_codegen);
 	RUN_TEST(test_SlicePassArrayAsArg_codegen);
 	RUN_TEST(test_SliceFromNull_codegen);
+	RUN_TEST(test_GlobalSliceFromArrayLiteral_codegen);
 	RUN_TEST(test_SliceFromStringLitImplicit_codegen);
 	RUN_TEST(test_SliceFromStringLitExplicitCast_codegen);
 	RUN_TEST(test_SliceFromStringLitAsArg_codegen);
@@ -542,6 +546,7 @@ int main(void) {
 	RUN_TEST(test_CrossModuleStructField_modules);
 	RUN_TEST(test_CrossModuleGlobalVar_modules);
 	RUN_TEST(test_CrossModuleConstGlobal_modules);
+	RUN_TEST(test_CrossModuleConstSlice_modules);
 	RUN_TEST(test_DebugInfoBasic_modules);
 	RUN_TEST(test_DebugInfoTypes_modules);
 	RUN_TEST(test_DebugInfoLines_modules);

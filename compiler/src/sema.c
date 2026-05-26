@@ -547,6 +547,22 @@ CompilerResult analyze_struct_literal(Symbol *table, Type *expected_type, ASTNod
 				report(expr->location, msg, 0);
 				init_result = RESULT_FAILURE;
 			}
+		} else if (expr->type == AST_STRING_LIT) {
+			Type *elem = NULL;
+			if (field_type->type_kind == TYPE_SLICE)
+				elem = field_type->slice.element_type;
+			else if (field_type->type_kind == TYPE_ARRAY)
+				elem = field_type->array.element_type;
+			else if (field_type->type_kind == TYPE_POINTER)
+				elem = field_type->pointee;
+			if (!elem || elem->type_kind != TYPE_PRIMITIVE || (elem->prim != PRIM_U8 && elem->prim != PRIM_I8)) {
+				char type_str[128] = "";
+				type_print(type_str, field_type);
+				char msg[256] = "";
+				sprintf(msg, "cannot initialize field '%s' of type %s with a string literal.", field_decl->data.field_decl.name, type_str);
+				report(expr->location, msg, 0);
+				init_result = RESULT_FAILURE;
+			}
 		} else {
 			init_result = analyze_ast(table, expr, scope_level, scope_specifier);
 			if (init_result == RESULT_SUCCESS) {
@@ -815,22 +831,23 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				result = RESULT_SUCCESS;
 			} else if (node->data.var_decl.init->type == AST_ARRAY_LITERAL) {
 				ASTNode *array_literal = node->data.var_decl.init;
-				if (node->data.var_decl.type->type_kind != TYPE_ARRAY) {
+				Type *lhs = node->data.var_decl.type;
+				int is_slice = lhs->type_kind == TYPE_SLICE;
+				if (lhs->type_kind != TYPE_ARRAY && !is_slice) {
 					char msg[256] = "";
 					sprintf(msg, "lvalue is not an array.");
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
 				}
-				if (node->data.var_decl.type->array.size != array_literal->data.array_literal.count) {
+				if (!is_slice && lhs->array.size != array_literal->data.array_literal.count) {
 					report(node->location, "array element count mismatch. Arrays cannot be initialized with partial initializers.", 0);
 					return RESULT_FAILURE;
 				}
+				Type *expected_elem = is_slice ? lhs->slice.element_type : lhs->array.element_type;
 				for (int i = 0; i < array_literal->data.array_literal.count; ++i) {
 					ASTNode *elem = array_literal->data.array_literal.elements[i];
-					// This if is a hack that essentially prevents type checking in nested array literals
-					if (elem->type != AST_ARRAY_LITERAL) {
+					if (elem->type != AST_ARRAY_LITERAL && elem->type != AST_STRUCT_LITERAL) {
 						Type *element_type = get_type(table, elem, scope_level, scope_specifier);
-						Type *expected_elem = node->data.var_decl.type->array.element_type;
 						if (!literal_fits_type(elem, expected_elem) && !is_convertible(element_type, expected_elem, 1, table)) {
 							char type_str[128] = "";
 							type_print(type_str, expected_elem);
@@ -840,7 +857,11 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 							return RESULT_FAILURE;
 						}
 					}
-					result = analyze_ast(table, array_literal->data.array_literal.elements[i], scope_level, scope_specifier);
+					if (elem->type == AST_STRUCT_LITERAL) {
+						result = analyze_struct_literal(table, expected_elem, elem, scope_level, scope_specifier);
+					} else {
+						result = analyze_ast(table, elem, scope_level, scope_specifier);
+					}
 					if (result != RESULT_SUCCESS) {
 						return result;
 					}

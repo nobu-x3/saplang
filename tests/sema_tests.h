@@ -682,6 +682,24 @@ void test_SliceFromPointerRejected_sema(void) {
 	free(output);
 }
 
+void test_GlobalSliceFromArrayLiteral_sema(void) {
+	TEST_SETUP_SINGLE("const i32[] NUMS = [10, 20, 30];");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_GlobalSliceOfStructsFromArrayLiteral_sema(void) {
+	TEST_SETUP_SINGLE("struct E { u8[] s; i32 v; } const E[] G = [ { \"a\", 1 }, { \"bb\", 2 } ];");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_ExportedGlobalSliceFromArrayLiteral_sema(void) {
+	TEST_SETUP_SINGLE("export const i32[] NUMS = [10, 20, 30];");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
 // `T[]` overloads with different element types must mangle distinctly from each other and `T*`.
 void test_SliceOverloadMangling_sema(void) {
 	TEST_SETUP_SINGLE("fn void f(i32[] s) {} fn void f(u8[] s) {} fn void f(i32* p) {} fn void g() { i32[] sa = null; u8[] sb = null; i32 x = 0; f(sa); f(sb); f(&x); }");

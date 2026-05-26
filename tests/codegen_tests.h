@@ -610,6 +610,14 @@ void test_SliceFromNull_codegen(void) {
 	free(error);
 }
 
+void test_GlobalSliceFromArrayLiteral_codegen(void) {
+	CODEGEN_TEST_SETUP_SINGLE("const i32[] NUMS = [10, 20, 30];");
+	TEST_ASSERT_NOT_NULL(strstr(output, "private constant [3 x i32] [i32 10, i32 20, i32 30]"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "@__main_NUMS = constant { ptr, i64 } { ptr @__main_NUMS.backing, i64 3 }"));
+	TEST_ASSERT_EQUAL_STRING("", error);
+	free(error);
+}
+
 void test_SliceFromStringLitImplicit_codegen(void) {
 	CODEGEN_TEST_SETUP_SINGLE("fn void foo() { u8[] s = \"hello\"; }");
 	TEST_ASSERT_NOT_NULL(strstr(output, "@.str = private unnamed_addr constant [6 x i8] c\"hello\\00\""));

@@ -811,19 +811,40 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 	} break;
 	case AST_ARRAY_LITERAL: {
 		int count = node->data.array_literal.count;
-		LLVMTypeRef elem_ty = map_to_llvm(cg, ctx.expected_type->array.element_type, table);
+		int is_slice = ctx.expected_type->type_kind == TYPE_SLICE;
+		Type *elem_sap_ty = is_slice ? ctx.expected_type->slice.element_type : ctx.expected_type->array.element_type;
+		LLVMTypeRef elem_ty = map_to_llvm(cg, elem_sap_ty, table);
 		assert(elem_ty);
-		LLVMTypeRef arr_ty = map_to_llvm(cg, ctx.expected_type, table);
+		LLVMTypeRef arr_ty = is_slice ? LLVMArrayType(elem_ty, count) : map_to_llvm(cg, ctx.expected_type, table);
 		assert(arr_ty);
-		// If global scope, build a constant array
 		if (ctx.current_scope == 0) {
 			LLVMValueRef *elems = alloca(sizeof(LLVMValueRef) * count);
+			PassContext elem_ctx = ctx;
+			elem_ctx.expected_type = elem_sap_ty;
 			for (int i = 0; i < count; i++) {
-				ctx.expected_type = ctx.expected_type->array.element_type;
-				elems[i] = codegen_literal(cg, node->data.array_literal.elements[i], table, ctx);
+				elems[i] = codegen_literal(cg, node->data.array_literal.elements[i], table, elem_ctx);
 				assert(elems[i]);
 			}
-			return LLVMConstArray(arr_ty, elems, count);
+			LLVMValueRef const_arr = LLVMConstArray(arr_ty, elems, count);
+			if (is_slice) {
+				char name[300] = "";
+				if (ctx.auxiliary_node && ctx.auxiliary_node->type == AST_VAR_DECL)
+					snprintf(name, sizeof(name), "%s.backing", ctx.auxiliary_node->data.var_decl.resolved_name);
+				else
+					snprintf(name, sizeof(name), ".slice_lit_backing");
+				LLVMValueRef backing = LLVMAddGlobal(cg->module, arr_ty, name);
+				LLVMSetGlobalConstant(backing, 1);
+				LLVMSetInitializer(backing, const_arr);
+				LLVMSetLinkage(backing, LLVMPrivateLinkage);
+				LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
+				LLVMTypeRef elem_ptr_ty = LLVMPointerType(elem_ty, 0);
+				LLVMValueRef ptr = LLVMConstBitCast(backing, elem_ptr_ty);
+				LLVMValueRef len = LLVMConstInt(i64_ty, count, 0);
+				LLVMValueRef slice_fields[2] = {ptr, len};
+				LLVMTypeRef slice_ty = map_to_llvm(cg, ctx.expected_type, table);
+				return LLVMConstNamedStruct(slice_ty, slice_fields, 2);
+			}
+			return const_arr;
 		}
 		// Get pointer to first element
 		LLVMValueRef ptr =
@@ -855,6 +876,7 @@ LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *tab
 	if (!global_var)
 		global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
 	PassContext ctx = {0, node->data.var_decl.type, NULL, NULL, NULL, PI_NONE, NULL, NULL, NULL, NULL, NULL};
+	ctx.auxiliary_node = node;
 	LLVMValueRef init_value = node->data.var_decl.init ? codegen_literal(cg, node->data.var_decl.init, table, ctx) : LLVMConstNull(ty);
 	LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
 	LLVMSetInitializer(global_var, init_value);
