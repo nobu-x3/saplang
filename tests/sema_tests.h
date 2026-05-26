@@ -700,6 +700,12 @@ void test_ExportedGlobalSliceFromArrayLiteral_sema(void) {
 	free(output);
 }
 
+void test_GlobalArrayOfStructsWithEnumMember_sema(void) {
+	TEST_SETUP_SINGLE("enum E : i32 { A, B, C } struct S { i32 idx; E kind; } const S[] T = [ { 1, E::A }, { 2, E::B } ];");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
 // `T[]` overloads with different element types must mangle distinctly from each other and `T*`.
 void test_SliceOverloadMangling_sema(void) {
 	TEST_SETUP_SINGLE("fn void f(i32[] s) {} fn void f(u8[] s) {} fn void f(i32* p) {} fn void g() { i32[] sa = null; u8[] sb = null; i32 x = 0; f(sa); f(sb); f(&x); }");

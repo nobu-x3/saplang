@@ -1013,6 +1013,13 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 				strncpy(node->data.ident.resolved_name, ns_resolved, sizeof(node->data.ident.resolved_name));
 				return RESULT_SUCCESS;
 			}
+			Symbol *enum_symbol = lookup_symbol_weak(table, node->data.ident.namespace, scope_level);
+			if (enum_symbol && enum_symbol->kind == SYMB_ENUM) {
+				node->type = AST_ENUM_VALUE;
+				strncpy(node->data.enum_value.member, node->data.ident.name, sizeof(node->data.enum_value.member));
+				node->data.enum_value.enum_type = copy_type(enum_symbol->type);
+				return analyze_ast(table, node, scope_level, scope_specifier);
+			}
 		}
 		char resolved_name[512] = "";
 		int written;

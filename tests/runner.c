@@ -203,6 +203,7 @@ int main(void) {
 	RUN_TEST(test_GlobalSliceFromArrayLiteral_sema);
 	RUN_TEST(test_GlobalSliceOfStructsFromArrayLiteral_sema);
 	RUN_TEST(test_ExportedGlobalSliceFromArrayLiteral_sema);
+	RUN_TEST(test_GlobalArrayOfStructsWithEnumMember_sema);
 	RUN_TEST(test_SliceOverloadMangling_sema);
 	RUN_TEST(test_SliceDotLen_sema);
 	RUN_TEST(test_ArrayDotLen_sema);
