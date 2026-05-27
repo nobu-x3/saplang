@@ -1,27 +1,21 @@
 import arena;
 import hash;
 import sys;
-
-export struct Symbol {
-    u64             offset; // index into Interner.slab
-    u32             len;
-    u32             hash;
-    Symbol*         chain; // open chained bucket
-}
+import symbol;
 
 export struct Interner {
     arena::Arena*   slab_arena;
     u8[]            slab;
     u64             slab_cap;
-    Symbol*[]       buckets;
+    symbol::Symbol*[]       buckets;
     u64             entry_count;
 }
 
-export fn Symbol* intern(Interner* it, u8[] bytes) {
+export fn symbol::Symbol* intern(Interner* it, u8[] bytes) {
     u32 hash = hash::fnv1a_32(bytes);
     u64 idx = (u64)hash & (it.buckets.len - 1);
     // walk the chain at this bucket
-    Symbol* cur = it.buckets[idx];
+    symbol::Symbol* cur = it.buckets[idx];
     while (cur != null) {
         if (cur.hash == hash && cur.len == (u32)bytes.len) {
             if (slab_equals(it, cur.offset, bytes)) { return cur; }
@@ -30,7 +24,7 @@ export fn Symbol* intern(Interner* it, u8[] bytes) {
     }
     // not found — append to slab, install in bucket
     u64 off = slab_append(it, bytes);
-    Symbol* sym = arena::alloc(it.slab_arena, sizeof(Symbol));
+    symbol::Symbol* sym = arena::alloc(it.slab_arena, sizeof(Symbol));
     sym.offset = off;
     sym.len = (u32)bytes.len;
     sym.hash = hash;
@@ -40,7 +34,7 @@ export fn Symbol* intern(Interner* it, u8[] bytes) {
     return sym;
 }
 
-export fn u8[] symbol_str(Symbol* s, Interner* it) {
+export fn u8[] symbol_str(symbol::Symbol* s, Interner* it) {
     return { .ptr = &it.slab[s.offset], .len = (u64)s.len };
 }
 

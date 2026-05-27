@@ -89,6 +89,13 @@ export fn bool expect_eq(i64 actual, i64 expected, u8[] msg) {
     sys::printf("[____FAIL____] %.*s: expected %ld, got %ld\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
+export fn bool expect_eq(u16 actual, u16 expected, u8[] msg) {
+    if(actual == expected) {
+        return true;
+    }
+    sys::printf("[____FAIL____] %.*s: expected %u, got %u\n", (i32)msg.len, msg.ptr, (u32)expected, (u32)actual);
+    return false;
+}
 export fn bool expect_eq(u32 actual, u32 expected, u8[] msg) {
     if(actual == expected) {
         return true;
