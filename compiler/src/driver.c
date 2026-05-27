@@ -461,6 +461,21 @@ static void report_import_cycle(DGFrame *current, const DependencyGraphNode *tar
 	fprintf(stderr, "  %s\n", target->name);
 }
 
+static void dg_collect_transitive(DependencyGraphNode *node, DependencyGraphNode ***seen, int *count, int *cap) {
+	for (int i = 0; i < *count; ++i) {
+		if ((*seen)[i] == node)
+			return;
+	}
+	if (*count == *cap) {
+		*cap = *cap ? *cap * 2 : 8;
+		*seen = realloc(*seen, sizeof(DependencyGraphNode *) * (size_t)*cap);
+	}
+	(*seen)[(*count)++] = node;
+	for (int i = 0; i < node->dependencies.count; ++i) {
+		dg_collect_transitive(node->dependencies.data[i], seen, count, cap);
+	}
+}
+
 static void dg_chain_append(DependencyGraphNode *node) {
 	if (!driver.dependency_graph || driver.dependency_graph == node) {
 		driver.dependency_graph = node;
@@ -684,12 +699,17 @@ CompilerResult driver_run() {
 			should_quit = 1;
 		}
 		if (!should_quit) {
-			// symbol_table_merge -> symbol_table_copy -> copy_type, so
-			// the copies of imported Types end up in this module's arena.
+			// Transitive: b's exported signatures may name a's types.
 			type_arena_set(&current->module->type_arena);
+			DependencyGraphNode **seen = NULL;
+			int seen_count = 0, seen_cap = 0;
 			for (int i = 0; i < current->dependencies.count; ++i) {
-				current->module->symbol_table = symbol_table_merge(current->dependencies.data[i]->module->exported_table, current->module->symbol_table);
+				dg_collect_transitive(current->dependencies.data[i], &seen, &seen_count, &seen_cap);
 			}
+			for (int i = 0; i < seen_count; ++i) {
+				current->module->symbol_table = symbol_table_merge(seen[i]->module->exported_table, current->module->symbol_table);
+			}
+			free(seen);
 			type_arena_set(NULL);
 		}
 	}
