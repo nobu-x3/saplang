@@ -781,6 +781,8 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 				inner_ctx.passed_value = tmp;
 				codegen_literal(cg, init->expr, table, inner_ctx);
 				generated_value = LLVMBuildLoad2(cg->builder, inner_ty, tmp, "inner_struct_val");
+			} else if (init->expr->type == AST_STRING_LIT && ctx.expected_type && ctx.expected_type->type_kind == TYPE_SLICE) {
+				generated_value = codegen_literal(cg, init->expr, table, ctx);
 			} else {
 				generated_value = codegen_ast(cg, init->expr, table, ctx);
 			}
@@ -1460,7 +1462,6 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		LLVMValueRef constStr = LLVMConstStringInContext(cg->llvm_context, s, len, 1);
 		LLVMSetInitializer(gv, constStr);
 		LLVMSetAlignment(gv, 1);
-		// decay to i8*
 		return LLVMBuildBitCast(cg->builder, gv, LLVMPointerType(LLVMInt8TypeInContext(cg->llvm_context), 0), "strptr");
 	} break;
 

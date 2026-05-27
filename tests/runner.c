@@ -558,6 +558,7 @@ int main(void) {
 	RUN_TEST(test_CrossModuleEnumValue_modules);
 	RUN_TEST(test_CrossModuleTransitiveType_modules);
 	RUN_TEST(test_EnumCastAndChars_modules);
+	RUN_TEST(test_StructSliceTable_modules);
 	RUN_TEST(test_DebugInfoBasic_modules);
 	RUN_TEST(test_DebugInfoTypes_modules);
 	RUN_TEST(test_DebugInfoLines_modules);

@@ -116,6 +116,10 @@ void test_EnumCastAndChars_modules(void) {
     test("module_tests/enum_cast_and_chars", "enum_cast_and_chars");
 }
 
+void test_StructSliceTable_modules(void) {
+    test("module_tests/struct_slice_table", "struct_slice_table");
+}
+
 static void test_DebugInfoBasic_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";
