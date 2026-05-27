@@ -703,7 +703,8 @@ int is_convertible(const Type *source, const Type *target, int permissive, Symbo
 
 	// Allow array decay
 	if (source->type_kind == TYPE_ARRAY && target->type_kind == TYPE_POINTER) {
-		// Could call for is_convertible on underlying types but easier to debug non-recursive code
+		if (target->pointee && target->pointee->type_kind == TYPE_PRIMITIVE && target->pointee->prim == PRIM_VOID)
+			return 1;
 		int decay_count = 1;
 		Type *underlying_array_type = source->array.element_type;
 		while (underlying_array_type && underlying_array_type->type_kind == TYPE_ARRAY) {

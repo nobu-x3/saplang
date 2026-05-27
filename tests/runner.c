@@ -182,6 +182,11 @@ int main(void) {
 	RUN_TEST(test_PointerToStructNullInit_sema);
 	RUN_TEST(test_SliceOfPointerToStructNullInit_sema);
 	RUN_TEST(test_GlobalVariableInitWithGlobalVar_sema);
+	RUN_TEST(test_GlobalVariableInitWithFnCall_sema);
+	RUN_TEST(test_CharLitInitToU64_sema);
+	RUN_TEST(test_CharLitInitToBool_sema);
+	RUN_TEST(test_EnumToIntCast_sema);
+	RUN_TEST(test_IntToEnumCast_sema);
 	RUN_TEST(test_ParamReferencedInBody_sema);
 	RUN_TEST(test_PointerParamDereferencedInBody_sema);
 	RUN_TEST(test_ParamPassedToOtherCall_sema);
@@ -552,6 +557,7 @@ int main(void) {
 	RUN_TEST(test_CrossModuleUnionField_modules);
 	RUN_TEST(test_CrossModuleEnumValue_modules);
 	RUN_TEST(test_CrossModuleTransitiveType_modules);
+	RUN_TEST(test_EnumCastAndChars_modules);
 	RUN_TEST(test_DebugInfoBasic_modules);
 	RUN_TEST(test_DebugInfoTypes_modules);
 	RUN_TEST(test_DebugInfoLines_modules);

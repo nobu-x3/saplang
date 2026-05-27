@@ -823,11 +823,14 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			} else if (node->data.var_decl.init->type == AST_STRUCT_LITERAL) {
 				result = analyze_struct_literal(table, node->data.var_decl.type, node->data.var_decl.init, scope_level, scope_specifier);
 			} else if (node->data.var_decl.init->type == AST_CHAR_LIT) {
-				Type *type = node->data.var_decl.type;
-				if (type->type_kind != TYPE_PRIMITIVE)
+				if (!literal_fits_type(node->data.var_decl.init, node->data.var_decl.type)) {
+					char type_str[128] = "";
+					type_print(type_str, node->data.var_decl.type);
+					char msg[256] = "";
+					sprintf(msg, "cannot initialize %s with a char literal.", type_str);
+					report(node->location, msg, 0);
 					return RESULT_FAILURE;
-				if (type->prim != PRIM_U8 && type->prim != PRIM_I8)
-					return RESULT_FAILURE;
+				}
 				result = RESULT_SUCCESS;
 			} else if (node->data.var_decl.init->type == AST_ARRAY_LITERAL) {
 				ASTNode *array_literal = node->data.var_decl.init;
@@ -898,9 +901,13 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					}
 				}
 			} else {
-				// Disallow global variable initialization with other global variables
 				if (node->data.var_decl.init->type == AST_EXPR_IDENT && scope_level == 0) {
 					char msg[128] = "global variables cannot be initialized with other global variables.";
+					report(node->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+				if (node->data.var_decl.init->type == AST_FN_CALL && scope_level == 0) {
+					char msg[128] = "global variables cannot be initialized with a function call.";
 					report(node->location, msg, 0);
 					return RESULT_FAILURE;
 				}
@@ -1193,10 +1200,14 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		} else if (node->data.assignment.rvalue->type == AST_STRUCT_LITERAL) {
 			result = analyze_struct_literal(table, ltype, node->data.assignment.rvalue, scope_level, scope_specifier);
 		} else if (node->data.assignment.rvalue->type == AST_CHAR_LIT) {
-			if (ltype->type_kind != TYPE_PRIMITIVE)
+			if (!literal_fits_type(node->data.assignment.rvalue, ltype)) {
+				char type_str[128] = "";
+				type_print(type_str, ltype);
+				char msg[256] = "";
+				sprintf(msg, "cannot assign char literal to lvalue of type %s.", type_str);
+				report(node->location, msg, 0);
 				return RESULT_FAILURE;
-			if (ltype->prim != PRIM_U8 && ltype->prim != PRIM_I8)
-				return RESULT_FAILURE;
+			}
 			result = RESULT_SUCCESS;
 		} else if (node->data.assignment.rvalue->type == AST_ARRAY_LITERAL) {
 			ASTNode *array_literal = node->data.assignment.rvalue;
@@ -1599,6 +1610,10 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		if (expr_type->type_kind == TYPE_UNDECIDED)
 			resolve_type(table, expr_type, node->location);
 		if (expr_type->type_kind == TYPE_PRIMITIVE && node->data.cast.target_type->type_kind == TYPE_PRIMITIVE)
+			return RESULT_SUCCESS;
+		int src_int_like = is_int(expr_type) || expr_type->type_kind == TYPE_ENUM;
+		int tgt_int_like = is_int(node->data.cast.target_type) || node->data.cast.target_type->type_kind == TYPE_ENUM;
+		if (src_int_like && tgt_int_like)
 			return RESULT_SUCCESS;
 		if ((is_int(expr_type) && expr_type->type_name[1] == '6' && expr_type->type_name[2] == '4' && node->data.cast.target_type->type_kind == TYPE_POINTER) ||
 			(is_int(node->data.cast.target_type) && node->data.cast.target_type->type_name[1] == '6' && node->data.cast.target_type->type_name[2] == '4' && expr_type->type_kind == TYPE_POINTER)) {

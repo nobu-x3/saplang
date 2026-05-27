@@ -1342,8 +1342,10 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		return codegen_binary(cg, node, table, ctx);
 
 	case AST_CHAR_LIT: {
-		LLVMTypeRef u8_type = LLVMInt8TypeInContext(cg->llvm_context);
-		return LLVMConstInt(u8_type, node->data.char_literal.literal, 0);
+		LLVMTypeRef ty = LLVMInt8TypeInContext(cg->llvm_context);
+		if (ctx.expected_type && is_int(ctx.expected_type))
+			ty = map_to_llvm(cg, ctx.expected_type, table);
+		return LLVMConstInt(ty, node->data.char_literal.literal, 0);
 	}
 
 	case AST_TYPE_QUERY:
@@ -1603,8 +1605,9 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 				return decayed;
 		}
 		LLVMTypeRef target_ty = map_to_llvm(cg, node->data.cast.target_type, table);
-		// integer<->integer
-		if (is_int(node->data.cast.target_type) && is_int(exp_val_type)) {
+		int src_int_like = is_int(exp_val_type) || exp_val_type->type_kind == TYPE_ENUM;
+		int tgt_int_like = is_int(node->data.cast.target_type) || node->data.cast.target_type->type_kind == TYPE_ENUM;
+		if (src_int_like && tgt_int_like) {
 			return LLVMBuildIntCast(cg->builder, v, target_ty, "casttmp");
 		}
 		// float<->float

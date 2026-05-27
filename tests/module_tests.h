@@ -112,6 +112,10 @@ void test_CrossModuleTransitiveType_modules(void) {
     test("module_tests/cross_module_transitive_type", "cross_module_transitive_type");
 }
 
+void test_EnumCastAndChars_modules(void) {
+    test("module_tests/enum_cast_and_chars", "enum_cast_and_chars");
+}
+
 static void test_DebugInfoBasic_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";

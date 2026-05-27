@@ -485,6 +485,41 @@ void test_GlobalVariableInitWithGlobalVar_sema(void) {
 	free(output);
 }
 
+void test_GlobalVariableInitWithFnCall_sema(void) {
+	TEST_SETUP_SINGLE("fn i32 produce() { return 1; } i32 g = produce();");
+	const char *expected = "parser_tests.sl:1:36:Error: global variables cannot be initialized with a function call.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_CharLitInitToU64_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { u64 i = 'A'; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_CharLitInitToBool_sema(void) {
+	TEST_SETUP_SINGLE("fn void f() { bool b = 'A'; }");
+	const char *expected = "parser_tests.sl:1:22:Error: cannot initialize bool with a char literal.\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_EnumToIntCast_sema(void) {
+	TEST_SETUP_SINGLE("enum C : u8 { A, B, D } fn void f() { u32 v = (u32)C::B; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
+void test_IntToEnumCast_sema(void) {
+	TEST_SETUP_SINGLE("enum C : u8 { A, B, D } fn void f() { C c = (C)1; }");
+	const char *expected = "";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_ParamReferencedInBody_sema(void) {
 	TEST_SETUP_SINGLE("fn i32 foo(i32 a, i32 b) { return a + b; }");
 	const char *expected = "";
