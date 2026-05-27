@@ -58,6 +58,7 @@ int main(void) {
 	RUN_TEST(test_StructLiteral_Nested);
 	RUN_TEST(test_EnumDecl_WithReference);
 	RUN_TEST(test_EnumDecl_VariableDeclaration);
+	RUN_TEST(test_QualifiedEnumValue_CrossModule);
 	RUN_TEST(test_ExternBlocks_FullIO);
 	RUN_TEST(test_ExportedDecls);
 	RUN_TEST(test_Imports);
@@ -549,6 +550,7 @@ int main(void) {
 	RUN_TEST(test_CrossModuleConstGlobal_modules);
 	RUN_TEST(test_CrossModuleConstSlice_modules);
 	RUN_TEST(test_CrossModuleUnionField_modules);
+	RUN_TEST(test_CrossModuleEnumValue_modules);
 	RUN_TEST(test_DebugInfoBasic_modules);
 	RUN_TEST(test_DebugInfoTypes_modules);
 	RUN_TEST(test_DebugInfoLines_modules);

@@ -104,6 +104,10 @@ void test_CrossModuleUnionField_modules(void) {
     test("module_tests/cross_module_union_field", "cross_module_union_field");
 }
 
+void test_CrossModuleEnumValue_modules(void) {
+    test("module_tests/cross_module_enum_value", "cross_module_enum_value");
+}
+
 static void test_DebugInfoBasic_modules(void) {
     CompileOptions opts = {0};
     char input_file_path[256] = "";

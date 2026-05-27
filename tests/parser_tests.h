@@ -555,6 +555,15 @@ void test_EnumDecl_VariableDeclaration(void) {
 	free(output);
 }
 
+void test_QualifiedEnumValue_CrossModule(void) {
+	SETUP_TEST("i32 v = (i32)m::E::A;");
+	const char *expected = "VarDecl: i32 v:\n"
+						   "  Explicit cast to i32:\n"
+						   "    EnumValue: m::E::A\n";
+	TEST_ASSERT_EQUAL_STRING(expected, output);
+	free(output);
+}
+
 void test_ExternBlocks_FullIO(void) {
 	SETUP_TEST("extern {"
 			   "struct FILE {"

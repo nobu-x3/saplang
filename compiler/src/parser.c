@@ -248,7 +248,7 @@ static void ast_print_enum_decl(ASTNode *node, int indent, char *string) {
 static void ast_print_enum_value(ASTNode *node, char *string) {
 	print(string, "EnumValue: ");
 	type_print(string, node->data.enum_value.enum_type);
-	print(string, "::%s", node->data.enum_value.member);
+	print(string, "::%s\n", node->data.enum_value.member);
 }
 
 static void ast_print_extern_block(ASTNode *node, int indent, char *string) {
@@ -1206,6 +1206,21 @@ ASTNode *parse_qualified_identifier(Parser *parser, const char *scope_prefix) {
 		if (scope_prefix[0] == '\0')
 			sprintf(resolved_name, "__%s_%s", namespace, name);
 		parser->current_token = next_token(&parser->scanner);
+		if (parser->current_token.type == TOK_COLONCOLON) {
+			parser->current_token = next_token(&parser->scanner);
+			if (parser->current_token.type != TOK_IDENTIFIER) {
+				char msg[128];
+				sprintf(msg, "expected enum member identifier after '::', got '%s'.", parser->current_token.text);
+				return report(parser->current_token.location, msg, 0);
+			}
+			char member[64] = "";
+			strncpy(member, parser->current_token.text, sizeof(member));
+			parser->current_token = next_token(&parser->scanner);
+			Type *enum_type = new_named_type(name, namespace, TYPE_UNDECIDED);
+			if (!enum_type)
+				return NULL;
+			return new_enum_value_node(namespace, enum_type, member, loc);
+		}
 	} else {
 		if (scope_prefix[0] == '\0') {
 			sprintf(resolved_name, "__%s_%s", parser->module_name, name);

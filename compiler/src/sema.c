@@ -1815,6 +1815,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, msg, 0);
 			return RESULT_FAILURE;
 		}
+		if (node->data.enum_value.enum_type->type_kind == TYPE_UNDECIDED) {
+			node->data.enum_value.enum_type = copy_type(sym->type);
+		}
 		for (int i = 0; i < sym->node->data.enum_decl.member_count; ++i) {
 			if (strcmp(sym->node->data.enum_decl.members[i]->name, node->data.enum_value.member) == 0) {
 				return RESULT_SUCCESS;
