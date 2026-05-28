@@ -9,6 +9,7 @@
 
 CompilerResult analyze_expr_literal(Symbol *table, Type *lvalue_type, ASTNode *node, int scope_level, const char *scope_specifier);
 CompilerResult analyze_switch_stmt(Symbol *table, ASTNode *node, int scope_level, const char *scope_specifier);
+int literal_fits_type(ASTNode *node, Type *target);
 
 int is_known_type(Symbol *table, const Type *source, int current_scope) {
 	if (!source)
@@ -99,8 +100,16 @@ Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char *scope_
 		case TOK_OR:
 		case TOK_AND:
 			return get_primitive_bool();
-		default:
-			return get_type(table, node->data.binary_op.left, scope_level, scope_specifier);
+		default: {
+			Type *ltype = get_type(table, node->data.binary_op.left, scope_level, scope_specifier);
+			Type *rtype = get_type(table, node->data.binary_op.right, scope_level, scope_specifier);
+			// Literal carve-out: a bare int/float literal takes on the other side's type when it fits.
+			if (literal_fits_type(node->data.binary_op.left, rtype))
+				return rtype;
+			if (literal_fits_type(node->data.binary_op.right, ltype))
+				return ltype;
+			return ltype;
+		}
 		}
 
 	case AST_ASSIGNMENT:
