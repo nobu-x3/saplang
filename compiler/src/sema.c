@@ -677,11 +677,30 @@ CompilerResult analyze_union_decl(Symbol *table, ASTNode *node, int scope_level,
 static int switch_case_value_const(Symbol *table, ASTNode *node, int scope_level, long *out_value) {
 	if (!node)
 		return 0;
+	if (node->type == AST_CHAR_LIT) {
+		*out_value = (unsigned char)node->data.char_literal.literal;
+		return 1;
+	}
 	if (node->type == AST_EXPR_LITERAL) {
 		if (node->data.literal.is_float || node->data.literal.is_bool || node->data.literal.is_null)
 			return 0;
 		*out_value = node->data.literal.long_value;
 		return 1;
+	}
+	if (node->type == AST_UNARY_EXPR && node->data.unary_op.op == '-') {
+		long inner;
+		if (!switch_case_value_const(table, node->data.unary_op.operand, scope_level, &inner))
+			return 0;
+		*out_value = -inner;
+		return 1;
+	}
+	if (node->type == AST_EXPR_IDENT) {
+		Symbol *sym = lookup_symbol(table, node->data.ident.resolved_name, scope_level);
+		if (!sym)
+			sym = lookup_symbol(table, node->data.ident.resolved_name, 0);
+		if (!sym || !sym->is_const || !sym->node || sym->node->type != AST_VAR_DECL || !sym->node->data.var_decl.init)
+			return 0;
+		return switch_case_value_const(table, sym->node->data.var_decl.init, scope_level, out_value);
 	}
 	if (node->type == AST_ENUM_VALUE) {
 		Symbol *sym = lookup_symbol(table, node->data.enum_value.enum_type->type_resolved_name, scope_level);
@@ -745,18 +764,32 @@ CompilerResult analyze_switch_stmt(Symbol *table, ASTNode *node, int scope_level
 					report(val->location, msg, 0);
 					return RESULT_FAILURE;
 				}
-			} else {
-				if (val->type != AST_EXPR_LITERAL || !literal_fits_type(val, subject_type)) {
+			}
+			long const_val = 0;
+			int got_const = subject_is_enum ? 1 : switch_case_value_const(table, val, scope_level, &const_val);
+			if (!subject_is_enum) {
+				if (!got_const) {
 					char type_msg[128] = "";
 					type_print(type_msg, subject_type);
 					char msg[256] = "";
-					sprintf(msg, "case value must be an integer literal compatible with switch subject type %s.", type_msg);
+					sprintf(msg, "case value must be a constant integer expression compatible with switch subject type %s.", type_msg);
 					report(val->location, msg, 0);
 					return RESULT_FAILURE;
 				}
-			}
-			long const_val = 0;
-			if (!switch_case_value_const(table, val, scope_level, &const_val)) {
+				int type_ok = literal_fits_type(val, subject_type);
+				if (!type_ok) {
+					Type *vt = get_type(table, val, scope_level, scope_specifier);
+					type_ok = vt && vt->type_kind == TYPE_PRIMITIVE && is_int(vt) && vt->prim != PRIM_BOOL;
+				}
+				if (!type_ok) {
+					char type_msg[128] = "";
+					type_print(type_msg, subject_type);
+					char msg[256] = "";
+					sprintf(msg, "case value not compatible with switch subject type %s.", type_msg);
+					report(val->location, msg, 0);
+					return RESULT_FAILURE;
+				}
+			} else if (!switch_case_value_const(table, val, scope_level, &const_val)) {
 				report(val->location, "case value must be a constant.", 0);
 				return RESULT_FAILURE;
 			}

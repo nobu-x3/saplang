@@ -646,7 +646,7 @@ void test_Switch_NonConstCaseValue_sema(void) {
 					  "    case b: { a = 10; }"
 					  "    }"
 					  "}");
-	TEST_ASSERT_NOT_NULL(strstr(output, "case value must be an integer literal compatible with switch subject type"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "case value must be a constant integer expression compatible with switch subject type"));
 	free(output);
 }
 

@@ -74,7 +74,7 @@ Token next_token(Scanner *scanner) {
 		eat_next_char(scanner);
 		while (_INPUT[_INDEX] && _INPUT[_INDEX] != '\'') {
 			char ch = eat_next_char(scanner);
-			if (ch == '\\' && _INPUT[_INDEX] && _INPUT[_INDEX] != '\'') {
+			if (ch == '\\' && _INPUT[_INDEX]) {
 				char second = eat_next_char(scanner);
 				ch = decode_escape_sequence(start_loc, second);
 			}
