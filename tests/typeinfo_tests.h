@@ -116,11 +116,7 @@ void test_StructTrailingPadI32Bool_typeinfo(void) {
 	TEST_ASSERT_EQUAL_UINT32(4, info.align);
 }
 
-// An enum-typed field contributes its base type's size + align. A struct
-// holding two u16 enums followed by a u32 must lay out as 2 + 2 + 4 = 8,
-// not 0 + 0 + 4 = 4. Previously the enum field's copy stayed UNDECIDED
-// when this lookup ran, falling through to {0, 1} and silently collapsing
-// the layout.
+// Enum field contributed 0 instead of its base type's size, collapsing layout.
 void test_StructTwoEnumsThenU32_typeinfo(void) {
 	TEST_SETUP_SINGLE_TYPEINFO("enum E : u16 { A = 0, B } struct S { E a; E b; u32 c; }");
 	Type type = {.type_kind = TYPE_STRUCT, .type_name = "S"};
@@ -130,8 +126,7 @@ void test_StructTwoEnumsThenU32_typeinfo(void) {
 	TEST_ASSERT_EQUAL_UINT32(4, info.align);
 }
 
-// Enum field followed directly by a wider scalar must still insert
-// alignment padding for the scalar: 2 + (2 pad) + 4 = 8.
+// Enum + wider scalar: 2 + (2 pad) + 4 = 8.
 void test_StructEnumThenU32_typeinfo(void) {
 	TEST_SETUP_SINGLE_TYPEINFO("enum E : u16 { A = 0, B } struct S { E a; u32 c; }");
 	Type type = {.type_kind = TYPE_STRUCT, .type_name = "S"};
@@ -141,9 +136,7 @@ void test_StructEnumThenU32_typeinfo(void) {
 	TEST_ASSERT_EQUAL_UINT32(4, info.align);
 }
 
-// A nested struct whose first field is itself a struct containing enum
-// fields must still pick up the inner enum sizing. Mirrors the AstHeader
-// embedded inside IntLitNode pattern from stage2.
+// Nested struct sizing must see the inner enum fields (AstHeader-in-IntLitNode shape).
 void test_StructEnumNestedHeaderPlusU64_typeinfo(void) {
 	TEST_SETUP_SINGLE_TYPEINFO(
 		"enum K : u16 { A = 0 } enum F : u16 { X = 0 } "

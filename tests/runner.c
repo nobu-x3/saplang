@@ -475,6 +475,8 @@ int main(void) {
 	RUN_TEST(test_CastFloatNarrowing_codegen);
 	RUN_TEST(test_CastFloatToInt_codegen);
 	RUN_TEST(test_CastIntToFloat_codegen);
+	RUN_TEST(test_BinaryOp_U64TimesU32Var_codegen);
+	RUN_TEST(test_BinaryOp_I64TimesI32Var_codegen);
 	RUN_TEST(test_EnumImplicitBaseValue_codegen);
 	RUN_TEST(test_EnumExplicitU8Base_codegen);
 	RUN_TEST(test_EnumExplicitJump_codegen);

@@ -164,10 +164,7 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 		return info;
 	}
 	case TYPE_UNDECIDED: {
-		// Field types are copies; if the surrounding module's resolve_types
-		// pass hasn't reached this field yet (or sizeof crosses module
-		// boundaries), the copy is still UNDECIDED while the canonical
-		// decl is known to the symbol table. Defer to that.
+		// Field-type copies can lag the canonical decl; defer to the table.
 		if (current_type_table && type->type_resolved_name[0] != '\0') {
 			Symbol *sym = lookup_symbol(current_type_table, type->type_resolved_name, 0);
 			if (sym && sym->type && sym->type->type_kind != TYPE_UNDECIDED) {

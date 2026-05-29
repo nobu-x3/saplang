@@ -1260,12 +1260,14 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 	} break;
 
 	case AST_EXPR_IDENT: {
+		// Load at the variable's storage type; widening is the caller's job.
+		Type *actual_type = get_type(table, node, ctx.current_scope, "");
 		if (hashmap_contains(ctx.loaded_values, node->data.ident.resolved_name)) {
 			LLVMValueRef ptr = hashmap_get(ctx.loaded_values, node->data.ident.resolved_name);
 			if (ctx.intention == PI_LOAD_VAL) {
 				assert(ctx.expected_type && "Must give expected type with PI_LOAD_VAL");
-				LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
-				if (ctx.expected_type->type_kind == TYPE_FUNCTION)
+				LLVMTypeRef ty = map_to_llvm(cg, actual_type ? actual_type : ctx.expected_type, table);
+				if ((actual_type ? actual_type : ctx.expected_type)->type_kind == TYPE_FUNCTION)
 					ty = LLVMPointerType(ty, 0);
 				return LLVMBuildLoad2(cg->builder, ty, ptr, "");
 			}
@@ -1280,8 +1282,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		assert(named_global); // @NOTE: I think that's the only option here - can only be global var
 		if (ctx.intention == PI_LOAD_VAL) {
 			assert(ctx.expected_type && "Must give expected type with PI_LOAD_VAL");
-			LLVMTypeRef ty = map_to_llvm(cg, ctx.expected_type, table);
-			if (ctx.expected_type->type_kind == TYPE_FUNCTION)
+			LLVMTypeRef ty = map_to_llvm(cg, actual_type ? actual_type : ctx.expected_type, table);
+			if ((actual_type ? actual_type : ctx.expected_type)->type_kind == TYPE_FUNCTION)
 				ty = LLVMPointerType(ty, 0);
 			return LLVMBuildLoad2(cg->builder, ty, named_global, "");
 		}

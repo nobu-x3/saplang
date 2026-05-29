@@ -1812,6 +1812,24 @@ void test_CastIntToFloat_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
+// IDENT loaded the u32 var at the binop's i64 expected_type, reading garbage past the alloca.
+void test_BinaryOp_U64TimesU32Var_codegen(void) {
+	EXH_TEST_SETUP("fn u64 mul(u32 n) { u64 a = (u64)8; return a * n; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "load i32"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "zext i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+// Signed-narrow operand widens via sext, not zext.
+void test_BinaryOp_I64TimesI32Var_codegen(void) {
+	EXH_TEST_SETUP("fn i64 mul(i32 n) { i64 a = (i64)8; return a * n; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "load i32"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "sext i32"));
+	EXH_TEST_TEARDOWN();
+}
+
 // ---------------------------------------------------------------------------
 // 13. Enum codegen — `EnumType::Member` literally resolves to its
 //    integer value at the expression site.
