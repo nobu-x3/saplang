@@ -6,6 +6,8 @@
 // If given an AST_FUNC_DECL, will return return type of the function
 Type *get_type(Symbol *table, ASTNode *node, int scope_level, const char* scope_specifier);
 
+int literal_fits_type(ASTNode *node, Type *target);
+
 /* ASTNode *insert_implicit_cast(ASTNode *expr, const char *target_type); */
 
 /*

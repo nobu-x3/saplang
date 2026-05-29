@@ -147,7 +147,10 @@ LLVMTypeRef map_to_llvm(CodegenLLVM *cg, Type *type, Symbol *table) {
 	case TYPE_UNION: {
 		char name[512] = "";
 		sprintf(name, "union.%s", type->type_resolved_name);
-		return LLVMGetTypeByName2(cg->llvm_context, name);
+		LLVMTypeRef t = LLVMGetTypeByName2(cg->llvm_context, name);
+		if (!t)
+			t = LLVMStructCreateNamed(cg->llvm_context, name);
+		return t;
 	} break;
 
 	case TYPE_ENUM: {
@@ -1075,14 +1078,23 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	assert(l_type);
 	Type *r_type = get_type(table, node->data.binary_op.right, ctx.current_scope, "");
 	int is_ptr_arith = (op == TOK_PLUS || op == TOK_MINUS) && l_type->type_kind == TYPE_POINTER && r_type && is_int(r_type);
+	// Resolved binop type (mirrors sema's literal carve-out): a bare literal
+	// adopts the other side's type when it fits, otherwise we keep l_type.
+	Type *binop_type = l_type;
+	if (!is_ptr_arith && r_type) {
+		if (literal_fits_type(node->data.binary_op.left, r_type))
+			binop_type = r_type;
+		else if (literal_fits_type(node->data.binary_op.right, l_type))
+			binop_type = l_type;
+	}
 	PassContext lhs_ctx = ctx;
-	lhs_ctx.expected_type = l_type;
+	lhs_ctx.expected_type = binop_type;
 	LLVMValueRef L = codegen_ast(cg, node->data.binary_op.left, table, lhs_ctx);
 	PassContext rhs_ctx = ctx;
-	rhs_ctx.expected_type = is_ptr_arith ? r_type : l_type;
+	rhs_ctx.expected_type = is_ptr_arith ? r_type : binop_type;
 	LLVMValueRef R = codegen_ast(cg, node->data.binary_op.right, table, rhs_ctx);
-	int is_float = l_type->type_kind == TYPE_PRIMITIVE && (l_type->prim == PRIM_F32 || l_type->prim == PRIM_F64);
-	int is_unsigned = l_type->type_kind == TYPE_PRIMITIVE && (l_type->prim == PRIM_U8 || l_type->prim == PRIM_U16 || l_type->prim == PRIM_U32 || l_type->prim == PRIM_U64);
+	int is_float = binop_type->type_kind == TYPE_PRIMITIVE && (binop_type->prim == PRIM_F32 || binop_type->prim == PRIM_F64);
+	int is_unsigned = binop_type->type_kind == TYPE_PRIMITIVE && (binop_type->prim == PRIM_U8 || binop_type->prim == PRIM_U16 || binop_type->prim == PRIM_U32 || binop_type->prim == PRIM_U64);
 	switch (node->data.binary_op.op) {
 	case TOK_EQUAL:
 		if (is_float)
@@ -1196,10 +1208,7 @@ void codegen_imported_symbol(CodegenLLVM *cg, Symbol *sym, Symbol *table) {
 		LLVMSetExternallyInitialized(global_var, 1);
 	} break;
 	case AST_UNION_DECL: {
-		char union_name[512] = "";
-		sprintf(union_name, "union.%s", node->data.union_decl.name);
-		LLVMTypeRef struct_type = LLVMStructCreateNamed(cg->llvm_context, union_name);
-		assert(struct_type);
+		codegen_union_decl(cg, sym->node, table);
 	} break;
 	case AST_STRUCT_DECL: {
 		codegen_struct_decl(cg, sym->node, table);
@@ -1686,7 +1695,11 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		for (int c = 0; c < node->data.switch_stmt.case_count; ++c) {
 			LLVMPositionBuilderAtEnd(cg->builder, group_bbs[c]);
 			codegen_ast(cg, node->data.switch_stmt.cases[c].body, table, ctx);
-			LLVMValueRef last_inst = LLVMGetLastInstruction(group_bbs[c]);
+			// After the body, the builder may be in a merge block from a
+			// nested if/else, not in group_bbs[c] itself. Terminate whatever
+			// block is current, not the case's entry block.
+			LLVMBasicBlockRef cur = LLVMGetInsertBlock(cg->builder);
+			LLVMValueRef last_inst = LLVMGetLastInstruction(cur);
 			if (!last_inst) {
 				LLVMBuildBr(cg->builder, endBB);
 			} else {
@@ -1698,7 +1711,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		if (elseBB) {
 			LLVMPositionBuilderAtEnd(cg->builder, elseBB);
 			codegen_ast(cg, node->data.switch_stmt.else_body, table, ctx);
-			LLVMValueRef last_inst = LLVMGetLastInstruction(elseBB);
+			LLVMBasicBlockRef cur = LLVMGetInsertBlock(cg->builder);
+			LLVMValueRef last_inst = LLVMGetLastInstruction(cur);
 			if (!last_inst) {
 				LLVMBuildBr(cg->builder, endBB);
 			} else {
@@ -1734,6 +1748,20 @@ static void codegen_predeclare_fn(CodegenLLVM *cg, const char *resolved_name, Sy
 }
 
 void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
+	for (Symbol *sym = table; sym; sym = sym->next) {
+		if (!sym->is_imported || !sym->node)
+			continue;
+		if (sym->node->type == AST_STRUCT_DECL) {
+			const char *name = sym->node->data.struct_decl.resolved_name;
+			if (!LLVMGetTypeByName2(cg->llvm_context, name))
+				LLVMStructCreateNamed(cg->llvm_context, name);
+		} else if (sym->node->type == AST_UNION_DECL) {
+			char union_name[512] = "";
+			sprintf(union_name, "union.%s", sym->node->data.union_decl.resolved_name);
+			if (!LLVMGetTypeByName2(cg->llvm_context, union_name))
+				LLVMStructCreateNamed(cg->llvm_context, union_name);
+		}
+	}
 	for (Symbol *sym = table; sym; sym = sym->next) {
 		if (sym->is_imported) {
 			codegen_imported_symbol(cg, sym, table);
