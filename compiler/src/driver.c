@@ -392,19 +392,23 @@ static void dg_diag_open(DependencyGraphNode *node) {
 }
 
 // Close the sink (which flushes the memstream into diag_buf), copy the
-// buffered bytes to `out`, then free the buffer. Idempotent for nodes
-// that were never opened or already drained.
-static void dg_diag_drain(DependencyGraphNode *node, FILE *out) {
+// buffered bytes to `out`, then free the buffer. Returns the number of
+// bytes drained so callers can detect silent failures. Idempotent for
+// nodes that were never opened or already drained.
+static size_t dg_diag_drain(DependencyGraphNode *node, FILE *out) {
 	if (!node->diag_sink)
-		return;
+		return 0;
 	fclose(node->diag_sink);
 	node->diag_sink = NULL;
+	size_t n = 0;
 	if (node->diag_buf && node->diag_buf_size > 0) {
-		fwrite(node->diag_buf, 1, node->diag_buf_size, out);
+		n = node->diag_buf_size;
+		fwrite(node->diag_buf, 1, n, out);
 	}
 	free(node->diag_buf);
 	node->diag_buf = NULL;
 	node->diag_buf_size = 0;
+	return n;
 }
 
 void dg_clean(DependencyGraphNode *graph) {
@@ -694,7 +698,10 @@ CompilerResult driver_run() {
 	}
 	threadpool_wait_all(thread_pool);
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
-		dg_diag_drain(current, stderr);
+		size_t drained = dg_diag_drain(current, stderr);
+		if (current->module->has_errors && drained == 0) {
+			fprintf(stderr, "internal: parser reported failure for %s with no diagnostic.\n", current->name);
+		}
 	}
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		if (current->module->has_errors) {
@@ -743,7 +750,10 @@ CompilerResult driver_run() {
 	}
 	threadpool_wait_all(thread_pool);
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
-		dg_diag_drain(current, stderr);
+		size_t drained = dg_diag_drain(current, stderr);
+		if (current->module->has_errors && drained == 0) {
+			fprintf(stderr, "internal: sema reported failure for %s with no diagnostic.\n", current->name);
+		}
 	}
 	for (DependencyGraphNode *current = driver.dependency_graph; current != NULL; current = current->next) {
 		if (current->module->has_errors) {

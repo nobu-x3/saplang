@@ -325,6 +325,9 @@ CompilerResult analyze_expr_ident(Symbol *table, ASTNode *node, int scope_level)
 	Symbol *global_sym_resolved = lookup_symbol(table, node->data.ident.resolved_name, 0);
 	if (global_sym_resolved)
 		return RESULT_SUCCESS;
+	char msg[160] = "";
+	snprintf(msg, sizeof(msg), "unknown identifier '%s'.", node->data.ident.name);
+	report(node->location, msg, 0);
 	return RESULT_FAILURE;
 }
 
@@ -985,6 +988,9 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			if (init_node_type != AST_STRUCT_LITERAL && init_node_type != AST_STRING_LIT && init_node_type != AST_EXPR_LITERAL && init_node_type != AST_UNARY_EXPR && init_node_type != AST_CHAR_LIT && init_node_type != AST_ARRAY_LITERAL) {
 				Type *init_type = get_type(table, node->data.var_decl.init, scope_level, scope_specifier);
 				if (!init_type) {
+					char msg[160] = "";
+					snprintf(msg, sizeof(msg), "cannot determine type of initializer for '%s'.", node->data.var_decl.name);
+					report(node->data.var_decl.init->location, msg, 0);
 					return RESULT_FAILURE;
 				}
 				if (!is_convertible(init_type, node->data.var_decl.type, 0, table)) {
@@ -1102,8 +1108,21 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			return RESULT_FAILURE;
 		}
 		ASTNode *return_expr = node->data.ret.return_expr;
+		if (!return_expr) {
+			Type *ret_ty = sym->type->function.return_type;
+			if (ret_ty && ret_ty->prim == PRIM_VOID) {
+				return RESULT_SUCCESS;
+			}
+			char msg[160] = "";
+			char trg[64] = "";
+			if (ret_ty)
+				type_print(trg, ret_ty);
+			snprintf(msg, sizeof(msg), "bare 'return' in non-void function (returns %s).", trg);
+			report(node->location, msg, 0);
+			return RESULT_FAILURE;
+		}
 		// Struct/slice literals get their type from the fn return type, same as var-decl init.
-		if (return_expr && return_expr->type == AST_STRUCT_LITERAL) {
+		if (return_expr->type == AST_STRUCT_LITERAL) {
 			return analyze_struct_literal(table, sym->type->function.return_type, return_expr, scope_level, scope_specifier);
 		}
 		CompilerResult result = analyze_ast(table, return_expr, scope_level, scope_specifier);
@@ -1789,8 +1808,12 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			}
 		}
 		Type *field_type = get_type(table, node, scope_level, scope_specifier);
-		if (!field_type)
+		if (!field_type) {
+			char msg[160] = "";
+			snprintf(msg, sizeof(msg), "cannot determine type of member access '.%s'.", node->data.member_access.member);
+			report(node->location, msg, 0);
 			return RESULT_FAILURE;
+		}
 		return RESULT_SUCCESS;
 	} break;
 

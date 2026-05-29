@@ -667,7 +667,9 @@ LLVMValueRef codegen_return(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	assert(sym->kind == SYMB_FN && sym->type->type_kind == TYPE_FUNCTION);
 	ctx.expected_type = sym->type->function.return_type;
 	ctx.intention = PI_LOAD_VAL;
-	ASTNodeType ret_expr_type = node->data.ret.return_expr->type;
+	if (!node->data.ret.return_expr) {
+		return LLVMBuildRetVoid(cg->builder);
+	}
 	LLVMValueRef expr = codegen_ast(cg, node->data.ret.return_expr, table, ctx);
 	assert(expr);
 	expr = maybe_decay_to_slice(cg, node->data.ret.return_expr, expr, ctx.expected_type, table, ctx);
