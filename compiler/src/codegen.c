@@ -1611,6 +1611,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 
 	case AST_CAST: {
 		Type *exp_val_type = get_type(table, node->data.cast.expr, ctx.current_scope, "");
+		if (literal_fits_type(node->data.cast.expr, node->data.cast.target_type))
+			exp_val_type = node->data.cast.target_type;
 		PassContext val_ctx = ctx;
 		val_ctx.expected_type = exp_val_type;
 		val_ctx.intention = PI_LOAD_VAL;
@@ -1624,7 +1626,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		int src_int_like = is_int(exp_val_type) || exp_val_type->type_kind == TYPE_ENUM;
 		int tgt_int_like = is_int(node->data.cast.target_type) || node->data.cast.target_type->type_kind == TYPE_ENUM;
 		if (src_int_like && tgt_int_like) {
-			return LLVMBuildIntCast(cg->builder, v, target_ty, "casttmp");
+			int src_unsigned = exp_val_type->type_kind == TYPE_PRIMITIVE && (exp_val_type->prim == PRIM_U8 || exp_val_type->prim == PRIM_U16 || exp_val_type->prim == PRIM_U32 || exp_val_type->prim == PRIM_U64);
+			return LLVMBuildIntCast2(cg->builder, v, target_ty, !src_unsigned, "casttmp");
 		}
 		// float<->float
 		if (LLVMGetTypeKind(LLVMTypeOf(v)) == LLVMFloatTypeKind && LLVMGetTypeKind(target_ty) == LLVMDoubleTypeKind) {

@@ -2616,3 +2616,26 @@ void test_BinopWidensNarrowerOperand_codegen(void) {
 	TEST_ASSERT_NOT_NULL(strstr(output, "xor i32"));
 	EXH_TEST_TEARDOWN();
 }
+
+void test_CastIntLiteralToWiderUnsignedNoSignExt_codegen(void) {
+	EXH_TEST_SETUP("fn u64 v() { return (u64)0xdeadbeef; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret i64 3735928559"));
+	TEST_ASSERT_NULL(strstr(output, "sext i32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CastU8ToU64ZeroExt_codegen(void) {
+	EXH_TEST_SETUP("fn u64 v(u8 b) { return (u64)b; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "zext i8"));
+	TEST_ASSERT_NULL(strstr(output, "sext i8"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_CastI8ToI64SignExt_codegen(void) {
+	EXH_TEST_SETUP("fn i64 v(i8 b) { return (i64)b; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "sext i8"));
+	EXH_TEST_TEARDOWN();
+}

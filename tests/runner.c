@@ -363,6 +363,9 @@ int main(void) {
 	RUN_TEST(test_OverloadedLocalsDontCollide_codegen);
 	RUN_TEST(test_IndirectCallReturnTypeIsUnwrapped_codegen);
 	RUN_TEST(test_BinopWidensNarrowerOperand_codegen);
+	RUN_TEST(test_CastIntLiteralToWiderUnsignedNoSignExt_codegen);
+	RUN_TEST(test_CastU8ToU64ZeroExt_codegen);
+	RUN_TEST(test_CastI8ToI64SignExt_codegen);
 	RUN_TEST(test_SliceDotPtr_codegen);
 	RUN_TEST(test_SliceDotLenAfterDecay_codegen);
 	RUN_TEST(test_SliceIndexRead_codegen);
