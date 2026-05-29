@@ -104,34 +104,3 @@ export fn void load_keywords(interner::Interner* it) {
         sym.keyword_kind = structs::KEYWORDS[i].kind;
     }
 }
-
-export enum CharClass : u8 {
-    Alpha = 1,
-    Digit = 2,
-    ID_Start = 4,
-    ID_Cont = 8,
-    Hex = 16,
-    Whitespace = 32,
-    NewLine = 64,
-}
-
-export CharClass[256] CHAR_CLASS;
-
-export fn void build_char_class_table() {
-    CharClass alpha_hex = (CharClass)((u8)CharClass::Alpha | (u8)CharClass::ID_Start | (u8)CharClass::ID_Cont | (u8)CharClass::Hex);
-    CharClass alpha     = (CharClass)((u8)CharClass::Alpha | (u8)CharClass::ID_Start | (u8)CharClass::ID_Cont);
-    CharClass digit     = (CharClass)((u8)CharClass::Digit | (u8)CharClass::ID_Cont | (u8)CharClass::Hex);
-    CharClass id_only   = (CharClass)((u8)CharClass::ID_Start | (u8)CharClass::ID_Cont);
-
-    sys::memset(CHAR_CLASS, 0, 256);
-    for (u64 i = 'A'; i <= 'F'; i += 1) { CHAR_CLASS[i] = alpha_hex; }
-    for (u64 i = 'G'; i <= 'Z'; i += 1) { CHAR_CLASS[i] = alpha; }
-    for (u64 i = 'a'; i <= 'f'; i += 1) { CHAR_CLASS[i] = alpha_hex; }
-    for (u64 i = 'g'; i <= 'z'; i += 1) { CHAR_CLASS[i] = alpha; }
-    for (u64 i = '0'; i <= '9'; i += 1) { CHAR_CLASS[i] = digit; }
-    CHAR_CLASS['_']  = id_only;
-    CHAR_CLASS[' ']  = CharClass::Whitespace;
-    CHAR_CLASS['\t'] = CharClass::Whitespace;
-    CHAR_CLASS['\r'] = CharClass::Whitespace;
-    CHAR_CLASS['\n'] = CharClass::NewLine;
-}

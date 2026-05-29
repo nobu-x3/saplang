@@ -46,6 +46,9 @@ extern {
     export fn i64 ftell(FILE* stream);
 
     export fn i32 remove(const i8* path);
+
+    // numeric parsing
+    export fn f64 strtod(const i8* nptr, i8** endptr);
 }
 
 export const i32 SEEK_SET = 0;
