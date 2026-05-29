@@ -1078,8 +1078,6 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	assert(l_type);
 	Type *r_type = get_type(table, node->data.binary_op.right, ctx.current_scope, "");
 	int is_ptr_arith = (op == TOK_PLUS || op == TOK_MINUS) && l_type->type_kind == TYPE_POINTER && r_type && is_int(r_type);
-	// Resolved binop type (mirrors sema's literal carve-out): a bare literal
-	// adopts the other side's type when it fits, otherwise we keep l_type.
 	Type *binop_type = l_type;
 	if (!is_ptr_arith && r_type) {
 		if (literal_fits_type(node->data.binary_op.left, r_type))
@@ -1585,7 +1583,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		codegen_ast(cg, node->data.if_stmt.then_branch, table, then_ctx);
 		LLVMBasicBlockRef then_end = LLVMGetInsertBlock(cg->builder);
 		LLVMValueRef last_inst = LLVMGetLastInstruction(then_end);
-		if (!last_inst || (LLVMGetInstructionOpcode(last_inst) != LLVMBr && LLVMGetInstructionOpcode(last_inst) != LLVMRet))
+		// Skip if already at mergeBB — nested if/else chains share it.
+		if (then_end != mergeBB && (!last_inst || (LLVMGetInstructionOpcode(last_inst) != LLVMBr && LLVMGetInstructionOpcode(last_inst) != LLVMRet)))
 			LLVMBuildBr(cg->builder, mergeBB);
 		// else
 		if (elseBB) {
@@ -1595,7 +1594,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			codegen_ast(cg, node->data.if_stmt.else_branch, table, else_ctx);
 			LLVMBasicBlockRef else_end = LLVMGetInsertBlock(cg->builder);
 			last_inst = LLVMGetLastInstruction(else_end);
-			if (!last_inst || (LLVMGetInstructionOpcode(last_inst) != LLVMBr && LLVMGetInstructionOpcode(last_inst) != LLVMRet))
+			if (else_end != mergeBB && (!last_inst || (LLVMGetInstructionOpcode(last_inst) != LLVMBr && LLVMGetInstructionOpcode(last_inst) != LLVMRet)))
 				LLVMBuildBr(cg->builder, mergeBB);
 		}
 		// merge
@@ -1695,9 +1694,6 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		for (int c = 0; c < node->data.switch_stmt.case_count; ++c) {
 			LLVMPositionBuilderAtEnd(cg->builder, group_bbs[c]);
 			codegen_ast(cg, node->data.switch_stmt.cases[c].body, table, ctx);
-			// After the body, the builder may be in a merge block from a
-			// nested if/else, not in group_bbs[c] itself. Terminate whatever
-			// block is current, not the case's entry block.
 			LLVMBasicBlockRef cur = LLVMGetInsertBlock(cg->builder);
 			LLVMValueRef last_inst = LLVMGetLastInstruction(cur);
 			if (!last_inst) {
