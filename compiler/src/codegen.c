@@ -250,7 +250,9 @@ LLVMMetadataRef map_to_ditype(CodegenLLVM *cg, Type *type, Symbol *table) {
 		LLVMMetadataRef members[2];
 		members[0] = LLVMDIBuilderCreateMemberType(cg->di_builder, cg->di_cu, "ptr", 3, cg->di_file, 0, PLATFORM_POINTER_SIZE, PLATFORM_POINTER_SIZE, 0, 0, ptr_di);
 		members[1] = LLVMDIBuilderCreateMemberType(cg->di_builder, cg->di_cu, "len", 3, cg->di_file, 0, 64, 64, PLATFORM_POINTER_SIZE, 0, u64_di);
-		const char *name = "slice";
+		// Distinct DWARF name per element type — otherwise debuggers merge all `slice` types.
+		char name[256] = "";
+		type_print(name, type);
 		result = LLVMDIBuilderCreateStructType(cg->di_builder, cg->di_cu, name, strlen(name), cg->di_file, 0, PLATFORM_POINTER_SIZE + 64, PLATFORM_POINTER_SIZE, 0, NULL, members, 2, 0, NULL, "", 0);
 	} break;
 
