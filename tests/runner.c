@@ -277,6 +277,9 @@ int main(void) {
 	RUN_TEST(test_StructAlreadyAlignedSingleF64_typeinfo);
 	RUN_TEST(test_StructAlreadyAlignedI32Quad_typeinfo);
 	RUN_TEST(test_StructTrailingPadI32Bool_typeinfo);
+	RUN_TEST(test_StructTwoEnumsThenU32_typeinfo);
+	RUN_TEST(test_StructEnumThenU32_typeinfo);
+	RUN_TEST(test_StructEnumNestedHeaderPlusU64_typeinfo);
 	RUN_TEST(test_UnionDecl_typeinfo);
 	RUN_TEST(test_FunctionType_typeinfo);
 	RUN_TEST(test_StructWithFnPtrField_typeinfo);

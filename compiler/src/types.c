@@ -120,11 +120,20 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 			return info;
 		return compute_struct_size_and_alignment(layout);
 	}
-	case TYPE_ENUM:
-		if (node && node->type == AST_ENUM_DECL && node->data.enum_decl.base_type) {
-			return get_type_info(node->data.enum_decl.base_type, node);
+	case TYPE_ENUM: {
+		ASTNode *layout = node;
+		if (!layout || layout->type != AST_ENUM_DECL) {
+			if (current_type_table) {
+				Symbol *sym = lookup_symbol(current_type_table, type->type_resolved_name, 0);
+				if (sym && sym->node && sym->node->type == AST_ENUM_DECL)
+					layout = sym->node;
+			}
+		}
+		if (layout && layout->type == AST_ENUM_DECL && layout->data.enum_decl.base_type) {
+			return get_type_info(layout->data.enum_decl.base_type, layout);
 		}
 		return info;
+	}
 
 	case TYPE_UNION: {
 		info.size = 0;
@@ -154,8 +163,19 @@ TypeInfo get_type_info(Type *type, ASTNode *node) {
 		}
 		return info;
 	}
-	case TYPE_UNDECIDED:
+	case TYPE_UNDECIDED: {
+		// Field types are copies; if the surrounding module's resolve_types
+		// pass hasn't reached this field yet (or sizeof crosses module
+		// boundaries), the copy is still UNDECIDED while the canonical
+		// decl is known to the symbol table. Defer to that.
+		if (current_type_table && type->type_resolved_name[0] != '\0') {
+			Symbol *sym = lookup_symbol(current_type_table, type->type_resolved_name, 0);
+			if (sym && sym->type && sym->type->type_kind != TYPE_UNDECIDED) {
+				return get_type_info(sym->type, sym->node);
+			}
+		}
 		break;
+	}
 	}
 	return info;
 }
