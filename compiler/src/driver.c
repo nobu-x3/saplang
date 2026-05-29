@@ -598,6 +598,7 @@ void sema_task(void *arg) {
 	}
 
 	symbol_table_set_type_info(node->module->symbol_table);
+	type_table_set(node->module->symbol_table);
 
 	for (ASTNode *ast_node = node->module->ast; ast_node; ast_node = ast_node->next) {
 		int sema_failed = analyze_ast(node->module->symbol_table, ast_node, 0, "") != RESULT_SUCCESS;
@@ -605,6 +606,7 @@ void sema_task(void *arg) {
 		node->module->has_errors |= sema_failed || type_resolution_failed;
 	}
 
+	type_table_set(NULL);
 	type_arena_set(NULL);
 	diag_set_source(NULL, NULL, 0);
 	diag_set_sink(NULL);
