@@ -1093,6 +1093,13 @@ LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassC
 	LLVMValueRef R = codegen_ast(cg, node->data.binary_op.right, table, rhs_ctx);
 	int is_float = binop_type->type_kind == TYPE_PRIMITIVE && (binop_type->prim == PRIM_F32 || binop_type->prim == PRIM_F64);
 	int is_unsigned = binop_type->type_kind == TYPE_PRIMITIVE && (binop_type->prim == PRIM_U8 || binop_type->prim == PRIM_U16 || binop_type->prim == PRIM_U32 || binop_type->prim == PRIM_U64);
+	if (!is_ptr_arith && binop_type->type_kind == TYPE_PRIMITIVE) {
+		LLVMTypeRef want = map_to_llvm(cg, binop_type, table);
+		if (LLVMTypeOf(L) != want)
+			L = is_float ? LLVMBuildFPCast(cg->builder, L, want, "fpcast") : LLVMBuildIntCast2(cg->builder, L, want, !is_unsigned, "cast");
+		if (LLVMTypeOf(R) != want)
+			R = is_float ? LLVMBuildFPCast(cg->builder, R, want, "fpcast") : LLVMBuildIntCast2(cg->builder, R, want, !is_unsigned, "cast");
+	}
 	switch (node->data.binary_op.op) {
 	case TOK_EQUAL:
 		if (is_float)

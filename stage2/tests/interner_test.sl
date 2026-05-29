@@ -87,6 +87,36 @@ fn i32 intern_empty_bytes(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 intern_dedup_distinct_buffers(arena::Arena* a, u8[] m) {
+    interner::Interner it;
+    setup(&it, a, 16);
+    u8[] b1 = {(u8*)arena::alloc(a, 3), 3};
+    u8[] b2 = {(u8*)arena::alloc(a, 3), 3};
+    b1[0] = 'f'; b1[1] = 'o'; b1[2] = 'o';
+    b2[0] = 'f'; b2[1] = 'o'; b2[2] = 'o';
+    if(!testing::expect_ne((void*)b1.ptr, (void*)b2.ptr, m)) { return -1; }
+    symbol::Symbol* s1 = interner::intern(&it, b1);
+    symbol::Symbol* s2 = interner::intern(&it, b2);
+    if(!testing::expect_eq((void*)s1, (void*)s2, m)) { return -2; }
+    if(!testing::expect_eq(s1.hash, s2.hash, m)) { return -3; }
+    if(!testing::expect_eq(it.entry_count, 1, m)) { return -4; }
+    return 0;
+}
+
+fn i32 intern_hash_buffer_independent(arena::Arena* a, u8[] m) {
+    interner::Interner it1;
+    interner::Interner it2;
+    setup(&it1, a, 16);
+    setup(&it2, a, 16);
+    u8[] b1 = {(u8*)arena::alloc(a, 5), 5};
+    u8[] b2 = {(u8*)arena::alloc(a, 5), 5};
+    for(u64 i = 0; i < 5; i += 1) { b1[i] = (u8)('a' + i); b2[i] = (u8)('a' + i); }
+    symbol::Symbol* s1 = interner::intern(&it1, b1);
+    symbol::Symbol* s2 = interner::intern(&it2, b2);
+    if(!testing::expect_eq(s1.hash, s2.hash, m)) { return -1; }
+    return 0;
+}
+
 // Forces slab capacity to grow past the initial 4096-byte floor.
 fn i32 intern_slab_growth(arena::Arena* a, u8[] m) {
     interner::Interner it;
@@ -114,6 +144,8 @@ fn i32 main() {
     testing::add(suite, "intern_symbol_fields", &intern_symbol_fields);
     testing::add(suite, "intern_chain_dedup", &intern_chain_dedup);
     testing::add(suite, "intern_empty_bytes", &intern_empty_bytes);
+    testing::add(suite, "intern_dedup_distinct_buffers", &intern_dedup_distinct_buffers);
+    testing::add(suite, "intern_hash_buffer_independent", &intern_hash_buffer_independent);
     testing::add(suite, "intern_slab_growth", &intern_slab_growth);
     return testing::run();
 }

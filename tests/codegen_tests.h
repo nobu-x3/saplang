@@ -2608,3 +2608,11 @@ void test_IndirectCallReturnTypeIsUnwrapped_codegen(void) {
 	TEST_ASSERT_NOT_NULL(strstr(output, "add i32"));
 	EXH_TEST_TEARDOWN();
 }
+
+void test_BinopWidensNarrowerOperand_codegen(void) {
+	EXH_TEST_SETUP("fn u32 mix(u8[] data) { u32 h = 0; for(u64 i = 0; i < data.len; i += 1) { h = h ^ data[i]; } return h; } fn i32 main() { return 0; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "zext i8"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "xor i32"));
+	EXH_TEST_TEARDOWN();
+}
