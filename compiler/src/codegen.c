@@ -599,6 +599,13 @@ LLVMValueRef codegen_member_access(CodegenLLVM *cg, ASTNode *node, Symbol *table
 	}
 	assert(base_value);
 	ctx.intention = tmp_intention;
+	if ((base_type->type_kind == TYPE_STRUCT || base_type->type_kind == TYPE_UNION) &&
+		LLVMGetTypeKind(LLVMTypeOf(base_value)) != LLVMPointerTypeKind) {
+		LLVMTypeRef base_llvm_ty = map_to_llvm(cg, base_type, table);
+		LLVMValueRef tmp = LLVMBuildAlloca(cg->builder, base_llvm_ty, "tmp_rvalue_base");
+		LLVMBuildStore(cg->builder, base_value, tmp);
+		base_value = tmp;
+	}
 	LLVMTypeRef i64_ty = LLVMInt64TypeInContext(cg->llvm_context);
 	if (base_type->type_kind == TYPE_ARRAY) {
 		// `arr.len` folds to the compile-time constant size.

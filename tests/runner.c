@@ -489,6 +489,10 @@ int main(void) {
 	RUN_TEST(test_StructLiteralReturn_NestedStruct_codegen);
 	RUN_TEST(test_StructLiteralReturn_RoundTrip_codegen);
 	RUN_TEST(test_StructLiteralLocalInit_RegressionStillStores_codegen);
+	RUN_TEST(test_MemberAccessOnCallResult_codegen);
+	RUN_TEST(test_MemberAccessOnCallResult_InWhileCondition_codegen);
+	RUN_TEST(test_MemberAccessOnCallResult_RoundTrip_codegen);
+	RUN_TEST(test_MemberAccessOnLvalueStillUsesDirectGep_codegen);
 	RUN_TEST(test_StructPassedByValue_codegen);
 	RUN_TEST(test_UnionDeclLayout_codegen);
 	RUN_TEST(test_ArrayLiteralStorage_codegen);

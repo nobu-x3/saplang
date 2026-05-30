@@ -1959,6 +1959,42 @@ void test_StructLiteralLocalInit_RegressionStillStores_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
+// codegen_member_access used to GEP straight into base_value, which produces
+// malformed IR when the base is an rvalue (function call result, struct
+// literal). The rvalue is now spilled to a tmp alloca before GEP.
+
+void test_MemberAccessOnCallResult_codegen(void) {
+	EXH_TEST_SETUP("struct Pair { u32 a; u32 b; } fn Pair mk() { return {7, 99}; } fn u32 first() { return mk().a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca %__main_Pair"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store %__main_Pair"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds %__main_Pair, ptr %tmp_rvalue_base"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_MemberAccessOnCallResult_InWhileCondition_codegen(void) {
+	EXH_TEST_SETUP("struct Tok { u16 kind; u32 pos; } fn Tok peek() { return {0, 0}; } fn void run() { while (peek().kind != 1) { } }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "tmp_rvalue_base"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_MemberAccessOnCallResult_RoundTrip_codegen(void) {
+	EXH_TEST_SETUP("struct Pair { u32 a; u32 b; } fn Pair mk(u32 x) { return {x, 99}; } fn i32 main() { if (mk(7).a == 7) { return 0; } return 1; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "tmp_rvalue_base"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "call %__main_Pair @__main_mk__u32"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_MemberAccessOnLvalueStillUsesDirectGep_codegen(void) {
+	// Regression: the lvalue path must not gain a spurious tmp_rvalue_base.
+	EXH_TEST_SETUP("struct Pair { u32 a; u32 b; } fn u32 first() { Pair p = {1, 2}; return p.a; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NULL(strstr(output, "tmp_rvalue_base"));
+	EXH_TEST_TEARDOWN();
+}
+
 void test_StructPassedByValue_codegen(void) {
 	EXH_TEST_SETUP("struct S { i32 a; i32 b; }"
 				   "fn i32 foo(S s) { return s.a + s.b; }"
