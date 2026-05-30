@@ -800,15 +800,28 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 		if (ctx.current_scope == 0) {
 			return LLVMConstNamedStruct(ty, generated_values, field_count);
 		}
-		LLVMValueRef var_ptr = ctx.passed_value ? ctx.passed_value : hashmap_get(ctx.loaded_values, ctx.auxiliary_node->data.var_decl.resolved_name);
-		assert(var_ptr);
+		LLVMValueRef var_ptr = NULL;
+		if (ctx.passed_value) {
+			var_ptr = ctx.passed_value;
+		} else if (ctx.auxiliary_node && ctx.auxiliary_node->type == AST_VAR_DECL) {
+			var_ptr = hashmap_get(ctx.loaded_values, ctx.auxiliary_node->data.var_decl.resolved_name);
+		}
+		if (!var_ptr) {
+			// rvalue position (e.g. `return { ... };`, struct-literal call argument).
+			// No destination slot — build the aggregate as an SSA value via insertvalue.
+			LLVMValueRef agg = LLVMGetUndef(ty);
+			for (int i = 0; i < field_count; ++i) {
+				agg = LLVMBuildInsertValue(cg->builder, agg, generated_values[i], i, "struct.lit");
+			}
+			return agg;
+		}
 		for (int i = 0; i < field_count; ++i) {
 			ASTNode *curr_field = decl_node->data.struct_decl.fields[i];
 			LLVMTypeRef field_type = LLVMStructGetTypeAtIndex(ty, i);
 			LLVMTypeRef index_type = LLVMIntType(PLATFORM_POINTER_SIZE);
 			LLVMValueRef index = LLVMConstInt(index_type, i, 0);
 			char gep_name[512] = "";
-			if (ctx.auxiliary_node->type == AST_VAR_DECL) {
+			if (ctx.auxiliary_node && ctx.auxiliary_node->type == AST_VAR_DECL) {
 				snprintf(gep_name, sizeof(gep_name), "gep_%d%s", i, ctx.auxiliary_node->data.var_decl.resolved_name);
 			} else {
 				snprintf(gep_name, sizeof(gep_name), "gep_%d", i);

@@ -1881,6 +1881,84 @@ void test_StructLiteralAllDesignated_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
+// ---------------------------------------------------------------------------
+// Struct literal as a return value (no destination slot). Before the fix,
+// `codegen_literal` dereferenced a null `ctx.auxiliary_node` looking for a
+// var-decl to store into. The rvalue path now builds an SSA aggregate via
+// insertvalue and returns it directly.
+// ---------------------------------------------------------------------------
+
+void test_StructLiteralReturn_AllConst_codegen(void) {
+	EXH_TEST_SETUP("struct Pair { u32 a; u32 b; } fn Pair make() { return {1, 2}; }");
+	EXH_REQUIRE_OK();
+	// LLVM folds an insertvalue chain over all constants into a literal aggregate.
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret %__main_Pair { i32 1, i32 2 }"));
+	// No alloca for the returned struct — pure rvalue, no destination slot.
+	TEST_ASSERT_NULL(strstr(output, "alloca %__main_Pair"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_StructLiteralReturn_RuntimeField_codegen(void) {
+	EXH_TEST_SETUP("struct Pair { u32 a; u32 b; } fn Pair make(u32 x) { return {x, 99}; }");
+	EXH_REQUIRE_OK();
+	// With a runtime field, the insertvalue chain survives folding.
+	TEST_ASSERT_NOT_NULL(strstr(output, "insertvalue %__main_Pair undef"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret %__main_Pair"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_StructLiteralReturn_DesignatedInit_codegen(void) {
+	EXH_TEST_SETUP("struct Pair { u32 a; u32 b; } fn Pair make() { return {.b = 22, .a = 11}; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret %__main_Pair { i32 11, i32 22 }"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_StructLiteralReturn_SparseInit_codegen(void) {
+	// Unspecified fields default to zero — codegen seeds generated_values[] from
+	// LLVMConstNull(field_type) before walking the initializers.
+	EXH_TEST_SETUP("struct Triple { i32 a; i32 b; i32 c; } fn Triple make() { return {7}; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret %__main_Triple { i32 7, i32 0, i32 0 }"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_StructLiteralReturn_NestedStruct_codegen(void) {
+	// Outer struct goes through the new rvalue path; the inner struct still uses
+	// the alloca+load helper, so its value is splatted in via insertvalue rather
+	// than folded into a constant aggregate.
+	EXH_TEST_SETUP("struct Inner { i32 v; } struct Outer { i32 a; Inner b; } fn Outer make() { return {1, {2}}; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca %__main_Inner"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "load %__main_Inner"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "insertvalue %__main_Outer { i32 1, %__main_Inner undef }"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ret %__main_Outer"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_StructLiteralReturn_RoundTrip_codegen(void) {
+	// End-to-end check: caller stores the returned struct and reads fields back.
+	EXH_TEST_SETUP("struct Pair { u32 a; u32 b; } fn Pair make(u32 x) { return {x, 99}; } fn i32 main() { Pair p = make(7); return (i32)(p.a + p.b); }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "call %__main_Pair @__main_make__u32"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store %__main_Pair"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds %__main_Pair"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_StructLiteralLocalInit_RegressionStillStores_codegen(void) {
+	// Regression: the var-decl init path (with auxiliary_node set) must still
+	// store-via-GEP rather than build an SSA aggregate.
+	EXH_TEST_SETUP("struct Pair { u32 a; u32 b; } fn void foo() { Pair p = {1, 2}; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "alloca %__main_Pair"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "getelementptr inbounds %__main_Pair"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 1"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "store i32 2"));
+	TEST_ASSERT_NULL(strstr(output, "insertvalue %__main_Pair"));
+	EXH_TEST_TEARDOWN();
+}
+
 void test_StructPassedByValue_codegen(void) {
 	EXH_TEST_SETUP("struct S { i32 a; i32 b; }"
 				   "fn i32 foo(S s) { return s.a + s.b; }"

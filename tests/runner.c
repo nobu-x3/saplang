@@ -482,6 +482,13 @@ int main(void) {
 	RUN_TEST(test_EnumExplicitJump_codegen);
 	RUN_TEST(test_StructDeclLayout_codegen);
 	RUN_TEST(test_StructLiteralAllDesignated_codegen);
+	RUN_TEST(test_StructLiteralReturn_AllConst_codegen);
+	RUN_TEST(test_StructLiteralReturn_RuntimeField_codegen);
+	RUN_TEST(test_StructLiteralReturn_DesignatedInit_codegen);
+	RUN_TEST(test_StructLiteralReturn_SparseInit_codegen);
+	RUN_TEST(test_StructLiteralReturn_NestedStruct_codegen);
+	RUN_TEST(test_StructLiteralReturn_RoundTrip_codegen);
+	RUN_TEST(test_StructLiteralLocalInit_RegressionStillStores_codegen);
 	RUN_TEST(test_StructPassedByValue_codegen);
 	RUN_TEST(test_UnionDeclLayout_codegen);
 	RUN_TEST(test_ArrayLiteralStorage_codegen);
