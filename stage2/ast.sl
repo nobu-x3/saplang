@@ -53,12 +53,12 @@ export struct ImportNode {
 }
 
 export struct VarDeclNode {
-    AstHeader h;
-    symbol::Symbol*   name;
-    AstNode*  type_expr;                // AstKind::*Type
-    AstNode*  init;                     // expression or AstKind::UndefinedLit or null
-    bool      is_const;
-    bool      is_exported;              // only meaningful at top-level
+    AstHeader           h;
+    symbol::Symbol*     name;
+    AstNode*            type_expr;                // AstKind::*Type
+    AstNode*            init;                     // expression or AstKind::UndefinedLit or null
+    bool                is_const;
+    bool                is_exported;              // only meaningful at top-level
 }
 
 export struct FnDeclNode {

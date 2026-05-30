@@ -175,6 +175,925 @@ fn i32 import_error_does_not_loop_forever(arena::Arena* a, u8[] msg) {
     if(!(testing::expect_not_null((void*)root, msg))) { return -1; } return 0;
 }
 
+// ============================================================================
+// VAR DECLS
+// ============================================================================
+
+fn i32 vd_basic_int_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 5;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_ty_prim(v.type_expr, token::TokenKind::I32, msg)) { return -2; }
+    if(!compiler_testing::expect_intlit(v.init, 5, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 vd_no_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_ty_prim(v.type_expr, token::TokenKind::I32, msg)) { return -2; }
+    if(!testing::expect_null((void*)v.init, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 vd_const(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "const i32 PI_X3 = 9;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "PI_X3"), true, false, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_intlit(v.init, 9, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 vd_export(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export i32 g = 1;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "g"), false, true, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_intlit(v.init, 1, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 vd_export_const(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export const i32 K = 42;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "K"), true, true, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_intlit(v.init, 42, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 vd_undefined_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_undeflit(v.init, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 vd_src_pos_on_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "  i32 x = 5;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -1; }
+    if(!testing::expect_eq(v.h.src_pos, 2, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 vd_src_pos_on_const(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "  const i32 x = 5;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "x"), true, false, msg);
+    if(!v) { return -1; }
+    if(!testing::expect_eq(v.h.src_pos, 2, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 vd_multiple_decls(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 a = 1; i32 b = 2; i32 c = 3;", &m);
+    ast::BlockNode* blk = (ast::BlockNode*)root;
+    if(!testing::expect_eq(blk.stmts.len, 3, msg)) { return -1; }
+    ast::VarDeclNode* v0 = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "a"), false, false, msg);
+    ast::VarDeclNode* v1 = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 1), compiler_testing::sym(m, "b"), false, false, msg);
+    ast::VarDeclNode* v2 = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 2), compiler_testing::sym(m, "c"), false, false, msg);
+    if(!v0 || !v1 || !v2) { return -2; }
+    if(!compiler_testing::expect_intlit(v0.init, 1, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(v1.init, 2, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(v2.init, 3, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 vd_named_type_decl(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "MyType x;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_ty_named(v.type_expr, null, compiler_testing::sym(m, "MyType"), msg)) { return -2; }
+    return 0;
+}
+
+// --- VarDecl error paths ---
+
+fn i32 vd_missing_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 = 5;", &m);
+    ast::AstNode* n = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_true(compiler_testing::has_error_flag(n), msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got '='", msg)) { return -2; }
+    return 0;
+}
+
+fn i32 vd_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 5", &m);
+    ast::AstNode* n = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_true(compiler_testing::has_error_flag(n), msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got end of file", msg)) { return -2; }
+    return 0;
+}
+
+fn i32 vd_missing_semi_no_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x", &m);
+    ast::AstNode* n = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_true(compiler_testing::has_error_flag(n), msg)) { return -1; }
+    return 0;
+}
+
+fn i32 vd_missing_init_expr(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = ;", &m);
+    ast::AstNode* n = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_true(compiler_testing::has_error_flag(n), msg)) { return -1; }
+    return 0;
+}
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+fn i32 ty_primitive_i32(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x;", &m);
+    if(!(compiler_testing::expect_ty_prim(compiler_testing::var_type(root, 0), token::TokenKind::I32, msg))) { return -1; } return 0;
+}
+
+fn i32 ty_primitive_bool(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "bool b;", &m);
+    if(!(compiler_testing::expect_ty_prim(compiler_testing::var_type(root, 0), token::TokenKind::BOOL, msg))) { return -1; } return 0;
+}
+
+fn i32 ty_primitive_f64(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "f64 x;", &m);
+    if(!(compiler_testing::expect_ty_prim(compiler_testing::var_type(root, 0), token::TokenKind::F64, msg))) { return -1; } return 0;
+}
+
+fn i32 ty_primitive_void(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "void* p;", &m);
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(compiler_testing::var_type(root, 0), msg);
+    if(!tp) { return -1; }
+    if(!(compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::VOID, msg))) { return -2; } return 0;
+}
+
+fn i32 ty_pointer(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p;", &m);
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(compiler_testing::var_type(root, 0), msg);
+    if(!tp) { return -1; }
+    if(!testing::expect_false(tp.is_const, msg)) { return -2; }
+    if(!(compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg))) { return -3; } return 0;
+}
+
+fn i32 ty_pointer_to_pointer(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32** pp;", &m);
+    ast::TypePointerNode* outer = compiler_testing::expect_ty_ptr(compiler_testing::var_type(root, 0), msg);
+    if(!outer) { return -1; }
+    ast::TypePointerNode* inner = compiler_testing::expect_ty_ptr(outer.pointee, msg);
+    if(!inner) { return -2; }
+    if(!(compiler_testing::expect_ty_prim(inner.pointee, token::TokenKind::I32, msg))) { return -3; } return 0;
+}
+
+fn i32 ty_slice(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] s;", &m);
+    ast::TypeSliceNode* ts = compiler_testing::expect_ty_slice(compiler_testing::var_type(root, 0), msg);
+    if(!ts) { return -1; }
+    if(!(compiler_testing::expect_ty_prim(ts.element, token::TokenKind::I32, msg))) { return -2; } return 0;
+}
+
+fn i32 ty_array(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[4] arr;", &m);
+    ast::TypeArrayNode* ta = compiler_testing::expect_ty_array(compiler_testing::var_type(root, 0), msg);
+    if(!ta) { return -1; }
+    if(!compiler_testing::expect_ty_prim(ta.element, token::TokenKind::I32, msg)) { return -2; }
+    if(!(compiler_testing::expect_intlit(ta.size_expr, 4, msg))) { return -3; } return 0;
+}
+
+fn i32 ty_named(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Foo x;", &m);
+    if(!(compiler_testing::expect_ty_named(compiler_testing::var_type(root, 0), null, compiler_testing::sym(m, "Foo"), msg))) { return -1; } return 0;
+}
+
+fn i32 ty_named_qualified(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "mod::Foo x;", &m);
+    if(!(compiler_testing::expect_ty_named(compiler_testing::var_type(root, 0), compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "Foo"), msg))) { return -1; } return 0;
+}
+
+fn i32 ty_fn_ptr_two_params(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn* i32(i32, i32) f;", &m);
+    ast::TypeFnPtrNode* fp = compiler_testing::expect_ty_fnptr(compiler_testing::var_type(root, 0), 2, msg);
+    if(!fp) { return -1; }
+    if(!compiler_testing::expect_ty_prim(fp.return_type, token::TokenKind::I32, msg)) { return -2; }
+    if(!compiler_testing::expect_ty_prim(fp.param_types.ptr[0], token::TokenKind::I32, msg)) { return -3; }
+    if(!compiler_testing::expect_ty_prim(fp.param_types.ptr[1], token::TokenKind::I32, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 ty_fn_ptr_zero_params(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn* void() cb;", &m);
+    ast::TypeFnPtrNode* fp = compiler_testing::expect_ty_fnptr(compiler_testing::var_type(root, 0), 0, msg);
+    if(!fp) { return -1; }
+    if(!(compiler_testing::expect_ty_prim(fp.return_type, token::TokenKind::VOID, msg))) { return -2; } return 0;
+}
+
+fn i32 ty_ptr_slice_chain(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32*[] s;", &m);
+    ast::TypeSliceNode* ts = compiler_testing::expect_ty_slice(compiler_testing::var_type(root, 0), msg);
+    if(!ts) { return -1; }
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(ts.element, msg);
+    if(!tp) { return -2; }
+    if(!(compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg))) { return -3; } return 0;
+}
+
+fn i32 ty_array_of_ptr(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    // i32*[4] — parsed as ArrayType(elem=PointerType(i32), size=4)
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32*[4] arr;", &m);
+    ast::TypeArrayNode* ta = compiler_testing::expect_ty_array(compiler_testing::var_type(root, 0), msg);
+    if(!ta) { return -1; }
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(ta.element, msg);
+    if(!tp) { return -2; }
+    if(!compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg)) { return -3; }
+    if(!(compiler_testing::expect_intlit(ta.size_expr, 4, msg))) { return -4; } return 0;
+}
+
+// ============================================================================
+// EXPRESSIONS: PRIMARY / LITERALS
+// ============================================================================
+
+fn i32 expr_int_literal(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 42;", &m);
+    if(!(compiler_testing::expect_intlit(compiler_testing::var_init(root, 0), 42, msg))) { return -1; } return 0;
+}
+
+fn i32 expr_int_literal_zero(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 0;", &m);
+    if(!(compiler_testing::expect_intlit(compiler_testing::var_init(root, 0), 0, msg))) { return -1; } return 0;
+}
+
+fn i32 expr_float_literal(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "f64 x = 3.5;", &m);
+    if(!(compiler_testing::expect_floatlit(compiler_testing::var_init(root, 0), 3.5, msg))) { return -1; } return 0;
+}
+
+fn i32 expr_char_literal(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "u8 c = 'a';", &m);
+    if(!(compiler_testing::expect_charlit(compiler_testing::var_init(root, 0), 'a', msg))) { return -1; } return 0;
+}
+
+fn i32 expr_string_literal(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "u8[] s = \"hi\";", &m);
+    if(!(compiler_testing::expect_strlit(compiler_testing::var_init(root, 0), 0, 2, msg))) { return -1; } return 0;
+}
+
+fn i32 expr_bool_true(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = true;", &m);
+    if(!(compiler_testing::expect_boollit(compiler_testing::var_init(root, 0), true, msg))) { return -1; } return 0;
+}
+
+fn i32 expr_bool_false(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = false;", &m);
+    if(!(compiler_testing::expect_boollit(compiler_testing::var_init(root, 0), false, msg))) { return -1; } return 0;
+}
+
+fn i32 expr_null(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p = null;", &m);
+    if(!(compiler_testing::expect_nulllit(compiler_testing::var_init(root, 0), msg))) { return -1; } return 0;
+}
+
+fn i32 expr_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = y;", &m);
+    if(!(compiler_testing::expect_ident(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "y"), msg))) { return -1; } return 0;
+}
+
+fn i32 expr_namespace_access(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = mod::y;", &m);
+    if(!(compiler_testing::expect_nsacc(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "y"), msg))) { return -1; } return 0;
+}
+
+// ============================================================================
+// EXPRESSIONS: PRATT PRECEDENCE / ASSOCIATIVITY
+// ============================================================================
+
+// 1 + 2  =>  Plus(1, 2)
+fn i32 expr_add(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 + 2;", &m);
+    ast::BinaryOpNode* b = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!b) { return -1; }
+    if(!compiler_testing::expect_intlit(b.lhs, 1, msg)) { return -2; }
+    if(!(compiler_testing::expect_intlit(b.rhs, 2, msg))) { return -3; } return 0;
+}
+
+// 1 + 2 * 3  =>  Plus(1, Star(2, 3))
+fn i32 expr_precedence_plus_mul(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 + 2 * 3;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!top) { return -1; }
+    if(!compiler_testing::expect_intlit(top.lhs, 1, msg)) { return -2; }
+    ast::BinaryOpNode* rhs = compiler_testing::expect_binop(top.rhs, token::TokenKind::Star, msg);
+    if(!rhs) { return -3; }
+    if(!compiler_testing::expect_intlit(rhs.lhs, 2, msg)) { return -4; }
+    if(!(compiler_testing::expect_intlit(rhs.rhs, 3, msg))) { return -5; } return 0;
+}
+
+// 1 * 2 + 3  =>  Plus(Star(1, 2), 3)
+fn i32 expr_precedence_mul_plus(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 * 2 + 3;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!top) { return -1; }
+    ast::BinaryOpNode* lhs = compiler_testing::expect_binop(top.lhs, token::TokenKind::Star, msg);
+    if(!lhs) { return -2; }
+    if(!compiler_testing::expect_intlit(lhs.lhs, 1, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(lhs.rhs, 2, msg)) { return -4; }
+    if(!(compiler_testing::expect_intlit(top.rhs, 3, msg))) { return -5; } return 0;
+}
+
+// 1 - 2 - 3  =>  Minus(Minus(1, 2), 3)   (left-assoc)
+fn i32 expr_left_associativity(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 - 2 - 3;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Minus, msg);
+    if(!top) { return -1; }
+    ast::BinaryOpNode* lhs = compiler_testing::expect_binop(top.lhs, token::TokenKind::Minus, msg);
+    if(!lhs) { return -2; }
+    if(!compiler_testing::expect_intlit(lhs.lhs, 1, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(lhs.rhs, 2, msg)) { return -4; }
+    if(!(compiler_testing::expect_intlit(top.rhs, 3, msg))) { return -5; } return 0;
+}
+
+// a == b && c == d  =>  AmpAmp(EqEq(a,b), EqEq(c,d))
+fn i32 expr_eq_and_chain(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = a == b && c == d;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::AmpAmp, msg);
+    if(!top) { return -1; }
+    ast::BinaryOpNode* lhs = compiler_testing::expect_binop(top.lhs, token::TokenKind::EqEq, msg);
+    if(!lhs) { return -2; }
+    ast::BinaryOpNode* rhs = compiler_testing::expect_binop(top.rhs, token::TokenKind::EqEq, msg);
+    if(!rhs) { return -3; }
+    if(!compiler_testing::expect_ident(lhs.lhs, compiler_testing::sym(m, "a"), msg)) { return -4; }
+    if(!compiler_testing::expect_ident(lhs.rhs, compiler_testing::sym(m, "b"), msg)) { return -5; }
+    if(!compiler_testing::expect_ident(rhs.lhs, compiler_testing::sym(m, "c"), msg)) { return -6; }
+    if(!(compiler_testing::expect_ident(rhs.rhs, compiler_testing::sym(m, "d"), msg))) { return -7; } return 0;
+}
+
+// a | b & c  =>  Pipe(a, Amp(b, c))   (& tighter than |)
+fn i32 expr_pipe_amp_precedence(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a | b & c;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Pipe, msg);
+    if(!top) { return -1; }
+    if(!compiler_testing::expect_ident(top.lhs, compiler_testing::sym(m, "a"), msg)) { return -2; }
+    ast::BinaryOpNode* rhs = compiler_testing::expect_binop(top.rhs, token::TokenKind::Amp, msg);
+    if(!rhs) { return -3; }
+    if(!compiler_testing::expect_ident(rhs.lhs, compiler_testing::sym(m, "b"), msg)) { return -4; }
+    if(!(compiler_testing::expect_ident(rhs.rhs, compiler_testing::sym(m, "c"), msg))) { return -5; } return 0;
+}
+
+// a < b << c  =>  LT(a, LShift(b, c))
+fn i32 expr_shift_lower_than_compare(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = a < b << c;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::LT, msg);
+    if(!top) { return -1; }
+    if(!compiler_testing::expect_ident(top.lhs, compiler_testing::sym(m, "a"), msg)) { return -2; }
+    ast::BinaryOpNode* rhs = compiler_testing::expect_binop(top.rhs, token::TokenKind::LShift, msg);
+    if(!rhs) { return -3; }
+    if(!compiler_testing::expect_ident(rhs.lhs, compiler_testing::sym(m, "b"), msg)) { return -4; }
+    if(!(compiler_testing::expect_ident(rhs.rhs, compiler_testing::sym(m, "c"), msg))) { return -5; } return 0;
+}
+
+// All operators reach Pratt: || && | ^ & == != < <= > >= << >> + - * / %
+fn i32 expr_ladder_all_ops(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    // a || b && c | d ^ e & f == g != h < i <= j > k >= l << m >> n + o - p * q / r % s
+    // Top should be ||; deepest right-spine should bottom out at a Percent.
+    ast::AstNode* root = compiler_testing::parse_src(&local,
+        "bool x = a || b && c | d ^ e & f == g != h < i <= j > k >= l << m >> n + o - p * q / r % s;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::PipePipe, msg);
+    if(!top) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -2; }
+    return 0;
+}
+
+// ============================================================================
+// EXPRESSIONS: UNARY
+// ============================================================================
+
+fn i32 expr_unary_minus(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -y;", &m);
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(compiler_testing::var_init(root, 0), token::TokenKind::Minus, msg);
+    if(!u) { return -1; }
+    if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "y"), msg))) { return -2; } return 0;
+}
+
+fn i32 expr_unary_bang(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = !y;", &m);
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(compiler_testing::var_init(root, 0), token::TokenKind::Bang, msg);
+    if(!u) { return -1; }
+    if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "y"), msg))) { return -2; } return 0;
+}
+
+fn i32 expr_unary_tilde(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = ~y;", &m);
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(compiler_testing::var_init(root, 0), token::TokenKind::Tilde, msg);
+    if(!u) { return -1; }
+    if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "y"), msg))) { return -2; } return 0;
+}
+
+fn i32 expr_unary_addrof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p = &x;", &m);
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(compiler_testing::var_init(root, 0), token::TokenKind::Amp, msg);
+    if(!u) { return -1; }
+    if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "x"), msg))) { return -2; } return 0;
+}
+
+fn i32 expr_unary_deref(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = *p;", &m);
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(compiler_testing::var_init(root, 0), token::TokenKind::Star, msg);
+    if(!u) { return -1; }
+    if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "p"), msg))) { return -2; } return 0;
+}
+
+// !-y  =>  Bang(Minus(y))
+fn i32 expr_unary_stacked(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = !-y;", &m);
+    ast::UnaryOpNode* outer = compiler_testing::expect_unop(compiler_testing::var_init(root, 0), token::TokenKind::Bang, msg);
+    if(!outer) { return -1; }
+    ast::UnaryOpNode* inner = compiler_testing::expect_unop(outer.operand, token::TokenKind::Minus, msg);
+    if(!inner) { return -2; }
+    if(!(compiler_testing::expect_ident(inner.operand, compiler_testing::sym(m, "y"), msg))) { return -3; } return 0;
+}
+
+// **p  =>  Star(Star(p))
+fn i32 expr_unary_double_deref(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = **p;", &m);
+    ast::UnaryOpNode* outer = compiler_testing::expect_unop(compiler_testing::var_init(root, 0), token::TokenKind::Star, msg);
+    if(!outer) { return -1; }
+    ast::UnaryOpNode* inner = compiler_testing::expect_unop(outer.operand, token::TokenKind::Star, msg);
+    if(!inner) { return -2; }
+    if(!(compiler_testing::expect_ident(inner.operand, compiler_testing::sym(m, "p"), msg))) { return -3; } return 0;
+}
+
+// -1 + 2  =>  Plus(Minus(1), 2)
+fn i32 expr_unary_binds_tighter_than_binary(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -1 + 2;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!top) { return -1; }
+    ast::UnaryOpNode* lhs = compiler_testing::expect_unop(top.lhs, token::TokenKind::Minus, msg);
+    if(!lhs) { return -2; }
+    if(!compiler_testing::expect_intlit(lhs.operand, 1, msg)) { return -3; }
+    if(!(compiler_testing::expect_intlit(top.rhs, 2, msg))) { return -4; } return 0;
+}
+
+// ============================================================================
+// EXPRESSIONS: POSTFIX
+// ============================================================================
+
+fn i32 expr_call_no_args(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f();", &m);
+    ast::CallNode* c = compiler_testing::expect_call(compiler_testing::var_init(root, 0), 0, msg);
+    if(!c) { return -1; }
+    if(!(compiler_testing::expect_ident(c.callee, compiler_testing::sym(m, "f"), msg))) { return -2; } return 0;
+}
+
+fn i32 expr_call_with_args(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f(1, 2, 3);", &m);
+    ast::CallNode* c = compiler_testing::expect_call(compiler_testing::var_init(root, 0), 3, msg);
+    if(!c) { return -1; }
+    if(!compiler_testing::expect_ident(c.callee, compiler_testing::sym(m, "f"), msg)) { return -2; }
+    if(!compiler_testing::expect_intlit(c.args.ptr[0], 1, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(c.args.ptr[1], 2, msg)) { return -4; }
+    if(!(compiler_testing::expect_intlit(c.args.ptr[2], 3, msg))) { return -5; } return 0;
+}
+
+fn i32 expr_call_nested(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    // f(g(1), 2)  =>  Call(f, [Call(g, [1]), 2])
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f(g(1), 2);", &m);
+    ast::CallNode* outer = compiler_testing::expect_call(compiler_testing::var_init(root, 0), 2, msg);
+    if(!outer) { return -1; }
+    ast::CallNode* inner = compiler_testing::expect_call(outer.args.ptr[0], 1, msg);
+    if(!inner) { return -2; }
+    if(!compiler_testing::expect_ident(inner.callee, compiler_testing::sym(m, "g"), msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(inner.args.ptr[0], 1, msg)) { return -4; }
+    if(!(compiler_testing::expect_intlit(outer.args.ptr[1], 2, msg))) { return -5; } return 0;
+}
+
+fn i32 expr_array_index(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a[0];", &m);
+    ast::ArrayIndexNode* ai = compiler_testing::expect_index(compiler_testing::var_init(root, 0), msg);
+    if(!ai) { return -1; }
+    if(!compiler_testing::expect_ident(ai.base, compiler_testing::sym(m, "a"), msg)) { return -2; }
+    if(!(compiler_testing::expect_intlit(ai.index, 0, msg))) { return -3; } return 0;
+}
+
+fn i32 expr_slice_range(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[1..3];", &m);
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(compiler_testing::var_init(root, 0), msg);
+    if(!sr) { return -1; }
+    if(!compiler_testing::expect_ident(sr.base, compiler_testing::sym(m, "a"), msg)) { return -2; }
+    if(!compiler_testing::expect_intlit(sr.lo, 1, msg)) { return -3; }
+    if(!(compiler_testing::expect_intlit(sr.hi, 3, msg))) { return -4; } return 0;
+}
+
+fn i32 expr_member_access(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = s.field;", &m);
+    ast::MemberAccessNode* ma = compiler_testing::expect_member(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "field"), msg);
+    if(!ma) { return -1; }
+    if(!(compiler_testing::expect_ident(ma.base, compiler_testing::sym(m, "s"), msg))) { return -2; } return 0;
+}
+
+// a.b[0]  =>  ArrayIndex(MemberAccess(a, b), 0)
+fn i32 expr_chained_postfix(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a.b[0];", &m);
+    ast::ArrayIndexNode* ai = compiler_testing::expect_index(compiler_testing::var_init(root, 0), msg);
+    if(!ai) { return -1; }
+    ast::MemberAccessNode* ma = compiler_testing::expect_member(ai.base, compiler_testing::sym(m, "b"), msg);
+    if(!ma) { return -2; }
+    if(!compiler_testing::expect_ident(ma.base, compiler_testing::sym(m, "a"), msg)) { return -3; }
+    if(!(compiler_testing::expect_intlit(ai.index, 0, msg))) { return -4; } return 0;
+}
+
+// f(1).x  =>  MemberAccess(Call(f, [1]), x)
+fn i32 expr_chained_postfix_call_member(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f(1).x;", &m);
+    ast::MemberAccessNode* ma = compiler_testing::expect_member(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "x"), msg);
+    if(!ma) { return -1; }
+    ast::CallNode* c = compiler_testing::expect_call(ma.base, 1, msg);
+    if(!c) { return -2; }
+    if(!compiler_testing::expect_ident(c.callee, compiler_testing::sym(m, "f"), msg)) { return -3; }
+    if(!(compiler_testing::expect_intlit(c.args.ptr[0], 1, msg))) { return -4; } return 0;
+}
+
+// a.b.c  =>  MemberAccess(MemberAccess(a, b), c)
+fn i32 expr_member_chain_three(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a.b.c;", &m);
+    ast::MemberAccessNode* outer = compiler_testing::expect_member(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "c"), msg);
+    if(!outer) { return -1; }
+    ast::MemberAccessNode* inner = compiler_testing::expect_member(outer.base, compiler_testing::sym(m, "b"), msg);
+    if(!inner) { return -2; }
+    if(!(compiler_testing::expect_ident(inner.base, compiler_testing::sym(m, "a"), msg))) { return -3; } return 0;
+}
+
+// ============================================================================
+// EXPRESSIONS: PAREN vs CAST
+// ============================================================================
+
+// (1 + 2) * 3  =>  Star(Plus(1, 2)[paren], 3)
+fn i32 expr_paren_grouping(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (1 + 2) * 3;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Star, msg);
+    if(!top) { return -1; }
+    ast::BinaryOpNode* lhs = compiler_testing::expect_binop(top.lhs, token::TokenKind::Plus, msg);
+    if(!lhs) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_paren_flag((ast::AstNode*)lhs), msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(lhs.lhs, 1, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(lhs.rhs, 2, msg)) { return -5; }
+    if(!(compiler_testing::expect_intlit(top.rhs, 3, msg))) { return -6; } return 0;
+}
+
+// (i32)y  =>  Cast(i32, Ident(y))
+fn i32 expr_cast_primitive(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (i32)y;", &m);
+    ast::CastNode* c = compiler_testing::expect_cast(compiler_testing::var_init(root, 0), msg);
+    if(!c) { return -1; }
+    if(!compiler_testing::expect_ty_prim(c.target_type, token::TokenKind::I32, msg)) { return -2; }
+    if(!(compiler_testing::expect_ident(c.expr, compiler_testing::sym(m, "y"), msg))) { return -3; } return 0;
+}
+
+// (i32*)q  =>  Cast(PointerType(i32), Ident(q))
+fn i32 expr_cast_pointer(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p = (i32*)q;", &m);
+    ast::CastNode* c = compiler_testing::expect_cast(compiler_testing::var_init(root, 0), msg);
+    if(!c) { return -1; }
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(c.target_type, msg);
+    if(!tp) { return -2; }
+    if(!compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg)) { return -3; }
+    if(!(compiler_testing::expect_ident(c.expr, compiler_testing::sym(m, "q"), msg))) { return -4; } return 0;
+}
+
+// (i32)-y  =>  Cast(i32, UnaryOp(Minus, y))
+fn i32 expr_cast_then_unary(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (i32)-y;", &m);
+    ast::CastNode* c = compiler_testing::expect_cast(compiler_testing::var_init(root, 0), msg);
+    if(!c) { return -1; }
+    if(!compiler_testing::expect_ty_prim(c.target_type, token::TokenKind::I32, msg)) { return -2; }
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(c.expr, token::TokenKind::Minus, msg);
+    if(!u) { return -3; }
+    if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "y"), msg))) { return -4; } return 0;
+}
+
+// (1 + 2) — parse_type tries 1, fails, rewinds; diag must stay clean.
+fn i32 expr_paren_arith_rewinds(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (1 + 2);", &m);
+    ast::BinaryOpNode* b = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!b) { return -1; }
+    if(!compiler_testing::expect_intlit(b.lhs, 1, msg)) { return -2; }
+    if(!compiler_testing::expect_intlit(b.rhs, 2, msg)) { return -3; }
+    if(!(testing::expect_eq(m.diag.entries.len, 0, msg))) { return -4; } return 0;
+}
+
+// ============================================================================
+// EXPRESSIONS: STRUCT / ARRAY LITERALS
+// ============================================================================
+
+fn i32 expr_struct_lit_positional(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {1, 2};", &m);
+    ast::StructLitNode* sl = compiler_testing::expect_struct_lit(compiler_testing::var_init(root, 0), 2, msg);
+    if(!sl) { return -1; }
+    if(!compiler_testing::expect_field_init(&sl.inits[0], null, msg)) { return -2; }
+    if(!compiler_testing::expect_intlit(sl.inits[0].value, 1, msg)) { return -3; }
+    if(!compiler_testing::expect_field_init(&sl.inits[1], null, msg)) { return -4; }
+    if(!(compiler_testing::expect_intlit(sl.inits[1].value, 2, msg))) { return -5; } return 0;
+}
+
+fn i32 expr_struct_lit_designated(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {.a = 1, .b = 2};", &m);
+    ast::StructLitNode* sl = compiler_testing::expect_struct_lit(compiler_testing::var_init(root, 0), 2, msg);
+    if(!sl) { return -1; }
+    if(!compiler_testing::expect_field_init(&sl.inits[0], compiler_testing::sym(m, "a"), msg)) { return -2; }
+    if(!compiler_testing::expect_intlit(sl.inits[0].value, 1, msg)) { return -3; }
+    if(!compiler_testing::expect_field_init(&sl.inits[1], compiler_testing::sym(m, "b"), msg)) { return -4; }
+    if(!(compiler_testing::expect_intlit(sl.inits[1].value, 2, msg))) { return -5; } return 0;
+}
+
+fn i32 expr_struct_lit_mixed_pos_designated(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {1, .b = 2};", &m);
+    ast::StructLitNode* sl = compiler_testing::expect_struct_lit(compiler_testing::var_init(root, 0), 2, msg);
+    if(!sl) { return -1; }
+    if(!compiler_testing::expect_field_init(&sl.inits[0], null, msg)) { return -2; }
+    if(!compiler_testing::expect_field_init(&sl.inits[1], compiler_testing::sym(m, "b"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_struct_lit_trailing_comma(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {1, 2,};", &m);
+    ast::StructLitNode* sl = compiler_testing::expect_struct_lit(compiler_testing::var_init(root, 0), 2, msg);
+    if(!sl) { return -1; }
+    if(!(testing::expect_eq(m.diag.entries.len, 0, msg))) { return -2; } return 0;
+}
+
+fn i32 expr_struct_lit_empty(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {};", &m);
+    ast::StructLitNode* sl = compiler_testing::expect_struct_lit(compiler_testing::var_init(root, 0), 0, msg);
+    if(!sl) { return -1; }
+    if(!(testing::expect_eq(m.diag.entries.len, 0, msg))) { return -2; } return 0;
+}
+
+fn i32 expr_array_lit(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[3] arr = [1, 2, 3];", &m);
+    ast::ArrayLitNode* al = compiler_testing::expect_array_lit(compiler_testing::var_init(root, 0), 3, msg);
+    if(!al) { return -1; }
+    if(!compiler_testing::expect_intlit(al.elems.ptr[0], 1, msg)) { return -2; }
+    if(!compiler_testing::expect_intlit(al.elems.ptr[1], 2, msg)) { return -3; }
+    if(!(compiler_testing::expect_intlit(al.elems.ptr[2], 3, msg))) { return -4; } return 0;
+}
+
+fn i32 expr_array_lit_empty(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] s = [];", &m);
+    ast::ArrayLitNode* al = compiler_testing::expect_array_lit(compiler_testing::var_init(root, 0), 0, msg);
+    if(!al) { return -1; }
+    if(!(testing::expect_eq(m.diag.entries.len, 0, msg))) { return -2; } return 0;
+}
+
+// ============================================================================
+// EXPRESSIONS: COMBOS
+// ============================================================================
+
+// (a + b) * (c - d)  =>  Star(Plus(a,b), Minus(c,d))
+fn i32 expr_combo_paren_mul(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (a + b) * (c - d);", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Star, msg);
+    if(!top) { return -1; }
+    ast::BinaryOpNode* lhs = compiler_testing::expect_binop(top.lhs, token::TokenKind::Plus, msg);
+    if(!lhs) { return -2; }
+    if(!compiler_testing::expect_ident(lhs.lhs, compiler_testing::sym(m, "a"), msg)) { return -3; }
+    if(!compiler_testing::expect_ident(lhs.rhs, compiler_testing::sym(m, "b"), msg)) { return -4; }
+    ast::BinaryOpNode* rhs = compiler_testing::expect_binop(top.rhs, token::TokenKind::Minus, msg);
+    if(!rhs) { return -5; }
+    if(!compiler_testing::expect_ident(rhs.lhs, compiler_testing::sym(m, "c"), msg)) { return -6; }
+    if(!(compiler_testing::expect_ident(rhs.rhs, compiler_testing::sym(m, "d"), msg))) { return -7; } return 0;
+}
+
+// f(a, b) + g(c)  =>  Plus(Call(f, [a, b]), Call(g, [c]))
+fn i32 expr_combo_call_plus_call(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f(a, b) + g(c);", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!top) { return -1; }
+    ast::CallNode* lhs = compiler_testing::expect_call(top.lhs, 2, msg);
+    if(!lhs) { return -2; }
+    if(!compiler_testing::expect_ident(lhs.callee, compiler_testing::sym(m, "f"), msg)) { return -3; }
+    ast::CallNode* rhs = compiler_testing::expect_call(top.rhs, 1, msg);
+    if(!rhs) { return -4; }
+    if(!(compiler_testing::expect_ident(rhs.callee, compiler_testing::sym(m, "g"), msg))) { return -5; } return 0;
+}
+
+// -a.b  =>  Minus(MemberAccess(a, b))
+fn i32 expr_combo_unary_member(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -a.b;", &m);
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(compiler_testing::var_init(root, 0), token::TokenKind::Minus, msg);
+    if(!u) { return -1; }
+    ast::MemberAccessNode* ma = compiler_testing::expect_member(u.operand, compiler_testing::sym(m, "b"), msg);
+    if(!ma) { return -2; }
+    if(!(compiler_testing::expect_ident(ma.base, compiler_testing::sym(m, "a"), msg))) { return -3; } return 0;
+}
+
+// a[0] + b[1]  =>  Plus(ArrayIndex(a, 0), ArrayIndex(b, 1))
+fn i32 expr_combo_index_plus_index(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a[0] + b[1];", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!top) { return -1; }
+    ast::ArrayIndexNode* la = compiler_testing::expect_index(top.lhs, msg);
+    if(!la) { return -2; }
+    if(!compiler_testing::expect_ident(la.base, compiler_testing::sym(m, "a"), msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(la.index, 0, msg)) { return -4; }
+    ast::ArrayIndexNode* ra = compiler_testing::expect_index(top.rhs, msg);
+    if(!ra) { return -5; }
+    if(!compiler_testing::expect_ident(ra.base, compiler_testing::sym(m, "b"), msg)) { return -6; }
+    if(!(compiler_testing::expect_intlit(ra.index, 1, msg))) { return -7; } return 0;
+}
+
+// (i32)x + y  =>  Plus(Cast(i32, x), y)   (cast binds like a unary, tighter than +)
+fn i32 expr_combo_cast_then_binary(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (i32)y + z;", &m);
+    ast::BinaryOpNode* top = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!top) { return -1; }
+    ast::CastNode* c = compiler_testing::expect_cast(top.lhs, msg);
+    if(!c) { return -2; }
+    if(!compiler_testing::expect_ty_prim(c.target_type, token::TokenKind::I32, msg)) { return -3; }
+    if(!compiler_testing::expect_ident(c.expr, compiler_testing::sym(m, "y"), msg)) { return -4; }
+    if(!(compiler_testing::expect_ident(top.rhs, compiler_testing::sym(m, "z"), msg))) { return -5; } return 0;
+}
+
+// ============================================================================
+// EXPRESSIONS: SRC_POS SANITY
+// ============================================================================
+
+// `i32 x = 1 + 2;` — `+` lives at byte 10
+fn i32 expr_binop_src_pos_on_operator(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 + 2;", &m);
+    ast::BinaryOpNode* b = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!b) { return -1; }
+    if(!(testing::expect_eq(b.h.src_pos, 10, msg))) { return -2; } return 0;
+}
+
+// `i32 x = -y;` — `-` lives at byte 8
+fn i32 expr_unop_src_pos_on_operator(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -y;", &m);
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(compiler_testing::var_init(root, 0), token::TokenKind::Minus, msg);
+    if(!u) { return -1; }
+    if(!(testing::expect_eq(u.h.src_pos, 8, msg))) { return -2; } return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -194,6 +1113,94 @@ fn i32 main() {
     testing::add(s_imp, "import_qualified_name_rejected", &import_qualified_name_rejected);
     testing::add(s_imp, "import_error_then_valid_recovers", &import_error_then_valid_recovers);
     testing::add(s_imp, "import_error_does_not_loop_forever", &import_error_does_not_loop_forever);
+
+    u8[] s_vd = "Parser VarDecls";
+    testing::add(s_vd, "vd_basic_int_init", &vd_basic_int_init);
+    testing::add(s_vd, "vd_no_init", &vd_no_init);
+    testing::add(s_vd, "vd_const", &vd_const);
+    testing::add(s_vd, "vd_export", &vd_export);
+    testing::add(s_vd, "vd_export_const", &vd_export_const);
+    testing::add(s_vd, "vd_undefined_init", &vd_undefined_init);
+    testing::add(s_vd, "vd_src_pos_on_type", &vd_src_pos_on_type);
+    testing::add(s_vd, "vd_src_pos_on_const", &vd_src_pos_on_const);
+    testing::add(s_vd, "vd_multiple_decls", &vd_multiple_decls);
+    testing::add(s_vd, "vd_named_type_decl", &vd_named_type_decl);
+    testing::add(s_vd, "vd_missing_ident", &vd_missing_ident);
+    testing::add(s_vd, "vd_missing_semi_at_eof", &vd_missing_semi_at_eof);
+    testing::add(s_vd, "vd_missing_semi_no_init", &vd_missing_semi_no_init);
+    testing::add(s_vd, "vd_missing_init_expr", &vd_missing_init_expr);
+
+    u8[] s_ty = "Parser Types";
+    testing::add(s_ty, "ty_primitive_i32", &ty_primitive_i32);
+    testing::add(s_ty, "ty_primitive_bool", &ty_primitive_bool);
+    testing::add(s_ty, "ty_primitive_f64", &ty_primitive_f64);
+    testing::add(s_ty, "ty_primitive_void", &ty_primitive_void);
+    testing::add(s_ty, "ty_pointer", &ty_pointer);
+    testing::add(s_ty, "ty_pointer_to_pointer", &ty_pointer_to_pointer);
+    testing::add(s_ty, "ty_slice", &ty_slice);
+    testing::add(s_ty, "ty_array", &ty_array);
+    testing::add(s_ty, "ty_named", &ty_named);
+    testing::add(s_ty, "ty_named_qualified", &ty_named_qualified);
+    testing::add(s_ty, "ty_fn_ptr_two_params", &ty_fn_ptr_two_params);
+    testing::add(s_ty, "ty_fn_ptr_zero_params", &ty_fn_ptr_zero_params);
+    testing::add(s_ty, "ty_ptr_slice_chain", &ty_ptr_slice_chain);
+    testing::add(s_ty, "ty_array_of_ptr", &ty_array_of_ptr);
+
+    u8[] s_e = "Parser Expressions";
+    testing::add(s_e, "expr_int_literal", &expr_int_literal);
+    testing::add(s_e, "expr_int_literal_zero", &expr_int_literal_zero);
+    testing::add(s_e, "expr_float_literal", &expr_float_literal);
+    testing::add(s_e, "expr_char_literal", &expr_char_literal);
+    testing::add(s_e, "expr_string_literal", &expr_string_literal);
+    testing::add(s_e, "expr_bool_true", &expr_bool_true);
+    testing::add(s_e, "expr_bool_false", &expr_bool_false);
+    testing::add(s_e, "expr_null", &expr_null);
+    testing::add(s_e, "expr_ident", &expr_ident);
+    testing::add(s_e, "expr_namespace_access", &expr_namespace_access);
+    testing::add(s_e, "expr_add", &expr_add);
+    testing::add(s_e, "expr_precedence_plus_mul", &expr_precedence_plus_mul);
+    testing::add(s_e, "expr_precedence_mul_plus", &expr_precedence_mul_plus);
+    testing::add(s_e, "expr_left_associativity", &expr_left_associativity);
+    testing::add(s_e, "expr_eq_and_chain", &expr_eq_and_chain);
+    testing::add(s_e, "expr_pipe_amp_precedence", &expr_pipe_amp_precedence);
+    testing::add(s_e, "expr_shift_lower_than_compare", &expr_shift_lower_than_compare);
+    testing::add(s_e, "expr_ladder_all_ops", &expr_ladder_all_ops);
+    testing::add(s_e, "expr_unary_minus", &expr_unary_minus);
+    testing::add(s_e, "expr_unary_bang", &expr_unary_bang);
+    testing::add(s_e, "expr_unary_tilde", &expr_unary_tilde);
+    testing::add(s_e, "expr_unary_addrof", &expr_unary_addrof);
+    testing::add(s_e, "expr_unary_deref", &expr_unary_deref);
+    testing::add(s_e, "expr_unary_stacked", &expr_unary_stacked);
+    testing::add(s_e, "expr_unary_double_deref", &expr_unary_double_deref);
+    testing::add(s_e, "expr_unary_binds_tighter_than_binary", &expr_unary_binds_tighter_than_binary);
+    testing::add(s_e, "expr_call_no_args", &expr_call_no_args);
+    testing::add(s_e, "expr_call_with_args", &expr_call_with_args);
+    testing::add(s_e, "expr_call_nested", &expr_call_nested);
+    testing::add(s_e, "expr_array_index", &expr_array_index);
+    testing::add(s_e, "expr_slice_range", &expr_slice_range);
+    testing::add(s_e, "expr_member_access", &expr_member_access);
+    testing::add(s_e, "expr_chained_postfix", &expr_chained_postfix);
+    testing::add(s_e, "expr_chained_postfix_call_member", &expr_chained_postfix_call_member);
+    testing::add(s_e, "expr_member_chain_three", &expr_member_chain_three);
+    testing::add(s_e, "expr_paren_grouping", &expr_paren_grouping);
+    testing::add(s_e, "expr_cast_primitive", &expr_cast_primitive);
+    testing::add(s_e, "expr_cast_pointer", &expr_cast_pointer);
+    testing::add(s_e, "expr_cast_then_unary", &expr_cast_then_unary);
+    testing::add(s_e, "expr_paren_arith_rewinds", &expr_paren_arith_rewinds);
+    testing::add(s_e, "expr_struct_lit_positional", &expr_struct_lit_positional);
+    testing::add(s_e, "expr_struct_lit_designated", &expr_struct_lit_designated);
+    testing::add(s_e, "expr_struct_lit_mixed_pos_designated", &expr_struct_lit_mixed_pos_designated);
+    testing::add(s_e, "expr_struct_lit_trailing_comma", &expr_struct_lit_trailing_comma);
+    testing::add(s_e, "expr_struct_lit_empty", &expr_struct_lit_empty);
+    testing::add(s_e, "expr_array_lit", &expr_array_lit);
+    testing::add(s_e, "expr_array_lit_empty", &expr_array_lit_empty);
+    testing::add(s_e, "expr_combo_paren_mul", &expr_combo_paren_mul);
+    testing::add(s_e, "expr_combo_call_plus_call", &expr_combo_call_plus_call);
+    testing::add(s_e, "expr_combo_unary_member", &expr_combo_unary_member);
+    testing::add(s_e, "expr_combo_index_plus_index", &expr_combo_index_plus_index);
+    testing::add(s_e, "expr_combo_cast_then_binary", &expr_combo_cast_then_binary);
+    testing::add(s_e, "expr_binop_src_pos_on_operator", &expr_binop_src_pos_on_operator);
+    testing::add(s_e, "expr_unop_src_pos_on_operator", &expr_unop_src_pos_on_operator);
 
     return testing::run();
 }
