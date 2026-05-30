@@ -11,6 +11,7 @@ export struct Arena {
     ArenaPage* head;
 }
 
+// size in bytes
 export fn void* alloc(Arena* arena, u64 size) {
     if(!arena) {
         return null;
@@ -38,6 +39,7 @@ export fn void* alloc(Arena* arena, u64 size) {
     return p.data.ptr;
 }
 
+// size in bytes
 export fn void* realloc_grow(Arena* arena, void* old, u64 old_size, u64 new_size) {
     void* fresh = alloc(arena, new_size);
     if(!fresh) {
