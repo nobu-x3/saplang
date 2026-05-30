@@ -622,7 +622,7 @@ fn i32 print_import(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::ImportNode* n = arena::alloc(&local, sizeof(ast::ImportNode));
-    n.h.kind = ast::AstKind::IMPORT;
+    n.h.kind = ast::AstKind::ImportDecl;
     n.module_name = interner::intern(c.interner, "io");
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
     if(!check(&c, "Import io\n", m)) { return -1; }

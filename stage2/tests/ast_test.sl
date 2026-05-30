@@ -225,7 +225,7 @@ fn i32 list_freeze_indices_match(arena::Arena* a, u8[] msg) {
 // ----- kind range helpers -----
 
 fn i32 is_decl_first(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::IMPORT), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::ImportDecl), msg)) { return -1; }
     return 0;
 }
 
@@ -298,7 +298,7 @@ fn i32 is_expr_middle(arena::Arena* a, u8[] msg) {
 fn i32 is_expr_rejects_other_ranges(arena::Arena* a, u8[] msg) {
     if(!testing::expect_false(ast::is_expr((u16)ast::AstKind::CompwarningStmt), msg)) { return -1; }
     if(!testing::expect_false(ast::is_expr((u16)ast::AstKind::PrimitiveType), msg)) { return -2; }
-    if(!testing::expect_false(ast::is_expr((u16)ast::AstKind::IMPORT), msg)) { return -3; }
+    if(!testing::expect_false(ast::is_expr((u16)ast::AstKind::ImportDecl), msg)) { return -3; }
     return 0;
 }
 
@@ -357,8 +357,8 @@ fn bool castback(void* p, ast::AstKind expected, u8[] m) {
 fn i32 hdr_import(arena::Arena* a, u8[] m) {
     arena::Arena lo = {1024, null};
     ast::ImportNode* n = arena::alloc(&lo, sizeof(ast::ImportNode));
-    n.h.kind = ast::AstKind::IMPORT;
-    if(!castback(n, ast::AstKind::IMPORT, m)) { return -1; }
+    n.h.kind = ast::AstKind::ImportDecl;
+    if(!castback(n, ast::AstKind::ImportDecl, m)) { return -1; }
     return 0;
 }
 

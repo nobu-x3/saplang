@@ -22,7 +22,7 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
     case ast::AstKind::ERROR:   { io::outbuf_write(out, "Error\n"); }
 
     // declarations ///////////////////////////////////////////////////////////
-    case ast::AstKind::IMPORT: {
+    case ast::AstKind::ImportDecl: {
         ast::ImportNode* d = (ast::ImportNode*)n;
         io::outbuf_write(out, "Import ");
         write_sym(out, d.module_name, it);

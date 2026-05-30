@@ -410,7 +410,7 @@ INVALID = 0,
 ERROR,       // placeholder for any failed parse; carries only a header
 
 // declarations  [DECL_FIRST..DECL_LAST]
-IMPORT,
+ImportDecl,
 VarDecl,                // also legal as a statement
 FnDecl,
 StructDecl,
@@ -419,7 +419,7 @@ EnumDecl,
 AliasDecl,
 ExternBlock,
 ExternFnDecl,           // fn decl inside extern { ... } with no body
-DECL_FIRST = IMPORT,
+DECL_FIRST = ImportDecl,
 DECL_LAST = ExternFnDecl,
 
 // statements   [STMT_FIRST..STMT_LAST]
