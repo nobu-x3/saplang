@@ -153,7 +153,7 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
     case ast::AstKind::AssignmentStmt: {
         ast::AssignmentNode* s = (ast::AssignmentNode*)n;
         io::outbuf_write(out, "Assign ");
-        io::outbuf_write(out, token_kind_str(s.op));
+        io::outbuf_write(out, token::kind_name(s.op));
         io::outbuf_write_byte(out, '\n');
         print(s.lhs, it, indent + 1, out);
         print(s.rhs, it, indent + 1, out);
@@ -274,14 +274,14 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
     case ast::AstKind::UnaryOp: {
         ast::UnaryOpNode* e = (ast::UnaryOpNode*)n;
         io::outbuf_write(out, "UnaryOp ");
-        io::outbuf_write(out, token_kind_str(e.op));
+        io::outbuf_write(out, token::kind_name(e.op));
         io::outbuf_write_byte(out, '\n');
         print(e.operand, it, indent + 1, out);
     }
     case ast::AstKind::BinaryOp: {
         ast::BinaryOpNode* e = (ast::BinaryOpNode*)n;
         io::outbuf_write(out, "BinaryOp ");
-        io::outbuf_write(out, token_kind_str(e.op));
+        io::outbuf_write(out, token::kind_name(e.op));
         io::outbuf_write_byte(out, '\n');
         print(e.lhs, it, indent + 1, out);
         print(e.rhs, it, indent + 1, out);
@@ -326,7 +326,7 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
     case ast::AstKind::PrimitiveType: {
         ast::TypePrimitiveNode* t = (ast::TypePrimitiveNode*)n;
         io::outbuf_write(out, "PrimitiveType ");
-        io::outbuf_write(out, token_kind_str(t.kind));
+        io::outbuf_write(out, token::kind_name(t.kind));
         io::outbuf_write_byte(out, '\n');
     }
     case ast::AstKind::NamedType: {
@@ -483,56 +483,4 @@ fn void write_f64(io::OutBuf* out, f64 v) {
     if(n <= 0) { return; }
     u8[] tail = {&scratch[0], (u64)n};
     io::outbuf_write(out, tail);
-}
-
-// Stable short names for the TokenKind values that appear in AST nodes as
-// op fields. Anything else falls through to "?"; tests should not depend on
-// "?", they should add the missing name here.
-fn u8[] token_kind_str(token::TokenKind k) {
-    switch(k) {
-    case token::TokenKind::Plus:      { return "+"; }
-    case token::TokenKind::Minus:     { return "-"; }
-    case token::TokenKind::Star:      { return "*"; }
-    case token::TokenKind::Slash:     { return "/"; }
-    case token::TokenKind::Percent:   { return "%"; }
-    case token::TokenKind::Amp:       { return "&"; }
-    case token::TokenKind::Pipe:      { return "|"; }
-    case token::TokenKind::Caret:     { return "^"; }
-    case token::TokenKind::Tilde:     { return "~"; }
-    case token::TokenKind::Bang:      { return "!"; }
-    case token::TokenKind::LShift:    { return "<<"; }
-    case token::TokenKind::RShift:    { return ">>"; }
-    case token::TokenKind::Eq:        { return "="; }
-    case token::TokenKind::PlusEq:    { return "+="; }
-    case token::TokenKind::MinusEq:   { return "-="; }
-    case token::TokenKind::StarEq:    { return "*="; }
-    case token::TokenKind::SlashEq:   { return "/="; }
-    case token::TokenKind::PercentEq: { return "%="; }
-    case token::TokenKind::AmpEq:     { return "&="; }
-    case token::TokenKind::PipeEq:    { return "|="; }
-    case token::TokenKind::CaretEq:   { return "^="; }
-    case token::TokenKind::EqEq:      { return "=="; }
-    case token::TokenKind::BangEq:    { return "!="; }
-    case token::TokenKind::LT:        { return "<"; }
-    case token::TokenKind::GT:        { return ">"; }
-    case token::TokenKind::LTEQ:      { return "<="; }
-    case token::TokenKind::GTEQ:      { return ">="; }
-    case token::TokenKind::AmpAmp:    { return "&&"; }
-    case token::TokenKind::PipePipe:  { return "||"; }
-    case token::TokenKind::I8:        { return "i8"; }
-    case token::TokenKind::I16:       { return "i16"; }
-    case token::TokenKind::I32:       { return "i32"; }
-    case token::TokenKind::I64:       { return "i64"; }
-    case token::TokenKind::U8:        { return "u8"; }
-    case token::TokenKind::U16:       { return "u16"; }
-    case token::TokenKind::U32:       { return "u32"; }
-    case token::TokenKind::U64:       { return "u64"; }
-    case token::TokenKind::F32:       { return "f32"; }
-    case token::TokenKind::F64:       { return "f64"; }
-    case token::TokenKind::BOOL:      { return "bool"; }
-    case token::TokenKind::VOID:      { return "void"; }
-    case token::TokenKind::TYPE:      { return "Type"; }
-    else { return "?"; }
-    }
-    return "?";
 }

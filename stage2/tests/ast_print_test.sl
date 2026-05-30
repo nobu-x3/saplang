@@ -350,7 +350,7 @@ fn i32 print_cast(arena::Arena* a, u8[] m) {
     n.target_type = (ast::AstNode*)prim_type(&local, token::TokenKind::I64);
     n.expr = (ast::AstNode*)ident(&local, c.interner, "x");
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "Cast\n  type:\n    PrimitiveType i64\n  expr:\n    Ident x\n";
+    u8[] e = "Cast\n  type:\n    PrimitiveType 'i64'\n  expr:\n    Ident x\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -362,7 +362,7 @@ fn i32 print_unary_minus(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::UnaryOpNode* n = unop(&local, token::TokenKind::Minus, (ast::AstNode*)int_lit(&local, (u64)7));
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    if(!check(&c, "UnaryOp -\n  IntLit 7\n", m)) { return -1; }
+    if(!check(&c, "UnaryOp '-'\n  IntLit 7\n", m)) { return -1; }
     return 0;
 }
 
@@ -373,7 +373,7 @@ fn i32 print_binary_plus(arena::Arena* a, u8[] m) {
         (ast::AstNode*)int_lit(&local, (u64)1),
         (ast::AstNode*)int_lit(&local, (u64)2));
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    if(!check(&c, "BinaryOp +\n  IntLit 1\n  IntLit 2\n", m)) { return -1; }
+    if(!check(&c, "BinaryOp '+'\n  IntLit 1\n  IntLit 2\n", m)) { return -1; }
     return 0;
 }
 
@@ -384,7 +384,7 @@ fn i32 print_binary_eqeq(arena::Arena* a, u8[] m) {
         (ast::AstNode*)int_lit(&local, (u64)1),
         (ast::AstNode*)int_lit(&local, (u64)1));
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    if(!check(&c, "BinaryOp ==\n  IntLit 1\n  IntLit 1\n", m)) { return -1; }
+    if(!check(&c, "BinaryOp '=='\n  IntLit 1\n  IntLit 1\n", m)) { return -1; }
     return 0;
 }
 
@@ -446,7 +446,7 @@ fn i32 print_sizeof(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::Sizeof;
     n.arg = (ast::AstNode*)prim_type(&local, token::TokenKind::U64);
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "Sizeof\n  PrimitiveType u64\n";
+    u8[] e = "Sizeof\n  PrimitiveType 'u64'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -458,7 +458,7 @@ fn i32 print_alignof(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::Alignof;
     n.arg = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    if(!check(&c, "Alignof\n  PrimitiveType i32\n", m)) { return -1; }
+    if(!check(&c, "Alignof\n  PrimitiveType 'i32'\n", m)) { return -1; }
     return 0;
 }
 
@@ -480,7 +480,7 @@ fn i32 print_type_info(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::Type_info;
     n.arg = (ast::AstNode*)prim_type(&local, token::TokenKind::BOOL);
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    if(!check(&c, "TypeInfo\n  PrimitiveType bool\n", m)) { return -1; }
+    if(!check(&c, "TypeInfo\n  PrimitiveType 'bool'\n", m)) { return -1; }
     return 0;
 }
 
@@ -501,7 +501,7 @@ fn i32 print_primitive_type(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast_print::print((ast::AstNode*)prim_type(&local, token::TokenKind::U32), c.interner, 0, &c.buf);
-    if(!check(&c, "PrimitiveType u32\n", m)) { return -1; }
+    if(!check(&c, "PrimitiveType 'u32'\n", m)) { return -1; }
     return 0;
 }
 
@@ -529,7 +529,7 @@ fn i32 print_pointer_type(arena::Arena* a, u8[] m) {
     n.pointee = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     n.is_const = false;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    if(!check(&c, "PointerType\n  PrimitiveType i32\n", m)) { return -1; }
+    if(!check(&c, "PointerType\n  PrimitiveType 'i32'\n", m)) { return -1; }
     return 0;
 }
 
@@ -541,7 +541,7 @@ fn i32 print_pointer_type_const(arena::Arena* a, u8[] m) {
     n.pointee = (ast::AstNode*)prim_type(&local, token::TokenKind::U8);
     n.is_const = true;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    if(!check(&c, "PointerType const\n  PrimitiveType u8\n", m)) { return -1; }
+    if(!check(&c, "PointerType const\n  PrimitiveType 'u8'\n", m)) { return -1; }
     return 0;
 }
 
@@ -553,7 +553,7 @@ fn i32 print_array_type(arena::Arena* a, u8[] m) {
     n.element = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     n.size_expr = (ast::AstNode*)int_lit(&local, (u64)8);
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "ArrayType\n  element:\n    PrimitiveType i32\n  size:\n    IntLit 8\n";
+    u8[] e = "ArrayType\n  element:\n    PrimitiveType 'i32'\n  size:\n    IntLit 8\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -565,7 +565,7 @@ fn i32 print_slice_type(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::SliceType;
     n.element = (ast::AstNode*)prim_type(&local, token::TokenKind::U8);
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    if(!check(&c, "SliceType\n  PrimitiveType u8\n", m)) { return -1; }
+    if(!check(&c, "SliceType\n  PrimitiveType 'u8'\n", m)) { return -1; }
     return 0;
 }
 
@@ -579,7 +579,7 @@ fn i32 print_fnptr_type(arena::Arena* a, u8[] m) {
     n.return_type = (ast::AstNode*)prim_type(&local, token::TokenKind::VOID);
     n.param_types = {params, 1};
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "FnPtrType\n  return:\n    PrimitiveType void\n  params\n    PrimitiveType i32\n";
+    u8[] e = "FnPtrType\n  return:\n    PrimitiveType 'void'\n  params\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -595,7 +595,7 @@ fn i32 print_struct_type(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::StructType;
     n.fields = {fields, 1};
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "StructType\n  Field x\n    PrimitiveType i32\n";
+    u8[] e = "StructType\n  Field x\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -611,7 +611,7 @@ fn i32 print_union_type(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::UnionType;
     n.fields = {fields, 1};
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "UnionType\n  Field v\n    PrimitiveType u64\n";
+    u8[] e = "UnionType\n  Field v\n    PrimitiveType 'u64'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -640,7 +640,7 @@ fn i32 print_var_decl(arena::Arena* a, u8[] m) {
     n.is_const = false;
     n.is_exported = false;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "VarDecl x\n  type:\n    PrimitiveType i32\n  init:\n    IntLit 7\n";
+    u8[] e = "VarDecl x\n  type:\n    PrimitiveType 'i32'\n  init:\n    IntLit 7\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -656,7 +656,7 @@ fn i32 print_var_decl_const_exported(arena::Arena* a, u8[] m) {
     n.is_const = true;
     n.is_exported = true;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "VarDecl K const exported\n  type:\n    PrimitiveType u32\n  init:\n    IntLit 42\n";
+    u8[] e = "VarDecl K const exported\n  type:\n    PrimitiveType 'u32'\n  init:\n    IntLit 42\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -672,7 +672,7 @@ fn i32 print_var_decl_no_init(arena::Arena* a, u8[] m) {
     n.is_const = false;
     n.is_exported = false;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "VarDecl x\n  type:\n    PrimitiveType i32\n  init: <null>\n";
+    u8[] e = "VarDecl x\n  type:\n    PrimitiveType 'i32'\n  init: <null>\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -695,7 +695,7 @@ fn i32 print_fn_decl(arena::Arena* a, u8[] m) {
     n.comptime_safe = 0;
     n.is_exported = true;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "FnDecl id exported\n  return:\n    PrimitiveType i32\n  Param a\n    PrimitiveType i32\n  body:\n    Block\n";
+    u8[] e = "FnDecl id exported\n  return:\n    PrimitiveType 'i32'\n  Param a\n    PrimitiveType 'i32'\n  body:\n    Block\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -713,7 +713,7 @@ fn i32 print_struct_decl(arena::Arena* a, u8[] m) {
     n.fields = {fields, 1};
     n.is_exported = false;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "StructDecl Point\n  Field x\n    PrimitiveType i32\n";
+    u8[] e = "StructDecl Point\n  Field x\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -731,7 +731,7 @@ fn i32 print_union_decl(arena::Arena* a, u8[] m) {
     n.fields = {fields, 1};
     n.is_exported = false;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "UnionDecl U\n  Field i\n    PrimitiveType i64\n";
+    u8[] e = "UnionDecl U\n  Field i\n    PrimitiveType 'i64'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -753,7 +753,7 @@ fn i32 print_enum_decl(arena::Arena* a, u8[] m) {
     n.members = {members, 2};
     n.is_exported = false;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "EnumDecl E\n  base:\n    PrimitiveType u8\n  Member A\n  Member B\n    IntLit 5\n";
+    u8[] e = "EnumDecl E\n  base:\n    PrimitiveType 'u8'\n  Member A\n  Member B\n    IntLit 5\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -767,7 +767,7 @@ fn i32 print_alias_decl(arena::Arena* a, u8[] m) {
     n.target = (ast::AstNode*)prim_type(&local, token::TokenKind::U8);
     n.is_exported = false;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "AliasDecl Bytes\n  target:\n    PrimitiveType u8\n";
+    u8[] e = "AliasDecl Bytes\n  target:\n    PrimitiveType 'u8'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -796,7 +796,7 @@ fn i32 print_extern_fn_decl(arena::Arena* a, u8[] m) {
     n.is_exported = true;
     n.comptime_safe = (i8)-1;
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    u8[] e = "ExternFnDecl printf variadic exported\n  return:\n    PrimitiveType i32\n";
+    u8[] e = "ExternFnDecl printf variadic exported\n  return:\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }
@@ -959,7 +959,7 @@ fn i32 print_assignment(arena::Arena* a, u8[] m) {
     n.lhs = (ast::AstNode*)ident(&local, c.interner, "x");
     n.rhs = (ast::AstNode*)int_lit(&local, (u64)1);
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
-    if(!check(&c, "Assign +=\n  Ident x\n  IntLit 1\n", m)) { return -1; }
+    if(!check(&c, "Assign '+='\n  Ident x\n  IntLit 1\n", m)) { return -1; }
     return 0;
 }
 
@@ -1041,7 +1041,7 @@ fn i32 print_nested_binop(arena::Arena* a, u8[] m) {
         (ast::AstNode*)int_lit(&local, (u64)1),
         (ast::AstNode*)inner);
     ast_print::print((ast::AstNode*)outer, c.interner, 0, &c.buf);
-    u8[] e = "BinaryOp +\n  IntLit 1\n  BinaryOp *\n    IntLit 2\n    IntLit 3\n";
+    u8[] e = "BinaryOp '+'\n  IntLit 1\n  BinaryOp '*'\n    IntLit 2\n    IntLit 3\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
 }

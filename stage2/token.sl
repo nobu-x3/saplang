@@ -73,6 +73,119 @@ export fn bool is_keyword(TokenKind k)      { return k >= TokenKind::KW_FIRST &&
 export fn bool is_type_keyword(TokenKind k) { return k >= TokenKind::KW_TYPE_FIRST && k <= TokenKind::KW_TYPE_LAST; }
 export fn bool is_literal(TokenKind k)      { return k >= TokenKind::IntLit && k <= TokenKind::Ident; }
 
+// Human-readable name for a TokenKind, suitable for diagnostic messages.
+// Punctuation / operators / keywords are returned single-quoted so they
+// stand out from surrounding prose; category tokens (literals, identifiers)
+// are returned as plain noun phrases.
+export fn u8[] kind_name(TokenKind k) {
+	switch(k) {
+	case TokenKind::EOF:          { return "end of file"; }
+	case TokenKind::ERROR:        { return "<error>"; }
+
+	case TokenKind::IntLit:       { return "integer literal"; }
+	case TokenKind::FloatLit:     { return "float literal"; }
+	case TokenKind::CharLit:      { return "character literal"; }
+	case TokenKind::StringLit:    { return "string literal"; }
+	case TokenKind::Ident:        { return "identifier"; }
+
+	case TokenKind::LParen:       { return "'('"; }
+	case TokenKind::RParen:       { return "')'"; }
+	case TokenKind::LBrace:       { return "'{'"; }
+	case TokenKind::RBrace:       { return "'}'"; }
+	case TokenKind::LBracket:     { return "'['"; }
+	case TokenKind::RBracket:     { return "']'"; }
+	case TokenKind::Comma:        { return "','"; }
+	case TokenKind::Semi:         { return "';'"; }
+	case TokenKind::Colon:        { return "':'"; }
+	case TokenKind::ColonColon:   { return "'::'"; }
+	case TokenKind::Dot:          { return "'.'"; }
+	case TokenKind::DotDot:       { return "'..'"; }
+	case TokenKind::DotDotDot:    { return "'...'"; }
+
+	case TokenKind::Plus:         { return "'+'"; }
+	case TokenKind::Minus:        { return "'-'"; }
+	case TokenKind::Star:         { return "'*'"; }
+	case TokenKind::Slash:        { return "'/'"; }
+	case TokenKind::Percent:      { return "'%'"; }
+	case TokenKind::Amp:          { return "'&'"; }
+	case TokenKind::Pipe:         { return "'|'"; }
+	case TokenKind::Caret:        { return "'^'"; }
+	case TokenKind::Tilde:        { return "'~'"; }
+	case TokenKind::Bang:         { return "'!'"; }
+	case TokenKind::LShift:       { return "'<<'"; }
+	case TokenKind::RShift:       { return "'>>'"; }
+	case TokenKind::Eq:           { return "'='"; }
+	case TokenKind::PlusEq:       { return "'+='"; }
+	case TokenKind::MinusEq:      { return "'-='"; }
+	case TokenKind::StarEq:       { return "'*='"; }
+	case TokenKind::SlashEq:      { return "'/='"; }
+	case TokenKind::PercentEq:    { return "'%='"; }
+	case TokenKind::AmpEq:        { return "'&='"; }
+	case TokenKind::PipeEq:       { return "'|='"; }
+	case TokenKind::CaretEq:      { return "'^='"; }
+	case TokenKind::EqEq:         { return "'=='"; }
+	case TokenKind::BangEq:       { return "'!='"; }
+	case TokenKind::LT:           { return "'<'"; }
+	case TokenKind::GT:           { return "'>'"; }
+	case TokenKind::LTEQ:         { return "'<='"; }
+	case TokenKind::GTEQ:         { return "'>='"; }
+	case TokenKind::AmpAmp:       { return "'&&'"; }
+	case TokenKind::PipePipe:     { return "'||'"; }
+
+	case TokenKind::I8:           { return "'i8'"; }
+	case TokenKind::I16:          { return "'i16'"; }
+	case TokenKind::I32:          { return "'i32'"; }
+	case TokenKind::I64:          { return "'i64'"; }
+	case TokenKind::U8:           { return "'u8'"; }
+	case TokenKind::U16:          { return "'u16'"; }
+	case TokenKind::U32:          { return "'u32'"; }
+	case TokenKind::U64:          { return "'u64'"; }
+	case TokenKind::F32:          { return "'f32'"; }
+	case TokenKind::F64:          { return "'f64'"; }
+	case TokenKind::BOOL:         { return "'bool'"; }
+	case TokenKind::VOID:         { return "'void'"; }
+	case TokenKind::TYPE:         { return "'Type'"; }
+
+	case TokenKind::STRUCT:       { return "'struct'"; }
+	case TokenKind::UNION:        { return "'union'"; }
+	case TokenKind::ENUM:         { return "'enum'"; }
+	case TokenKind::FN:           { return "'fn'"; }
+	case TokenKind::CONST:        { return "'const'"; }
+	case TokenKind::RETURN:       { return "'return'"; }
+	case TokenKind::EXTERN:       { return "'extern'"; }
+	case TokenKind::EXPORT:       { return "'export'"; }
+	case TokenKind::IMPORT:       { return "'import'"; }
+	case TokenKind::IF:           { return "'if'"; }
+	case TokenKind::ELSE:         { return "'else'"; }
+	case TokenKind::WHILE:        { return "'while'"; }
+	case TokenKind::FOR:          { return "'for'"; }
+	case TokenKind::SWITCH:       { return "'switch'"; }
+	case TokenKind::CASE:         { return "'case'"; }
+	case TokenKind::BREAK:        { return "'break'"; }
+	case TokenKind::CONTINUE:     { return "'continue'"; }
+	case TokenKind::DEFER:        { return "'defer'"; }
+	case TokenKind::TRUE:         { return "'true'"; }
+	case TokenKind::FALSE:        { return "'false'"; }
+	case TokenKind::NULL:         { return "'null'"; }
+	case TokenKind::UNDEFINED:    { return "'undefined'"; }
+	case TokenKind::ALIAS:        { return "'alias'"; }
+
+	case TokenKind::COMPTIME:     { return "'comptime'"; }
+	case TokenKind::COMPRUN:      { return "'comprun'"; }
+	case TokenKind::COMPINSERT:   { return "'compinsert'"; }
+	case TokenKind::COMPCODE:     { return "'compcode'"; }
+	case TokenKind::COMPSPLICE:   { return "'compsplice'"; }
+	case TokenKind::COMPERROR:    { return "'comperror'"; }
+	case TokenKind::COMPWARNING:  { return "'compwarning'"; }
+	case TokenKind::SIZEOF:       { return "'sizeof'"; }
+	case TokenKind::ALIGNOF:      { return "'alignof'"; }
+	case TokenKind::TYPEOF:       { return "'typeof'"; }
+	case TokenKind::TYPE_INFO:    { return "'type_info'"; }
+	else { return "<unknown>"; }
+	}
+	return "<unknown>";
+}
+
 export struct KeywordEntry { u8[] bytes; TokenKind kind; }
 
 export const KeywordEntry[] KEYWORDS = [
