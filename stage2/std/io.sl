@@ -172,6 +172,67 @@ export fn bool unlink(u8[] path) {
     return sys::remove((const i8*)&path_buf[0]) == 0;
 }
 
+// Growable byte buffer backed by an arena. Append-only; the underlying
+// memory comes from the arena and lives as long as the arena does.
+export struct OutBuf {
+    arena::Arena* arena;
+    u8[]          data;
+    u64           cap;
+}
+
+export fn void outbuf_init(OutBuf* b, arena::Arena* a, u64 initial_cap) {
+    b.arena = a;
+    b.data = {(u8*)arena::alloc(a, initial_cap), 0};
+    b.cap = initial_cap;
+}
+
+export fn void outbuf_reset(OutBuf* b) {
+    b.data.len = 0;
+}
+
+export fn u8[] outbuf_bytes(OutBuf* b) {
+    return b.data;
+}
+
+export fn void outbuf_write(OutBuf* b, u8[] s) {
+    if(s.len == 0) { return; }
+    outbuf_ensure(b, s.len);
+    sys::memcpy(&b.data[b.data.len], s.ptr, s.len);
+    b.data.len += s.len;
+}
+
+export fn void outbuf_write_byte(OutBuf* b, u8 c) {
+    outbuf_ensure(b, 1);
+    b.data[b.data.len] = c;
+    b.data.len += 1;
+}
+
+export fn void outbuf_write_u64(OutBuf* b, u64 v) {
+    u8[32] scratch;
+    i32 n = sys::snprintf((i8*)&scratch[0], 32, "%lu", v);
+    if(n <= 0) { return; }
+    u8[] tail = {&scratch[0], (u64)n};
+    outbuf_write(b, tail);
+}
+
+export fn void outbuf_write_i64(OutBuf* b, i64 v) {
+    u8[32] scratch;
+    i32 n = sys::snprintf((i8*)&scratch[0], 32, "%ld", v);
+    if(n <= 0) { return; }
+    u8[] tail = {&scratch[0], (u64)n};
+    outbuf_write(b, tail);
+}
+
+fn void outbuf_ensure(OutBuf* b, u64 add) {
+    u64 need = b.data.len + add;
+    if(need <= b.cap) { return; }
+    u64 new_cap = b.cap * 2;
+    if(new_cap == 0) { new_cap = 64; }
+    while(new_cap < need) { new_cap *= 2; }
+    b.data.ptr = (u8*)arena::realloc_grow(b.arena, b.data.ptr, b.data.len, new_cap);
+    b.cap = new_cap;
+}
+
 // PRIVATE
 fn u8[] read_growing(File* f, arena::Arena* a) {
     u8[] out = {null, 0};
