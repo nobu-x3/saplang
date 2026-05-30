@@ -1,4 +1,5 @@
 import arena;
+import sys;
 
 export struct DiagEntry {
     u32  src_pos;
@@ -35,9 +36,20 @@ fn void append(DiagBuf* d, arena::Arena* a, u32 src_pos, u8[] msg, bool is_warni
                 new_cap * sizeof(DiagEntry));
         d.entries_cap = new_cap;
     }
+    // Copy msg bytes into the arena so callers can pass any slice — stack
+    // buffers, string literals, or transient buffers — without dangling.
+    u8[] stored = {null, 0};
+    if(msg.len > 0) {
+        u8* dst = arena::alloc(a, msg.len);
+        if(dst) {
+            sys::memcpy(dst, msg.ptr, msg.len);
+            stored.ptr = dst;
+            stored.len = msg.len;
+        }
+    }
     DiagEntry* e = &d.entries[d.entries.len];
     e.src_pos = src_pos;
     e.is_warning = is_warning;
-    e.msg = msg;
+    e.msg = stored;
     d.entries.len += 1;
 }

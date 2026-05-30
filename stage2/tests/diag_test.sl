@@ -332,13 +332,14 @@ fn i32 long_msg_handled(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 msg_slice_stored_by_reference(arena::Arena* a, u8[] m) {
+fn i32 msg_bytes_copied_into_arena(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     u8[] src = "shared";
     diag::report(&d, &local, 0, src);
-    if(!testing::expect_eq((void*)d.entries[0].msg.ptr, (void*)src.ptr, m)) { return -1; }
+    if(!testing::expect_ne((void*)d.entries[0].msg.ptr, (void*)src.ptr, m)) { return -1; }
     if(!testing::expect_eq(d.entries[0].msg.len, src.len, m)) { return -2; }
+    if(!testing::expect_eq(d.entries[0].msg, src, m)) { return -3; }
     return 0;
 }
 
@@ -389,7 +390,7 @@ fn i32 main() {
     testing::add(suite, "duplicate_src_pos_appends_twice", &duplicate_src_pos_appends_twice);
     testing::add(suite, "duplicate_msg_appends_twice", &duplicate_msg_appends_twice);
     testing::add(suite, "long_msg_handled", &long_msg_handled);
-    testing::add(suite, "msg_slice_stored_by_reference", &msg_slice_stored_by_reference);
+    testing::add(suite, "msg_bytes_copied_into_arena", &msg_bytes_copied_into_arena);
     testing::add(suite, "independent_buffers_are_independent", &independent_buffers_are_independent);
     return testing::run();
 }
