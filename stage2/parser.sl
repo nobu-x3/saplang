@@ -140,7 +140,8 @@ fn ast::AstNode* parse_fn_decl(Parser* p, bool is_exported) {
     ast::Param[] params = parse_params(p, &had_err);
     token::Token rparen = expect(p, token::TokenKind::RParen);
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::AstNode* body = parse_block(p, &had_err);
+    ast::AstNode* body = parse_block(p);
+    if(had_error(body)) { had_err = true; }
     ast::FnDeclNode* fn_decl_node = arena::alloc(p.m.arena, sizeof(ast::FnDeclNode));
     sys::memset(fn_decl_node, 0, sizeof(ast::FnDeclNode));
     fn_decl_node.h.kind = ast::AstKind::FnDecl;
@@ -200,7 +201,7 @@ fn ast::Param[] parse_params(Parser* p, bool* had_err) {
 fn ast::AstNode* parse_stmt(Parser* p) {
     token::Token t = peek(p, 0);
     switch(t.kind) {
-        //case token::TokenKind::LBrace:       { return parse_block(p); }
+        case token::TokenKind::LBrace:       { return parse_block(p); }
         //case token::TokenKind::IF:           { return parse_if(p); }
         //case token::TokenKind::WHILE:        { return parse_while(p); }
         //case token::TokenKind::FOR:          { return parse_for(p); }
@@ -241,14 +242,11 @@ fn bool looks_like_var_decl(Parser* p) {
     return ok;
 }
 
-fn ast::AstNode* parse_block(Parser* p, bool* had_err) {
+fn ast::AstNode* parse_block(Parser* p) {
     u32 start = peek(p, 0).src_pos;
     bool local_err = false;
     token::Token open = expect(p, token::TokenKind::LBrace);
-    if(open.kind == token::TokenKind::ERROR) {
-        *had_err = true;
-        return mk_error_node(p, start);
-    }
+    if(open.kind == token::TokenKind::ERROR) { return mk_error_node(p, start); }
     ast::ListBuilder stmts;
     ast::list_init(&stmts, p.m.arena, 8);
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
@@ -260,7 +258,6 @@ fn ast::AstNode* parse_block(Parser* p, bool* had_err) {
     }
     token::Token close = expect(p, token::TokenKind::RBrace);
     if(close.kind == token::TokenKind::ERROR) { local_err = true; }
-    if(local_err) { *had_err = true; }
     ast::BlockNode* blk = arena::alloc(p.m.arena, sizeof(ast::BlockNode));
     blk.h.kind = ast::AstKind::BlockStmt;
     blk.h.flags = (ast::AstFlags)0;

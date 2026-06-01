@@ -299,6 +299,14 @@ export fn ast::VarDeclNode* expect_var(ast::AstNode* n, symbol::Symbol* name, bo
     return v;
 }
 
+export fn ast::BlockNode* expect_block(ast::AstNode* n, u64 n_stmts, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::BlockStmt, msg)) { return null; }
+    ast::BlockNode* b = (ast::BlockNode*)n;
+    if(!testing::expect_eq(b.stmts.len, n_stmts, msg)) { return null; }
+    return b;
+}
+
 export fn ast::FnDeclNode* expect_fn_decl(ast::AstNode* n, symbol::Symbol* name, u64 n_params, bool is_exported, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::FnDecl, msg)) { return null; }
