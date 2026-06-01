@@ -203,7 +203,7 @@ fn ast::AstNode* parse_stmt(Parser* p) {
     switch(t.kind) {
         case token::TokenKind::LBrace:       { return parse_block(p); }
         case token::TokenKind::IF:           { return parse_if(p); }
-        //case token::TokenKind::WHILE:        { return parse_while(p); }
+        case token::TokenKind::WHILE:        { return parse_while(p); }
         //case token::TokenKind::FOR:          { return parse_for(p); }
         //case token::TokenKind::SWITCH:       { return parse_switch(p); }
         case token::TokenKind::RETURN:       { return parse_return(p); }
@@ -248,6 +248,29 @@ fn ast::AstNode* parse_return(Parser* p) {
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
     n.expr = expr;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_while(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token while_tok = expect(p, token::TokenKind::WHILE);
+    if(while_tok.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* cond = parse_expr(p, 0);
+    if(!cond || had_error(cond)) { had_err = true; }
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* body = parse_block(p);
+    if(had_error(body)) { had_err = true; }
+    ast::WhileNode* n = arena::alloc(p.m.arena, sizeof(ast::WhileNode));
+    n.h.kind = ast::AstKind::WhileStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.cond = cond;
+    n.body = body;
     return (ast::AstNode*)n;
 }
 
