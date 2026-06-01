@@ -44,7 +44,10 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
         case token::TokenKind::CONST:   { return parse_var_decl(p, is_exported); }
         //case token::TokenKind::EXTERN:  { return parse_extern_block(p); }
         //case token::TokenKind::COMPRUN: { return parse_comprun(p); }
-        //case token::TokenKind::FN:      { return parse_fn_decl(p, is_exported); }
+        case token::TokenKind::FN: {
+            if(peek(p, 1).kind == token::TokenKind::Star) { return parse_var_decl(p, is_exported); }
+            return parse_fn_decl(p, is_exported);
+        }
         //case token::TokenKind::STRUCT:  { return parse_struct_decl(p, is_exported); }
         //case token::TokenKind::UNION:   { return parse_union_decl(p, is_exported); }
         //case token::TokenKind::ENUM:    { return parse_enum_decl(p, is_exported); }
@@ -94,13 +97,10 @@ fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
     u32 start = peek(p, 0).src_pos;
     bool is_const = peek(p, 0).kind == token::TokenKind::CONST;
     if(is_const) { consume(p); }
-
     ast::AstNode* type_expr = parse_type(p);
     bool had_err = !type_expr || had_error(type_expr);
-
     token::Token ident = expect(p, token::TokenKind::Ident);
     if(ident.kind == token::TokenKind::ERROR) { had_err = true; }
-
     ast::AstNode* init_expr = null;
     if(peek(p, 0).kind == token::TokenKind::Eq) {
         consume(p);
@@ -109,8 +109,8 @@ fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
     }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-
     ast::VarDeclNode* var_decl_node = arena::alloc(p.m.arena, sizeof(ast::VarDeclNode));
+    sys::memset(var_decl_node, 0, sizeof(ast::VarDeclNode));
     var_decl_node.h.kind = ast::AstKind::VarDecl;
     var_decl_node.h.flags = (ast::AstFlags)0;
     if(had_err) { var_decl_node.h.flags = ast::AstFlags::HadError; }
@@ -121,6 +121,139 @@ fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
     var_decl_node.is_const = is_const;
     var_decl_node.is_exported = is_exported;
     return (ast::AstNode*)var_decl_node;
+}
+
+fn ast::AstNode* parse_fn_decl(Parser* p, bool is_exported) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token fn_tok = expect(p, token::TokenKind::FN);
+    if(fn_tok.kind == token::TokenKind::ERROR) {
+        return mk_error_node_and_consume(p, fn_tok.src_pos);
+    }
+    bool is_const = peek(p, 0).kind == token::TokenKind::CONST;
+    if(is_const) { consume(p); }
+    ast::AstNode* type_expr = parse_type(p);
+    bool had_err = !type_expr || had_error(type_expr);
+    token::Token ident = expect(p, token::TokenKind::Ident);
+    if(ident.kind == token::TokenKind::ERROR) { had_err = true; }
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::Param[] params = parse_params(p, &had_err);
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* body = parse_block(p, &had_err);
+    ast::FnDeclNode* fn_decl_node = arena::alloc(p.m.arena, sizeof(ast::FnDeclNode));
+    sys::memset(fn_decl_node, 0, sizeof(ast::FnDeclNode));
+    fn_decl_node.h.kind = ast::AstKind::FnDecl;
+    fn_decl_node.h.flags = (ast::AstFlags)0;
+    if(had_err) { fn_decl_node.h.flags = ast::AstFlags::HadError; }
+    fn_decl_node.h.src_pos = start;
+    fn_decl_node.name = ident.data.sym;
+    fn_decl_node.return_type = type_expr;
+    fn_decl_node.params = params;
+    fn_decl_node.body = body;
+    fn_decl_node.comptime_safe = 0;
+    fn_decl_node.is_exported = is_exported;
+    return (ast::AstNode*)fn_decl_node;
+}
+fn ast::Param[] parse_params(Parser* p, bool* had_err) {
+    ast::Param[] arr;
+    arr.ptr = null;
+    arr.len = 0;
+    u64 cap = 0;
+    while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
+        u32 start = peek(p, 0).src_pos;
+        bool is_const = false;
+        bool is_comptime = false;
+        if(peek(p, 0).kind == token::TokenKind::CONST) {
+            consume(p);
+            is_const = true;
+        }
+        if(peek(p, 0).kind == token::TokenKind::COMPTIME) {
+            consume(p);
+            is_comptime = true;
+        }
+        ast::AstNode* type_expr = parse_type(p);
+        if(!type_expr || had_error(type_expr)) { *had_err = true; }
+        token::Token name = expect(p, token::TokenKind::Ident);
+        if(name.kind == token::TokenKind::ERROR) { *had_err = true; }
+        if(arr.len + 1 > cap) {
+            u64 new_cap = 4;
+            if(cap > 0) { new_cap = cap * 2; }
+            arr.ptr = arena::realloc_grow(p.m.arena, arr.ptr,
+                    cap * sizeof(ast::Param),
+                    new_cap * sizeof(ast::Param));
+            cap = new_cap;
+        }
+        ast::Param* prm = &arr[arr.len];
+        prm.name = name.data.sym;
+        prm.type_expr = type_expr;
+        prm.is_const = is_const;
+        prm.is_comptime = is_comptime;
+        prm.src_pos = start;
+        arr.len += 1;
+        if(!match(p, token::TokenKind::Comma)) { break; }
+    }
+    return arr;
+}
+
+// STATEMENTS ///////////////////////////////////////////////////////////////////////////
+fn ast::AstNode* parse_stmt(Parser* p) {
+    token::Token t = peek(p, 0);
+    switch(t.kind) {
+        //case token::TokenKind::LBrace:       { return parse_block(p); }
+        //case token::TokenKind::IF:           { return parse_if(p); }
+        //case token::TokenKind::WHILE:        { return parse_while(p); }
+        //case token::TokenKind::FOR:          { return parse_for(p); }
+        //case token::TokenKind::SWITCH:       { return parse_switch(p); }
+        //case token::TokenKind::RETURN:       { return parse_return(p); }
+        //case token::TokenKind::BREAK:        { return parse_break(p); }
+        //case token::TokenKind::CONTINUE:     { return parse_continue(p); }
+        //case token::TokenKind::DEFER:        { return parse_defer(p); }
+        //case token::TokenKind::COMPRUN:      { return parse_comprun(p); }
+        //case token::TokenKind::COMPINSERT:   { return parse_compinsert(p); }
+        //case token::TokenKind::COMPSPLICE:   { return parse_compsplice(p); }
+        //case token::TokenKind::COMPERROR:    { return parse_comperror(p); }
+        //case token::TokenKind::COMPWARNING:  { return parse_compwarning(p); }
+        //case token::TokenKind::CONST:        { return parse_local_var_decl(p); }
+    else {
+        //if(looks_like_type_start(t.kind) && looks_like_var_decl(p)) {
+        //    return parse_local_var_decl(p);
+        //}
+        //return parse_assignment_or_expr_stmt(p);
+        report_expected(p, t, token::TokenKind::Semi);
+        return mk_error_node_and_consume(p, t.src_pos);
+    }
+    }
+    return mk_error_node_and_consume(p, t.src_pos);
+}
+
+fn ast::AstNode* parse_block(Parser* p, bool* had_err) {
+    u32 start = peek(p, 0).src_pos;
+    bool local_err = false;
+    token::Token open = expect(p, token::TokenKind::LBrace);
+    if(open.kind == token::TokenKind::ERROR) {
+        *had_err = true;
+        return mk_error_node(p, start);
+    }
+    ast::ListBuilder stmts;
+    ast::list_init(&stmts, p.m.arena, 8);
+    while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
+        ast::AstNode* s = parse_stmt(p);
+        if(s) {
+            ast::list_push(&stmts, p.m.arena, s);
+            if(had_error(s)) { local_err = true; }
+        }
+    }
+    token::Token close = expect(p, token::TokenKind::RBrace);
+    if(close.kind == token::TokenKind::ERROR) { local_err = true; }
+    if(local_err) { *had_err = true; }
+    ast::BlockNode* blk = arena::alloc(p.m.arena, sizeof(ast::BlockNode));
+    blk.h.kind = ast::AstKind::BlockStmt;
+    blk.h.flags = (ast::AstFlags)0;
+    if(local_err) { blk.h.flags = ast::AstFlags::HadError; }
+    blk.h.src_pos = start;
+    blk.stmts = ast::list_freeze(&stmts);
+    return (ast::AstNode*)blk;
 }
 
 // TYPES ////////////////////////////////////////////////////////////////////////////////

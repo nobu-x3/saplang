@@ -299,6 +299,27 @@ export fn ast::VarDeclNode* expect_var(ast::AstNode* n, symbol::Symbol* name, bo
     return v;
 }
 
+export fn ast::FnDeclNode* expect_fn_decl(ast::AstNode* n, symbol::Symbol* name, u64 n_params, bool is_exported, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::FnDecl, msg)) { return null; }
+    ast::FnDeclNode* f = (ast::FnDeclNode*)n;
+    if(name) {
+        if(!testing::expect_eq((void*)f.name, (void*)name, msg)) { return null; }
+    }
+    if(!testing::expect_eq(f.params.len, n_params, msg)) { return null; }
+    if(!testing::expect_eq(f.is_exported, is_exported, msg)) { return null; }
+    return f;
+}
+
+export fn bool expect_param(ast::Param* prm, symbol::Symbol* name, bool is_const, bool is_comptime, u8[] msg) {
+    if(!testing::expect_not_null((void*)prm, msg)) { return false; }
+    if(name) {
+        if(!testing::expect_eq((void*)prm.name, (void*)name, msg)) { return false; }
+    }
+    if(!testing::expect_eq(prm.is_const, is_const, msg)) { return false; }
+    return testing::expect_eq(prm.is_comptime, is_comptime, msg);
+}
+
 export fn ast::ImportNode* expect_import(ast::AstNode* n, symbol::Symbol* mod_name, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ImportDecl, msg)) { return null; }

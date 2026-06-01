@@ -464,6 +464,304 @@ fn i32 ty_array_of_ptr(arena::Arena* a, u8[] msg) {
 }
 
 // ============================================================================
+// FN DECLS / PARAMS
+// ============================================================================
+
+fn i32 fn_empty_params(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 0, false, msg);
+    if(!f) { return -1; }
+    if(!compiler_testing::expect_ty_prim(f.return_type, token::TokenKind::VOID, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 fn_single_param(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "x"), false, false, msg)) { return -2; }
+    if(!compiler_testing::expect_ty_prim(p0.type_expr, token::TokenKind::I32, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_two_params(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 add(i32 a, i32 b) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "add"), 2, false, msg);
+    if(!f) { return -1; }
+    if(!compiler_testing::expect_ty_prim(f.return_type, token::TokenKind::I32, msg)) { return -2; }
+    ast::Param* p0 = &f.params[0];
+    ast::Param* p1 = &f.params[1];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "a"), false, false, msg)) { return -3; }
+    if(!compiler_testing::expect_ty_prim(p0.type_expr, token::TokenKind::I32, msg)) { return -4; }
+    if(!compiler_testing::expect_param(p1, compiler_testing::sym(m, "b"), false, false, msg)) { return -5; }
+    if(!compiler_testing::expect_ty_prim(p1.type_expr, token::TokenKind::I32, msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 fn_param_const(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const i32 x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "x"), true, false, msg)) { return -2; }
+    if(!compiler_testing::expect_ty_prim(p0.type_expr, token::TokenKind::I32, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_param_comptime(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime Type T) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "T"), false, true, msg)) { return -2; }
+    if(!compiler_testing::expect_ty_prim(p0.type_expr, token::TokenKind::TYPE, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_param_const_comptime(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime i32 N) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "N"), true, true, msg)) { return -2; }
+    if(!compiler_testing::expect_ty_prim(p0.type_expr, token::TokenKind::I32, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_param_pointer_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32* p) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "p"), false, false, msg)) { return -2; }
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(p0.type_expr, msg);
+    if(!tp) { return -3; }
+    if(!compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 fn_param_slice_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32[] s) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    ast::Param* p0 = &f.params[0];
+    ast::TypeSliceNode* ts = compiler_testing::expect_ty_slice(p0.type_expr, msg);
+    if(!ts) { return -2; }
+    if(!compiler_testing::expect_ty_prim(ts.element, token::TokenKind::I32, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_param_named_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(Foo x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_ty_named(p0.type_expr, null, compiler_testing::sym(m, "Foo"), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 fn_param_qualified_named_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(io::FILE* p) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    ast::Param* p0 = &f.params[0];
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(p0.type_expr, msg);
+    if(!tp) { return -2; }
+    if(!compiler_testing::expect_ty_named(tp.pointee, compiler_testing::sym(m, "io"), compiler_testing::sym(m, "FILE"), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_params_mixed_modifiers(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const i32 a, i32 b, comptime Type T) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 3, false, msg);
+    if(!f) { return -1; }
+    if(!compiler_testing::expect_param(&f.params[0], compiler_testing::sym(m, "a"), true, false, msg)) { return -2; }
+    if(!compiler_testing::expect_param(&f.params[1], compiler_testing::sym(m, "b"), false, false, msg)) { return -3; }
+    if(!compiler_testing::expect_param(&f.params[2], compiler_testing::sym(m, "T"), false, true, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 fn_param_trailing_comma(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 a, i32 b,) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 2, false, msg);
+    if(!f) { return -1; }
+    if(!compiler_testing::expect_param(&f.params[0], compiler_testing::sym(m, "a"), false, false, msg)) { return -2; }
+    if(!compiler_testing::expect_param(&f.params[1], compiler_testing::sym(m, "b"), false, false, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export fn void f(i32 x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, true, msg);
+    if(!f) { return -1; }
+    if(!compiler_testing::expect_param(&f.params[0], compiler_testing::sym(m, "x"), false, false, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+// `fn void f(const i32 x) {}` — `const` starts at byte 10
+fn i32 fn_param_src_pos_on_const(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const i32 x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(f.params[0].src_pos, 10, msg)) { return -2; }
+    return 0;
+}
+
+// `fn void f(i32 x) {}` — `i32` starts at byte 10
+fn i32 fn_param_src_pos_on_type_when_no_modifier(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(f.params[0].src_pos, 10, msg)) { return -2; }
+    return 0;
+}
+
+// `fn void f(comptime Type T) {}` — `comptime` starts at byte 10
+fn i32 fn_param_src_pos_on_comptime(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime Type T) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(f.params[0].src_pos, 10, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 fn_missing_param_name(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
+    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 fn_missing_rparen(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 x {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
+    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 fn_missing_fn_name(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void (i32 x) {}", &m);
+    ast::AstNode* stmt0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)stmt0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)stmt0.h.kind, (u16)ast::AstKind::FnDecl, msg)) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(stmt0), msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_src_pos_on_fn_keyword(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "   fn void f() {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 0, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(f.h.src_pos, 3, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 fn_export_src_pos_on_export(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export fn void f() {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 0, true, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(f.h.src_pos, 7, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 fn_multiple_decls(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() {} fn i32 g(i32 x) {}", &m);
+    ast::BlockNode* b = (ast::BlockNode*)root;
+    if(!testing::expect_eq(b.stmts.len, 2, msg)) { return -1; }
+    if(!compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 0, false, msg)) { return -2; }
+    if(!compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 1), compiler_testing::sym(m, "g"), 1, false, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_fn_ptr_return_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn fn* void(i32) make() {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "make"), 0, false, msg);
+    if(!f) { return -1; }
+    if(!compiler_testing::expect_ty_fnptr(f.return_type, 1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 fn_param_fn_ptr_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(fn* void(i32) cb) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "cb"), false, false, msg)) { return -2; }
+    if(!compiler_testing::expect_ty_fnptr(p0.type_expr, 1, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+// ============================================================================
 // EXPRESSIONS: PRIMARY / LITERALS
 // ============================================================================
 
@@ -1145,6 +1443,32 @@ fn i32 main() {
     testing::add(s_ty, "ty_fn_ptr_zero_params", &ty_fn_ptr_zero_params);
     testing::add(s_ty, "ty_ptr_slice_chain", &ty_ptr_slice_chain);
     testing::add(s_ty, "ty_array_of_ptr", &ty_array_of_ptr);
+
+    u8[] s_fn = "Parser FnDecls";
+    testing::add(s_fn, "fn_empty_params", &fn_empty_params);
+    testing::add(s_fn, "fn_single_param", &fn_single_param);
+    testing::add(s_fn, "fn_two_params", &fn_two_params);
+    testing::add(s_fn, "fn_param_const", &fn_param_const);
+    testing::add(s_fn, "fn_param_comptime", &fn_param_comptime);
+    testing::add(s_fn, "fn_param_const_comptime", &fn_param_const_comptime);
+    testing::add(s_fn, "fn_param_pointer_type", &fn_param_pointer_type);
+    testing::add(s_fn, "fn_param_slice_type", &fn_param_slice_type);
+    testing::add(s_fn, "fn_param_named_type", &fn_param_named_type);
+    testing::add(s_fn, "fn_param_qualified_named_type", &fn_param_qualified_named_type);
+    testing::add(s_fn, "fn_params_mixed_modifiers", &fn_params_mixed_modifiers);
+    testing::add(s_fn, "fn_param_trailing_comma", &fn_param_trailing_comma);
+    testing::add(s_fn, "fn_exported", &fn_exported);
+    testing::add(s_fn, "fn_param_src_pos_on_const", &fn_param_src_pos_on_const);
+    testing::add(s_fn, "fn_param_src_pos_on_type_when_no_modifier", &fn_param_src_pos_on_type_when_no_modifier);
+    testing::add(s_fn, "fn_param_src_pos_on_comptime", &fn_param_src_pos_on_comptime);
+    testing::add(s_fn, "fn_missing_param_name", &fn_missing_param_name);
+    testing::add(s_fn, "fn_missing_rparen", &fn_missing_rparen);
+    testing::add(s_fn, "fn_missing_fn_name", &fn_missing_fn_name);
+    testing::add(s_fn, "fn_src_pos_on_fn_keyword", &fn_src_pos_on_fn_keyword);
+    testing::add(s_fn, "fn_export_src_pos_on_export", &fn_export_src_pos_on_export);
+    testing::add(s_fn, "fn_multiple_decls", &fn_multiple_decls);
+    testing::add(s_fn, "fn_fn_ptr_return_type", &fn_fn_ptr_return_type);
+    testing::add(s_fn, "fn_param_fn_ptr_type", &fn_param_fn_ptr_type);
 
     u8[] s_e = "Parser Expressions";
     testing::add(s_e, "expr_int_literal", &expr_int_literal);
