@@ -328,6 +328,12 @@ export fn bool expect_diag_at(module::Module* m, u32 pos, u8[] needle, u8[] msg)
     return testing::expect_true(false, msg);
 }
 
+export fn ast::ReturnNode* expect_return(ast::AstNode* n, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ReturnStmt, msg)) { return null; }
+    return (ast::ReturnNode*)n;
+}
+
 export fn ast::BlockNode* expect_block(ast::AstNode* n, u64 n_stmts, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::BlockStmt, msg)) { return null; }

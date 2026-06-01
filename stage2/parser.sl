@@ -206,7 +206,7 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         //case token::TokenKind::WHILE:        { return parse_while(p); }
         //case token::TokenKind::FOR:          { return parse_for(p); }
         //case token::TokenKind::SWITCH:       { return parse_switch(p); }
-        //case token::TokenKind::RETURN:       { return parse_return(p); }
+        case token::TokenKind::RETURN:       { return parse_return(p); }
         //case token::TokenKind::BREAK:        { return parse_break(p); }
         //case token::TokenKind::CONTINUE:     { return parse_continue(p); }
         //case token::TokenKind::DEFER:        { return parse_defer(p); }
@@ -229,6 +229,27 @@ fn ast::AstNode* parse_stmt(Parser* p) {
 }
 
 fn ast::AstNode* parse_local_var_decl(Parser* p) { return parse_var_decl(p, false); }
+
+fn ast::AstNode* parse_return(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token ret = expect(p, token::TokenKind::RETURN);
+    if(ret.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    ast::AstNode* expr = null;
+    if(peek(p, 0).kind != token::TokenKind::Semi) {
+        expr = parse_expr(p, 0);
+        if(!expr || had_error(expr)) { had_err = true; }
+    }
+    token::Token semi = expect(p, token::TokenKind::Semi);
+    if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::ReturnNode* n = arena::alloc(p.m.arena, sizeof(ast::ReturnNode));
+    n.h.kind = ast::AstKind::ReturnStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.expr = expr;
+    return (ast::AstNode*)n;
+}
 
 // Speculative: try parse_type then check next is Ident. Rewind either way.
 fn bool looks_like_var_decl(Parser* p) {
