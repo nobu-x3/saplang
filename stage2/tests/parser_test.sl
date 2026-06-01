@@ -179,7 +179,7 @@ fn i32 import_error_does_not_loop_forever(arena::Arena* a, u8[] msg) {
 // VAR DECLS
 // ============================================================================
 
-fn i32 vd_basic_int_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_basic_int_init(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 5;", &m);
@@ -191,7 +191,7 @@ fn i32 vd_basic_int_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_no_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_no_init(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x;", &m);
@@ -203,7 +203,7 @@ fn i32 vd_no_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_const(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_const(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const i32 PI_X3 = 9;", &m);
@@ -213,7 +213,7 @@ fn i32 vd_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_export(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_export(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export i32 g = 1;", &m);
@@ -223,7 +223,7 @@ fn i32 vd_export(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_export_const(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_export_const(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export const i32 K = 42;", &m);
@@ -233,7 +233,7 @@ fn i32 vd_export_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_undefined_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_init(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined;", &m);
@@ -243,7 +243,7 @@ fn i32 vd_undefined_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_src_pos_on_type(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_src_pos_on_type(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "  i32 x = 5;", &m);
@@ -253,7 +253,7 @@ fn i32 vd_src_pos_on_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_src_pos_on_const(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_src_pos_on_const(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "  const i32 x = 5;", &m);
@@ -263,7 +263,7 @@ fn i32 vd_src_pos_on_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_multiple_decls(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_multiple_decls(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 a = 1; i32 b = 2; i32 c = 3;", &m);
@@ -280,7 +280,7 @@ fn i32 vd_multiple_decls(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_named_type_decl(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_named_type_decl(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "MyType x;", &m);
@@ -292,7 +292,7 @@ fn i32 vd_named_type_decl(arena::Arena* a, u8[] msg) {
 
 // --- VarDecl error paths ---
 
-fn i32 vd_missing_ident(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_missing_ident(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 = 5;", &m);
@@ -302,7 +302,7 @@ fn i32 vd_missing_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 5", &m);
@@ -312,7 +312,7 @@ fn i32 vd_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_missing_semi_no_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_missing_semi_no_init(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x", &m);
@@ -321,7 +321,7 @@ fn i32 vd_missing_semi_no_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 vd_missing_init_expr(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_missing_init_expr(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = ;", &m);
@@ -758,6 +758,339 @@ fn i32 fn_param_fn_ptr_type(arena::Arena* a, u8[] msg) {
     if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "cb"), false, false, msg)) { return -2; }
     if(!compiler_testing::expect_ty_fnptr(p0.type_expr, 1, msg)) { return -3; }
     if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+// ============================================================================
+// LOCAL VAR DECLS
+// ============================================================================
+
+fn i32 local_var_decl_basic(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = (ast::BlockNode*)f.body;
+    if(!testing::expect_eq(body.stmts.len, 1, msg)) { return -2; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -3; }
+    if(!compiler_testing::expect_ty_prim(v.type_expr, token::TokenKind::I32, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(v.init, 5, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 local_var_decl_const(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { const i32 x = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), true, false, msg);
+    if(!v) { return -2; }
+    if(!compiler_testing::expect_ty_prim(v.type_expr, token::TokenKind::I32, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(v.init, 5, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 local_var_decl_no_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    if(!compiler_testing::expect_ty_prim(v.type_expr, token::TokenKind::I32, msg)) { return -3; }
+    if(!testing::expect_null((void*)v.init, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 local_var_decl_pointer_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32* p = null; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "p"), false, false, msg);
+    if(!v) { return -2; }
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(v.type_expr, msg);
+    if(!tp) { return -3; }
+    if(!compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg)) { return -4; }
+    if(!compiler_testing::expect_nulllit(v.init, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 local_var_decl_named_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Foo x; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    if(!compiler_testing::expect_ty_named(v.type_expr, null, compiler_testing::sym(m, "Foo"), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 local_var_decl_qualified_named_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { io::FILE* p; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "p"), false, false, msg);
+    if(!v) { return -2; }
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(v.type_expr, msg);
+    if(!tp) { return -3; }
+    if(!compiler_testing::expect_ty_named(tp.pointee, compiler_testing::sym(m, "io"), compiler_testing::sym(m, "FILE"), msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 local_var_decl_multiple(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 a = 1; i32 b = 2; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = (ast::BlockNode*)f.body;
+    if(!testing::expect_eq(body.stmts.len, 2, msg)) { return -2; }
+    if(!compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "a"), false, false, msg)) { return -3; }
+    if(!compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 1), compiler_testing::sym(m, "b"), false, false, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 local_var_decl_complex_init_expr(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 1 + 2 * 3; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::BinaryOpNode* plus = compiler_testing::expect_binop(v.init, token::TokenKind::Plus, msg);
+    if(!plus) { return -3; }
+    if(!compiler_testing::expect_intlit(plus.lhs, 1, msg)) { return -4; }
+    ast::BinaryOpNode* mul = compiler_testing::expect_binop(plus.rhs, token::TokenKind::Star, msg);
+    if(!mul) { return -5; }
+    if(!compiler_testing::expect_intlit(mul.lhs, 2, msg)) { return -6; }
+    if(!compiler_testing::expect_intlit(mul.rhs, 3, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 local_var_decl_missing_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 5 }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
+    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -3; }
+    return 0;
+}
+
+// `fn void f() { i32 x = 5; }` — `i32` starts at byte 14
+fn i32 local_var_decl_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), null, false, false, msg);
+    if(!v) { return -2; }
+    if(!testing::expect_eq(v.h.src_pos, 14, msg)) { return -3; }
+    return 0;
+}
+
+// `fn void f() { const i32 x = 5; }` — `const` starts at byte 14
+fn i32 local_var_decl_src_pos_on_const(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { const i32 x = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), null, true, false, msg);
+    if(!v) { return -2; }
+    if(!testing::expect_eq(v.h.src_pos, 14, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 local_var_decl_empty_body(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = (ast::BlockNode*)f.body;
+    if(!testing::expect_eq(body.stmts.len, 0, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 local_var_decl_fn_ptr_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { fn* i32(i32) cb = null; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "cb"), false, false, msg);
+    if(!v) { return -2; }
+    ast::TypeFnPtrNode* fp = compiler_testing::expect_ty_fnptr(v.type_expr, 1, msg);
+    if(!fp) { return -3; }
+    if(!compiler_testing::expect_ty_prim(fp.return_type, token::TokenKind::I32, msg)) { return -4; }
+    if(!compiler_testing::expect_ty_prim(fp.param_types.ptr[0], token::TokenKind::I32, msg)) { return -5; }
+    if(!compiler_testing::expect_nulllit(v.init, msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 local_var_decl_slice_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32[] s; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "s"), false, false, msg);
+    if(!v) { return -2; }
+    ast::TypeSliceNode* ts = compiler_testing::expect_ty_slice(v.type_expr, msg);
+    if(!ts) { return -3; }
+    if(!compiler_testing::expect_ty_prim(ts.element, token::TokenKind::I32, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 local_var_decl_array_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32[3] arr; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "arr"), false, false, msg);
+    if(!v) { return -2; }
+    ast::TypeArrayNode* ta = compiler_testing::expect_ty_array(v.type_expr, msg);
+    if(!ta) { return -3; }
+    if(!compiler_testing::expect_ty_prim(ta.element, token::TokenKind::I32, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(ta.size_expr, 3, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 local_var_decl_struct_lit_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Foo x = { 1, 2 }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    if(!compiler_testing::expect_ty_named(v.type_expr, null, compiler_testing::sym(m, "Foo"), msg)) { return -3; }
+    ast::StructLitNode* sl = compiler_testing::expect_struct_lit(v.init, 2, msg);
+    if(!sl) { return -4; }
+    if(!compiler_testing::expect_field_init(&sl.inits[0], null, msg)) { return -5; }
+    if(!compiler_testing::expect_intlit(sl.inits[0].value, 1, msg)) { return -6; }
+    if(!compiler_testing::expect_field_init(&sl.inits[1], null, msg)) { return -7; }
+    if(!compiler_testing::expect_intlit(sl.inits[1].value, 2, msg)) { return -8; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -9; }
+    return 0;
+}
+
+fn i32 local_var_decl_struct_lit_designated_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Foo x = { .a = 1, .b = 2 }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::StructLitNode* sl = compiler_testing::expect_struct_lit(v.init, 2, msg);
+    if(!sl) { return -3; }
+    if(!compiler_testing::expect_field_init(&sl.inits[0], compiler_testing::sym(m, "a"), msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(sl.inits[0].value, 1, msg)) { return -5; }
+    if(!compiler_testing::expect_field_init(&sl.inits[1], compiler_testing::sym(m, "b"), msg)) { return -6; }
+    if(!compiler_testing::expect_intlit(sl.inits[1].value, 2, msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -8; }
+    return 0;
+}
+
+fn i32 local_var_decl_array_lit_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32[3] arr = [1, 2, 3]; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "arr"), false, false, msg);
+    if(!v) { return -2; }
+    ast::ArrayLitNode* al = compiler_testing::expect_array_lit(v.init, 3, msg);
+    if(!al) { return -3; }
+    if(!compiler_testing::expect_intlit(al.elems.ptr[0], 1, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(al.elems.ptr[1], 2, msg)) { return -5; }
+    if(!compiler_testing::expect_intlit(al.elems.ptr[2], 3, msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 local_var_decl_cast_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = (i32)y; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::CastNode* c = compiler_testing::expect_cast(v.init, msg);
+    if(!c) { return -3; }
+    if(!compiler_testing::expect_ty_prim(c.target_type, token::TokenKind::I32, msg)) { return -4; }
+    if(!compiler_testing::expect_ident(c.expr, compiler_testing::sym(m, "y"), msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 local_var_decl_call_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = foo(1, 2); }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::CallNode* c = compiler_testing::expect_call(v.init, 2, msg);
+    if(!c) { return -3; }
+    if(!compiler_testing::expect_ident(c.callee, compiler_testing::sym(m, "foo"), msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(c.args.ptr[0], 1, msg)) { return -5; }
+    if(!compiler_testing::expect_intlit(c.args.ptr[1], 2, msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 local_var_decl_undefined_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = undefined; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    if(!compiler_testing::expect_ty_prim(v.type_expr, token::TokenKind::I32, msg)) { return -3; }
+    if(!compiler_testing::expect_undeflit(v.init, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 local_var_decl_export_rejected(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { export i32 x = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
+    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -3; }
     return 0;
 }
 
@@ -1412,21 +1745,21 @@ fn i32 main() {
     testing::add(s_imp, "import_error_then_valid_recovers", &import_error_then_valid_recovers);
     testing::add(s_imp, "import_error_does_not_loop_forever", &import_error_does_not_loop_forever);
 
-    u8[] s_vd = "Parser VarDecls";
-    testing::add(s_vd, "vd_basic_int_init", &vd_basic_int_init);
-    testing::add(s_vd, "vd_no_init", &vd_no_init);
-    testing::add(s_vd, "vd_const", &vd_const);
-    testing::add(s_vd, "vd_export", &vd_export);
-    testing::add(s_vd, "vd_export_const", &vd_export_const);
-    testing::add(s_vd, "vd_undefined_init", &vd_undefined_init);
-    testing::add(s_vd, "vd_src_pos_on_type", &vd_src_pos_on_type);
-    testing::add(s_vd, "vd_src_pos_on_const", &vd_src_pos_on_const);
-    testing::add(s_vd, "vd_multiple_decls", &vd_multiple_decls);
-    testing::add(s_vd, "vd_named_type_decl", &vd_named_type_decl);
-    testing::add(s_vd, "vd_missing_ident", &vd_missing_ident);
-    testing::add(s_vd, "vd_missing_semi_at_eof", &vd_missing_semi_at_eof);
-    testing::add(s_vd, "vd_missing_semi_no_init", &vd_missing_semi_no_init);
-    testing::add(s_vd, "vd_missing_init_expr", &vd_missing_init_expr);
+    u8[] s_var_decl = "Parser VarDecls";
+    testing::add(s_var_decl, "var_decl_basic_int_init", &var_decl_basic_int_init);
+    testing::add(s_var_decl, "var_decl_no_init", &var_decl_no_init);
+    testing::add(s_var_decl, "var_decl_const", &var_decl_const);
+    testing::add(s_var_decl, "var_decl_export", &var_decl_export);
+    testing::add(s_var_decl, "var_decl_export_const", &var_decl_export_const);
+    testing::add(s_var_decl, "var_decl_undefined_init", &var_decl_undefined_init);
+    testing::add(s_var_decl, "var_decl_src_pos_on_type", &var_decl_src_pos_on_type);
+    testing::add(s_var_decl, "var_decl_src_pos_on_const", &var_decl_src_pos_on_const);
+    testing::add(s_var_decl, "var_decl_multiple_decls", &var_decl_multiple_decls);
+    testing::add(s_var_decl, "var_decl_named_type_decl", &var_decl_named_type_decl);
+    testing::add(s_var_decl, "var_decl_missing_ident", &var_decl_missing_ident);
+    testing::add(s_var_decl, "var_decl_missing_semi_at_eof", &var_decl_missing_semi_at_eof);
+    testing::add(s_var_decl, "var_decl_missing_semi_no_init", &var_decl_missing_semi_no_init);
+    testing::add(s_var_decl, "var_decl_missing_init_expr", &var_decl_missing_init_expr);
 
     u8[] s_ty = "Parser Types";
     testing::add(s_ty, "ty_primitive_i32", &ty_primitive_i32);
@@ -1469,6 +1802,30 @@ fn i32 main() {
     testing::add(s_fn, "fn_multiple_decls", &fn_multiple_decls);
     testing::add(s_fn, "fn_fn_ptr_return_type", &fn_fn_ptr_return_type);
     testing::add(s_fn, "fn_param_fn_ptr_type", &fn_param_fn_ptr_type);
+
+    u8[] s_local_var_decl = "Parser Local VarDecls";
+    testing::add(s_local_var_decl, "local_var_decl_basic", &local_var_decl_basic);
+    testing::add(s_local_var_decl, "local_var_decl_const", &local_var_decl_const);
+    testing::add(s_local_var_decl, "local_var_decl_no_init", &local_var_decl_no_init);
+    testing::add(s_local_var_decl, "local_var_decl_pointer_type", &local_var_decl_pointer_type);
+    testing::add(s_local_var_decl, "local_var_decl_named_type", &local_var_decl_named_type);
+    testing::add(s_local_var_decl, "local_var_decl_qualified_named_type", &local_var_decl_qualified_named_type);
+    testing::add(s_local_var_decl, "local_var_decl_multiple", &local_var_decl_multiple);
+    testing::add(s_local_var_decl, "local_var_decl_complex_init_expr", &local_var_decl_complex_init_expr);
+    testing::add(s_local_var_decl, "local_var_decl_missing_semi", &local_var_decl_missing_semi);
+    testing::add(s_local_var_decl, "local_var_decl_src_pos", &local_var_decl_src_pos);
+    testing::add(s_local_var_decl, "local_var_decl_src_pos_on_const", &local_var_decl_src_pos_on_const);
+    testing::add(s_local_var_decl, "local_var_decl_empty_body", &local_var_decl_empty_body);
+    testing::add(s_local_var_decl, "local_var_decl_fn_ptr_type", &local_var_decl_fn_ptr_type);
+    testing::add(s_local_var_decl, "local_var_decl_slice_type", &local_var_decl_slice_type);
+    testing::add(s_local_var_decl, "local_var_decl_array_type", &local_var_decl_array_type);
+    testing::add(s_local_var_decl, "local_var_decl_struct_lit_init", &local_var_decl_struct_lit_init);
+    testing::add(s_local_var_decl, "local_var_decl_struct_lit_designated_init", &local_var_decl_struct_lit_designated_init);
+    testing::add(s_local_var_decl, "local_var_decl_array_lit_init", &local_var_decl_array_lit_init);
+    testing::add(s_local_var_decl, "local_var_decl_cast_init", &local_var_decl_cast_init);
+    testing::add(s_local_var_decl, "local_var_decl_call_init", &local_var_decl_call_init);
+    testing::add(s_local_var_decl, "local_var_decl_undefined_init", &local_var_decl_undefined_init);
+    testing::add(s_local_var_decl, "local_var_decl_export_rejected", &local_var_decl_export_rejected);
 
     u8[] s_e = "Parser Expressions";
     testing::add(s_e, "expr_int_literal", &expr_int_literal);

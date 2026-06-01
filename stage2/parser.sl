@@ -214,17 +214,31 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         //case token::TokenKind::COMPSPLICE:   { return parse_compsplice(p); }
         //case token::TokenKind::COMPERROR:    { return parse_comperror(p); }
         //case token::TokenKind::COMPWARNING:  { return parse_compwarning(p); }
-        //case token::TokenKind::CONST:        { return parse_local_var_decl(p); }
+        case token::TokenKind::CONST:        { return parse_local_var_decl(p); }
     else {
-        //if(looks_like_type_start(t.kind) && looks_like_var_decl(p)) {
-        //    return parse_local_var_decl(p);
-        //}
+        if(looks_like_type_start(t.kind) && looks_like_var_decl(p)) {
+            return parse_local_var_decl(p);
+        }
         //return parse_assignment_or_expr_stmt(p);
         report_expected(p, t, token::TokenKind::Semi);
         return mk_error_node_and_consume(p, t.src_pos);
     }
     }
     return mk_error_node_and_consume(p, t.src_pos);
+}
+
+fn ast::AstNode* parse_local_var_decl(Parser* p) { return parse_var_decl(p, false); }
+
+// Speculative: try parse_type then check next is Ident. Rewind either way.
+fn bool looks_like_var_decl(Parser* p) {
+    ParserSnapshot s = snap(p);
+    bool prev_spec = p.is_speculating;
+    p.is_speculating = true;
+    ast::AstNode* ty = parse_type(p);
+    bool ok = ty && !had_error(ty) && peek(p, 0).kind == token::TokenKind::Ident;
+    p.is_speculating = prev_spec;
+    rewind(p, s);
+    return ok;
 }
 
 fn ast::AstNode* parse_block(Parser* p, bool* had_err) {
