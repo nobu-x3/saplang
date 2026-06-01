@@ -202,7 +202,7 @@ fn ast::AstNode* parse_stmt(Parser* p) {
     token::Token t = peek(p, 0);
     switch(t.kind) {
         case token::TokenKind::LBrace:       { return parse_block(p); }
-        //case token::TokenKind::IF:           { return parse_if(p); }
+        case token::TokenKind::IF:           { return parse_if(p); }
         //case token::TokenKind::WHILE:        { return parse_while(p); }
         //case token::TokenKind::FOR:          { return parse_for(p); }
         //case token::TokenKind::SWITCH:       { return parse_switch(p); }
@@ -248,6 +248,40 @@ fn ast::AstNode* parse_return(Parser* p) {
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
     n.expr = expr;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_if(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token if_tok = expect(p, token::TokenKind::IF);
+    if(if_tok.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* cond = parse_expr(p, 0);
+    if(!cond || had_error(cond)) { had_err = true; }
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* then_block = parse_block(p);
+    if(had_error(then_block)) { had_err = true; }
+    ast::AstNode* else_block = null;
+    if(peek(p, 0).kind == token::TokenKind::ELSE) {
+        consume(p);
+        if(peek(p, 0).kind == token::TokenKind::IF) {
+            else_block = parse_if(p);
+        } else {
+            else_block = parse_block(p);
+        }
+        if(had_error(else_block)) { had_err = true; }
+    }
+    ast::IfNode* n = arena::alloc(p.m.arena, sizeof(ast::IfNode));
+    n.h.kind = ast::AstKind::IfStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.cond = cond;
+    n.then_block = then_block;
+    n.else_block = else_block;
     return (ast::AstNode*)n;
 }
 
