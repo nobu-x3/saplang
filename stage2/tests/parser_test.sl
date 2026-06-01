@@ -318,6 +318,8 @@ fn i32 var_decl_missing_semi_no_init(arena::Arena* a, u8[] msg) {
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x", &m);
     ast::AstNode* n = compiler_testing::nth_stmt(root, 0);
     if(!testing::expect_true(compiler_testing::has_error_flag(n), msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got end of file", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 5, msg)) { return -3; }
     return 0;
 }
 
@@ -327,6 +329,8 @@ fn i32 var_decl_missing_init_expr(arena::Arena* a, u8[] msg) {
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = ;", &m);
     ast::AstNode* n = compiler_testing::nth_stmt(root, 0);
     if(!testing::expect_true(compiler_testing::has_error_flag(n), msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ';'", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 8, msg)) { return -3; }
     return 0;
 }
 
@@ -678,7 +682,8 @@ fn i32 fn_missing_param_name(arena::Arena* a, u8[] msg) {
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
     if(!f) { return -1; }
     if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ')'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 13, msg)) { return -4; }
     return 0;
 }
 
@@ -689,7 +694,8 @@ fn i32 fn_missing_rparen(arena::Arena* a, u8[] msg) {
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
     if(!f) { return -1; }
     if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ')', got '{'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 16, msg)) { return -4; }
     return 0;
 }
 
@@ -701,7 +707,8 @@ fn i32 fn_missing_fn_name(arena::Arena* a, u8[] msg) {
     if(!testing::expect_not_null((void*)stmt0, msg)) { return -1; }
     if(!testing::expect_eq((u16)stmt0.h.kind, (u16)ast::AstKind::FnDecl, msg)) { return -2; }
     if(!testing::expect_true(compiler_testing::has_error_flag(stmt0), msg)) { return -3; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got '('", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 8, msg)) { return -5; }
     return 0;
 }
 
@@ -758,6 +765,66 @@ fn i32 fn_param_fn_ptr_type(arena::Arena* a, u8[] msg) {
     if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "cb"), false, false, msg)) { return -2; }
     if(!compiler_testing::expect_ty_fnptr(p0.type_expr, 1, msg)) { return -3; }
     if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_missing_lparen(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f i32 x) {}", &m);
+    ast::AstNode* stmt0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)stmt0, msg)) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(stmt0), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '(', got 'i32'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 10, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_missing_return_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn f() {}", &m);
+    ast::AstNode* stmt0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)stmt0, msg)) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(stmt0), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got '('", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 4, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_missing_param_comma(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 a i32 b) {}", &m);
+    ast::AstNode* stmt0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)stmt0, msg)) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(stmt0), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ')', got 'i32'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 16, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_param_modifier_only(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const) {}", &m);
+    ast::AstNode* stmt0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)stmt0, msg)) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(stmt0), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ')'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 15, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_param_wrong_modifier_order(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime const i32 x) {}", &m);
+    ast::AstNode* stmt0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)stmt0, msg)) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(stmt0), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got 'const'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 19, msg)) { return -4; }
     return 0;
 }
 
@@ -892,7 +959,8 @@ fn i32 local_var_decl_missing_semi(arena::Arena* a, u8[] msg) {
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
     if(!f) { return -1; }
     if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got '}'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 24, msg)) { return -4; }
     return 0;
 }
 
@@ -1083,6 +1151,23 @@ fn i32 local_var_decl_undefined_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// `i32 = 5;` at stmt position: `looks_like_var_decl` rewinds (no Ident after type),
+// falls through to the stubbed expr_stmt path → error stmt, not a malformed var decl.
+fn i32 local_var_decl_dispatch_falls_through_on_no_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = (ast::BlockNode*)f.body;
+    if(!testing::expect_true(body.stmts.len > 0, msg)) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(body.stmts.ptr[0]), msg)) { return -3; }
+    if(!testing::expect_eq((u16)body.stmts.ptr[0].h.kind, (u16)ast::AstKind::ERROR, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got 'i32'", msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 14, msg)) { return -6; }
+    return 0;
+}
+
 fn i32 local_var_decl_export_rejected(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -1090,7 +1175,8 @@ fn i32 local_var_decl_export_rejected(arena::Arena* a, u8[] msg) {
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
     if(!f) { return -1; }
     if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got 'export'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 14, msg)) { return -4; }
     return 0;
 }
 
@@ -1188,7 +1274,8 @@ fn i32 block_inner_error_propagates(arena::Arena* a, u8[] msg) {
     if(!testing::expect_true(compiler_testing::has_error_flag(f.body), msg)) { return -3; }
     ast::BlockNode* outer = (ast::BlockNode*)f.body;
     if(!testing::expect_true(compiler_testing::has_error_flag(outer.stmts.ptr[0]), msg)) { return -4; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got '}'", msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 26, msg)) { return -6; }
     return 0;
 }
 
@@ -1200,7 +1287,8 @@ fn i32 block_unclosed_inner(arena::Arena* a, u8[] msg) {
     if(!f) { return -1; }
     if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
     if(!testing::expect_true(compiler_testing::has_error_flag(f.body), msg)) { return -3; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '}', got end of file", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 28, msg)) { return -5; }
     return 0;
 }
 
@@ -1281,6 +1369,8 @@ fn i32 block_sibling_error_isolation(arena::Arena* a, u8[] msg) {
     if(!outer) { return -2; }
     if(!testing::expect_true(compiler_testing::has_error_flag(outer.stmts.ptr[0]), msg)) { return -3; }
     if(!testing::expect_false(compiler_testing::has_error_flag(outer.stmts.ptr[1]), msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got '}'", msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 26, msg)) { return -6; }
     return 0;
 }
 
@@ -1308,6 +1398,8 @@ fn i32 block_recovery_resumes_outer(arena::Arena* a, u8[] msg) {
     if(!y) { return -4; }
     if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)y), msg)) { return -5; }
     if(!compiler_testing::expect_intlit(y.init, 6, msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got '}'", msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 26, msg)) { return -8; }
     return 0;
 }
 
@@ -1341,7 +1433,8 @@ fn i32 block_multiple_garbage_tokens(arena::Arena* a, u8[] msg) {
     if(!testing::expect_true(compiler_testing::has_error_flag(body.stmts.ptr[1]), msg)) { return -4; }
     if(!testing::expect_true(compiler_testing::has_error_flag(body.stmts.ptr[2]), msg)) { return -5; }
     if(!testing::expect_true(compiler_testing::has_error_flag(f.body), msg)) { return -6; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got ';'", msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 14, msg)) { return -8; }
     return 0;
 }
 
@@ -1357,6 +1450,8 @@ fn i32 block_all_error_stmts(arena::Arena* a, u8[] msg) {
     if(!testing::expect_true(compiler_testing::has_error_flag(body.stmts.ptr[1]), msg)) { return -4; }
     if(!testing::expect_true(compiler_testing::has_error_flag(f.body), msg)) { return -5; }
     if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ';'", msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 22, msg)) { return -8; }
     return 0;
 }
 
@@ -1377,6 +1472,8 @@ fn i32 block_error_interleaved_with_valid(arena::Arena* a, u8[] msg) {
     if(!testing::expect_false(compiler_testing::has_error_flag(body.stmts.ptr[2]), msg)) { return -7; }
     if(!testing::expect_true(compiler_testing::has_error_flag(body.stmts.ptr[3]), msg)) { return -8; }
     if(!testing::expect_true(compiler_testing::has_error_flag(f.body), msg)) { return -9; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got ';'", msg)) { return -10; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 25, msg)) { return -11; }
     return 0;
 }
 
@@ -1390,7 +1487,8 @@ fn i32 block_unrecognized_leading_token(arena::Arena* a, u8[] msg) {
     if(!body) { return -2; }
     if(!testing::expect_eq((u16)body.stmts.ptr[0].h.kind, (u16)ast::AstKind::ERROR, msg)) { return -3; }
     if(!testing::expect_true(compiler_testing::has_error_flag(body.stmts.ptr[0]), msg)) { return -4; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got ';'", msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 14, msg)) { return -6; }
     return 0;
 }
 
@@ -1404,7 +1502,8 @@ fn i32 block_unclosed_inner_at_eof(arena::Arena* a, u8[] msg) {
     if(!testing::expect_true(compiler_testing::has_error_flag(f.body), msg)) { return -3; }
     ast::BlockNode* outer = (ast::BlockNode*)f.body;
     if(!testing::expect_true(compiler_testing::has_error_flag(outer.stmts.ptr[0]), msg)) { return -4; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '}', got end of file", msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 26, msg)) { return -6; }
     return 0;
 }
 
@@ -1417,7 +1516,8 @@ fn i32 block_no_lbrace_returns_error(arena::Arena* a, u8[] msg) {
     if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
     if(!testing::expect_not_null((void*)f.body, msg)) { return -3; }
     if(!testing::expect_eq((u16)f.body.h.kind, (u16)ast::AstKind::ERROR, msg)) { return -4; }
-    if(!testing::expect_true(m.diag.entries.len > 0, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '{', got ';'", msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 11, msg)) { return -6; }
     return 0;
 }
 
@@ -2129,6 +2229,11 @@ fn i32 main() {
     testing::add(s_fn, "fn_multiple_decls", &fn_multiple_decls);
     testing::add(s_fn, "fn_fn_ptr_return_type", &fn_fn_ptr_return_type);
     testing::add(s_fn, "fn_param_fn_ptr_type", &fn_param_fn_ptr_type);
+    testing::add(s_fn, "fn_missing_lparen", &fn_missing_lparen);
+    testing::add(s_fn, "fn_missing_return_type", &fn_missing_return_type);
+    testing::add(s_fn, "fn_missing_param_comma", &fn_missing_param_comma);
+    testing::add(s_fn, "fn_param_modifier_only", &fn_param_modifier_only);
+    testing::add(s_fn, "fn_param_wrong_modifier_order", &fn_param_wrong_modifier_order);
 
     u8[] s_local_var_decl = "Parser Local VarDecls";
     testing::add(s_local_var_decl, "local_var_decl_basic", &local_var_decl_basic);
@@ -2152,6 +2257,7 @@ fn i32 main() {
     testing::add(s_local_var_decl, "local_var_decl_cast_init", &local_var_decl_cast_init);
     testing::add(s_local_var_decl, "local_var_decl_call_init", &local_var_decl_call_init);
     testing::add(s_local_var_decl, "local_var_decl_undefined_init", &local_var_decl_undefined_init);
+    testing::add(s_local_var_decl, "local_var_decl_dispatch_falls_through_on_no_ident", &local_var_decl_dispatch_falls_through_on_no_ident);
     testing::add(s_local_var_decl, "local_var_decl_export_rejected", &local_var_decl_export_rejected);
 
     u8[] s_block = "Parser Blocks";

@@ -299,6 +299,35 @@ export fn ast::VarDeclNode* expect_var(ast::AstNode* n, symbol::Symbol* name, bo
     return v;
 }
 
+// DIAG ASSERTS ///////////////////////////////////////////////////////////////
+fn bool bytes_contain(u8[] haystack, u8[] needle) {
+    if(needle.len == 0) { return true; }
+    if(haystack.len < needle.len) { return false; }
+    u64 limit = haystack.len - needle.len + 1;
+    for(u64 i = 0; i < limit; i += 1) {
+        bool match = true;
+        for(u64 j = 0; j < needle.len; j += 1) {
+            if(haystack.ptr[i + j] != needle.ptr[j]) { match = false; }
+        }
+        if(match) { return true; }
+    }
+    return false;
+}
+
+export fn bool expect_diag_substr(module::Module* m, u8[] needle, u8[] msg) {
+    for(u64 i = 0; i < m.diag.entries.len; i += 1) {
+        if(bytes_contain(m.diag.entries.ptr[i].msg, needle)) { return true; }
+    }
+    return testing::expect_true(false, msg);
+}
+
+export fn bool expect_diag_at(module::Module* m, u32 pos, u8[] needle, u8[] msg) {
+    for(u64 i = 0; i < m.diag.entries.len; i += 1) {
+        if(m.diag.entries.ptr[i].src_pos == pos && bytes_contain(m.diag.entries.ptr[i].msg, needle)) { return true; }
+    }
+    return testing::expect_true(false, msg);
+}
+
 export fn ast::BlockNode* expect_block(ast::AstNode* n, u64 n_stmts, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::BlockStmt, msg)) { return null; }
