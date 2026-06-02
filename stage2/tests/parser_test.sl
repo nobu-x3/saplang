@@ -5008,6 +5008,246 @@ fn i32 continue_in_else_branch(arena::Arena* a, u8[] msg) {
 }
 
 // ============================================================================
+// ALIAS
+// ============================================================================
+
+fn i32 alias_primitive_rhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 = u32;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "U32"), false, msg);
+    if(!al) { return -1; }
+    if(!compiler_testing::expect_ty_prim(al.target, token::TokenKind::U32, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 alias_named_rhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias MyFoo = Foo;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "MyFoo"), false, msg);
+    if(!al) { return -1; }
+    if(!compiler_testing::expect_ty_named(al.target, null, compiler_testing::sym(m, "Foo"), msg)) { return -2; }
+    return 0;
+}
+
+// User-requested pattern: `alias TestCase = testing::TestCase;` — qualified RHS.
+fn i32 alias_qualified_named_rhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "import testing; alias TestCase = testing::TestCase;", &m);
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, 2, msg)) { return -1; }
+    if(!compiler_testing::expect_import(r.stmts.ptr[0], compiler_testing::sym(m, "testing"), msg)) { return -2; }
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(r.stmts.ptr[1], compiler_testing::sym(m, "TestCase"), false, msg);
+    if(!al) { return -3; }
+    if(!compiler_testing::expect_ty_named(al.target, compiler_testing::sym(m, "testing"), compiler_testing::sym(m, "TestCase"), msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 alias_pointer_rhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias Ptr = i32*;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Ptr"), false, msg);
+    if(!al) { return -1; }
+    ast::TypePointerNode* p = compiler_testing::expect_ty_ptr(al.target, msg);
+    if(!p) { return -2; }
+    if(!compiler_testing::expect_ty_prim(p.pointee, token::TokenKind::I32, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 alias_slice_rhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias Bytes = u8[];", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Bytes"), false, msg);
+    if(!al) { return -1; }
+    ast::TypeSliceNode* s = compiler_testing::expect_ty_slice(al.target, msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_ty_prim(s.element, token::TokenKind::U8, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 alias_array_rhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias Pair = i32[2];", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Pair"), false, msg);
+    if(!al) { return -1; }
+    ast::TypeArrayNode* ar = compiler_testing::expect_ty_array(al.target, msg);
+    if(!ar) { return -2; }
+    if(!compiler_testing::expect_ty_prim(ar.element, token::TokenKind::I32, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(ar.size_expr, 2, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 alias_fn_ptr_rhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias Cb = fn* void(i32);", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Cb"), false, msg);
+    if(!al) { return -1; }
+    if(!compiler_testing::expect_ty_fnptr(al.target, 1, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 alias_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export alias TokenId = u32;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "TokenId"), true, msg);
+    if(!al) { return -1; }
+    if(!compiler_testing::expect_ty_prim(al.target, token::TokenKind::U32, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 alias_multiple_in_file(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias A = u32; alias B = A; alias C = B;", &m);
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, 3, msg)) { return -1; }
+    if(!compiler_testing::expect_alias(r.stmts.ptr[0], compiler_testing::sym(m, "A"), false, msg)) { return -2; }
+    if(!compiler_testing::expect_alias(r.stmts.ptr[1], compiler_testing::sym(m, "B"), false, msg)) { return -3; }
+    if(!compiler_testing::expect_alias(r.stmts.ptr[2], compiler_testing::sym(m, "C"), false, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 alias_mixed_with_other_decls(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "import foo; alias A = u32; fn void f() { }", &m);
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, 3, msg)) { return -1; }
+    if(!compiler_testing::expect_import(r.stmts.ptr[0], compiler_testing::sym(m, "foo"), msg)) { return -2; }
+    if(!compiler_testing::expect_alias(r.stmts.ptr[1], compiler_testing::sym(m, "A"), false, msg)) { return -3; }
+    if(!compiler_testing::expect_fn_decl(r.stmts.ptr[2], compiler_testing::sym(m, "f"), 0, false, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 alias_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 = u32;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_eq(al.h.src_pos, 0, msg)) { return -2; }
+    return 0;
+}
+
+// With `export`: alias.src_pos points at the `alias` keyword, NOT at `export`
+// (parse_top_decl consumes `export` before dispatching).
+fn i32 alias_exported_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export alias U32 = u32;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, true, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_eq(al.h.src_pos, 7, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 alias_missing_name(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias = u32;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got '='", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 6, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 alias_missing_eq(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 u32;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '=', got 'u32'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 10, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 alias_missing_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 = ;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ';'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 12, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 alias_missing_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 = u32", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -2; }
+    if(!compiler_testing::expect_diag_substr(m, "expected ';'", msg)) { return -3; }
+    return 0;
+}
+
+fn i32 alias_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -2; }
+    if(!compiler_testing::expect_diag_substr(m, "expected identifier", msg)) { return -3; }
+    return 0;
+}
+
+fn i32 alias_export_preserved_through_error(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export alias = u32;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, true, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got '='", msg)) { return -3; }
+    return 0;
+}
+
+fn i32 alias_exported_qualified_rhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "import testing; export alias TestCase = testing::TestCase;", &m);
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, 2, msg)) { return -1; }
+    if(!compiler_testing::expect_import(r.stmts.ptr[0], compiler_testing::sym(m, "testing"), msg)) { return -2; }
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(r.stmts.ptr[1], compiler_testing::sym(m, "TestCase"), true, msg);
+    if(!al) { return -3; }
+    if(!compiler_testing::expect_ty_named(al.target, compiler_testing::sym(m, "testing"), compiler_testing::sym(m, "TestCase"), msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 alias_recovery_continues(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias = u32; fn void f() { }", &m);
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, 2, msg)) { return -1; }
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(r.stmts.ptr[0], null, false, msg);
+    if(!al) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -3; }
+    if(!compiler_testing::expect_fn_decl(r.stmts.ptr[1], compiler_testing::sym(m, "f"), 0, false, msg)) { return -4; }
+    return 0;
+}
+
+// ============================================================================
 // COMPCODE  (expression: compcode { ... })
 // ============================================================================
 
@@ -8998,6 +9238,28 @@ fn i32 main() {
     testing::add(s_bc, "continue_recovery_continues", &continue_recovery_continues);
     testing::add(s_bc, "break_in_else_branch", &break_in_else_branch);
     testing::add(s_bc, "continue_in_else_branch", &continue_in_else_branch);
+
+    u8[] s_al = "Parser Aliases";
+    testing::add(s_al, "alias_primitive_rhs", &alias_primitive_rhs);
+    testing::add(s_al, "alias_named_rhs", &alias_named_rhs);
+    testing::add(s_al, "alias_qualified_named_rhs", &alias_qualified_named_rhs);
+    testing::add(s_al, "alias_pointer_rhs", &alias_pointer_rhs);
+    testing::add(s_al, "alias_slice_rhs", &alias_slice_rhs);
+    testing::add(s_al, "alias_array_rhs", &alias_array_rhs);
+    testing::add(s_al, "alias_fn_ptr_rhs", &alias_fn_ptr_rhs);
+    testing::add(s_al, "alias_exported", &alias_exported);
+    testing::add(s_al, "alias_multiple_in_file", &alias_multiple_in_file);
+    testing::add(s_al, "alias_mixed_with_other_decls", &alias_mixed_with_other_decls);
+    testing::add(s_al, "alias_src_pos", &alias_src_pos);
+    testing::add(s_al, "alias_exported_src_pos", &alias_exported_src_pos);
+    testing::add(s_al, "alias_missing_name", &alias_missing_name);
+    testing::add(s_al, "alias_missing_eq", &alias_missing_eq);
+    testing::add(s_al, "alias_missing_type", &alias_missing_type);
+    testing::add(s_al, "alias_missing_semi", &alias_missing_semi);
+    testing::add(s_al, "alias_at_eof", &alias_at_eof);
+    testing::add(s_al, "alias_export_preserved_through_error", &alias_export_preserved_through_error);
+    testing::add(s_al, "alias_exported_qualified_rhs", &alias_exported_qualified_rhs);
+    testing::add(s_al, "alias_recovery_continues", &alias_recovery_continues);
 
     u8[] s_cc = "Parser Compcode";
     testing::add(s_cc, "compcode_in_var_decl_init", &compcode_in_var_decl_init);

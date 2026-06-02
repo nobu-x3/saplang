@@ -51,7 +51,7 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
         //case token::TokenKind::STRUCT:  { return parse_struct_decl(p, is_exported); }
         //case token::TokenKind::UNION:   { return parse_union_decl(p, is_exported); }
         //case token::TokenKind::ENUM:    { return parse_enum_decl(p, is_exported); }
-        //case token::TokenKind::ALIAS:   { return parse_alias_decl(p, is_exported); }
+        case token::TokenKind::ALIAS:   { return parse_alias_decl(p, is_exported); }
     else {
         if(looks_like_type_start(t.kind)) {
             return parse_var_decl(p, is_exported);
@@ -294,6 +294,31 @@ fn ast::AstNode* parse_comprun(Parser* p) {
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
     n.body = body;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_alias_decl(Parser* p, bool is_exported) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token kw = expect(p, token::TokenKind::ALIAS);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token name = expect(p, token::TokenKind::Ident);
+    if(name.kind == token::TokenKind::ERROR) { had_err = true; }
+    token::Token eq = expect(p, token::TokenKind::Eq);
+    if(eq.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* target = parse_type(p);
+    if(!target || had_error(target)) { had_err = true; }
+    token::Token semi = expect(p, token::TokenKind::Semi);
+    if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AliasDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::AliasDeclNode));
+    sys::memset(n, 0, sizeof(ast::AliasDeclNode));
+    n.h.kind = ast::AstKind::AliasDecl;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.name = name.data.sym;
+    n.target = target;
+    n.is_exported = is_exported;
     return (ast::AstNode*)n;
 }
 

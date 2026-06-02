@@ -346,6 +346,17 @@ export fn ast::ForNode* expect_for(ast::AstNode* n, u8[] msg) {
     return (ast::ForNode*)n;
 }
 
+export fn ast::AliasDeclNode* expect_alias(ast::AstNode* n, symbol::Symbol* name, bool is_exported, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::AliasDecl, msg)) { return null; }
+    ast::AliasDeclNode* a = (ast::AliasDeclNode*)n;
+    if(name) {
+        if(!testing::expect_eq((void*)a.name, (void*)name, msg)) { return null; }
+    }
+    if(!testing::expect_eq(a.is_exported, is_exported, msg)) { return null; }
+    return a;
+}
+
 export fn ast::CompCodeNode* expect_compcode(ast::AstNode* n, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::Compcode, msg)) { return null; }
