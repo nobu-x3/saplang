@@ -43,7 +43,7 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
         case token::TokenKind::IMPORT:  { return parse_import(p); }              // export is illegal here
         case token::TokenKind::CONST:   { return parse_var_decl(p, is_exported); }
         //case token::TokenKind::EXTERN:  { return parse_extern_block(p); }
-        //case token::TokenKind::COMPRUN: { return parse_comprun(p); }
+        case token::TokenKind::COMPRUN: { return parse_comprun(p); }
         case token::TokenKind::FN: {
             if(peek(p, 1).kind == token::TokenKind::Star) { return parse_var_decl(p, is_exported); }
             return parse_fn_decl(p, is_exported);
@@ -210,7 +210,7 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         case token::TokenKind::BREAK:        { return parse_break(p); }
         case token::TokenKind::CONTINUE:     { return parse_continue(p); }
         case token::TokenKind::DEFER:        { return parse_defer(p); }
-        //case token::TokenKind::COMPRUN:      { return parse_comprun(p); }
+        case token::TokenKind::COMPRUN:      { return parse_comprun(p); }
         //case token::TokenKind::COMPINSERT:   { return parse_compinsert(p); }
         //case token::TokenKind::COMPSPLICE:   { return parse_compsplice(p); }
         case token::TokenKind::COMPERROR:    { return parse_comperror(p); }
@@ -278,6 +278,22 @@ fn ast::AstNode* parse_continue(Parser* p) {
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_comprun(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token kw = expect(p, token::TokenKind::COMPRUN);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    ast::AstNode* body = parse_block(p);
+    if(had_error(body)) { had_err = true; }
+    ast::CompRunNode* n = arena::alloc(p.m.arena, sizeof(ast::CompRunNode));
+    n.h.kind = ast::AstKind::ComprunStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.body = body;
     return (ast::AstNode*)n;
 }
 
