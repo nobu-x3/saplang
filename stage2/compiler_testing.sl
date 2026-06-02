@@ -346,6 +346,18 @@ export fn ast::ForNode* expect_for(ast::AstNode* n, u8[] msg) {
     return (ast::ForNode*)n;
 }
 
+export fn ast::BreakNode* expect_break(ast::AstNode* n, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::BreakStmt, msg)) { return null; }
+    return (ast::BreakNode*)n;
+}
+
+export fn ast::ContinueNode* expect_continue(ast::AstNode* n, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ContinueStmt, msg)) { return null; }
+    return (ast::ContinueNode*)n;
+}
+
 export fn ast::AssignmentNode* expect_assign(ast::AstNode* n, token::TokenKind op, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::AssignmentStmt, msg)) { return null; }

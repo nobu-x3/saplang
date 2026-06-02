@@ -207,8 +207,8 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         case token::TokenKind::FOR:          { return parse_for(p); }
         //case token::TokenKind::SWITCH:       { return parse_switch(p); }
         case token::TokenKind::RETURN:       { return parse_return(p); }
-        //case token::TokenKind::BREAK:        { return parse_break(p); }
-        //case token::TokenKind::CONTINUE:     { return parse_continue(p); }
+        case token::TokenKind::BREAK:        { return parse_break(p); }
+        case token::TokenKind::CONTINUE:     { return parse_continue(p); }
         //case token::TokenKind::DEFER:        { return parse_defer(p); }
         //case token::TokenKind::COMPRUN:      { return parse_comprun(p); }
         //case token::TokenKind::COMPINSERT:   { return parse_compinsert(p); }
@@ -248,6 +248,36 @@ fn ast::AstNode* parse_return(Parser* p) {
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
     n.expr = expr;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_break(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token brk = expect(p, token::TokenKind::BREAK);
+    if(brk.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token semi = expect(p, token::TokenKind::Semi);
+    if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::BreakNode* n = arena::alloc(p.m.arena, sizeof(ast::BreakNode));
+    n.h.kind = ast::AstKind::BreakStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_continue(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token cont = expect(p, token::TokenKind::CONTINUE);
+    if(cont.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token semi = expect(p, token::TokenKind::Semi);
+    if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::ContinueNode* n = arena::alloc(p.m.arena, sizeof(ast::ContinueNode));
+    n.h.kind = ast::AstKind::ContinueStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
     return (ast::AstNode*)n;
 }
 

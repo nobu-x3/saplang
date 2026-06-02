@@ -4551,6 +4551,463 @@ fn i32 for_init_var_decl_pointer_to_pointer(arena::Arena* a, u8[] msg) {
 }
 
 // ============================================================================
+// BREAK / CONTINUE
+// ============================================================================
+
+fn i32 break_basic(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BreakNode* b = compiler_testing::expect_break(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!b) { return -2; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)b), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 continue_basic(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ContinueNode* c = compiler_testing::expect_continue(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!c) { return -2; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)c), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 break_in_while(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { break; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::WhileNode* w = compiler_testing::expect_while(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!w) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(w.body, 1, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_break(body.stmts.ptr[0], msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 break_in_for(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { break; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ForNode* fr = compiler_testing::expect_for(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!fr) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(fr.body, 1, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_break(body.stmts.ptr[0], msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 continue_in_while(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { continue; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::WhileNode* w = compiler_testing::expect_while(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!w) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(w.body, 1, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_continue(body.stmts.ptr[0], msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 continue_in_for(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { continue; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ForNode* fr = compiler_testing::expect_for(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!fr) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(fr.body, 1, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_continue(body.stmts.ptr[0], msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 break_in_nested_if(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { if (y) { break; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::WhileNode* w = compiler_testing::expect_while(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!w) { return -2; }
+    ast::BlockNode* wbody = compiler_testing::expect_block(w.body, 1, msg);
+    if(!wbody) { return -3; }
+    ast::IfNode* ifn = compiler_testing::expect_if(wbody.stmts.ptr[0], msg);
+    if(!ifn) { return -4; }
+    ast::BlockNode* tbody = compiler_testing::expect_block(ifn.then_block, 1, msg);
+    if(!tbody) { return -5; }
+    if(!compiler_testing::expect_break(tbody.stmts.ptr[0], msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 continue_in_nested_if(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { if (y) { continue; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ForNode* fr = compiler_testing::expect_for(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!fr) { return -2; }
+    ast::BlockNode* fbody = compiler_testing::expect_block(fr.body, 1, msg);
+    if(!fbody) { return -3; }
+    ast::IfNode* ifn = compiler_testing::expect_if(fbody.stmts.ptr[0], msg);
+    if(!ifn) { return -4; }
+    ast::BlockNode* tbody = compiler_testing::expect_block(ifn.then_block, 1, msg);
+    if(!tbody) { return -5; }
+    if(!compiler_testing::expect_continue(tbody.stmts.ptr[0], msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 break_in_nested_loop(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { for (;;) { break; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ForNode* outer = compiler_testing::expect_for(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!outer) { return -2; }
+    ast::BlockNode* obody = compiler_testing::expect_block(outer.body, 1, msg);
+    if(!obody) { return -3; }
+    ast::ForNode* inner = compiler_testing::expect_for(obody.stmts.ptr[0], msg);
+    if(!inner) { return -4; }
+    ast::BlockNode* ibody = compiler_testing::expect_block(inner.body, 1, msg);
+    if(!ibody) { return -5; }
+    if(!compiler_testing::expect_break(ibody.stmts.ptr[0], msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 break_in_bare_block(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { break; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* inner = compiler_testing::expect_block(compiler_testing::nth_stmt(f.body, 0), 1, msg);
+    if(!inner) { return -2; }
+    if(!compiler_testing::expect_break(inner.stmts.ptr[0], msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 break_then_other_stmt(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { break; i32 y = 5; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::WhileNode* w = compiler_testing::expect_while(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!w) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(w.body, 2, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_break(body.stmts.ptr[0], msg)) { return -4; }
+    if(!compiler_testing::expect_var(body.stmts.ptr[1], compiler_testing::sym(m, "y"), false, false, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 multiple_breaks(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { break; break; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::WhileNode* w = compiler_testing::expect_while(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!w) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(w.body, 2, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_break(body.stmts.ptr[0], msg)) { return -4; }
+    if(!compiler_testing::expect_break(body.stmts.ptr[1], msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 break_continue_sequence(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { break; continue; break; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ForNode* fr = compiler_testing::expect_for(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!fr) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(fr.body, 3, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_break(body.stmts.ptr[0], msg)) { return -4; }
+    if(!compiler_testing::expect_continue(body.stmts.ptr[1], msg)) { return -5; }
+    if(!compiler_testing::expect_break(body.stmts.ptr[2], msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+// `fn void f() { break; }` — `break` at byte 14
+fn i32 break_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BreakNode* b = compiler_testing::expect_break(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!b) { return -2; }
+    if(!testing::expect_eq(b.h.src_pos, 14, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 continue_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ContinueNode* c = compiler_testing::expect_continue(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!c) { return -2; }
+    if(!testing::expect_eq(c.h.src_pos, 14, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 break_missing_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BreakNode* b = compiler_testing::expect_break(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!b) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)b), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got '}'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 20, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 continue_missing_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ContinueNode* c = compiler_testing::expect_continue(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!c) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)c), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got '}'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 23, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 break_extra_token(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break x; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BreakNode* b = compiler_testing::expect_break(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!b) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)b), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got identifier", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 20, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 break_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BreakNode* b = compiler_testing::expect_break(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!b) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)b), msg)) { return -3; }
+    if(!compiler_testing::expect_diag_substr(m, "expected ';'", msg)) { return -4; }
+    return 0;
+}
+
+fn i32 continue_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ContinueNode* c = compiler_testing::expect_continue(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!c) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)c), msg)) { return -3; }
+    if(!compiler_testing::expect_diag_substr(m, "expected ';'", msg)) { return -4; }
+    return 0;
+}
+
+fn i32 break_recovery_continues(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break i32 x = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = compiler_testing::expect_block(f.body, 2, msg);
+    if(!body) { return -2; }
+    ast::BreakNode* b = compiler_testing::expect_break(body.stmts.ptr[0], msg);
+    if(!b) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)b), msg)) { return -4; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(body.stmts.ptr[1], compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -5; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)v), msg)) { return -6; }
+    if(!compiler_testing::expect_intlit(v.init, 5, msg)) { return -7; }
+    return 0;
+}
+
+// continue mirrors of break-specific tests
+fn i32 continue_in_bare_block(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { continue; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* inner = compiler_testing::expect_block(compiler_testing::nth_stmt(f.body, 0), 1, msg);
+    if(!inner) { return -2; }
+    if(!compiler_testing::expect_continue(inner.stmts.ptr[0], msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 continue_in_nested_loop(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { for (;;) { continue; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ForNode* outer = compiler_testing::expect_for(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!outer) { return -2; }
+    ast::BlockNode* obody = compiler_testing::expect_block(outer.body, 1, msg);
+    if(!obody) { return -3; }
+    ast::ForNode* inner = compiler_testing::expect_for(obody.stmts.ptr[0], msg);
+    if(!inner) { return -4; }
+    ast::BlockNode* ibody = compiler_testing::expect_block(inner.body, 1, msg);
+    if(!ibody) { return -5; }
+    if(!compiler_testing::expect_continue(ibody.stmts.ptr[0], msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 continue_then_other_stmt(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { continue; i32 y = 5; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::WhileNode* w = compiler_testing::expect_while(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!w) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(w.body, 2, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_continue(body.stmts.ptr[0], msg)) { return -4; }
+    if(!compiler_testing::expect_var(body.stmts.ptr[1], compiler_testing::sym(m, "y"), false, false, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 multiple_continues(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { continue; continue; } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::WhileNode* w = compiler_testing::expect_while(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!w) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(w.body, 2, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_continue(body.stmts.ptr[0], msg)) { return -4; }
+    if(!compiler_testing::expect_continue(body.stmts.ptr[1], msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 continue_extra_token(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue x; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ContinueNode* c = compiler_testing::expect_continue(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!c) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)c), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got identifier", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 23, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 continue_recovery_continues(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue i32 x = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = compiler_testing::expect_block(f.body, 2, msg);
+    if(!body) { return -2; }
+    ast::ContinueNode* c = compiler_testing::expect_continue(body.stmts.ptr[0], msg);
+    if(!c) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)c), msg)) { return -4; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(body.stmts.ptr[1], compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -5; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)v), msg)) { return -6; }
+    if(!compiler_testing::expect_intlit(v.init, 5, msg)) { return -7; }
+    return 0;
+}
+
+// Else-branch coverage — exercises the parse_if else_block path, which is a
+// distinct parent from the then-branch tests above.
+fn i32 break_in_else_branch(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) { if (b) { } else { break; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::WhileNode* w = compiler_testing::expect_while(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!w) { return -2; }
+    ast::BlockNode* wbody = compiler_testing::expect_block(w.body, 1, msg);
+    if(!wbody) { return -3; }
+    ast::IfNode* ifn = compiler_testing::expect_if(wbody.stmts.ptr[0], msg);
+    if(!ifn) { return -4; }
+    ast::BlockNode* elseb = compiler_testing::expect_block(ifn.else_block, 1, msg);
+    if(!elseb) { return -5; }
+    if(!compiler_testing::expect_break(elseb.stmts.ptr[0], msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 continue_in_else_branch(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { if (b) { } else { continue; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ForNode* fr = compiler_testing::expect_for(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!fr) { return -2; }
+    ast::BlockNode* fbody = compiler_testing::expect_block(fr.body, 1, msg);
+    if(!fbody) { return -3; }
+    ast::IfNode* ifn = compiler_testing::expect_if(fbody.stmts.ptr[0], msg);
+    if(!ifn) { return -4; }
+    ast::BlockNode* elseb = compiler_testing::expect_block(ifn.else_block, 1, msg);
+    if(!elseb) { return -5; }
+    if(!compiler_testing::expect_continue(elseb.stmts.ptr[0], msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+// ============================================================================
 // EXPRESSIONS: PRIMARY / LITERALS
 // ============================================================================
 
@@ -5518,6 +5975,37 @@ fn i32 main() {
     testing::add(s_for, "for_unclosed_body_at_eof", &for_unclosed_body_at_eof);
     testing::add(s_for, "for_at_eof", &for_at_eof);
     testing::add(s_for, "for_init_var_decl_pointer_to_pointer", &for_init_var_decl_pointer_to_pointer);
+
+    u8[] s_bc = "Parser Break/Continue";
+    testing::add(s_bc, "break_basic", &break_basic);
+    testing::add(s_bc, "continue_basic", &continue_basic);
+    testing::add(s_bc, "break_in_while", &break_in_while);
+    testing::add(s_bc, "break_in_for", &break_in_for);
+    testing::add(s_bc, "continue_in_while", &continue_in_while);
+    testing::add(s_bc, "continue_in_for", &continue_in_for);
+    testing::add(s_bc, "break_in_nested_if", &break_in_nested_if);
+    testing::add(s_bc, "continue_in_nested_if", &continue_in_nested_if);
+    testing::add(s_bc, "break_in_nested_loop", &break_in_nested_loop);
+    testing::add(s_bc, "break_in_bare_block", &break_in_bare_block);
+    testing::add(s_bc, "break_then_other_stmt", &break_then_other_stmt);
+    testing::add(s_bc, "multiple_breaks", &multiple_breaks);
+    testing::add(s_bc, "break_continue_sequence", &break_continue_sequence);
+    testing::add(s_bc, "break_src_pos", &break_src_pos);
+    testing::add(s_bc, "continue_src_pos", &continue_src_pos);
+    testing::add(s_bc, "break_missing_semi", &break_missing_semi);
+    testing::add(s_bc, "continue_missing_semi", &continue_missing_semi);
+    testing::add(s_bc, "break_extra_token", &break_extra_token);
+    testing::add(s_bc, "break_at_eof", &break_at_eof);
+    testing::add(s_bc, "continue_at_eof", &continue_at_eof);
+    testing::add(s_bc, "break_recovery_continues", &break_recovery_continues);
+    testing::add(s_bc, "continue_in_bare_block", &continue_in_bare_block);
+    testing::add(s_bc, "continue_in_nested_loop", &continue_in_nested_loop);
+    testing::add(s_bc, "continue_then_other_stmt", &continue_then_other_stmt);
+    testing::add(s_bc, "multiple_continues", &multiple_continues);
+    testing::add(s_bc, "continue_extra_token", &continue_extra_token);
+    testing::add(s_bc, "continue_recovery_continues", &continue_recovery_continues);
+    testing::add(s_bc, "break_in_else_branch", &break_in_else_branch);
+    testing::add(s_bc, "continue_in_else_branch", &continue_in_else_branch);
 
     u8[] s_e = "Parser Expressions";
     testing::add(s_e, "expr_int_literal", &expr_int_literal);
