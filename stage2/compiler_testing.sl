@@ -346,6 +346,12 @@ export fn ast::ForNode* expect_for(ast::AstNode* n, u8[] msg) {
     return (ast::ForNode*)n;
 }
 
+export fn ast::CompSpliceNode* expect_compsplice(ast::AstNode* n, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::CompspliceStmt, msg)) { return null; }
+    return (ast::CompSpliceNode*)n;
+}
+
 export fn ast::CompInsertNode* expect_compinsert(ast::AstNode* n, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::CompinsertStmt, msg)) { return null; }
