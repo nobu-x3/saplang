@@ -2125,6 +2125,38 @@ void test_IfEmptyThenAndElse_codegen(void) {
 	EXH_TEST_TEARDOWN();
 }
 
+// Each inner if in a block-form else must get its own merge block.
+void test_MultipleInnerIfsInBlockElse_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() {"
+				   "  i32 r = 0;"
+				   "  if (r) {} else {"
+				   "    bool a = true;"
+				   "    if (a) { r = 1; }"
+				   "    bool b = true;"
+				   "    if (b) { r = 2; }"
+				   "  }"
+				   "  return r; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ifcont:"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ifcont2:"));
+	TEST_ASSERT_NOT_NULL(strstr(output, "ifcont4:"));
+	EXH_TEST_TEARDOWN();
+}
+
+void test_ElifChainSharesMergeBlock_codegen(void) {
+	EXH_TEST_SETUP("fn i32 main() {"
+				   "  i32 r = 0;"
+				   "  if (r == 0) { r = 1; }"
+				   "  else if (r == 1) { r = 2; }"
+				   "  else if (r == 2) { r = 3; }"
+				   "  else { r = 4; }"
+				   "  return r; }");
+	EXH_REQUIRE_OK();
+	TEST_ASSERT_NOT_NULL(strstr(output, "ifcont:"));
+	TEST_ASSERT_NULL(strstr(output, "ifcont1:"));
+	EXH_TEST_TEARDOWN();
+}
+
 void test_NestedWhileLoops_codegen(void) {
 	EXH_TEST_SETUP("fn i32 main() {"
 				   "  i32 a = 0; i32 b = 0;"

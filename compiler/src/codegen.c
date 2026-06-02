@@ -1623,7 +1623,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 		if (elseBB) {
 			LLVMPositionBuilderAtEnd(cg->builder, elseBB);
 			PassContext else_ctx = ctx;
-			else_ctx.if_cont_block = mergeBB;
+			// Sharing mergeBB is only safe for the elif chain; a block else with multiple inner ifs breaks it.
+			else_ctx.if_cont_block = node->data.if_stmt.else_branch->type == AST_IF_STMT ? mergeBB : NULL;
 			codegen_ast(cg, node->data.if_stmt.else_branch, table, else_ctx);
 			LLVMBasicBlockRef else_end = LLVMGetInsertBlock(cg->builder);
 			last_inst = LLVMGetLastInstruction(else_end);

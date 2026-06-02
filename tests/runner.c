@@ -505,6 +505,8 @@ int main(void) {
 	RUN_TEST(test_ExternFnDeclaresUnmangled_codegen);
 	RUN_TEST(test_MultipleStringLiteralsGetSuffixedNames_codegen);
 	RUN_TEST(test_IfEmptyThenAndElse_codegen);
+	RUN_TEST(test_MultipleInnerIfsInBlockElse_codegen);
+	RUN_TEST(test_ElifChainSharesMergeBlock_codegen);
 	RUN_TEST(test_NestedWhileLoops_codegen);
 	RUN_TEST(test_DeferAtFnEnd_codegen);
 	RUN_TEST(test_DeferAcrossEarlyReturn_codegen);
