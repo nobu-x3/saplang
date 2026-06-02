@@ -5008,6 +5008,254 @@ fn i32 continue_in_else_branch(arena::Arena* a, u8[] msg) {
 }
 
 // ============================================================================
+// COMPCODE  (expression: compcode { ... })
+// ============================================================================
+
+fn i32 compcode_in_var_decl_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode { }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::CompCodeNode* cc = compiler_testing::expect_compcode(v.init, msg);
+    if(!cc) { return -3; }
+    if(!compiler_testing::expect_block(cc.body, 0, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 compcode_in_return(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -2; }
+    if(!compiler_testing::expect_compcode(r.expr, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 compcode_in_compsplice_arg(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice compcode { }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::CompSpliceNode* cs = compiler_testing::expect_compsplice(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!cs) { return -2; }
+    if(!compiler_testing::expect_compcode(cs.code_expr, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 compcode_in_compinsert_arg(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(compcode { }); }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::CompInsertNode* ci = compiler_testing::expect_compinsert(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!ci) { return -2; }
+    if(!compiler_testing::expect_compcode(ci.source_expr, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 compcode_in_call_arg(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return foo(compcode { }); }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -2; }
+    ast::CallNode* c = compiler_testing::expect_call(r.expr, 1, msg);
+    if(!c) { return -3; }
+    if(!compiler_testing::expect_compcode(c.args.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+fn i32 compcode_as_if_cond(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (compcode { }) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::IfNode* ifn = compiler_testing::expect_if(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!ifn) { return -2; }
+    if(!compiler_testing::expect_compcode(ifn.cond, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 compcode_as_switch_disc(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (compcode { }) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_compcode(s.discriminant, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 compcode_in_paren(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return (compcode { }); }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -2; }
+    if(!compiler_testing::expect_compcode(r.expr, msg)) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_paren_flag(r.expr), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 compcode_empty_body(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -2; }
+    ast::CompCodeNode* cc = compiler_testing::expect_compcode(r.expr, msg);
+    if(!cc) { return -3; }
+    if(!compiler_testing::expect_block(cc.body, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 compcode_multi_stmt_body(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { i32 y = 5; return y; }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -2; }
+    ast::CompCodeNode* cc = compiler_testing::expect_compcode(r.expr, msg);
+    if(!cc) { return -3; }
+    ast::BlockNode* body = compiler_testing::expect_block(cc.body, 2, msg);
+    if(!body) { return -4; }
+    if(!compiler_testing::expect_var(body.stmts.ptr[0], compiler_testing::sym(m, "y"), false, false, msg)) { return -5; }
+    if(!compiler_testing::expect_return(body.stmts.ptr[1], msg)) { return -6; }
+    return 0;
+}
+
+fn i32 compcode_body_with_control_flow(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { if (x) { } while (y) { } }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -2; }
+    ast::CompCodeNode* cc = compiler_testing::expect_compcode(r.expr, msg);
+    if(!cc) { return -3; }
+    ast::BlockNode* body = compiler_testing::expect_block(cc.body, 2, msg);
+    if(!body) { return -4; }
+    if(!compiler_testing::expect_if(body.stmts.ptr[0], msg)) { return -5; }
+    if(!compiler_testing::expect_while(body.stmts.ptr[1], msg)) { return -6; }
+    return 0;
+}
+
+fn i32 compcode_nested(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { return compcode { }; }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -2; }
+    ast::CompCodeNode* outer = compiler_testing::expect_compcode(r.expr, msg);
+    if(!outer) { return -3; }
+    ast::BlockNode* obody = compiler_testing::expect_block(outer.body, 1, msg);
+    if(!obody) { return -4; }
+    ast::ReturnNode* inner_r = compiler_testing::expect_return(obody.stmts.ptr[0], msg);
+    if(!inner_r) { return -5; }
+    if(!compiler_testing::expect_compcode(inner_r.expr, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 compcode_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode { }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::CompCodeNode* cc = compiler_testing::expect_compcode(v.init, msg);
+    if(!cc) { return -3; }
+    if(!testing::expect_eq(cc.h.src_pos, 22, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 compcode_body_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode { }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::CompCodeNode* cc = compiler_testing::expect_compcode(v.init, msg);
+    if(!cc) { return -3; }
+    if(!testing::expect_eq(cc.body.h.src_pos, 31, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 compcode_missing_lbrace(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::CompCodeNode* cc = compiler_testing::expect_compcode(v.init, msg);
+    if(!cc) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)cc), msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '{', got ';'", msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 30, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 compcode_unclosed_body_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode {", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::CompCodeNode* cc = compiler_testing::expect_compcode(v.init, msg);
+    if(!cc) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)cc), msg)) { return -4; }
+    if(!compiler_testing::expect_diag_substr(m, "expected '}'", msg)) { return -5; }
+    return 0;
+}
+
+fn i32 compcode_body_error_propagates(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode { return 5 5; }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -2; }
+    ast::CompCodeNode* cc = compiler_testing::expect_compcode(v.init, msg);
+    if(!cc) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)cc), msg)) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(cc.body), msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got integer literal", msg)) { return -6; }
+    return 0;
+}
+
+// ============================================================================
 // COMPSPLICE
 // ============================================================================
 
@@ -8750,6 +8998,25 @@ fn i32 main() {
     testing::add(s_bc, "continue_recovery_continues", &continue_recovery_continues);
     testing::add(s_bc, "break_in_else_branch", &break_in_else_branch);
     testing::add(s_bc, "continue_in_else_branch", &continue_in_else_branch);
+
+    u8[] s_cc = "Parser Compcode";
+    testing::add(s_cc, "compcode_in_var_decl_init", &compcode_in_var_decl_init);
+    testing::add(s_cc, "compcode_in_return", &compcode_in_return);
+    testing::add(s_cc, "compcode_in_compsplice_arg", &compcode_in_compsplice_arg);
+    testing::add(s_cc, "compcode_in_compinsert_arg", &compcode_in_compinsert_arg);
+    testing::add(s_cc, "compcode_in_call_arg", &compcode_in_call_arg);
+    testing::add(s_cc, "compcode_as_if_cond", &compcode_as_if_cond);
+    testing::add(s_cc, "compcode_as_switch_disc", &compcode_as_switch_disc);
+    testing::add(s_cc, "compcode_in_paren", &compcode_in_paren);
+    testing::add(s_cc, "compcode_empty_body", &compcode_empty_body);
+    testing::add(s_cc, "compcode_multi_stmt_body", &compcode_multi_stmt_body);
+    testing::add(s_cc, "compcode_body_with_control_flow", &compcode_body_with_control_flow);
+    testing::add(s_cc, "compcode_nested", &compcode_nested);
+    testing::add(s_cc, "compcode_src_pos", &compcode_src_pos);
+    testing::add(s_cc, "compcode_body_src_pos", &compcode_body_src_pos);
+    testing::add(s_cc, "compcode_missing_lbrace", &compcode_missing_lbrace);
+    testing::add(s_cc, "compcode_unclosed_body_at_eof", &compcode_unclosed_body_at_eof);
+    testing::add(s_cc, "compcode_body_error_propagates", &compcode_body_error_propagates);
 
     u8[] s_cs = "Parser Compsplice";
     testing::add(s_cs, "compsplice_ident_arg", &compsplice_ident_arg);

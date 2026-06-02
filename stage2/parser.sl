@@ -297,6 +297,22 @@ fn ast::AstNode* parse_comprun(Parser* p) {
     return (ast::AstNode*)n;
 }
 
+fn ast::AstNode* parse_compcode(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token kw = expect(p, token::TokenKind::COMPCODE);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node(p, start); }
+    bool had_err = false;
+    ast::AstNode* body = parse_block(p);
+    if(had_error(body)) { had_err = true; }
+    ast::CompCodeNode* n = arena::alloc(p.m.arena, sizeof(ast::CompCodeNode));
+    n.h.kind = ast::AstKind::Compcode;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.body = body;
+    return (ast::AstNode*)n;
+}
+
 fn ast::AstNode* parse_compsplice(Parser* p) {
     u32 start = peek(p, 0).src_pos;
     token::Token kw = expect(p, token::TokenKind::COMPSPLICE);
@@ -1016,6 +1032,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
     case token::TokenKind::LParen:   { return parse_paren_or_cast(p); }
     case token::TokenKind::LBrace:   { return parse_struct_lit(p); }
     case token::TokenKind::LBracket: { return parse_array_lit(p); }
+    case token::TokenKind::COMPCODE: { return parse_compcode(p); }
     else {
         if(!p.is_speculating) { report_expected(p, t, token::TokenKind::Ident); }
         return mk_error_node_and_consume(p, t.src_pos);
