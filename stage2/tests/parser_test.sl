@@ -8348,6 +8348,8 @@ fn i32 main() {
     testing::add(s_ret, "return_with_other_stmts", &return_with_other_stmts);
     testing::add(s_ret, "return_two_consecutive", &return_two_consecutive);
     testing::add(s_ret, "return_inside_nested_block", &return_inside_nested_block);
+    testing::add(s_ret, "return_in_middle_of_block", &return_in_middle_of_block);
+    testing::add(s_ret, "return_trailing_tokens_before_semi", &return_trailing_tokens_before_semi);
     testing::add(s_ret, "return_src_pos", &return_src_pos);
     testing::add(s_ret, "return_missing_semi", &return_missing_semi);
     testing::add(s_ret, "return_missing_semi_at_eof", &return_missing_semi_at_eof);
