@@ -205,7 +205,7 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         case token::TokenKind::IF:           { return parse_if(p); }
         case token::TokenKind::WHILE:        { return parse_while(p); }
         case token::TokenKind::FOR:          { return parse_for(p); }
-        //case token::TokenKind::SWITCH:       { return parse_switch(p); }
+        case token::TokenKind::SWITCH:       { return parse_switch(p); }
         case token::TokenKind::RETURN:       { return parse_return(p); }
         case token::TokenKind::BREAK:        { return parse_break(p); }
         case token::TokenKind::CONTINUE:     { return parse_continue(p); }
@@ -427,6 +427,100 @@ fn ast::AstNode* parse_if(Parser* p) {
     n.h.src_pos = start;
     n.cond = cond;
     n.then_block = then_block;
+    n.else_block = else_block;
+    return (ast::AstNode*)n;
+}
+
+// body = null encodes fallthrough to the next arm.
+fn ast::AstNode* parse_switch(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token sw = expect(p, token::TokenKind::SWITCH);
+    if(sw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* disc = parse_expr(p, 0);
+    if(!disc || had_error(disc)) { had_err = true; }
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    token::Token lbrace = expect(p, token::TokenKind::LBrace);
+    if(lbrace.kind == token::TokenKind::ERROR) { had_err = true; }
+
+    ast::SwitchArm[] arms;
+    arms.ptr = null;
+    arms.len = 0;
+    u64 arms_cap = 0;
+    ast::AstNode* else_block = null;
+
+    while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
+        token::TokenKind k = peek(p, 0).kind;
+        if(k == token::TokenKind::CASE) {
+            consume(p);
+            u32 label_pos = peek(p, 0).src_pos;
+            ast::AstNode* label = parse_expr(p, 0);
+            if(!label || had_error(label)) { had_err = true; }
+            token::Token colon = expect(p, token::TokenKind::Colon);
+            if(colon.kind == token::TokenKind::ERROR) { had_err = true; }
+            ast::AstNode* body = null;
+            if(peek(p, 0).kind == token::TokenKind::LBrace) {
+                body = parse_block(p);
+                if(had_error(body)) { had_err = true; }
+            }
+            if(arms.len + 1 > arms_cap) {
+                u64 new_cap = 4;
+                if(arms_cap > 0) { new_cap = arms_cap * 2; }
+                arms.ptr = arena::realloc_grow(p.m.arena, arms.ptr,
+                        arms_cap * sizeof(ast::SwitchArm),
+                        new_cap * sizeof(ast::SwitchArm));
+                arms_cap = new_cap;
+            }
+            ast::ListBuilder labels_b;
+            ast::list_init(&labels_b, p.m.arena, 1);
+            ast::list_push(&labels_b, p.m.arena, label);
+            ast::SwitchArm* arm = &arms[arms.len];
+            arm.labels = ast::list_freeze(&labels_b);
+            arm.body = body;
+            arm.src_pos = label_pos;
+            arms.len += 1;
+        } else if(k == token::TokenKind::ELSE) {
+            u32 else_pos = peek(p, 0).src_pos;
+            consume(p);
+            ast::AstNode* eb = parse_block(p);
+            if(had_error(eb)) { had_err = true; }
+            if(else_block) {
+                had_err = true;
+                u8[256] scratch;
+                i32 n = sys::snprintf((i8*)&scratch[0], 256, "duplicate 'else' in switch");
+                if(n > 0) {
+                    u64 len = (u64)n;
+                    if(len > 255) { len = 255; }
+                    u8[] dup_msg = {&scratch[0], len};
+                    if(!p.is_speculating) { diag::report(&p.m.diag, p.m.arena, else_pos, dup_msg); }
+                }
+            } else {
+                else_block = eb;
+            }
+        } else {
+            report_expected(p, peek(p, 0), token::TokenKind::CASE);
+            had_err = true;
+            while(peek(p, 0).kind != token::TokenKind::CASE
+                  && peek(p, 0).kind != token::TokenKind::ELSE
+                  && peek(p, 0).kind != token::TokenKind::RBrace
+                  && peek(p, 0).kind != token::TokenKind::EOF) {
+                consume(p);
+            }
+        }
+    }
+    token::Token rbrace = expect(p, token::TokenKind::RBrace);
+    if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
+
+    ast::SwitchNode* n = arena::alloc(p.m.arena, sizeof(ast::SwitchNode));
+    n.h.kind = ast::AstKind::SwitchStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.discriminant = disc;
+    n.arms = arms;
     n.else_block = else_block;
     return (ast::AstNode*)n;
 }

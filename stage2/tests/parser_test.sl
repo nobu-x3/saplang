@@ -5008,6 +5008,949 @@ fn i32 continue_in_else_branch(arena::Arena* a, u8[] msg) {
 }
 
 // ============================================================================
+// SWITCH
+// ============================================================================
+
+// SHAPES
+fn i32 switch_empty(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_ident(s.discriminant, compiler_testing::sym(m, "x"), msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.len, 0, msg)) { return -4; }
+    if(!testing::expect_null((void*)s.else_block, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 switch_single_arm_single_label(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 1, msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.ptr[0].labels.len, 1, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -5; }
+    if(!compiler_testing::expect_block(s.arms.ptr[0].body, 0, msg)) { return -6; }
+    if(!testing::expect_null((void*)s.else_block, msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -8; }
+    return 0;
+}
+
+// `case 1: case 2: { body }` — case 1 falls through to case 2's body, encoded
+// as two arms where arm[0].body is null.
+fn i32 switch_fallthrough_2_cases(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 2, msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.ptr[0].labels.len, 1, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -5; }
+    if(!testing::expect_null((void*)s.arms.ptr[0].body, msg)) { return -6; }
+    if(!testing::expect_eq(s.arms.ptr[1].labels.len, 1, msg)) { return -7; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[1].labels.ptr[0], 2, msg)) { return -8; }
+    if(!compiler_testing::expect_block(s.arms.ptr[1].body, 0, msg)) { return -9; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -10; }
+    return 0;
+}
+
+fn i32 switch_fallthrough_3_cases(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: case 3: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 3, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -4; }
+    if(!testing::expect_null((void*)s.arms.ptr[0].body, msg)) { return -5; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[1].labels.ptr[0], 2, msg)) { return -6; }
+    if(!testing::expect_null((void*)s.arms.ptr[1].body, msg)) { return -7; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[2].labels.ptr[0], 3, msg)) { return -8; }
+    if(!compiler_testing::expect_block(s.arms.ptr[2].body, 0, msg)) { return -9; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -10; }
+    return 0;
+}
+
+fn i32 switch_multiple_arms(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } case 2: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 2, msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.ptr[0].labels.len, 1, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -5; }
+    if(!testing::expect_eq(s.arms.ptr[1].labels.len, 1, msg)) { return -6; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[1].labels.ptr[0], 2, msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -8; }
+    return 0;
+}
+
+fn i32 switch_else_only(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 0, msg)) { return -3; }
+    if(!compiler_testing::expect_block(s.else_block, 0, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_arm_and_else(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } else { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 1, msg)) { return -3; }
+    if(!compiler_testing::expect_block(s.else_block, 0, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_multi_arms_and_else(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } case 2: { } else { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 2, msg)) { return -3; }
+    if(!compiler_testing::expect_block(s.else_block, 0, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_mixed_fallthrough_and_standalone(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: { } case 3: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 3, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -4; }
+    if(!testing::expect_null((void*)s.arms.ptr[0].body, msg)) { return -5; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[1].labels.ptr[0], 2, msg)) { return -6; }
+    if(!compiler_testing::expect_block(s.arms.ptr[1].body, 0, msg)) { return -7; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[2].labels.ptr[0], 3, msg)) { return -8; }
+    if(!compiler_testing::expect_block(s.arms.ptr[2].body, 0, msg)) { return -9; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -10; }
+    return 0;
+}
+
+fn i32 switch_fallthrough_to_else(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: else { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.len, 1, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -5; }
+    if(!testing::expect_null((void*)s.arms.ptr[0].body, msg)) { return -6; }
+    if(!compiler_testing::expect_block(s.else_block, 0, msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -8; }
+    return 0;
+}
+
+fn i32 switch_two_cases_fallthrough_to_else(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: else { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.len, 2, msg)) { return -4; }
+    if(!testing::expect_null((void*)s.arms.ptr[0].body, msg)) { return -5; }
+    if(!testing::expect_null((void*)s.arms.ptr[1].body, msg)) { return -6; }
+    if(!compiler_testing::expect_block(s.else_block, 0, msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -8; }
+    return 0;
+}
+
+// Fallthrough between standalone arms: 1 has body, 2 falls through, 3 has body.
+fn i32 switch_fallthrough_in_middle(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } case 2: case 3: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 3, msg)) { return -3; }
+    if(!compiler_testing::expect_block(s.arms.ptr[0].body, 0, msg)) { return -4; }
+    if(!testing::expect_null((void*)s.arms.ptr[1].body, msg)) { return -5; }
+    if(!compiler_testing::expect_block(s.arms.ptr[2].body, 0, msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+// DISCRIMINANT FORMS
+fn i32 switch_disc_intlit(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (42) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_intlit(s.discriminant, 42, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_disc_member_access(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (obj.field) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_member(s.discriminant, compiler_testing::sym(m, "field"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_disc_pratt(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (a + b * 2) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::BinaryOpNode* plus = compiler_testing::expect_binop(s.discriminant, token::TokenKind::Plus, msg);
+    if(!plus) { return -3; }
+    if(!compiler_testing::expect_binop(plus.rhs, token::TokenKind::Star, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_disc_call(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (foo(1)) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_call(s.discriminant, 1, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_disc_namespace(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (mod::x) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_nsacc(s.discriminant, compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "x"), msg)) { return -3; }
+    return 0;
+}
+
+// LABEL FORMS
+fn i32 switch_label_charlit(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 'a': { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_charlit(s.arms.ptr[0].labels.ptr[0], 97, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_label_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case A: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_ident(s.arms.ptr[0].labels.ptr[0], compiler_testing::sym(m, "A"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_label_namespace_access(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case E::A: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_nsacc(s.arms.ptr[0].labels.ptr[0], compiler_testing::sym(m, "E"), compiler_testing::sym(m, "A"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_label_negative(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case -1: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(s.arms.ptr[0].labels.ptr[0], token::TokenKind::Minus, msg);
+    if(!u) { return -3; }
+    if(!compiler_testing::expect_intlit(u.operand, 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_label_pratt(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case a + b: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_binop(s.arms.ptr[0].labels.ptr[0], token::TokenKind::Plus, msg)) { return -3; }
+    return 0;
+}
+
+// BODY CONTENT
+fn i32 switch_body_multi_stmts(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { switch (x) { case 1: { i32 y = 5; return y; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(s.arms.ptr[0].body, 2, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_var(body.stmts.ptr[0], compiler_testing::sym(m, "y"), false, false, msg)) { return -4; }
+    if(!compiler_testing::expect_return(body.stmts.ptr[1], msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_body_with_break(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { break; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(s.arms.ptr[0].body, 1, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_break(body.stmts.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_body_with_continue(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { continue; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(s.arms.ptr[0].body, 1, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_continue(body.stmts.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_body_with_if(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { if (y) { } } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(s.arms.ptr[0].body, 1, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_if(body.stmts.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_body_with_while(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { while (y) { } } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(s.arms.ptr[0].body, 1, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_while(body.stmts.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_body_with_for(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { for (;;) { } } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(s.arms.ptr[0].body, 1, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_for(body.stmts.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_body_with_nested_switch(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { switch (y) { case 2: { } } } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* outer = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!outer) { return -2; }
+    ast::BlockNode* outer_body = compiler_testing::expect_block(outer.arms.ptr[0].body, 1, msg);
+    if(!outer_body) { return -3; }
+    ast::SwitchNode* inner = compiler_testing::expect_switch(outer_body.stmts.ptr[0], msg);
+    if(!inner) { return -4; }
+    if(!compiler_testing::expect_ident(inner.discriminant, compiler_testing::sym(m, "y"), msg)) { return -5; }
+    return 0;
+}
+
+// ELSE BLOCK
+fn i32 switch_else_body_multi_stmts(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { switch (x) { else { i32 y = 5; return y; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::BlockNode* eb = compiler_testing::expect_block(s.else_block, 2, msg);
+    if(!eb) { return -3; }
+    if(!compiler_testing::expect_var(eb.stmts.ptr[0], compiler_testing::sym(m, "y"), false, false, msg)) { return -4; }
+    if(!compiler_testing::expect_return(eb.stmts.ptr[1], msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_else_with_nested_switch(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { switch (y) { } } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* outer = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!outer) { return -2; }
+    ast::BlockNode* eb = compiler_testing::expect_block(outer.else_block, 1, msg);
+    if(!eb) { return -3; }
+    if(!compiler_testing::expect_switch(eb.stmts.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+// NESTING / SEQUENCING
+fn i32 switch_inside_if(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { switch (x) { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::IfNode* ifn = compiler_testing::expect_if(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!ifn) { return -2; }
+    ast::BlockNode* tb = compiler_testing::expect_block(ifn.then_block, 1, msg);
+    if(!tb) { return -3; }
+    if(!compiler_testing::expect_switch(tb.stmts.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_inside_while(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) { switch (x) { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::WhileNode* w = compiler_testing::expect_while(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!w) { return -2; }
+    ast::BlockNode* wb = compiler_testing::expect_block(w.body, 1, msg);
+    if(!wb) { return -3; }
+    if(!compiler_testing::expect_switch(wb.stmts.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_inside_for(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { switch (x) { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::ForNode* fr = compiler_testing::expect_for(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!fr) { return -2; }
+    ast::BlockNode* fb = compiler_testing::expect_block(fr.body, 1, msg);
+    if(!fb) { return -3; }
+    if(!compiler_testing::expect_switch(fb.stmts.ptr[0], msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_two_consecutive(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } switch (y) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = compiler_testing::expect_block(f.body, 2, msg);
+    if(!body) { return -2; }
+    if(!compiler_testing::expect_switch(body.stmts.ptr[0], msg)) { return -3; }
+    if(!compiler_testing::expect_switch(body.stmts.ptr[1], msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 r = 0; switch (x) { } return r; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = compiler_testing::expect_block(f.body, 3, msg);
+    if(!body) { return -2; }
+    if(!compiler_testing::expect_var(body.stmts.ptr[0], compiler_testing::sym(m, "r"), false, false, msg)) { return -3; }
+    if(!compiler_testing::expect_switch(body.stmts.ptr[1], msg)) { return -4; }
+    if(!compiler_testing::expect_return(body.stmts.ptr[2], msg)) { return -5; }
+    return 0;
+}
+
+// SRC POS
+fn i32 switch_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.h.src_pos, 14, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_disc_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.discriminant.h.src_pos, 22, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_arm_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.ptr[0].src_pos, 32, msg)) { return -3; }
+    return 0;
+}
+
+// Each arm's src_pos points at its own label, not the position of any earlier
+// fallthrough label.
+fn i32 switch_fallthrough_arm_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.ptr[0].src_pos, 32, msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.ptr[1].src_pos, 40, msg)) { return -4; }
+    return 0;
+}
+
+// NEGATIVE
+fn i32 switch_missing_lparen(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch x) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '(', got identifier", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 21, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_missing_rparen(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ')', got '{'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 24, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_missing_lbrace(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '{', got '}'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 25, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) {", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!compiler_testing::expect_diag_substr(m, "expected '}'", msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_missing_colon(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1 { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ':', got '{'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 34, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_missing_label_expr(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case : { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ':'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 32, msg)) { return -5; }
+    return 0;
+}
+
+// `case 1:` with no body before `}` is a dangling fallthrough — parser accepts
+// it without diagnostic (sema's job to flag fallthrough with no successor).
+fn i32 switch_dangling_fallthrough_at_close(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.len, 1, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -5; }
+    if(!testing::expect_null((void*)s.arms.ptr[0].body, msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 switch_junk_token_in_body(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { foo; case 1: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected 'case', got identifier", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 27, msg)) { return -5; }
+    // After recovery, the `case 1: { }` arm must still parse.
+    if(!testing::expect_eq(s.arms.len, 1, msg)) { return -6; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 switch_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!compiler_testing::expect_diag_substr(m, "expected '('", msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_recovery_continues(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } i32 y = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = compiler_testing::expect_block(f.body, 2, msg);
+    if(!body) { return -2; }
+    if(!compiler_testing::expect_switch(body.stmts.ptr[0], msg)) { return -3; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(body.stmts.ptr[1], compiler_testing::sym(m, "y"), false, false, msg);
+    if(!v) { return -4; }
+    if(!compiler_testing::expect_intlit(v.init, 5, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 switch_malformed_disc(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (5 +) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ')'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 25, msg)) { return -5; }
+    return 0;
+}
+
+// Second `else` is rejected with a diagnostic; the FIRST else's body is kept.
+fn i32 switch_double_else_first_wins(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { i32 a = 1; } else { i32 z = 5; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    ast::BlockNode* eb = compiler_testing::expect_block(s.else_block, 1, msg);
+    if(!eb) { return -4; }
+    if(!compiler_testing::expect_var(eb.stmts.ptr[0], compiler_testing::sym(m, "a"), false, false, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "duplicate 'else' in switch", msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 47, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 switch_else_before_case(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { } case 1: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 1, msg)) { return -3; }
+    if(!testing::expect_not_null((void*)s.else_block, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+// GAP FILL
+
+fn i32 switch_case_body_error_propagates(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { return 5 5; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(s.arms.ptr[0].body), msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got integer literal", msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 46, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 switch_else_body_error_propagates(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { return 5 5; } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(s.else_block), msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got integer literal", msg)) { return -5; }
+    return 0;
+}
+
+// 6 arms exercises the realloc-grow path (arms_cap starts at 4).
+fn i32 switch_arms_growth_past_initial_cap(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } case 2: { } case 3: { } case 4: { } case 5: { } case 6: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.arms.len, 6, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[5].labels.ptr[0], 6, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 switch_multi_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (5 +) { case 1 { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len >= 2, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ')'", msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 25, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 switch_label_bool_literal(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case true: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_boollit(s.arms.ptr[0].labels.ptr[0], true, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+// `;` between cases is illegal. Parser hits the else-branch on `;` and recovers
+// to the next `case`. Pins the diagnostic so the behavior is locked.
+fn i32 switch_semicolon_between_cases(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: ; case 2: { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.len, 2, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[0].labels.ptr[0], 1, msg)) { return -5; }
+    if(!compiler_testing::expect_intlit(s.arms.ptr[1].labels.ptr[0], 2, msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected 'case', got ';'", msg)) { return -7; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 35, msg)) { return -8; }
+    return 0;
+}
+
+fn i32 switch_inside_else_branch(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { } else { switch (x) { } } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::IfNode* ifn = compiler_testing::expect_if(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!ifn) { return -2; }
+    ast::BlockNode* eb = compiler_testing::expect_block(ifn.else_block, 1, msg);
+    if(!eb) { return -3; }
+    if(!compiler_testing::expect_switch(eb.stmts.ptr[0], msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 switch_disc_cast(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch ((bool)x) { } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    ast::CastNode* c = compiler_testing::expect_cast(s.discriminant, msg);
+    if(!c) { return -3; }
+    if(!compiler_testing::expect_ty_prim(c.target_type, token::TokenKind::BOOL, msg)) { return -4; }
+    if(!compiler_testing::expect_ident(c.expr, compiler_testing::sym(m, "x"), msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+// All arms fall through with no terminating body — sema flags, parser accepts.
+fn i32 switch_pure_fallthrough_no_terminator(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: case 3: } }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -2; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -3; }
+    if(!testing::expect_eq(s.arms.len, 3, msg)) { return -4; }
+    if(!testing::expect_null((void*)s.arms.ptr[0].body, msg)) { return -5; }
+    if(!testing::expect_null((void*)s.arms.ptr[1].body, msg)) { return -6; }
+    if(!testing::expect_null((void*)s.arms.ptr[2].body, msg)) { return -7; }
+    if(!testing::expect_null((void*)s.else_block, msg)) { return -8; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -9; }
+    return 0;
+}
+
+fn i32 switch_recovery_after_error(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (5 +) { } i32 y = 5; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::BlockNode* body = compiler_testing::expect_block(f.body, 2, msg);
+    if(!body) { return -2; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(body.stmts.ptr[0], msg);
+    if(!s) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -4; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(body.stmts.ptr[1], compiler_testing::sym(m, "y"), false, false, msg);
+    if(!v) { return -5; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)v), msg)) { return -6; }
+    if(!compiler_testing::expect_intlit(v.init, 5, msg)) { return -7; }
+    return 0;
+}
+
+// ============================================================================
 // EXPRESSIONS: PRIMARY / LITERALS
 // ============================================================================
 
@@ -6006,6 +6949,71 @@ fn i32 main() {
     testing::add(s_bc, "continue_recovery_continues", &continue_recovery_continues);
     testing::add(s_bc, "break_in_else_branch", &break_in_else_branch);
     testing::add(s_bc, "continue_in_else_branch", &continue_in_else_branch);
+
+    u8[] s_sw = "Parser Switches";
+    testing::add(s_sw, "switch_empty", &switch_empty);
+    testing::add(s_sw, "switch_single_arm_single_label", &switch_single_arm_single_label);
+    testing::add(s_sw, "switch_fallthrough_2_cases", &switch_fallthrough_2_cases);
+    testing::add(s_sw, "switch_fallthrough_3_cases", &switch_fallthrough_3_cases);
+    testing::add(s_sw, "switch_multiple_arms", &switch_multiple_arms);
+    testing::add(s_sw, "switch_else_only", &switch_else_only);
+    testing::add(s_sw, "switch_arm_and_else", &switch_arm_and_else);
+    testing::add(s_sw, "switch_multi_arms_and_else", &switch_multi_arms_and_else);
+    testing::add(s_sw, "switch_mixed_fallthrough_and_standalone", &switch_mixed_fallthrough_and_standalone);
+    testing::add(s_sw, "switch_fallthrough_to_else", &switch_fallthrough_to_else);
+    testing::add(s_sw, "switch_two_cases_fallthrough_to_else", &switch_two_cases_fallthrough_to_else);
+    testing::add(s_sw, "switch_fallthrough_in_middle", &switch_fallthrough_in_middle);
+    testing::add(s_sw, "switch_disc_intlit", &switch_disc_intlit);
+    testing::add(s_sw, "switch_disc_member_access", &switch_disc_member_access);
+    testing::add(s_sw, "switch_disc_pratt", &switch_disc_pratt);
+    testing::add(s_sw, "switch_disc_call", &switch_disc_call);
+    testing::add(s_sw, "switch_disc_namespace", &switch_disc_namespace);
+    testing::add(s_sw, "switch_label_charlit", &switch_label_charlit);
+    testing::add(s_sw, "switch_label_ident", &switch_label_ident);
+    testing::add(s_sw, "switch_label_namespace_access", &switch_label_namespace_access);
+    testing::add(s_sw, "switch_label_negative", &switch_label_negative);
+    testing::add(s_sw, "switch_label_pratt", &switch_label_pratt);
+    testing::add(s_sw, "switch_body_multi_stmts", &switch_body_multi_stmts);
+    testing::add(s_sw, "switch_body_with_break", &switch_body_with_break);
+    testing::add(s_sw, "switch_body_with_continue", &switch_body_with_continue);
+    testing::add(s_sw, "switch_body_with_if", &switch_body_with_if);
+    testing::add(s_sw, "switch_body_with_while", &switch_body_with_while);
+    testing::add(s_sw, "switch_body_with_for", &switch_body_with_for);
+    testing::add(s_sw, "switch_body_with_nested_switch", &switch_body_with_nested_switch);
+    testing::add(s_sw, "switch_else_body_multi_stmts", &switch_else_body_multi_stmts);
+    testing::add(s_sw, "switch_else_with_nested_switch", &switch_else_with_nested_switch);
+    testing::add(s_sw, "switch_inside_if", &switch_inside_if);
+    testing::add(s_sw, "switch_inside_while", &switch_inside_while);
+    testing::add(s_sw, "switch_inside_for", &switch_inside_for);
+    testing::add(s_sw, "switch_two_consecutive", &switch_two_consecutive);
+    testing::add(s_sw, "switch_combined_with_var_and_return", &switch_combined_with_var_and_return);
+    testing::add(s_sw, "switch_src_pos", &switch_src_pos);
+    testing::add(s_sw, "switch_disc_src_pos", &switch_disc_src_pos);
+    testing::add(s_sw, "switch_arm_src_pos", &switch_arm_src_pos);
+    testing::add(s_sw, "switch_fallthrough_arm_src_pos", &switch_fallthrough_arm_src_pos);
+    testing::add(s_sw, "switch_missing_lparen", &switch_missing_lparen);
+    testing::add(s_sw, "switch_missing_rparen", &switch_missing_rparen);
+    testing::add(s_sw, "switch_missing_lbrace", &switch_missing_lbrace);
+    testing::add(s_sw, "switch_missing_rbrace_at_eof", &switch_missing_rbrace_at_eof);
+    testing::add(s_sw, "switch_missing_colon", &switch_missing_colon);
+    testing::add(s_sw, "switch_missing_label_expr", &switch_missing_label_expr);
+    testing::add(s_sw, "switch_dangling_fallthrough_at_close", &switch_dangling_fallthrough_at_close);
+    testing::add(s_sw, "switch_junk_token_in_body", &switch_junk_token_in_body);
+    testing::add(s_sw, "switch_at_eof", &switch_at_eof);
+    testing::add(s_sw, "switch_recovery_continues", &switch_recovery_continues);
+    testing::add(s_sw, "switch_malformed_disc", &switch_malformed_disc);
+    testing::add(s_sw, "switch_double_else_first_wins", &switch_double_else_first_wins);
+    testing::add(s_sw, "switch_else_before_case", &switch_else_before_case);
+    testing::add(s_sw, "switch_case_body_error_propagates", &switch_case_body_error_propagates);
+    testing::add(s_sw, "switch_else_body_error_propagates", &switch_else_body_error_propagates);
+    testing::add(s_sw, "switch_arms_growth_past_initial_cap", &switch_arms_growth_past_initial_cap);
+    testing::add(s_sw, "switch_multi_errors", &switch_multi_errors);
+    testing::add(s_sw, "switch_label_bool_literal", &switch_label_bool_literal);
+    testing::add(s_sw, "switch_semicolon_between_cases", &switch_semicolon_between_cases);
+    testing::add(s_sw, "switch_inside_else_branch", &switch_inside_else_branch);
+    testing::add(s_sw, "switch_disc_cast", &switch_disc_cast);
+    testing::add(s_sw, "switch_pure_fallthrough_no_terminator", &switch_pure_fallthrough_no_terminator);
+    testing::add(s_sw, "switch_recovery_after_error", &switch_recovery_after_error);
 
     u8[] s_e = "Parser Expressions";
     testing::add(s_e, "expr_int_literal", &expr_int_literal);
