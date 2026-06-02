@@ -358,6 +358,26 @@ export fn ast::StructDeclNode* expect_struct_decl(ast::AstNode* n, symbol::Symbo
     return s;
 }
 
+export fn ast::UnionDeclNode* expect_union_decl(ast::AstNode* n, symbol::Symbol* name, u64 n_fields, bool is_exported, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::UnionDecl, msg)) { return null; }
+    ast::UnionDeclNode* u = (ast::UnionDeclNode*)n;
+    if(name) {
+        if(!testing::expect_eq((void*)u.name, (void*)name, msg)) { return null; }
+    }
+    if(!testing::expect_eq(u.fields.len, n_fields, msg)) { return null; }
+    if(!testing::expect_eq(u.is_exported, is_exported, msg)) { return null; }
+    return u;
+}
+
+export fn ast::TypeUnionNode* expect_ty_anon_union(ast::AstNode* n, u64 n_fields, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::UnionType, msg)) { return null; }
+    ast::TypeUnionNode* u = (ast::TypeUnionNode*)n;
+    if(!testing::expect_eq(u.fields.len, n_fields, msg)) { return null; }
+    return u;
+}
+
 export fn ast::TypeStructNode* expect_ty_anon_struct(ast::AstNode* n, u64 n_fields, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::StructType, msg)) { return null; }

@@ -5008,6 +5008,308 @@ fn i32 continue_in_else_branch(arena::Arena* a, u8[] msg) {
 }
 
 // ============================================================================
+// UNION
+// ============================================================================
+
+fn i32 union_empty(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Foo"), 0, false, msg);
+    if(!u) { return -1; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)u), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 union_single_field(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Tagged { i32 i; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Tagged"), 1, false, msg);
+    if(!u) { return -1; }
+    if(!compiler_testing::expect_field(&u.fields.ptr[0], compiler_testing::sym(m, "i"), msg)) { return -2; }
+    if(!compiler_testing::expect_ty_prim(u.fields.ptr[0].type_expr, token::TokenKind::I32, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 union_multi_field(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Tagged { i32 i; f64 f; bool b; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Tagged"), 3, false, msg);
+    if(!u) { return -1; }
+    if(!compiler_testing::expect_field(&u.fields.ptr[0], compiler_testing::sym(m, "i"), msg)) { return -2; }
+    if(!compiler_testing::expect_field(&u.fields.ptr[1], compiler_testing::sym(m, "f"), msg)) { return -3; }
+    if(!compiler_testing::expect_field(&u.fields.ptr[2], compiler_testing::sym(m, "b"), msg)) { return -4; }
+    if(!compiler_testing::expect_ty_prim(u.fields.ptr[0].type_expr, token::TokenKind::I32, msg)) { return -5; }
+    if(!compiler_testing::expect_ty_prim(u.fields.ptr[1].type_expr, token::TokenKind::F64, msg)) { return -6; }
+    if(!compiler_testing::expect_ty_prim(u.fields.ptr[2].type_expr, token::TokenKind::BOOL, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 union_field_pointer_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union U { i32* p; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!compiler_testing::expect_ty_ptr(u.fields.ptr[0].type_expr, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 union_field_array_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union U { i32[8] arr; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    ast::TypeArrayNode* ta = compiler_testing::expect_ty_array(u.fields.ptr[0].type_expr, msg);
+    if(!ta) { return -2; }
+    if(!compiler_testing::expect_intlit(ta.size_expr, 8, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 union_field_named_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union U { Bar b; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!compiler_testing::expect_ty_named(u.fields.ptr[0].type_expr, null, compiler_testing::sym(m, "Bar"), msg)) { return -2; }
+    return 0;
+}
+
+fn i32 union_field_qualified_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union U { mod::Bar b; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!compiler_testing::expect_ty_named(u.fields.ptr[0].type_expr, compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "Bar"), msg)) { return -2; }
+    return 0;
+}
+
+fn i32 union_field_fn_ptr_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union U { fn* void(i32) cb; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!compiler_testing::expect_ty_fnptr(u.fields.ptr[0].type_expr, 1, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 union_field_nested_anon_union(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union U { union { i32 x; } inner; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    ast::TypeUnionNode* inner = compiler_testing::expect_ty_anon_union(u.fields.ptr[0].type_expr, 1, msg);
+    if(!inner) { return -2; }
+    if(!compiler_testing::expect_field(&inner.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 union_field_with_struct_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union U { struct { i32 x; u8 y; } s; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!compiler_testing::expect_ty_anon_struct(u.fields.ptr[0].type_expr, 2, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 union_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export union U { i32 i; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "U"), 1, true, msg);
+    if(!u) { return -1; }
+    return 0;
+}
+
+fn i32 union_many_fields_growth(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union U { i32 a; i32 b; i32 c; i32 d; i32 e; i32 f; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 6, false, msg);
+    if(!u) { return -1; }
+    if(!compiler_testing::expect_field(&u.fields.ptr[5], compiler_testing::sym(m, "f"), msg)) { return -2; }
+    return 0;
+}
+
+fn i32 anon_union_in_alias(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = union { i32 i; f64 f; };", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "V"), false, msg);
+    if(!al) { return -1; }
+    ast::TypeUnionNode* tu = compiler_testing::expect_ty_anon_union(al.target, 2, msg);
+    if(!tu) { return -2; }
+    if(!compiler_testing::expect_field(&tu.fields.ptr[0], compiler_testing::sym(m, "i"), msg)) { return -3; }
+    if(!compiler_testing::expect_field(&tu.fields.ptr[1], compiler_testing::sym(m, "f"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 anon_union_in_var_decl(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { union { i32 i; } v; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "v"), false, false, msg);
+    if(!v) { return -2; }
+    if(!compiler_testing::expect_ty_anon_union(v.type_expr, 1, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 anon_union_in_fn_param(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void g(union { i32 i; } v) { }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "g"), 1, false, msg);
+    if(!f) { return -1; }
+    if(!compiler_testing::expect_param(&f.params.ptr[0], compiler_testing::sym(m, "v"), false, false, msg)) { return -2; }
+    if(!compiler_testing::expect_ty_anon_union(f.params.ptr[0].type_expr, 1, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 anon_union_empty(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = union { };", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!compiler_testing::expect_ty_anon_union(al.target, 0, msg)) { return -2; }
+    return 0;
+}
+
+// Union literals reuse parse_struct_lit — same AST shape, sema discriminates at use site.
+fn i32 union_lit_via_struct_lit_syntax(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Tagged t = { .i = 5 }; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "t"), false, false, msg);
+    if(!v) { return -2; }
+    ast::StructLitNode* sl = compiler_testing::expect_struct_lit(v.init, 1, msg);
+    if(!sl) { return -3; }
+    if(!compiler_testing::expect_field_init(&sl.inits.ptr[0], compiler_testing::sym(m, "i"), msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(sl.inits.ptr[0].value, 5, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 union_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!u) { return -1; }
+    if(!testing::expect_eq(u.h.src_pos, 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 union_field_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32 x; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!testing::expect_eq(u.fields.ptr[0].src_pos, 12, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 union_missing_name(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union { i32 i; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)u), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got '{'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 6, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 union_missing_lbrace(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo i32 x; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)u), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '{', got 'i32'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 10, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 union_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32 x;", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)u), msg)) { return -2; }
+    if(!compiler_testing::expect_diag_substr(m, "expected '}'", msg)) { return -3; }
+    return 0;
+}
+
+fn i32 union_field_missing_name(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32; }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)u), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ';'", msg)) { return -3; }
+    return 0;
+}
+
+fn i32 union_field_missing_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32 x }", &m);
+    ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!u) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)u), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got '}'", msg)) { return -3; }
+    return 0;
+}
+
+// `union` at type position not followed by `{` — parse_base_type's UNION case reports "expected '{'".
+fn i32 anon_union_missing_lbrace_at_type_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = union x;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '{', got identifier", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 16, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 union_recovery_continues(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32; } union Bar { u8 y; }", &m);
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, 2, msg)) { return -1; }
+    ast::UnionDeclNode* foo = compiler_testing::expect_union_decl(r.stmts.ptr[0], compiler_testing::sym(m, "Foo"), 1, false, msg);
+    if(!foo) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)foo), msg)) { return -3; }
+    ast::UnionDeclNode* bar = compiler_testing::expect_union_decl(r.stmts.ptr[1], compiler_testing::sym(m, "Bar"), 1, false, msg);
+    if(!bar) { return -4; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)bar), msg)) { return -5; }
+    return 0;
+}
+
+// ============================================================================
 // STRUCT
 // ============================================================================
 
@@ -9556,6 +9858,34 @@ fn i32 main() {
     testing::add(s_bc, "continue_recovery_continues", &continue_recovery_continues);
     testing::add(s_bc, "break_in_else_branch", &break_in_else_branch);
     testing::add(s_bc, "continue_in_else_branch", &continue_in_else_branch);
+
+    u8[] s_un = "Parser Unions";
+    testing::add(s_un, "union_empty", &union_empty);
+    testing::add(s_un, "union_single_field", &union_single_field);
+    testing::add(s_un, "union_multi_field", &union_multi_field);
+    testing::add(s_un, "union_field_pointer_type", &union_field_pointer_type);
+    testing::add(s_un, "union_field_array_type", &union_field_array_type);
+    testing::add(s_un, "union_field_named_type", &union_field_named_type);
+    testing::add(s_un, "union_field_qualified_type", &union_field_qualified_type);
+    testing::add(s_un, "union_field_fn_ptr_type", &union_field_fn_ptr_type);
+    testing::add(s_un, "union_field_nested_anon_union", &union_field_nested_anon_union);
+    testing::add(s_un, "union_field_with_struct_type", &union_field_with_struct_type);
+    testing::add(s_un, "union_exported", &union_exported);
+    testing::add(s_un, "union_many_fields_growth", &union_many_fields_growth);
+    testing::add(s_un, "anon_union_in_alias", &anon_union_in_alias);
+    testing::add(s_un, "anon_union_in_var_decl", &anon_union_in_var_decl);
+    testing::add(s_un, "anon_union_in_fn_param", &anon_union_in_fn_param);
+    testing::add(s_un, "anon_union_empty", &anon_union_empty);
+    testing::add(s_un, "union_lit_via_struct_lit_syntax", &union_lit_via_struct_lit_syntax);
+    testing::add(s_un, "union_src_pos", &union_src_pos);
+    testing::add(s_un, "union_field_src_pos", &union_field_src_pos);
+    testing::add(s_un, "union_missing_name", &union_missing_name);
+    testing::add(s_un, "union_missing_lbrace", &union_missing_lbrace);
+    testing::add(s_un, "union_missing_rbrace_at_eof", &union_missing_rbrace_at_eof);
+    testing::add(s_un, "union_field_missing_name", &union_field_missing_name);
+    testing::add(s_un, "union_field_missing_semi", &union_field_missing_semi);
+    testing::add(s_un, "anon_union_missing_lbrace_at_type_pos", &anon_union_missing_lbrace_at_type_pos);
+    testing::add(s_un, "union_recovery_continues", &union_recovery_continues);
 
     u8[] s_st = "Parser Structs";
     testing::add(s_st, "struct_empty", &struct_empty);
