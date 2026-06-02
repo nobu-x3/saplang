@@ -340,6 +340,20 @@ export fn ast::IfNode* expect_if(ast::AstNode* n, u8[] msg) {
     return (ast::IfNode*)n;
 }
 
+export fn ast::ForNode* expect_for(ast::AstNode* n, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ForStmt, msg)) { return null; }
+    return (ast::ForNode*)n;
+}
+
+export fn ast::AssignmentNode* expect_assign(ast::AstNode* n, token::TokenKind op, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::AssignmentStmt, msg)) { return null; }
+    ast::AssignmentNode* a = (ast::AssignmentNode*)n;
+    if(!testing::expect_eq((u16)a.op, (u16)op, msg)) { return null; }
+    return a;
+}
+
 export fn ast::ReturnNode* expect_return(ast::AstNode* n, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ReturnStmt, msg)) { return null; }

@@ -204,7 +204,7 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         case token::TokenKind::LBrace:       { return parse_block(p); }
         case token::TokenKind::IF:           { return parse_if(p); }
         case token::TokenKind::WHILE:        { return parse_while(p); }
-        //case token::TokenKind::FOR:          { return parse_for(p); }
+        case token::TokenKind::FOR:          { return parse_for(p); }
         //case token::TokenKind::SWITCH:       { return parse_switch(p); }
         case token::TokenKind::RETURN:       { return parse_return(p); }
         //case token::TokenKind::BREAK:        { return parse_break(p); }
@@ -248,6 +248,99 @@ fn ast::AstNode* parse_return(Parser* p) {
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
     n.expr = expr;
+    return (ast::AstNode*)n;
+}
+
+fn bool is_assignment_op(token::TokenKind k) {
+    switch(k) {
+    case token::TokenKind::Eq:        { return true; }
+    case token::TokenKind::PlusEq:    { return true; }
+    case token::TokenKind::MinusEq:   { return true; }
+    case token::TokenKind::StarEq:    { return true; }
+    case token::TokenKind::SlashEq:   { return true; }
+    case token::TokenKind::PercentEq: { return true; }
+    case token::TokenKind::AmpEq:     { return true; }
+    case token::TokenKind::PipeEq:    { return true; }
+    case token::TokenKind::CaretEq:   { return true; }
+    else { return false; }
+    }
+    return false;
+}
+
+// Parses an expression and, if followed by an assignment op, wraps it in an
+// AssignmentNode. Used inside for-loop init/post — does not consume a trailing ';'.
+fn ast::AstNode* parse_assign_or_expr(Parser* p, bool* had_err) {
+    u32 start = peek(p, 0).src_pos;
+    ast::AstNode* lhs = parse_expr(p, 0);
+    if(!lhs || had_error(lhs)) { *had_err = true; }
+    token::Token t = peek(p, 0);
+    if(is_assignment_op(t.kind)) {
+        consume(p);
+        ast::AstNode* rhs = parse_expr(p, 0);
+        if(!rhs || had_error(rhs)) { *had_err = true; }
+        ast::AssignmentNode* a = arena::alloc(p.m.arena, sizeof(ast::AssignmentNode));
+        a.h.kind = ast::AstKind::AssignmentStmt;
+        a.h.flags = (ast::AstFlags)0;
+        a.h.src_pos = start;
+        a.op = t.kind;
+        a.lhs = lhs;
+        a.rhs = rhs;
+        return (ast::AstNode*)a;
+    }
+    return lhs;
+}
+
+fn ast::AstNode* parse_for(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token for_tok = expect(p, token::TokenKind::FOR);
+    if(for_tok.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+
+    ast::AstNode* init = null;
+    token::TokenKind init_first = peek(p, 0).kind;
+    if(init_first == token::TokenKind::Semi) {
+        consume(p);
+    } else if(init_first == token::TokenKind::CONST) {
+        init = parse_local_var_decl(p);
+        if(had_error(init)) { had_err = true; }
+    } else if(looks_like_type_start(init_first) && looks_like_var_decl(p)) {
+        init = parse_local_var_decl(p);
+        if(had_error(init)) { had_err = true; }
+    } else {
+        init = parse_assign_or_expr(p, &had_err);
+        token::Token semi = expect(p, token::TokenKind::Semi);
+        if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
+    }
+
+    ast::AstNode* cond = null;
+    if(peek(p, 0).kind != token::TokenKind::Semi) {
+        cond = parse_expr(p, 0);
+        if(!cond || had_error(cond)) { had_err = true; }
+    }
+    token::Token semi2 = expect(p, token::TokenKind::Semi);
+    if(semi2.kind == token::TokenKind::ERROR) { had_err = true; }
+
+    ast::AstNode* post = null;
+    if(peek(p, 0).kind != token::TokenKind::RParen) {
+        post = parse_assign_or_expr(p, &had_err);
+    }
+
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* body = parse_block(p);
+    if(had_error(body)) { had_err = true; }
+
+    ast::ForNode* n = arena::alloc(p.m.arena, sizeof(ast::ForNode));
+    n.h.kind = ast::AstKind::ForStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.init = init;
+    n.cond = cond;
+    n.post = post;
+    n.body = body;
     return (ast::AstNode*)n;
 }
 
