@@ -48,7 +48,7 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
             if(peek(p, 1).kind == token::TokenKind::Star) { return parse_var_decl(p, is_exported); }
             return parse_fn_decl(p, is_exported);
         }
-        //case token::TokenKind::STRUCT:  { return parse_struct_decl(p, is_exported); }
+        case token::TokenKind::STRUCT:  { return parse_struct_decl(p, is_exported); }
         //case token::TokenKind::UNION:   { return parse_union_decl(p, is_exported); }
         //case token::TokenKind::ENUM:    { return parse_enum_decl(p, is_exported); }
         case token::TokenKind::ALIAS:   { return parse_alias_decl(p, is_exported); }
@@ -69,6 +69,7 @@ fn bool looks_like_type_start(token::TokenKind k) {
     if(k == token::TokenKind::FN) { return true; }
     if(k == token::TokenKind::STRUCT) { return true; }
     if(k == token::TokenKind::UNION) { return true; }
+    if(k == token::TokenKind::Dot) { return true; }
     return false;
 }
 
@@ -294,6 +295,62 @@ fn ast::AstNode* parse_comprun(Parser* p) {
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
     n.body = body;
+    return (ast::AstNode*)n;
+}
+
+fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
+    ast::FieldDecl[] arr;
+    arr.ptr = null;
+    arr.len = 0;
+    u64 cap = 0;
+    while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
+        u32 prev_idx = p.idx;
+        u32 start = peek(p, 0).src_pos;
+        ast::AstNode* type_expr = parse_type(p);
+        if(!type_expr || had_error(type_expr)) { *had_err = true; }
+        token::Token name = expect(p, token::TokenKind::Ident);
+        if(name.kind == token::TokenKind::ERROR) { *had_err = true; }
+        token::Token semi = expect(p, token::TokenKind::Semi);
+        if(semi.kind == token::TokenKind::ERROR) { *had_err = true; }
+        if(arr.len + 1 > cap) {
+            u64 new_cap = 4;
+            if(cap > 0) { new_cap = cap * 2; }
+            arr.ptr = arena::realloc_grow(p.m.arena, arr.ptr,
+                    cap * sizeof(ast::FieldDecl),
+                    new_cap * sizeof(ast::FieldDecl));
+            cap = new_cap;
+        }
+        ast::FieldDecl* fd = &arr[arr.len];
+        fd.name = name.data.sym;
+        fd.type_expr = type_expr;
+        fd.src_pos = start;
+        arr.len += 1;
+        if(p.idx == prev_idx) { consume(p); *had_err = true; }
+    }
+    return arr;
+}
+
+fn ast::AstNode* parse_struct_decl(Parser* p, bool is_exported) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token kw = expect(p, token::TokenKind::STRUCT);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token name = expect(p, token::TokenKind::Ident);
+    if(name.kind == token::TokenKind::ERROR) { had_err = true; }
+    token::Token lbrace = expect(p, token::TokenKind::LBrace);
+    if(lbrace.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::FieldDecl[] fields = parse_fields(p, &had_err);
+    token::Token rbrace = expect(p, token::TokenKind::RBrace);
+    if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::StructDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::StructDeclNode));
+    sys::memset(n, 0, sizeof(ast::StructDeclNode));
+    n.h.kind = ast::AstKind::StructDecl;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.name = name.data.sym;
+    n.fields = fields;
+    n.is_exported = is_exported;
     return (ast::AstNode*)n;
 }
 
@@ -782,6 +839,34 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         n.h.src_pos = t.src_pos;
         n.return_type = ret;
         n.param_types = ast::list_freeze(&pb);
+        return (ast::AstNode*)n;
+    }
+    case token::TokenKind::STRUCT: {
+        consume(p);
+        token::Token lbrace = expect(p, token::TokenKind::LBrace);
+        if(lbrace.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
+        bool dummy = false;
+        ast::FieldDecl[] fields = parse_fields(p, &dummy);
+        expect(p, token::TokenKind::RBrace);
+        ast::TypeStructNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeStructNode));
+        n.h.kind = ast::AstKind::StructType;
+        n.h.flags = (ast::AstFlags)0;
+        n.h.src_pos = t.src_pos;
+        n.fields = fields;
+        return (ast::AstNode*)n;
+    }
+    case token::TokenKind::Dot: {
+        consume(p);
+        token::Token lbrace = expect(p, token::TokenKind::LBrace);
+        if(lbrace.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
+        bool dummy = false;
+        ast::FieldDecl[] fields = parse_fields(p, &dummy);
+        expect(p, token::TokenKind::RBrace);
+        ast::TypeStructNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeStructNode));
+        n.h.kind = ast::AstKind::StructType;
+        n.h.flags = (ast::AstFlags)0;
+        n.h.src_pos = t.src_pos;
+        n.fields = fields;
         return (ast::AstNode*)n;
     }
     case token::TokenKind::Ident: {

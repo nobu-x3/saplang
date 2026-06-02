@@ -346,6 +346,34 @@ export fn ast::ForNode* expect_for(ast::AstNode* n, u8[] msg) {
     return (ast::ForNode*)n;
 }
 
+export fn ast::StructDeclNode* expect_struct_decl(ast::AstNode* n, symbol::Symbol* name, u64 n_fields, bool is_exported, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::StructDecl, msg)) { return null; }
+    ast::StructDeclNode* s = (ast::StructDeclNode*)n;
+    if(name) {
+        if(!testing::expect_eq((void*)s.name, (void*)name, msg)) { return null; }
+    }
+    if(!testing::expect_eq(s.fields.len, n_fields, msg)) { return null; }
+    if(!testing::expect_eq(s.is_exported, is_exported, msg)) { return null; }
+    return s;
+}
+
+export fn ast::TypeStructNode* expect_ty_anon_struct(ast::AstNode* n, u64 n_fields, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::StructType, msg)) { return null; }
+    ast::TypeStructNode* s = (ast::TypeStructNode*)n;
+    if(!testing::expect_eq(s.fields.len, n_fields, msg)) { return null; }
+    return s;
+}
+
+export fn bool expect_field(ast::FieldDecl* fd, symbol::Symbol* name, u8[] msg) {
+    if(!testing::expect_not_null((void*)fd, msg)) { return false; }
+    if(name) {
+        if(!testing::expect_eq((void*)fd.name, (void*)name, msg)) { return false; }
+    }
+    return true;
+}
+
 export fn ast::AliasDeclNode* expect_alias(ast::AstNode* n, symbol::Symbol* name, bool is_exported, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::AliasDecl, msg)) { return null; }

@@ -5008,6 +5008,324 @@ fn i32 continue_in_else_branch(arena::Arena* a, u8[] msg) {
 }
 
 // ============================================================================
+// STRUCT
+// ============================================================================
+
+fn i32 struct_empty(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Foo"), 0, false, msg);
+    if(!s) { return -1; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 struct_single_field(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Foo"), 1, false, msg);
+    if(!s) { return -1; }
+    if(!compiler_testing::expect_field(&s.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -2; }
+    if(!compiler_testing::expect_ty_prim(s.fields.ptr[0].type_expr, token::TokenKind::I32, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 struct_multi_field(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x; u8 y; bool z; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Foo"), 3, false, msg);
+    if(!s) { return -1; }
+    if(!compiler_testing::expect_field(&s.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -2; }
+    if(!compiler_testing::expect_field(&s.fields.ptr[1], compiler_testing::sym(m, "y"), msg)) { return -3; }
+    if(!compiler_testing::expect_field(&s.fields.ptr[2], compiler_testing::sym(m, "z"), msg)) { return -4; }
+    if(!compiler_testing::expect_ty_prim(s.fields.ptr[0].type_expr, token::TokenKind::I32, msg)) { return -5; }
+    if(!compiler_testing::expect_ty_prim(s.fields.ptr[1].type_expr, token::TokenKind::U8, msg)) { return -6; }
+    if(!compiler_testing::expect_ty_prim(s.fields.ptr[2].type_expr, token::TokenKind::BOOL, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 struct_field_pointer_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32* p; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!compiler_testing::expect_ty_ptr(s.fields.ptr[0].type_expr, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 struct_field_array_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32[8] arr; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    ast::TypeArrayNode* ta = compiler_testing::expect_ty_array(s.fields.ptr[0].type_expr, msg);
+    if(!ta) { return -2; }
+    if(!compiler_testing::expect_intlit(ta.size_expr, 8, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 struct_field_named_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { Bar b; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!compiler_testing::expect_ty_named(s.fields.ptr[0].type_expr, null, compiler_testing::sym(m, "Bar"), msg)) { return -2; }
+    return 0;
+}
+
+fn i32 struct_field_qualified_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { mod::Bar b; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!compiler_testing::expect_ty_named(s.fields.ptr[0].type_expr, compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "Bar"), msg)) { return -2; }
+    return 0;
+}
+
+fn i32 struct_field_fn_ptr_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { fn* void(i32) cb; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!compiler_testing::expect_ty_fnptr(s.fields.ptr[0].type_expr, 1, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 struct_field_nested_anon_struct(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { struct { i32 x; } inner; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    ast::TypeStructNode* inner = compiler_testing::expect_ty_anon_struct(s.fields.ptr[0].type_expr, 1, msg);
+    if(!inner) { return -2; }
+    if(!compiler_testing::expect_field(&inner.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 struct_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export struct Foo { i32 x; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Foo"), 1, true, msg);
+    if(!s) { return -1; }
+    return 0;
+}
+
+// 6 fields exercises the realloc-grow path (initial cap=4).
+fn i32 struct_many_fields_growth(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 a; i32 b; i32 c; i32 d; i32 e; i32 f; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 6, false, msg);
+    if(!s) { return -1; }
+    if(!compiler_testing::expect_field(&s.fields.ptr[5], compiler_testing::sym(m, "f"), msg)) { return -2; }
+    return 0;
+}
+
+// Anonymous struct in alias RHS: legacy `struct { ... }` form.
+fn i32 anon_struct_in_alias_legacy(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias VecI32 = struct { i32 x; u64 len; };", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "VecI32"), false, msg);
+    if(!al) { return -1; }
+    ast::TypeStructNode* ts = compiler_testing::expect_ty_anon_struct(al.target, 2, msg);
+    if(!ts) { return -2; }
+    if(!compiler_testing::expect_field(&ts.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -3; }
+    if(!compiler_testing::expect_field(&ts.fields.ptr[1], compiler_testing::sym(m, "len"), msg)) { return -4; }
+    return 0;
+}
+
+// Anonymous struct in alias RHS: dot-prefix `.{ ... }` form.
+fn i32 anon_struct_in_alias_dot(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias VecI32 = .{ i32 x; u64 len; };", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "VecI32"), false, msg);
+    if(!al) { return -1; }
+    ast::TypeStructNode* ts = compiler_testing::expect_ty_anon_struct(al.target, 2, msg);
+    if(!ts) { return -2; }
+    if(!compiler_testing::expect_field(&ts.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -3; }
+    if(!compiler_testing::expect_field(&ts.fields.ptr[1], compiler_testing::sym(m, "len"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 anon_struct_in_var_decl_dot(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { .{ i32 x; } v; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "v"), false, false, msg);
+    if(!v) { return -2; }
+    if(!compiler_testing::expect_ty_anon_struct(v.type_expr, 1, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 anon_struct_empty_dot(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = .{ };", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!compiler_testing::expect_ty_anon_struct(al.target, 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 struct_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!s) { return -1; }
+    if(!testing::expect_eq(s.h.src_pos, 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 struct_field_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!testing::expect_eq(s.fields.ptr[0].src_pos, 13, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 struct_missing_name(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct { i32 x; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got '{'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 7, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 struct_missing_lbrace(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo i32 x; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '{', got 'i32'", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 11, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 struct_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x;", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -2; }
+    if(!compiler_testing::expect_diag_substr(m, "expected '}'", msg)) { return -3; }
+    return 0;
+}
+
+fn i32 struct_field_missing_name(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ';'", msg)) { return -3; }
+    return 0;
+}
+
+fn i32 struct_field_missing_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got '}'", msg)) { return -3; }
+    return 0;
+}
+
+fn i32 struct_recovery_continues(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32; } struct Bar { u8 y; }", &m);
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, 2, msg)) { return -1; }
+    ast::StructDeclNode* foo = compiler_testing::expect_struct_decl(r.stmts.ptr[0], compiler_testing::sym(m, "Foo"), 1, false, msg);
+    if(!foo) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)foo), msg)) { return -3; }
+    ast::StructDeclNode* bar = compiler_testing::expect_struct_decl(r.stmts.ptr[1], compiler_testing::sym(m, "Bar"), 1, false, msg);
+    if(!bar) { return -4; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)bar), msg)) { return -5; }
+    return 0;
+}
+
+// `struct Foo { 1 }` — `1` consumes no tokens via parse_type / expect chain;
+// the no-progress guard in parse_fields must force advance to avoid infinite loop.
+fn i32 struct_no_progress_safety(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { 1 } struct Bar { }", &m);
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, 2, msg)) { return -1; }
+    ast::StructDeclNode* foo = compiler_testing::expect_struct_decl(r.stmts.ptr[0], compiler_testing::sym(m, "Foo"), 1, false, msg);
+    if(!foo) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)foo), msg)) { return -3; }
+    if(!compiler_testing::expect_struct_decl(r.stmts.ptr[1], compiler_testing::sym(m, "Bar"), 0, false, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 struct_field_nested_dot_anon(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { .{ i32 x; } inner; }", &m);
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -1; }
+    ast::TypeStructNode* inner = compiler_testing::expect_ty_anon_struct(s.fields.ptr[0].type_expr, 1, msg);
+    if(!inner) { return -2; }
+    if(!compiler_testing::expect_field(&inner.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 anon_struct_in_fn_param_dot(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void g(.{ i32 x; } v) { }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "g"), 1, false, msg);
+    if(!f) { return -1; }
+    if(!compiler_testing::expect_param(&f.params.ptr[0], compiler_testing::sym(m, "v"), false, false, msg)) { return -2; }
+    if(!compiler_testing::expect_ty_anon_struct(f.params.ptr[0].type_expr, 1, msg)) { return -3; }
+    return 0;
+}
+
+// `.` not followed by `{` at type position — parse_base_type's Dot case reports "expected '{'".
+fn i32 dot_struct_dot_not_followed_by_lbrace(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = .x;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), null, false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '{', got identifier", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 11, msg)) { return -4; }
+    return 0;
+}
+
+// ============================================================================
 // ALIAS
 // ============================================================================
 
@@ -9238,6 +9556,35 @@ fn i32 main() {
     testing::add(s_bc, "continue_recovery_continues", &continue_recovery_continues);
     testing::add(s_bc, "break_in_else_branch", &break_in_else_branch);
     testing::add(s_bc, "continue_in_else_branch", &continue_in_else_branch);
+
+    u8[] s_st = "Parser Structs";
+    testing::add(s_st, "struct_empty", &struct_empty);
+    testing::add(s_st, "struct_single_field", &struct_single_field);
+    testing::add(s_st, "struct_multi_field", &struct_multi_field);
+    testing::add(s_st, "struct_field_pointer_type", &struct_field_pointer_type);
+    testing::add(s_st, "struct_field_array_type", &struct_field_array_type);
+    testing::add(s_st, "struct_field_named_type", &struct_field_named_type);
+    testing::add(s_st, "struct_field_qualified_type", &struct_field_qualified_type);
+    testing::add(s_st, "struct_field_fn_ptr_type", &struct_field_fn_ptr_type);
+    testing::add(s_st, "struct_field_nested_anon_struct", &struct_field_nested_anon_struct);
+    testing::add(s_st, "struct_field_nested_dot_anon", &struct_field_nested_dot_anon);
+    testing::add(s_st, "struct_exported", &struct_exported);
+    testing::add(s_st, "struct_many_fields_growth", &struct_many_fields_growth);
+    testing::add(s_st, "anon_struct_in_alias_legacy", &anon_struct_in_alias_legacy);
+    testing::add(s_st, "anon_struct_in_alias_dot", &anon_struct_in_alias_dot);
+    testing::add(s_st, "anon_struct_in_var_decl_dot", &anon_struct_in_var_decl_dot);
+    testing::add(s_st, "anon_struct_in_fn_param_dot", &anon_struct_in_fn_param_dot);
+    testing::add(s_st, "anon_struct_empty_dot", &anon_struct_empty_dot);
+    testing::add(s_st, "struct_src_pos", &struct_src_pos);
+    testing::add(s_st, "struct_field_src_pos", &struct_field_src_pos);
+    testing::add(s_st, "struct_missing_name", &struct_missing_name);
+    testing::add(s_st, "struct_missing_lbrace", &struct_missing_lbrace);
+    testing::add(s_st, "struct_missing_rbrace_at_eof", &struct_missing_rbrace_at_eof);
+    testing::add(s_st, "struct_field_missing_name", &struct_field_missing_name);
+    testing::add(s_st, "struct_field_missing_semi", &struct_field_missing_semi);
+    testing::add(s_st, "struct_recovery_continues", &struct_recovery_continues);
+    testing::add(s_st, "struct_no_progress_safety", &struct_no_progress_safety);
+    testing::add(s_st, "dot_struct_dot_not_followed_by_lbrace", &dot_struct_dot_not_followed_by_lbrace);
 
     u8[] s_al = "Parser Aliases";
     testing::add(s_al, "alias_primitive_rhs", &alias_primitive_rhs);
