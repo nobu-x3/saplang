@@ -346,6 +346,18 @@ export fn ast::ForNode* expect_for(ast::AstNode* n, u8[] msg) {
     return (ast::ForNode*)n;
 }
 
+export fn ast::CompErrorNode* expect_comperror(ast::AstNode* n, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ComperrorStmt, msg)) { return null; }
+    return (ast::CompErrorNode*)n;
+}
+
+export fn ast::CompWarningNode* expect_compwarning(ast::AstNode* n, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::CompwarningStmt, msg)) { return null; }
+    return (ast::CompWarningNode*)n;
+}
+
 export fn ast::DeferNode* expect_defer(ast::AstNode* n, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::DeferStmt, msg)) { return null; }

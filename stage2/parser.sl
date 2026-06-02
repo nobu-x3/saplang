@@ -213,8 +213,8 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         //case token::TokenKind::COMPRUN:      { return parse_comprun(p); }
         //case token::TokenKind::COMPINSERT:   { return parse_compinsert(p); }
         //case token::TokenKind::COMPSPLICE:   { return parse_compsplice(p); }
-        //case token::TokenKind::COMPERROR:    { return parse_comperror(p); }
-        //case token::TokenKind::COMPWARNING:  { return parse_compwarning(p); }
+        case token::TokenKind::COMPERROR:    { return parse_comperror(p); }
+        case token::TokenKind::COMPWARNING:  { return parse_compwarning(p); }
         case token::TokenKind::CONST:        { return parse_local_var_decl(p); }
     else {
         if(looks_like_type_start(t.kind) && looks_like_var_decl(p)) {
@@ -278,6 +278,50 @@ fn ast::AstNode* parse_continue(Parser* p) {
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_comperror(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token kw = expect(p, token::TokenKind::COMPERROR);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* msg = parse_expr(p, 0);
+    if(!msg || had_error(msg)) { had_err = true; }
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    token::Token semi = expect(p, token::TokenKind::Semi);
+    if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::CompErrorNode* n = arena::alloc(p.m.arena, sizeof(ast::CompErrorNode));
+    n.h.kind = ast::AstKind::ComperrorStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.msg_expr = msg;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_compwarning(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token kw = expect(p, token::TokenKind::COMPWARNING);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* msg = parse_expr(p, 0);
+    if(!msg || had_error(msg)) { had_err = true; }
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    token::Token semi = expect(p, token::TokenKind::Semi);
+    if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::CompWarningNode* n = arena::alloc(p.m.arena, sizeof(ast::CompWarningNode));
+    n.h.kind = ast::AstKind::CompwarningStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.msg_expr = msg;
     return (ast::AstNode*)n;
 }
 
