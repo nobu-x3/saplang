@@ -538,10 +538,10 @@ fn i32 fn_param_comptime(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_const_comptime(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_comptime_const(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
-    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime i32 N) {}", &m);
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime const i32 N) {}", &m);
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
     if(!f) { return -1; }
     ast::Param* p0 = &f.params[0];
@@ -819,12 +819,107 @@ fn i32 fn_param_modifier_only(arena::Arena* a, u8[] msg) {
 fn i32 fn_param_wrong_modifier_order(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
-    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime const i32 x) {}", &m);
-    ast::AstNode* stmt0 = compiler_testing::nth_stmt(root, 0);
-    if(!testing::expect_not_null((void*)stmt0, msg)) { return -1; }
-    if(!testing::expect_true(compiler_testing::has_error_flag(stmt0), msg)) { return -2; }
-    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got 'const'", msg)) { return -3; }
-    if(!testing::expect_eq(m.diag.entries[0].src_pos, 19, msg)) { return -4; }
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime i32 x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`comptime` must come before `const`", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)16, msg)) { return -5; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "x"), true, true, msg)) { return -6; }
+    if(!compiler_testing::expect_ty_prim(p0.type_expr, token::TokenKind::I32, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 fn_param_wrong_order_with_pointer_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime i32* x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "x"), true, true, msg)) { return -3; }
+    ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(p0.type_expr, msg);
+    if(!tp) { return -4; }
+    if(!compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 fn_param_wrong_order_with_qualified_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime mod::Foo x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
+    ast::Param* p0 = &f.params[0];
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "x"), true, true, msg)) { return -3; }
+    if(!compiler_testing::expect_ty_named(p0.type_expr, compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "Foo"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 fn_param_wrong_order_one_of_many_recovers(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 a, const comptime i32 b, i32 c) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 3, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
+    if(!compiler_testing::expect_param(&f.params[0], compiler_testing::sym(m, "a"), false, false, msg)) { return -3; }
+    if(!compiler_testing::expect_param(&f.params[1], compiler_testing::sym(m, "b"), true, true, msg)) { return -4; }
+    if(!compiler_testing::expect_param(&f.params[2], compiler_testing::sym(m, "c"), false, false, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 fn_param_comptime_only_no_diag(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime Type T) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -2; }
+    if(!compiler_testing::expect_param(&f.params[0], compiler_testing::sym(m, "T"), false, true, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 fn_param_const_only_no_diag(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const i32 x) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 1, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -2; }
+    if(!compiler_testing::expect_param(&f.params[0], compiler_testing::sym(m, "x"), true, false, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 fn_param_two_wrong_order_two_diags(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime i32 a, const comptime i32 b) {}", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "f"), 2, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)2, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`comptime` must come before `const`", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[1].msg, "`comptime` must come before `const`", msg)) { return -4; }
+    if(!compiler_testing::expect_param(&f.params[0], compiler_testing::sym(m, "a"), true, true, msg)) { return -5; }
+    if(!compiler_testing::expect_param(&f.params[1], compiler_testing::sym(m, "b"), true, true, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 extern_fn_param_wrong_modifier_order(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void g(const comptime i32 x); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`comptime` must come before `const`", msg)) { return -3; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "g"), 1, false, false, msg);
+    if(!f) { return -4; }
+    if(!compiler_testing::expect_param(&f.params[0], compiler_testing::sym(m, "x"), true, true, msg)) { return -5; }
     return 0;
 }
 
@@ -10684,7 +10779,7 @@ fn i32 main() {
     testing::add(s_fn, "fn_two_params", &fn_two_params);
     testing::add(s_fn, "fn_param_const", &fn_param_const);
     testing::add(s_fn, "fn_param_comptime", &fn_param_comptime);
-    testing::add(s_fn, "fn_param_const_comptime", &fn_param_const_comptime);
+    testing::add(s_fn, "fn_param_comptime_const", &fn_param_comptime_const);
     testing::add(s_fn, "fn_param_pointer_type", &fn_param_pointer_type);
     testing::add(s_fn, "fn_param_slice_type", &fn_param_slice_type);
     testing::add(s_fn, "fn_param_named_type", &fn_param_named_type);
@@ -10708,6 +10803,12 @@ fn i32 main() {
     testing::add(s_fn, "fn_missing_param_comma", &fn_missing_param_comma);
     testing::add(s_fn, "fn_param_modifier_only", &fn_param_modifier_only);
     testing::add(s_fn, "fn_param_wrong_modifier_order", &fn_param_wrong_modifier_order);
+    testing::add(s_fn, "fn_param_wrong_order_with_pointer_type", &fn_param_wrong_order_with_pointer_type);
+    testing::add(s_fn, "fn_param_wrong_order_with_qualified_type", &fn_param_wrong_order_with_qualified_type);
+    testing::add(s_fn, "fn_param_wrong_order_one_of_many_recovers", &fn_param_wrong_order_one_of_many_recovers);
+    testing::add(s_fn, "fn_param_comptime_only_no_diag", &fn_param_comptime_only_no_diag);
+    testing::add(s_fn, "fn_param_const_only_no_diag", &fn_param_const_only_no_diag);
+    testing::add(s_fn, "fn_param_two_wrong_order_two_diags", &fn_param_two_wrong_order_two_diags);
 
     u8[] s_local_var_decl = "Parser Local VarDecls";
     testing::add(s_local_var_decl, "local_var_decl_basic", &local_var_decl_basic);
@@ -11374,6 +11475,7 @@ fn i32 main() {
     testing::add(s_ext, "extern_block_src_pos_on_extern_kw", &extern_block_src_pos_on_extern_kw);
     testing::add(s_ext, "extern_fn_no_params", &extern_fn_no_params);
     testing::add(s_ext, "extern_fn_with_params", &extern_fn_with_params);
+    testing::add(s_ext, "extern_fn_param_wrong_modifier_order", &extern_fn_param_wrong_modifier_order);
     testing::add(s_ext, "extern_fn_variadic", &extern_fn_variadic);
     testing::add(s_ext, "extern_fn_variadic_only", &extern_fn_variadic_only);
     testing::add(s_ext, "extern_fn_multi_param_variadic", &extern_fn_multi_param_variadic);

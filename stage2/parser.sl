@@ -168,13 +168,23 @@ fn ast::Param[] parse_params(Parser* p, bool* had_err) {
         u32 start = peek(p, 0).src_pos;
         bool is_const = false;
         bool is_comptime = false;
-        if(peek(p, 0).kind == token::TokenKind::CONST) {
-            consume(p);
-            is_const = true;
-        }
         if(peek(p, 0).kind == token::TokenKind::COMPTIME) {
             consume(p);
             is_comptime = true;
+        }
+        if(peek(p, 0).kind == token::TokenKind::CONST) {
+            consume(p);
+            is_const = true;
+            if(peek(p, 0).kind == token::TokenKind::COMPTIME) {
+                u32 reverse_pos = peek(p, 0).src_pos;
+                consume(p);
+                is_comptime = true;
+                *had_err = true;
+                if(!p.is_speculating) {
+                    u8[] msg = "`comptime` must come before `const`";
+                    diag::report(&p.m.diag, p.m.arena, reverse_pos, msg);
+                }
+            }
         }
         ast::AstNode* type_expr = parse_type(p);
         if(!type_expr || had_error(type_expr)) { *had_err = true; }
