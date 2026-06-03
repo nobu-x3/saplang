@@ -1224,6 +1224,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         consume(p);
         symbol::Symbol* ns = null;
         symbol::Symbol* name = t.data.sym;
+        bool had_err = false;
         if(peek(p, 0).kind == token::TokenKind::ColonColon) {
             consume(p);
             token::Token n2 = expect(p, token::TokenKind::Ident);
@@ -1231,9 +1232,23 @@ fn ast::AstNode* parse_base_type(Parser* p) {
             ns = name;
             name = n2.data.sym;
         }
+        if(peek(p, 0).kind == token::TokenKind::ColonColon) {
+            u32 colon_pos = peek(p, 0).src_pos;
+            if(!p.is_speculating) {
+                had_err = true;
+                u8[] msg = "expected a type here, but this chain looks like an enum variant (a value); types max out at `module::Name`";
+                diag::report(&p.m.diag, p.m.arena, colon_pos, msg);
+            }
+            while(peek(p, 0).kind == token::TokenKind::ColonColon) {
+                consume(p);
+                token::Token nx = expect(p, token::TokenKind::Ident);
+                if(nx.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
+            }
+        }
         ast::TypeNamedNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeNamedNode));
         n.h.kind = ast::AstKind::NamedType;
         n.h.flags = (ast::AstFlags)0;
+        if(had_err) { n.h.flags = ast::AstFlags::HadError; }
         n.h.src_pos = t.src_pos;
         n.namespace = ns;
         n.name = name;
@@ -1504,7 +1519,13 @@ fn ast::AstNode* parse_primary(Parser* p) {
 
 fn ast::AstNode* parse_ident_or_ns(Parser* p) {
     token::Token t = consume(p);
-    if(peek(p, 0).kind == token::TokenKind::ColonColon) {
+    ast::IdentNode* id = arena::alloc(p.m.arena, sizeof(ast::IdentNode));
+    id.h.kind = ast::AstKind::Ident;
+    id.h.flags = (ast::AstFlags)0;
+    id.h.src_pos = t.src_pos;
+    id.name = t.data.sym;
+    ast::AstNode* result = (ast::AstNode*)id;
+    while(peek(p, 0).kind == token::TokenKind::ColonColon) {
         consume(p);
         token::Token n2 = expect(p, token::TokenKind::Ident);
         if(n2.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
@@ -1512,16 +1533,11 @@ fn ast::AstNode* parse_ident_or_ns(Parser* p) {
         na.h.kind = ast::AstKind::NamespaceAccess;
         na.h.flags = (ast::AstFlags)0;
         na.h.src_pos = t.src_pos;
-        na.namespace = t.data.sym;
+        na.base = result;
         na.name = n2.data.sym;
-        return (ast::AstNode*)na;
+        result = (ast::AstNode*)na;
     }
-    ast::IdentNode* id = arena::alloc(p.m.arena, sizeof(ast::IdentNode));
-    id.h.kind = ast::AstKind::Ident;
-    id.h.flags = (ast::AstFlags)0;
-    id.h.src_pos = t.src_pos;
-    id.name = t.data.sym;
-    return (ast::AstNode*)id;
+    return result;
 }
 
 // (T)expr cast vs (expr) parenthesized: try parse_type speculatively. If it

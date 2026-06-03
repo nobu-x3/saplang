@@ -920,6 +920,49 @@ fn i32 local_var_decl_qualified_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 local_var_decl_qualified_type_too_deep(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { mod::Foo::Bar x; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.ptr[0].msg, "expected a type here, but this chain looks like an enum variant (a value); types max out at `module::Name`", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.ptr[0].src_pos, (u32)22, msg)) { return -4; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -5; }
+    if(!testing::expect_true(((u16)v.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -6; }
+    if(!testing::expect_true(((u16)v.type_expr.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -7; }
+    if(!compiler_testing::expect_ty_named(v.type_expr, compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "Foo"), msg)) { return -8; }
+    return 0;
+}
+
+fn i32 local_var_decl_qualified_type_four_levels_one_diag(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { mod::A::B::C x; }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.ptr[0].src_pos, (u32)20, msg)) { return -3; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -4; }
+    if(!testing::expect_true(((u16)v.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 fn_param_qualified_type_too_deep_recovers(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(mod::A::B x, i32 y) { }", &m);
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 2, false, msg);
+    if(!f) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq((void*)f.params.ptr[0].name, (void*)compiler_testing::sym(m, "x"), msg)) { return -3; }
+    if(!testing::expect_eq((void*)f.params.ptr[1].name, (void*)compiler_testing::sym(m, "y"), msg)) { return -4; }
+    return 0;
+}
+
 fn i32 local_var_decl_multiple(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -1943,6 +1986,41 @@ fn i32 return_namespace_access(arena::Arena* a, u8[] msg) {
     ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
     if(!r) { return -2; }
     if(!compiler_testing::expect_nsacc(r.expr, compiler_testing::sym(m, "io"), compiler_testing::sym(m, "stdout"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 return_namespace_access_three_levels(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return mod::Color::Red; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -3; }
+    if(!compiler_testing::expect_nsacc3(r.expr,
+            compiler_testing::sym(m, "mod"),
+            compiler_testing::sym(m, "Color"),
+            compiler_testing::sym(m, "Red"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 return_namespace_access_four_levels(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return a::b::c::d; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -3; }
+    if(!testing::expect_eq((u16)r.expr.h.kind, (u16)ast::AstKind::NamespaceAccess, msg)) { return -4; }
+    ast::NamespaceAccessNode* outer = (ast::NamespaceAccessNode*)r.expr;
+    if(!testing::expect_eq((void*)outer.name, (void*)compiler_testing::sym(m, "d"), msg)) { return -5; }
+    if(!compiler_testing::expect_nsacc3(outer.base,
+            compiler_testing::sym(m, "a"),
+            compiler_testing::sym(m, "b"),
+            compiler_testing::sym(m, "c"), msg)) { return -6; }
     return 0;
 }
 
@@ -8220,6 +8298,38 @@ fn i32 switch_label_namespace_access(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 switch_label_namespace_access_three_levels(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case mod::Color::Red: { } } }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -3; }
+    if(!compiler_testing::expect_nsacc3(s.arms.ptr[0].labels.ptr[0],
+            compiler_testing::sym(m, "mod"),
+            compiler_testing::sym(m, "Color"),
+            compiler_testing::sym(m, "Red"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 switch_disc_namespace_three_levels(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (mod::E::V) { } }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::SwitchNode* s = compiler_testing::expect_switch(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!s) { return -3; }
+    if(!compiler_testing::expect_nsacc3(s.discriminant,
+            compiler_testing::sym(m, "mod"),
+            compiler_testing::sym(m, "E"),
+            compiler_testing::sym(m, "V"), msg)) { return -4; }
+    return 0;
+}
+
 fn i32 switch_label_negative(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -8929,6 +9039,67 @@ fn i32 expr_namespace_access(arena::Arena* a, u8[] msg) {
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = mod::y;", &m);
     if(!(compiler_testing::expect_nsacc(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "y"), msg))) { return -1; } return 0;
+}
+
+fn i32 expr_namespace_three_levels_in_call_arg(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f(mod::E::V);", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::CallNode* c = compiler_testing::expect_call(compiler_testing::var_init(root, 0), 1, msg);
+    if(!c) { return -2; }
+    if(!compiler_testing::expect_nsacc3(c.args.ptr[0],
+            compiler_testing::sym(m, "mod"),
+            compiler_testing::sym(m, "E"),
+            compiler_testing::sym(m, "V"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_namespace_three_levels_in_struct_lit(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Foo x = { .field = mod::E::V };", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::StructLitNode* sl = compiler_testing::expect_struct_lit(compiler_testing::var_init(root, 0), 1, msg);
+    if(!sl) { return -2; }
+    if(!compiler_testing::expect_field_init(&sl.inits[0], compiler_testing::sym(m, "field"), msg)) { return -3; }
+    if(!compiler_testing::expect_nsacc3(sl.inits[0].value,
+            compiler_testing::sym(m, "mod"),
+            compiler_testing::sym(m, "E"),
+            compiler_testing::sym(m, "V"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_namespace_three_levels_in_binop(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = mod::E::A + mod::E::B;", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::BinaryOpNode* b = compiler_testing::expect_binop(compiler_testing::var_init(root, 0), token::TokenKind::Plus, msg);
+    if(!b) { return -2; }
+    if(!compiler_testing::expect_nsacc3(b.lhs,
+            compiler_testing::sym(m, "mod"),
+            compiler_testing::sym(m, "E"),
+            compiler_testing::sym(m, "A"), msg)) { return -3; }
+    if(!compiler_testing::expect_nsacc3(b.rhs,
+            compiler_testing::sym(m, "mod"),
+            compiler_testing::sym(m, "E"),
+            compiler_testing::sym(m, "B"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_namespace_three_levels_then_member_access(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = mod::Foo::Bar.field;", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::MemberAccessNode* ma = compiler_testing::expect_member(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "field"), msg);
+    if(!ma) { return -2; }
+    if(!compiler_testing::expect_nsacc3(ma.base,
+            compiler_testing::sym(m, "mod"),
+            compiler_testing::sym(m, "Foo"),
+            compiler_testing::sym(m, "Bar"), msg)) { return -3; }
+    return 0;
 }
 
 // ============================================================================
@@ -10545,6 +10716,9 @@ fn i32 main() {
     testing::add(s_local_var_decl, "local_var_decl_pointer_type", &local_var_decl_pointer_type);
     testing::add(s_local_var_decl, "local_var_decl_named_type", &local_var_decl_named_type);
     testing::add(s_local_var_decl, "local_var_decl_qualified_named_type", &local_var_decl_qualified_named_type);
+    testing::add(s_local_var_decl, "local_var_decl_qualified_type_too_deep", &local_var_decl_qualified_type_too_deep);
+    testing::add(s_local_var_decl, "local_var_decl_qualified_type_four_levels_one_diag", &local_var_decl_qualified_type_four_levels_one_diag);
+    testing::add(s_local_var_decl, "fn_param_qualified_type_too_deep_recovers", &fn_param_qualified_type_too_deep_recovers);
     testing::add(s_local_var_decl, "local_var_decl_multiple", &local_var_decl_multiple);
     testing::add(s_local_var_decl, "local_var_decl_complex_init_expr", &local_var_decl_complex_init_expr);
     testing::add(s_local_var_decl, "local_var_decl_missing_semi", &local_var_decl_missing_semi);
@@ -10612,6 +10786,8 @@ fn i32 main() {
     testing::add(s_ret, "return_slice_range", &return_slice_range);
     testing::add(s_ret, "return_paren", &return_paren);
     testing::add(s_ret, "return_namespace_access", &return_namespace_access);
+    testing::add(s_ret, "return_namespace_access_three_levels", &return_namespace_access_three_levels);
+    testing::add(s_ret, "return_namespace_access_four_levels", &return_namespace_access_four_levels);
     testing::add(s_ret, "return_member_chain", &return_member_chain);
     testing::add(s_ret, "return_comparison", &return_comparison);
     testing::add(s_ret, "return_logical_and", &return_logical_and);
@@ -11082,9 +11258,11 @@ fn i32 main() {
     testing::add(s_sw, "switch_disc_pratt", &switch_disc_pratt);
     testing::add(s_sw, "switch_disc_call", &switch_disc_call);
     testing::add(s_sw, "switch_disc_namespace", &switch_disc_namespace);
+    testing::add(s_sw, "switch_disc_namespace_three_levels", &switch_disc_namespace_three_levels);
     testing::add(s_sw, "switch_label_charlit", &switch_label_charlit);
     testing::add(s_sw, "switch_label_ident", &switch_label_ident);
     testing::add(s_sw, "switch_label_namespace_access", &switch_label_namespace_access);
+    testing::add(s_sw, "switch_label_namespace_access_three_levels", &switch_label_namespace_access_three_levels);
     testing::add(s_sw, "switch_label_negative", &switch_label_negative);
     testing::add(s_sw, "switch_label_pratt", &switch_label_pratt);
     testing::add(s_sw, "switch_body_multi_stmts", &switch_body_multi_stmts);
@@ -11140,6 +11318,10 @@ fn i32 main() {
     testing::add(s_e, "expr_null", &expr_null);
     testing::add(s_e, "expr_ident", &expr_ident);
     testing::add(s_e, "expr_namespace_access", &expr_namespace_access);
+    testing::add(s_e, "expr_namespace_three_levels_in_call_arg", &expr_namespace_three_levels_in_call_arg);
+    testing::add(s_e, "expr_namespace_three_levels_in_struct_lit", &expr_namespace_three_levels_in_struct_lit);
+    testing::add(s_e, "expr_namespace_three_levels_in_binop", &expr_namespace_three_levels_in_binop);
+    testing::add(s_e, "expr_namespace_three_levels_then_member_access", &expr_namespace_three_levels_then_member_access);
     testing::add(s_e, "expr_add", &expr_add);
     testing::add(s_e, "expr_precedence_plus_mul", &expr_precedence_plus_mul);
     testing::add(s_e, "expr_precedence_mul_plus", &expr_precedence_mul_plus);

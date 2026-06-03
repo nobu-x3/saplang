@@ -159,8 +159,19 @@ export fn bool expect_nsacc(ast::AstNode* n, symbol::Symbol* ns, symbol::Symbol*
     if(!testing::expect_not_null((void*)n, msg)) { return false; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::NamespaceAccess, msg)) { return false; }
     ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)n;
-    if(!testing::expect_eq((void*)na.namespace, (void*)ns, msg)) { return false; }
+    if(!testing::expect_not_null((void*)na.base, msg)) { return false; }
+    if(!testing::expect_eq((u16)na.base.h.kind, (u16)ast::AstKind::Ident, msg)) { return false; }
+    ast::IdentNode* base_id = (ast::IdentNode*)na.base;
+    if(!testing::expect_eq((void*)base_id.name, (void*)ns, msg)) { return false; }
     return testing::expect_eq((void*)na.name, (void*)name, msg);
+}
+
+export fn bool expect_nsacc3(ast::AstNode* n, symbol::Symbol* a, symbol::Symbol* b, symbol::Symbol* c, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return false; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::NamespaceAccess, msg)) { return false; }
+    ast::NamespaceAccessNode* outer = (ast::NamespaceAccessNode*)n;
+    if(!testing::expect_eq((void*)outer.name, (void*)c, msg)) { return false; }
+    return expect_nsacc(outer.base, a, b, msg);
 }
 
 export fn bool expect_error_node(ast::AstNode* n, u8[] msg) {

@@ -250,7 +250,7 @@ export struct IdentNode {
 
 export struct NamespaceAccessNode {
     AstHeader h;
-    symbol::Symbol*   namespace;        // module name OR enum name
+    AstNode*  base;                     // Ident or another NamespaceAccess
     symbol::Symbol*   name;
     //Decl*     resolved;                 // sema::Decl* — null until sema pass C
 }
@@ -469,7 +469,7 @@ StringLit,
 NullLit,
 UndefinedLit,
 Ident,
-NamespaceAccess,        // a::b — chain of two names
+NamespaceAccess,        // a::b — left-associative chain (base may be NamespaceAccess for a::b::c)
 MemberAccess,           // x.field
 ArrayIndex,             // a[i]
 SliceRange,             // a[lo..hi]

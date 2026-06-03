@@ -263,9 +263,12 @@ fn i32 print_ident(arena::Arena* a, u8[] m) {
 fn i32 print_namespace_access(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
+    ast::IdentNode* base = arena::alloc(&local, sizeof(ast::IdentNode));
+    base.h.kind = ast::AstKind::Ident;
+    base.name = interner::intern(c.interner, "io");
     ast::NamespaceAccessNode* n = arena::alloc(&local, sizeof(ast::NamespaceAccessNode));
     n.h.kind = ast::AstKind::NamespaceAccess;
-    n.namespace = interner::intern(c.interner, "io");
+    n.base = (ast::AstNode*)base;
     n.name = interner::intern(c.interner, "write");
     ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
     if(!check(&c, "NamespaceAccess io::write\n", m)) { return -1; }

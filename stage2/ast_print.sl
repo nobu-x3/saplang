@@ -250,9 +250,7 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
     case ast::AstKind::NamespaceAccess: {
         ast::NamespaceAccessNode* e = (ast::NamespaceAccessNode*)n;
         io::outbuf_write(out, "NamespaceAccess ");
-        write_sym(out, e.namespace, it);
-        io::outbuf_write(out, "::");
-        write_sym(out, e.name, it);
+        write_ns_chain(out, (ast::AstNode*)e, it);
         io::outbuf_write_byte(out, '\n');
     }
     case ast::AstKind::MemberAccess: {
@@ -414,6 +412,23 @@ fn void write_sym(io::OutBuf* out, symbol::Symbol* s, interner::Interner* it) {
     if(!s) { io::outbuf_write(out, "<null>"); return; }
     u8[] bytes = interner::symbol_str(s, it);
     io::outbuf_write(out, bytes);
+}
+
+fn void write_ns_chain(io::OutBuf* out, ast::AstNode* n, interner::Interner* it) {
+    if(!n) { io::outbuf_write(out, "<null>"); return; }
+    if(n.h.kind == ast::AstKind::NamespaceAccess) {
+        ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)n;
+        write_ns_chain(out, na.base, it);
+        io::outbuf_write(out, "::");
+        write_sym(out, na.name, it);
+        return;
+    }
+    if(n.h.kind == ast::AstKind::Ident) {
+        ast::IdentNode* id = (ast::IdentNode*)n;
+        write_sym(out, id.name, it);
+        return;
+    }
+    io::outbuf_write(out, "<bad-ns-base>");
 }
 
 fn void write_labeled_child(io::OutBuf* out, i32 indent, u8[] label, ast::AstNode* child, interner::Interner* it) {
