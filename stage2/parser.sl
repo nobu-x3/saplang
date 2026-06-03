@@ -12,10 +12,11 @@ export struct Parser {
     u32 idx;
     bool in_extern;
     bool is_speculating;
+    bool allow_anon_type;
 }
 
 export fn ast::AstNode* parse(module::Module* m) {
-    Parser p = { m, 0, false, false };
+    Parser p = { m, 0, false, false, false };
     ast::ListBuilder decls;
     ast::list_init(&decls, m.arena, 32);
     while (peek(&p, 0).kind != token::TokenKind::EOF) {
@@ -322,6 +323,8 @@ fn ast::AstNode* parse_comprun(Parser* p) {
 }
 
 fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
+    bool prev_allow = p.allow_anon_type;
+    p.allow_anon_type = false;
     ast::FieldDecl[] arr;
     arr.ptr = null;
     arr.len = 0;
@@ -350,6 +353,7 @@ fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
         arr.len += 1;
         if(p.idx == prev_idx) { consume(p); *had_err = true; }
     }
+    p.allow_anon_type = prev_allow;
     return arr;
 }
 
@@ -655,7 +659,10 @@ fn ast::AstNode* parse_alias_decl(Parser* p, bool is_exported) {
     if(name.kind == token::TokenKind::ERROR) { had_err = true; }
     token::Token eq = expect(p, token::TokenKind::Eq);
     if(eq.kind == token::TokenKind::ERROR) { had_err = true; }
+    bool prev_allow = p.allow_anon_type;
+    p.allow_anon_type = true;
     ast::AstNode* target = parse_type(p);
+    p.allow_anon_type = prev_allow;
     if(!target || had_error(target)) { had_err = true; }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
@@ -1200,43 +1207,67 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         return (ast::AstNode*)n;
     }
     case token::TokenKind::STRUCT: {
+        u32 kw_pos = t.src_pos;
         consume(p);
+        bool had_err = false;
+        if(!p.allow_anon_type) {
+            if(!p.is_speculating) { had_err = true; }
+            u8[] msg = "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`";
+            diag::report(&p.m.diag, p.m.arena, kw_pos, msg);
+        }
         token::Token lbrace = expect(p, token::TokenKind::LBrace);
         if(lbrace.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
-        bool dummy = false;
-        ast::FieldDecl[] fields = parse_fields(p, &dummy);
-        expect(p, token::TokenKind::RBrace);
+        ast::FieldDecl[] fields = parse_fields(p, &had_err);
+        token::Token rbrace = expect(p, token::TokenKind::RBrace);
+        if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
         ast::TypeStructNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeStructNode));
         n.h.kind = ast::AstKind::StructType;
         n.h.flags = (ast::AstFlags)0;
+        if(had_err) { n.h.flags = ast::AstFlags::HadError; }
         n.h.src_pos = t.src_pos;
         n.fields = fields;
         return (ast::AstNode*)n;
     }
     case token::TokenKind::Dot: {
+        u32 kw_pos = t.src_pos;
         consume(p);
+        bool had_err = false;
+        if(!p.allow_anon_type) {
+            if(!p.is_speculating) { had_err = true; }
+            u8[] msg = "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`";
+            diag::report(&p.m.diag, p.m.arena, kw_pos, msg);
+        }
         token::Token lbrace = expect(p, token::TokenKind::LBrace);
         if(lbrace.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
-        bool dummy = false;
-        ast::FieldDecl[] fields = parse_fields(p, &dummy);
-        expect(p, token::TokenKind::RBrace);
+        ast::FieldDecl[] fields = parse_fields(p, &had_err);
+        token::Token rbrace = expect(p, token::TokenKind::RBrace);
+        if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
         ast::TypeStructNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeStructNode));
         n.h.kind = ast::AstKind::StructType;
         n.h.flags = (ast::AstFlags)0;
+        if(had_err) { n.h.flags = ast::AstFlags::HadError; }
         n.h.src_pos = t.src_pos;
         n.fields = fields;
         return (ast::AstNode*)n;
     }
     case token::TokenKind::UNION: {
+        u32 kw_pos = t.src_pos;
         consume(p);
+        bool had_err = false;
+        if(!p.allow_anon_type) {
+            if(!p.is_speculating) { had_err = true; }
+            u8[] msg = "anonymous union types are only allowed on the right-hand side of an `alias` declaration; use a named union or wrap this in `alias`";
+            diag::report(&p.m.diag, p.m.arena, kw_pos, msg);
+        }
         token::Token lbrace = expect(p, token::TokenKind::LBrace);
         if(lbrace.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
-        bool dummy = false;
-        ast::FieldDecl[] fields = parse_fields(p, &dummy);
-        expect(p, token::TokenKind::RBrace);
+        ast::FieldDecl[] fields = parse_fields(p, &had_err);
+        token::Token rbrace = expect(p, token::TokenKind::RBrace);
+        if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
         ast::TypeUnionNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeUnionNode));
         n.h.kind = ast::AstKind::UnionType;
         n.h.flags = (ast::AstFlags)0;
+        if(had_err) { n.h.flags = ast::AstFlags::HadError; }
         n.h.src_pos = t.src_pos;
         n.fields = fields;
         return (ast::AstNode*)n;

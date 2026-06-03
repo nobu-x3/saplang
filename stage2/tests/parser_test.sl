@@ -5356,25 +5356,35 @@ fn i32 union_field_fn_ptr_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_nested_anon_union(arena::Arena* a, u8[] msg) {
+fn i32 union_field_nested_anon_union_rejected(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { union { i32 x; } inner; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous union types are only allowed on the right-hand side of an `alias` declaration; use a named union or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)10, msg)) { return -3; }
     ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
-    if(!u) { return -1; }
+    if(!u) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)u), msg)) { return -5; }
     ast::TypeUnionNode* inner = compiler_testing::expect_ty_anon_union(u.fields.ptr[0].type_expr, 1, msg);
-    if(!inner) { return -2; }
-    if(!compiler_testing::expect_field(&inner.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -3; }
+    if(!inner) { return -6; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)inner), msg)) { return -7; }
     return 0;
 }
 
-fn i32 union_field_with_struct_type(arena::Arena* a, u8[] msg) {
+fn i32 union_field_anon_struct_rejected(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { struct { i32 x; u8 y; } s; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)10, msg)) { return -3; }
     ast::UnionDeclNode* u = compiler_testing::expect_union_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
-    if(!u) { return -1; }
-    if(!compiler_testing::expect_ty_anon_struct(u.fields.ptr[0].type_expr, 2, msg)) { return -2; }
+    if(!u) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)u), msg)) { return -5; }
+    ast::TypeStructNode* inner = compiler_testing::expect_ty_anon_struct(u.fields.ptr[0].type_expr, 2, msg);
+    if(!inner) { return -6; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)inner), msg)) { return -7; }
     return 0;
 }
 
@@ -5410,26 +5420,33 @@ fn i32 anon_union_in_alias(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_union_in_var_decl(arena::Arena* a, u8[] msg) {
+fn i32 anon_union_in_var_decl_rejected(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { union { i32 i; } v; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous union types are only allowed on the right-hand side of an `alias` declaration; use a named union or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)14, msg)) { return -3; }
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
-    if(!f) { return -1; }
+    if(!f) { return -4; }
     ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "v"), false, false, msg);
-    if(!v) { return -2; }
-    if(!compiler_testing::expect_ty_anon_union(v.type_expr, 1, msg)) { return -3; }
+    if(!v) { return -5; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)v), msg)) { return -6; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(v.type_expr), msg)) { return -7; }
     return 0;
 }
 
-fn i32 anon_union_in_fn_param(arena::Arena* a, u8[] msg) {
+fn i32 anon_union_in_fn_param_rejected(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void g(union { i32 i; } v) { }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous union types are only allowed on the right-hand side of an `alias` declaration; use a named union or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)10, msg)) { return -3; }
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "g"), 1, false, msg);
-    if(!f) { return -1; }
-    if(!compiler_testing::expect_param(&f.params.ptr[0], compiler_testing::sym(m, "v"), false, false, msg)) { return -2; }
-    if(!compiler_testing::expect_ty_anon_union(f.params.ptr[0].type_expr, 1, msg)) { return -3; }
+    if(!f) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -5; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(f.params.ptr[0].type_expr), msg)) { return -6; }
     return 0;
 }
 
@@ -5658,15 +5675,17 @@ fn i32 struct_field_fn_ptr_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_nested_anon_struct(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_nested_anon_struct_rejected(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { struct { i32 x; } inner; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)13, msg)) { return -3; }
     ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
-    if(!s) { return -1; }
-    ast::TypeStructNode* inner = compiler_testing::expect_ty_anon_struct(s.fields.ptr[0].type_expr, 1, msg);
-    if(!inner) { return -2; }
-    if(!compiler_testing::expect_field(&inner.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -3; }
+    if(!s) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -5; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(s.fields.ptr[0].type_expr), msg)) { return -6; }
     return 0;
 }
 
@@ -5718,15 +5737,19 @@ fn i32 anon_struct_in_alias_dot(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_in_var_decl_dot(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_var_decl_dot_rejected(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { .{ i32 x; } v; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)14, msg)) { return -3; }
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
-    if(!f) { return -1; }
+    if(!f) { return -4; }
     ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(f.body, 0), compiler_testing::sym(m, "v"), false, false, msg);
-    if(!v) { return -2; }
-    if(!compiler_testing::expect_ty_anon_struct(v.type_expr, 1, msg)) { return -3; }
+    if(!v) { return -5; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)v), msg)) { return -6; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(v.type_expr), msg)) { return -7; }
     return 0;
 }
 
@@ -5847,26 +5870,152 @@ fn i32 struct_no_progress_safety(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_nested_dot_anon(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_alias_body_error_propagates(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
-    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { .{ i32 x; } inner; }", &m);
-    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
-    if(!s) { return -1; }
-    ast::TypeStructNode* inner = compiler_testing::expect_ty_anon_struct(s.fields.ptr[0].type_expr, 1, msg);
-    if(!inner) { return -2; }
-    if(!compiler_testing::expect_field(&inner.fields.ptr[0], compiler_testing::sym(m, "x"), msg)) { return -3; }
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = struct { i32 ; };", &m);
+    if(!testing::expect_true(m.diag.entries.len >= (u64)1, msg)) { return -1; }
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "T"), false, msg);
+    if(!al) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(al.target), msg)) { return -4; }
     return 0;
 }
 
-fn i32 anon_struct_in_fn_param_dot(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_alias_unclosed_brace_propagates(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = struct { i32 x;", &m);
+    if(!testing::expect_true(m.diag.entries.len >= (u64)1, msg)) { return -1; }
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "T"), false, msg);
+    if(!al) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(al.target), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 anon_union_in_alias_body_error_propagates(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = union { i32 ; };", &m);
+    if(!testing::expect_true(m.diag.entries.len >= (u64)1, msg)) { return -1; }
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "V"), false, msg);
+    if(!al) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(al.target), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 anon_struct_dot_in_alias_body_error_propagates(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = .{ i32 ; };", &m);
+    if(!testing::expect_true(m.diag.entries.len >= (u64)1, msg)) { return -1; }
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "T"), false, msg);
+    if(!al) { return -2; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -3; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(al.target), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 anon_struct_nested_in_alias_rejected(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = struct { struct { i32 x; } y; };", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)19, msg)) { return -3; }
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "T"), false, msg);
+    if(!al) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)al), msg)) { return -5; }
+    ast::TypeStructNode* outer = compiler_testing::expect_ty_anon_struct(al.target, 1, msg);
+    if(!outer) { return -6; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)outer), msg)) { return -7; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(outer.fields.ptr[0].type_expr), msg)) { return -8; }
+    return 0;
+}
+
+fn i32 anon_struct_in_cast_target_rejected(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 v = (struct { i32 x; })x;", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)9, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 anon_struct_behind_pointer_rejected(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { struct { i32 x; }* p; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)14, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 anon_struct_in_extern_fn_return_rejected(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn struct { i32 x; } f(); }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)12, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 anon_two_decls_two_diags(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { struct { i32 a; } x; union { i32 b; } y; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)2, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)14, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[1].msg, "anonymous union types are only allowed on the right-hand side of an `alias` declaration; use a named union or wrap this in `alias`", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[1].src_pos, (u32)35, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 anon_struct_in_fn_return_type_rejected(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn struct { i32 x; } g() { return { .x = 0 }; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)3, msg)) { return -3; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "g"), 0, false, msg);
+    if(!f) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -5; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(f.return_type), msg)) { return -6; }
+    return 0;
+}
+
+fn i32 struct_field_nested_dot_anon_rejected(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { .{ i32 x; } inner; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)13, msg)) { return -3; }
+    ast::StructDeclNode* s = compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 0), null, 1, false, msg);
+    if(!s) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)s), msg)) { return -5; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(s.fields.ptr[0].type_expr), msg)) { return -6; }
+    return 0;
+}
+
+fn i32 anon_struct_in_fn_param_dot_rejected(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void g(.{ i32 x; } v) { }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)10, msg)) { return -3; }
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "g"), 1, false, msg);
-    if(!f) { return -1; }
-    if(!compiler_testing::expect_param(&f.params.ptr[0], compiler_testing::sym(m, "v"), false, false, msg)) { return -2; }
-    if(!compiler_testing::expect_ty_anon_struct(f.params.ptr[0].type_expr, 1, msg)) { return -3; }
+    if(!f) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)f), msg)) { return -5; }
+    if(!testing::expect_true(compiler_testing::has_error_flag(f.params.ptr[0].type_expr), msg)) { return -6; }
     return 0;
 }
 
@@ -11420,13 +11569,14 @@ fn i32 main() {
     testing::add(s_un, "union_field_named_type", &union_field_named_type);
     testing::add(s_un, "union_field_qualified_type", &union_field_qualified_type);
     testing::add(s_un, "union_field_fn_ptr_type", &union_field_fn_ptr_type);
-    testing::add(s_un, "union_field_nested_anon_union", &union_field_nested_anon_union);
-    testing::add(s_un, "union_field_with_struct_type", &union_field_with_struct_type);
+    testing::add(s_un, "union_field_nested_anon_union_rejected", &union_field_nested_anon_union_rejected);
+    testing::add(s_un, "union_field_anon_struct_rejected", &union_field_anon_struct_rejected);
     testing::add(s_un, "union_exported", &union_exported);
     testing::add(s_un, "union_many_fields_growth", &union_many_fields_growth);
     testing::add(s_un, "anon_union_in_alias", &anon_union_in_alias);
-    testing::add(s_un, "anon_union_in_var_decl", &anon_union_in_var_decl);
-    testing::add(s_un, "anon_union_in_fn_param", &anon_union_in_fn_param);
+    testing::add(s_un, "anon_union_in_var_decl_rejected", &anon_union_in_var_decl_rejected);
+    testing::add(s_un, "anon_union_in_fn_param_rejected", &anon_union_in_fn_param_rejected);
+    testing::add(s_un, "anon_union_in_alias_body_error_propagates", &anon_union_in_alias_body_error_propagates);
     testing::add(s_un, "anon_union_empty", &anon_union_empty);
     testing::add(s_un, "union_lit_via_struct_lit_syntax", &union_lit_via_struct_lit_syntax);
     testing::add(s_un, "union_src_pos", &union_src_pos);
@@ -11448,14 +11598,23 @@ fn i32 main() {
     testing::add(s_st, "struct_field_named_type", &struct_field_named_type);
     testing::add(s_st, "struct_field_qualified_type", &struct_field_qualified_type);
     testing::add(s_st, "struct_field_fn_ptr_type", &struct_field_fn_ptr_type);
-    testing::add(s_st, "struct_field_nested_anon_struct", &struct_field_nested_anon_struct);
-    testing::add(s_st, "struct_field_nested_dot_anon", &struct_field_nested_dot_anon);
+    testing::add(s_st, "struct_field_nested_anon_struct_rejected", &struct_field_nested_anon_struct_rejected);
+    testing::add(s_st, "struct_field_nested_dot_anon_rejected", &struct_field_nested_dot_anon_rejected);
     testing::add(s_st, "struct_exported", &struct_exported);
     testing::add(s_st, "struct_many_fields_growth", &struct_many_fields_growth);
     testing::add(s_st, "anon_struct_in_alias_legacy", &anon_struct_in_alias_legacy);
     testing::add(s_st, "anon_struct_in_alias_dot", &anon_struct_in_alias_dot);
-    testing::add(s_st, "anon_struct_in_var_decl_dot", &anon_struct_in_var_decl_dot);
-    testing::add(s_st, "anon_struct_in_fn_param_dot", &anon_struct_in_fn_param_dot);
+    testing::add(s_st, "anon_struct_in_var_decl_dot_rejected", &anon_struct_in_var_decl_dot_rejected);
+    testing::add(s_st, "anon_struct_in_fn_param_dot_rejected", &anon_struct_in_fn_param_dot_rejected);
+    testing::add(s_st, "anon_struct_in_alias_body_error_propagates", &anon_struct_in_alias_body_error_propagates);
+    testing::add(s_st, "anon_struct_in_alias_unclosed_brace_propagates", &anon_struct_in_alias_unclosed_brace_propagates);
+    testing::add(s_st, "anon_struct_dot_in_alias_body_error_propagates", &anon_struct_dot_in_alias_body_error_propagates);
+    testing::add(s_st, "anon_struct_in_fn_return_type_rejected", &anon_struct_in_fn_return_type_rejected);
+    testing::add(s_st, "anon_struct_nested_in_alias_rejected", &anon_struct_nested_in_alias_rejected);
+    testing::add(s_st, "anon_struct_in_cast_target_rejected", &anon_struct_in_cast_target_rejected);
+    testing::add(s_st, "anon_struct_behind_pointer_rejected", &anon_struct_behind_pointer_rejected);
+    testing::add(s_st, "anon_struct_in_extern_fn_return_rejected", &anon_struct_in_extern_fn_return_rejected);
+    testing::add(s_st, "anon_two_decls_two_diags", &anon_two_decls_two_diags);
     testing::add(s_st, "anon_struct_empty_dot", &anon_struct_empty_dot);
     testing::add(s_st, "struct_src_pos", &struct_src_pos);
     testing::add(s_st, "struct_field_src_pos", &struct_field_src_pos);
