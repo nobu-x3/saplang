@@ -9459,6 +9459,177 @@ fn i32 expr_slice_range(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_intlit(sr.hi, 3, msg))) { return -4; } return 0;
 }
 
+fn i32 expr_slice_range_lo_only(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[2..];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(compiler_testing::var_init(root, 0), msg);
+    if(!sr) { return -2; }
+    if(!compiler_testing::expect_ident(sr.base, compiler_testing::sym(m, "a"), msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(sr.lo, 2, msg)) { return -4; }
+    if(!testing::expect_eq((void*)sr.hi, null, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 expr_slice_range_hi_only(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[..5];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(compiler_testing::var_init(root, 0), msg);
+    if(!sr) { return -2; }
+    if(!compiler_testing::expect_ident(sr.base, compiler_testing::sym(m, "a"), msg)) { return -3; }
+    if(!testing::expect_eq((void*)sr.lo, null, msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(sr.hi, 5, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 expr_slice_range_both_missing_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[..];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "slice range `[..]` must have at least one bound; use `[lo..hi]`, `[lo..]`, or `[..hi]`", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)12, msg)) { return -3; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(compiler_testing::var_init(root, 0), msg);
+    if(!sr) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)sr), msg)) { return -5; }
+    if(!testing::expect_eq((void*)sr.lo, null, msg)) { return -6; }
+    if(!testing::expect_eq((void*)sr.hi, null, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 expr_slice_range_complex_bounds(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[i + 1..n - 1];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(compiler_testing::var_init(root, 0), msg);
+    if(!sr) { return -2; }
+    ast::BinaryOpNode* lo = compiler_testing::expect_binop(sr.lo, token::TokenKind::Plus, msg);
+    if(!lo) { return -3; }
+    ast::BinaryOpNode* hi = compiler_testing::expect_binop(sr.hi, token::TokenKind::Minus, msg);
+    if(!hi) { return -4; }
+    return 0;
+}
+
+fn i32 expr_slice_range_hi_only_then_member_access(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "u64 x = a[..n].len;", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::MemberAccessNode* ma = compiler_testing::expect_member(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "len"), msg);
+    if(!ma) { return -2; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(ma.base, msg);
+    if(!sr) { return -3; }
+    if(!testing::expect_eq((void*)sr.lo, null, msg)) { return -4; }
+    if(!compiler_testing::expect_ident(sr.hi, compiler_testing::sym(m, "n"), msg)) { return -5; }
+    return 0;
+}
+
+fn i32 expr_slice_range_lo_only_after_call(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = f()[2..];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(compiler_testing::var_init(root, 0), msg);
+    if(!sr) { return -2; }
+    ast::CallNode* c = compiler_testing::expect_call(sr.base, 0, msg);
+    if(!c) { return -3; }
+    if(!compiler_testing::expect_intlit(sr.lo, 2, msg)) { return -4; }
+    if(!testing::expect_eq((void*)sr.hi, null, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 expr_slice_range_hi_only_in_call_arg(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = g(a[..n]);", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::CallNode* c = compiler_testing::expect_call(compiler_testing::var_init(root, 0), 1, msg);
+    if(!c) { return -2; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(c.args.ptr[0], msg);
+    if(!sr) { return -3; }
+    if(!testing::expect_eq((void*)sr.lo, null, msg)) { return -4; }
+    if(!compiler_testing::expect_ident(sr.hi, compiler_testing::sym(m, "n"), msg)) { return -5; }
+    return 0;
+}
+
+fn i32 return_slice_range_lo_only(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32[] f() { return arr[3..]; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -3; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(r.expr, msg);
+    if(!sr) { return -4; }
+    if(!compiler_testing::expect_intlit(sr.lo, 3, msg)) { return -5; }
+    if(!testing::expect_eq((void*)sr.hi, null, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 return_slice_range_hi_only(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32[] f() { return arr[..4]; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!r) { return -3; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(r.expr, msg);
+    if(!sr) { return -4; }
+    if(!testing::expect_eq((void*)sr.lo, null, msg)) { return -5; }
+    if(!compiler_testing::expect_intlit(sr.hi, 4, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 expr_slice_range_lo_only_identifier(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[start..];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(compiler_testing::var_init(root, 0), msg);
+    if(!sr) { return -2; }
+    if(!compiler_testing::expect_ident(sr.lo, compiler_testing::sym(m, "start"), msg)) { return -3; }
+    if(!testing::expect_eq((void*)sr.hi, null, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_slice_range_chained(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[..n][m..];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::SliceRangeNode* outer = compiler_testing::expect_slice_range(compiler_testing::var_init(root, 0), msg);
+    if(!outer) { return -2; }
+    if(!compiler_testing::expect_ident(outer.lo, compiler_testing::sym(m, "m"), msg)) { return -3; }
+    if(!testing::expect_eq((void*)outer.hi, null, msg)) { return -4; }
+    ast::SliceRangeNode* inner = compiler_testing::expect_slice_range(outer.base, msg);
+    if(!inner) { return -5; }
+    if(!testing::expect_eq((void*)inner.lo, null, msg)) { return -6; }
+    if(!compiler_testing::expect_ident(inner.hi, compiler_testing::sym(m, "n"), msg)) { return -7; }
+    if(!compiler_testing::expect_ident(inner.base, compiler_testing::sym(m, "a"), msg)) { return -8; }
+    return 0;
+}
+
+fn i32 expr_slice_range_hi_only_on_namespace_base(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = mod::arr[..n];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::SliceRangeNode* sr = compiler_testing::expect_slice_range(compiler_testing::var_init(root, 0), msg);
+    if(!sr) { return -2; }
+    if(!compiler_testing::expect_nsacc(sr.base, compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "arr"), msg)) { return -3; }
+    if(!testing::expect_eq((void*)sr.lo, null, msg)) { return -4; }
+    if(!compiler_testing::expect_ident(sr.hi, compiler_testing::sym(m, "n"), msg)) { return -5; }
+    return 0;
+}
+
 fn i32 expr_member_access(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -10885,6 +11056,8 @@ fn i32 main() {
     testing::add(s_ret, "return_array_lit", &return_array_lit);
     testing::add(s_ret, "return_array_index", &return_array_index);
     testing::add(s_ret, "return_slice_range", &return_slice_range);
+    testing::add(s_ret, "return_slice_range_lo_only", &return_slice_range_lo_only);
+    testing::add(s_ret, "return_slice_range_hi_only", &return_slice_range_hi_only);
     testing::add(s_ret, "return_paren", &return_paren);
     testing::add(s_ret, "return_namespace_access", &return_namespace_access);
     testing::add(s_ret, "return_namespace_access_three_levels", &return_namespace_access_three_levels);
@@ -11444,6 +11617,16 @@ fn i32 main() {
     testing::add(s_e, "expr_call_nested", &expr_call_nested);
     testing::add(s_e, "expr_array_index", &expr_array_index);
     testing::add(s_e, "expr_slice_range", &expr_slice_range);
+    testing::add(s_e, "expr_slice_range_lo_only", &expr_slice_range_lo_only);
+    testing::add(s_e, "expr_slice_range_hi_only", &expr_slice_range_hi_only);
+    testing::add(s_e, "expr_slice_range_both_missing_errors", &expr_slice_range_both_missing_errors);
+    testing::add(s_e, "expr_slice_range_complex_bounds", &expr_slice_range_complex_bounds);
+    testing::add(s_e, "expr_slice_range_hi_only_then_member_access", &expr_slice_range_hi_only_then_member_access);
+    testing::add(s_e, "expr_slice_range_lo_only_after_call", &expr_slice_range_lo_only_after_call);
+    testing::add(s_e, "expr_slice_range_hi_only_in_call_arg", &expr_slice_range_hi_only_in_call_arg);
+    testing::add(s_e, "expr_slice_range_lo_only_identifier", &expr_slice_range_lo_only_identifier);
+    testing::add(s_e, "expr_slice_range_chained", &expr_slice_range_chained);
+    testing::add(s_e, "expr_slice_range_hi_only_on_namespace_base", &expr_slice_range_hi_only_on_namespace_base);
     testing::add(s_e, "expr_member_access", &expr_member_access);
     testing::add(s_e, "expr_chained_postfix", &expr_chained_postfix);
     testing::add(s_e, "expr_chained_postfix_call_member", &expr_chained_postfix_call_member);

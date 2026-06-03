@@ -1399,27 +1399,54 @@ fn ast::AstNode* parse_postfix(Parser* p) {
             e = (ast::AstNode*)n;
         } else if(t.kind == token::TokenKind::LBracket) {
             consume(p);
-            ast::AstNode* first = parse_expr(p, 0);
+            ast::AstNode* lo = null;
+            ast::AstNode* hi = null;
+            bool is_range = false;
+            bool had_err = false;
             if(peek(p, 0).kind == token::TokenKind::DotDot) {
+                u32 dotdot_pos = peek(p, 0).src_pos;
                 consume(p);
-                ast::AstNode* hi = parse_expr(p, 0);
+                is_range = true;
+                if(peek(p, 0).kind == token::TokenKind::RBracket) {
+                    had_err = true;
+                    if(!p.is_speculating) {
+                        u8[] msg = "slice range `[..]` must have at least one bound; use `[lo..hi]`, `[lo..]`, or `[..hi]`";
+                        diag::report(&p.m.diag, p.m.arena, dotdot_pos, msg);
+                    }
+                } else {
+                    hi = parse_expr(p, 0);
+                }
                 expect(p, token::TokenKind::RBracket);
+            } else {
+                lo = parse_expr(p, 0);
+                if(peek(p, 0).kind == token::TokenKind::DotDot) {
+                    consume(p);
+                    is_range = true;
+                    if(peek(p, 0).kind != token::TokenKind::RBracket) {
+                        hi = parse_expr(p, 0);
+                    }
+                    expect(p, token::TokenKind::RBracket);
+                } else {
+                    expect(p, token::TokenKind::RBracket);
+                }
+            }
+            if(is_range) {
                 ast::SliceRangeNode* n = arena::alloc(p.m.arena, sizeof(ast::SliceRangeNode));
                 n.h.kind = ast::AstKind::SliceRange;
                 n.h.flags = (ast::AstFlags)0;
+                if(had_err) { n.h.flags = ast::AstFlags::HadError; }
                 n.h.src_pos = t.src_pos;
                 n.base = e;
-                n.lo = first;
+                n.lo = lo;
                 n.hi = hi;
                 e = (ast::AstNode*)n;
             } else {
-                expect(p, token::TokenKind::RBracket);
                 ast::ArrayIndexNode* n = arena::alloc(p.m.arena, sizeof(ast::ArrayIndexNode));
                 n.h.kind = ast::AstKind::ArrayIndex;
                 n.h.flags = (ast::AstFlags)0;
                 n.h.src_pos = t.src_pos;
                 n.base = e;
-                n.index = first;
+                n.index = lo;
                 e = (ast::AstNode*)n;
             }
         } else if(t.kind == token::TokenKind::Dot) {
