@@ -315,6 +315,62 @@ fn i32 keyword_with_leading_underscore_is_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 keyword_opaque_recognized(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {4096, null};
+    module::Module* m = scan_src(&local, "opaque");
+    if(!kind_eq(m, 0, token::TokenKind::OPAQUE, msg)) { return -1; }
+    if(!kind_eq(m, 1, token::TokenKind::EOF, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 keyword_opaque_in_extern_block(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {4096, null};
+    module::Module* m = scan_src(&local, "extern { opaque struct FILE; }");
+    if(!kind_eq(m, 0, token::TokenKind::EXTERN, msg)) { return -1; }
+    if(!kind_eq(m, 1, token::TokenKind::LBrace, msg)) { return -2; }
+    if(!kind_eq(m, 2, token::TokenKind::OPAQUE, msg)) { return -3; }
+    if(!kind_eq(m, 3, token::TokenKind::STRUCT, msg)) { return -4; }
+    if(!kind_eq(m, 4, token::TokenKind::Ident, msg)) { return -5; }
+    if(!kind_eq(m, 5, token::TokenKind::Semi, msg)) { return -6; }
+    if(!kind_eq(m, 6, token::TokenKind::RBrace, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 keyword_opaque_prefix_opaquex_is_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {4096, null};
+    module::Module* m = scan_src(&local, "opaquex");
+    if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
+    return 0;
+}
+
+fn i32 keyword_opaque_suffix_xopaque_is_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {4096, null};
+    module::Module* m = scan_src(&local, "xopaque");
+    if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
+    return 0;
+}
+
+fn i32 keyword_opaque_with_trailing_digit_is_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {4096, null};
+    module::Module* m = scan_src(&local, "opaque1");
+    if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
+    return 0;
+}
+
+fn i32 keyword_opaque_with_leading_underscore_is_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {4096, null};
+    module::Module* m = scan_src(&local, "_opaque");
+    if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
+    return 0;
+}
+
+fn i32 keyword_opaque_uppercase_is_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {4096, null};
+    module::Module* m = scan_src(&local, "OPAQUE");
+    if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
+    return 0;
+}
+
 // ---------- integer literals ----------
 
 fn i32 int_zero(arena::Arena* a, u8[] msg) {
@@ -1371,6 +1427,13 @@ fn i32 main() {
     testing::add(suite, "keyword_prefix_comptimex_is_ident", &keyword_prefix_comptimex_is_ident);
     testing::add(suite, "keyword_with_trailing_digit_is_ident", &keyword_with_trailing_digit_is_ident);
     testing::add(suite, "keyword_with_leading_underscore_is_ident", &keyword_with_leading_underscore_is_ident);
+    testing::add(suite, "keyword_opaque_recognized", &keyword_opaque_recognized);
+    testing::add(suite, "keyword_opaque_in_extern_block", &keyword_opaque_in_extern_block);
+    testing::add(suite, "keyword_opaque_prefix_opaquex_is_ident", &keyword_opaque_prefix_opaquex_is_ident);
+    testing::add(suite, "keyword_opaque_suffix_xopaque_is_ident", &keyword_opaque_suffix_xopaque_is_ident);
+    testing::add(suite, "keyword_opaque_with_trailing_digit_is_ident", &keyword_opaque_with_trailing_digit_is_ident);
+    testing::add(suite, "keyword_opaque_with_leading_underscore_is_ident", &keyword_opaque_with_leading_underscore_is_ident);
+    testing::add(suite, "keyword_opaque_uppercase_is_ident", &keyword_opaque_uppercase_is_ident);
 
     // integer literals
     testing::add(suite, "int_zero", &int_zero);
