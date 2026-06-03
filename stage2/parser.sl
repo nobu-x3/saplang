@@ -51,7 +51,7 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
         }
         case token::TokenKind::STRUCT:  { return parse_struct_decl(p, is_exported); }
         case token::TokenKind::UNION:   { return parse_union_decl(p, is_exported); }
-        //case token::TokenKind::ENUM:    { return parse_enum_decl(p, is_exported); }
+        case token::TokenKind::ENUM:    { return parse_enum_decl(p, is_exported); }
         case token::TokenKind::ALIAS:   { return parse_alias_decl(p, is_exported); }
     else {
         if(looks_like_type_start(t.kind)) {
@@ -646,6 +646,72 @@ fn ast::AstNode* parse_alias_decl(Parser* p, bool is_exported) {
     n.h.src_pos = start;
     n.name = name.data.sym;
     n.target = target;
+    n.is_exported = is_exported;
+    return (ast::AstNode*)n;
+}
+
+fn ast::EnumMember[] parse_enum_members(Parser* p, bool* had_err) {
+    ast::EnumMember[] arr;
+    arr.ptr = null;
+    arr.len = 0;
+    u64 cap = 0;
+    while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
+        u32 prev = p.idx;
+        u32 start = peek(p, 0).src_pos;
+        token::Token name = expect(p, token::TokenKind::Ident);
+        if(name.kind == token::TokenKind::ERROR) { *had_err = true; }
+        ast::AstNode* value_expr = null;
+        if(peek(p, 0).kind == token::TokenKind::Eq) {
+            consume(p);
+            value_expr = parse_expr(p, 0);
+            if(!value_expr || had_error(value_expr)) { *had_err = true; }
+        }
+        if(arr.len + 1 > cap) {
+            u64 new_cap = 4;
+            if(cap > 0) { new_cap = cap * 2; }
+            arr.ptr = arena::realloc_grow(p.m.arena, arr.ptr,
+                    cap * sizeof(ast::EnumMember),
+                    new_cap * sizeof(ast::EnumMember));
+            cap = new_cap;
+        }
+        ast::EnumMember* em = &arr[arr.len];
+        em.name = name.data.sym;
+        em.value_expr = value_expr;
+        em.src_pos = start;
+        arr.len += 1;
+        if(!match(p, token::TokenKind::Comma)) { break; }
+        if(p.idx == prev) { consume(p); *had_err = true; }
+    }
+    return arr;
+}
+
+fn ast::AstNode* parse_enum_decl(Parser* p, bool is_exported) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token kw = expect(p, token::TokenKind::ENUM);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token name = expect(p, token::TokenKind::Ident);
+    if(name.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* base_type = null;
+    if(peek(p, 0).kind == token::TokenKind::Colon) {
+        consume(p);
+        base_type = parse_type(p);
+        if(!base_type || had_error(base_type)) { had_err = true; }
+    }
+    token::Token lbrace = expect(p, token::TokenKind::LBrace);
+    if(lbrace.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::EnumMember[] members = parse_enum_members(p, &had_err);
+    token::Token rbrace = expect(p, token::TokenKind::RBrace);
+    if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::EnumDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::EnumDeclNode));
+    sys::memset(n, 0, sizeof(ast::EnumDeclNode));
+    n.h.kind = ast::AstKind::EnumDecl;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.name = name.data.sym;
+    n.base_type = base_type;
+    n.members = members;
     n.is_exported = is_exported;
     return (ast::AstNode*)n;
 }

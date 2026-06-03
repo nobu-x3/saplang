@@ -10116,6 +10116,329 @@ fn i32 extern_opaque_on_var_decl_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// ---- enum decls ----
+
+fn i32 enum_empty(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 0, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 enum_single_member(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 1, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[0], compiler_testing::sym(m, "A"), false, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 enum_multi_member(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum Color { Red, Green, Blue }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Color"), 3, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[0], compiler_testing::sym(m, "Red"), false, msg)) { return -2; }
+    if(!compiler_testing::expect_enum_member(&e.members[1], compiler_testing::sym(m, "Green"), false, msg)) { return -3; }
+    if(!compiler_testing::expect_enum_member(&e.members[2], compiler_testing::sym(m, "Blue"), false, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 enum_explicit_base_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E : u8 { A, B }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 2, true, token::TokenKind::U8, false, msg);
+    if(!e) { return -1; }
+    return 0;
+}
+
+fn i32 enum_all_int_base_types(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local,
+        "enum A : i8 { } enum B : i16 { } enum C : i32 { } enum D : i64 { } enum E : u8 { } enum F : u16 { } enum G : u32 { } enum H : u64 { }", &m);
+    if(!compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "A"), 0, true, token::TokenKind::I8, false, msg)) { return -1; }
+    if(!compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 1), compiler_testing::sym(m, "B"), 0, true, token::TokenKind::I16, false, msg)) { return -2; }
+    if(!compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 2), compiler_testing::sym(m, "C"), 0, true, token::TokenKind::I32, false, msg)) { return -3; }
+    if(!compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 3), compiler_testing::sym(m, "D"), 0, true, token::TokenKind::I64, false, msg)) { return -4; }
+    if(!compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 4), compiler_testing::sym(m, "E"), 0, true, token::TokenKind::U8, false, msg)) { return -5; }
+    if(!compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 5), compiler_testing::sym(m, "F"), 0, true, token::TokenKind::U16, false, msg)) { return -6; }
+    if(!compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 6), compiler_testing::sym(m, "G"), 0, true, token::TokenKind::U32, false, msg)) { return -7; }
+    if(!compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 7), compiler_testing::sym(m, "H"), 0, true, token::TokenKind::U64, false, msg)) { return -8; }
+    return 0;
+}
+
+fn i32 enum_explicit_int_value(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = 42 }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 1, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[0], compiler_testing::sym(m, "A"), true, msg)) { return -2; }
+    if(!compiler_testing::expect_intlit(e.members[0].value_expr, (u64)42, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 enum_mixed_explicit_and_auto(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, B = 10, C }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 3, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[0], compiler_testing::sym(m, "A"), false, msg)) { return -2; }
+    if(!compiler_testing::expect_enum_member(&e.members[1], compiler_testing::sym(m, "B"), true, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(e.members[1].value_expr, (u64)10, msg)) { return -4; }
+    if(!compiler_testing::expect_enum_member(&e.members[2], compiler_testing::sym(m, "C"), false, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 enum_symbolic_value(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = 10, B = A }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 2, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[1], compiler_testing::sym(m, "B"), true, msg)) { return -2; }
+    if(!compiler_testing::expect_ident(e.members[1].value_expr, compiler_testing::sym(m, "A"), msg)) { return -3; }
+    return 0;
+}
+
+fn i32 enum_negative_value(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = -1 }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 1, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[0], compiler_testing::sym(m, "A"), true, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 enum_expression_value(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = 1 + 2 }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 1, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[0], compiler_testing::sym(m, "A"), true, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 enum_trailing_comma(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, B, }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 2, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 enum_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export enum Color { Red }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Color"), 1, false, token::TokenKind::I32, true, msg);
+    if(!e) { return -1; }
+    return 0;
+}
+
+fn i32 enum_exported_with_base_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export enum Status : u8 { Ok, Err }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Status"), 2, true, token::TokenKind::U8, true, msg);
+    if(!e) { return -1; }
+    return 0;
+}
+
+fn i32 enum_spec_example(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum Status : u8 { Ok, Err = 234, Warn, Same = Err }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "Status"), 4, true, token::TokenKind::U8, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[0], compiler_testing::sym(m, "Ok"), false, msg)) { return -2; }
+    if(!compiler_testing::expect_enum_member(&e.members[1], compiler_testing::sym(m, "Err"), true, msg)) { return -3; }
+    if(!compiler_testing::expect_intlit(e.members[1].value_expr, (u64)234, msg)) { return -4; }
+    if(!compiler_testing::expect_enum_member(&e.members[2], compiler_testing::sym(m, "Warn"), false, msg)) { return -5; }
+    if(!compiler_testing::expect_enum_member(&e.members[3], compiler_testing::sym(m, "Same"), true, msg)) { return -6; }
+    if(!compiler_testing::expect_ident(e.members[3].value_expr, compiler_testing::sym(m, "Err"), msg)) { return -7; }
+    return 0;
+}
+
+fn i32 enum_src_pos_at_enum_kw(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 1, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!testing::expect_eq(e.h.src_pos, (u32)0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 enum_member_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, B }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 2, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!testing::expect_eq(e.members[0].src_pos, (u32)9, msg)) { return -2; }
+    if(!testing::expect_eq(e.members[1].src_pos, (u32)12, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 enum_missing_name_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum { A }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return -2; }
+    if(!testing::expect_true(((u16)n0.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got '{'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)5, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 enum_missing_lbrace_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E A, B }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return -2; }
+    if(!testing::expect_true(((u16)n0.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '{', got identifier", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)7, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 enum_missing_rbrace_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return -2; }
+    if(!testing::expect_true(((u16)n0.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected '}', got end of file", msg)) { return -4; }
+    return 0;
+}
+
+fn i32 enum_missing_member_after_comma_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, , B }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return -2; }
+    if(!testing::expect_true(((u16)n0.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got ','", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)12, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 enum_missing_value_after_eq_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = , B }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return -2; }
+    if(!testing::expect_true(((u16)n0.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 enum_member_is_keyword_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { fn }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return -2; }
+    if(!testing::expect_true(((u16)n0.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got 'fn'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)9, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 enum_base_type_missing_after_colon_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E : { A }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return -2; }
+    if(!testing::expect_true(((u16)n0.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected identifier, got '{'", msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)9, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 enum_missing_comma_between_members(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A B C }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return -2; }
+    if(!testing::expect_true(((u16)n0.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 enum_trailing_comma_single_member(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 1, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 enum_complex_expression_value(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = (1 + 2) * 3 }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 1, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[0], compiler_testing::sym(m, "A"), true, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 enum_zero_value(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = 0 }", &m);
+    ast::EnumDeclNode* e = compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "E"), 1, false, token::TokenKind::I32, false, msg);
+    if(!e) { return -1; }
+    if(!compiler_testing::expect_enum_member(&e.members[0], compiler_testing::sym(m, "A"), true, msg)) { return -2; }
+    if(!compiler_testing::expect_intlit(e.members[0].value_expr, (u64)0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 enum_after_other_decls(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "import io; enum E { A } struct S { i32 x; }", &m);
+    if(!compiler_testing::expect_import(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "io"), msg)) { return -1; }
+    if(!compiler_testing::expect_enum(compiler_testing::nth_stmt(root, 1), compiler_testing::sym(m, "E"), 1, false, token::TokenKind::I32, false, msg)) { return -2; }
+    if(!compiler_testing::expect_struct_decl(compiler_testing::nth_stmt(root, 2), compiler_testing::sym(m, "S"), 1, false, msg)) { return -3; }
+    return 0;
+}
+
 fn i32 extern_fn_with_body_errors(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -10915,6 +11238,36 @@ fn i32 main() {
     testing::add(s_ext, "opaque_at_top_level_errors", &opaque_at_top_level_errors);
     testing::add(s_ext, "extern_opaque_on_var_decl_errors", &extern_opaque_on_var_decl_errors);
     testing::add(s_ext, "extern_fn_with_body_errors", &extern_fn_with_body_errors);
+
+    u8[] s_en = "Parser Enum";
+    testing::add(s_en, "enum_empty", &enum_empty);
+    testing::add(s_en, "enum_single_member", &enum_single_member);
+    testing::add(s_en, "enum_multi_member", &enum_multi_member);
+    testing::add(s_en, "enum_explicit_base_type", &enum_explicit_base_type);
+    testing::add(s_en, "enum_all_int_base_types", &enum_all_int_base_types);
+    testing::add(s_en, "enum_explicit_int_value", &enum_explicit_int_value);
+    testing::add(s_en, "enum_mixed_explicit_and_auto", &enum_mixed_explicit_and_auto);
+    testing::add(s_en, "enum_symbolic_value", &enum_symbolic_value);
+    testing::add(s_en, "enum_negative_value", &enum_negative_value);
+    testing::add(s_en, "enum_expression_value", &enum_expression_value);
+    testing::add(s_en, "enum_trailing_comma", &enum_trailing_comma);
+    testing::add(s_en, "enum_exported", &enum_exported);
+    testing::add(s_en, "enum_exported_with_base_type", &enum_exported_with_base_type);
+    testing::add(s_en, "enum_spec_example", &enum_spec_example);
+    testing::add(s_en, "enum_src_pos_at_enum_kw", &enum_src_pos_at_enum_kw);
+    testing::add(s_en, "enum_member_src_pos", &enum_member_src_pos);
+    testing::add(s_en, "enum_missing_name_errors", &enum_missing_name_errors);
+    testing::add(s_en, "enum_missing_lbrace_errors", &enum_missing_lbrace_errors);
+    testing::add(s_en, "enum_missing_rbrace_errors", &enum_missing_rbrace_errors);
+    testing::add(s_en, "enum_missing_member_after_comma_errors", &enum_missing_member_after_comma_errors);
+    testing::add(s_en, "enum_missing_value_after_eq_errors", &enum_missing_value_after_eq_errors);
+    testing::add(s_en, "enum_member_is_keyword_errors", &enum_member_is_keyword_errors);
+    testing::add(s_en, "enum_base_type_missing_after_colon_errors", &enum_base_type_missing_after_colon_errors);
+    testing::add(s_en, "enum_missing_comma_between_members", &enum_missing_comma_between_members);
+    testing::add(s_en, "enum_trailing_comma_single_member", &enum_trailing_comma_single_member);
+    testing::add(s_en, "enum_complex_expression_value", &enum_complex_expression_value);
+    testing::add(s_en, "enum_zero_value", &enum_zero_value);
+    testing::add(s_en, "enum_after_other_decls", &enum_after_other_decls);
 
     return testing::run();
 }

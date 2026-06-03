@@ -553,6 +553,36 @@ export fn ast::ExternStructDeclNode* expect_extern_struct(ast::AstNode* n, symbo
     return s;
 }
 
+export fn ast::EnumDeclNode* expect_enum(ast::AstNode* n, symbol::Symbol* name, u64 n_members, bool has_base, token::TokenKind base_kind, bool is_exported, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return null; }
+    ast::EnumDeclNode* e = (ast::EnumDeclNode*)n;
+    if(name) {
+        if(!testing::expect_eq((void*)e.name, (void*)name, msg)) { return null; }
+    }
+    if(!testing::expect_eq(e.members.len, n_members, msg)) { return null; }
+    if(!testing::expect_eq(e.is_exported, is_exported, msg)) { return null; }
+    if(has_base) {
+        if(!expect_ty_prim(e.base_type, base_kind, msg)) { return null; }
+    } else {
+        if(!testing::expect_null((void*)e.base_type, msg)) { return null; }
+    }
+    return e;
+}
+
+export fn bool expect_enum_member(ast::EnumMember* em, symbol::Symbol* name, bool has_value, u8[] msg) {
+    if(!testing::expect_not_null((void*)em, msg)) { return false; }
+    if(name) {
+        if(!testing::expect_eq((void*)em.name, (void*)name, msg)) { return false; }
+    }
+    if(has_value) {
+        if(!testing::expect_not_null((void*)em.value_expr, msg)) { return false; }
+    } else {
+        if(!testing::expect_null((void*)em.value_expr, msg)) { return false; }
+    }
+    return true;
+}
+
 export fn ast::ExternUnionDeclNode* expect_extern_union(ast::AstNode* n, symbol::Symbol* name, u64 n_fields, bool is_opaque, bool is_exported, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ExternUnionDecl, msg)) { return null; }
