@@ -122,6 +122,22 @@ export struct ExternFnDeclNode {
     i8        comptime_safe;            // always -1 for extern; pre-set at sema time
 }
 
+export struct ExternStructDeclNode {
+    AstHeader h;
+    symbol::Symbol*   name;
+    FieldDecl[] fields;                 // empty when is_opaque
+    bool      is_opaque;
+    bool      is_exported;
+}
+
+export struct ExternUnionDeclNode {
+    AstHeader h;
+    symbol::Symbol*   name;
+    FieldDecl[] fields;                 // empty when is_opaque
+    bool      is_opaque;
+    bool      is_exported;
+}
+
 // stmts ///////////////////////////////////////////////////////////////////////////
 export struct BlockNode {
     AstHeader h;
@@ -419,8 +435,10 @@ EnumDecl,
 AliasDecl,
 ExternBlock,
 ExternFnDecl,           // fn decl inside extern { ... } with no body
+ExternStructDecl,       // struct decl inside extern { ... }: opaque or full
+ExternUnionDecl,        // union decl inside extern { ... }: opaque or full
 DECL_FIRST = ImportDecl,
-DECL_LAST = ExternFnDecl,
+DECL_LAST = ExternUnionDecl,
 
 // statements   [STMT_FIRST..STMT_LAST]
 BlockStmt,

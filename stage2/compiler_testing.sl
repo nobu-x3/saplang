@@ -517,3 +517,51 @@ export fn ast::ImportNode* expect_import(ast::AstNode* n, symbol::Symbol* mod_na
     }
     return i;
 }
+
+export fn ast::ExternBlockNode* expect_extern_block(ast::AstNode* n, symbol::Symbol* lib_name, u64 n_items, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return null; }
+    ast::ExternBlockNode* b = (ast::ExternBlockNode*)n;
+    if(!testing::expect_eq((void*)b.lib_name, (void*)lib_name, msg)) { return null; }
+    if(!testing::expect_eq(b.items.len, n_items, msg)) { return null; }
+    return b;
+}
+
+export fn ast::ExternFnDeclNode* expect_extern_fn(ast::AstNode* n, symbol::Symbol* name, u64 n_params, bool is_variadic, bool is_exported, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ExternFnDecl, msg)) { return null; }
+    ast::ExternFnDeclNode* f = (ast::ExternFnDeclNode*)n;
+    if(name) {
+        if(!testing::expect_eq((void*)f.name, (void*)name, msg)) { return null; }
+    }
+    if(!testing::expect_eq(f.params.len, n_params, msg)) { return null; }
+    if(!testing::expect_eq(f.is_variadic, is_variadic, msg)) { return null; }
+    if(!testing::expect_eq(f.is_exported, is_exported, msg)) { return null; }
+    return f;
+}
+
+export fn ast::ExternStructDeclNode* expect_extern_struct(ast::AstNode* n, symbol::Symbol* name, u64 n_fields, bool is_opaque, bool is_exported, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ExternStructDecl, msg)) { return null; }
+    ast::ExternStructDeclNode* s = (ast::ExternStructDeclNode*)n;
+    if(name) {
+        if(!testing::expect_eq((void*)s.name, (void*)name, msg)) { return null; }
+    }
+    if(!testing::expect_eq(s.fields.len, n_fields, msg)) { return null; }
+    if(!testing::expect_eq(s.is_opaque, is_opaque, msg)) { return null; }
+    if(!testing::expect_eq(s.is_exported, is_exported, msg)) { return null; }
+    return s;
+}
+
+export fn ast::ExternUnionDeclNode* expect_extern_union(ast::AstNode* n, symbol::Symbol* name, u64 n_fields, bool is_opaque, bool is_exported, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ExternUnionDecl, msg)) { return null; }
+    ast::ExternUnionDeclNode* u = (ast::ExternUnionDeclNode*)n;
+    if(name) {
+        if(!testing::expect_eq((void*)u.name, (void*)name, msg)) { return null; }
+    }
+    if(!testing::expect_eq(u.fields.len, n_fields, msg)) { return null; }
+    if(!testing::expect_eq(u.is_opaque, is_opaque, msg)) { return null; }
+    if(!testing::expect_eq(u.is_exported, is_exported, msg)) { return null; }
+    return u;
+}

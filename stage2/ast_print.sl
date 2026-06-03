@@ -99,6 +99,24 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
         write_labeled_child(out, indent + 1, "return", d.return_type, it);
         write_params(out, indent + 1, d.params, it);
     }
+    case ast::AstKind::ExternStructDecl: {
+        ast::ExternStructDeclNode* d = (ast::ExternStructDeclNode*)n;
+        io::outbuf_write(out, "ExternStructDecl ");
+        write_sym(out, d.name, it);
+        if(d.is_opaque)   { io::outbuf_write(out, " opaque"); }
+        if(d.is_exported) { io::outbuf_write(out, " exported"); }
+        io::outbuf_write_byte(out, '\n');
+        write_fields(out, indent + 1, d.fields, it);
+    }
+    case ast::AstKind::ExternUnionDecl: {
+        ast::ExternUnionDeclNode* d = (ast::ExternUnionDeclNode*)n;
+        io::outbuf_write(out, "ExternUnionDecl ");
+        write_sym(out, d.name, it);
+        if(d.is_opaque)   { io::outbuf_write(out, " opaque"); }
+        if(d.is_exported) { io::outbuf_write(out, " exported"); }
+        io::outbuf_write_byte(out, '\n');
+        write_fields(out, indent + 1, d.fields, it);
+    }
 
     // statements /////////////////////////////////////////////////////////////
     case ast::AstKind::BlockStmt: {

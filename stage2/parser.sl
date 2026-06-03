@@ -4,6 +4,7 @@ import token;
 import diag;
 import arena;
 import symbol;
+import interner;
 import sys;
 
 export struct Parser {
@@ -42,7 +43,7 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
     switch (t.kind) {
         case token::TokenKind::IMPORT:  { return parse_import(p); }              // export is illegal here
         case token::TokenKind::CONST:   { return parse_var_decl(p, is_exported); }
-        //case token::TokenKind::EXTERN:  { return parse_extern_block(p); }
+        case token::TokenKind::EXTERN:  { return parse_extern_block(p); }
         case token::TokenKind::COMPRUN: { return parse_comprun(p); }
         case token::TokenKind::FN: {
             if(peek(p, 1).kind == token::TokenKind::Star) { return parse_var_decl(p, is_exported); }
@@ -163,6 +164,7 @@ fn ast::Param[] parse_params(Parser* p, bool* had_err) {
     arr.len = 0;
     u64 cap = 0;
     while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
+        if(p.in_extern && peek(p, 0).kind == token::TokenKind::DotDotDot) { break; }
         u32 start = peek(p, 0).src_pos;
         bool is_const = false;
         bool is_comptime = false;
@@ -375,6 +377,251 @@ fn ast::AstNode* parse_union_decl(Parser* p, bool is_exported) {
     n.name = name.data.sym;
     n.fields = fields;
     n.is_exported = is_exported;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_extern_fn_decl(Parser* p, bool is_exported, u32 start) {
+    token::Token fn_tok = expect(p, token::TokenKind::FN);
+    if(fn_tok.kind == token::TokenKind::ERROR) {
+        return mk_error_node_and_consume(p, fn_tok.src_pos);
+    }
+    ast::AstNode* type_expr = parse_type(p);
+    bool had_err = !type_expr || had_error(type_expr);
+    token::Token ident = expect(p, token::TokenKind::Ident);
+    if(ident.kind == token::TokenKind::ERROR) { had_err = true; }
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::Param[] params = parse_params(p, &had_err);
+    bool is_variadic = false;
+    if(peek(p, 0).kind == token::TokenKind::DotDotDot) {
+        consume(p);
+        is_variadic = true;
+    }
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    token::Token semi = expect(p, token::TokenKind::Semi);
+    if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::ExternFnDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternFnDeclNode));
+    sys::memset(n, 0, sizeof(ast::ExternFnDeclNode));
+    n.h.kind = ast::AstKind::ExternFnDecl;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.name = ident.data.sym;
+    n.return_type = type_expr;
+    n.params = params;
+    n.is_variadic = is_variadic;
+    n.is_exported = is_exported;
+    n.comptime_safe = (i8)-1;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_extern_struct_decl(Parser* p, bool is_exported, u32 start, bool is_opaque, u32 opaque_pos) {
+    token::Token kw = expect(p, token::TokenKind::STRUCT);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token name = expect(p, token::TokenKind::Ident);
+    if(name.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::FieldDecl[] fields;
+    fields.ptr = null;
+    fields.len = 0;
+    token::TokenKind nk = peek(p, 0).kind;
+    if(is_opaque) {
+        if(nk == token::TokenKind::LBrace) {
+            had_err = true;
+            u8[128] sb;
+            i32 sl = sys::snprintf((i8*)&sb[0], 128, "opaque extern type cannot have a body");
+            if(sl > 0 && !p.is_speculating) {
+                u64 ml = (u64)sl; if(ml > 127) { ml = 127; }
+                u8[] mb = {&sb[0], ml};
+                diag::report(&p.m.diag, p.m.arena, peek(p, 0).src_pos, mb);
+            }
+            consume(p);
+            fields = parse_fields(p, &had_err);
+            token::Token rb = expect(p, token::TokenKind::RBrace);
+            if(rb.kind == token::TokenKind::ERROR) { had_err = true; }
+            token::Token sc = expect(p, token::TokenKind::Semi);
+            if(sc.kind == token::TokenKind::ERROR) { had_err = true; }
+        } else {
+            token::Token sc = expect(p, token::TokenKind::Semi);
+            if(sc.kind == token::TokenKind::ERROR) { had_err = true; }
+        }
+    } else {
+        if(nk == token::TokenKind::Semi) {
+            had_err = true;
+            u8[128] sb;
+            i32 sl = sys::snprintf((i8*)&sb[0], 128, "extern struct without body must be marked 'opaque'");
+            if(sl > 0 && !p.is_speculating) {
+                u64 ml = (u64)sl; if(ml > 127) { ml = 127; }
+                u8[] mb = {&sb[0], ml};
+                diag::report(&p.m.diag, p.m.arena, peek(p, 0).src_pos, mb);
+            }
+            consume(p);
+        } else {
+            token::Token lb = expect(p, token::TokenKind::LBrace);
+            if(lb.kind == token::TokenKind::ERROR) { had_err = true; }
+            fields = parse_fields(p, &had_err);
+            token::Token rb = expect(p, token::TokenKind::RBrace);
+            if(rb.kind == token::TokenKind::ERROR) { had_err = true; }
+            token::Token sc = expect(p, token::TokenKind::Semi);
+            if(sc.kind == token::TokenKind::ERROR) { had_err = true; }
+        }
+    }
+    ast::ExternStructDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternStructDeclNode));
+    sys::memset(n, 0, sizeof(ast::ExternStructDeclNode));
+    n.h.kind = ast::AstKind::ExternStructDecl;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.name = name.data.sym;
+    n.fields = fields;
+    n.is_opaque = is_opaque;
+    n.is_exported = is_exported;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_extern_union_decl(Parser* p, bool is_exported, u32 start, bool is_opaque, u32 opaque_pos) {
+    token::Token kw = expect(p, token::TokenKind::UNION);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    token::Token name = expect(p, token::TokenKind::Ident);
+    if(name.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::FieldDecl[] fields;
+    fields.ptr = null;
+    fields.len = 0;
+    token::TokenKind nk = peek(p, 0).kind;
+    if(is_opaque) {
+        if(nk == token::TokenKind::LBrace) {
+            had_err = true;
+            u8[128] sb;
+            i32 sl = sys::snprintf((i8*)&sb[0], 128, "opaque extern type cannot have a body");
+            if(sl > 0 && !p.is_speculating) {
+                u64 ml = (u64)sl; if(ml > 127) { ml = 127; }
+                u8[] mb = {&sb[0], ml};
+                diag::report(&p.m.diag, p.m.arena, peek(p, 0).src_pos, mb);
+            }
+            consume(p);
+            fields = parse_fields(p, &had_err);
+            token::Token rb = expect(p, token::TokenKind::RBrace);
+            if(rb.kind == token::TokenKind::ERROR) { had_err = true; }
+            token::Token sc = expect(p, token::TokenKind::Semi);
+            if(sc.kind == token::TokenKind::ERROR) { had_err = true; }
+        } else {
+            token::Token sc = expect(p, token::TokenKind::Semi);
+            if(sc.kind == token::TokenKind::ERROR) { had_err = true; }
+        }
+    } else {
+        if(nk == token::TokenKind::Semi) {
+            had_err = true;
+            u8[128] sb;
+            i32 sl = sys::snprintf((i8*)&sb[0], 128, "extern union without body must be marked 'opaque'");
+            if(sl > 0 && !p.is_speculating) {
+                u64 ml = (u64)sl; if(ml > 127) { ml = 127; }
+                u8[] mb = {&sb[0], ml};
+                diag::report(&p.m.diag, p.m.arena, peek(p, 0).src_pos, mb);
+            }
+            consume(p);
+        } else {
+            token::Token lb = expect(p, token::TokenKind::LBrace);
+            if(lb.kind == token::TokenKind::ERROR) { had_err = true; }
+            fields = parse_fields(p, &had_err);
+            token::Token rb = expect(p, token::TokenKind::RBrace);
+            if(rb.kind == token::TokenKind::ERROR) { had_err = true; }
+            token::Token sc = expect(p, token::TokenKind::Semi);
+            if(sc.kind == token::TokenKind::ERROR) { had_err = true; }
+        }
+    }
+    ast::ExternUnionDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternUnionDeclNode));
+    sys::memset(n, 0, sizeof(ast::ExternUnionDeclNode));
+    n.h.kind = ast::AstKind::ExternUnionDecl;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.name = name.data.sym;
+    n.fields = fields;
+    n.is_opaque = is_opaque;
+    n.is_exported = is_exported;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_extern_item(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    bool is_exported = false;
+    if(peek(p, 0).kind == token::TokenKind::EXPORT) {
+        consume(p);
+        is_exported = true;
+    }
+    bool is_opaque = false;
+    u32 opaque_pos = 0;
+    if(peek(p, 0).kind == token::TokenKind::OPAQUE) {
+        opaque_pos = peek(p, 0).src_pos;
+        consume(p);
+        is_opaque = true;
+    }
+    token::TokenKind k = peek(p, 0).kind;
+    if(k == token::TokenKind::FN) {
+        if(is_opaque) {
+            u8[128] sb;
+            i32 sl = sys::snprintf((i8*)&sb[0], 128, "'opaque' is only valid on struct or union");
+            if(sl > 0 && !p.is_speculating) {
+                u64 ml = (u64)sl; if(ml > 127) { ml = 127; }
+                u8[] mb = {&sb[0], ml};
+                diag::report(&p.m.diag, p.m.arena, opaque_pos, mb);
+            }
+        }
+        ast::AstNode* fnode = parse_extern_fn_decl(p, is_exported, start);
+        if(is_opaque) { fnode.h.flags = ast::AstFlags::HadError; }
+        return fnode;
+    }
+    if(k == token::TokenKind::STRUCT) {
+        return parse_extern_struct_decl(p, is_exported, start, is_opaque, opaque_pos);
+    }
+    if(k == token::TokenKind::UNION) {
+        return parse_extern_union_decl(p, is_exported, start, is_opaque, opaque_pos);
+    }
+    report_expected(p, peek(p, 0), token::TokenKind::FN);
+    return mk_error_node_and_consume(p, start);
+}
+
+fn ast::AstNode* parse_extern_block(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    token::Token kw = expect(p, token::TokenKind::EXTERN);
+    if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    bool had_err = false;
+    symbol::Symbol* lib_name = null;
+    if(peek(p, 0).kind == token::TokenKind::StringLit) {
+        token::Token s = consume(p);
+        u8[] bytes;
+        bytes.ptr = &p.m.literal_pool.ptr[s.data.bytes.off];
+        bytes.len = (u64)s.data.bytes.len;
+        lib_name = interner::intern(p.m.interner, bytes);
+    }
+    token::Token lbrace = expect(p, token::TokenKind::LBrace);
+    if(lbrace.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::ListBuilder items;
+    ast::list_init(&items, p.m.arena, 4);
+    bool saved_in_extern = p.in_extern;
+    p.in_extern = true;
+    while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
+        u32 prev = p.idx;
+        ast::AstNode* item = parse_extern_item(p);
+        if(item) {
+            if(had_error(item)) { had_err = true; }
+            ast::list_push(&items, p.m.arena, item);
+        }
+        if(p.idx == prev) { consume(p); had_err = true; }
+    }
+    p.in_extern = saved_in_extern;
+    token::Token rbrace = expect(p, token::TokenKind::RBrace);
+    if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::ExternBlockNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternBlockNode));
+    sys::memset(n, 0, sizeof(ast::ExternBlockNode));
+    n.h.kind = ast::AstKind::ExternBlock;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.lib_name = lib_name;
+    n.items = ast::list_freeze(&items);
     return (ast::AstNode*)n;
 }
 

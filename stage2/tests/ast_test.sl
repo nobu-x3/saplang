@@ -230,7 +230,9 @@ fn i32 is_decl_first(arena::Arena* a, u8[] msg) {
 }
 
 fn i32 is_decl_last(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::ExternFnDecl), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::ExternUnionDecl), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::ExternFnDecl), msg)) { return -2; }
+    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::ExternStructDecl), msg)) { return -3; }
     return 0;
 }
 
@@ -423,6 +425,22 @@ fn i32 hdr_extern_fn_decl(arena::Arena* a, u8[] m) {
     ast::ExternFnDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternFnDeclNode));
     n.h.kind = ast::AstKind::ExternFnDecl;
     if(!castback(n, ast::AstKind::ExternFnDecl, m)) { return -1; }
+    return 0;
+}
+
+fn i32 hdr_extern_struct_decl(arena::Arena* a, u8[] m) {
+    arena::Arena lo = {1024, null};
+    ast::ExternStructDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternStructDeclNode));
+    n.h.kind = ast::AstKind::ExternStructDecl;
+    if(!castback(n, ast::AstKind::ExternStructDecl, m)) { return -1; }
+    return 0;
+}
+
+fn i32 hdr_extern_union_decl(arena::Arena* a, u8[] m) {
+    arena::Arena lo = {1024, null};
+    ast::ExternUnionDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternUnionDeclNode));
+    n.h.kind = ast::AstKind::ExternUnionDecl;
+    if(!castback(n, ast::AstKind::ExternUnionDecl, m)) { return -1; }
     return 0;
 }
 
@@ -894,6 +912,32 @@ fn i32 externfn_variadic_flag_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 externstruct_opaque_flag_roundtrip(arena::Arena* a, u8[] m) {
+    arena::Arena lo = {1024, null};
+    ast::ExternStructDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternStructDeclNode));
+    n.h.kind = ast::AstKind::ExternStructDecl;
+    n.is_opaque = false;
+    if(!testing::expect_false(n.is_opaque, m)) { return -1; }
+    n.is_opaque = true;
+    if(!testing::expect_true(n.is_opaque, m)) { return -2; }
+    n.is_exported = true;
+    if(!testing::expect_true(n.is_exported, m)) { return -3; }
+    return 0;
+}
+
+fn i32 externunion_opaque_flag_roundtrip(arena::Arena* a, u8[] m) {
+    arena::Arena lo = {1024, null};
+    ast::ExternUnionDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternUnionDeclNode));
+    n.h.kind = ast::AstKind::ExternUnionDecl;
+    n.is_opaque = false;
+    if(!testing::expect_false(n.is_opaque, m)) { return -1; }
+    n.is_opaque = true;
+    if(!testing::expect_true(n.is_opaque, m)) { return -2; }
+    n.is_exported = true;
+    if(!testing::expect_true(n.is_exported, m)) { return -3; }
+    return 0;
+}
+
 // ----- auxiliary structs -----
 
 fn i32 param_field_roundtrip(arena::Arena* a, u8[] m) {
@@ -1017,6 +1061,8 @@ fn i32 main() {
     testing::add(suite, "hdr_alias_decl", &hdr_alias_decl);
     testing::add(suite, "hdr_extern_block", &hdr_extern_block);
     testing::add(suite, "hdr_extern_fn_decl", &hdr_extern_fn_decl);
+    testing::add(suite, "hdr_extern_struct_decl", &hdr_extern_struct_decl);
+    testing::add(suite, "hdr_extern_union_decl", &hdr_extern_union_decl);
     testing::add(suite, "hdr_block", &hdr_block);
     testing::add(suite, "hdr_if", &hdr_if);
     testing::add(suite, "hdr_while", &hdr_while);
@@ -1073,6 +1119,8 @@ fn i32 main() {
     testing::add(suite, "fornode_fields_can_be_null", &fornode_fields_can_be_null);
     testing::add(suite, "ptrtype_const_flag_roundtrip", &ptrtype_const_flag_roundtrip);
     testing::add(suite, "externfn_variadic_flag_roundtrip", &externfn_variadic_flag_roundtrip);
+    testing::add(suite, "externstruct_opaque_flag_roundtrip", &externstruct_opaque_flag_roundtrip);
+    testing::add(suite, "externunion_opaque_flag_roundtrip", &externunion_opaque_flag_roundtrip);
 
     testing::add(suite, "param_field_roundtrip", &param_field_roundtrip);
     testing::add(suite, "fielddecl_field_roundtrip", &fielddecl_field_roundtrip);

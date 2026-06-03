@@ -9488,6 +9488,650 @@ fn i32 expr_unop_src_pos_on_operator(arena::Arena* a, u8[] msg) {
     if(!(testing::expect_eq(u.h.src_pos, 8, msg))) { return -2; } return 0;
 }
 
+// ---- extern blocks ----
+
+fn i32 extern_block_empty(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 0, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 extern_block_named_lib(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern \"mylib\" { }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "mylib"), 0, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 extern_block_lib_c_explicit(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern \"c\" { }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "c"), 0, msg);
+    if(!b) { return -1; }
+    return 0;
+}
+
+fn i32 extern_block_src_pos_on_extern_kw(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 0, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq(b.h.src_pos, 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 extern_fn_no_params(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f(); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "f"), 0, false, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_ty_prim(f.return_type, token::TokenKind::VOID, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_fn_with_params(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn i32 puts(u8* s); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "puts"), 1, false, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_ty_prim(f.return_type, token::TokenKind::I32, msg)) { return -3; }
+    if(!compiler_testing::expect_param(&f.params[0], compiler_testing::sym(m, "s"), false, false, msg)) { return -4; }
+    ast::TypePointerNode* pty = compiler_testing::expect_ty_ptr(f.params[0].type_expr, msg);
+    if(!pty) { return -5; }
+    if(!compiler_testing::expect_ty_prim(pty.pointee, token::TokenKind::U8, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 extern_fn_variadic(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn i32 printf(u8* fmt, ...); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "printf"), 1, true, false, msg);
+    if(!f) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_fn_variadic_only(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f(...); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "f"), 0, true, false, msg);
+    if(!f) { return -2; }
+    return 0;
+}
+
+fn i32 extern_fn_multi_param_variadic(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn i32 f(i32 a, u8* b, ...); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "f"), 2, true, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_ty_prim(f.params[0].type_expr, token::TokenKind::I32, msg)) { return -3; }
+    ast::TypePointerNode* p1 = compiler_testing::expect_ty_ptr(f.params[1].type_expr, msg);
+    if(!p1) { return -4; }
+    if(!compiler_testing::expect_ty_prim(p1.pointee, token::TokenKind::U8, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_fn_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export fn void f(); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "f"), 0, false, true, msg);
+    if(!f) { return -2; }
+    return 0;
+}
+
+fn i32 extern_fn_comptime_safe_is_minus_one(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f(); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "f"), 0, false, false, msg);
+    if(!f) { return -2; }
+    if(!testing::expect_eq((i32)f.comptime_safe, (i32)-1, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_struct_opaque(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque struct FILE; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "FILE"), 0, true, false, msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_struct_opaque_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export opaque struct FILE; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "FILE"), 0, true, true, msg);
+    if(!s) { return -2; }
+    return 0;
+}
+
+fn i32 extern_struct_full(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct Point { i32 x; i32 y; }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "Point"), 2, false, false, msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_field(&s.fields[0], compiler_testing::sym(m, "x"), msg)) { return -3; }
+    if(!compiler_testing::expect_ty_prim(s.fields[0].type_expr, token::TokenKind::I32, msg)) { return -4; }
+    if(!compiler_testing::expect_field(&s.fields[1], compiler_testing::sym(m, "y"), msg)) { return -5; }
+    if(!compiler_testing::expect_ty_prim(s.fields[1].type_expr, token::TokenKind::I32, msg)) { return -6; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -7; }
+    return 0;
+}
+
+fn i32 extern_struct_full_empty_body(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct E { }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "E"), 0, false, false, msg);
+    if(!s) { return -2; }
+    return 0;
+}
+
+fn i32 extern_struct_full_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export struct Point { i32 x; }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "Point"), 1, false, true, msg);
+    if(!s) { return -2; }
+    return 0;
+}
+
+fn i32 extern_struct_no_body_no_opaque_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct Foo; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "Foo"), 0, false, false, msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(((u16)s.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "extern struct without body must be marked 'opaque'", msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_struct_opaque_with_body_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque struct Foo { i32 x; }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "Foo"), 1, true, false, msg);
+    if(!s) { return -2; }
+    if(!testing::expect_true(((u16)s.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "opaque extern type cannot have a body", msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_union_opaque(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque union V; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternUnionDeclNode* u = compiler_testing::expect_extern_union(b.items[0], compiler_testing::sym(m, "V"), 0, true, false, msg);
+    if(!u) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_union_opaque_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export opaque union V; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternUnionDeclNode* u = compiler_testing::expect_extern_union(b.items[0], compiler_testing::sym(m, "V"), 0, true, true, msg);
+    if(!u) { return -2; }
+    return 0;
+}
+
+fn i32 extern_union_full(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { union U { i32 i; f32 f; }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternUnionDeclNode* u = compiler_testing::expect_extern_union(b.items[0], compiler_testing::sym(m, "U"), 2, false, false, msg);
+    if(!u) { return -2; }
+    if(!compiler_testing::expect_field(&u.fields[0], compiler_testing::sym(m, "i"), msg)) { return -3; }
+    if(!compiler_testing::expect_ty_prim(u.fields[0].type_expr, token::TokenKind::I32, msg)) { return -4; }
+    if(!compiler_testing::expect_field(&u.fields[1], compiler_testing::sym(m, "f"), msg)) { return -5; }
+    if(!compiler_testing::expect_ty_prim(u.fields[1].type_expr, token::TokenKind::F32, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 extern_union_full_exported(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export union U { i32 i; }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternUnionDeclNode* u = compiler_testing::expect_extern_union(b.items[0], compiler_testing::sym(m, "U"), 1, false, true, msg);
+    if(!u) { return -2; }
+    return 0;
+}
+
+fn i32 extern_union_no_body_no_opaque_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { union Foo; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternUnionDeclNode* u = compiler_testing::expect_extern_union(b.items[0], compiler_testing::sym(m, "Foo"), 0, false, false, msg);
+    if(!u) { return -2; }
+    if(!testing::expect_true(((u16)u.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "extern union without body must be marked 'opaque'", msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_union_opaque_with_body_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque union Foo { i32 x; }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternUnionDeclNode* u = compiler_testing::expect_extern_union(b.items[0], compiler_testing::sym(m, "Foo"), 1, true, false, msg);
+    if(!u) { return -2; }
+    if(!testing::expect_true(((u16)u.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "opaque extern type cannot have a body", msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_opaque_on_fn_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque fn void f(); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "f"), 0, false, false, msg);
+    if(!f) { return -2; }
+    if(!testing::expect_true(((u16)f.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "'opaque' is only valid on struct or union", msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_block_multi_item(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local,
+        "extern { opaque struct FILE; fn i32 puts(u8* s); fn i32 printf(u8* fmt, ...); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 3, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "FILE"), 0, true, false, msg);
+    if(!s) { return -2; }
+    ast::ExternFnDeclNode* f1 = compiler_testing::expect_extern_fn(b.items[1], compiler_testing::sym(m, "puts"), 1, false, false, msg);
+    if(!f1) { return -3; }
+    ast::ExternFnDeclNode* f2 = compiler_testing::expect_extern_fn(b.items[2], compiler_testing::sym(m, "printf"), 1, true, false, msg);
+    if(!f2) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_block_mixed_export(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local,
+        "extern { export fn void a(); fn void b(); export opaque struct C; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 3, msg);
+    if(!b) { return -1; }
+    if(!compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "a"), 0, false, true, msg)) { return -2; }
+    if(!compiler_testing::expect_extern_fn(b.items[1], compiler_testing::sym(m, "b"), 0, false, false, msg)) { return -3; }
+    if(!compiler_testing::expect_extern_struct(b.items[2], compiler_testing::sym(m, "C"), 0, true, true, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_block_after_import(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "import io; extern { fn void f(); }", &m);
+    if(!compiler_testing::expect_import(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "io"), msg)) { return -1; }
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 1), null, 1, msg);
+    if(!b) { return -2; }
+    return 0;
+}
+
+fn i32 extern_unknown_item_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { i32 x; }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return -2; }
+    ast::ExternBlockNode* b = (ast::ExternBlockNode*)n0;
+    if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f();", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 extern_named_lib_with_items(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local,
+        "extern \"sodium\" { fn i32 sodium_init(); opaque struct sodium_state; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "sodium"), 2, msg);
+    if(!b) { return -1; }
+    if(!compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "sodium_init"), 0, false, false, msg)) { return -2; }
+    if(!compiler_testing::expect_extern_struct(b.items[1], compiler_testing::sym(m, "sodium_state"), 0, true, false, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_struct_full_with_pointer_field(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct Node { Node* next; i32 value; }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "Node"), 2, false, false, msg);
+    if(!s) { return -2; }
+    if(!compiler_testing::expect_ty_ptr(s.fields[0].type_expr, msg)) { return -3; }
+    if(!compiler_testing::expect_ty_prim(s.fields[1].type_expr, token::TokenKind::I32, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_fn_returns_pointer(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn u8* malloc(u64 size); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "malloc"), 1, false, false, msg);
+    if(!f) { return -2; }
+    ast::TypePointerNode* pty = compiler_testing::expect_ty_ptr(f.return_type, msg);
+    if(!pty) { return -3; }
+    if(!compiler_testing::expect_ty_prim(pty.pointee, token::TokenKind::U8, msg)) { return -4; }
+    if(!compiler_testing::expect_ty_prim(f.params[0].type_expr, token::TokenKind::U64, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_fn_takes_opaque_pointer(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local,
+        "extern { opaque struct FILE; fn i32 fclose(FILE* fp); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 2, msg);
+    if(!b) { return -1; }
+    if(!compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "FILE"), 0, true, false, msg)) { return -2; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[1], compiler_testing::sym(m, "fclose"), 1, false, false, msg);
+    if(!f) { return -3; }
+    ast::TypePointerNode* pty = compiler_testing::expect_ty_ptr(f.params[0].type_expr, msg);
+    if(!pty) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_two_blocks(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local,
+        "extern { fn void a(); } extern \"x\" { fn void b(); }", &m);
+    ast::ExternBlockNode* b0 = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b0) { return -1; }
+    ast::ExternBlockNode* b1 = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 1), compiler_testing::sym(m, "x"), 1, msg);
+    if(!b1) { return -2; }
+    return 0;
+}
+
+fn i32 extern_fn_src_pos(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f(); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "f"), 0, false, false, msg);
+    if(!f) { return -2; }
+    if(!testing::expect_eq(f.h.src_pos, (u32)9, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_struct_src_pos_at_start(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque struct FILE; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "FILE"), 0, true, false, msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.h.src_pos, (u32)9, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_export_struct_src_pos_includes_export(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export opaque struct FILE; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "FILE"), 0, true, true, msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq(s.h.src_pos, (u32)9, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 fn_variadic_at_top_level_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(...) { }", &m);
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -1; }
+    return 0;
+}
+
+fn i32 extern_bare_no_brace_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern;", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return -2; }
+    ast::ExternBlockNode* b = (ast::ExternBlockNode*)n0;
+    if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_non_string_lib_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern foo { }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return -2; }
+    ast::ExternBlockNode* b = (ast::ExternBlockNode*)n0;
+    if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_eq((void*)b.lib_name, (void*)null, msg)) { return -4; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 extern_wrong_modifier_order_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque export struct X; }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return -2; }
+    ast::ExternBlockNode* b = (ast::ExternBlockNode*)n0;
+    if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_fn_missing_semi_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f() }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "f"), 0, false, false, msg);
+    if(!f) { return -2; }
+    if(!testing::expect_true(((u16)f.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_struct_no_body_no_opaque_src_pos_at_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct Foo; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)19, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_struct_opaque_with_body_src_pos_at_lbrace(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque struct Foo { i32 x; }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)27, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_union_no_body_no_opaque_src_pos_at_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { union Foo; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)18, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_union_opaque_with_body_src_pos_at_lbrace(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque union Foo { i32 x; }; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)26, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_opaque_on_fn_src_pos_at_opaque(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque fn void f(); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)9, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 extern_double_export_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export export fn void f(); }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return -2; }
+    ast::ExternBlockNode* b = (ast::ExternBlockNode*)n0;
+    if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 opaque_at_top_level_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "opaque struct Foo;", &m);
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -1; }
+    return 0;
+}
+
+fn i32 extern_opaque_on_var_decl_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque i32 x; }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return -2; }
+    ast::ExternBlockNode* b = (ast::ExternBlockNode*)n0;
+    if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_fn_with_body_errors(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f() { } }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return -2; }
+    ast::ExternBlockNode* b = (ast::ExternBlockNode*)n0;
+    if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
+    if(!testing::expect_true(b.items.len >= 1, msg)) { return -4; }
+    if(!testing::expect_eq((u16)b.items[0].h.kind, (u16)ast::AstKind::ExternFnDecl, msg)) { return -5; }
+    if(!testing::expect_true(((u16)b.items[0].h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -6; }
+    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -7; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -10217,6 +10861,60 @@ fn i32 main() {
     testing::add(s_e, "expr_combo_cast_then_binary", &expr_combo_cast_then_binary);
     testing::add(s_e, "expr_binop_src_pos_on_operator", &expr_binop_src_pos_on_operator);
     testing::add(s_e, "expr_unop_src_pos_on_operator", &expr_unop_src_pos_on_operator);
+
+    u8[] s_ext = "Parser Extern";
+    testing::add(s_ext, "extern_block_empty", &extern_block_empty);
+    testing::add(s_ext, "extern_block_named_lib", &extern_block_named_lib);
+    testing::add(s_ext, "extern_block_lib_c_explicit", &extern_block_lib_c_explicit);
+    testing::add(s_ext, "extern_block_src_pos_on_extern_kw", &extern_block_src_pos_on_extern_kw);
+    testing::add(s_ext, "extern_fn_no_params", &extern_fn_no_params);
+    testing::add(s_ext, "extern_fn_with_params", &extern_fn_with_params);
+    testing::add(s_ext, "extern_fn_variadic", &extern_fn_variadic);
+    testing::add(s_ext, "extern_fn_variadic_only", &extern_fn_variadic_only);
+    testing::add(s_ext, "extern_fn_multi_param_variadic", &extern_fn_multi_param_variadic);
+    testing::add(s_ext, "extern_fn_exported", &extern_fn_exported);
+    testing::add(s_ext, "extern_fn_comptime_safe_is_minus_one", &extern_fn_comptime_safe_is_minus_one);
+    testing::add(s_ext, "extern_struct_opaque", &extern_struct_opaque);
+    testing::add(s_ext, "extern_struct_opaque_exported", &extern_struct_opaque_exported);
+    testing::add(s_ext, "extern_struct_full", &extern_struct_full);
+    testing::add(s_ext, "extern_struct_full_empty_body", &extern_struct_full_empty_body);
+    testing::add(s_ext, "extern_struct_full_exported", &extern_struct_full_exported);
+    testing::add(s_ext, "extern_struct_no_body_no_opaque_errors", &extern_struct_no_body_no_opaque_errors);
+    testing::add(s_ext, "extern_struct_opaque_with_body_errors", &extern_struct_opaque_with_body_errors);
+    testing::add(s_ext, "extern_union_opaque", &extern_union_opaque);
+    testing::add(s_ext, "extern_union_opaque_exported", &extern_union_opaque_exported);
+    testing::add(s_ext, "extern_union_full", &extern_union_full);
+    testing::add(s_ext, "extern_union_full_exported", &extern_union_full_exported);
+    testing::add(s_ext, "extern_union_no_body_no_opaque_errors", &extern_union_no_body_no_opaque_errors);
+    testing::add(s_ext, "extern_union_opaque_with_body_errors", &extern_union_opaque_with_body_errors);
+    testing::add(s_ext, "extern_opaque_on_fn_errors", &extern_opaque_on_fn_errors);
+    testing::add(s_ext, "extern_block_multi_item", &extern_block_multi_item);
+    testing::add(s_ext, "extern_block_mixed_export", &extern_block_mixed_export);
+    testing::add(s_ext, "extern_block_after_import", &extern_block_after_import);
+    testing::add(s_ext, "extern_unknown_item_errors", &extern_unknown_item_errors);
+    testing::add(s_ext, "extern_missing_rbrace_at_eof", &extern_missing_rbrace_at_eof);
+    testing::add(s_ext, "extern_named_lib_with_items", &extern_named_lib_with_items);
+    testing::add(s_ext, "extern_struct_full_with_pointer_field", &extern_struct_full_with_pointer_field);
+    testing::add(s_ext, "extern_fn_returns_pointer", &extern_fn_returns_pointer);
+    testing::add(s_ext, "extern_fn_takes_opaque_pointer", &extern_fn_takes_opaque_pointer);
+    testing::add(s_ext, "extern_two_blocks", &extern_two_blocks);
+    testing::add(s_ext, "extern_fn_src_pos", &extern_fn_src_pos);
+    testing::add(s_ext, "extern_struct_src_pos_at_start", &extern_struct_src_pos_at_start);
+    testing::add(s_ext, "extern_export_struct_src_pos_includes_export", &extern_export_struct_src_pos_includes_export);
+    testing::add(s_ext, "fn_variadic_at_top_level_errors", &fn_variadic_at_top_level_errors);
+    testing::add(s_ext, "extern_bare_no_brace_errors", &extern_bare_no_brace_errors);
+    testing::add(s_ext, "extern_non_string_lib_errors", &extern_non_string_lib_errors);
+    testing::add(s_ext, "extern_wrong_modifier_order_errors", &extern_wrong_modifier_order_errors);
+    testing::add(s_ext, "extern_fn_missing_semi_errors", &extern_fn_missing_semi_errors);
+    testing::add(s_ext, "extern_struct_no_body_no_opaque_src_pos_at_semi", &extern_struct_no_body_no_opaque_src_pos_at_semi);
+    testing::add(s_ext, "extern_struct_opaque_with_body_src_pos_at_lbrace", &extern_struct_opaque_with_body_src_pos_at_lbrace);
+    testing::add(s_ext, "extern_union_no_body_no_opaque_src_pos_at_semi", &extern_union_no_body_no_opaque_src_pos_at_semi);
+    testing::add(s_ext, "extern_union_opaque_with_body_src_pos_at_lbrace", &extern_union_opaque_with_body_src_pos_at_lbrace);
+    testing::add(s_ext, "extern_opaque_on_fn_src_pos_at_opaque", &extern_opaque_on_fn_src_pos_at_opaque);
+    testing::add(s_ext, "extern_double_export_errors", &extern_double_export_errors);
+    testing::add(s_ext, "opaque_at_top_level_errors", &opaque_at_top_level_errors);
+    testing::add(s_ext, "extern_opaque_on_var_decl_errors", &extern_opaque_on_var_decl_errors);
+    testing::add(s_ext, "extern_fn_with_body_errors", &extern_fn_with_body_errors);
 
     return testing::run();
 }

@@ -801,6 +801,138 @@ fn i32 print_extern_fn_decl(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 print_extern_struct_decl_opaque(arena::Arena* a, u8[] m) {
+    arena::Arena local = {4096, null};
+    Ctx c; setup(&c, &local);
+    ast::ExternStructDeclNode* n = arena::alloc(&local, sizeof(ast::ExternStructDeclNode));
+    n.h.kind = ast::AstKind::ExternStructDecl;
+    n.name = interner::intern(c.interner, "FILE");
+    n.fields = {null, 0};
+    n.is_opaque = true;
+    n.is_exported = false;
+    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    if(!check(&c, "ExternStructDecl FILE opaque\n", m)) { return -1; }
+    return 0;
+}
+
+fn i32 print_extern_struct_decl_opaque_exported(arena::Arena* a, u8[] m) {
+    arena::Arena local = {4096, null};
+    Ctx c; setup(&c, &local);
+    ast::ExternStructDeclNode* n = arena::alloc(&local, sizeof(ast::ExternStructDeclNode));
+    n.h.kind = ast::AstKind::ExternStructDecl;
+    n.name = interner::intern(c.interner, "FILE");
+    n.fields = {null, 0};
+    n.is_opaque = true;
+    n.is_exported = true;
+    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    if(!check(&c, "ExternStructDecl FILE opaque exported\n", m)) { return -1; }
+    return 0;
+}
+
+fn i32 print_extern_struct_decl_full(arena::Arena* a, u8[] m) {
+    arena::Arena local = {4096, null};
+    Ctx c; setup(&c, &local);
+    ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
+    fields[0].name = interner::intern(c.interner, "x");
+    fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
+    fields[0].src_pos = 0;
+    ast::ExternStructDeclNode* n = arena::alloc(&local, sizeof(ast::ExternStructDeclNode));
+    n.h.kind = ast::AstKind::ExternStructDecl;
+    n.name = interner::intern(c.interner, "Point");
+    n.fields = {fields, 1};
+    n.is_opaque = false;
+    n.is_exported = false;
+    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    u8[] e = "ExternStructDecl Point\n  Field x\n    PrimitiveType 'i32'\n";
+    if(!check(&c, e, m)) { return -1; }
+    return 0;
+}
+
+fn i32 print_extern_struct_decl_full_exported(arena::Arena* a, u8[] m) {
+    arena::Arena local = {4096, null};
+    Ctx c; setup(&c, &local);
+    ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
+    fields[0].name = interner::intern(c.interner, "x");
+    fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
+    fields[0].src_pos = 0;
+    ast::ExternStructDeclNode* n = arena::alloc(&local, sizeof(ast::ExternStructDeclNode));
+    n.h.kind = ast::AstKind::ExternStructDecl;
+    n.name = interner::intern(c.interner, "Point");
+    n.fields = {fields, 1};
+    n.is_opaque = false;
+    n.is_exported = true;
+    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    u8[] e = "ExternStructDecl Point exported\n  Field x\n    PrimitiveType 'i32'\n";
+    if(!check(&c, e, m)) { return -1; }
+    return 0;
+}
+
+fn i32 print_extern_union_decl_opaque(arena::Arena* a, u8[] m) {
+    arena::Arena local = {4096, null};
+    Ctx c; setup(&c, &local);
+    ast::ExternUnionDeclNode* n = arena::alloc(&local, sizeof(ast::ExternUnionDeclNode));
+    n.h.kind = ast::AstKind::ExternUnionDecl;
+    n.name = interner::intern(c.interner, "Variant");
+    n.fields = {null, 0};
+    n.is_opaque = true;
+    n.is_exported = false;
+    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    if(!check(&c, "ExternUnionDecl Variant opaque\n", m)) { return -1; }
+    return 0;
+}
+
+fn i32 print_extern_union_decl_opaque_exported(arena::Arena* a, u8[] m) {
+    arena::Arena local = {4096, null};
+    Ctx c; setup(&c, &local);
+    ast::ExternUnionDeclNode* n = arena::alloc(&local, sizeof(ast::ExternUnionDeclNode));
+    n.h.kind = ast::AstKind::ExternUnionDecl;
+    n.name = interner::intern(c.interner, "Variant");
+    n.fields = {null, 0};
+    n.is_opaque = true;
+    n.is_exported = true;
+    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    if(!check(&c, "ExternUnionDecl Variant opaque exported\n", m)) { return -1; }
+    return 0;
+}
+
+fn i32 print_extern_union_decl_full(arena::Arena* a, u8[] m) {
+    arena::Arena local = {4096, null};
+    Ctx c; setup(&c, &local);
+    ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
+    fields[0].name = interner::intern(c.interner, "i");
+    fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I64);
+    fields[0].src_pos = 0;
+    ast::ExternUnionDeclNode* n = arena::alloc(&local, sizeof(ast::ExternUnionDeclNode));
+    n.h.kind = ast::AstKind::ExternUnionDecl;
+    n.name = interner::intern(c.interner, "U");
+    n.fields = {fields, 1};
+    n.is_opaque = false;
+    n.is_exported = false;
+    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    u8[] e = "ExternUnionDecl U\n  Field i\n    PrimitiveType 'i64'\n";
+    if(!check(&c, e, m)) { return -1; }
+    return 0;
+}
+
+fn i32 print_extern_union_decl_full_exported(arena::Arena* a, u8[] m) {
+    arena::Arena local = {4096, null};
+    Ctx c; setup(&c, &local);
+    ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
+    fields[0].name = interner::intern(c.interner, "i");
+    fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I64);
+    fields[0].src_pos = 0;
+    ast::ExternUnionDeclNode* n = arena::alloc(&local, sizeof(ast::ExternUnionDeclNode));
+    n.h.kind = ast::AstKind::ExternUnionDecl;
+    n.name = interner::intern(c.interner, "U");
+    n.fields = {fields, 1};
+    n.is_opaque = false;
+    n.is_exported = true;
+    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    u8[] e = "ExternUnionDecl U exported\n  Field i\n    PrimitiveType 'i64'\n";
+    if(!check(&c, e, m)) { return -1; }
+    return 0;
+}
+
 // ---- statements ----
 
 fn i32 print_empty_block(arena::Arena* a, u8[] m) {
@@ -1119,6 +1251,14 @@ fn i32 main() {
     testing::add(suite, "print_alias_decl", &print_alias_decl);
     testing::add(suite, "print_extern_block", &print_extern_block);
     testing::add(suite, "print_extern_fn_decl", &print_extern_fn_decl);
+    testing::add(suite, "print_extern_struct_decl_opaque", &print_extern_struct_decl_opaque);
+    testing::add(suite, "print_extern_struct_decl_opaque_exported", &print_extern_struct_decl_opaque_exported);
+    testing::add(suite, "print_extern_struct_decl_full", &print_extern_struct_decl_full);
+    testing::add(suite, "print_extern_struct_decl_full_exported", &print_extern_struct_decl_full_exported);
+    testing::add(suite, "print_extern_union_decl_opaque", &print_extern_union_decl_opaque);
+    testing::add(suite, "print_extern_union_decl_opaque_exported", &print_extern_union_decl_opaque_exported);
+    testing::add(suite, "print_extern_union_decl_full", &print_extern_union_decl_full);
+    testing::add(suite, "print_extern_union_decl_full_exported", &print_extern_union_decl_full_exported);
 
     // statements
     testing::add(suite, "print_empty_block", &print_empty_block);
