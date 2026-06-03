@@ -175,6 +175,89 @@ fn i32 import_error_does_not_loop_forever(arena::Arena* a, u8[] msg) {
     if(!(testing::expect_not_null((void*)root, msg))) { return -1; } return 0;
 }
 
+fn i32 import_not_reexport_by_default(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "import io;", &m);
+    ast::ImportNode* imp = compiler_testing::expect_import(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "io"), msg);
+    if(!imp) { return -1; }
+    if(!testing::expect_eq(imp.is_reexport, false, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 import_export_marks_reexport(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export import io;", &m);
+    ast::ImportNode* imp = compiler_testing::expect_import(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "io"), msg);
+    if(!imp) { return -1; }
+    if(!testing::expect_eq(imp.is_reexport, true, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -3; }
+    if(!testing::expect_eq((u16)imp.h.flags, (u16)0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 import_export_then_plain_import(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export import a; import b;", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::ImportNode* i0 = compiler_testing::expect_import(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "a"), msg);
+    if(!i0) { return -2; }
+    if(!testing::expect_eq(i0.is_reexport, true, msg)) { return -3; }
+    ast::ImportNode* i1 = compiler_testing::expect_import(compiler_testing::nth_stmt(root, 1), compiler_testing::sym(m, "b"), msg);
+    if(!i1) { return -4; }
+    if(!testing::expect_eq(i1.is_reexport, false, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 import_export_with_bad_module_name_recovers(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export import 123; import io;", &m);
+    ast::BlockNode* b = (ast::BlockNode*)root;
+    bool found_io = false;
+    bool io_is_reexport = true;
+    symbol::Symbol* want = compiler_testing::sym(m, "io");
+    for(u64 i = 0; i < b.stmts.len; i += 1) {
+        ast::AstNode* s = b.stmts.ptr[i];
+        if(s && s.h.kind == ast::AstKind::ImportDecl) {
+            ast::ImportNode* ii = (ast::ImportNode*)s;
+            if(ii.module_name == want) {
+                found_io = true;
+                io_is_reexport = ii.is_reexport;
+            }
+        }
+    }
+    if(!testing::expect_true(found_io, msg)) { return -1; }
+    if(!testing::expect_eq(io_is_reexport, false, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 import_export_with_keyword_module_name_recovers(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export import const; import io;", &m);
+    ast::BlockNode* b = (ast::BlockNode*)root;
+    bool found_io = false;
+    bool io_is_reexport = true;
+    symbol::Symbol* want = compiler_testing::sym(m, "io");
+    for(u64 i = 0; i < b.stmts.len; i += 1) {
+        ast::AstNode* s = b.stmts.ptr[i];
+        if(s && s.h.kind == ast::AstKind::ImportDecl) {
+            ast::ImportNode* ii = (ast::ImportNode*)s;
+            if(ii.module_name == want) {
+                found_io = true;
+                io_is_reexport = ii.is_reexport;
+            }
+        }
+    }
+    if(!testing::expect_true(found_io, msg)) { return -1; }
+    if(!testing::expect_eq(io_is_reexport, false, msg)) { return -2; }
+    return 0;
+}
+
 // ============================================================================
 // VAR DECLS
 // ============================================================================
@@ -6742,6 +6825,53 @@ fn i32 comprun_top_level_mixed_with_decls(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 comprun_export_is_error(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export comprun { i32 x = 5; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`export` is not valid on `comprun` (it does not declare a named symbol)", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)7, msg)) { return -3; }
+    ast::CompRunNode* cr = compiler_testing::expect_comprun(compiler_testing::nth_stmt(root, 0), msg);
+    if(!cr) { return -4; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)cr), msg)) { return -5; }
+    ast::BlockNode* body = compiler_testing::expect_block(cr.body, 1, msg);
+    if(!body) { return -6; }
+    return 0;
+}
+
+fn i32 comprun_export_then_valid_decl_recovers(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export comprun { } export fn void f() { }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, (u64)2, msg)) { return -2; }
+    if(!compiler_testing::expect_comprun(r.stmts.ptr[0], msg)) { return -3; }
+    if(!compiler_testing::expect_fn_decl(r.stmts.ptr[1], compiler_testing::sym(m, "f"), 0, true, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 comprun_two_exports_two_diags(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "export comprun { } export comprun { }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)2, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`export` is not valid on `comprun` (it does not declare a named symbol)", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[1].msg, "`export` is not valid on `comprun` (it does not declare a named symbol)", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)7, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries[1].src_pos, (u32)26, msg)) { return -5; }
+    ast::BlockNode* r = (ast::BlockNode*)root;
+    if(!testing::expect_eq(r.stmts.len, (u64)2, msg)) { return -6; }
+    ast::CompRunNode* cr0 = compiler_testing::expect_comprun(r.stmts.ptr[0], msg);
+    if(!cr0) { return -7; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)cr0), msg)) { return -8; }
+    ast::CompRunNode* cr1 = compiler_testing::expect_comprun(r.stmts.ptr[1], msg);
+    if(!cr1) { return -9; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)cr1), msg)) { return -10; }
+    return 0;
+}
+
 fn i32 comprun_in_fn_empty(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -10911,6 +11041,11 @@ fn i32 main() {
     testing::add(s_imp, "import_qualified_name_rejected", &import_qualified_name_rejected);
     testing::add(s_imp, "import_error_then_valid_recovers", &import_error_then_valid_recovers);
     testing::add(s_imp, "import_error_does_not_loop_forever", &import_error_does_not_loop_forever);
+    testing::add(s_imp, "import_not_reexport_by_default", &import_not_reexport_by_default);
+    testing::add(s_imp, "import_export_marks_reexport", &import_export_marks_reexport);
+    testing::add(s_imp, "import_export_then_plain_import", &import_export_then_plain_import);
+    testing::add(s_imp, "import_export_with_bad_module_name_recovers", &import_export_with_bad_module_name_recovers);
+    testing::add(s_imp, "import_export_with_keyword_module_name_recovers", &import_export_with_keyword_module_name_recovers);
 
     u8[] s_var_decl = "Parser VarDecls";
     testing::add(s_var_decl, "var_decl_basic_int_init", &var_decl_basic_int_init);
@@ -11412,6 +11547,9 @@ fn i32 main() {
     testing::add(s_cr, "comprun_top_level_empty", &comprun_top_level_empty);
     testing::add(s_cr, "comprun_top_level_with_stmts", &comprun_top_level_with_stmts);
     testing::add(s_cr, "comprun_top_level_mixed_with_decls", &comprun_top_level_mixed_with_decls);
+    testing::add(s_cr, "comprun_export_is_error", &comprun_export_is_error);
+    testing::add(s_cr, "comprun_export_then_valid_decl_recovers", &comprun_export_then_valid_decl_recovers);
+    testing::add(s_cr, "comprun_two_exports_two_diags", &comprun_two_exports_two_diags);
     testing::add(s_cr, "comprun_in_fn_empty", &comprun_in_fn_empty);
     testing::add(s_cr, "comprun_in_fn_multi_stmt", &comprun_in_fn_multi_stmt);
     testing::add(s_cr, "comprun_in_bare_block", &comprun_in_bare_block);

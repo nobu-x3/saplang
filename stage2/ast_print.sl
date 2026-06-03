@@ -26,6 +26,7 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
         ast::ImportNode* d = (ast::ImportNode*)n;
         io::outbuf_write(out, "Import ");
         write_sym(out, d.module_name, it);
+        if(d.is_reexport) { io::outbuf_write(out, " reexport"); }
         io::outbuf_write_byte(out, '\n');
     }
     case ast::AstKind::VarDecl: {

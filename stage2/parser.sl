@@ -41,10 +41,20 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
         t = peek(p, 0);
     }
     switch (t.kind) {
-        case token::TokenKind::IMPORT:  { return parse_import(p); }              // export is illegal here
+        case token::TokenKind::IMPORT:  { return parse_import(p, is_exported); }
         case token::TokenKind::CONST:   { return parse_var_decl(p, is_exported); }
         case token::TokenKind::EXTERN:  { return parse_extern_block(p); }
-        case token::TokenKind::COMPRUN: { return parse_comprun(p); }
+        case token::TokenKind::COMPRUN: {
+            ast::AstNode* cr = parse_comprun(p);
+            if(is_exported) {
+                if(!p.is_speculating) {
+                    u8[] msg = "`export` is not valid on `comprun` (it does not declare a named symbol)";
+                    diag::report(&p.m.diag, p.m.arena, t.src_pos, msg);
+                }
+                if(cr) { cr.h.flags = (ast::AstFlags)((u16)cr.h.flags | (u16)ast::AstFlags::HadError); }
+            }
+            return cr;
+        }
         case token::TokenKind::FN: {
             if(peek(p, 1).kind == token::TokenKind::Star) { return parse_var_decl(p, is_exported); }
             return parse_fn_decl(p, is_exported);
@@ -74,7 +84,7 @@ fn bool looks_like_type_start(token::TokenKind k) {
     return false;
 }
 
-fn ast::AstNode* parse_import(Parser* p) {
+fn ast::AstNode* parse_import(Parser* p, bool is_reexport) {
     token::Token import_tok = expect(p, token::TokenKind::IMPORT);
     if(import_tok.kind == token::TokenKind::ERROR) {
         return mk_error_node_and_consume(p, import_tok.src_pos);
@@ -92,6 +102,7 @@ fn ast::AstNode* parse_import(Parser* p) {
     import_node.h.flags = (ast::AstFlags)0;
     import_node.h.src_pos = import_tok.src_pos;
     import_node.module_name = module_name.data.sym;
+    import_node.is_reexport = is_reexport;
     return (ast::AstNode*)import_node;
 }
 
