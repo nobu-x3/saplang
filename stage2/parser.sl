@@ -85,6 +85,27 @@ fn bool looks_like_type_start(token::TokenKind k) {
     return false;
 }
 
+fn bool can_start_expr(token::TokenKind k) {
+    return k == token::TokenKind::IntLit
+        || k == token::TokenKind::FloatLit
+        || k == token::TokenKind::CharLit
+        || k == token::TokenKind::StringLit
+        || k == token::TokenKind::TRUE
+        || k == token::TokenKind::FALSE
+        || k == token::TokenKind::NULL
+        || k == token::TokenKind::UNDEFINED
+        || k == token::TokenKind::Ident
+        || k == token::TokenKind::LParen
+        || k == token::TokenKind::LBrace
+        || k == token::TokenKind::LBracket
+        || k == token::TokenKind::COMPCODE
+        || k == token::TokenKind::Minus
+        || k == token::TokenKind::Bang
+        || k == token::TokenKind::Tilde
+        || k == token::TokenKind::Amp
+        || k == token::TokenKind::Star;
+}
+
 fn ast::AstNode* parse_import(Parser* p, bool is_reexport) {
     token::Token import_tok = expect(p, token::TokenKind::IMPORT);
     if(import_tok.kind == token::TokenKind::ERROR) {
@@ -245,7 +266,9 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         if(looks_like_type_start(t.kind) && looks_like_var_decl(p)) {
             return parse_local_var_decl(p);
         }
-        //return parse_assignment_or_expr_stmt(p);
+        if(can_start_expr(t.kind)) {
+            return parse_assignment_or_expr_stmt(p);
+        }
         report_expected(p, t, token::TokenKind::Semi);
         return mk_error_node_and_consume(p, t.src_pos);
     }
@@ -893,6 +916,25 @@ fn bool is_assignment_op(token::TokenKind k) {
     else { return false; }
     }
     return false;
+}
+
+fn ast::AstNode* parse_assignment_or_expr_stmt(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    bool had_err = false;
+    ast::AstNode* node = parse_assign_or_expr(p, &had_err);
+    token::Token semi = expect(p, token::TokenKind::Semi);
+    if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
+    if(node && node.h.kind == ast::AstKind::AssignmentStmt) {
+        if(had_err) { node.h.flags = (ast::AstFlags)((u16)node.h.flags | (u16)ast::AstFlags::HadError); }
+        return node;
+    }
+    ast::ExprStmtNode* n = arena::alloc(p.m.arena, sizeof(ast::ExprStmtNode));
+    n.h.kind = ast::AstKind::ExprStmt;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.expr = node;
+    return (ast::AstNode*)n;
 }
 
 // Parses an expression and, if followed by an assignment op, wraps it in an

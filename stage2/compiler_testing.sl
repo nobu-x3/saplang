@@ -484,6 +484,12 @@ export fn ast::AssignmentNode* expect_assign(ast::AstNode* n, token::TokenKind o
     return a;
 }
 
+export fn ast::ExprStmtNode* expect_expr_stmt(ast::AstNode* n, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ExprStmt, msg)) { return null; }
+    return (ast::ExprStmtNode*)n;
+}
+
 export fn ast::ReturnNode* expect_return(ast::AstNode* n, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::ReturnStmt, msg)) { return null; }

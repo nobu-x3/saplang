@@ -1402,6 +1402,341 @@ fn i32 local_var_decl_export_rejected(arena::Arena* a, u8[] msg) {
 }
 
 // ============================================================================
+// EXPRESSION / ASSIGNMENT STATEMENTS
+// ============================================================================
+
+fn i32 expr_stmt_bare_call(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo(); }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!es) { return -3; }
+    ast::CallNode* c = compiler_testing::expect_call(es.expr, 0, msg);
+    if(!c) { return -4; }
+    if(!compiler_testing::expect_ident(c.callee, compiler_testing::sym(m, "foo"), msg)) { return -5; }
+    return 0;
+}
+
+fn i32 expr_stmt_call_with_args(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo(1, x); }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!es) { return -3; }
+    ast::CallNode* c = compiler_testing::expect_call(es.expr, 2, msg);
+    if(!c) { return -4; }
+    if(!compiler_testing::expect_intlit(c.args.ptr[0], 1, msg)) { return -5; }
+    if(!compiler_testing::expect_ident(c.args.ptr[1], compiler_testing::sym(m, "x"), msg)) { return -6; }
+    return 0;
+}
+
+fn i32 expr_stmt_method_chain_call(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { a.b.c(); }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!es) { return -3; }
+    if(!compiler_testing::expect_call(es.expr, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_plain(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x = 1; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::AssignmentNode* an = compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::Eq, msg);
+    if(!an) { return -3; }
+    if(!compiler_testing::expect_ident(an.lhs, compiler_testing::sym(m, "x"), msg)) { return -4; }
+    if(!compiler_testing::expect_intlit(an.rhs, 1, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_compound_plus_eq(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x += 2; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::PlusEq, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_compound_star_eq(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x *= 2; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::StarEq, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_compound_amp_eq(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x &= 3; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::AmpEq, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_compound_minus_eq(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x -= 2; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::MinusEq, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_compound_slash_eq(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x /= 2; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::SlashEq, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_compound_percent_eq(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x %= 2; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::PercentEq, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_compound_pipe_eq(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x |= 3; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::PipeEq, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_compound_caret_eq(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x ^= 3; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    if(!compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::CaretEq, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 expr_stmt_bare_deref(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { *p; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!es) { return -3; }
+    ast::UnaryOpNode* u = compiler_testing::expect_unop(es.expr, token::TokenKind::Star, msg);
+    if(!u) { return -4; }
+    if(!compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "p"), msg)) { return -5; }
+    return 0;
+}
+
+fn i32 expr_stmt_capitalized_call(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Foo(); }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!es) { return -3; }
+    ast::CallNode* c = compiler_testing::expect_call(es.expr, 0, msg);
+    if(!c) { return -4; }
+    if(!compiler_testing::expect_ident(c.callee, compiler_testing::sym(m, "Foo"), msg)) { return -5; }
+    return 0;
+}
+
+fn i32 defer_call_canonical(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer fclose(file); }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::DeferNode* d = compiler_testing::expect_defer(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!d) { return -3; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)d), msg)) { return -4; }
+    ast::BlockNode* blk = compiler_testing::expect_block(d.body, 1, msg);
+    if(!blk) { return -5; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(blk.stmts.ptr[0], msg);
+    if(!es) { return -6; }
+    ast::CallNode* c = compiler_testing::expect_call(es.expr, 1, msg);
+    if(!c) { return -7; }
+    if(!compiler_testing::expect_ident(c.callee, compiler_testing::sym(m, "fclose"), msg)) { return -8; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_index_lhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { arr[i] = v; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::AssignmentNode* an = compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::Eq, msg);
+    if(!an) { return -3; }
+    if(!compiler_testing::expect_index(an.lhs, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_deref_lhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { *p = v; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::AssignmentNode* an = compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::Eq, msg);
+    if(!an) { return -3; }
+    if(!compiler_testing::expect_unop(an.lhs, token::TokenKind::Star, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_member_lhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { s.field = v; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::AssignmentNode* an = compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::Eq, msg);
+    if(!an) { return -3; }
+    if(!compiler_testing::expect_member(an.lhs, compiler_testing::sym(m, "field"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_stmt_bare_literal(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { 5; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!es) { return -3; }
+    if(!compiler_testing::expect_intlit(es.expr, 5, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_stmt_bare_ident(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!es) { return -3; }
+    if(!compiler_testing::expect_ident(es.expr, compiler_testing::sym(m, "x"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_stmt_missing_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo() }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got '}'", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)20, msg)) { return -3; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -4; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!es) { return -5; }
+    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)es), msg)) { return -6; }
+    return 0;
+}
+
+fn i32 expr_stmt_two_consecutive_calls(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo(); bar(); }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(f.body, 2, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_expr_stmt(body.stmts.ptr[0], msg)) { return -4; }
+    if(!compiler_testing::expect_expr_stmt(body.stmts.ptr[1], msg)) { return -5; }
+    return 0;
+}
+
+fn i32 expr_stmt_mixed_with_var_decl_and_return(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 1; foo(x); return; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(f.body, 3, msg);
+    if(!body) { return -3; }
+    if(!compiler_testing::expect_var(body.stmts.ptr[0], compiler_testing::sym(m, "x"), false, false, msg)) { return -4; }
+    if(!compiler_testing::expect_expr_stmt(body.stmts.ptr[1], msg)) { return -5; }
+    if(!compiler_testing::expect_return(body.stmts.ptr[2], msg)) { return -6; }
+    return 0;
+}
+
+fn i32 expr_stmt_assignment_to_namespaced_lhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { mod::counter = 0; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::AssignmentNode* an = compiler_testing::expect_assign(compiler_testing::nth_stmt(f.body, 0), token::TokenKind::Eq, msg);
+    if(!an) { return -3; }
+    if(!compiler_testing::expect_nsacc(an.lhs, compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "counter"), msg)) { return -4; }
+    return 0;
+}
+
+fn i32 expr_stmt_cast(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { (i32)x; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
+    if(!f) { return -2; }
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    if(!es) { return -3; }
+    if(!compiler_testing::expect_cast(es.expr, msg)) { return -4; }
+    return 0;
+}
+
+// ============================================================================
 // NESTED BLOCKS
 // ============================================================================
 
@@ -8278,17 +8613,19 @@ fn i32 defer_semicolon_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_intlit_body(arena::Arena* a, u8[] msg) {
+fn i32 defer_expr_stmt_body(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer 5; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
-    if(!f) { return -1; }
+    if(!f) { return -2; }
     ast::DeferNode* d = compiler_testing::expect_defer(compiler_testing::nth_stmt(f.body, 0), msg);
-    if(!d) { return -2; }
-    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)d), msg)) { return -3; }
-    if(!testing::expect_eq(m.diag.entries[0].msg, "expected ';', got integer literal", msg)) { return -4; }
-    if(!testing::expect_eq(m.diag.entries[0].src_pos, 20, msg)) { return -5; }
+    if(!d) { return -3; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)d), msg)) { return -4; }
+    ast::BlockNode* blk = compiler_testing::expect_block(d.body, 1, msg);
+    if(!blk) { return -5; }
+    if(!testing::expect_eq((u16)blk.stmts.ptr[0].h.kind, (u16)ast::AstKind::ExprStmt, msg)) { return -6; }
     return 0;
 }
 
@@ -8349,20 +8686,21 @@ fn i32 defer_unclosed_block_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 defer_expr_stmt_then_var_decl(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer 5; i32 x = 5; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
-    if(!f) { return -1; }
-    ast::BlockNode* body = compiler_testing::expect_block(f.body, 3, msg);
-    if(!body) { return -2; }
+    if(!f) { return -2; }
+    ast::BlockNode* body = compiler_testing::expect_block(f.body, 2, msg);
+    if(!body) { return -3; }
     ast::DeferNode* d = compiler_testing::expect_defer(body.stmts.ptr[0], msg);
-    if(!d) { return -3; }
-    if(!testing::expect_true(compiler_testing::has_error_flag((ast::AstNode*)d), msg)) { return -4; }
-    ast::VarDeclNode* v = compiler_testing::expect_var(body.stmts.ptr[2], compiler_testing::sym(m, "x"), false, false, msg);
-    if(!v) { return -5; }
-    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)v), msg)) { return -6; }
+    if(!d) { return -4; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)d), msg)) { return -5; }
+    ast::VarDeclNode* v = compiler_testing::expect_var(body.stmts.ptr[1], compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -6; }
+    if(!testing::expect_false(compiler_testing::has_error_flag((ast::AstNode*)v), msg)) { return -7; }
     return 0;
 }
 
@@ -11293,6 +11631,32 @@ fn i32 main() {
     testing::add(s_local_var_decl, "local_var_decl_dispatch_falls_through_on_no_ident", &local_var_decl_dispatch_falls_through_on_no_ident);
     testing::add(s_local_var_decl, "local_var_decl_export_rejected", &local_var_decl_export_rejected);
 
+    u8[] s_es = "Parser ExprStmts";
+    testing::add(s_es, "expr_stmt_bare_call", &expr_stmt_bare_call);
+    testing::add(s_es, "expr_stmt_call_with_args", &expr_stmt_call_with_args);
+    testing::add(s_es, "expr_stmt_method_chain_call", &expr_stmt_method_chain_call);
+    testing::add(s_es, "expr_stmt_assignment_plain", &expr_stmt_assignment_plain);
+    testing::add(s_es, "expr_stmt_assignment_compound_plus_eq", &expr_stmt_assignment_compound_plus_eq);
+    testing::add(s_es, "expr_stmt_assignment_compound_star_eq", &expr_stmt_assignment_compound_star_eq);
+    testing::add(s_es, "expr_stmt_assignment_compound_amp_eq", &expr_stmt_assignment_compound_amp_eq);
+    testing::add(s_es, "expr_stmt_assignment_compound_minus_eq", &expr_stmt_assignment_compound_minus_eq);
+    testing::add(s_es, "expr_stmt_assignment_compound_slash_eq", &expr_stmt_assignment_compound_slash_eq);
+    testing::add(s_es, "expr_stmt_assignment_compound_percent_eq", &expr_stmt_assignment_compound_percent_eq);
+    testing::add(s_es, "expr_stmt_assignment_compound_pipe_eq", &expr_stmt_assignment_compound_pipe_eq);
+    testing::add(s_es, "expr_stmt_assignment_compound_caret_eq", &expr_stmt_assignment_compound_caret_eq);
+    testing::add(s_es, "expr_stmt_bare_deref", &expr_stmt_bare_deref);
+    testing::add(s_es, "expr_stmt_capitalized_call", &expr_stmt_capitalized_call);
+    testing::add(s_es, "expr_stmt_assignment_index_lhs", &expr_stmt_assignment_index_lhs);
+    testing::add(s_es, "expr_stmt_assignment_deref_lhs", &expr_stmt_assignment_deref_lhs);
+    testing::add(s_es, "expr_stmt_assignment_member_lhs", &expr_stmt_assignment_member_lhs);
+    testing::add(s_es, "expr_stmt_bare_literal", &expr_stmt_bare_literal);
+    testing::add(s_es, "expr_stmt_bare_ident", &expr_stmt_bare_ident);
+    testing::add(s_es, "expr_stmt_missing_semi", &expr_stmt_missing_semi);
+    testing::add(s_es, "expr_stmt_two_consecutive_calls", &expr_stmt_two_consecutive_calls);
+    testing::add(s_es, "expr_stmt_mixed_with_var_decl_and_return", &expr_stmt_mixed_with_var_decl_and_return);
+    testing::add(s_es, "expr_stmt_assignment_to_namespaced_lhs", &expr_stmt_assignment_to_namespaced_lhs);
+    testing::add(s_es, "expr_stmt_cast", &expr_stmt_cast);
+
     u8[] s_block = "Parser Blocks";
     testing::add(s_block, "block_empty_inner", &block_empty_inner);
     testing::add(s_block, "block_inner_single_stmt", &block_inner_single_stmt);
@@ -11805,11 +12169,12 @@ fn i32 main() {
     testing::add(s_df, "defer_single_synthetic_block_src_pos", &defer_single_synthetic_block_src_pos);
     testing::add(s_df, "defer_at_eof", &defer_at_eof);
     testing::add(s_df, "defer_semicolon_body", &defer_semicolon_body);
-    testing::add(s_df, "defer_intlit_body", &defer_intlit_body);
+    testing::add(s_df, "defer_expr_stmt_body", &defer_expr_stmt_body);
     testing::add(s_df, "defer_block_body_error_propagates", &defer_block_body_error_propagates);
     testing::add(s_df, "defer_single_body_error_propagates", &defer_single_body_error_propagates);
     testing::add(s_df, "defer_unclosed_block_at_eof", &defer_unclosed_block_at_eof);
-    testing::add(s_df, "defer_recovery_continues", &defer_recovery_continues);
+    testing::add(s_df, "defer_expr_stmt_then_var_decl", &defer_expr_stmt_then_var_decl);
+    testing::add(s_df, "defer_call_canonical", &defer_call_canonical);
 
     u8[] s_sw = "Parser Switches";
     testing::add(s_sw, "switch_empty", &switch_empty);
