@@ -82,6 +82,7 @@ fn bool looks_like_type_start(token::TokenKind k) {
     if(k == token::TokenKind::STRUCT) { return true; }
     if(k == token::TokenKind::UNION) { return true; }
     if(k == token::TokenKind::Dot) { return true; }
+    if(k == token::TokenKind::TYPEOF) { return true; }
     return false;
 }
 
@@ -99,6 +100,10 @@ fn bool can_start_expr(token::TokenKind k) {
         || k == token::TokenKind::LBrace
         || k == token::TokenKind::LBracket
         || k == token::TokenKind::COMPCODE
+        || k == token::TokenKind::SIZEOF
+        || k == token::TokenKind::ALIGNOF
+        || k == token::TokenKind::TYPEOF
+        || k == token::TokenKind::TYPE_INFO
         || k == token::TokenKind::Minus
         || k == token::TokenKind::Bang
         || k == token::TokenKind::Tilde
@@ -776,6 +781,95 @@ fn ast::AstNode* parse_enum_decl(Parser* p, bool is_exported) {
     return (ast::AstNode*)n;
 }
 
+fn ast::AstNode* parse_sizeof_alignof_arg(Parser* p, bool* had_err) {
+    ParserSnapshot s = snap(p);
+    bool prev_spec = p.is_speculating;
+    p.is_speculating = true;
+    ast::AstNode* arg = parse_type(p);
+    p.is_speculating = prev_spec;
+    if(arg && !had_error(arg) && peek(p, 0).kind == token::TokenKind::RParen) {
+        return arg;
+    }
+    rewind(p, s);
+    arg = parse_expr(p, 0);
+    if(!arg || had_error(arg)) { *had_err = true; }
+    return arg;
+}
+
+fn ast::AstNode* parse_sizeof(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    consume(p);
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* arg = parse_sizeof_alignof_arg(p, &had_err);
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::SizeofNode* n = arena::alloc(p.m.arena, sizeof(ast::SizeofNode));
+    n.h.kind = ast::AstKind::Sizeof;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.arg = arg;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_alignof(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    consume(p);
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* arg = parse_sizeof_alignof_arg(p, &had_err);
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AlignofNode* n = arena::alloc(p.m.arena, sizeof(ast::AlignofNode));
+    n.h.kind = ast::AstKind::Alignof;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.arg = arg;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_typeof(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    consume(p);
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* expr = parse_expr(p, 0);
+    if(!expr || had_error(expr)) { had_err = true; }
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::TypeofNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeofNode));
+    n.h.kind = ast::AstKind::Typeof;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.expr = expr;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* parse_type_info(Parser* p) {
+    u32 start = peek(p, 0).src_pos;
+    consume(p);
+    bool had_err = false;
+    token::Token lparen = expect(p, token::TokenKind::LParen);
+    if(lparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::AstNode* arg = parse_type(p);
+    if(!arg || had_error(arg)) { had_err = true; }
+    token::Token rparen = expect(p, token::TokenKind::RParen);
+    if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
+    ast::TypeInfoNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeInfoNode));
+    n.h.kind = ast::AstKind::Type_info;
+    n.h.flags = (ast::AstFlags)0;
+    if(had_err) { n.h.flags = ast::AstFlags::HadError; }
+    n.h.src_pos = start;
+    n.arg = arg;
+    return (ast::AstNode*)n;
+}
+
 fn ast::AstNode* parse_compcode(Parser* p) {
     u32 start = peek(p, 0).src_pos;
     token::Token kw = expect(p, token::TokenKind::COMPCODE);
@@ -1323,6 +1417,9 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         n.fields = fields;
         return (ast::AstNode*)n;
     }
+    case token::TokenKind::TYPEOF: {
+        return parse_typeof(p);
+    }
     case token::TokenKind::Ident: {
         consume(p);
         symbol::Symbol* ns = null;
@@ -1643,6 +1740,10 @@ fn ast::AstNode* parse_primary(Parser* p) {
     case token::TokenKind::LBrace:   { return parse_struct_lit(p); }
     case token::TokenKind::LBracket: { return parse_array_lit(p); }
     case token::TokenKind::COMPCODE: { return parse_compcode(p); }
+    case token::TokenKind::SIZEOF:    { return parse_sizeof(p); }
+    case token::TokenKind::ALIGNOF:   { return parse_alignof(p); }
+    case token::TokenKind::TYPEOF:    { return parse_typeof(p); }
+    case token::TokenKind::TYPE_INFO: { return parse_type_info(p); }
     else {
         if(!p.is_speculating) { report_expected(p, t, token::TokenKind::Ident); }
         return mk_error_node_and_consume(p, t.src_pos);

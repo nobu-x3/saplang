@@ -230,6 +230,38 @@ export fn ast::CastNode* expect_cast(ast::AstNode* n, u8[] msg) {
     return (ast::CastNode*)n;
 }
 
+export fn ast::SizeofNode* expect_sizeof(ast::AstNode* n, ast::AstKind arg_kind, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::Sizeof, msg)) { return null; }
+    ast::SizeofNode* s = (ast::SizeofNode*)n;
+    if(!testing::expect_eq((u16)s.arg.h.kind, (u16)arg_kind, msg)) { return null; }
+    return s;
+}
+
+export fn ast::AlignofNode* expect_alignof(ast::AstNode* n, ast::AstKind arg_kind, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::Alignof, msg)) { return null; }
+    ast::AlignofNode* an = (ast::AlignofNode*)n;
+    if(!testing::expect_eq((u16)an.arg.h.kind, (u16)arg_kind, msg)) { return null; }
+    return an;
+}
+
+export fn ast::TypeofNode* expect_typeof(ast::AstNode* n, ast::AstKind expr_kind, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::Typeof, msg)) { return null; }
+    ast::TypeofNode* t = (ast::TypeofNode*)n;
+    if(!testing::expect_eq((u16)t.expr.h.kind, (u16)expr_kind, msg)) { return null; }
+    return t;
+}
+
+export fn ast::TypeInfoNode* expect_type_info(ast::AstNode* n, ast::AstKind arg_kind, u8[] msg) {
+    if(!testing::expect_not_null((void*)n, msg)) { return null; }
+    if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::Type_info, msg)) { return null; }
+    ast::TypeInfoNode* ti = (ast::TypeInfoNode*)n;
+    if(!testing::expect_eq((u16)ti.arg.h.kind, (u16)arg_kind, msg)) { return null; }
+    return ti;
+}
+
 export fn ast::StructLitNode* expect_struct_lit(ast::AstNode* n, u64 n_inits, u8[] msg) {
     if(!testing::expect_not_null((void*)n, msg)) { return null; }
     if(!testing::expect_eq((u16)n.h.kind, (u16)ast::AstKind::StructLit, msg)) { return null; }
