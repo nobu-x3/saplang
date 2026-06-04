@@ -488,6 +488,19 @@ static LLVMValueRef maybe_decay_to_slice(CodegenLLVM *cg, ASTNode *expr, LLVMVal
 	return slice;
 }
 
+// Decay a fixed array argument to its address when the callee expects a pointer.
+static LLVMValueRef maybe_decay_to_pointer(CodegenLLVM *cg, ASTNode *expr, LLVMValueRef computed_val, Type *expected, Symbol *table, PassContext ctx) {
+	if (!expected || expected->type_kind != TYPE_POINTER)
+		return computed_val;
+	Type *actual = get_type(table, expr, ctx.current_scope, "");
+	if (!actual || actual->type_kind != TYPE_ARRAY)
+		return computed_val;
+	PassContext ptr_ctx = ctx;
+	ptr_ctx.intention = PI_LOAD_PTR;
+	ptr_ctx.expected_type = actual;
+	return codegen_ast(cg, expr, table, ptr_ctx);
+}
+
 LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	ASTNode *lvalue = node->data.assignment.lvalue;
 	assert(lvalue->type == AST_EXPR_IDENT || lvalue->type == AST_MEMBER_ACCESS || lvalue->type == AST_ARRAY_ACCESS ||
@@ -1487,6 +1500,7 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			}
 			args[i] = codegen_ast(cg, param, table, param_ctx);
 			args[i] = maybe_decay_to_slice(cg, param, args[i], declared_param_ty, table, ctx);
+			args[i] = maybe_decay_to_pointer(cg, param, args[i], declared_param_ty, table, ctx);
 		}
 		int is_void = callee_type->function.return_type->type_kind == TYPE_PRIMITIVE && callee_type->function.return_type->prim == PRIM_VOID;
 		return LLVMBuildCall2(cg->builder, fn_type, callee, args, node->data.func_call.arg_count, is_void ? "" : "calltmp");
