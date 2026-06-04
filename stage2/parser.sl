@@ -1685,7 +1685,7 @@ fn ast::AstNode* parse_paren_or_cast(Parser* p) {
     ast::AstNode* ty = parse_type(p);
     p.is_speculating = prev_spec;
 
-    if(ty && !had_error(ty) && peek(p, 0).kind == token::TokenKind::RParen) {
+    if(ty && !had_error(ty) && peek(p, 0).kind == token::TokenKind::RParen && can_start_expr(peek(p, 1).kind)) {
         consume(p);
         ast::AstNode* operand = parse_unary(p);
         ast::CastNode* c = arena::alloc(p.m.arena, sizeof(ast::CastNode));
