@@ -139,8 +139,17 @@ fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
     ast::AstNode* init_expr = null;
     if(peek(p, 0).kind == token::TokenKind::Eq) {
         consume(p);
-        init_expr = parse_expr(p, 0);
-        if(!init_expr || had_error(init_expr)) { had_err = true; }
+        if(peek(p, 0).kind == token::TokenKind::UNDEFINED && peek(p, 1).kind == token::TokenKind::Semi) {
+            token::Token u_tok = consume(p);
+            ast::UndefinedLitNode* u = arena::alloc(p.m.arena, sizeof(ast::UndefinedLitNode));
+            u.h.kind = ast::AstKind::UndefinedLit;
+            u.h.flags = (ast::AstFlags)0;
+            u.h.src_pos = u_tok.src_pos;
+            init_expr = (ast::AstNode*)u;
+        } else {
+            init_expr = parse_expr(p, 0);
+            if(!init_expr || had_error(init_expr)) { had_err = true; }
+        }
     }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
@@ -1619,9 +1628,13 @@ fn ast::AstNode* parse_primary(Parser* p) {
     }
     case token::TokenKind::UNDEFINED: {
         consume(p);
+        if(!p.is_speculating) {
+            u8[] msg = "`undefined` is only valid as a var-decl initializer";
+            diag::report(&p.m.diag, p.m.arena, t.src_pos, msg);
+        }
         ast::UndefinedLitNode* n = arena::alloc(p.m.arena, sizeof(ast::UndefinedLitNode));
         n.h.kind = ast::AstKind::UndefinedLit;
-        n.h.flags = (ast::AstFlags)0;
+        n.h.flags = ast::AstFlags::HadError;
         n.h.src_pos = t.src_pos;
         return (ast::AstNode*)n;
     }

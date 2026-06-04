@@ -326,6 +326,214 @@ fn i32 var_decl_undefined_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 var_decl_const_undefined_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "const f32 y = undefined;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "y"), true, false, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_undeflit(v.init, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_slice_undefined_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Foo[] arr = undefined;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "arr"), false, false, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_undeflit(v.init, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_pointer_undefined_init(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p = undefined;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "p"), false, false, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_undeflit(v.init, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_then_normal(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined; i32 y = 5;", &m);
+    ast::VarDeclNode* v1 = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v1) { return -1; }
+    if(!compiler_testing::expect_undeflit(v1.init, msg)) { return -2; }
+    ast::VarDeclNode* v2 = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 1), compiler_testing::sym(m, "y"), false, false, msg);
+    if(!v2) { return -3; }
+    if(!compiler_testing::expect_intlit(v2.init, 5, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_call_arg(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = foo(undefined);", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 12, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_binop(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined + 1;", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 8, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_paren(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (undefined);", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 9, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_index(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = arr[undefined];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 12, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_unary(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -undefined;", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 9, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_struct_lit(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Foo f = { .x = undefined };", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 15, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_bare_stmt(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { undefined; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 14, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_assign_rhs(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x = undefined; }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 18, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_if_cond(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if(undefined) {} }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 17, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_switch_scrut(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch(undefined) { else { } } }", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 21, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_as_callee(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined();", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 8, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_as_member_base(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined.field;", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 8, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_array_lit(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32[2] xs = [1, undefined];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 16, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_slice_range(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = arr[undefined..5];", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 12, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_undefined_in_cast(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (i32)undefined;", &m);
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 13, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 var_decl_named_type_undefined(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "Foo x = undefined;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "x"), false, false, msg);
+    if(!v) { return -1; }
+    if(!compiler_testing::expect_undeflit(v.init, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
 fn i32 var_decl_src_pos_on_type(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -2393,11 +2601,9 @@ fn i32 return_undefined(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return undefined; }", &m);
-    ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
-    if(!f) { return -1; }
-    ast::ReturnNode* r = compiler_testing::expect_return(compiler_testing::nth_stmt(f.body, 0), msg);
-    if(!r) { return -2; }
-    if(!compiler_testing::expect_undeflit(r.expr, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "`undefined` is only valid as a var-decl initializer", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, 20, msg)) { return -3; }
     return 0;
 }
 
@@ -11541,6 +11747,26 @@ fn i32 main() {
     testing::add(s_var_decl, "var_decl_export", &var_decl_export);
     testing::add(s_var_decl, "var_decl_export_const", &var_decl_export_const);
     testing::add(s_var_decl, "var_decl_undefined_init", &var_decl_undefined_init);
+    testing::add(s_var_decl, "var_decl_const_undefined_init", &var_decl_const_undefined_init);
+    testing::add(s_var_decl, "var_decl_slice_undefined_init", &var_decl_slice_undefined_init);
+    testing::add(s_var_decl, "var_decl_pointer_undefined_init", &var_decl_pointer_undefined_init);
+    testing::add(s_var_decl, "var_decl_named_type_undefined", &var_decl_named_type_undefined);
+    testing::add(s_var_decl, "var_decl_undefined_then_normal", &var_decl_undefined_then_normal);
+    testing::add(s_var_decl, "var_decl_undefined_in_call_arg", &var_decl_undefined_in_call_arg);
+    testing::add(s_var_decl, "var_decl_undefined_in_binop", &var_decl_undefined_in_binop);
+    testing::add(s_var_decl, "var_decl_undefined_in_paren", &var_decl_undefined_in_paren);
+    testing::add(s_var_decl, "var_decl_undefined_in_index", &var_decl_undefined_in_index);
+    testing::add(s_var_decl, "var_decl_undefined_in_unary", &var_decl_undefined_in_unary);
+    testing::add(s_var_decl, "var_decl_undefined_in_struct_lit", &var_decl_undefined_in_struct_lit);
+    testing::add(s_var_decl, "var_decl_undefined_bare_stmt", &var_decl_undefined_bare_stmt);
+    testing::add(s_var_decl, "var_decl_undefined_assign_rhs", &var_decl_undefined_assign_rhs);
+    testing::add(s_var_decl, "var_decl_undefined_in_if_cond", &var_decl_undefined_in_if_cond);
+    testing::add(s_var_decl, "var_decl_undefined_in_switch_scrut", &var_decl_undefined_in_switch_scrut);
+    testing::add(s_var_decl, "var_decl_undefined_as_callee", &var_decl_undefined_as_callee);
+    testing::add(s_var_decl, "var_decl_undefined_as_member_base", &var_decl_undefined_as_member_base);
+    testing::add(s_var_decl, "var_decl_undefined_in_array_lit", &var_decl_undefined_in_array_lit);
+    testing::add(s_var_decl, "var_decl_undefined_in_slice_range", &var_decl_undefined_in_slice_range);
+    testing::add(s_var_decl, "var_decl_undefined_in_cast", &var_decl_undefined_in_cast);
     testing::add(s_var_decl, "var_decl_src_pos_on_type", &var_decl_src_pos_on_type);
     testing::add(s_var_decl, "var_decl_src_pos_on_const", &var_decl_src_pos_on_const);
     testing::add(s_var_decl, "var_decl_multiple_decls", &var_decl_multiple_decls);
