@@ -7,7 +7,7 @@ export struct AstHeader {
     AstKind     kind;                   // AstKind enum value
     AstFlags    flags;                  // sema-populated bitfield; see below
     u32         src_pos;                // byte offset into Module.source — line/col derived
-    // Type*       ty;                  // null until sema; null for statement kinds
+    void*       ty;                     // types::Type*; void* breaks the ast<->types cycle
 }
 
 // abstract handle
@@ -385,6 +385,7 @@ export struct TypeUnionNode {           // anonymous union { ... } at type posit
 export struct Param {
     symbol::Symbol*   name;
     AstNode*  type_expr;                // AstKind::*Type
+    void*     resolved_type;            // types::Type*; filled by sema
     bool      is_const;
     bool      is_comptime;
     u32       src_pos;
@@ -393,6 +394,7 @@ export struct Param {
 export struct FieldDecl {
     symbol::Symbol*   name;
     AstNode*  type_expr;                // AstKind::*Type
+    void*     resolved_type;            // types::Type*; filled by sema
     u32       src_pos;
 }
 

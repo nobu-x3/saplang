@@ -7,8 +7,8 @@ import token;
 
 // ----- header / node layout -----
 
-fn i32 header_is_eight_bytes(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_eq(sizeof(ast::AstHeader), (u64)8, msg)) { return -1; }
+fn i32 header_is_sixteen_bytes(arena::Arena* a, u8[] msg) {
+    if(!testing::expect_eq(sizeof(ast::AstHeader), (u64)16, msg)) { return -1; }
     return 0;
 }
 
@@ -18,12 +18,12 @@ fn i32 astnode_alias_matches_header(arena::Arena* a, u8[] msg) {
 }
 
 fn i32 intlit_header_plus_u64(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_eq(sizeof(ast::IntLitNode), (u64)16, msg)) { return -1; }
+    if(!testing::expect_eq(sizeof(ast::IntLitNode), (u64)24, msg)) { return -1; }
     return 0;
 }
 
 fn i32 floatlit_header_plus_f64(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_eq(sizeof(ast::FloatLitNode), (u64)16, msg)) { return -1; }
+    if(!testing::expect_eq(sizeof(ast::FloatLitNode), (u64)24, msg)) { return -1; }
     return 0;
 }
 
@@ -35,8 +35,7 @@ fn i32 boollit_size(arena::Arena* a, u8[] msg) {
 }
 
 fn i32 binop_layout(arena::Arena* a, u8[] msg) {
-    // header (8) + op u16 (2 + 6 pad) + ptr (8) + ptr (8) = 32.
-    if(!testing::expect_eq(sizeof(ast::BinaryOpNode), (u64)32, msg)) { return -1; }
+    if(!testing::expect_eq(sizeof(ast::BinaryOpNode), (u64)40, msg)) { return -1; }
     return 0;
 }
 
@@ -1008,7 +1007,7 @@ fn i32 main() {
     u8[] suite = "AST Tests";
 
     // header / node layout
-    testing::add(suite, "header_is_eight_bytes", &header_is_eight_bytes);
+    testing::add(suite, "header_is_sixteen_bytes", &header_is_sixteen_bytes);
     testing::add(suite, "astnode_alias_matches_header", &astnode_alias_matches_header);
     testing::add(suite, "intlit_header_plus_u64", &intlit_header_plus_u64);
     testing::add(suite, "floatlit_header_plus_f64", &floatlit_header_plus_f64);

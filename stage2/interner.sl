@@ -4,11 +4,11 @@ import sys;
 import symbol;
 
 export struct Interner {
-    arena::Arena*   slab_arena;
-    u8[]            slab;
-    u64             slab_cap;
-    symbol::Symbol*[]       buckets;
-    u64             entry_count;
+    arena::Arena*       slab_arena;
+    u8[]                slab;
+    u64                 slab_cap;
+    symbol::Symbol*[]   buckets;
+    u64                 entry_count;
 }
 
 export fn symbol::Symbol* intern(Interner* it, u8[] bytes) {
