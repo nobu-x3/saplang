@@ -17,8 +17,8 @@
       "adapter": "CodeLLDB",
       "configuration": {
         "request": "launch",
-        "program": "${workspaceFolder}/build/bin/compiler",
-        "args": ["test.sl", "-o"," test", "-dbg", "-i", "incl"],
+        "program": "${workspaceFolder}/build/bin/saplangc",
+        "args": ["stage2/testing/interner_test.sl", "-o", "testing", "-dbg", "-i", "${workspaceFolder}/stage2/std;${workspaceFolder}/stage2"],
         "cwd": "${workspaceFolder}/build/bin",
         "environment": [],
         "stopOnEntry": false,
@@ -32,7 +32,20 @@
         "request": "launch",
         "program": "${workspaceFolder}/build/bin/saplangc_tests",
         "args": [],
-        "cwd": "${workspaceFolder}",
+        "cwd": "${workspaceFolder}/build",
+        "environment": [],
+        "stopOnEntry": false,
+        "terminal": "integrated",
+        "targetArchitecture": "x86_64"
+      }
+    },
+    "Run compiled with stage1": {
+      "adapter": "CodeLLDB",
+      "configuration": {
+        "request": "launch",
+        "program": "${workspaceFolder}/build/bin/stage2_tests/scanner_test",
+        "args": [],
+        "cwd": "${workspaceFolder}/build/bin",
         "environment": [],
         "stopOnEntry": false,
         "terminal": "integrated",

@@ -6,6 +6,8 @@ SAPLANGC="$ROOT/build/bin/saplangc"
 SRC_DIR="$ROOT/stage2/tests"
 OUT_DIR="$ROOT/build/bin/stage2_tests"
 
+rm -rf "$OUT_DIR/*"
+
 if [ ! -x "$SAPLANGC" ]; then
 	echo "error: $SAPLANGC not found or not executable" >&2
 	exit 1
