@@ -7,6 +7,12 @@ else()
 	llvm_map_components_to_libnames(llvm_libs core support native target codegen asmprinter)
 endif()
 
+if(NOT WIN32)
+	set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+	find_package(Threads REQUIRED)
+	list(APPEND llvm_libs Threads::Threads)
+endif()
+
 if(BUILD_TESTS)
 	add_library(saplangc_lib STATIC ${compiler_src})
 	include_directories(src)

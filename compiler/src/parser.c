@@ -63,7 +63,7 @@ static void print_indent(char *string, int level) {
 		print(string, "  ");
 }
 
-static const char *binary_op_name(TokenType op) {
+static const char *binary_op_name(TokenKind op) {
 	switch (op) {
 	case TOK_OR: return "||";
 	case TOK_SELFOR: return "|=";
@@ -158,7 +158,7 @@ static void ast_print_literal(ASTNode *node, char *string) {
 	else if (node->data.literal.is_float)
 		print(string, "Literal Float: %f\n", node->data.literal.float_value);
 	else
-		print(string, "Literal Int: %ld\n", node->data.literal.long_value);
+		print(string, "Literal Int: %lld\n", (long long)node->data.literal.long_value);
 }
 
 static void ast_print_ident(ASTNode *node, char *string) {
@@ -241,7 +241,7 @@ static void ast_print_enum_decl(ASTNode *node, int indent, char *string) {
 	print(string, ":\n");
 	for (int i = 0; i < node->data.enum_decl.member_count; ++i) {
 		print_indent(string, indent + 1);
-		print(string, "%s : %ld\n", node->data.enum_decl.members[i]->name, node->data.enum_decl.members[i]->value);
+		print(string, "%s : %lld\n", node->data.enum_decl.members[i]->name, (long long)node->data.enum_decl.members[i]->value);
 	}
 }
 
@@ -747,7 +747,7 @@ ASTNode *new_assignment_node(ASTNode *lvalue, ASTNode *rvalue, SourceLocation lo
 	return node;
 }
 
-ASTNode *new_binary_expr_node(TokenType op, ASTNode *left, ASTNode *right, SourceLocation loc) {
+ASTNode *new_binary_expr_node(TokenKind op, ASTNode *left, ASTNode *right, SourceLocation loc) {
 	ASTNode *node = new_ast_node(AST_BINARY_EXPR, loc);
 	if (!node)
 		return NULL;
@@ -906,7 +906,7 @@ ASTNode *new_extern_block_node(const char *libname, ASTNode **decls, int count, 
 	return node;
 }
 
-ASTNode *new_literal_node_long(long value, SourceLocation loc) {
+ASTNode *new_literal_node_long(i64 value, SourceLocation loc) {
 	ASTNode *node = new_ast_node(AST_EXPR_LITERAL, loc);
 	if (!node)
 		return NULL;
@@ -1255,7 +1255,7 @@ ASTNode *parse_qualified_identifier(Parser *parser, const char *scope_prefix) {
 
 ASTNode *parse_logical_or(Parser *, const char *);
 
-TokenType get_underlying_op(TokenType type, SourceLocation *loc) {
+TokenKind get_underlying_op(TokenKind type, SourceLocation *loc) {
 	switch (type) {
 	case TOK_SELFOR:
 		return TOK_BITWISE_OR;
@@ -1284,7 +1284,7 @@ ASTNode *parse_assignment(Parser *parser, const char *scope_prefix) {
 
 	if (parser->current_token.type == TOK_ASSIGN || parser->current_token.type == TOK_SELFADD || parser->current_token.type == TOK_SELFSUB || parser->current_token.type == TOK_SELFMUL || parser->current_token.type == TOK_SELFDIV ||
 		parser->current_token.type == TOK_SELFAND || parser->current_token.type == TOK_SELFOR || parser->current_token.type == TOK_SELFXOR) {
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		SourceLocation loc = parser->current_token.location;
 		parser->current_token = next_token(&parser->scanner);
 		// Right-associative
@@ -1292,7 +1292,7 @@ ASTNode *parse_assignment(Parser *parser, const char *scope_prefix) {
 		if (op == TOK_ASSIGN)
 			node = new_assignment_node(node, right, loc);
 		else {
-			TokenType underlying_op = get_underlying_op(op, &loc);
+			TokenKind underlying_op = get_underlying_op(op, &loc);
 			ASTNode *compound_expr = new_binary_expr_node(underlying_op, copy_ast_node(node), right, loc);
 			node = new_assignment_node(node, compound_expr, loc);
 		}
@@ -1349,7 +1349,7 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 	if (!p_da_init(members, 4))
 		return NULL;
 
-	int next_value = 0;
+	i64 next_value = 0;
 	while (parser->current_token.type != TOK_RCURLY) {
 		if (parser->current_token.type != TOK_IDENTIFIER) {
 			char msg[128];
@@ -1372,7 +1372,7 @@ ASTNode *parse_enum_decl(Parser *parser, int is_exported, int is_extern) {
 		if (parser->current_token.type == TOK_ASSIGN) {
 			parser->current_token = next_token(&parser->scanner); // consume '='
 			if (parser->current_token.type == TOK_NUMBER) {
-				member->value = atoi(parser->current_token.text);
+				member->value = (i64)strtoll(parser->current_token.text, NULL, 10);
 				next_value = member->value + 1;
 				parser->current_token = next_token(&parser->scanner); // consume number
 			} else if (parser->current_token.type == TOK_IDENTIFIER) {
@@ -1754,7 +1754,7 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 			}
 			unsigned long long uvalue = strtoull(parser->current_token.text + offset, NULL, base);
 			parser->current_token = next_token(&parser->scanner);
-			return new_literal_node_long((long)uvalue, loc);
+			return new_literal_node_long((i64)uvalue, loc);
 		}
 	case TOK_TRUE:
 		parser->current_token = next_token(&parser->scanner);
@@ -1793,7 +1793,7 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 				// was a parenthesized expression after all.
 				Scanner peek_scanner = parser->scanner;
 				Token peek_token = next_token(&peek_scanner);
-				TokenType t = peek_token.type;
+				TokenKind t = peek_token.type;
 				int looks_like_operand = t == TOK_NUMBER || t == TOK_TRUE || t == TOK_FALSE || t == TOK_NULL || t == TOK_IDENTIFIER ||
 										 t == TOK_LPAREN || t == TOK_STRINGLIT || t == TOK_LCURLY || t == TOK_LBRACKET || t == TOK_CHARLIT ||
 										 t == TOK_EXCLAMATION || t == TOK_AMPERSAND || t == TOK_ASTERISK || t == TOK_BITWISE_NEG || t == TOK_MINUS;
@@ -1871,7 +1871,7 @@ ASTNode *parse_multiplicative(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_unary(parser, scope_prefix);
 	while (parser->current_token.type == TOK_ASTERISK || parser->current_token.type == TOK_SLASH || parser->current_token.type == TOK_MODULO) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_unary(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1883,7 +1883,7 @@ ASTNode *parse_additive(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_multiplicative(parser, scope_prefix);
 	while (parser->current_token.type == TOK_PLUS || parser->current_token.type == TOK_MINUS) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_multiplicative(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1895,7 +1895,7 @@ ASTNode *parse_bitwise_shift(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_additive(parser, scope_prefix);
 	while (parser->current_token.type == TOK_BITWISE_LSHIFT || parser->current_token.type == TOK_BITWISE_RSHIFT) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_additive(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1907,7 +1907,7 @@ ASTNode *parse_relational(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_bitwise_shift(parser, scope_prefix);
 	while (parser->current_token.type == TOK_LESSTHAN || parser->current_token.type == TOK_LTOE || parser->current_token.type == TOK_GREATERTHAN || parser->current_token.type == TOK_GTOE) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_bitwise_shift(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1919,7 +1919,7 @@ ASTNode *parse_equality(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_relational(parser, scope_prefix);
 	while (parser->current_token.type == TOK_EQUAL || parser->current_token.type == TOK_NOTEQUAL) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_relational(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1931,7 +1931,7 @@ ASTNode *parse_bitwise_and(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_equality(parser, scope_prefix);
 	while (parser->current_token.type == TOK_AMPERSAND) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_equality(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1943,7 +1943,7 @@ ASTNode *parse_bitwise_xor(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_bitwise_and(parser, scope_prefix);
 	while (parser->current_token.type == TOK_BITWISE_XOR) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_bitwise_and(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1955,7 +1955,7 @@ ASTNode *parse_bitwise_or(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_bitwise_xor(parser, scope_prefix);
 	while (parser->current_token.type == TOK_BITWISE_OR) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_bitwise_xor(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1967,7 +1967,7 @@ ASTNode *parse_logical_and(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_bitwise_or(parser, scope_prefix);
 	while (parser->current_token.type == TOK_AND) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_bitwise_or(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1979,7 +1979,7 @@ ASTNode *parse_logical_or(Parser *parser, const char *scope_prefix) {
 	ASTNode *node = parse_logical_and(parser, scope_prefix);
 	while (parser->current_token.type == TOK_OR) {
 		SourceLocation loc = parser->current_token.location;
-		TokenType op = parser->current_token.type;
+		TokenKind op = parser->current_token.type;
 		parser->current_token = next_token(&parser->scanner);
 		ASTNode *right = parse_logical_and(parser, scope_prefix);
 		node = new_binary_expr_node(op, node, right, loc);
@@ -1990,7 +1990,7 @@ ASTNode *parse_logical_or(Parser *parser, const char *scope_prefix) {
 // <unaryExpr>
 // ::= ('*' | '!' | '&') <expr>
 ASTNode *parse_unary(Parser *parser, const char *scope_prefix) {
-	TokenType type = parser->current_token.type;
+	TokenKind type = parser->current_token.type;
 	if (type == TOK_EXCLAMATION || type == TOK_AMPERSAND || type == TOK_ASTERISK || type == TOK_BITWISE_NEG || type == TOK_MINUS) {
 		SourceLocation loc = parser->current_token.location;
 		char op = parser->current_token.text[0];

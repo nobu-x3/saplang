@@ -1,28 +1,35 @@
 #pragma once
 
-#if defined(__linux__) || defined(__unix__)
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+typedef CRITICAL_SECTION sl_mutex_t;
+typedef CONDITION_VARIABLE sl_cond_t;
+typedef HANDLE sl_thread_t;
+#else
 #include <pthread.h>
 #include <unistd.h>
+typedef pthread_mutex_t sl_mutex_t;
+typedef pthread_cond_t sl_cond_t;
+typedef pthread_t sl_thread_t;
 #endif
 
-typedef struct Task{
+typedef struct Task {
 	void (*function)(void *);
 	void *argument;
 	struct Task *next;
 } Task;
 
 typedef struct {
-#if defined(__linux__) || defined(__unix__)
-	pthread_mutex_t lock;  // Mutex for task queue access.
-	pthread_cond_t notify; // Condition variable to signal task availability.
-	pthread_cond_t empty;  // Condition variable to signal empty queue.
-	pthread_t *threads;	   // Array of worker threads.
-	Task *queue_head;	   // Head of the task queue.
-	Task *queue_tail;	   // Tail of the task queue.
-	int thread_count;	   // Number of worker threads.
-	int shutdown;		   // Flag to indicate shutdown.
-	int pending;		   // Number of tasks currrently enqueued or in execution.
-#endif
+	sl_mutex_t lock;
+	sl_cond_t notify;
+	sl_cond_t empty;
+	sl_thread_t *threads;
+	Task *queue_head;
+	Task *queue_tail;
+	int thread_count;
+	int shutdown;
+	int pending;
 } ThreadPool;
 
 ThreadPool *threadpool_create(int num_threads);

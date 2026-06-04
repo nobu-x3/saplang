@@ -89,10 +89,10 @@ typedef enum {
 	TOK_ALIGNOF,
 	TOKENS_BUILTIN_TYPE_BEGIN = TOK_I8,
 	TOKENS_BUILTIN_TYPE_END = TOK_BOOL,
-} TokenType;
+} TokenKind;
 
 typedef struct {
-	TokenType type;
+	TokenKind type;
 	// Inline buffer for idents/numbers/operators/chars. Scanner truncates with
 	// a diagnostic at sizeof(text)-1.
 	char text[64];

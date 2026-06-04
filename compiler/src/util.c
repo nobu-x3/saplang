@@ -1,11 +1,15 @@
 #include "util.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#if defined(__linux__) || defined(__unix__)
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <direct.h>
+#include <windows.h>
+#else
 #include <libgen.h>
 #include <limits.h>
-#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #define __USE_XOPEN_EXTENDED
@@ -99,7 +103,57 @@ char *flatten_stringlist(const StringList *list) {
 	return result;
 }
 
-#if defined(__linux__) || defined(__unix__)
+#if defined(_WIN32)
+static int win_find_recursive(const char *dir, const char *target, char *out, size_t outsz) {
+	char pattern[PATH_MAX];
+	snprintf(pattern, sizeof(pattern), "%s\\*", dir);
+	WIN32_FIND_DATAA fd;
+	HANDLE h = FindFirstFileA(pattern, &fd);
+	if (h == INVALID_HANDLE_VALUE)
+		return 0;
+	int found = 0;
+	do {
+		if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
+			continue;
+		char child[PATH_MAX];
+		snprintf(child, sizeof(child), "%s\\%s", dir, fd.cFileName);
+		if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+			if (win_find_recursive(child, target, out, outsz)) {
+				found = 1;
+				break;
+			}
+		} else if (strcmp(fd.cFileName, target) == 0) {
+			strncpy(out, child, outsz - 1);
+			out[outsz - 1] = '\0';
+			found = 1;
+			break;
+		}
+	} while (FindNextFileA(h, &fd));
+	FindClose(h);
+	return found;
+}
+
+static int win_rmrf(const char *path) {
+	char pattern[PATH_MAX];
+	snprintf(pattern, sizeof(pattern), "%s\\*", path);
+	WIN32_FIND_DATAA fd;
+	HANDLE h = FindFirstFileA(pattern, &fd);
+	if (h != INVALID_HANDLE_VALUE) {
+		do {
+			if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
+				continue;
+			char child[PATH_MAX];
+			snprintf(child, sizeof(child), "%s\\%s", path, fd.cFileName);
+			if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				win_rmrf(child);
+			else
+				DeleteFileA(child);
+		} while (FindNextFileA(h, &fd));
+		FindClose(h);
+	}
+	return RemoveDirectoryA(path) ? 0 : -1;
+}
+#else
 
 static const char *target_filename;
 static char found_path[PATH_MAX];
@@ -121,7 +175,29 @@ int find_file_callback(const char *fpath, const struct stat *sb, int type_flag, 
 #endif
 
 char *find_file_in_dir(const char *root_dir, const char *filename) {
-#if defined(__linux__) || defined(__unix__)
+#if defined(_WIN32)
+	// Literal path first — explicit args must not get swept up by the fallback.
+	DWORD attr = GetFileAttributesA(filename);
+	if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY))
+		return strdup(filename);
+	char joined[PATH_MAX];
+	int written = snprintf(joined, sizeof(joined), "%s/%s", root_dir, filename);
+	if (written > 0 && written < (int)sizeof(joined)) {
+		attr = GetFileAttributesA(joined);
+		if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY))
+			return strdup(joined);
+	}
+	// Basename-recursive fallback for bare names like "io.sl".
+	char *filename_cpy = strdup(filename);
+	char *base_name = filename_cpy;
+	for (char *p = filename_cpy; *p; ++p)
+		if (*p == '/' || *p == '\\')
+			base_name = p + 1;
+	char found[PATH_MAX] = "";
+	int ok = win_find_recursive(root_dir, base_name, found, sizeof(found));
+	free(filename_cpy);
+	return ok ? strdup(found) : NULL;
+#else
 	// Literal path first — explicit args like `module_tests/foo/main.sl` must
 	// not get swept up by the basename-recursive nftw fallback below.
 	struct stat st;
@@ -148,40 +224,47 @@ char *find_file_in_dir(const char *root_dir, const char *filename) {
 		free(filename_cpy);
 		return NULL;
 	}
-#else
-	printf("find_file_in_dir only implemented for linux\n");
-	return NULL;
 #endif
 }
 
 char *full_path(const char *restrict file_name, char *restrict resolved_name) {
-#if defined(__linux__) || defined(__unix__)
-	return realpath(file_name, resolved_name);
+#if defined(_WIN32)
+	return _fullpath(resolved_name, file_name, PATH_MAX);
 #else
-	printf("full_path only implemented for linux\n");
-	return NULL;
+	return realpath(file_name, resolved_name);
 #endif
 }
 
 int make_dir(const char *pathname, int mode) {
-#if defined(__linux__) || defined(__unix__)
-	return mkdir(pathname, (mode_t)mode);
+#if defined(_WIN32)
+	(void)mode;
+	return _mkdir(pathname);
 #else
-	printf("mkdir only implemented for linux\n");
-	return NULL;
+	return mkdir(pathname, (mode_t)mode);
 #endif
 }
 
 char *dir_name(char *pathname) {
-#if defined(__linux__) || defined(__unix__)
-	return dirname(pathname);
+#if defined(_WIN32)
+	if (!pathname || !*pathname)
+		return ".";
+	char *last = NULL;
+	for (char *p = pathname; *p; ++p)
+		if (*p == '/' || *p == '\\')
+			last = p;
+	if (!last)
+		return ".";
+	if (last == pathname)
+		last[1] = '\0';
+	else
+		*last = '\0';
+	return pathname;
 #else
-	printf("mkdir only implemented for linux\n");
-	return NULL;
+	return dirname(pathname);
 #endif
 }
 
-#if defined(__linux__) || defined(__unix__)
+#if !defined(_WIN32)
 int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) {
 	int rv = remove(fpath);
 
@@ -193,19 +276,21 @@ int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW
 #endif
 
 int rmrf(char *path) {
-#if defined(__linux__) || defined(__unix__)
-	return nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
+#if defined(_WIN32)
+	return win_rmrf(path);
 #else
-	printf("mkdir only implemented for linux\n");
-	return NULL;
+	return nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
 #endif
 }
 
 char *file_name(const char *restrict file_name) {
-#if defined(__linux__) || defined(__unix__)
-	return basename(file_name);
+#if defined(_WIN32)
+	const char *base = file_name;
+	for (const char *p = file_name; *p; ++p)
+		if (*p == '/' || *p == '\\')
+			base = p + 1;
+	return (char *)base;
 #else
-	printf("mkdir only implemented for linux\n");
-	return NULL;
+	return basename(file_name);
 #endif
 }

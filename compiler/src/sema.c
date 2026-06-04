@@ -677,7 +677,7 @@ CompilerResult analyze_union_decl(Symbol *table, ASTNode *node, int scope_level,
 }
 
 // Extract the constant integer value of a switch case value AST node. Returns 1 on success.
-static int switch_case_value_const(Symbol *table, ASTNode *node, int scope_level, long *out_value) {
+static int switch_case_value_const(Symbol *table, ASTNode *node, int scope_level, i64 *out_value) {
 	if (!node)
 		return 0;
 	if (node->type == AST_CHAR_LIT) {
@@ -691,7 +691,7 @@ static int switch_case_value_const(Symbol *table, ASTNode *node, int scope_level
 		return 1;
 	}
 	if (node->type == AST_UNARY_EXPR && node->data.unary_op.op == '-') {
-		long inner;
+		i64 inner;
 		if (!switch_case_value_const(table, node->data.unary_op.operand, scope_level, &inner))
 			return 0;
 		*out_value = -inner;
@@ -743,12 +743,12 @@ CompilerResult analyze_switch_stmt(Symbol *table, ASTNode *node, int scope_level
 	int total_values = 0;
 	for (int c = 0; c < node->data.switch_stmt.case_count; ++c)
 		total_values += node->data.switch_stmt.cases[c].value_count;
-	long stack_seen[256];
+	i64 stack_seen[256];
 	if (total_values > 256) {
 		report(node->location, "switch has too many case values (limit 256 in Stage 1).", 0);
 		return RESULT_FAILURE;
 	}
-	long *seen = stack_seen;
+	i64 *seen = stack_seen;
 	int seen_count = 0;
 	for (int c = 0; c < node->data.switch_stmt.case_count; ++c) {
 		for (int v = 0; v < node->data.switch_stmt.cases[c].value_count; ++v) {
@@ -768,7 +768,7 @@ CompilerResult analyze_switch_stmt(Symbol *table, ASTNode *node, int scope_level
 					return RESULT_FAILURE;
 				}
 			}
-			long const_val = 0;
+			i64 const_val = 0;
 			int got_const = subject_is_enum ? 1 : switch_case_value_const(table, val, scope_level, &const_val);
 			if (!subject_is_enum) {
 				if (!got_const) {
@@ -799,7 +799,7 @@ CompilerResult analyze_switch_stmt(Symbol *table, ASTNode *node, int scope_level
 			for (int i = 0; i < seen_count; ++i) {
 				if (seen[i] == const_val) {
 					char msg[128] = "";
-					sprintf(msg, "duplicate case value %ld in switch.", const_val);
+					sprintf(msg, "duplicate case value %lld in switch.", (long long)const_val);
 					report(val->location, msg, 0);
 					return RESULT_FAILURE;
 				}
@@ -1192,7 +1192,7 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			break;
 		}
 		int pointer_arith = (node->data.binary_op.op == TOK_PLUS || node->data.binary_op.op == TOK_MINUS) && ltype && ltype->type_kind == TYPE_POINTER && is_int(rtype);
-		TokenType op = node->data.binary_op.op;
+		TokenKind op = node->data.binary_op.op;
 		int is_arith_op = op == TOK_PLUS || op == TOK_MINUS || op == TOK_ASTERISK || op == TOK_SLASH || op == TOK_MODULO || op == TOK_AMPERSAND || op == TOK_BITWISE_OR || op == TOK_BITWISE_XOR ||
 						  op == TOK_BITWISE_LSHIFT || op == TOK_BITWISE_RSHIFT;
 		int has_ptr_operand = (ltype && ltype->type_kind == TYPE_POINTER) || (rtype && rtype->type_kind == TYPE_POINTER);

@@ -1,15 +1,53 @@
 #pragma once
 
+#include "platform.h"
 #include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <unity.h>
 #include <driver.h>
 
 #define MODULE_TEST_SETUP(path) \
 
+
+// Platform executable name for a base (adds .exe on Windows).
+static const char *exe_name(const char *base, char *buf, size_t n) {
+#if defined(_WIN32)
+    snprintf(buf, n, "%s.exe", base);
+#else
+    snprintf(buf, n, "%s", base);
+#endif
+    return buf;
+}
+
+// Run a program built into the cwd by base name. cmd.exe won't find a bare
+// name in the current directory, so a `.\` prefix is required on Windows.
+static int run_built(const char *base) {
+    char cmd[200] = "";
+#if defined(_WIN32)
+    snprintf(cmd, sizeof(cmd), ".\\%s.exe", base);
+#else
+    snprintf(cmd, sizeof(cmd), "./%s", base);
+#endif
+    return system(cmd);
+}
+
+// Compile a debug-info fixture (gen_debug, no cleanup) and run it.
+static void build_and_run_debug(const char *path, const char *base) {
+    CompileOptions opts = {0};
+    char input_file_path[256] = "";
+    sprintf(input_file_path, "%s/main.sl", path);
+    opts.input_file_path = strdup(input_file_path);
+    opts.no_cleanup = 1;
+    opts.gen_debug = 1;
+    opts.threads = 1;
+    char ob[160] = "";
+    opts.output_file_path = strdup(exe_name(base, ob, sizeof(ob)));
+    driver_set_compiler_options(opts);
+    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
+    TEST_ASSERT_EQUAL_INT(run_built(base), 0);
+}
 
 void test(const char* path, char* output_path) {
     CompileOptions opts = {0};
@@ -18,12 +56,11 @@ void test(const char* path, char* output_path) {
     opts.input_file_path = strdup(input_file_path);
     opts.no_cleanup = 0;
     opts.threads = 1;
-    opts.output_file_path = strdup(output_path);
+    char out_name[160] = "";
+    opts.output_file_path = strdup(exe_name(output_path, out_name, sizeof(out_name)));
     driver_set_compiler_options(opts);
     TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
-    char cmd [128] = "";
-    sprintf(cmd, "./%s", output_path);
-    TEST_ASSERT_EQUAL_INT(system(cmd), 0);
+    TEST_ASSERT_EQUAL_INT(run_built(output_path), 0);
 }
 
 // Run the driver on a module fixture that we expect to fail compilation
@@ -40,15 +77,15 @@ static void test_expect_driver_failure(const char *path, char *output_path) {
     opts.output_file_path = strdup(output_path);
     driver_set_compiler_options(opts);
 
-    int saved_stderr = dup(fileno(stderr));
-    FILE *devnull = freopen("/dev/null", "w", stderr);
+    int saved_stderr = SL_DUP(SL_FILENO(stderr));
+    FILE *devnull = freopen(SL_DEVNULL, "w", stderr);
     (void)devnull;
 
     CompilerResult res = driver_run();
 
     fflush(stderr);
-    dup2(saved_stderr, fileno(stderr));
-    close(saved_stderr);
+    SL_DUP2(saved_stderr, SL_FILENO(stderr));
+    SL_CLOSE(saved_stderr);
 
     TEST_ASSERT_EQUAL_INT(RESULT_FAILURE, res);
 }
@@ -121,78 +158,48 @@ void test_StructSliceTable_modules(void) {
 }
 
 static void test_DebugInfoBasic_modules(void) {
-    CompileOptions opts = {0};
-    char input_file_path[256] = "";
-    sprintf(input_file_path, "%s/main.sl", "module_tests/debug_info_basic");
-    opts.input_file_path = strdup(input_file_path);
-    opts.no_cleanup = 1;
-    opts.gen_debug = 1;
-    opts.threads = 1;
-    opts.output_file_path = strdup("debug_info_basic");
-    driver_set_compiler_options(opts);
-    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
-    TEST_ASSERT_EQUAL_INT(system("./debug_info_basic"), 0);
+    build_and_run_debug("module_tests/debug_info_basic", "debug_info_basic");
 
-    FILE *dump = popen("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
+    FILE *dump = SL_POPEN("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
     TEST_ASSERT_NOT_NULL(dump);
     char buf[8192] = {0};
     size_t n = fread(buf, 1, sizeof(buf) - 1, dump);
-    pclose(dump);
+    SL_PCLOSE(dump);
     TEST_ASSERT_GREATER_THAN(0, n);
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_compile_unit"), "expected DW_TAG_compile_unit in dwarfdump output");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_subprogram"), "expected DW_TAG_subprogram in dwarfdump output");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_linkage_name\t(\"main\")"), "expected main subprogram with linkage_name in dwarfdump output");
 
-    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
+    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > " SL_DEVNULL " 2>&1");
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the emitted object");
 }
 
 static void test_DebugInfoTypes_modules(void) {
-    CompileOptions opts = {0};
-    char input_file_path[256] = "";
-    sprintf(input_file_path, "%s/main.sl", "module_tests/debug_info_types");
-    opts.input_file_path = strdup(input_file_path);
-    opts.no_cleanup = 1;
-    opts.gen_debug = 1;
-    opts.threads = 1;
-    opts.output_file_path = strdup("debug_info_types");
-    driver_set_compiler_options(opts);
-    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
-    TEST_ASSERT_EQUAL_INT(system("./debug_info_types"), 0);
+    build_and_run_debug("module_tests/debug_info_types", "debug_info_types");
 
-    FILE *dump = popen("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
+    FILE *dump = SL_POPEN("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
     TEST_ASSERT_NOT_NULL(dump);
     char buf[32768] = {0};
     size_t n = fread(buf, 1, sizeof(buf) - 1, dump);
-    pclose(dump);
+    SL_PCLOSE(dump);
     TEST_ASSERT_GREATER_THAN(0, n);
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_linkage_name\t(\"main\")"), "expected main subprogram");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "(\"__main_add__i32_i32\")"), "expected add subprogram with mangled signature");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_base_type"), "expected DW_TAG_base_type for primitives");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "(\"i32\")"), "expected i32 basic type");
 
-    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
+    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > " SL_DEVNULL " 2>&1");
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the Phase 2 fixture");
 }
 
 static void test_DebugInfoLines_modules(void) {
-    CompileOptions opts = {0};
-    char input_file_path[256] = "";
-    sprintf(input_file_path, "%s/main.sl", "module_tests/debug_info_lines");
-    opts.input_file_path = strdup(input_file_path);
-    opts.no_cleanup = 1;
-    opts.gen_debug = 1;
-    opts.threads = 1;
-    opts.output_file_path = strdup("debug_info_lines");
-    driver_set_compiler_options(opts);
-    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
-    TEST_ASSERT_EQUAL_INT(system("./debug_info_lines"), 0);
+    build_and_run_debug("module_tests/debug_info_lines", "debug_info_lines");
 
-    FILE *dump = popen("llvm-dwarfdump --debug-line .tmp/tmp-main.o", "r");
+    FILE *dump = SL_POPEN("llvm-dwarfdump --debug-line .tmp/tmp-main.o", "r");
     TEST_ASSERT_NOT_NULL(dump);
     char buf[16384] = {0};
     size_t n = fread(buf, 1, sizeof(buf) - 1, dump);
-    pclose(dump);
+    SL_PCLOSE(dump);
     TEST_ASSERT_GREATER_THAN(0, n);
     // The line program prologue must reference main.sl, and several
     // statements (we want is_stmt markers on at least a handful of
@@ -204,27 +211,17 @@ static void test_DebugInfoLines_modules(void) {
     // least 3 real line-program rows carry is_stmt.
     TEST_ASSERT_GREATER_THAN_MESSAGE(3, is_stmt_rows, "expected multiple is_stmt rows in line table");
 
-    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
+    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > " SL_DEVNULL " 2>&1");
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the Phase 3 fixture");
 }
 static void test_DebugInfoGlobals_modules(void) {
-    CompileOptions opts = {0};
-    char input_file_path[256] = "";
-    sprintf(input_file_path, "%s/main.sl", "module_tests/debug_info_globals");
-    opts.input_file_path = strdup(input_file_path);
-    opts.no_cleanup = 1;
-    opts.gen_debug = 1;
-    opts.threads = 1;
-    opts.output_file_path = strdup("debug_info_globals");
-    driver_set_compiler_options(opts);
-    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
-    TEST_ASSERT_EQUAL_INT(system("./debug_info_globals"), 0);
+    build_and_run_debug("module_tests/debug_info_globals", "debug_info_globals");
 
-    FILE *info = popen("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
+    FILE *info = SL_POPEN("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
     TEST_ASSERT_NOT_NULL(info);
     char buf[32768] = {0};
     size_t n = fread(buf, 1, sizeof(buf) - 1, info);
-    pclose(info);
+    SL_PCLOSE(info);
     TEST_ASSERT_GREATER_THAN(0, n);
 
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_variable"), "expected DW_TAG_variable entries for globals");
@@ -233,28 +230,18 @@ static void test_DebugInfoGlobals_modules(void) {
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"Outer\")"), "expected Outer struct DI");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"Inner\")"), "expected nested Inner struct DI");
 
-    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
+    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > " SL_DEVNULL " 2>&1");
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the globals fixture");
 }
 
 static void test_DebugInfoLocals_modules(void) {
-    CompileOptions opts = {0};
-    char input_file_path[256] = "";
-    sprintf(input_file_path, "%s/main.sl", "module_tests/debug_info_locals");
-    opts.input_file_path = strdup(input_file_path);
-    opts.no_cleanup = 1;
-    opts.gen_debug = 1;
-    opts.threads = 1;
-    opts.output_file_path = strdup("debug_info_locals");
-    driver_set_compiler_options(opts);
-    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
-    TEST_ASSERT_EQUAL_INT(system("./debug_info_locals"), 0);
+    build_and_run_debug("module_tests/debug_info_locals", "debug_info_locals");
 
-    FILE *info = popen("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
+    FILE *info = SL_POPEN("llvm-dwarfdump --debug-info .tmp/tmp-main.o", "r");
     TEST_ASSERT_NOT_NULL(info);
     char buf[32768] = {0};
     size_t n = fread(buf, 1, sizeof(buf) - 1, info);
-    pclose(info);
+    SL_PCLOSE(info);
     TEST_ASSERT_GREATER_THAN(0, n);
 
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_formal_parameter"), "expected DW_TAG_formal_parameter for params");
@@ -267,6 +254,6 @@ static void test_DebugInfoLocals_modules(void) {
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_TAG_structure_type"), "expected DW_TAG_structure_type for Point (anchored via local)");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(buf, "DW_AT_name\t(\"Point\")"), "expected Point struct named");
 
-    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > /dev/null 2>&1");
+    int rc = system("llvm-dwarfdump --verify .tmp/tmp-main.o > " SL_DEVNULL " 2>&1");
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, rc, "llvm-dwarfdump --verify reported errors on the Phase 4 fixture");
 }

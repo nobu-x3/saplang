@@ -4,6 +4,13 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#if !defined(_WIN32)
+#include <limits.h>
+#endif
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
 typedef enum {
 	RESULT_SUCCESS,
 	RESULT_PASSED_NULL_PTR,

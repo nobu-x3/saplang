@@ -7,6 +7,11 @@
 #include "types.h"
 
 #include <assert.h>
+#if defined(_WIN32)
+#include <malloc.h>
+#else
+#include <alloca.h>
+#endif
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
 #include <llvm-c/Target.h>
@@ -1087,7 +1092,7 @@ LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCo
 }
 
 LLVMValueRef codegen_binary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
-	TokenType op = node->data.binary_op.op;
+	TokenKind op = node->data.binary_op.op;
 	if (op == TOK_AND || op == TOK_OR) {
 		LLVMValueRef fn = LLVMGetNamedFunction(cg->module, ctx.current_function_node->data.func_decl.resolved_name);
 		LLVMValueRef lhs_bool = codegen_cond_to_bool(cg, node->data.binary_op.left, table, ctx);

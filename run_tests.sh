@@ -1,14 +1,8 @@
 #!/bin/sh
-rm -rf build/bin/module_tests
+set -e
 
-# cp rework_tests/*.h rework_tests/.runners/
-# ruby build/_deps/unity-src/auto/generate_test_runner.rb rework_tests/runner.c rework_tests/.runners/runner.c
-
-cp -r tests/module_tests build/bin/module_tests
-
-cmake -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=On -Wall && make -C build -j 32
-(cd build/bin && rm -rf .tmp &&./saplangc_tests)
-
-# build/bin/saplangc
-# cp -r tests/module_tests build/bin/module_tests
-# build/bin/saplang_tests
+# CMake stages the module_tests fixtures next to the test binary and registers
+# the suite with CTest, so there's no manual copy step anymore.
+cmake -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=On
+make -C build -j 32
+ctest --test-dir build --output-on-failure

@@ -7,24 +7,43 @@
 #include "timer.h"
 #include "util.h"
 #include <errno.h>
-#include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(__linux__) || defined(__unix__)
-#include <asm-generic/errno-base.h>
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <dirent.h>
 #include <unistd.h>
 #endif
 
 #define OBJ_DIRECTORY ".tmp"
 
 int get_num_of_cores() {
-#if defined(__linux__) || defined(__unix__)
+#if defined(_WIN32)
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+	return (int)info.dwNumberOfProcessors;
+#else
 	return sysconf(_SC_NPROCESSORS_ONLN);
 #endif
-	// @TODO: do this for windows & mac
-	return 1;
+}
+
+// Portable strsep — strsep itself is not available on Windows.
+static char *sl_strsep(char **stringp, const char *delim) {
+	char *start = *stringp;
+	if (!start)
+		return NULL;
+	char *p = start + strcspn(start, delim);
+	if (*p) {
+		*p = '\0';
+		*stringp = p + 1;
+	} else {
+		*stringp = NULL;
+	}
+	return start;
 }
 void driver_print_help() {
 	printf("Usage:\n"
@@ -57,7 +76,7 @@ StringList split(const char *s, char delim) {
 	char *tmp = cpy;
 	char delim_str[2] = {delim, '\0'};
 	char *found;
-	while ((found = strsep(&cpy, delim_str)) != NULL) {
+	while ((found = sl_strsep(&cpy, delim_str)) != NULL) {
 		char *found_cpy = strdup(found);
 		if (!da_push(result, found_cpy)) {
 			free(found_cpy);
@@ -244,11 +263,6 @@ typedef struct {
 
 Driver driver = {0};
 
-// @TODO: do windows & mac
-#if defined(__linux__) || defined(__unix__)
-
-#include <dirent.h>
-
 int module_name_is_unique(const char *name) {
 	int count = 0;
 	for (int i = 0; i < driver.options.import_paths.count; ++i) {
@@ -268,6 +282,30 @@ int module_name_is_unique(const char *name) {
 }
 
 void combine_object_paths(StringList *string_list, char *obj_dir) {
+#if defined(_WIN32)
+	char pattern[1024];
+	snprintf(pattern, sizeof(pattern), "%s\\*", obj_dir);
+	WIN32_FIND_DATAA fd;
+	HANDLE h = FindFirstFileA(pattern, &fd);
+	if (h == INVALID_HANDLE_VALUE) {
+		fprintf(stderr, "could not open obj directory");
+		return;
+	}
+	do {
+		if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
+			continue;
+		if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			continue;
+		char filepath[1024];
+		snprintf(filepath, sizeof(filepath), "%s/%s", obj_dir, fd.cFileName);
+		char *filepath_cpy = strdup(filepath);
+		if (!da_push(*string_list, filepath_cpy)) {
+			free(filepath_cpy);
+			break;
+		}
+	} while (FindNextFileA(h, &fd));
+	FindClose(h);
+#else
 	DIR *dir = opendir(obj_dir);
 	if (!dir) {
 		fprintf(stderr, "could not open obj directory: %d", errno);
@@ -289,10 +327,39 @@ void combine_object_paths(StringList *string_list, char *obj_dir) {
 		}
 	}
 	closedir(dir);
+#endif
 }
 
 CompilerResult driver_check_paths_for_uniqueness() {
 	for (int i = 0; i < driver.options.import_paths.count; ++i) {
+#if defined(_WIN32)
+		char pattern[1024];
+		snprintf(pattern, sizeof(pattern), "%s\\*", driver.options.import_paths.data[i]);
+		WIN32_FIND_DATAA fd;
+		HANDLE h = FindFirstFileA(pattern, &fd);
+		if (h == INVALID_HANDLE_VALUE) {
+			fprintf(stderr, "could not open directory '%s'.\n", driver.options.import_paths.data[i]);
+			return RESULT_DIRECTORY_NOT_FOUND;
+		}
+		do {
+			if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
+				continue;
+
+			const char *filename = fd.cFileName;
+			size_t len = strlen(filename);
+
+			if (len > 3 && strcmp(filename + len - 3, ".sl") == 0) {
+				if (!module_name_is_unique(filename)) {
+					char filepath[1024];
+					snprintf(filepath, sizeof(filepath), "%s/%s", driver.options.import_paths.data[i], filename);
+					FindClose(h);
+					fprintf(stderr, "duplicate file on path %s.\n", filepath);
+					return RESULT_FAILURE;
+				}
+			}
+		} while (FindNextFileA(h, &fd));
+		FindClose(h);
+#else
 		DIR *dir = opendir(driver.options.import_paths.data[i]);
 		if (!dir) {
 			fprintf(stderr, "could not open directory '%s'.\n", driver.options.import_paths.data[i]);
@@ -319,6 +386,7 @@ CompilerResult driver_check_paths_for_uniqueness() {
 			}
 		}
 		closedir(dir);
+#endif
 	}
 	return RESULT_SUCCESS;
 }
@@ -339,7 +407,7 @@ SourceFile driver_init_source(const char *name) {
 		strncpy(src_file.name, file_name(name), sizeof(src_file.name));
 		strncpy(src_file.path, full_path, sizeof(src_file.path));
 		free(full_path);
-		FILE *fp = fopen(src_file.path, "r");
+		FILE *fp = fopen(src_file.path, "rb");
 		if (!fp) {
 			fprintf(stderr, "could not open file with path %s.\n", src_file.path);
 			return src_file;
@@ -372,7 +440,6 @@ SourceFile driver_init_source(const char *name) {
 	}
 	return src_file;
 }
-#endif
 
 DependencyGraphNode *dg_find(const char *name, DependencyGraphNode *root) {
 	for (DependencyGraphNode *current = root; current != NULL; current = current->next) {
@@ -388,7 +455,11 @@ DependencyGraphNode *dg_find(const char *name, DependencyGraphNode *root) {
 static void dg_diag_open(DependencyGraphNode *node) {
 	node->diag_buf = NULL;
 	node->diag_buf_size = 0;
+#if defined(_WIN32)
+	node->diag_sink = tmpfile();
+#else
 	node->diag_sink = open_memstream(&node->diag_buf, &node->diag_buf_size);
+#endif
 }
 
 // Close the sink (which flushes the memstream into diag_buf), copy the
@@ -398,9 +469,24 @@ static void dg_diag_open(DependencyGraphNode *node) {
 static size_t dg_diag_drain(DependencyGraphNode *node, FILE *out) {
 	if (!node->diag_sink)
 		return 0;
+	size_t n = 0;
+#if defined(_WIN32)
+	fflush(node->diag_sink);
+	long pos = ftell(node->diag_sink);
+	if (pos > 0) {
+		rewind(node->diag_sink);
+		char *buf = malloc((size_t)pos);
+		if (buf) {
+			n = fread(buf, 1, (size_t)pos, node->diag_sink);
+			fwrite(buf, 1, n, out);
+			free(buf);
+		}
+	}
 	fclose(node->diag_sink);
 	node->diag_sink = NULL;
-	size_t n = 0;
+#else
+	fclose(node->diag_sink);
+	node->diag_sink = NULL;
 	if (node->diag_buf && node->diag_buf_size > 0) {
 		n = node->diag_buf_size;
 		fwrite(node->diag_buf, 1, n, out);
@@ -408,6 +494,7 @@ static size_t dg_diag_drain(DependencyGraphNode *node, FILE *out) {
 	free(node->diag_buf);
 	node->diag_buf = NULL;
 	node->diag_buf_size = 0;
+#endif
 	return n;
 }
 

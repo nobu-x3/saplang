@@ -1,5 +1,6 @@
 #pragma once
 #include "arena.h"
+#include "platform.h"
 #include "scanner.h"
 #include "symbol_table.h"
 #include "types.h"
@@ -14,7 +15,7 @@ typedef struct {
 
 typedef struct {
 	char name[64];
-	long value;
+	i64 value;
 } EnumMember;
 
 typedef struct {
@@ -116,7 +117,7 @@ typedef struct ASTNode {
 		} block;
 		// Literal expression: integer, float, bool, or null
 		struct {
-			long long_value;
+			i64 long_value;
 			double float_value;
 			bool is_float;	// true if float literal
 			int bool_value; // 1 for true, 0 for false
@@ -135,7 +136,7 @@ typedef struct ASTNode {
 		} ret;
 		// Binary expression
 		struct {
-			TokenType op;
+			TokenKind op;
 			struct ASTNode *left;
 			struct ASTNode *right;
 		} binary_op;

@@ -8,11 +8,31 @@
 #include "module_tests.h"
 #include <unity.h>
 
+// Honor `-n <name>` so a single test can be run by name (ctest registers one
+// CTest test per RUN_TEST). The stock RUN_TEST ignores the name filter.
+#ifdef UNITY_USE_COMMAND_LINE_ARGS
+#undef RUN_TEST
+#define RUN_TEST(func)                                                                                                                                                                                                                          \
+	do {                                                                                                                                                                                                                                       \
+		Unity.CurrentTestName = #func;                                                                                                                                                                                                         \
+		Unity.CurrentTestLineNumber = __LINE__;                                                                                                                                                                                                \
+		if (UnityTestMatches()) {                                                                                                                                                                                                              \
+			UnityDefaultTestRun(func, #func, __LINE__);                                                                                                                                                                                         \
+		}                                                                                                                                                                                                                                      \
+	} while (0)
+#endif
+
 void setUp(void) {}
 
 void tearDown(void) {}
 
-int main(void) {
+int main(int argc, char **argv) {
+#ifdef UNITY_USE_COMMAND_LINE_ARGS
+	UnityParseOptions(argc, argv);
+#else
+	(void)argc;
+	(void)argv;
+#endif
 	UNITY_BEGIN();
 
 	RUN_TEST(test_hashmap_create_and_destroy);
