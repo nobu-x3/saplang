@@ -2,10 +2,21 @@ import testing;
 import types;
 import ast;
 import arena;
+import diag;
 import sys;
 
 fn void setup(types::TypeInterner* it, arena::Arena* a, u64 cap) {
-    types::typer_init(it, a, cap);
+    types::typer_init(it, a, null, cap);
+}
+
+fn void setup_with_diag(types::TypeInterner* it, arena::Arena* a, diag::DiagBuf* d, u64 cap) {
+    types::typer_init(it, a, d, cap);
+}
+
+fn diag::DiagBuf* fresh_diag(arena::Arena* a) {
+    diag::DiagBuf* d = (diag::DiagBuf*)arena::alloc(a, sizeof(diag::DiagBuf));
+    sys::memset(d, 0, sizeof(diag::DiagBuf));
+    return d;
 }
 
 fn types::Type* fake_prim(arena::Arena* a, types::PrimitiveKind p, u32 size, u32 align) {
@@ -58,6 +69,46 @@ fn ast::EnumDeclNode* fake_enum_decl_null_base(arena::Arena* a) {
 
 fn types::Type* fake_enum_with_base(arena::Arena* a, types::TypeInterner* it, types::Type* base) {
     return types::intern_enum(it, (void*)fake_enum_decl(a, base));
+}
+
+fn ast::StructDeclNode* fake_struct_decl(arena::Arena* a, types::Type*[] fts) {
+    ast::StructDeclNode* d = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(d, 0, sizeof(ast::StructDeclNode));
+    if(fts.len > 0) {
+        ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, fts.len * sizeof(ast::FieldDecl));
+        sys::memset(fields, 0, fts.len * sizeof(ast::FieldDecl));
+        for(u64 i = 0; i < fts.len; i += 1) {
+            fields[i].resolved_type = (void*)fts[i];
+        }
+        d.fields = {fields, fts.len};
+    } else {
+        d.fields = {null, 0};
+    }
+    return d;
+}
+
+fn ast::UnionDeclNode* fake_union_decl(arena::Arena* a, types::Type*[] fts) {
+    ast::UnionDeclNode* d = (ast::UnionDeclNode*)arena::alloc(a, sizeof(ast::UnionDeclNode));
+    sys::memset(d, 0, sizeof(ast::UnionDeclNode));
+    if(fts.len > 0) {
+        ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, fts.len * sizeof(ast::FieldDecl));
+        sys::memset(fields, 0, fts.len * sizeof(ast::FieldDecl));
+        for(u64 i = 0; i < fts.len; i += 1) {
+            fields[i].resolved_type = (void*)fts[i];
+        }
+        d.fields = {fields, fts.len};
+    } else {
+        d.fields = {null, 0};
+    }
+    return d;
+}
+
+fn types::Type* fake_struct_typed(arena::Arena* a, types::TypeInterner* it, types::Type*[] fts) {
+    return types::intern_struct(it, (void*)fake_struct_decl(a, fts));
+}
+
+fn types::Type* fake_union_typed(arena::Arena* a, types::TypeInterner* it, types::Type*[] fts) {
+    return types::intern_union(it, (void*)fake_union_decl(a, fts));
 }
 
 fn void* fake_decl(arena::Arena* a) { return arena::alloc(a, 8); }
@@ -1709,6 +1760,1552 @@ fn i32 prim_null_ptr_kind_is_pointer(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// ===== size_of / align_of — primitives =====
+
+fn i32 layout_primitives_exhaustive(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    if(!testing::expect_eq(types::size_of (&it, fake_i8(a)),   (u32)1, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, fake_i8(a)),   (u32)1, m)) { return -2; }
+    if(!testing::expect_eq(types::size_of (&it, fake_i16(a)),  (u32)2, m)) { return -3; }
+    if(!testing::expect_eq(types::align_of(&it, fake_i16(a)),  (u32)2, m)) { return -4; }
+    if(!testing::expect_eq(types::size_of (&it, fake_i32(a)),  (u32)4, m)) { return -5; }
+    if(!testing::expect_eq(types::align_of(&it, fake_i32(a)),  (u32)4, m)) { return -6; }
+    if(!testing::expect_eq(types::size_of (&it, fake_i64(a)),  (u32)8, m)) { return -7; }
+    if(!testing::expect_eq(types::align_of(&it, fake_i64(a)),  (u32)8, m)) { return -8; }
+    if(!testing::expect_eq(types::size_of (&it, fake_u8(a)),   (u32)1, m)) { return -9; }
+    if(!testing::expect_eq(types::size_of (&it, fake_u16(a)),  (u32)2, m)) { return -10; }
+    if(!testing::expect_eq(types::size_of (&it, fake_u32(a)),  (u32)4, m)) { return -11; }
+    if(!testing::expect_eq(types::size_of (&it, fake_u64(a)),  (u32)8, m)) { return -12; }
+    if(!testing::expect_eq(types::size_of (&it, fake_f32(a)),  (u32)4, m)) { return -13; }
+    if(!testing::expect_eq(types::size_of (&it, fake_f64(a)),  (u32)8, m)) { return -14; }
+    if(!testing::expect_eq(types::size_of (&it, fake_bool(a)), (u32)1, m)) { return -15; }
+    if(!testing::expect_eq(types::size_of (&it, fake_void(a)), (u32)0, m)) { return -16; }
+    return 0;
+}
+
+// ===== size_of / align_of — pointer / slice / fnptr =====
+
+fn i32 layout_pointer_always_8_8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p1 = types::intern_pointer(&it, fake_i8(a),  false);
+    types::Type* p2 = types::intern_pointer(&it, fake_i64(a), false);
+    types::Type* p3 = types::intern_pointer(&it, fake_void(a), false);
+    types::Type* p4 = types::intern_pointer(&it, p1, false);
+    types::Type* p5 = types::intern_pointer(&it, types::intern_struct(&it, fake_decl(a)), false);
+    if(!testing::expect_eq(types::size_of (&it, p1), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, p1), (u32)8, m)) { return -2; }
+    if(!testing::expect_eq(types::size_of (&it, p2), (u32)8, m)) { return -3; }
+    if(!testing::expect_eq(types::size_of (&it, p3), (u32)8, m)) { return -4; }
+    if(!testing::expect_eq(types::size_of (&it, p4), (u32)8, m)) { return -5; }
+    if(!testing::expect_eq(types::size_of (&it, p5), (u32)8, m)) { return -6; }
+    return 0;
+}
+
+fn i32 layout_const_pointer_is_8_8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p = types::intern_pointer(&it, fake_i32(a), true);
+    if(!testing::expect_eq(types::size_of (&it, p), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, p), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_slice_always_16_8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s1 = types::intern_slice(&it, fake_i8(a));
+    types::Type* s2 = types::intern_slice(&it, fake_i64(a));
+    types::Type* s3 = types::intern_slice(&it, types::intern_pointer(&it, fake_i32(a), false));
+    if(!testing::expect_eq(types::size_of (&it, s1), (u32)16, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s1), (u32)8,  m)) { return -2; }
+    if(!testing::expect_eq(types::size_of (&it, s2), (u32)16, m)) { return -3; }
+    if(!testing::expect_eq(types::size_of (&it, s3), (u32)16, m)) { return -4; }
+    return 0;
+}
+
+fn i32 layout_fnptr_always_8_8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* f1 = types::intern_fn_ptr(&it, fake_void(a), mk_params0(), false);
+    types::Type* f2 = types::intern_fn_ptr(&it, fake_i32(a),  mk_params2(a, fake_i32(a), fake_f64(a)), false);
+    types::Type* f3 = types::intern_fn_ptr(&it, fake_void(a), mk_params1(a, fake_u8(a)), true);
+    if(!testing::expect_eq(types::size_of (&it, f1), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, f1), (u32)8, m)) { return -2; }
+    if(!testing::expect_eq(types::size_of (&it, f2), (u32)8, m)) { return -3; }
+    if(!testing::expect_eq(types::size_of (&it, f3), (u32)8, m)) { return -4; }
+    return 0;
+}
+
+// ===== size_of / align_of — arrays =====
+
+fn i32 layout_array_primitive_elem(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* a_i8  = types::intern_array(&it, fake_i8(a),  4);
+    types::Type* a_i32 = types::intern_array(&it, fake_i32(a), 4);
+    types::Type* a_i64 = types::intern_array(&it, fake_i64(a), 3);
+    types::Type* a_u64 = types::intern_array(&it, fake_u64(a), 2);
+    if(!testing::expect_eq(types::size_of (&it, a_i8),  (u32)4,  m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, a_i8),  (u32)1,  m)) { return -2; }
+    if(!testing::expect_eq(types::size_of (&it, a_i32), (u32)16, m)) { return -3; }
+    if(!testing::expect_eq(types::align_of(&it, a_i32), (u32)4,  m)) { return -4; }
+    if(!testing::expect_eq(types::size_of (&it, a_i64), (u32)24, m)) { return -5; }
+    if(!testing::expect_eq(types::align_of(&it, a_i64), (u32)8,  m)) { return -6; }
+    if(!testing::expect_eq(types::size_of (&it, a_u64), (u32)16, m)) { return -7; }
+    return 0;
+}
+
+fn i32 layout_array_zero_count(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* arr = types::intern_array(&it, fake_i32(a), 0);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_array_single(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* arr = types::intern_array(&it, fake_i32(a), 1);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)4, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_array_large_count(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* arr = types::intern_array(&it, fake_i8(a), 1000);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)1000, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_nested_array(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* inner = types::intern_array(&it, fake_i32(a), 2);
+    types::Type* outer = types::intern_array(&it, inner, 3);
+    if(!testing::expect_eq(types::size_of (&it, outer), (u32)24, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, outer), (u32)4,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_array_of_pointer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* ptr = types::intern_pointer(&it, fake_i32(a), false);
+    types::Type* arr = types::intern_array(&it, ptr, 5);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)40, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_array_of_slice(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* slc = types::intern_slice(&it, fake_i32(a));
+    types::Type* arr = types::intern_array(&it, slc, 2);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)32, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_array_of_struct(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_i8(a), fake_i32(a)));
+    types::Type* arr = types::intern_array(&it, s, 3);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)24, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)4,  m)) { return -2; }
+    return 0;
+}
+
+// ===== size_of / align_of — structs =====
+
+fn i32 layout_empty_struct(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params0());
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_one_i8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params1(a, fake_i8(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)1, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_one_i32(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params1(a, fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)4, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_i8_i32(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_i8(a), fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_i32_i8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_i32(a), fake_i8(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_i8_i8_i32(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params3(a, fake_i8(a), fake_i8(a), fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_i8_i64(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_i8(a), fake_i64(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)16, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_ptr_i8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* ptr = types::intern_pointer(&it, fake_i32(a), false);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, ptr, fake_i8(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)16, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_array_field(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* arr = types::intern_array(&it, fake_i8(a), 3);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, arr, fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_slice_field(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* slc = types::intern_slice(&it, fake_u8(a));
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, slc, fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)24, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_three_i32(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params3(a, fake_i32(a), fake_i32(a), fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)12, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)4,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_nested(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* inner = fake_struct_typed(a, &it, mk_params2(a, fake_i8(a), fake_i32(a)));
+    types::Type* outer = fake_struct_typed(a, &it, mk_params2(a, inner, fake_i8(a)));
+    if(!testing::expect_eq(types::size_of (&it, outer), (u32)12, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, outer), (u32)4,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_with_fnptr(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* fp = types::intern_fn_ptr(&it, fake_void(a), mk_params0(), false);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fp, fake_i8(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)16, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+// ===== struct offsets =====
+
+fn i32 layout_struct_offsets_dense_i32(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params3(a, fake_i32(a), fake_i32(a), fake_i32(a)));
+    types::size_of(&it, s);
+    if(!testing::expect_ne((void*)s.layout, null, m)) { return -1; }
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0, m)) { return -2; }
+    if(!testing::expect_eq(s.layout.offsets[1], (u32)4, m)) { return -3; }
+    if(!testing::expect_eq(s.layout.offsets[2], (u32)8, m)) { return -4; }
+    return 0;
+}
+
+fn i32 layout_struct_offsets_i8_i32(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_i8(a), fake_i32(a)));
+    types::size_of(&it, s);
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(s.layout.offsets[1], (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_offsets_i32_i8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_i32(a), fake_i8(a)));
+    types::size_of(&it, s);
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(s.layout.offsets[1], (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_offsets_i8_i8_i32(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params3(a, fake_i8(a), fake_i8(a), fake_i32(a)));
+    types::size_of(&it, s);
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(s.layout.offsets[1], (u32)1, m)) { return -2; }
+    if(!testing::expect_eq(s.layout.offsets[2], (u32)4, m)) { return -3; }
+    return 0;
+}
+
+fn i32 layout_struct_offsets_i8_i64(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_i8(a), fake_i64(a)));
+    types::size_of(&it, s);
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(s.layout.offsets[1], (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_offsets_single_field(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params1(a, fake_i32(a)));
+    types::size_of(&it, s);
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0, m)) { return -1; }
+    return 0;
+}
+
+// ===== size_of / align_of — unions =====
+
+fn i32 layout_empty_union(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u = fake_union_typed(a, &it, mk_params0());
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_one_i8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u = fake_union_typed(a, &it, mk_params1(a, fake_i8(a)));
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)1, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_i8_i32(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u = fake_union_typed(a, &it, mk_params2(a, fake_i8(a), fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)4, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_i64_i8(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u = fake_union_typed(a, &it, mk_params2(a, fake_i64(a), fake_i8(a)));
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_i8_i64(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u = fake_union_typed(a, &it, mk_params2(a, fake_i8(a), fake_i64(a)));
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_with_slice(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* slc = types::intern_slice(&it, fake_i32(a));
+    types::Type* u = fake_union_typed(a, &it, mk_params2(a, slc, fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)16, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_with_pointer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* ptr = types::intern_pointer(&it, fake_i32(a), false);
+    types::Type* u = fake_union_typed(a, &it, mk_params2(a, ptr, fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_offsets_all_zero(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u = fake_union_typed(a, &it, mk_params3(a, fake_i8(a), fake_i32(a), fake_i64(a)));
+    types::size_of(&it, u);
+    if(!testing::expect_ne((void*)u.layout, null, m)) { return -1; }
+    if(!testing::expect_eq(u.layout.offsets[0], (u32)0, m)) { return -2; }
+    if(!testing::expect_eq(u.layout.offsets[1], (u32)0, m)) { return -3; }
+    if(!testing::expect_eq(u.layout.offsets[2], (u32)0, m)) { return -4; }
+    return 0;
+}
+
+// ===== size_of / align_of — enums =====
+
+fn i32 layout_enum_i32_base(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = fake_enum_with_base(a, &it, fake_i32(a));
+    if(!testing::expect_eq(types::size_of (&it, e), (u32)4, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, e), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_enum_i8_base(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = fake_enum_with_base(a, &it, fake_i8(a));
+    if(!testing::expect_eq(types::size_of (&it, e), (u32)1, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, e), (u32)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_enum_u64_base(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = fake_enum_with_base(a, &it, fake_u64(a));
+    if(!testing::expect_eq(types::size_of (&it, e), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, e), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_enum_null_base_zero(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = types::intern_enum(&it, (void*)fake_enum_decl_null_base(a));
+    if(!testing::expect_eq(types::size_of (&it, e), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, e), (u32)1, m)) { return -2; }
+    return 0;
+}
+
+// ===== ComptimeType =====
+
+fn i32 layout_comptime_zero(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* c = fake_comptime(a);
+    if(!testing::expect_eq(types::size_of (&it, c), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, c), (u32)0, m)) { return -2; }
+    return 0;
+}
+
+// ===== layout flag / cache behavior =====
+
+fn i32 layout_struct_sets_computed_flag(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params1(a, fake_i32(a)));
+    if(!testing::expect_eq(has_flag(s, types::LayoutFlags::Computed), false, m)) { return -1; }
+    types::size_of(&it, s);
+    if(!testing::expect_eq(has_flag(s, types::LayoutFlags::Computed), true, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_caching_returns_same(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_i8(a), fake_i32(a)));
+    u32 sz1 = types::size_of(&it, s);
+    u32 sz2 = types::size_of(&it, s);
+    u32 al1 = types::align_of(&it, s);
+    u32 al2 = types::align_of(&it, s);
+    if(!testing::expect_eq(sz1, sz2, m)) { return -1; }
+    if(!testing::expect_eq(al1, al2, m)) { return -2; }
+    if(!testing::expect_eq(sz1, (u32)8, m)) { return -3; }
+    return 0;
+}
+
+fn i32 layout_array_sets_computed_flag(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* arr = types::intern_array(&it, fake_i32(a), 4);
+    if(!testing::expect_eq(has_flag(arr, types::LayoutFlags::Computed), false, m)) { return -1; }
+    types::size_of(&it, arr);
+    if(!testing::expect_eq(has_flag(arr, types::LayoutFlags::Computed), true, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_sets_layout_pointer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params1(a, fake_i32(a)));
+    if(!testing::expect_eq((void*)s.layout, null, m)) { return -1; }
+    types::size_of(&it, s);
+    if(!testing::expect_ne((void*)s.layout, null, m)) { return -2; }
+    if(!testing::expect_eq(s.layout.offsets.len, (u64)1, m)) { return -3; }
+    return 0;
+}
+
+fn i32 layout_union_sets_layout_pointer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u = fake_union_typed(a, &it, mk_params2(a, fake_i8(a), fake_i64(a)));
+    if(!testing::expect_eq((void*)u.layout, null, m)) { return -1; }
+    types::size_of(&it, u);
+    if(!testing::expect_ne((void*)u.layout, null, m)) { return -2; }
+    if(!testing::expect_eq(u.layout.offsets.len, (u64)2, m)) { return -3; }
+    return 0;
+}
+
+fn i32 layout_array_layout_stays_null(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* arr = types::intern_array(&it, fake_i32(a), 4);
+    types::size_of(&it, arr);
+    if(!testing::expect_eq((void*)arr.layout, null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 layout_pointer_layout_stays_null(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p = types::intern_pointer(&it, fake_i32(a), false);
+    types::size_of(&it, p);
+    if(!testing::expect_eq((void*)p.layout, null, m)) { return -1; }
+    return 0;
+}
+
+// ===== cycle detection =====
+
+fn i32 cycle_self_struct_non_pointer_returns_zero(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, sizeof(ast::FieldDecl));
+    decl.fields = {fields, 1};
+    types::Type* s = types::intern_struct(&it, (void*)decl);
+    fields[0].resolved_type = (void*)s;
+    u32 sz = types::size_of(&it, s);
+    if(!testing::expect_eq(sz, (u32)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 cycle_self_struct_pointer_field_returns_eight(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, sizeof(ast::FieldDecl));
+    decl.fields = {fields, 1};
+    types::Type* s = types::intern_struct(&it, (void*)decl);
+    types::Type* ps = types::intern_pointer(&it, s, false);
+    fields[0].resolved_type = (void*)ps;
+    u32 sz = types::size_of(&it, s);
+    if(!testing::expect_eq(sz, (u32)8, m)) { return -1; }
+    return 0;
+}
+
+fn i32 cycle_mutual_struct_pointer_fields_both_eight(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    ast::StructDeclNode* d_a = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    ast::StructDeclNode* d_b = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(d_a, 0, sizeof(ast::StructDeclNode));
+    sys::memset(d_b, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* f_a = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    ast::FieldDecl* f_b = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(f_a, 0, sizeof(ast::FieldDecl));
+    sys::memset(f_b, 0, sizeof(ast::FieldDecl));
+    d_a.fields = {f_a, 1};
+    d_b.fields = {f_b, 1};
+    types::Type* ta = types::intern_struct(&it, (void*)d_a);
+    types::Type* tb = types::intern_struct(&it, (void*)d_b);
+    f_a[0].resolved_type = (void*)types::intern_pointer(&it, tb, false);
+    f_b[0].resolved_type = (void*)types::intern_pointer(&it, ta, false);
+    if(!testing::expect_eq(types::size_of(&it, ta), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::size_of(&it, tb), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+// ===== reintern_from — primitives / null =====
+
+fn i32 reintern_primitive_returns_same(arena::Arena* a, u8[] m) {
+    types::TypeInterner dst; setup(&dst, a, 16);
+    types::Type* p = fake_i32(a);
+    if(!testing::expect_eq((void*)types::reintern_from(&dst, p), (void*)p, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_comptime_returns_same(arena::Arena* a, u8[] m) {
+    types::TypeInterner dst; setup(&dst, a, 16);
+    types::Type* c = fake_comptime(a);
+    if(!testing::expect_eq((void*)types::reintern_from(&dst, c), (void*)c, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_null_returns_null(arena::Arena* a, u8[] m) {
+    types::TypeInterner dst; setup(&dst, a, 16);
+    if(!testing::expect_eq((void*)types::reintern_from(&dst, null), null, m)) { return -1; }
+    return 0;
+}
+
+// ===== reintern_from — same-typer idempotence =====
+
+fn i32 reintern_pointer_same_typer_idempotent(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p = types::intern_pointer(&it, fake_i32(a), false);
+    if(!testing::expect_eq((void*)types::reintern_from(&it, p), (void*)p, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_array_same_typer_idempotent(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* arr = types::intern_array(&it, fake_i32(a), 4);
+    if(!testing::expect_eq((void*)types::reintern_from(&it, arr), (void*)arr, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_slice_same_typer_idempotent(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* slc = types::intern_slice(&it, fake_i32(a));
+    if(!testing::expect_eq((void*)types::reintern_from(&it, slc), (void*)slc, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_fnptr_same_typer_idempotent(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* fp = types::intern_fn_ptr(&it, fake_void(a), mk_params2(a, fake_i32(a), fake_f64(a)), false);
+    if(!testing::expect_eq((void*)types::reintern_from(&it, fp), (void*)fp, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_struct_same_typer_idempotent(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = types::intern_struct(&it, fake_decl(a));
+    if(!testing::expect_eq((void*)types::reintern_from(&it, s), (void*)s, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_union_same_typer_idempotent(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u = types::intern_union(&it, fake_decl(a));
+    if(!testing::expect_eq((void*)types::reintern_from(&it, u), (void*)u, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_enum_same_typer_idempotent(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = types::intern_enum(&it, fake_decl(a));
+    if(!testing::expect_eq((void*)types::reintern_from(&it, e), (void*)e, m)) { return -1; }
+    return 0;
+}
+
+// ===== reintern_from — cross-typer =====
+
+fn i32 reintern_pointer_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* p1 = types::intern_pointer(&it1, fake_i32(a), false);
+    types::Type* p2 = types::reintern_from(&it2, p1);
+    if(!testing::expect_ne((void*)p1, (void*)p2, m)) { return -1; }
+    if(!testing::expect_eq((u64)p2.kind, (u64)types::TypeKind::Pointer, m)) { return -2; }
+    if(!testing::expect_eq((void*)types::reintern_from(&it2, p1), (void*)p2, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_pointer_const_preserved(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* p_c = types::intern_pointer(&it1, fake_i32(a), true);
+    types::Type* p_n = types::intern_pointer(&it1, fake_i32(a), false);
+    types::Type* rc  = types::reintern_from(&it2, p_c);
+    types::Type* rn  = types::reintern_from(&it2, p_n);
+    if(!testing::expect_eq(has_flag(rc, types::LayoutFlags::Const), true,  m)) { return -1; }
+    if(!testing::expect_eq(has_flag(rn, types::LayoutFlags::Const), false, m)) { return -2; }
+    if(!testing::expect_ne((void*)rc, (void*)rn, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_array_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* a1 = types::intern_array(&it1, fake_i32(a), 7);
+    types::Type* a2 = types::reintern_from(&it2, a1);
+    if(!testing::expect_ne((void*)a1, (void*)a2, m)) { return -1; }
+    if(!testing::expect_eq(a2.data.array.count, (u64)7, m)) { return -2; }
+    if(!testing::expect_eq((void*)types::reintern_from(&it2, a1), (void*)a2, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_slice_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* s1 = types::intern_slice(&it1, fake_i64(a));
+    types::Type* s2 = types::reintern_from(&it2, s1);
+    if(!testing::expect_ne((void*)s1, (void*)s2, m)) { return -1; }
+    if(!testing::expect_eq((u64)s2.kind, (u64)types::TypeKind::Slice, m)) { return -2; }
+    if(!testing::expect_eq((void*)types::reintern_from(&it2, s1), (void*)s2, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_fnptr_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* f1 = types::intern_fn_ptr(&it1, fake_void(a), mk_params2(a, fake_i32(a), fake_f64(a)), false);
+    types::Type* f2 = types::reintern_from(&it2, f1);
+    if(!testing::expect_ne((void*)f1, (void*)f2, m)) { return -1; }
+    if(!testing::expect_eq(f2.data.fn_ptr.params.len, (u64)2, m)) { return -2; }
+    if(!testing::expect_eq(f2.data.fn_ptr.is_variadic, false, m)) { return -3; }
+    if(!testing::expect_eq((void*)types::reintern_from(&it2, f1), (void*)f2, m)) { return -4; }
+    return 0;
+}
+
+fn i32 reintern_fnptr_variadic_preserved(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* f_v = types::intern_fn_ptr(&it1, fake_void(a), mk_params0(), true);
+    types::Type* f_n = types::intern_fn_ptr(&it1, fake_void(a), mk_params0(), false);
+    types::Type* rv  = types::reintern_from(&it2, f_v);
+    types::Type* rn  = types::reintern_from(&it2, f_n);
+    if(!testing::expect_eq(rv.data.fn_ptr.is_variadic, true,  m)) { return -1; }
+    if(!testing::expect_eq(rn.data.fn_ptr.is_variadic, false, m)) { return -2; }
+    if(!testing::expect_ne((void*)rv, (void*)rn, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_struct_cross_typer_same_decl(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    void* d = fake_decl(a);
+    types::Type* s1 = types::intern_struct(&it1, d);
+    types::Type* s2 = types::reintern_from(&it2, s1);
+    if(!testing::expect_ne((void*)s1, (void*)s2, m)) { return -1; }
+    if(!testing::expect_eq((void*)s2.data.struct_decl, d, m)) { return -2; }
+    if(!testing::expect_eq((void*)types::intern_struct(&it2, d), (void*)s2, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_union_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    void* d = fake_decl(a);
+    types::Type* u1 = types::intern_union(&it1, d);
+    types::Type* u2 = types::reintern_from(&it2, u1);
+    if(!testing::expect_ne((void*)u1, (void*)u2, m)) { return -1; }
+    if(!testing::expect_eq((void*)u2.data.union_decl, d, m)) { return -2; }
+    return 0;
+}
+
+fn i32 reintern_enum_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    void* d = fake_decl(a);
+    types::Type* e1 = types::intern_enum(&it1, d);
+    types::Type* e2 = types::reintern_from(&it2, e1);
+    if(!testing::expect_ne((void*)e1, (void*)e2, m)) { return -1; }
+    if(!testing::expect_eq((void*)e2.data.enum_decl, d, m)) { return -2; }
+    return 0;
+}
+
+fn i32 reintern_nested_pointer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* p1  = types::intern_pointer(&it1, fake_i32(a), false);
+    types::Type* pp1 = types::intern_pointer(&it1, p1, false);
+    types::Type* pp2 = types::reintern_from(&it2, pp1);
+    if(!testing::expect_ne((void*)pp1, (void*)pp2, m)) { return -1; }
+    if(!testing::expect_eq((u64)pp2.kind, (u64)types::TypeKind::Pointer, m)) { return -2; }
+    if(!testing::expect_eq((u64)pp2.data.pointee.kind, (u64)types::TypeKind::Pointer, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_array_of_pointer_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* p   = types::intern_pointer(&it1, fake_i32(a), false);
+    types::Type* a1  = types::intern_array(&it1, p, 5);
+    types::Type* a2  = types::reintern_from(&it2, a1);
+    if(!testing::expect_ne((void*)a1, (void*)a2, m)) { return -1; }
+    if(!testing::expect_eq(a2.data.array.count, (u64)5, m)) { return -2; }
+    if(!testing::expect_eq((u64)a2.data.array.elem.kind, (u64)types::TypeKind::Pointer, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_pointer_to_struct_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    void* d = fake_decl(a);
+    types::Type* s   = types::intern_struct(&it1, d);
+    types::Type* p1  = types::intern_pointer(&it1, s, false);
+    types::Type* p2  = types::reintern_from(&it2, p1);
+    if(!testing::expect_eq((void*)p2.data.pointee.data.struct_decl, d, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_fnptr_with_struct_params_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    void* d = fake_decl(a);
+    types::Type* s   = types::intern_struct(&it1, d);
+    types::Type* f1  = types::intern_fn_ptr(&it1, s, mk_params1(a, s), false);
+    types::Type* f2  = types::reintern_from(&it2, f1);
+    if(!testing::expect_eq((void*)f2.data.fn_ptr.ret.data.struct_decl, d, m)) { return -1; }
+    if(!testing::expect_eq((void*)f2.data.fn_ptr.params[0].data.struct_decl, d, m)) { return -2; }
+    return 0;
+}
+
+// ===== cross-module layout consistency =====
+
+fn i32 xmod_struct_layout_matches(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* s1 = fake_struct_typed(a, &it1, mk_params2(a, fake_i8(a), fake_i32(a)));
+    types::Type* s2 = types::reintern_from(&it2, s1);
+    if(!testing::expect_eq(types::size_of (&it2, s2), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it2, s2), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 xmod_struct_does_not_mutate_source(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* s1 = fake_struct_typed(a, &it1, mk_params2(a, fake_i8(a), fake_i32(a)));
+    types::Type* s2 = types::reintern_from(&it2, s1);
+    types::size_of(&it2, s2);
+    if(!testing::expect_eq(has_flag(s1, types::LayoutFlags::Computed), false, m)) { return -1; }
+    if(!testing::expect_eq((void*)s1.layout, null, m)) { return -2; }
+    if(!testing::expect_eq(has_flag(s2, types::LayoutFlags::Computed), true, m)) { return -3; }
+    if(!testing::expect_ne((void*)s2.layout, null, m)) { return -4; }
+    return 0;
+}
+
+fn i32 xmod_union_layout_matches(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* u1 = fake_union_typed(a, &it1, mk_params2(a, fake_i64(a), fake_i8(a)));
+    types::Type* u2 = types::reintern_from(&it2, u1);
+    if(!testing::expect_eq(types::size_of (&it2, u2), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it2, u2), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 xmod_enum_layout_matches(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* e1 = fake_enum_with_base(a, &it1, fake_i64(a));
+    types::Type* e2 = types::reintern_from(&it2, e1);
+    if(!testing::expect_eq(types::size_of (&it2, e2), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it2, e2), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 xmod_struct_offsets_match(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* s1 = fake_struct_typed(a, &it1, mk_params3(a, fake_i8(a), fake_i8(a), fake_i32(a)));
+    types::Type* s2 = types::reintern_from(&it2, s1);
+    types::size_of(&it1, s1);
+    types::size_of(&it2, s2);
+    if(!testing::expect_ne((void*)s1.layout, (void*)s2.layout, m)) { return -1; }
+    if(!testing::expect_eq(s1.layout.offsets[0], s2.layout.offsets[0], m)) { return -2; }
+    if(!testing::expect_eq(s1.layout.offsets[1], s2.layout.offsets[1], m)) { return -3; }
+    if(!testing::expect_eq(s1.layout.offsets[2], s2.layout.offsets[2], m)) { return -4; }
+    return 0;
+}
+
+fn i32 xmod_reintern_chain_three_typers(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::TypeInterner it3; setup(&it3, a, 16);
+    types::Type* p1 = types::intern_pointer(&it1, fake_i32(a), false);
+    types::Type* p2 = types::reintern_from(&it2, p1);
+    types::Type* p3 = types::reintern_from(&it3, p2);
+    if(!testing::expect_ne((void*)p1, (void*)p2, m)) { return -1; }
+    if(!testing::expect_ne((void*)p2, (void*)p3, m)) { return -2; }
+    if(!testing::expect_ne((void*)p1, (void*)p3, m)) { return -3; }
+    if(!testing::expect_eq((void*)types::reintern_from(&it3, p1), (void*)p3, m)) { return -4; }
+    return 0;
+}
+
+// ===== Opaque preservation + size_of/align_of error =====
+
+fn types::Type* fake_opaque_struct(arena::Arena* a, types::TypeInterner* it) {
+    types::Type* t = types::intern_struct(it, fake_decl(a));
+    t.flags = (types::LayoutFlags)((u8)t.flags | (u8)types::LayoutFlags::Opaque);
+    return t;
+}
+
+fn types::Type* fake_opaque_union(arena::Arena* a, types::TypeInterner* it) {
+    types::Type* t = types::intern_union(it, fake_decl(a));
+    t.flags = (types::LayoutFlags)((u8)t.flags | (u8)types::LayoutFlags::Opaque);
+    return t;
+}
+
+fn i32 reintern_struct_opaque_preserved(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* s1 = fake_opaque_struct(a, &it1);
+    types::Type* s2 = types::reintern_from(&it2, s1);
+    if(!testing::expect_eq(has_flag(s2, types::LayoutFlags::Opaque), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_union_opaque_preserved(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* u1 = fake_opaque_union(a, &it1);
+    types::Type* u2 = types::reintern_from(&it2, u1);
+    if(!testing::expect_eq(has_flag(u2, types::LayoutFlags::Opaque), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_enum_opaque_preserved(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* e1 = types::intern_enum(&it1, fake_decl(a));
+    e1.flags = (types::LayoutFlags)((u8)e1.flags | (u8)types::LayoutFlags::Opaque);
+    types::Type* e2 = types::reintern_from(&it2, e1);
+    if(!testing::expect_eq(has_flag(e2, types::LayoutFlags::Opaque), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_struct_non_opaque_not_propagated(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* s1 = types::intern_struct(&it1, fake_decl(a));
+    types::Type* s2 = types::reintern_from(&it2, s1);
+    if(!testing::expect_eq(has_flag(s2, types::LayoutFlags::Opaque), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 opaque_struct_size_of_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* s = fake_opaque_struct(a, &it);
+    u32 sz = types::size_of(&it, s);
+    if(!testing::expect_eq(sz, (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_eq(d.entries[0].is_warning, false, m)) { return -3; }
+    return 0;
+}
+
+fn i32 opaque_struct_align_of_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* s = fake_opaque_struct(a, &it);
+    u32 al = types::align_of(&it, s);
+    if(!testing::expect_eq(al, (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 opaque_size_of_reports_every_call(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* s = fake_opaque_struct(a, &it);
+    types::size_of(&it, s);
+    types::size_of(&it, s);
+    types::size_of(&it, s);
+    if(!testing::expect_eq(d.entries.len, (u64)3, m)) { return -1; }
+    return 0;
+}
+
+fn i32 opaque_does_not_set_layout(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_opaque_struct(a, &it);
+    types::size_of(&it, s);
+    if(!testing::expect_eq((void*)s.layout, null, m)) { return -1; }
+    if(!testing::expect_eq(has_flag(s, types::LayoutFlags::Computed), false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 opaque_union_size_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* u = fake_opaque_union(a, &it);
+    u32 sz = types::size_of(&it, u);
+    if(!testing::expect_eq(sz, (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 opaque_with_null_diag_no_crash(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_opaque_struct(a, &it);
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)0, m)) { return -2; }
+    return 0;
+}
+
+// ===== ComptimeType / cycle — diag reporting =====
+
+fn i32 comptime_size_of_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* c = fake_comptime(a);
+    types::size_of(&it, c);
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(d.entries[0].is_warning, false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 comptime_with_null_diag_no_crash(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* c = fake_comptime(a);
+    if(!testing::expect_eq(types::size_of (&it, c), (u32)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 cycle_self_struct_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, sizeof(ast::FieldDecl));
+    decl.fields = {fields, 1};
+    types::Type* s = types::intern_struct(&it, (void*)decl);
+    fields[0].resolved_type = (void*)s;
+    types::size_of(&it, s);
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(d.entries[0].is_warning, false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 cycle_mutual_struct_non_pointer_both_zero(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    ast::StructDeclNode* d_a = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    ast::StructDeclNode* d_b = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(d_a, 0, sizeof(ast::StructDeclNode));
+    sys::memset(d_b, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* f_a = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    ast::FieldDecl* f_b = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(f_a, 0, sizeof(ast::FieldDecl));
+    sys::memset(f_b, 0, sizeof(ast::FieldDecl));
+    d_a.fields = {f_a, 1};
+    d_b.fields = {f_b, 1};
+    types::Type* ta = types::intern_struct(&it, (void*)d_a);
+    types::Type* tb = types::intern_struct(&it, (void*)d_b);
+    f_a[0].resolved_type = (void*)tb;
+    f_b[0].resolved_type = (void*)ta;
+    if(!testing::expect_eq(types::size_of(&it, ta), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::size_of(&it, tb), (u32)0, m)) { return -2; }
+    return 0;
+}
+
+// ===== null resolved_type guard =====
+
+fn i32 layout_struct_null_field_skipped(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, 2 * sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, 2 * sizeof(ast::FieldDecl));
+    fields[1].resolved_type = (void*)fake_i32(a);
+    decl.fields = {fields, 2};
+    types::Type* s = types::intern_struct(&it, (void*)decl);
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)4, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_null_field_skipped(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    ast::UnionDeclNode* decl = (ast::UnionDeclNode*)arena::alloc(a, sizeof(ast::UnionDeclNode));
+    sys::memset(decl, 0, sizeof(ast::UnionDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, 2 * sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, 2 * sizeof(ast::FieldDecl));
+    fields[1].resolved_type = (void*)fake_i64(a);
+    decl.fields = {fields, 2};
+    types::Type* u = types::intern_union(&it, (void*)decl);
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_empty_struct_has_layout(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params0());
+    types::size_of(&it, s);
+    if(!testing::expect_ne((void*)s.layout, null, m)) { return -1; }
+    if(!testing::expect_eq(s.layout.offsets.len, (u64)0, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_with_bool(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_bool(a), fake_i32(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)4, m)) { return -2; }
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0, m)) { return -3; }
+    if(!testing::expect_eq(s.layout.offsets[1], (u32)4, m)) { return -4; }
+    return 0;
+}
+
+fn i32 layout_struct_with_float(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, fake_i32(a), fake_f64(a)));
+    if(!testing::expect_eq(types::size_of (&it, s), (u32)16, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)8,  m)) { return -2; }
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0, m)) { return -3; }
+    if(!testing::expect_eq(s.layout.offsets[1], (u32)8, m)) { return -4; }
+    return 0;
+}
+
+fn i32 layout_struct_offsets_with_slice(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* slc = types::intern_slice(&it, fake_i32(a));
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, slc, fake_i32(a)));
+    types::size_of(&it, s);
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0,  m)) { return -1; }
+    if(!testing::expect_eq(s.layout.offsets[1], (u32)16, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_offsets_with_pointer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* ptr = types::intern_pointer(&it, fake_i32(a), false);
+    types::Type* s = fake_struct_typed(a, &it, mk_params3(a, fake_i8(a), ptr, fake_i32(a)));
+    types::size_of(&it, s);
+    if(!testing::expect_eq(s.layout.offsets[0], (u32)0,  m)) { return -1; }
+    if(!testing::expect_eq(s.layout.offsets[1], (u32)8,  m)) { return -2; }
+    if(!testing::expect_eq(s.layout.offsets[2], (u32)16, m)) { return -3; }
+    return 0;
+}
+
+fn i32 layout_struct_offsets_with_nested_struct(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* inner = fake_struct_typed(a, &it, mk_params2(a, fake_i8(a), fake_i32(a)));
+    types::Type* outer = fake_struct_typed(a, &it, mk_params2(a, fake_i32(a), inner));
+    types::size_of(&it, outer);
+    if(!testing::expect_eq(outer.layout.offsets[0], (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(outer.layout.offsets[1], (u32)4, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_array_of_fnptr(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* fp  = types::intern_fn_ptr(&it, fake_void(a), mk_params0(), false);
+    types::Type* arr = types::intern_array(&it, fp, 4);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)32, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_array_of_union(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u   = fake_union_typed(a, &it, mk_params2(a, fake_i64(a), fake_i8(a)));
+    types::Type* arr = types::intern_array(&it, u, 3);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)24, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_array_of_enum(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e   = fake_enum_with_base(a, &it, fake_i32(a));
+    types::Type* arr = types::intern_array(&it, e, 5);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)20, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)4,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_pointer_to_fnptr(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* fp = types::intern_fn_ptr(&it, fake_void(a), mk_params0(), false);
+    types::Type* p  = types::intern_pointer(&it, fp, false);
+    if(!testing::expect_eq(types::size_of (&it, p), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, p), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_pointer_to_enum(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = fake_enum_with_base(a, &it, fake_i64(a));
+    types::Type* p = types::intern_pointer(&it, e, false);
+    if(!testing::expect_eq(types::size_of (&it, p), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, p), (u32)8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_enum_caches_after_first(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = fake_enum_with_base(a, &it, fake_i32(a));
+    if(!testing::expect_eq(has_flag(e, types::LayoutFlags::Computed), false, m)) { return -1; }
+    types::size_of(&it, e);
+    if(!testing::expect_eq(has_flag(e, types::LayoutFlags::Computed), true, m)) { return -2; }
+    u32 a2 = types::align_of(&it, e);
+    if(!testing::expect_eq(a2, (u32)4, m)) { return -3; }
+    return 0;
+}
+
+fn i32 layout_slice_layout_stays_null(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = types::intern_slice(&it, fake_i32(a));
+    types::size_of(&it, s);
+    if(!testing::expect_eq((void*)s.layout, null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 layout_fnptr_layout_stays_null(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* f = types::intern_fn_ptr(&it, fake_void(a), mk_params0(), false);
+    types::size_of(&it, f);
+    if(!testing::expect_eq((void*)f.layout, null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 layout_enum_layout_stays_null(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = fake_enum_with_base(a, &it, fake_i32(a));
+    types::size_of(&it, e);
+    if(!testing::expect_eq((void*)e.layout, null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 layout_3d_array(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* a1 = types::intern_array(&it, fake_i32(a), 2);
+    types::Type* a2 = types::intern_array(&it, a1, 3);
+    types::Type* a3 = types::intern_array(&it, a2, 4);
+    if(!testing::expect_eq(types::size_of (&it, a3), (u32)96, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, a3), (u32)4,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_slice_of_struct(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s   = fake_struct_typed(a, &it, mk_params2(a, fake_i8(a), fake_i32(a)));
+    types::Type* slc = types::intern_slice(&it, s);
+    if(!testing::expect_eq(types::size_of (&it, slc), (u32)16, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, slc), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_slice_of_array(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* arr = types::intern_array(&it, fake_i32(a), 5);
+    types::Type* slc = types::intern_slice(&it, arr);
+    if(!testing::expect_eq(types::size_of (&it, slc), (u32)16, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, slc), (u32)8,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_pointer_to_opaque_no_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* s = fake_opaque_struct(a, &it);
+    types::Type* p = types::intern_pointer(&it, s, false);
+    if(!testing::expect_eq(types::size_of (&it, p), (u32)8, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, p), (u32)8, m)) { return -2; }
+    if(!testing::expect_eq(d.entries.len, (u64)0, m)) { return -3; }
+    return 0;
+}
+
+fn i32 layout_array_of_pointer_to_opaque_no_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* s   = fake_opaque_struct(a, &it);
+    types::Type* p   = types::intern_pointer(&it, s, false);
+    types::Type* arr = types::intern_array(&it, p, 4);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)32, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)8,  m)) { return -2; }
+    if(!testing::expect_eq(d.entries.len, (u64)0, m)) { return -3; }
+    return 0;
+}
+
+fn i32 cycle_struct_through_array_field(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, sizeof(ast::FieldDecl));
+    decl.fields = {fields, 1};
+    types::Type* s   = types::intern_struct(&it, (void*)decl);
+    types::Type* arr = types::intern_array(&it, s, 3);
+    fields[0].resolved_type = (void*)arr;
+    if(!testing::expect_eq(types::size_of(&it, s), (u32)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 cycle_union_through_value(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    ast::UnionDeclNode* decl = (ast::UnionDeclNode*)arena::alloc(a, sizeof(ast::UnionDeclNode));
+    sys::memset(decl, 0, sizeof(ast::UnionDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, sizeof(ast::FieldDecl));
+    decl.fields = {fields, 1};
+    types::Type* u = types::intern_union(&it, (void*)decl);
+    fields[0].resolved_type = (void*)u;
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 cycle_union_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    ast::UnionDeclNode* decl = (ast::UnionDeclNode*)arena::alloc(a, sizeof(ast::UnionDeclNode));
+    sys::memset(decl, 0, sizeof(ast::UnionDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, sizeof(ast::FieldDecl));
+    decl.fields = {fields, 1};
+    types::Type* u = types::intern_union(&it, (void*)decl);
+    fields[0].resolved_type = (void*)u;
+    types::size_of(&it, u);
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -1; }
+    return 0;
+}
+
+fn i32 cycle_diag_src_pos_matches_decl(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    decl.h.src_pos = 4242;
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, sizeof(ast::FieldDecl));
+    decl.fields = {fields, 1};
+    types::Type* s = types::intern_struct(&it, (void*)decl);
+    fields[0].resolved_type = (void*)s;
+    types::size_of(&it, s);
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(d.entries[0].src_pos, (u32)4242, m)) { return -2; }
+    return 0;
+}
+
+fn i32 comptime_diag_msg_content(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::size_of(&it, fake_comptime(a));
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -1; }
+    u8[] expected = "Type has no runtime size";
+    if(!testing::expect_eq(d.entries[0].msg, expected, m)) { return -2; }
+    return 0;
+}
+
+fn i32 cycle_diag_msg_content(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, sizeof(ast::FieldDecl));
+    decl.fields = {fields, 1};
+    types::Type* s = types::intern_struct(&it, (void*)decl);
+    fields[0].resolved_type = (void*)s;
+    types::size_of(&it, s);
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -1; }
+    u8[] expected = "type has infinite size (cycle through non-pointer fields)";
+    if(!testing::expect_eq(d.entries[0].msg, expected, m)) { return -2; }
+    return 0;
+}
+
+fn i32 opaque_diag_msg_content(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* s = fake_opaque_struct(a, &it);
+    types::size_of(&it, s);
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -1; }
+    u8[] expected = "cannot take size of opaque type";
+    if(!testing::expect_eq(d.entries[0].msg, expected, m)) { return -2; }
+    return 0;
+}
+
+fn i32 reintern_const_pointer_in_array(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* p_const = types::intern_pointer(&it1, fake_i32(a), true);
+    types::Type* arr     = types::intern_array(&it1, p_const, 3);
+    types::Type* arr2    = types::reintern_from(&it2, arr);
+    types::Type* elem2   = arr2.data.array.elem;
+    if(!testing::expect_eq(has_flag(elem2, types::LayoutFlags::Const), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_pointer_to_opaque_struct_preserves_opaque(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* s   = fake_opaque_struct(a, &it1);
+    types::Type* p   = types::intern_pointer(&it1, s, false);
+    types::Type* p2  = types::reintern_from(&it2, p);
+    types::Type* po2 = p2.data.pointee;
+    if(!testing::expect_eq(has_flag(po2, types::LayoutFlags::Opaque), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_opaque_struct_same_typer_idempotent(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s  = fake_opaque_struct(a, &it);
+    types::Type* s2 = types::reintern_from(&it, s);
+    if(!testing::expect_eq((void*)s, (void*)s2, m)) { return -1; }
+    if(!testing::expect_eq(has_flag(s, types::LayoutFlags::Opaque), true, m)) { return -2; }
+    return 0;
+}
+
+fn i32 union_lazy_layout(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* u = types::intern_union(&it, fake_decl(a));
+    if(!testing::expect_eq(has_flag(u, types::LayoutFlags::Computed), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 enum_lazy_layout(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = types::intern_enum(&it, fake_decl(a));
+    if(!testing::expect_eq(has_flag(e, types::LayoutFlags::Computed), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 reintern_slice_of_struct_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    void* d = fake_decl(a);
+    types::Type* s1   = types::intern_struct(&it1, d);
+    types::Type* slc1 = types::intern_slice(&it1, s1);
+    types::Type* slc2 = types::reintern_from(&it2, slc1);
+    if(!testing::expect_ne((void*)slc1, (void*)slc2, m)) { return -1; }
+    if(!testing::expect_eq((u64)slc2.kind, (u64)types::TypeKind::Slice, m)) { return -2; }
+    if(!testing::expect_eq((u64)slc2.data.slice_elem.kind, (u64)types::TypeKind::Struct, m)) { return -3; }
+    if(!testing::expect_eq((void*)slc2.data.slice_elem.data.struct_decl, d, m)) { return -4; }
+    return 0;
+}
+
+fn i32 reintern_pointer_to_fnptr_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* fp1 = types::intern_fn_ptr(&it1, fake_void(a), mk_params0(), false);
+    types::Type* p1  = types::intern_pointer(&it1, fp1, false);
+    types::Type* p2  = types::reintern_from(&it2, p1);
+    if(!testing::expect_ne((void*)p1, (void*)p2, m)) { return -1; }
+    if(!testing::expect_eq((u64)p2.kind, (u64)types::TypeKind::Pointer, m)) { return -2; }
+    if(!testing::expect_eq((u64)p2.data.pointee.kind, (u64)types::TypeKind::FnPtr, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_const_pointer_nested(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* inner_const = types::intern_pointer(&it1, fake_i32(a), true);
+    types::Type* outer       = types::intern_pointer(&it1, inner_const, false);
+    types::Type* outer2      = types::reintern_from(&it2, outer);
+    types::Type* inner2      = outer2.data.pointee;
+    if(!testing::expect_eq(has_flag(inner2, types::LayoutFlags::Const), true,  m)) { return -1; }
+    if(!testing::expect_eq(has_flag(outer2, types::LayoutFlags::Const), false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_struct_multiple_opaque_fields_reports_each(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* opaque_a = fake_opaque_struct(a, &it);
+    types::Type* opaque_b = fake_opaque_struct(a, &it);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, opaque_a, opaque_b));
+    u32 size = types::size_of(&it, s);
+    if(!testing::expect_eq(size, (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(d.entries.len, (u64)2, m)) { return -2; }
+    return 0;
+}
+
+fn i32 cycle_struct_with_valid_field(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, 2 * sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, 2 * sizeof(ast::FieldDecl));
+    decl.fields = {fields, 2};
+    types::Type* s = types::intern_struct(&it, (void*)decl);
+    fields[0].resolved_type = (void*)s;
+    fields[1].resolved_type = (void*)fake_i32(a);
+    if(!testing::expect_eq(types::size_of(&it, s), (u32)4, m)) { return -1; }
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 cycle_self_struct_align_of_reports_and_returns_one(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    ast::FieldDecl* fields = (ast::FieldDecl*)arena::alloc(a, sizeof(ast::FieldDecl));
+    sys::memset(fields, 0, sizeof(ast::FieldDecl));
+    decl.fields = {fields, 1};
+    types::Type* s = types::intern_struct(&it, (void*)decl);
+    fields[0].resolved_type = (void*)s;
+    if(!testing::expect_eq(types::align_of(&it, s), (u32)1, m)) { return -1; }
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_with_opaque_field(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* opaque_s = fake_opaque_struct(a, &it);
+    types::Type* u = fake_union_typed(a, &it, mk_params1(a, opaque_s));
+    if(!testing::expect_eq(types::size_of (&it, u), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, u), (u32)1, m)) { return -2; }
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -3; }
+    return 0;
+}
+
+fn i32 layout_struct_with_comptime_field_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* c = fake_comptime(a);
+    types::Type* s = fake_struct_typed(a, &it, mk_params2(a, c, fake_i32(a)));
+    u32 size = types::size_of(&it, s);
+    if(!testing::expect_eq(size, (u32)4, m)) { return -1; }
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_union_with_comptime_field_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* c = fake_comptime(a);
+    types::Type* u = fake_union_typed(a, &it, mk_params2(a, c, fake_i32(a)));
+    u32 size = types::size_of(&it, u);
+    if(!testing::expect_eq(size, (u32)4, m)) { return -1; }
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 layout_array_of_comptime_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* c   = fake_comptime(a);
+    types::Type* arr = types::intern_array(&it, c, 3);
+    types::size_of(&it, arr);
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -1; }
+    return 0;
+}
+
+fn i32 layout_array_of_opaque_reports_diag(arena::Arena* a, u8[] m) {
+    diag::DiagBuf* d = fresh_diag(a);
+    types::TypeInterner it; setup_with_diag(&it, a, d, 16);
+    types::Type* op  = fake_opaque_struct(a, &it);
+    types::Type* arr = types::intern_array(&it, op, 3);
+    if(!testing::expect_eq(types::size_of (&it, arr), (u32)0, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(&it, arr), (u32)1, m)) { return -2; }
+    if(!testing::expect_eq(d.entries.len, (u64)1, m)) { return -3; }
+    return 0;
+}
+
+fn i32 reintern_does_not_compute_layout(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* s1 = fake_struct_typed(a, &it1, mk_params2(a, fake_i8(a), fake_i32(a)));
+    types::Type* s2 = types::reintern_from(&it2, s1);
+    if(!testing::expect_eq(has_flag(s1, types::LayoutFlags::Computed), false, m)) { return -1; }
+    if(!testing::expect_eq(has_flag(s2, types::LayoutFlags::Computed), false, m)) { return -2; }
+    if(!testing::expect_eq((void*)s1.layout, null, m)) { return -3; }
+    if(!testing::expect_eq((void*)s2.layout, null, m)) { return -4; }
+    return 0;
+}
+
+fn i32 reintern_slice_of_slice_cross_typer(arena::Arena* a, u8[] m) {
+    types::TypeInterner it1; setup(&it1, a, 16);
+    types::TypeInterner it2; setup(&it2, a, 16);
+    types::Type* inner1 = types::intern_slice(&it1, fake_i32(a));
+    types::Type* outer1 = types::intern_slice(&it1, inner1);
+    types::Type* outer2 = types::reintern_from(&it2, outer1);
+    if(!testing::expect_ne((void*)outer1, (void*)outer2, m)) { return -1; }
+    if(!testing::expect_eq((u64)outer2.kind, (u64)types::TypeKind::Slice, m)) { return -2; }
+    if(!testing::expect_eq((u64)outer2.data.slice_elem.kind, (u64)types::TypeKind::Slice, m)) { return -3; }
+    if(!testing::expect_eq((u64)outer2.data.slice_elem.data.slice_elem.prim, (u64)types::PrimitiveKind::I32, m)) { return -4; }
+    return 0;
+}
+
 // ===== entry point =====
 
 fn i32 main() {
@@ -1905,6 +3502,185 @@ fn i32 main() {
     testing::add(conv, "convert_array_of_struct_to_pointer_of_struct", &convert_array_of_struct_to_pointer_of_struct);
     testing::add(conv, "convert_comptime_to_comptime_identity",        &convert_comptime_to_comptime_identity);
     testing::add(conv, "convert_comptime_to_other_fails",              &convert_comptime_to_other_fails);
+
+    testing::add(suite, "union_lazy_layout", &union_lazy_layout);
+    testing::add(suite, "enum_lazy_layout",  &enum_lazy_layout);
+
+    u8[] layout = "Layout Tests";
+
+    testing::add(layout, "layout_primitives_exhaustive",         &layout_primitives_exhaustive);
+    testing::add(layout, "layout_pointer_always_8_8",            &layout_pointer_always_8_8);
+    testing::add(layout, "layout_const_pointer_is_8_8",          &layout_const_pointer_is_8_8);
+    testing::add(layout, "layout_slice_always_16_8",             &layout_slice_always_16_8);
+    testing::add(layout, "layout_fnptr_always_8_8",              &layout_fnptr_always_8_8);
+
+    testing::add(layout, "layout_array_primitive_elem", &layout_array_primitive_elem);
+    testing::add(layout, "layout_array_zero_count",     &layout_array_zero_count);
+    testing::add(layout, "layout_array_single",         &layout_array_single);
+    testing::add(layout, "layout_array_large_count",    &layout_array_large_count);
+    testing::add(layout, "layout_nested_array",         &layout_nested_array);
+    testing::add(layout, "layout_array_of_pointer",     &layout_array_of_pointer);
+    testing::add(layout, "layout_array_of_slice",       &layout_array_of_slice);
+    testing::add(layout, "layout_array_of_struct",      &layout_array_of_struct);
+    testing::add(layout, "layout_array_of_fnptr",       &layout_array_of_fnptr);
+    testing::add(layout, "layout_array_of_union",       &layout_array_of_union);
+    testing::add(layout, "layout_array_of_enum",        &layout_array_of_enum);
+    testing::add(layout, "layout_3d_array",             &layout_3d_array);
+
+    testing::add(layout, "layout_slice_of_struct", &layout_slice_of_struct);
+    testing::add(layout, "layout_slice_of_array",  &layout_slice_of_array);
+
+    testing::add(layout, "layout_pointer_to_fnptr", &layout_pointer_to_fnptr);
+    testing::add(layout, "layout_pointer_to_enum",  &layout_pointer_to_enum);
+
+    testing::add(layout, "layout_empty_struct",         &layout_empty_struct);
+    testing::add(layout, "layout_struct_one_i8",        &layout_struct_one_i8);
+    testing::add(layout, "layout_struct_one_i32",       &layout_struct_one_i32);
+    testing::add(layout, "layout_struct_i8_i32",        &layout_struct_i8_i32);
+    testing::add(layout, "layout_struct_i32_i8",        &layout_struct_i32_i8);
+    testing::add(layout, "layout_struct_i8_i8_i32",     &layout_struct_i8_i8_i32);
+    testing::add(layout, "layout_struct_i8_i64",        &layout_struct_i8_i64);
+    testing::add(layout, "layout_struct_ptr_i8",        &layout_struct_ptr_i8);
+    testing::add(layout, "layout_struct_array_field",   &layout_struct_array_field);
+    testing::add(layout, "layout_struct_slice_field",   &layout_struct_slice_field);
+    testing::add(layout, "layout_struct_three_i32",     &layout_struct_three_i32);
+    testing::add(layout, "layout_struct_nested",        &layout_struct_nested);
+    testing::add(layout, "layout_struct_with_fnptr",    &layout_struct_with_fnptr);
+    testing::add(layout, "layout_struct_with_bool",     &layout_struct_with_bool);
+    testing::add(layout, "layout_struct_with_float",    &layout_struct_with_float);
+    testing::add(layout, "layout_empty_struct_has_layout", &layout_empty_struct_has_layout);
+
+    testing::add(layout, "layout_struct_offsets_dense_i32",        &layout_struct_offsets_dense_i32);
+    testing::add(layout, "layout_struct_offsets_i8_i32",           &layout_struct_offsets_i8_i32);
+    testing::add(layout, "layout_struct_offsets_i32_i8",           &layout_struct_offsets_i32_i8);
+    testing::add(layout, "layout_struct_offsets_i8_i8_i32",        &layout_struct_offsets_i8_i8_i32);
+    testing::add(layout, "layout_struct_offsets_i8_i64",           &layout_struct_offsets_i8_i64);
+    testing::add(layout, "layout_struct_offsets_single_field",     &layout_struct_offsets_single_field);
+    testing::add(layout, "layout_struct_offsets_with_slice",       &layout_struct_offsets_with_slice);
+    testing::add(layout, "layout_struct_offsets_with_pointer",     &layout_struct_offsets_with_pointer);
+    testing::add(layout, "layout_struct_offsets_with_nested_struct", &layout_struct_offsets_with_nested_struct);
+
+    testing::add(layout, "layout_empty_union",            &layout_empty_union);
+    testing::add(layout, "layout_union_one_i8",           &layout_union_one_i8);
+    testing::add(layout, "layout_union_i8_i32",           &layout_union_i8_i32);
+    testing::add(layout, "layout_union_i64_i8",           &layout_union_i64_i8);
+    testing::add(layout, "layout_union_i8_i64",           &layout_union_i8_i64);
+    testing::add(layout, "layout_union_with_slice",       &layout_union_with_slice);
+    testing::add(layout, "layout_union_with_pointer",     &layout_union_with_pointer);
+    testing::add(layout, "layout_union_offsets_all_zero", &layout_union_offsets_all_zero);
+
+    testing::add(layout, "layout_enum_i32_base",         &layout_enum_i32_base);
+    testing::add(layout, "layout_enum_i8_base",          &layout_enum_i8_base);
+    testing::add(layout, "layout_enum_u64_base",         &layout_enum_u64_base);
+    testing::add(layout, "layout_enum_null_base_zero",   &layout_enum_null_base_zero);
+    testing::add(layout, "layout_enum_caches_after_first", &layout_enum_caches_after_first);
+
+    testing::add(layout, "layout_comptime_zero", &layout_comptime_zero);
+
+    testing::add(layout, "layout_struct_sets_computed_flag", &layout_struct_sets_computed_flag);
+    testing::add(layout, "layout_caching_returns_same",      &layout_caching_returns_same);
+    testing::add(layout, "layout_array_sets_computed_flag",  &layout_array_sets_computed_flag);
+    testing::add(layout, "layout_struct_sets_layout_pointer", &layout_struct_sets_layout_pointer);
+    testing::add(layout, "layout_union_sets_layout_pointer",  &layout_union_sets_layout_pointer);
+    testing::add(layout, "layout_array_layout_stays_null",   &layout_array_layout_stays_null);
+    testing::add(layout, "layout_pointer_layout_stays_null", &layout_pointer_layout_stays_null);
+    testing::add(layout, "layout_slice_layout_stays_null",   &layout_slice_layout_stays_null);
+    testing::add(layout, "layout_fnptr_layout_stays_null",   &layout_fnptr_layout_stays_null);
+    testing::add(layout, "layout_enum_layout_stays_null",    &layout_enum_layout_stays_null);
+
+    testing::add(layout, "layout_struct_null_field_skipped", &layout_struct_null_field_skipped);
+    testing::add(layout, "layout_union_null_field_skipped",  &layout_union_null_field_skipped);
+
+    u8[] cyc = "Cycle Detection Tests";
+
+    testing::add(cyc, "cycle_self_struct_non_pointer_returns_zero",   &cycle_self_struct_non_pointer_returns_zero);
+    testing::add(cyc, "cycle_self_struct_pointer_field_returns_eight", &cycle_self_struct_pointer_field_returns_eight);
+    testing::add(cyc, "cycle_mutual_struct_pointer_fields_both_eight", &cycle_mutual_struct_pointer_fields_both_eight);
+    testing::add(cyc, "cycle_mutual_struct_non_pointer_both_zero",     &cycle_mutual_struct_non_pointer_both_zero);
+    testing::add(cyc, "cycle_struct_through_array_field",              &cycle_struct_through_array_field);
+    testing::add(cyc, "cycle_union_through_value",                     &cycle_union_through_value);
+
+    u8[] ri = "reintern_from Tests";
+
+    testing::add(ri, "reintern_primitive_returns_same",    &reintern_primitive_returns_same);
+    testing::add(ri, "reintern_comptime_returns_same",     &reintern_comptime_returns_same);
+    testing::add(ri, "reintern_null_returns_null",         &reintern_null_returns_null);
+
+    testing::add(ri, "reintern_pointer_same_typer_idempotent", &reintern_pointer_same_typer_idempotent);
+    testing::add(ri, "reintern_array_same_typer_idempotent",   &reintern_array_same_typer_idempotent);
+    testing::add(ri, "reintern_slice_same_typer_idempotent",   &reintern_slice_same_typer_idempotent);
+    testing::add(ri, "reintern_fnptr_same_typer_idempotent",   &reintern_fnptr_same_typer_idempotent);
+    testing::add(ri, "reintern_struct_same_typer_idempotent",  &reintern_struct_same_typer_idempotent);
+    testing::add(ri, "reintern_union_same_typer_idempotent",   &reintern_union_same_typer_idempotent);
+    testing::add(ri, "reintern_enum_same_typer_idempotent",    &reintern_enum_same_typer_idempotent);
+    testing::add(ri, "reintern_opaque_struct_same_typer_idempotent", &reintern_opaque_struct_same_typer_idempotent);
+
+    testing::add(ri, "reintern_pointer_cross_typer",           &reintern_pointer_cross_typer);
+    testing::add(ri, "reintern_pointer_const_preserved",       &reintern_pointer_const_preserved);
+    testing::add(ri, "reintern_array_cross_typer",             &reintern_array_cross_typer);
+    testing::add(ri, "reintern_slice_cross_typer",             &reintern_slice_cross_typer);
+    testing::add(ri, "reintern_fnptr_cross_typer",             &reintern_fnptr_cross_typer);
+    testing::add(ri, "reintern_fnptr_variadic_preserved",      &reintern_fnptr_variadic_preserved);
+    testing::add(ri, "reintern_struct_cross_typer_same_decl",  &reintern_struct_cross_typer_same_decl);
+    testing::add(ri, "reintern_union_cross_typer",             &reintern_union_cross_typer);
+    testing::add(ri, "reintern_enum_cross_typer",              &reintern_enum_cross_typer);
+    testing::add(ri, "reintern_nested_pointer",                &reintern_nested_pointer);
+    testing::add(ri, "reintern_array_of_pointer_cross_typer",  &reintern_array_of_pointer_cross_typer);
+    testing::add(ri, "reintern_pointer_to_struct_cross_typer", &reintern_pointer_to_struct_cross_typer);
+    testing::add(ri, "reintern_fnptr_with_struct_params_cross_typer", &reintern_fnptr_with_struct_params_cross_typer);
+    testing::add(ri, "reintern_const_pointer_in_array",        &reintern_const_pointer_in_array);
+
+    testing::add(ri, "reintern_struct_opaque_preserved",       &reintern_struct_opaque_preserved);
+    testing::add(ri, "reintern_union_opaque_preserved",        &reintern_union_opaque_preserved);
+    testing::add(ri, "reintern_enum_opaque_preserved",         &reintern_enum_opaque_preserved);
+    testing::add(ri, "reintern_struct_non_opaque_not_propagated", &reintern_struct_non_opaque_not_propagated);
+    testing::add(ri, "reintern_pointer_to_opaque_struct_preserves_opaque", &reintern_pointer_to_opaque_struct_preserves_opaque);
+
+    u8[] xmod = "Cross-module Layout Tests";
+
+    testing::add(xmod, "xmod_struct_layout_matches",          &xmod_struct_layout_matches);
+    testing::add(xmod, "xmod_struct_does_not_mutate_source",  &xmod_struct_does_not_mutate_source);
+    testing::add(xmod, "xmod_union_layout_matches",           &xmod_union_layout_matches);
+    testing::add(xmod, "xmod_enum_layout_matches",            &xmod_enum_layout_matches);
+    testing::add(xmod, "xmod_struct_offsets_match",           &xmod_struct_offsets_match);
+    testing::add(xmod, "xmod_reintern_chain_three_typers",    &xmod_reintern_chain_three_typers);
+
+    u8[] op = "Opaque + Diag Tests";
+
+    testing::add(op, "opaque_struct_size_of_reports_diag",   &opaque_struct_size_of_reports_diag);
+    testing::add(op, "opaque_struct_align_of_reports_diag",  &opaque_struct_align_of_reports_diag);
+    testing::add(op, "opaque_size_of_reports_every_call",    &opaque_size_of_reports_every_call);
+    testing::add(op, "opaque_does_not_set_layout",           &opaque_does_not_set_layout);
+    testing::add(op, "opaque_union_size_reports_diag",       &opaque_union_size_reports_diag);
+    testing::add(op, "opaque_with_null_diag_no_crash",       &opaque_with_null_diag_no_crash);
+    testing::add(op, "opaque_diag_msg_content",              &opaque_diag_msg_content);
+    testing::add(op, "layout_pointer_to_opaque_no_diag",     &layout_pointer_to_opaque_no_diag);
+    testing::add(op, "layout_array_of_pointer_to_opaque_no_diag", &layout_array_of_pointer_to_opaque_no_diag);
+
+    testing::add(op, "comptime_size_of_reports_diag",        &comptime_size_of_reports_diag);
+    testing::add(op, "comptime_with_null_diag_no_crash",     &comptime_with_null_diag_no_crash);
+    testing::add(op, "comptime_diag_msg_content",            &comptime_diag_msg_content);
+    testing::add(op, "cycle_self_struct_reports_diag",       &cycle_self_struct_reports_diag);
+    testing::add(op, "cycle_union_reports_diag",             &cycle_union_reports_diag);
+    testing::add(op, "cycle_diag_src_pos_matches_decl",      &cycle_diag_src_pos_matches_decl);
+    testing::add(op, "cycle_diag_msg_content",               &cycle_diag_msg_content);
+
+    testing::add(ri, "reintern_slice_of_struct_cross_typer",  &reintern_slice_of_struct_cross_typer);
+    testing::add(ri, "reintern_pointer_to_fnptr_cross_typer", &reintern_pointer_to_fnptr_cross_typer);
+    testing::add(ri, "reintern_const_pointer_nested",         &reintern_const_pointer_nested);
+
+    testing::add(layout, "layout_struct_multiple_opaque_fields_reports_each", &layout_struct_multiple_opaque_fields_reports_each);
+    testing::add(layout, "layout_union_with_opaque_field",                    &layout_union_with_opaque_field);
+    testing::add(layout, "layout_struct_with_comptime_field_reports_diag",    &layout_struct_with_comptime_field_reports_diag);
+    testing::add(layout, "layout_union_with_comptime_field_reports_diag",     &layout_union_with_comptime_field_reports_diag);
+    testing::add(layout, "layout_array_of_comptime_reports_diag",             &layout_array_of_comptime_reports_diag);
+    testing::add(layout, "layout_array_of_opaque_reports_diag",               &layout_array_of_opaque_reports_diag);
+
+    testing::add(ri, "reintern_does_not_compute_layout",      &reintern_does_not_compute_layout);
+    testing::add(ri, "reintern_slice_of_slice_cross_typer",   &reintern_slice_of_slice_cross_typer);
+
+    testing::add(cyc, "cycle_struct_with_valid_field",                   &cycle_struct_with_valid_field);
+    testing::add(cyc, "cycle_self_struct_align_of_reports_and_returns_one", &cycle_self_struct_align_of_reports_and_returns_one);
 
     return testing::run();
 }

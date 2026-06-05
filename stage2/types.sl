@@ -1,5 +1,6 @@
 import arena;
 import ast;
+import diag;
 import sys;
 
 export enum TypeKind : u8 {
@@ -86,15 +87,17 @@ export struct TypeInterner {
     u64             count;
     u64             cap;        // power of 2
     arena::Arena*   arena;
+    diag::DiagBuf*  diag;       // nullable; layout/cycle errors reported here when set
 }
 
-export fn void typer_init(TypeInterner* it, arena::Arena* a, u64 initial_cap) {
+export fn void typer_init(TypeInterner* it, arena::Arena* a, diag::DiagBuf* d, u64 initial_cap) {
     u64 bytes = initial_cap * sizeof(TypeBucket);
     it.buckets = {(TypeBucket*)arena::alloc(a, bytes), initial_cap};
     sys::memset(it.buckets.ptr, 0, bytes);
     it.count = 0;
     it.cap   = initial_cap;
     it.arena = a;
+    it.diag  = d;
 }
 
 export fn Type* intern_pointer(TypeInterner* it, Type* pointee, bool is_const) {
@@ -259,8 +262,208 @@ export fn Type* intern_enum(TypeInterner* it, void* decl) {    // ast::EnumDeclN
     return install(it, hash, t);
 }
 
-// Conversions
+export fn Type* reintern_from(TypeInterner* dst, Type* foreign) {
+    if(foreign == null) { return null; }
+    switch(foreign.kind) {
+        case TypeKind::Primitive:    { return foreign; }
+        case TypeKind::ComptimeType: { return foreign; }
+        case TypeKind::Pointer: {
+            Type* p = reintern_from(dst, foreign.data.pointee);
+            bool is_const = ((u8)foreign.flags & (u8)LayoutFlags::Const) != 0;
+            return intern_pointer(dst, p, is_const);
+        }
+        case TypeKind::Array: {
+            Type* e = reintern_from(dst, foreign.data.array.elem);
+            return intern_array(dst, e, foreign.data.array.count);
+        }
+        case TypeKind::Slice: {
+            Type* e = reintern_from(dst, foreign.data.slice_elem);
+            return intern_slice(dst, e);
+        }
+        case TypeKind::FnPtr: {
+            Type* r = reintern_from(dst, foreign.data.fn_ptr.ret);
+            Type*[] ps = reintern_params(dst, foreign.data.fn_ptr.params);
+            return intern_fn_ptr(dst, r, ps, foreign.data.fn_ptr.is_variadic);
+        }
+        case TypeKind::Struct: {
+            Type* t = intern_struct(dst, foreign.data.struct_decl);
+            propagate_opaque(t, foreign);
+            return t;
+        }
+        case TypeKind::Union: {
+            Type* t = intern_union(dst, foreign.data.union_decl);
+            propagate_opaque(t, foreign);
+            return t;
+        }
+        case TypeKind::Enum: {
+            Type* t = intern_enum(dst, foreign.data.enum_decl);
+            propagate_opaque(t, foreign);
+            return t;
+        }
+        else { return null; }
+    }
+    return null;
+}
 
+fn void propagate_opaque(Type* interned, Type* foreign) {
+    if(((u8)foreign.flags & (u8)LayoutFlags::Opaque) != 0) {
+        interned.flags = (LayoutFlags)((u8)interned.flags | (u8)LayoutFlags::Opaque);
+    }
+}
+
+// sizeof/alignof
+export fn u32 size_of(TypeInterner* it, Type* type) {
+    if(((u8)type.flags & (u8)LayoutFlags::Opaque) != 0) {
+        if(it.diag != null) {
+            diag::report(it.diag, it.arena, decl_src_pos(type), "cannot take size of opaque type");
+        }
+        return 0;
+    }
+    if(((u8)type.flags & (u8)LayoutFlags::Computed) != 0) {
+        return type.size;
+    }
+    compute_layout(it, type);
+    return type.size;
+}
+
+export fn u32 align_of(TypeInterner* it, Type* type) {
+    if(((u8)type.flags & (u8)LayoutFlags::Opaque) != 0) {
+        if(it.diag != null) {
+            diag::report(it.diag, it.arena, decl_src_pos(type), "cannot take alignment of opaque type");
+        }
+        return 0;
+    }
+    if(((u8)type.flags & (u8)LayoutFlags::Computed) != 0) {
+        return type.align;
+    }
+    compute_layout(it, type);
+    return type.align;
+}
+
+fn void compute_layout(TypeInterner* it, Type* type) {
+    if(((u8)type.flags & (u8)LayoutFlags::Computed) != 0) { return; }
+    if(((u8)type.flags & (u8)LayoutFlags::InProgress) != 0) {
+        if(it.diag != null) {
+            diag::report(it.diag, it.arena, decl_src_pos(type),
+                         "type has infinite size (cycle through non-pointer fields)");
+        }
+        return;
+    }
+    type.flags = (LayoutFlags)((u8)type.flags | (u8)LayoutFlags::InProgress);
+
+    u32 size = 0;
+    u32 align = 1;
+    switch(type.kind) {
+        case TypeKind::Primitive: {
+            size  = type.size;
+            align = type.align;
+        }
+        case TypeKind::Pointer: { size = 8;  align = 8; }
+        case TypeKind::FnPtr:   { size = 8;  align = 8; }
+        case TypeKind::Slice:   { size = 16; align = 8; }
+        case TypeKind::Array: {
+            Type* elem = type.data.array.elem;
+            if(layout_field(it, elem)) {
+                size  = elem.size * (u32)type.data.array.count;
+                align = elem.align;
+            }
+        }
+        case TypeKind::Struct: {
+            ast::StructDeclNode* decl = (ast::StructDeclNode*)type.data.struct_decl;
+            Layout* new_layout = (Layout*)arena::alloc(it.arena, sizeof(Layout));
+            u32* offsets = (u32*)arena::alloc(it.arena, decl.fields.len * sizeof(u32));
+            new_layout.offsets = {offsets, decl.fields.len};
+            u32 cursor = 0;
+            u32 max_align = 1;
+            for(u64 i = 0; i < decl.fields.len; i += 1) {
+                Type* field_type = reintern_from(it, (Type*)decl.fields[i].resolved_type);
+                if(!layout_field(it, field_type)) {
+                    offsets[i] = cursor;
+                    continue;
+                }
+                u32 field_align = field_type.align;
+                u32 field_size  = field_type.size;
+                cursor = (u32)arena::align_up((u64)cursor, (u64)field_align);
+                offsets[i] = cursor;
+                cursor += field_size;
+                if(field_align > max_align) { max_align = field_align; }
+            }
+            size  = (u32)arena::align_up((u64)cursor, (u64)max_align);
+            align = max_align;
+            type.layout = new_layout;
+        }
+        case TypeKind::Union: {
+            ast::UnionDeclNode* decl = (ast::UnionDeclNode*)type.data.union_decl;
+            Layout* new_layout = (Layout*)arena::alloc(it.arena, sizeof(Layout));
+            u32* offsets = (u32*)arena::alloc(it.arena, decl.fields.len * sizeof(u32));
+            sys::memset(offsets, 0, decl.fields.len * sizeof(u32));
+            new_layout.offsets = {offsets, decl.fields.len};
+            u32 max_size  = 0;
+            u32 max_align = 1;
+            for(u64 i = 0; i < decl.fields.len; i += 1) {
+                Type* field_type = reintern_from(it, (Type*)decl.fields[i].resolved_type);
+                if(!layout_field(it, field_type)) { continue; }
+                u32 field_align = field_type.align;
+                u32 field_size  = field_type.size;
+                if(field_size  > max_size)  { max_size  = field_size; }
+                if(field_align > max_align) { max_align = field_align; }
+            }
+            size  = (u32)arena::align_up((u64)max_size, (u64)max_align);
+            align = max_align;
+            type.layout = new_layout;
+        }
+        case TypeKind::Enum: {
+            Type* base = reintern_from(it, enum_base_type(type));
+            if(layout_field(it, base)) {
+                size  = base.size;
+                align = base.align;
+            }
+        }
+        case TypeKind::ComptimeType: {
+            if(it.diag != null) {
+                diag::report(it.diag, it.arena, 0, "Type has no runtime size");
+            }
+            size  = 0;
+            align = 0;
+        }
+        else { }
+    }
+
+    type.size  = size;
+    type.align = align;
+    type.flags = (LayoutFlags)(((u8)type.flags | (u8)LayoutFlags::Computed) & ~(u8)LayoutFlags::InProgress);
+}
+
+fn bool layout_field(TypeInterner* it, Type* field_type) {
+    if(field_type == null) { return false; }
+    if(((u8)field_type.flags & (u8)LayoutFlags::Opaque) != 0) {
+        if(it.diag != null) {
+            diag::report(it.diag, it.arena, decl_src_pos(field_type),
+                         "cannot take size of opaque type");
+        }
+        return false;
+    }
+    compute_layout(it, field_type);
+    return true;
+}
+
+fn u32 decl_src_pos(Type* t) {
+    if(t.kind == TypeKind::Struct) { return ((ast::StructDeclNode*)t.data.struct_decl).h.src_pos; }
+    if(t.kind == TypeKind::Union)  { return ((ast::UnionDeclNode*) t.data.union_decl ).h.src_pos; }
+    if(t.kind == TypeKind::Enum)   { return ((ast::EnumDeclNode*)  t.data.enum_decl  ).h.src_pos; }
+    return 0;
+}
+
+fn Type*[] reintern_params(TypeInterner* dst, Type*[] src) {
+    u64 bytes = src.len * sizeof(Type*);
+    Type** mem = (Type**)arena::alloc(dst.arena, bytes);
+    for(u64 i = 0; i < src.len; i += 1) {
+        mem[i] = reintern_from(dst, src[i]);
+    }
+    return {mem, src.len};
+}
+
+// Conversions
 export fn bool is_convertible(Type* src, Type* dst) {
     if (src == dst) { return true; }
     // array -> pointer (matching depth + element)
