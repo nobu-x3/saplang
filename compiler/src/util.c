@@ -20,6 +20,19 @@ static __thread FILE *thread_diag_sink = NULL;
 static __thread const char *thread_src_path = NULL;
 static __thread const char *thread_src_buf = NULL;
 static __thread size_t thread_src_len = 0;
+static __thread int thread_error_count = 0;
+
+void diag_reset_errors(void) {
+	thread_error_count = 0;
+}
+
+int diag_error_count(void) {
+	return thread_error_count;
+}
+
+void diag_set_errors(int count) {
+	thread_error_count = count;
+}
 
 void diag_set_sink(FILE *sink) {
 	thread_diag_sink = sink;
@@ -37,6 +50,8 @@ FILE *diag_stream(void) {
 
 void *report(SourceLocation location, const char *msg, int is_warning) {
 	const char *verbosity = is_warning ? "Warning:" : "Error:";
+	if (!is_warning)
+		thread_error_count += 1;
 	FILE *out = diag_stream();
 	fprintf(out, "%s:%d:%d:%s %s\n", location.path, location.line, location.col, verbosity, msg);
 	if (thread_src_buf && thread_src_path && strcmp(thread_src_path, location.path) == 0 && location.line > 0 && location.col > 0) {

@@ -1706,3 +1706,45 @@ void test_StructFieldMissingSemicolonDoesNotCrash_parser(void) {
 	free(err);
 }
 
+void test_TypeKeywordAsVarNameSetsHasErrors_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("struct S {} fn i32 main() { S* i32 = (S*)0; return 0; }");
+	char *err = capture_error_end(old_stderr);
+	(void)output;
+	TEST_ASSERT_TRUE(module->has_errors);
+	TEST_ASSERT_NOT_NULL(strstr(err, "unexpected token in expression: i32"));
+	free(err);
+	parser_deinit(&parser);
+}
+
+void test_MidExpressionErrorSetsHasErrors_parser(void) {
+	FILE *old_stderr = capture_error_begin();
+	SETUP_TEST("fn i32 main() { i32 x = ; return x; }");
+	char *err = capture_error_end(old_stderr);
+	(void)output;
+	(void)err;
+	TEST_ASSERT_TRUE(module->has_errors);
+	parser_deinit(&parser);
+}
+
+void test_CleanProgramHasNoErrors_parser(void) {
+	SETUP_TEST("fn i32 main() { i32 x = 42; return x; }");
+	(void)output;
+	TEST_ASSERT_FALSE(module->has_errors);
+	parser_deinit(&parser);
+}
+
+void test_CastSpeculationDoesNotLeakErrors_parser(void) {
+	SETUP_TEST("fn i32 main() { i32 x = 1; i32 y = (x); return y; }");
+	(void)output;
+	TEST_ASSERT_FALSE(module->has_errors);
+	parser_deinit(&parser);
+}
+
+void test_SizeofExpressionDoesNotLeakErrors_parser(void) {
+	SETUP_TEST("fn i32 main() { i32 x = 1; u64 s = sizeof(x); return (i32)s; }");
+	(void)output;
+	TEST_ASSERT_FALSE(module->has_errors);
+	parser_deinit(&parser);
+}
+

@@ -136,6 +136,11 @@ int main(int argc, char **argv) {
 	RUN_TEST(test_UnionFieldBadTypeDoesNotCrash_parser);
 	RUN_TEST(test_StructFieldMissingIdentifierDoesNotCrash_parser);
 	RUN_TEST(test_StructFieldMissingSemicolonDoesNotCrash_parser);
+	RUN_TEST(test_TypeKeywordAsVarNameSetsHasErrors_parser);
+	RUN_TEST(test_MidExpressionErrorSetsHasErrors_parser);
+	RUN_TEST(test_CleanProgramHasNoErrors_parser);
+	RUN_TEST(test_CastSpeculationDoesNotLeakErrors_parser);
+	RUN_TEST(test_SizeofExpressionDoesNotLeakErrors_parser);
 
 	RUN_TEST(test_TypePrinting_sema);
 	RUN_TEST(test_UndeclaredVariable_sema);
@@ -589,6 +594,8 @@ int main(int argc, char **argv) {
 	RUN_TEST(test_NullTest_modules);
 	RUN_TEST(test_ImportCycle_modules);
 	RUN_TEST(test_MissingExport_modules);
+	RUN_TEST(test_ParserErrorTypeKeywordVar_modules);
+	RUN_TEST(test_ParserErrorInFnBody_modules);
 	RUN_TEST(test_SwitchTest_modules);
 	RUN_TEST(test_SliceTest_modules);
 	RUN_TEST(test_SliceLenChain_modules);

@@ -1710,6 +1710,7 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 		int prefer_expr_first = parser->current_token.type == TOK_IDENTIFIER;
 		if (prefer_expr_first) {
 			FILE *saved_sink = diag_stream();
+			int saved_errors = diag_error_count();
 			FILE *scratch = tmpfile();
 			if (scratch)
 				diag_set_sink(scratch);
@@ -1724,6 +1725,7 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 			} else {
 				parser->scanner = saved_scanner;
 				parser->current_token = saved_token;
+				diag_set_errors(saved_errors);
 			}
 		}
 		if (!target_expr) {
@@ -1778,6 +1780,7 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 			Token saved_token = parser->current_token;
 			FILE *saved_sink = NULL;
 			FILE *scratch = NULL;
+			int saved_errors = diag_error_count();
 			if (is_ident_led) {
 				saved_sink = diag_stream();
 				scratch = tmpfile();
@@ -1808,6 +1811,7 @@ ASTNode *parse_primary(Parser *parser, const char *scope_prefix) {
 				diag_set_sink(saved_sink);
 				if (scratch)
 					fclose(scratch);
+				diag_set_errors(saved_errors);
 				ASTNode *expr = parse_expr(parser, scope_prefix);
 				if (!expr)
 					return NULL;
@@ -3174,6 +3178,8 @@ Module *parse_input(Parser *parser) {
 	current_parser_arena = &module->ast_arena;
 	type_arena_set(&module->type_arena);
 
+	int entry_errors = diag_error_count();
+
 	ASTNode *global_list = NULL, *last = NULL;
 
 	parser->current_token = next_token(&parser->scanner);
@@ -3223,7 +3229,7 @@ Module *parse_input(Parser *parser) {
 	module->ast = global_list;
 	module->symbol_table = parser->symbol_table;
 	module->exported_table = parser->exported_table;
-	module->has_errors = has_errors;
+	module->has_errors = has_errors || diag_error_count() > entry_errors;
 	current_parser_arena = NULL;
 	return module;
 }

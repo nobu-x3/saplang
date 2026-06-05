@@ -54,6 +54,10 @@ void diag_set_sink(FILE *sink);
 void diag_set_source(const char *path, const char *buf, size_t len);
 FILE *diag_stream(void);
 
+void diag_reset_errors(void);
+int diag_error_count(void);
+void diag_set_errors(int count);
+
 unsigned long djb2(const char *str);
 
 // Dynamic-array helpers. `xs` has `.count`, `.capacity`, `.data`. Return bool.

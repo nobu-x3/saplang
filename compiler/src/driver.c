@@ -665,7 +665,6 @@ void parsing_task(void *arg) {
 		return;
 	diag_set_sink(node->diag_sink);
 	diag_set_source(node->parser.scanner.source.path, node->parser.scanner.source.buffer, (size_t)node->parser.scanner.source.len);
-	// parse_input creates the module and points the type arena at it.
 	node->module = parse_input(&node->parser);
 	type_arena_set(NULL);
 	diag_set_source(NULL, NULL, 0);
@@ -691,11 +690,14 @@ void sema_task(void *arg) {
 	symbol_table_set_type_info(node->module->symbol_table);
 	type_table_set(node->module->symbol_table);
 
+	diag_reset_errors();
 	for (ASTNode *ast_node = node->module->ast; ast_node; ast_node = ast_node->next) {
 		int sema_failed = analyze_ast(node->module->symbol_table, ast_node, 0, "") != RESULT_SUCCESS;
 		int type_resolution_failed = resolve_types(node->module->symbol_table, ast_node, ast_node == node->module->ast) != RESULT_SUCCESS;
 		node->module->has_errors |= sema_failed || type_resolution_failed;
 	}
+	if (diag_error_count() > 0)
+		node->module->has_errors = true;
 
 	type_table_set(NULL);
 	type_arena_set(NULL);
