@@ -56,6 +56,7 @@ export struct ImportNode {
 export struct VarDeclNode {
     AstHeader           h;
     symbol::Symbol*     name;
+    symbol::Symbol*     qualified_name;           // "module::name"; sema-set on top-level decls
     AstNode*            type_expr;                // AstKind::*Type
     AstNode*            init;                     // expression or AstKind::UndefinedLit or null
     bool                is_const;
@@ -65,6 +66,7 @@ export struct VarDeclNode {
 export struct FnDeclNode {
     AstHeader h;
     symbol::Symbol*   name;
+    symbol::Symbol*   qualified_name;
     AstNode*  return_type;              // AstKind::*Type
     Param[]   params;
     AstNode*  body;                     // AstKind::BlockStmt
@@ -76,6 +78,7 @@ export struct FnDeclNode {
 export struct StructDeclNode {
     AstHeader h;
     symbol::Symbol*   name;
+    symbol::Symbol*   qualified_name;
     FieldDecl[] fields;
     bool      is_exported;
     // Provenance for monomorphization-produced anonymous structs
@@ -88,6 +91,7 @@ export struct StructDeclNode {
 export struct UnionDeclNode {
     AstHeader h;
     symbol::Symbol*   name;
+    symbol::Symbol*   qualified_name;
     FieldDecl[] fields;
     bool      is_exported;
 }
@@ -95,6 +99,7 @@ export struct UnionDeclNode {
 export struct EnumDeclNode {
     AstHeader h;
     symbol::Symbol*   name;
+    symbol::Symbol*   qualified_name;
     AstNode*  base_type;                // AstKind::PrimitiveType, null = i32 default
     EnumMember[] members;
     bool      is_exported;
@@ -103,6 +108,7 @@ export struct EnumDeclNode {
 export struct AliasDeclNode {
     AstHeader h;
     symbol::Symbol*   name;
+    symbol::Symbol*   qualified_name;
     AstNode*  target;                   // AstKind::*Type or any expression resolving to Type
     bool      is_exported;
 }

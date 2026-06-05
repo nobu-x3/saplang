@@ -66,24 +66,24 @@ fn types::Type*[] mk_params2(arena::Arena* a, types::Type* p0, types::Type* p1) 
     types::Type*[] p; p.ptr = mem; p.len = 2; return p;
 }
 
-fn ast::StructDeclNode* fake_struct_decl_named(arena::Arena* a, symbol::Symbol* name) {
+fn ast::StructDeclNode* fake_struct_decl_qualified(arena::Arena* a, symbol::Symbol* qualified_name) {
     ast::StructDeclNode* d = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
     sys::memset(d, 0, sizeof(ast::StructDeclNode));
-    d.name = name;
+    d.qualified_name = qualified_name;
     return d;
 }
 
-fn ast::UnionDeclNode* fake_union_decl_named(arena::Arena* a, symbol::Symbol* name) {
+fn ast::UnionDeclNode* fake_union_decl_qualified(arena::Arena* a, symbol::Symbol* qualified_name) {
     ast::UnionDeclNode* d = (ast::UnionDeclNode*)arena::alloc(a, sizeof(ast::UnionDeclNode));
     sys::memset(d, 0, sizeof(ast::UnionDeclNode));
-    d.name = name;
+    d.qualified_name = qualified_name;
     return d;
 }
 
-fn ast::EnumDeclNode* fake_enum_decl_named(arena::Arena* a, symbol::Symbol* name) {
+fn ast::EnumDeclNode* fake_enum_decl_qualified(arena::Arena* a, symbol::Symbol* qualified_name) {
     ast::EnumDeclNode* d = (ast::EnumDeclNode*)arena::alloc(a, sizeof(ast::EnumDeclNode));
     sys::memset(d, 0, sizeof(ast::EnumDeclNode));
-    d.name = name;
+    d.qualified_name = qualified_name;
     return d;
 }
 
@@ -300,37 +300,37 @@ fn i32 print_pointer_to_fnptr(arena::Arena* a, u8[] m) {
 
 // ===== struct / union / enum =====
 
-fn i32 print_struct_with_name(arena::Arena* a, u8[] m) {
+fn i32 print_struct_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
     interner::Interner names; setup_interner(&names, a, 16);
-    symbol::Symbol* nm = interner::intern(&names, "Foo");
-    types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_named(a, nm));
-    if(!testing::expect_eq(do_print_named(a, s, &names), "Foo", m)) { return -1; }
+    symbol::Symbol* nm = interner::intern(&names, "mod::Foo");
+    types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
+    if(!testing::expect_eq(do_print_named(a, s, &names), "mod::Foo", m)) { return -1; }
     return 0;
 }
 
-fn i32 print_union_with_name(arena::Arena* a, u8[] m) {
+fn i32 print_union_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
     interner::Interner names; setup_interner(&names, a, 16);
-    symbol::Symbol* nm = interner::intern(&names, "Variant");
-    types::Type* u = types::intern_union(&ty, (void*)fake_union_decl_named(a, nm));
-    if(!testing::expect_eq(do_print_named(a, u, &names), "Variant", m)) { return -1; }
+    symbol::Symbol* nm = interner::intern(&names, "shapes::Variant");
+    types::Type* u = types::intern_union(&ty, (void*)fake_union_decl_qualified(a, nm));
+    if(!testing::expect_eq(do_print_named(a, u, &names), "shapes::Variant", m)) { return -1; }
     return 0;
 }
 
-fn i32 print_enum_with_name(arena::Arena* a, u8[] m) {
+fn i32 print_enum_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
     interner::Interner names; setup_interner(&names, a, 16);
-    symbol::Symbol* nm = interner::intern(&names, "Color");
-    types::Type* e = types::intern_enum(&ty, (void*)fake_enum_decl_named(a, nm));
-    if(!testing::expect_eq(do_print_named(a, e, &names), "Color", m)) { return -1; }
+    symbol::Symbol* nm = interner::intern(&names, "ui::Color");
+    types::Type* e = types::intern_enum(&ty, (void*)fake_enum_decl_qualified(a, nm));
+    if(!testing::expect_eq(do_print_named(a, e, &names), "ui::Color", m)) { return -1; }
     return 0;
 }
 
-fn i32 print_struct_with_null_name_says_anon(arena::Arena* a, u8[] m) {
+fn i32 print_struct_with_null_qualified_says_anon(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
     interner::Interner names; setup_interner(&names, a, 16);
-    types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_named(a, null));
+    types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, null));
     if(!testing::expect_eq(do_print_named(a, s, &names), "<anon>", m)) { return -1; }
     return 0;
 }
@@ -338,29 +338,38 @@ fn i32 print_struct_with_null_name_says_anon(arena::Arena* a, u8[] m) {
 fn i32 print_struct_with_null_interner_says_anon(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
     interner::Interner names; setup_interner(&names, a, 16);
-    symbol::Symbol* nm = interner::intern(&names, "Foo");
-    types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_named(a, nm));
+    symbol::Symbol* nm = interner::intern(&names, "mod::Foo");
+    types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
     if(!testing::expect_eq(do_print(a, s), "<anon>", m)) { return -1; }
     return 0;
 }
 
-fn i32 print_pointer_to_struct(arena::Arena* a, u8[] m) {
+fn i32 print_pointer_to_struct_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
     interner::Interner names; setup_interner(&names, a, 16);
-    symbol::Symbol* nm = interner::intern(&names, "Node");
-    types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_named(a, nm));
+    symbol::Symbol* nm = interner::intern(&names, "ds::Node");
+    types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
     types::Type* p = types::intern_pointer(&ty, s, false);
-    if(!testing::expect_eq(do_print_named(a, p, &names), "Node*", m)) { return -1; }
+    if(!testing::expect_eq(do_print_named(a, p, &names), "ds::Node*", m)) { return -1; }
     return 0;
 }
 
-fn i32 print_array_of_struct(arena::Arena* a, u8[] m) {
+fn i32 print_array_of_struct_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
     interner::Interner names; setup_interner(&names, a, 16);
-    symbol::Symbol* nm = interner::intern(&names, "Item");
-    types::Type* s   = types::intern_struct(&ty, (void*)fake_struct_decl_named(a, nm));
+    symbol::Symbol* nm = interner::intern(&names, "inv::Item");
+    types::Type* s   = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
     types::Type* arr = types::intern_array(&ty, s, 4);
-    if(!testing::expect_eq(do_print_named(a, arr, &names), "Item[4]", m)) { return -1; }
+    if(!testing::expect_eq(do_print_named(a, arr, &names), "inv::Item[4]", m)) { return -1; }
+    return 0;
+}
+
+fn i32 print_struct_bare_name_no_module(arena::Arena* a, u8[] m) {
+    types::TypeInterner ty; setup_typer(&ty, a, 16);
+    interner::Interner names; setup_interner(&names, a, 16);
+    symbol::Symbol* nm = interner::intern(&names, "Bare");
+    types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
+    if(!testing::expect_eq(do_print_named(a, s, &names), "Bare", m)) { return -1; }
     return 0;
 }
 
@@ -409,13 +418,14 @@ fn i32 main() {
     testing::add(suite, "print_fnptr_with_composite_params",       &print_fnptr_with_composite_params);
     testing::add(suite, "print_pointer_to_fnptr",                  &print_pointer_to_fnptr);
 
-    testing::add(suite, "print_struct_with_name",                  &print_struct_with_name);
-    testing::add(suite, "print_union_with_name",                   &print_union_with_name);
-    testing::add(suite, "print_enum_with_name",                    &print_enum_with_name);
-    testing::add(suite, "print_struct_with_null_name_says_anon",   &print_struct_with_null_name_says_anon);
-    testing::add(suite, "print_struct_with_null_interner_says_anon", &print_struct_with_null_interner_says_anon);
-    testing::add(suite, "print_pointer_to_struct",                 &print_pointer_to_struct);
-    testing::add(suite, "print_array_of_struct",                   &print_array_of_struct);
+    testing::add(suite, "print_struct_qualified",                  &print_struct_qualified);
+    testing::add(suite, "print_union_qualified",                   &print_union_qualified);
+    testing::add(suite, "print_enum_qualified",                    &print_enum_qualified);
+    testing::add(suite, "print_struct_with_null_qualified_says_anon",  &print_struct_with_null_qualified_says_anon);
+    testing::add(suite, "print_struct_with_null_interner_says_anon",   &print_struct_with_null_interner_says_anon);
+    testing::add(suite, "print_pointer_to_struct_qualified",       &print_pointer_to_struct_qualified);
+    testing::add(suite, "print_array_of_struct_qualified",         &print_array_of_struct_qualified);
+    testing::add(suite, "print_struct_bare_name_no_module",        &print_struct_bare_name_no_module);
 
     testing::add(suite, "print_null_type",                         &print_null_type);
 

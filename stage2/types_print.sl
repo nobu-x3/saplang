@@ -40,13 +40,13 @@ export fn void print(types::Type* t, interner::Interner* names, io::OutBuf* out)
             io::outbuf_write_byte(out, ')');
         }
         case types::TypeKind::Struct: {
-            print_decl_name(out, names, ((ast::StructDeclNode*)t.data.struct_decl).name);
+            print_decl_name(out, names, ((ast::StructDeclNode*)t.data.struct_decl).qualified_name);
         }
         case types::TypeKind::Union: {
-            print_decl_name(out, names, ((ast::UnionDeclNode*)t.data.union_decl).name);
+            print_decl_name(out, names, ((ast::UnionDeclNode*)t.data.union_decl).qualified_name);
         }
         case types::TypeKind::Enum: {
-            print_decl_name(out, names, ((ast::EnumDeclNode*)t.data.enum_decl).name);
+            print_decl_name(out, names, ((ast::EnumDeclNode*)t.data.enum_decl).qualified_name);
         }
         case types::TypeKind::ComptimeType: {
             io::outbuf_write(out, "Type");
