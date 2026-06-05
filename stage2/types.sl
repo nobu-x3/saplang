@@ -2,6 +2,7 @@ import arena;
 import ast;
 import diag;
 import sys;
+import token;
 
 export enum TypeKind : u8 {
     Primitive,
@@ -585,14 +586,100 @@ export fn Type* enum_base_type(Type* type) {
     return (Type*)decl.base_type.h.ty;
 }
 
-Type NULL_PTR_STORAGE;
+PrimitiveTable PRIM;
+bool prim_table_inited = false;
 
-export fn Type* prim_null_ptr() {
-    NULL_PTR_STORAGE.kind = TypeKind::Pointer;
-    NULL_PTR_STORAGE.size = 8;
-    NULL_PTR_STORAGE.align = 8;
-    NULL_PTR_STORAGE.flags = LayoutFlags::Computed;
-    return &NULL_PTR_STORAGE;
+fn void ensure_prim_init() {
+    if(prim_table_inited) { return; }
+    build_primitive_table();
+}
+
+fn void build_primitive_table() {
+    sys::memset(&PRIM, 0, sizeof(PrimitiveTable));
+    init_prim(&PRIM.i8_,   PrimitiveKind::I8,   1, 1);
+    init_prim(&PRIM.i16_,  PrimitiveKind::I16,  2, 2);
+    init_prim(&PRIM.i32_,  PrimitiveKind::I32,  4, 4);
+    init_prim(&PRIM.i64_,  PrimitiveKind::I64,  8, 8);
+    init_prim(&PRIM.u8_,   PrimitiveKind::U8,   1, 1);
+    init_prim(&PRIM.u16_,  PrimitiveKind::U16,  2, 2);
+    init_prim(&PRIM.u32_,  PrimitiveKind::U32,  4, 4);
+    init_prim(&PRIM.u64_,  PrimitiveKind::U64,  8, 8);
+    init_prim(&PRIM.f32_,  PrimitiveKind::F32,  4, 4);
+    init_prim(&PRIM.f64_,  PrimitiveKind::F64,  8, 8);
+    init_prim(&PRIM.bool_, PrimitiveKind::BOOL, 1, 1);
+    init_prim(&PRIM.void_, PrimitiveKind::VOID, 0, 1);
+
+    PRIM.type_.kind  = TypeKind::ComptimeType;
+    PRIM.type_.flags = LayoutFlags::Computed;
+
+    PRIM.null_ptr.kind  = TypeKind::Pointer;
+    PRIM.null_ptr.size  = 8;
+    PRIM.null_ptr.align = 8;
+    PRIM.null_ptr.flags = LayoutFlags::Computed;
+    PRIM.null_ptr.data.pointee = &PRIM.void_;
+
+    prim_table_inited = true;
+}
+
+fn void init_prim(Type* t, PrimitiveKind p, u32 size, u32 align) {
+    t.kind  = TypeKind::Primitive;
+    t.prim  = p;
+    t.size  = size;
+    t.align = align;
+    t.flags = LayoutFlags::Computed;
+}
+
+export fn Type* prim_i8 ()    { ensure_prim_init(); return &PRIM.i8_;   }
+export fn Type* prim_i16()    { ensure_prim_init(); return &PRIM.i16_;  }
+export fn Type* prim_i32()    { ensure_prim_init(); return &PRIM.i32_;  }
+export fn Type* prim_i64()    { ensure_prim_init(); return &PRIM.i64_;  }
+export fn Type* prim_u8 ()    { ensure_prim_init(); return &PRIM.u8_;   }
+export fn Type* prim_u16()    { ensure_prim_init(); return &PRIM.u16_;  }
+export fn Type* prim_u32()    { ensure_prim_init(); return &PRIM.u32_;  }
+export fn Type* prim_u64()    { ensure_prim_init(); return &PRIM.u64_;  }
+export fn Type* prim_f32()    { ensure_prim_init(); return &PRIM.f32_;  }
+export fn Type* prim_f64()    { ensure_prim_init(); return &PRIM.f64_;  }
+export fn Type* prim_bool()   { ensure_prim_init(); return &PRIM.bool_; }
+export fn Type* prim_void()   { ensure_prim_init(); return &PRIM.void_; }
+export fn Type* prim_type()   { ensure_prim_init(); return &PRIM.type_; }
+export fn Type* prim_null_ptr() { ensure_prim_init(); return &PRIM.null_ptr; }
+
+export fn Type* primitive(PrimitiveKind kind) {
+    switch(kind) {
+        case PrimitiveKind::I8:   { return prim_i8();  }
+        case PrimitiveKind::I16:  { return prim_i16(); }
+        case PrimitiveKind::I32:  { return prim_i32(); }
+        case PrimitiveKind::I64:  { return prim_i64(); }
+        case PrimitiveKind::U8:   { return prim_u8();  }
+        case PrimitiveKind::U16:  { return prim_u16(); }
+        case PrimitiveKind::U32:  { return prim_u32(); }
+        case PrimitiveKind::U64:  { return prim_u64(); }
+        case PrimitiveKind::F32:  { return prim_f32(); }
+        case PrimitiveKind::F64:  { return prim_f64(); }
+        case PrimitiveKind::BOOL: { return prim_bool();}
+        case PrimitiveKind::VOID: { return prim_void();}
+        else { return null; }
+    }
+    return null;
+}
+
+export fn PrimitiveKind get_primitive_kind_from_token(token::TokenKind k) {
+    switch(k) {
+        case token::TokenKind::I8:   { return PrimitiveKind::I8;   }
+        case token::TokenKind::I16:  { return PrimitiveKind::I16;  }
+        case token::TokenKind::I32:  { return PrimitiveKind::I32;  }
+        case token::TokenKind::I64:  { return PrimitiveKind::I64;  }
+        case token::TokenKind::U8:   { return PrimitiveKind::U8;   }
+        case token::TokenKind::U16:  { return PrimitiveKind::U16;  }
+        case token::TokenKind::U32:  { return PrimitiveKind::U32;  }
+        case token::TokenKind::U64:  { return PrimitiveKind::U64;  }
+        case token::TokenKind::F32:  { return PrimitiveKind::F32;  }
+        case token::TokenKind::F64:  { return PrimitiveKind::F64;  }
+        case token::TokenKind::BOOL: { return PrimitiveKind::BOOL; }
+        case token::TokenKind::VOID: { return PrimitiveKind::VOID; }
+        else { return PrimitiveKind::NONE; }
+    }
+    return PrimitiveKind::NONE;
 }
 
 export fn u64 int_max(Type* t) {

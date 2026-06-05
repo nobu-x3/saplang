@@ -3,6 +3,7 @@ import types;
 import ast;
 import arena;
 import diag;
+import token;
 import sys;
 
 fn void setup(types::TypeInterner* it, arena::Arena* a, u64 cap) {
@@ -3306,6 +3307,160 @@ fn i32 reintern_slice_of_slice_cross_typer(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// ===== PrimitiveTable + accessors =====
+
+fn bool check_prim_fields(types::Type* t, types::PrimitiveKind p, u32 size, u32 align, u8[] m) {
+    if(!testing::expect_eq((u64)t.kind, (u64)types::TypeKind::Primitive, m)) { return false; }
+    if(!testing::expect_eq((u64)t.prim, (u64)p, m)) { return false; }
+    if(!testing::expect_eq(t.size,  size,  m)) { return false; }
+    if(!testing::expect_eq(t.align, align, m)) { return false; }
+    if(!testing::expect_eq(has_flag(t, types::LayoutFlags::Computed), true, m)) { return false; }
+    return true;
+}
+
+fn i32 prim_signed_ints_have_correct_fields(arena::Arena* a, u8[] m) {
+    if(!check_prim_fields(types::prim_i8 (), types::PrimitiveKind::I8,  1, 1, m)) { return -1; }
+    if(!check_prim_fields(types::prim_i16(), types::PrimitiveKind::I16, 2, 2, m)) { return -2; }
+    if(!check_prim_fields(types::prim_i32(), types::PrimitiveKind::I32, 4, 4, m)) { return -3; }
+    if(!check_prim_fields(types::prim_i64(), types::PrimitiveKind::I64, 8, 8, m)) { return -4; }
+    return 0;
+}
+
+fn i32 prim_unsigned_ints_have_correct_fields(arena::Arena* a, u8[] m) {
+    if(!check_prim_fields(types::prim_u8 (), types::PrimitiveKind::U8,  1, 1, m)) { return -1; }
+    if(!check_prim_fields(types::prim_u16(), types::PrimitiveKind::U16, 2, 2, m)) { return -2; }
+    if(!check_prim_fields(types::prim_u32(), types::PrimitiveKind::U32, 4, 4, m)) { return -3; }
+    if(!check_prim_fields(types::prim_u64(), types::PrimitiveKind::U64, 8, 8, m)) { return -4; }
+    return 0;
+}
+
+fn i32 prim_floats_have_correct_fields(arena::Arena* a, u8[] m) {
+    if(!check_prim_fields(types::prim_f32(), types::PrimitiveKind::F32, 4, 4, m)) { return -1; }
+    if(!check_prim_fields(types::prim_f64(), types::PrimitiveKind::F64, 8, 8, m)) { return -2; }
+    return 0;
+}
+
+fn i32 prim_bool_has_correct_fields(arena::Arena* a, u8[] m) {
+    if(!check_prim_fields(types::prim_bool(), types::PrimitiveKind::BOOL, 1, 1, m)) { return -1; }
+    return 0;
+}
+
+fn i32 prim_void_has_correct_fields(arena::Arena* a, u8[] m) {
+    if(!check_prim_fields(types::prim_void(), types::PrimitiveKind::VOID, 0, 1, m)) { return -1; }
+    return 0;
+}
+
+fn i32 prim_type_has_correct_fields(arena::Arena* a, u8[] m) {
+    types::Type* t = types::prim_type();
+    if(!testing::expect_eq((u64)t.kind, (u64)types::TypeKind::ComptimeType, m)) { return -1; }
+    if(!testing::expect_eq((u64)t.prim, (u64)types::PrimitiveKind::NONE,    m)) { return -2; }
+    if(!testing::expect_eq(has_flag(t, types::LayoutFlags::Computed), true, m)) { return -3; }
+    return 0;
+}
+
+fn i32 prim_null_ptr_has_correct_fields(arena::Arena* a, u8[] m) {
+    types::Type* t = types::prim_null_ptr();
+    if(!testing::expect_eq((u64)t.kind, (u64)types::TypeKind::Pointer,   m)) { return -1; }
+    if(!testing::expect_eq((u64)t.prim, (u64)types::PrimitiveKind::NONE, m)) { return -2; }
+    if(!testing::expect_eq(t.size,  (u32)8, m)) { return -3; }
+    if(!testing::expect_eq(t.align, (u32)8, m)) { return -4; }
+    if(!testing::expect_eq(has_flag(t, types::LayoutFlags::Computed), true, m)) { return -5; }
+    return 0;
+}
+
+fn i32 prim_null_ptr_pointee_is_void(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq((void*)types::prim_null_ptr().data.pointee, (void*)types::prim_void(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 prim_accessors_are_stable_across_calls(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq((void*)types::prim_i8(),       (void*)types::prim_i8(),       m)) { return -1;  }
+    if(!testing::expect_eq((void*)types::prim_i32(),      (void*)types::prim_i32(),      m)) { return -2;  }
+    if(!testing::expect_eq((void*)types::prim_u64(),      (void*)types::prim_u64(),      m)) { return -3;  }
+    if(!testing::expect_eq((void*)types::prim_f64(),      (void*)types::prim_f64(),      m)) { return -4;  }
+    if(!testing::expect_eq((void*)types::prim_bool(),     (void*)types::prim_bool(),     m)) { return -5;  }
+    if(!testing::expect_eq((void*)types::prim_void(),     (void*)types::prim_void(),     m)) { return -6;  }
+    if(!testing::expect_eq((void*)types::prim_type(),     (void*)types::prim_type(),     m)) { return -7;  }
+    if(!testing::expect_eq((void*)types::prim_null_ptr(), (void*)types::prim_null_ptr(), m)) { return -8;  }
+    return 0;
+}
+
+fn i32 prim_accessors_are_distinct(arena::Arena* a, u8[] m) {
+    if(!testing::expect_ne((void*)types::prim_i32(),  (void*)types::prim_i64(), m)) { return -1; }
+    if(!testing::expect_ne((void*)types::prim_i32(),  (void*)types::prim_u32(), m)) { return -2; }
+    if(!testing::expect_ne((void*)types::prim_i8(),   (void*)types::prim_u8(),  m)) { return -3; }
+    if(!testing::expect_ne((void*)types::prim_f32(),  (void*)types::prim_f64(), m)) { return -4; }
+    if(!testing::expect_ne((void*)types::prim_bool(), (void*)types::prim_u8(),  m)) { return -5; }
+    if(!testing::expect_ne((void*)types::prim_void(), (void*)types::prim_bool(),m)) { return -6; }
+    if(!testing::expect_ne((void*)types::prim_type(), (void*)types::prim_void(),m)) { return -7; }
+    if(!testing::expect_ne((void*)types::prim_null_ptr(), (void*)types::prim_void(), m)) { return -8; }
+    return 0;
+}
+
+fn i32 primitive_dispatch_matches_accessors(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::I8),   (void*)types::prim_i8(),   m)) { return -1;  }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::I16),  (void*)types::prim_i16(),  m)) { return -2;  }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::I32),  (void*)types::prim_i32(),  m)) { return -3;  }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::I64),  (void*)types::prim_i64(),  m)) { return -4;  }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::U8),   (void*)types::prim_u8(),   m)) { return -5;  }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::U16),  (void*)types::prim_u16(),  m)) { return -6;  }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::U32),  (void*)types::prim_u32(),  m)) { return -7;  }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::U64),  (void*)types::prim_u64(),  m)) { return -8;  }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::F32),  (void*)types::prim_f32(),  m)) { return -9;  }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::F64),  (void*)types::prim_f64(),  m)) { return -10; }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::BOOL), (void*)types::prim_bool(), m)) { return -11; }
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::VOID), (void*)types::prim_void(), m)) { return -12; }
+    return 0;
+}
+
+fn i32 primitive_none_returns_null(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq((void*)types::primitive(types::PrimitiveKind::NONE), null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 get_primitive_kind_from_token_maps_all(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::I8),   (u64)types::PrimitiveKind::I8,   m)) { return -1;  }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::I16),  (u64)types::PrimitiveKind::I16,  m)) { return -2;  }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::I32),  (u64)types::PrimitiveKind::I32,  m)) { return -3;  }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::I64),  (u64)types::PrimitiveKind::I64,  m)) { return -4;  }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::U8),   (u64)types::PrimitiveKind::U8,   m)) { return -5;  }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::U16),  (u64)types::PrimitiveKind::U16,  m)) { return -6;  }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::U32),  (u64)types::PrimitiveKind::U32,  m)) { return -7;  }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::U64),  (u64)types::PrimitiveKind::U64,  m)) { return -8;  }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::F32),  (u64)types::PrimitiveKind::F32,  m)) { return -9;  }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::F64),  (u64)types::PrimitiveKind::F64,  m)) { return -10; }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::BOOL), (u64)types::PrimitiveKind::BOOL, m)) { return -11; }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::VOID), (u64)types::PrimitiveKind::VOID, m)) { return -12; }
+    return 0;
+}
+
+fn i32 get_primitive_kind_from_token_type_is_none(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::TYPE), (u64)types::PrimitiveKind::NONE, m)) { return -1; }
+    return 0;
+}
+
+fn i32 get_primitive_kind_from_token_non_primitive_is_none(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::Ident),  (u64)types::PrimitiveKind::NONE, m)) { return -1; }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::Plus),   (u64)types::PrimitiveKind::NONE, m)) { return -2; }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::STRUCT), (u64)types::PrimitiveKind::NONE, m)) { return -3; }
+    if(!testing::expect_eq((u64)types::get_primitive_kind_from_token(token::TokenKind::EOF),    (u64)types::PrimitiveKind::NONE, m)) { return -4; }
+    return 0;
+}
+
+fn i32 canonical_prims_pass_predicates(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_int(types::prim_i32()),          true,  m)) { return -1;  }
+    if(!testing::expect_eq(types::is_signed_int(types::prim_i8()),    true,  m)) { return -2;  }
+    if(!testing::expect_eq(types::is_unsigned_int(types::prim_u64()), true,  m)) { return -3;  }
+    if(!testing::expect_eq(types::is_float(types::prim_f64()),        true,  m)) { return -4;  }
+    if(!testing::expect_eq(types::is_bool(types::prim_bool()),        true,  m)) { return -5;  }
+    if(!testing::expect_eq(types::is_void(types::prim_void()),        true,  m)) { return -6;  }
+    if(!testing::expect_eq(types::is_comptime_type(types::prim_type()), true, m)) { return -7;  }
+    if(!testing::expect_eq(types::is_ptr(types::prim_null_ptr()),     true,  m)) { return -8;  }
+    if(!testing::expect_eq(types::is_int(types::prim_f32()),          false, m)) { return -9;  }
+    if(!testing::expect_eq(types::is_signed_int(types::prim_u8()),    false, m)) { return -10; }
+    return 0;
+}
+
 // ===== entry point =====
 
 fn i32 main() {
@@ -3681,6 +3836,25 @@ fn i32 main() {
 
     testing::add(cyc, "cycle_struct_with_valid_field",                   &cycle_struct_with_valid_field);
     testing::add(cyc, "cycle_self_struct_align_of_reports_and_returns_one", &cycle_self_struct_align_of_reports_and_returns_one);
+
+    u8[] pr = "PrimitiveTable Tests";
+
+    testing::add(pr, "prim_signed_ints_have_correct_fields",   &prim_signed_ints_have_correct_fields);
+    testing::add(pr, "prim_unsigned_ints_have_correct_fields", &prim_unsigned_ints_have_correct_fields);
+    testing::add(pr, "prim_floats_have_correct_fields",        &prim_floats_have_correct_fields);
+    testing::add(pr, "prim_bool_has_correct_fields",           &prim_bool_has_correct_fields);
+    testing::add(pr, "prim_void_has_correct_fields",           &prim_void_has_correct_fields);
+    testing::add(pr, "prim_type_has_correct_fields",           &prim_type_has_correct_fields);
+    testing::add(pr, "prim_null_ptr_has_correct_fields",       &prim_null_ptr_has_correct_fields);
+    testing::add(pr, "prim_null_ptr_pointee_is_void",          &prim_null_ptr_pointee_is_void);
+    testing::add(pr, "prim_accessors_are_stable_across_calls", &prim_accessors_are_stable_across_calls);
+    testing::add(pr, "prim_accessors_are_distinct",            &prim_accessors_are_distinct);
+    testing::add(pr, "primitive_dispatch_matches_accessors",   &primitive_dispatch_matches_accessors);
+    testing::add(pr, "primitive_none_returns_null",            &primitive_none_returns_null);
+    testing::add(pr, "get_primitive_kind_from_token_maps_all", &get_primitive_kind_from_token_maps_all);
+    testing::add(pr, "get_primitive_kind_from_token_type_is_none", &get_primitive_kind_from_token_type_is_none);
+    testing::add(pr, "get_primitive_kind_from_token_non_primitive_is_none", &get_primitive_kind_from_token_non_primitive_is_none);
+    testing::add(pr, "canonical_prims_pass_predicates",        &canonical_prims_pass_predicates);
 
     return testing::run();
 }
