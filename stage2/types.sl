@@ -512,6 +512,25 @@ export fn bool int_lit_fits(u64 value, bool is_negative, Type* dst) {
     return value <= dst_max;
 }
 
+export fn bool is_castable(Type* src, Type* dst) {
+    if (src == null || dst == null) { return false; }
+    if (((u8)src.flags & (u8)LayoutFlags::Opaque) != 0) { return false; }
+    if (((u8)dst.flags & (u8)LayoutFlags::Opaque) != 0) { return false; }
+    if (is_convertible(src, dst))                  { return true; }
+    if (is_int(src)        && is_int(dst))         { return true; }
+    if (is_int(src)        && is_float(dst))       { return true; }
+    if (is_float(src)      && is_int(dst))         { return true; }
+    if (is_float(src)      && is_float(dst))       { return true; }
+    if (is_ptr(src)        && is_ptr_sized_int(dst)) { return true; }
+    if (is_ptr_sized_int(src) && is_ptr(dst))        { return true; }
+    return false;
+}
+
+fn bool is_ptr_sized_int(Type* t) {
+    if (!is_int(t)) { return false; }
+    return t.prim == PrimitiveKind::I64 || t.prim == PrimitiveKind::U64;
+}
+
 fn i32 int_rank(Type* t) {
     if(!is_int(t)) { return -1; }
     switch(t.prim) {

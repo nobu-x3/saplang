@@ -3447,6 +3447,274 @@ fn i32 get_primitive_kind_from_token_non_primitive_is_none(arena::Arena* a, u8[]
     return 0;
 }
 
+fn i32 castable_identity_primitive(arena::Arena* a, u8[] m) {
+    types::Type* t = fake_i32(a);
+    if(!testing::expect_eq(types::is_castable(t, t), true, m)) { return -1; }
+    types::Type* b = fake_bool(a);
+    if(!testing::expect_eq(types::is_castable(b, b), true, m)) { return -2; }
+    types::Type* v = fake_void(a);
+    if(!testing::expect_eq(types::is_castable(v, v), true, m)) { return -3; }
+    return 0;
+}
+
+fn i32 castable_int_to_int_all_combos(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_i8(a),  fake_i64(a)), true, m)) { return -1;  }
+    if(!testing::expect_eq(types::is_castable(fake_i64(a), fake_i8(a)),  true, m)) { return -2;  }
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), fake_u32(a)), true, m)) { return -3;  }
+    if(!testing::expect_eq(types::is_castable(fake_u32(a), fake_i32(a)), true, m)) { return -4;  }
+    if(!testing::expect_eq(types::is_castable(fake_u8(a),  fake_i64(a)), true, m)) { return -5;  }
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), fake_u64(a)), true, m)) { return -6;  }
+    if(!testing::expect_eq(types::is_castable(fake_u64(a), fake_i8(a)),  true, m)) { return -7;  }
+    if(!testing::expect_eq(types::is_castable(fake_u16(a), fake_u16(a)), true, m)) { return -8;  }
+    if(!testing::expect_eq(types::is_castable(fake_i16(a), fake_u32(a)), true, m)) { return -9;  }
+    if(!testing::expect_eq(types::is_castable(fake_u32(a), fake_u16(a)), true, m)) { return -10; }
+    return 0;
+}
+
+fn i32 castable_int_to_float(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_i8(a),  fake_f32(a)), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), fake_f64(a)), true, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(fake_u64(a), fake_f32(a)), true, m)) { return -3; }
+    if(!testing::expect_eq(types::is_castable(fake_u8(a),  fake_f64(a)), true, m)) { return -4; }
+    return 0;
+}
+
+fn i32 castable_float_to_int(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_f32(a), fake_i8(a)),  true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_f64(a), fake_i32(a)), true, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(fake_f32(a), fake_u64(a)), true, m)) { return -3; }
+    if(!testing::expect_eq(types::is_castable(fake_f64(a), fake_u16(a)), true, m)) { return -4; }
+    return 0;
+}
+
+fn i32 castable_float_to_float(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_f32(a), fake_f64(a)), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_f64(a), fake_f32(a)), true, m)) { return -2; }
+    types::Type* f = fake_f32(a);
+    if(!testing::expect_eq(types::is_castable(f, f), true, m)) { return -3; }
+    return 0;
+}
+
+fn i32 castable_ptr_to_ptr_various(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p_i32  = types::intern_pointer(&it, fake_i32(a), false);
+    types::Type* p_void = types::intern_pointer(&it, fake_void(a), false);
+    types::Type* p_struct = types::intern_pointer(&it, types::intern_struct(&it, fake_decl(a)), false);
+    if(!testing::expect_eq(types::is_castable(p_i32,    p_void),   true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(p_void,   p_struct), true, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(p_struct, p_i32),    true, m)) { return -3; }
+    return 0;
+}
+
+fn i32 castable_ptr_to_ptr_sized_int(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p = types::intern_pointer(&it, fake_i32(a), false);
+    if(!testing::expect_eq(types::is_castable(p, fake_i64(a)), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(p, fake_u64(a)), true, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_ptr_sized_int_to_ptr(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p = types::intern_pointer(&it, fake_i32(a), false);
+    if(!testing::expect_eq(types::is_castable(fake_i64(a), p), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_u64(a), p), true, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_ptr_to_smaller_int_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p = types::intern_pointer(&it, fake_i32(a), false);
+    if(!testing::expect_eq(types::is_castable(p, fake_i32(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(p, fake_i16(a)), false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(p, fake_i8(a)),  false, m)) { return -3; }
+    if(!testing::expect_eq(types::is_castable(p, fake_u32(a)), false, m)) { return -4; }
+    if(!testing::expect_eq(types::is_castable(p, fake_u16(a)), false, m)) { return -5; }
+    if(!testing::expect_eq(types::is_castable(p, fake_u8(a)),  false, m)) { return -6; }
+    return 0;
+}
+
+fn i32 castable_smaller_int_to_ptr_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p = types::intern_pointer(&it, fake_i32(a), false);
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), p), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_i16(a), p), false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(fake_i8(a),  p), false, m)) { return -3; }
+    if(!testing::expect_eq(types::is_castable(fake_u32(a), p), false, m)) { return -4; }
+    return 0;
+}
+
+fn i32 castable_inherits_is_convertible(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* elem = fake_i32(a);
+    types::Type* arr  = types::intern_array(&it, elem, 5);
+    types::Type* ptr  = types::intern_pointer(&it, elem, false);
+    types::Type* slc  = types::intern_slice(&it, elem);
+    if(!testing::expect_eq(types::is_castable(arr, ptr), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(arr, slc), true, m)) { return -2; }
+    types::Type* e = fake_enum_with_base(a, &it, elem);
+    if(!testing::expect_eq(types::is_castable(e, elem), true, m)) { return -3; }
+    types::Type* nullp = types::prim_null_ptr();
+    if(!testing::expect_eq(types::is_castable(nullp, ptr), true, m)) { return -4; }
+    if(!testing::expect_eq(types::is_castable(nullp, slc), true, m)) { return -5; }
+    if(!testing::expect_eq(types::is_castable(fake_i8(a), fake_i32(a)), true, m)) { return -6; }
+    if(!testing::expect_eq(types::is_castable(fake_f32(a), fake_f64(a)), true, m)) { return -7; }
+    return 0;
+}
+
+fn i32 castable_opaque_src_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* op = fake_opaque_struct(a, &it);
+    if(!testing::expect_eq(types::is_castable(op, fake_i32(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(op, op),          false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(op, types::intern_pointer(&it, fake_i32(a), false)), false, m)) { return -3; }
+    return 0;
+}
+
+fn i32 castable_opaque_dst_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* op = fake_opaque_struct(a, &it);
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), op), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(types::intern_struct(&it, fake_decl(a)), op), false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_pointer_to_opaque_allowed(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* op   = fake_opaque_struct(a, &it);
+    types::Type* p_op = types::intern_pointer(&it, op, false);
+    types::Type* p_i32 = types::intern_pointer(&it, fake_i32(a), false);
+    if(!testing::expect_eq(types::is_castable(p_op,  p_i32), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(p_i32, p_op),  true, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_int_to_bool_rejected(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), fake_bool(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_u8(a),  fake_bool(a)), false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_bool_to_int_rejected(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_bool(a), fake_i32(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_bool(a), fake_u8(a)),  false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_bool_float_rejected(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_bool(a), fake_f32(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_f64(a),  fake_bool(a)), false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_identity_composite(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* arr = types::intern_array(&it, fake_i32(a), 4);
+    types::Type* slc = types::intern_slice(&it, fake_i32(a));
+    types::Type* ptr = types::intern_pointer(&it, fake_i32(a), false);
+    types::Type* fp  = types::intern_fn_ptr(&it, fake_void(a), mk_params0(), false);
+    types::Type* s   = types::intern_struct(&it, fake_decl(a));
+    types::Type* u   = types::intern_union(&it, fake_decl(a));
+    types::Type* e   = types::intern_enum(&it, fake_decl(a));
+    if(!testing::expect_eq(types::is_castable(arr, arr), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(slc, slc), true, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(ptr, ptr), true, m)) { return -3; }
+    if(!testing::expect_eq(types::is_castable(fp,  fp),  true, m)) { return -4; }
+    if(!testing::expect_eq(types::is_castable(s,   s),   true, m)) { return -5; }
+    if(!testing::expect_eq(types::is_castable(u,   u),   true, m)) { return -6; }
+    if(!testing::expect_eq(types::is_castable(e,   e),   true, m)) { return -7; }
+    return 0;
+}
+
+fn i32 castable_fnptr_to_int_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* fp = types::intern_fn_ptr(&it, fake_void(a), mk_params0(), false);
+    if(!testing::expect_eq(types::is_castable(fp, fake_i64(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fp, fake_u64(a)), false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(fp, fake_i32(a)), false, m)) { return -3; }
+    if(!testing::expect_eq(types::is_castable(fake_i64(a), fp), false, m)) { return -4; }
+    if(!testing::expect_eq(types::is_castable(fake_u64(a), fp), false, m)) { return -5; }
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), fp), false, m)) { return -6; }
+    return 0;
+}
+
+fn i32 castable_enum_to_other_enum_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* base = fake_i32(a);
+    types::Type* e1 = fake_enum_with_base(a, &it, base);
+    types::Type* e2 = fake_enum_with_base(a, &it, base);
+    if(!testing::expect_eq(types::is_castable(e1, e2), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(e2, e1), false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_void_rejected(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_void(a), fake_i32(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), fake_void(a)), false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(fake_void(a), fake_bool(a)), false, m)) { return -3; }
+    return 0;
+}
+
+fn i32 castable_struct_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s1 = types::intern_struct(&it, fake_decl(a));
+    types::Type* s2 = types::intern_struct(&it, fake_decl(a));
+    if(!testing::expect_eq(types::is_castable(s1, s2), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(s1, fake_i32(a)), false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), s1), false, m)) { return -3; }
+    return 0;
+}
+
+fn i32 castable_comptime_rejected(arena::Arena* a, u8[] m) {
+    types::Type* c = fake_comptime(a);
+    if(!testing::expect_eq(types::is_castable(c, fake_i32(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), c), false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_fnptr_ptr_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* fp = types::intern_fn_ptr(&it, fake_void(a), mk_params0(), false);
+    types::Type* p  = types::intern_pointer(&it, fake_i32(a), false);
+    if(!testing::expect_eq(types::is_castable(fp, p), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(p, fp), false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_slice_ptr_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* s = types::intern_slice(&it, fake_i32(a));
+    types::Type* p = types::intern_pointer(&it, fake_i32(a), false);
+    if(!testing::expect_eq(types::is_castable(s, p), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(p, s), false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 castable_enum_to_non_base_rejected(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* e = fake_enum_with_base(a, &it, fake_i32(a));
+    if(!testing::expect_eq(types::is_castable(e, fake_i64(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(e, fake_u32(a)), false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(e, fake_f32(a)), false, m)) { return -3; }
+    return 0;
+}
+
+fn i32 castable_null_args_return_false(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(null, fake_i32(a)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), null), false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(null, null),        false, m)) { return -3; }
+    return 0;
+}
+
+fn i32 castable_pointer_const_qualifier_irrelevant(arena::Arena* a, u8[] m) {
+    types::TypeInterner it; setup(&it, a, 16);
+    types::Type* p     = types::intern_pointer(&it, fake_i32(a), false);
+    types::Type* p_c   = types::intern_pointer(&it, fake_i32(a), true);
+    if(!testing::expect_eq(types::is_castable(p, p_c), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(p_c, p), true, m)) { return -2; }
+    return 0;
+}
+
 fn i32 canonical_prims_pass_predicates(arena::Arena* a, u8[] m) {
     if(!testing::expect_eq(types::is_int(types::prim_i32()),          true,  m)) { return -1;  }
     if(!testing::expect_eq(types::is_signed_int(types::prim_i8()),    true,  m)) { return -2;  }
@@ -3855,6 +4123,37 @@ fn i32 main() {
     testing::add(pr, "get_primitive_kind_from_token_type_is_none", &get_primitive_kind_from_token_type_is_none);
     testing::add(pr, "get_primitive_kind_from_token_non_primitive_is_none", &get_primitive_kind_from_token_non_primitive_is_none);
     testing::add(pr, "canonical_prims_pass_predicates",        &canonical_prims_pass_predicates);
+
+    u8[] cast = "is_castable Tests";
+
+    testing::add(cast, "castable_identity_primitive",            &castable_identity_primitive);
+    testing::add(cast, "castable_int_to_int_all_combos",         &castable_int_to_int_all_combos);
+    testing::add(cast, "castable_int_to_float",                  &castable_int_to_float);
+    testing::add(cast, "castable_float_to_int",                  &castable_float_to_int);
+    testing::add(cast, "castable_float_to_float",                &castable_float_to_float);
+    testing::add(cast, "castable_ptr_to_ptr_various",            &castable_ptr_to_ptr_various);
+    testing::add(cast, "castable_ptr_to_ptr_sized_int",          &castable_ptr_to_ptr_sized_int);
+    testing::add(cast, "castable_ptr_sized_int_to_ptr",          &castable_ptr_sized_int_to_ptr);
+    testing::add(cast, "castable_ptr_to_smaller_int_rejected",   &castable_ptr_to_smaller_int_rejected);
+    testing::add(cast, "castable_smaller_int_to_ptr_rejected",   &castable_smaller_int_to_ptr_rejected);
+    testing::add(cast, "castable_inherits_is_convertible",       &castable_inherits_is_convertible);
+    testing::add(cast, "castable_opaque_src_rejected",           &castable_opaque_src_rejected);
+    testing::add(cast, "castable_opaque_dst_rejected",           &castable_opaque_dst_rejected);
+    testing::add(cast, "castable_pointer_to_opaque_allowed",     &castable_pointer_to_opaque_allowed);
+    testing::add(cast, "castable_int_to_bool_rejected",          &castable_int_to_bool_rejected);
+    testing::add(cast, "castable_bool_to_int_rejected",          &castable_bool_to_int_rejected);
+    testing::add(cast, "castable_bool_float_rejected",           &castable_bool_float_rejected);
+    testing::add(cast, "castable_void_rejected",                 &castable_void_rejected);
+    testing::add(cast, "castable_struct_rejected",               &castable_struct_rejected);
+    testing::add(cast, "castable_comptime_rejected",             &castable_comptime_rejected);
+    testing::add(cast, "castable_fnptr_ptr_rejected",            &castable_fnptr_ptr_rejected);
+    testing::add(cast, "castable_slice_ptr_rejected",            &castable_slice_ptr_rejected);
+    testing::add(cast, "castable_enum_to_non_base_rejected",     &castable_enum_to_non_base_rejected);
+    testing::add(cast, "castable_null_args_return_false",        &castable_null_args_return_false);
+    testing::add(cast, "castable_pointer_const_qualifier_irrelevant", &castable_pointer_const_qualifier_irrelevant);
+    testing::add(cast, "castable_identity_composite",            &castable_identity_composite);
+    testing::add(cast, "castable_fnptr_to_int_rejected",         &castable_fnptr_to_int_rejected);
+    testing::add(cast, "castable_enum_to_other_enum_rejected",   &castable_enum_to_other_enum_rejected);
 
     return testing::run();
 }
