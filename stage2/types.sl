@@ -1,4 +1,5 @@
 import arena;
+import ast;
 import sys;
 
 export enum TypeKind : u8 {
@@ -257,6 +258,169 @@ export fn Type* intern_enum(TypeInterner* it, void* decl) {    // ast::EnumDeclN
     t.data.enum_decl = decl;
     return install(it, hash, t);
 }
+
+// Conversions
+
+export fn bool is_convertible(Type* src, Type* dst) {
+    if (src == dst) { return true; }
+    // array -> pointer (matching depth + element)
+    if (is_array(src) && is_ptr(dst)) {
+        Type* a_elem = src.data.array.elem;
+        Type* p_pee  = dst.data.pointee;
+        return a_elem == p_pee;
+    }
+    // array -> slice
+    if (is_array(src) && is_slice(dst)) {
+        return src.data.array.elem == dst.data.slice_elem;
+    }
+    // enum -> base
+    if (src.kind == TypeKind::Enum && enum_base_type(src) == dst) { return true; }
+    // integer widening, same signedness
+    if (is_int(src) && is_int(dst)) {
+        bool same_sign = is_signed_int(src) == is_signed_int(dst);
+        return same_sign && int_rank(src) <= int_rank(dst);
+    }
+    // float widening
+    if (is_float(src) && is_float(dst)) {
+        if (src.prim == PrimitiveKind::F32 && dst.prim == PrimitiveKind::F64) { return true; }
+        return false;
+    }
+    // pointer -> pointer (any pointee)
+    if (is_ptr(src) && is_ptr(dst)) { return true; }
+    // null -> any pointer or slice
+    if (src == prim_null_ptr() && (is_ptr(dst) || is_slice(dst))) { return true; }
+    return false;
+}
+
+export fn bool is_convertible_in_cond(Type* src) {
+    if (is_bool(src)) { return true; }
+    if (is_int(src))  { return true; }       // zero / non-zero
+    if (is_ptr(src) || is_slice(src)) { return true; }  // null / non-null
+    return false;
+}
+
+export fn bool int_lit_fits(u64 value, bool is_negative, Type* dst) {
+    if (!is_int(dst)) { return false; }
+    if (is_negative && is_unsigned_int(dst)) { return false; }
+    u64 dst_max = int_max(dst);
+    u64 dst_min_abs = int_min_abs(dst);    // for signed; 0 for unsigned
+    if (is_negative) { return value <= dst_min_abs; }
+    return value <= dst_max;
+}
+
+fn i32 int_rank(Type* t) {
+    if(!is_int(t)) { return -1; }
+    switch(t.prim) {
+        case PrimitiveKind::I8:
+        case PrimitiveKind::U8: { return 1; }
+        case PrimitiveKind::I16:
+        case PrimitiveKind::U16: { return 2; }
+        case PrimitiveKind::I32:
+        case PrimitiveKind::U32: { return 3; }
+        case PrimitiveKind::I64:
+        case PrimitiveKind::U64: { return 4; }
+        else { return -1; }
+    }
+    return -1;
+}
+
+// Helpers
+export fn bool is_int(Type* t) {
+    return t.kind == TypeKind::Primitive
+    && t.prim >= PrimitiveKind::I8 && t.prim <= PrimitiveKind::U64;
+}
+
+export fn bool is_signed_int(Type* t) {
+    return t.kind == TypeKind::Primitive
+    && t.prim >= PrimitiveKind::I8 && t.prim <= PrimitiveKind::I64;
+}
+
+export fn bool is_unsigned_int(Type* t) {
+    return t.kind == TypeKind::Primitive
+    && t.prim >= PrimitiveKind::U8 && t.prim <= PrimitiveKind::U64;
+}
+
+export fn bool is_float(Type* t) {
+    return t.kind == TypeKind::Primitive
+    && t.prim >= PrimitiveKind::F32 && t.prim <= PrimitiveKind::F64;
+}
+
+export fn bool is_bool(Type* t) {
+    return t.kind == TypeKind::Primitive
+    && t.prim == PrimitiveKind::BOOL;
+}
+
+export fn bool is_void(Type* t) {
+    return t.kind == TypeKind::Primitive
+    && t.prim == PrimitiveKind::VOID;
+}
+
+export fn bool is_slice(Type* t) {
+    return t.kind == TypeKind::Slice;
+}
+
+export fn bool is_array(Type* t) {
+    return t.kind == TypeKind::Array;
+}
+
+export fn bool is_ptr(Type* t) {
+    return t.kind == TypeKind::Pointer;
+}
+
+export fn bool is_named(Type* t) {
+    return t.kind == TypeKind::Struct || t.kind == TypeKind::Union || t.kind == TypeKind::Enum;
+}
+
+export fn bool is_comptime_type(Type* t) {
+    return t.kind == TypeKind::ComptimeType;
+}
+
+export fn Type* enum_base_type(Type* type) {
+    if(type.kind != TypeKind::Enum) { return null; }
+    ast::EnumDeclNode* decl = (ast::EnumDeclNode*)type.data.enum_decl;
+    if(decl == null || decl.base_type == null) { return null; }
+    return (Type*)decl.base_type.h.ty;
+}
+
+Type NULL_PTR_STORAGE;
+
+export fn Type* prim_null_ptr() {
+    NULL_PTR_STORAGE.kind = TypeKind::Pointer;
+    NULL_PTR_STORAGE.size = 8;
+    NULL_PTR_STORAGE.align = 8;
+    NULL_PTR_STORAGE.flags = LayoutFlags::Computed;
+    return &NULL_PTR_STORAGE;
+}
+
+export fn u64 int_max(Type* t) {
+    if(!is_int(t)) { return 0; }
+    switch(t.prim) {
+        case PrimitiveKind::I8:  { return 127; }
+        case PrimitiveKind::I16: { return 32767; }
+        case PrimitiveKind::I32: { return 2147483647; }
+        case PrimitiveKind::I64: { return 9223372036854775807; }
+        case PrimitiveKind::U8:  { return 255; }
+        case PrimitiveKind::U16: { return 65535; }
+        case PrimitiveKind::U32: { return 4294967295; }
+        case PrimitiveKind::U64: { return 18446744073709551615; }
+        else { return 0; }
+    }
+    return 0;
+}
+
+export fn u64 int_min_abs(Type* t) {
+    if(!is_signed_int(t)) { return 0; }
+    switch(t.prim) {
+        case PrimitiveKind::I8:  { return 128; }
+        case PrimitiveKind::I16: { return 32768; }
+        case PrimitiveKind::I32: { return 2147483648; }
+        case PrimitiveKind::I64: { return 9223372036854775808; }
+        else { return 0; }
+    }
+    return 0;
+}
+
+// PRIVATE FUNCTIONS
 
 fn Type* install(TypeInterner* it, u32 hash, Type* t) {
     if ((it.count + 1) * 10 > it.cap * 7) { typer_grow(it); }
