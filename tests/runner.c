@@ -291,6 +291,9 @@ int main(int argc, char **argv) {
 	RUN_TEST(test_PointerArith_IntPlusPointer_Rejected_sema);
 	RUN_TEST(test_PointerArith_PointerTimesInt_Rejected_sema);
 	RUN_TEST(test_PointerArith_PointerPlusPointer_Rejected_sema);
+	RUN_TEST(test_EnumValueReturnToOwnEnum_sema);
+	RUN_TEST(test_EnumValueReturnToBaseType_sema);
+	RUN_TEST(test_EnumValueReturnToDifferentEnum_sema);
 
 	RUN_TEST(test_Primitivei32_typeinfo);
 	RUN_TEST(test_Primitivei64_typeinfo);

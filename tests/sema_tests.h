@@ -1112,3 +1112,21 @@ void test_PointerArith_PointerPlusPointer_Rejected_sema(void) {
 	TEST_ASSERT_NOT_NULL(strstr(output, "binary operator type mismatch"));
 	free(output);
 }
+
+void test_EnumValueReturnToOwnEnum_sema(void) {
+	TEST_SETUP_SINGLE("enum K : u8 { A, B } fn K make() { return K::A; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_EnumValueReturnToBaseType_sema(void) {
+	TEST_SETUP_SINGLE("enum K : u8 { A, B } fn u8 make() { return K::A; }");
+	TEST_ASSERT_EQUAL_STRING("", output);
+	free(output);
+}
+
+void test_EnumValueReturnToDifferentEnum_sema(void) {
+	TEST_SETUP_SINGLE("enum K1 : u8 { A } enum K2 : u8 { B } fn K2 make() { return K1::A; }");
+	TEST_ASSERT_NOT_NULL(strstr(output, "cannot implicitly convert"));
+	free(output);
+}

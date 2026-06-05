@@ -1133,17 +1133,6 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 			report(node->location, "return expression has no inferrable type.", 0);
 			return RESULT_FAILURE;
 		}
-		if (expr_type->type_kind == TYPE_ENUM) {
-			Symbol *enum_decl = lookup_named_type(table, expr_type, scope_level);
-			if (!enum_decl) {
-				char msg[128] = "";
-				sprintf(msg, "undeclared enum %s.", expr_type->type_name);
-				report(node->location, msg, 0);
-				return RESULT_FAILURE;
-			}
-			expr_type = enum_decl->node->data.enum_decl.base_type;
-			expr_type->type_kind = TYPE_PRIMITIVE;
-		}
 		if (!string_lit_fits_target(node->data.ret.return_expr, sym->type->function.return_type) && !literal_fits_type(node->data.ret.return_expr, sym->type->function.return_type) &&
 			!is_convertible(expr_type, sym->type->function.return_type, 0, table)) {
 			char msg[128] = "";
