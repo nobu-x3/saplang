@@ -594,6 +594,9 @@ int main(int argc, char **argv) {
 	RUN_TEST(test_SizeOf_InArithmetic_codegen);
 
 	RUN_TEST(test_ImportTest_modules);
+	RUN_TEST(test_TargetSelect_Linux_modules);
+	RUN_TEST(test_TargetSelect_Windows_modules);
+	RUN_TEST(test_TargetSelect_FallbackToCommon_modules);
 	RUN_TEST(test_NullTest_modules);
 	RUN_TEST(test_ImportCycle_modules);
 	RUN_TEST(test_MissingExport_modules);

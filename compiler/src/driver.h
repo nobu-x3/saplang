@@ -6,6 +6,7 @@ typedef struct {
 	char *input_file_path;
 	char *output_file_path;
 	char *input_string;
+	char *target;
 	StringList library_paths;
 	StringList extra_flags;
 	StringList import_paths;

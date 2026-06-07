@@ -8,6 +8,10 @@
 #include <unity.h>
 #include <driver.h>
 
+#if !defined(_WIN32)
+#include <sys/wait.h>
+#endif
+
 #define MODULE_TEST_SETUP(path) \
 
 
@@ -31,6 +35,34 @@ static int run_built(const char *base) {
     snprintf(cmd, sizeof(cmd), "./%s", base);
 #endif
     return system(cmd);
+}
+
+// Decode the exit code from a system() return value. On POSIX, `system`
+// returns wait-style encoded status — exit code is in the high byte.
+static int decode_exit(int status) {
+#if defined(_WIN32)
+    return status;
+#else
+    if (WIFEXITED(status))
+        return WEXITSTATUS(status);
+    return -1;
+#endif
+}
+
+// Compile a fixture with an explicit target, run it, return its exit code.
+static int build_and_get_exit_with_target(const char *path, const char *base, const char *target) {
+    CompileOptions opts = {0};
+    char input_file_path[256] = "";
+    sprintf(input_file_path, "%s/main.sl", path);
+    opts.input_file_path = strdup(input_file_path);
+    opts.no_cleanup = 0;
+    opts.threads = 1;
+    opts.target = strdup(target);
+    char out_name[160] = "";
+    opts.output_file_path = strdup(exe_name(base, out_name, sizeof(out_name)));
+    driver_set_compiler_options(opts);
+    TEST_ASSERT_EQUAL_INT(driver_run(), RESULT_SUCCESS);
+    return decode_exit(run_built(base));
 }
 
 // Compile a debug-info fixture (gen_debug, no cleanup) and run it.
@@ -92,6 +124,24 @@ static void test_expect_driver_failure(const char *path, char *output_path) {
 
 void test_ImportTest_modules(void) {
     test("module_tests/import_test", "import_test");
+}
+
+// `-target=linux` picks threads.linux.sl over threads.sl.
+void test_TargetSelect_Linux_modules(void) {
+    int code = build_and_get_exit_with_target("module_tests/target_select", "target_select_linux", "linux");
+    TEST_ASSERT_EQUAL_INT(22, code);
+}
+
+// `-target=windows` picks threads.windows.sl.
+void test_TargetSelect_Windows_modules(void) {
+    int code = build_and_get_exit_with_target("module_tests/target_select", "target_select_windows", "windows");
+    TEST_ASSERT_EQUAL_INT(33, code);
+}
+
+// `-target=macos` has no matching .macos.sl variant; falls back to threads.sl.
+void test_TargetSelect_FallbackToCommon_modules(void) {
+    int code = build_and_get_exit_with_target("module_tests/target_select", "target_select_fallback", "macos");
+    TEST_ASSERT_EQUAL_INT(11, code);
 }
 
 // E2E `null` literal: init, eq/ne, truthy/falsy, reassign, fn return, field init.

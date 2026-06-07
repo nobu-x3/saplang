@@ -31,6 +31,18 @@ int get_num_of_cores() {
 #endif
 }
 
+static const char *host_target_default(void) {
+#if defined(_WIN32)
+	return "windows";
+#elif defined(__APPLE__)
+	return "macos";
+#elif defined(__linux__)
+	return "linux";
+#else
+	return "unknown";
+#endif
+}
+
 // Portable strsep — strsep itself is not available on Windows.
 static char *sl_strsep(char **stringp, const char *delim) {
 	char *start = *stringp;
@@ -64,7 +76,8 @@ void driver_print_help() {
 		   "\t-dbg                          output debug info.\n"
 		   "\t-no-cleanup                   do not remove temporary LLVMIR-files after compilation.\n"
 		   "\t-llvm-dump                    print the generated llvm module\n"
-		   "\t-show-timings                 prints how long each compilation stage took");
+		   "\t-show-timings                 prints how long each compilation stage took\n"
+		   "\t-target <name>                platform target (linux|windows|macos). For each `import X;`, the driver tries `X.<target>.sl` before `X.sl`. Defaults to host.");
 }
 
 StringList split(const char *s, char delim) {
@@ -95,6 +108,7 @@ CompilerResult compile_options_get(int argc, const char **argv, CompileOptions *
 
 	int cpu_count = get_num_of_cores();
 	options->threads = cpu_count;
+	options->target = strdup(host_target_default());
 
 	for (int idx = 1; idx < argc; ++idx) {
 		const char *arg = argv[idx];
@@ -142,6 +156,15 @@ CompilerResult compile_options_get(int argc, const char **argv, CompileOptions *
 			options->library_paths = split(argv[++idx], ';');
 		else if (strcmp(arg, "-extra") == 0)
 			options->extra_flags = split(argv[++idx], ';');
+		else if (strcmp(arg, "-target") == 0) {
+			if (idx + 1 >= argc) {
+				fprintf(stderr, "-target requires an argument.\n");
+				compile_options_deinit(options);
+				return RESULT_FAILURE;
+			}
+			free(options->target);
+			options->target = strdup(argv[++idx]);
+		}
 	}
 	return RESULT_SUCCESS;
 }
@@ -158,6 +181,10 @@ void compile_options_deinit(CompileOptions *opt) {
 	if (opt->input_string) {
 		free(opt->input_string);
 		opt->input_string = NULL;
+	}
+	if (opt->target) {
+		free(opt->target);
+		opt->target = NULL;
 	}
 	for (int i = 0; i < opt->library_paths.count; ++i) {
 		free(opt->library_paths.data[i]);
@@ -188,6 +215,7 @@ void compile_options_print(CompileOptions *opt) {
 	printf("input_path: %s\n", opt->input_file_path);
 	printf("output_path: %s\n", opt->output_file_path);
 	printf("input_string: %s\n", opt->input_string);
+	printf("target: %s\n", opt->target ? opt->target : "(none)");
 	printf("library_paths: ");
 	for (int i = 0; i < opt->library_paths.count; ++i) {
 		printf("%s; ", opt->library_paths.data[i]);
@@ -610,9 +638,29 @@ static CompilerResult build_dependency_graph_inner(SourceFile input_file, Depend
 	DGFrame frame = {*root, parent_frame};
 
 	for (int i = 0; i < (*root)->imports.count; ++i) {
+		const char *imp = (*root)->imports.data[i];
+		const char *target = driver.options.target;
 		char name[64] = "";
-		sprintf(name, "%s.sl", (*root)->imports.data[i]);
-		DependencyGraphNode *existing_node = dg_find(name, driver.dependency_graph);
+		SourceFile dep_src = {0};
+		DependencyGraphNode *existing_node = NULL;
+
+		if (target && target[0]) {
+			snprintf(name, sizeof(name), "%s.%s.sl", imp, target);
+			existing_node = dg_find(name, driver.dependency_graph);
+			if (!existing_node) {
+				dep_src = driver_init_source(name);
+				if (!dep_src.name[0])
+					name[0] = '\0';
+			}
+		}
+
+		if (!existing_node && !dep_src.name[0]) {
+			snprintf(name, sizeof(name), "%s.sl", imp);
+			existing_node = dg_find(name, driver.dependency_graph);
+			if (!existing_node)
+				dep_src = driver_init_source(name);
+		}
+
 		if (existing_node) {
 			if (existing_node->status == DG_IN_PROGRESS) {
 				report_import_cycle(&frame, existing_node);
@@ -622,7 +670,7 @@ static CompilerResult build_dependency_graph_inner(SourceFile input_file, Depend
 				return RESULT_MEMORY_ERROR;
 			continue;
 		}
-		SourceFile dep_src = driver_init_source(name);
+
 		DependencyGraphNode *subgraph;
 		res = build_dependency_graph_inner(dep_src, &subgraph, &frame);
 		if (res != RESULT_SUCCESS)
