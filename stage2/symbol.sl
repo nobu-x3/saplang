@@ -6,3 +6,7 @@ export struct Symbol {
     u16                 _pad;
     Symbol*             chain; // open chained bucket
 }
+
+export fn u64 hash(Symbol* s) {
+    return ((u64)s * 0x9E3779B97F4A7C15) >> 0;
+}

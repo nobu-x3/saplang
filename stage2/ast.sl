@@ -252,21 +252,21 @@ export struct UndefinedLitNode { AstHeader h; }
 export struct IdentNode {
     AstHeader h;
     symbol::Symbol*   name;
-    //Decl*     resolved;                 // sema::Decl* — null until sema pass C
+    void*             resolved;             // sema::Decl* — null until body checking; cast at use sites (ast can't import sema)
 }
 
 export struct NamespaceAccessNode {
     AstHeader h;
-    AstNode*  base;                     // Ident or another NamespaceAccess
+    AstNode*  base;                         // Ident or another NamespaceAccess
     symbol::Symbol*   name;
-    //Decl*     resolved;                 // sema::Decl* — null until sema pass C
+    void*             resolved;             // sema::Decl* — null until body checking
 }
 
 export struct MemberAccessNode {
     AstHeader h;
     AstNode*  base;
     symbol::Symbol*   field;
-    //Decl*     resolved;                 // sema::Decl* (DECL_FIELD) — null until sema pass C
+    void*             resolved;             // sema::Decl* (DeclKind::Field) — null until body checking
 }
 
 export struct ArrayIndexNode {
