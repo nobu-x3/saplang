@@ -1347,10 +1347,29 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 		// Overload pick by exact match; single-candidate falls through to the
 		// is_convertible check below. Parser-set resolved_name is overridden.
 		if (callee->type == AST_EXPR_IDENT) {
+				// A mod::fn call only considers fns from mod (mangled __<mod>_).
+			char ns_prefix[128] = "";
+			size_t ns_prefix_len = 0;
+			if (callee->data.ident.namespace[0] != '\0') {
+				snprintf(ns_prefix, sizeof(ns_prefix), "__%s_", callee->data.ident.namespace);
+				ns_prefix_len = strlen(ns_prefix);
+			}
 			int candidate_count = 0;
 			for (Symbol *s = table; s != NULL; s = s->next) {
-				if (s->kind == SYMB_FN && strcmp(s->name, callee->data.ident.name) == 0)
-					++candidate_count;
+				if (s->kind != SYMB_FN || strcmp(s->name, callee->data.ident.name) != 0)
+					continue;
+				if (ns_prefix_len && strncmp(s->resolved_name, ns_prefix, ns_prefix_len) != 0)
+					continue;
+				++candidate_count;
+			}
+				// One candidate in the module: pin it; the normal path below checks args (allowing implicit conversions the strict matcher rejects).
+			if (ns_prefix_len && candidate_count == 1) {
+				for (Symbol *s = table; s != NULL; s = s->next) {
+					if (s->kind == SYMB_FN && strcmp(s->name, callee->data.ident.name) == 0 && strncmp(s->resolved_name, ns_prefix, ns_prefix_len) == 0) {
+						strncpy(callee->data.ident.resolved_name, s->resolved_name, sizeof(callee->data.ident.resolved_name));
+						break;
+					}
+				}
 			}
 			if (candidate_count > 1) {
 				Symbol *match = NULL;
@@ -1359,6 +1378,8 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 					if (s->kind != SYMB_FN)
 						continue;
 					if (strcmp(s->name, callee->data.ident.name) != 0)
+						continue;
+					if (ns_prefix_len && strncmp(s->resolved_name, ns_prefix, ns_prefix_len) != 0)
 						continue;
 					int has_va = 0;
 					int non_va = 0;
