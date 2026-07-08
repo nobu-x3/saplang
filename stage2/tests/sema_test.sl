@@ -273,6 +273,29 @@ fn sema::Decl* register_fn(arena::Arena* a, sema::Scope* sc, symbol::Symbol* nam
     return d;
 }
 
+fn ast::NamespaceAccessNode* fake_ns_access(arena::Arena* a, ast::AstNode* base, symbol::Symbol* name, u32 src_pos) {
+    ast::NamespaceAccessNode* n = (ast::NamespaceAccessNode*)arena::alloc(a, sizeof(ast::NamespaceAccessNode));
+    sys::memset(n, 0, sizeof(ast::NamespaceAccessNode));
+    n.h.kind = ast::AstKind::NamespaceAccess;
+    n.h.src_pos = src_pos;
+    n.base = base;
+    n.name = name;
+    return n;
+}
+
+fn types::Type* register_color_enum(arena::Arena* a, sema::Scope* sc) {
+    symbol::Symbol*[2] names; names[0] = interner::intern("Red"); names[1] = interner::intern("Green");
+    symbol::Symbol*[] nslice = {&names[0], 2};
+    ast::EnumDeclNode* d = fake_enum_decl_with_members(a, nslice);
+    d.qualified_name = interner::intern("Color");
+    types::Type* ety = types::intern_enum((void*)d);
+    symbol::Symbol* cname = interner::intern("Color");
+    sema::Decl* cd = fake_node_decl(a, cname, ety, (ast::AstNode*)d);
+    cd.is_exported = true;
+    sema::scope_add(sc, cname, cd);
+    return ety;
+}
+
 fn types::Type* mk_point_type(arena::Arena* a) {
     symbol::Symbol*[2] fnames; fnames[0] = interner::intern("x"); fnames[1] = interner::intern("y");
     types::Type*[2] ftys; ftys[0] = types::prim_i32(); ftys[1] = types::prim_i32();
@@ -3512,6 +3535,153 @@ fn i32 cast_expr_error(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ns_enum_member(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* ety = register_color_enum(a, sc);
+    ast::AstNode* base = (ast::AstNode*)fake_ident(a, interner::intern("Color"), 0);
+    ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("Red"), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    if(!testing::expect_eq((void*)t, (void*)ety, m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)na, ast::AstFlags::ConstExpr), m)) { return -2; }
+    if(!testing::expect_not_null((void*)na.resolved, m)) { return -3; }
+    return 0;
+}
+
+fn i32 ns_enum_unknown_member(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    register_color_enum(a, sc);
+    ast::AstNode* base = (ast::AstNode*)fake_ident(a, interner::intern("Color"), 0);
+    ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("Blue"), 5);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "no member named Blue", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
+    return 0;
+}
+
+fn i32 ns_not_namespace(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, types::prim_i32(), false);
+    ast::AstNode* base = (ast::AstNode*)fake_ident(a, x, 0);
+    ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("y"), 2);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "left of '::' is not a module or enum", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 2, m)) { return -3; }
+    return 0;
+}
+
+fn i32 ns_base_undefined(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    ast::AstNode* base = (ast::AstNode*)fake_ident(a, interner::intern("Nope"), 0);
+    ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("x"), 3);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "left of '::' is not a module or enum", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
+    return 0;
+}
+
+fn i32 ns_import_member(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "main");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* main_scope = sema::scope_new(a, null, 16);
+    s.scope = main_scope;
+    module::Module* other = fresh_module(a);
+    other.name = interner::intern("other");
+    sema::Scope* other_scope = sema::scope_new(a, null, 16);
+    other.global_scope = (void*)other_scope;
+    symbol::Symbol* helper = interner::intern("helper");
+    types::Type*[] noparams = {null, 0};
+    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), noparams, false);
+    sema::Decl* hd = register_fn(a, other_scope, helper, fnty);
+    hd.is_exported = true;
+    symbol::Symbol* othername = interner::intern("other");
+    sema::scope_add(main_scope, othername, fake_import_decl(a, othername, other));
+    ast::AstNode* base = (ast::AstNode*)fake_ident(a, othername, 0);
+    ast::NamespaceAccessNode* na = fake_ns_access(a, base, helper, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    if(!testing::expect_eq((void*)t, (void*)fnty, m)) { return -1; }
+    if(!testing::expect_eq((void*)na.resolved, (void*)hd, m)) { return -2; }
+    return 0;
+}
+
+fn i32 ns_import_non_exported(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "main");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* main_scope = sema::scope_new(a, null, 16);
+    s.scope = main_scope;
+    module::Module* other = fresh_module(a);
+    other.name = interner::intern("other");
+    sema::Scope* other_scope = sema::scope_new(a, null, 16);
+    other.global_scope = (void*)other_scope;
+    symbol::Symbol* helper = interner::intern("helper");
+    types::Type*[] noparams = {null, 0};
+    register_fn(a, other_scope, helper, types::intern_fn_ptr(types::prim_i32(), noparams, false));
+    symbol::Symbol* othername = interner::intern("other");
+    sema::scope_add(main_scope, othername, fake_import_decl(a, othername, other));
+    ast::AstNode* base = (ast::AstNode*)fake_ident(a, othername, 0);
+    ast::NamespaceAccessNode* na = fake_ns_access(a, base, helper, 7);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "no member named helper", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 7, m)) { return -3; }
+    return 0;
+}
+
+fn i32 ns_import_unknown_member(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "main");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* main_scope = sema::scope_new(a, null, 16);
+    s.scope = main_scope;
+    module::Module* other = fresh_module(a);
+    other.name = interner::intern("other");
+    other.global_scope = (void*)sema::scope_new(a, null, 16);
+    symbol::Symbol* othername = interner::intern("other");
+    sema::scope_add(main_scope, othername, fake_import_decl(a, othername, other));
+    ast::AstNode* base = (ast::AstNode*)fake_ident(a, othername, 0);
+    ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("missing"), 4);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "no member named missing", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -3; }
+    return 0;
+}
+
+fn i32 ns_nested_mod_enum_member(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "main");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* main_scope = sema::scope_new(a, null, 16);
+    s.scope = main_scope;
+    module::Module* other = fresh_module(a);
+    other.name = interner::intern("other");
+    sema::Scope* other_scope = sema::scope_new(a, null, 16);
+    other.global_scope = (void*)other_scope;
+    types::Type* ety = register_color_enum(a, other_scope);
+    symbol::Symbol* othername = interner::intern("other");
+    sema::scope_add(main_scope, othername, fake_import_decl(a, othername, other));
+    ast::AstNode* base_mod = (ast::AstNode*)fake_ident(a, othername, 0);
+    ast::AstNode* base_enum = (ast::AstNode*)fake_ns_access(a, base_mod, interner::intern("Color"), 0);
+    ast::NamespaceAccessNode* na = fake_ns_access(a, base_enum, interner::intern("Red"), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    if(!testing::expect_eq((void*)t, (void*)ety, m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)na, ast::AstFlags::ConstExpr), m)) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -3778,6 +3948,16 @@ fn i32 main() {
     testing::add(cc, "cast_const_propagation", &cast_const_propagation);
     testing::add(cc, "cast_invalid",         &cast_invalid);
     testing::add(cc, "cast_expr_error",      &cast_expr_error);
+
+    u8[] ns = "Sema Namespace Access Tests";
+    testing::add(ns, "ns_enum_member",           &ns_enum_member);
+    testing::add(ns, "ns_enum_unknown_member",   &ns_enum_unknown_member);
+    testing::add(ns, "ns_not_namespace",         &ns_not_namespace);
+    testing::add(ns, "ns_base_undefined",        &ns_base_undefined);
+    testing::add(ns, "ns_import_member",         &ns_import_member);
+    testing::add(ns, "ns_import_non_exported",   &ns_import_non_exported);
+    testing::add(ns, "ns_import_unknown_member", &ns_import_unknown_member);
+    testing::add(ns, "ns_nested_mod_enum_member", &ns_nested_mod_enum_member);
 
     return testing::run();
 }

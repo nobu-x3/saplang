@@ -64,9 +64,7 @@ export struct Scope {
     arena::Arena*       arena;      // for growth
 }
 
-// (Module*, Symbol*) pair: identifies a single named decl being resolved.
-// Pushed onto Sema.resolution_stack around named-type / alias lookups so
-// `alias A = B; alias B = A;` style cycles can be detected.
+// (module, name) key for alias / named-type cycle detection.
 export struct ResolutionKey {
     module::Module*     mod;
     symbol::Symbol*     name;
@@ -78,8 +76,7 @@ export struct ResolutionStack {
     arena::Arena*       arena;
 }
 
-// Public entry: stack-allocates a Sema and runs the three sub-passes on `m`.
-// Idempotent (guarded by Module.sema_phase bits). Called by the driver per module.
+// Idempotent per Module.sema_phase bits; called by the driver per module.
 export fn void run(module::Module* m) {
     Sema s;
     sys::memset(&s, 0, sizeof(Sema));
@@ -219,9 +216,6 @@ fn module::Module* find_import_module(Sema* s, symbol::Symbol* import_name) {
     return null;
 }
 
-// Signature resolution. Resolves every top-level decl's signature into canonical Type*.
-// Walks param/return/field/base type expressions, fills FieldDecl.resolved_type,
-// Param.resolved_type, Decl.ty. Sets Signatures on m.sema_phase.
 fn void resolve_signatures_locked(Sema* s) {
     if((s.m.sema_phase & (u16)SemaPhase::Signatures) != 0) { return; }
     s.scope = (Scope*)s.m.global_scope;
@@ -300,9 +294,6 @@ fn void set_decl_ty(Sema* s, symbol::Symbol* name, types::Type* ty) {
     if(decl != null) { decl.ty = ty; }
 }
 
-// Body checking. Walks every function body with bidirectional check/synth.
-// Sets AstHeader.ty + AstFlags on every expression node. Sets `resolved`
-// on Ident / NamespaceAccess / MemberAccess. Sets Bodies on m.sema_phase.
 fn void check_bodies_locked(Sema* s) {
     // TODO
 }
@@ -312,20 +303,14 @@ fn void check_bodies_locked(Sema* s) {
 // §10 — Cross-module lazy resolution
 // ============================================================================
 
-// Ensure `target` has at least completed name collection.
-// No-op when target == s.m (self — already running). Acquires target.sema_mutex.
 fn void ensure_names_collected(Sema* s, module::Module* target) {
     // TODO
 }
 
-// Ensure `target` has completed signature resolution (implies name collection).
-// Called when resolving an AstKind::NamedType that crosses a module boundary.
 fn void ensure_signatures_resolved(Sema* s, module::Module* target) {
     // TODO
 }
 
-// Ensure `target` has completed body checking (implies signature resolution).
-// Called by comptime before interpreting a user function from another module.
 fn void ensure_bodies_checked(Sema* s, module::Module* target) {
     // TODO
 }
@@ -416,9 +401,6 @@ fn void _scope_insert(Scope* s, symbol::Symbol* name, Decl* d) {
 // Name collection
 // ============================================================================
 
-// Walk the top-level BlockNode (s.m.root_node), register each decl in
-// s.m.global_scope, set Decl.is_exported per the `export` keyword.
-// Imports become Import entries; the driver populates s.m.imports beforehand.
 fn void collect_names(Sema* s) {
     // TODO
 }
@@ -442,20 +424,11 @@ fn symbol::Symbol* qualify_decl_name(Sema* s, symbol::Symbol* bare_name) {
 // §7 — Signature resolution
 // ============================================================================
 
-// Resolve every top-level decl's signature into canonical Type*.
-// For fn decls: param types, return type, then the fn-pointer Type*.
-// For struct/union: each FieldDecl.resolved_type.
-// For enum: base type and member values (via eval_const_u64).
-// For alias: target type, with cycle detection through s.resolution_stack.
 fn void resolve_signatures(Sema* s) {
     // TODO
 }
 
-// Convert an AstKind::*Type subtree into a canonical Type* via the typer.
-// Sets texpr.h.ty as a side effect. Aliases are dissolved here — the returned
-// Type* is the underlying type, never an alias wrapper.
-// Handles: PrimitiveType, PointerType, ArrayType, SliceType, FnPtrType,
-// NamedType, StructType (anonymous), UnionType (anonymous).
+// Aliases are dissolved here; the returned Type* is never an alias wrapper.
 export fn types::Type* resolve_type(Sema* s, ast::AstNode* texpr) {
     if(texpr == null) { return null; }
     switch(texpr.h.kind) {
@@ -523,8 +496,6 @@ export fn types::Type* resolve_type(Sema* s, ast::AstNode* texpr) {
     return null;
 }
 
-// Resolve a list of type expressions (e.g. fn-ptr param types) and return a
-// fresh Type*[] backed by s.m.arena. Each element goes through resolve_type.
 export fn types::Type*[] resolve_type_list(Sema* s, ast::AstNode*[] type_exprs) {
     if(type_exprs.len == 0) {
         types::Type*[] empty = {null, 0};
@@ -538,10 +509,7 @@ export fn types::Type*[] resolve_type_list(Sema* s, ast::AstNode*[] type_exprs) 
     return out;
 }
 
-// Resolve an AstKind::NamedType lookup, possibly crossing a module boundary
-// (when n.namespace is non-null and names an import). Pushes (target_mod, name)
-// onto s.resolution_stack and reports a cycle if the same key is already there.
-// Triggers ensure_signatures_resolved on the target module.
+// Crosses a module boundary when n.namespace names an import.
 fn types::Type* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
     module::Module* target = s.m;
     if(n.namespace != null) {
@@ -560,21 +528,15 @@ fn types::Type* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
     return decl_to_type(s, target, decl);
 }
 
-// Take an anonymous `struct { ... }` at type position and intern it.
-// Allocates a synthetic StructDeclNode (no name, no qualified_name) so the
-// typer can key the resulting Type by decl pointer.
 fn ast::StructDeclNode* synth_anon_struct_decl(Sema* s, ast::TypeStructNode* n) {
     return null; // TODO
 }
 
-// As above, for anonymous `union { ... }` at type position.
 fn ast::UnionDeclNode* synth_anon_union_decl(Sema* s, ast::TypeUnionNode* n) {
     return null; // TODO
 }
 
-// Evaluate `expr` as a comptime u64. Used for array sizes and enum member
-// values. Errors when the expression is non-constant or out of u64 range.
-// Backed by the comptime interpreter; only int literals until it lands.
+// Only int literals until the comptime interpreter lands.
 export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
     if(expr == null) { return 0; }
     if(expr.h.kind == ast::AstKind::IntLit) {
@@ -583,14 +545,10 @@ export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
     return 0;
 }
 
-// Given a Decl that may be an alias, follow the alias chain until a
-// non-alias Type* is reached. Used by resolve_named_type so aliases never
-// enter the typer.
 fn types::Type* decl_to_type(Sema* s, module::Module* target, Decl* d) {
     ast::AstNode* node = d.data.node;
     if(node == null) { return null; }
-    // Nominal types intern idempotently by decl pointer, so no per-decl cache;
-    // the cache below is only for aliases (whose target must not be re-resolved).
+    // Nominal types intern by decl pointer; only aliases need the d.ty cache below.
     if(node.h.kind == ast::AstKind::StructDecl) { d.ty = types::intern_struct((void*)node); return d.ty; }
     if(node.h.kind == ast::AstKind::UnionDecl)  { d.ty = types::intern_union((void*)node);  return d.ty; }
     if(node.h.kind == ast::AstKind::EnumDecl)   { d.ty = types::intern_enum((void*)node);   return d.ty; }
@@ -616,17 +574,11 @@ fn types::Type* decl_to_type(Sema* s, module::Module* target, Decl* d) {
 // §8 — Body checking: bidirectional type checking
 // ============================================================================
 
-// Walk every FnDeclNode body. Pushes a function scope, registers params as
-// Param in it, sets s.current_fn / s.current_return, then sema's the
-// body via stmt(). Pops everything on exit.
 fn void check_bodies(Sema* s) {
     // TODO
 }
 
-// Synthesize the type of `e` bottom-up. Sets e.h.ty and returns it on success;
-// returns null and sets AstFlags::HadError on failure (with a diagnostic already
-// reported). One arm per AstKind::Expr*. StructLit / ArrayLit are not synth-able
-// — they require check-mode (the caller must supply an expected type).
+// StructLit / ArrayLit / UndefinedLit are not synth-able — they need check-mode.
 export fn types::Type* synth(Sema* s, ast::AstNode* e) {
     if(e == null) { return null; }
     switch(e.h.kind) {
@@ -697,10 +649,7 @@ fn bool expr_has_flag(ast::AstNode* e, ast::AstFlags f) {
     return ((u16)e.h.flags & (u16)f) != 0;
 }
 
-// Top-down: fit `e` to `expected`. Handles the literal carve-outs (int lit
-// fits target int type, null lit fits any pointer/slice, undefined fits any
-// var-init), the struct/array literal coercions, then falls back to synth
-// followed by is_convertible. Sets e.h.ty on success.
+// Literal carve-outs, then fall back to synth + is_convertible.
 export fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
     if(e == null || expected == null) { return false; }
     if(e.h.kind == ast::AstKind::UnaryOp) {
@@ -754,8 +703,6 @@ export fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
 // Per-AstKind synth helpers
 // ----------------------------------------------------------------------------
 
-// Look up the ident in the scope chain, set n.resolved, propagate LValue/
-// ConstExpr flags. Diagnostic "undefined identifier `<name>`" on miss.
 export fn types::Type* synth_ident(Sema* s, ast::IdentNode* n) {
     Decl* d = scope_lookup(s.scope, n.name);
     if(d == null) {
@@ -771,16 +718,61 @@ export fn types::Type* synth_ident(Sema* s, ast::IdentNode* n) {
     return d.ty;
 }
 
-// `ns::name`. The namespace must resolve to either a Import (cross-module
-// lookup in target.global_scope, rejecting !is_exported entries) or a Node
-// wrapping an EnumDeclNode (enum member access — result is the enum type, marked ConstExpr).
-fn types::Type* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
-    return null; // TODO
+// Recurses when the base is itself a namespace access (`mod::Enum::Member`).
+fn Decl* resolve_namespace_decl(Sema* s, ast::AstNode* base) {
+    if(base == null) { return null; }
+    if(base.h.kind == ast::AstKind::Ident) {
+        return scope_lookup(s.scope, ((ast::IdentNode*)base).name);
+    }
+    if(base.h.kind == ast::AstKind::NamespaceAccess) {
+        ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)base;
+        Decl* outer = resolve_namespace_decl(s, na.base);
+        if(outer == null || outer.kind != (u16)DeclKind::Import || outer.data.module == null) { return null; }
+        return scope_lookup_local((Scope*)outer.data.module.global_scope, na.name);
+    }
+    return null;
 }
 
-// `x.field`. Auto-derefs one level of pointer per spec §5.3. On slices,
-// recognizes the magic .ptr / .len fields. On struct/union, looks up the
-// field by symbol; sets n.resolved and propagates LValue when applicable.
+fn types::Type* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
+    Decl* ns = resolve_namespace_decl(s, n.base);
+    if(ns == null) {
+        diag_not_namespace(s, n.h.src_pos);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    if(ns.kind == (u16)DeclKind::Import) {
+        module::Module* target = ns.data.module;
+        Decl* found = scope_lookup_local((Scope*)target.global_scope, n.name);
+        if(found == null || !found.is_exported) {
+            diag_unknown_member(s, n.h.src_pos, n.name);
+            mark_error((ast::AstNode*)n);
+            return null;
+        }
+        n.resolved = (void*)found;
+        u16 flags = 0;
+        if(decl_is_lvalue(found)) { flags = flags | (u16)ast::AstFlags::LValue; }
+        if(decl_is_const_expr(found)) { flags = flags | (u16)ast::AstFlags::ConstExpr; }
+        set_expr((ast::AstNode*)n, found.ty, flags);
+        return found.ty;
+    }
+    if(ns.kind == (u16)DeclKind::Node && ns.data.node != null && ns.data.node.h.kind == ast::AstKind::EnumDecl) {
+        ast::EnumDeclNode* edecl = (ast::EnumDeclNode*)ns.data.node;
+        ast::EnumMember* mem = find_enum_member(edecl, n.name);
+        if(mem == null) {
+            diag_unknown_member(s, n.h.src_pos, n.name);
+            mark_error((ast::AstNode*)n);
+            return null;
+        }
+        n.resolved = (void*)make_enum_member_decl(s, mem, ns.ty);
+        set_expr((ast::AstNode*)n, ns.ty, (u16)ast::AstFlags::ConstExpr);
+        return ns.ty;
+    }
+    diag_not_namespace(s, n.h.src_pos);
+    mark_error((ast::AstNode*)n);
+    return null;
+}
+
+// Auto-derefs one pointer level; slices expose the magic .ptr / .len fields.
 fn types::Type* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
     types::Type* base = synth(s, n.base);
     if(base == null) { return null; }
@@ -821,9 +813,6 @@ fn types::Type* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
     return field_ty;
 }
 
-// `a[i]`. Base must be array, slice, or pointer; index must be convertible
-// to u64. Result is the element type; lvalue when base is lvalue (array)
-// or always (slice/pointer).
 fn types::Type* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
     types::Type* base = synth(s, n.base);
     if(base == null) { return null; }
@@ -847,8 +836,6 @@ fn types::Type* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
     return elem;
 }
 
-// `a[lo..hi]`. Base must be array, slice, or pointer; bounds must be u64-
-// convertible. Result is the slice type of the element. Never an lvalue.
 fn types::Type* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
     types::Type* base = synth(s, n.base);
     if(base == null) { return null; }
@@ -868,10 +855,6 @@ fn types::Type* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
     return result;
 }
 
-// `f(args)`. Callee may be a fn name, a fn-pointer variable, or a method-
-// style member access. Arity is checked; each arg is `check`ed against the
-// corresponding param type. Result type is the callee's return type.
-// Triggers comptime monomorphization when params are `comptime`.
 fn types::Type* synth_call(Sema* s, ast::CallNode* n) {
     types::Type* callee = synth(s, n.callee);
     if(callee == null) { return null; }
@@ -905,8 +888,6 @@ fn types::Type* synth_call(Sema* s, ast::CallNode* n) {
     return ret;
 }
 
-// `(T)expr`. Resolves the target type, synths the source, runs is_castable
-// per spec §2.12. Diagnostic names both types on rejection. Result is T.
 fn types::Type* synth_cast(Sema* s, ast::CastNode* n) {
     types::Type* target = resolve_type(s, n.target_type);
     types::Type* src = synth(s, n.expr);
@@ -922,9 +903,6 @@ fn types::Type* synth_cast(Sema* s, ast::CastNode* n) {
     return target;
 }
 
-// Unary ops: `-x`, `!x`, `~x`, `&x`, `*x`. Delegates result-type rules to
-// op.sl::unaryop_result_type. Special-case fused `-IntLit`: re-checks the
-// literal against the parent's expected type with negative=true.
 fn types::Type* synth_unary(Sema* s, ast::UnaryOpNode* n) {
     types::Type* operand = synth(s, n.operand);
     if(operand == null) { return null; }
@@ -949,9 +927,6 @@ fn types::Type* synth_unary(Sema* s, ast::UnaryOpNode* n) {
     return result;
 }
 
-// Binary ops. Synths both operands, then delegates to op.sl::binop_result_type
-// for the result type (or null on invalid combination). Marks ConstExpr when
-// both operands are ConstExpr.
 fn types::Type* synth_binary(Sema* s, ast::BinaryOpNode* n) {
     types::Type* lt = synth(s, n.lhs);
     if(lt == null) { return null; }
@@ -971,33 +946,22 @@ fn types::Type* synth_binary(Sema* s, ast::BinaryOpNode* n) {
     return result;
 }
 
-// `sizeof(T)` or `sizeof(expr)`. If arg is a type expression, resolve it and
-// call types::size_of. If arg is an expression, take its typeof and use that.
-// Result is u64, ConstExpr. Diagnostic on opaque types.
 fn types::Type* synth_sizeof(Sema* s, ast::SizeofNode* n) {
     return null; // TODO
 }
 
-// `alignof(T)`. Mirror of synth_sizeof using types::align_of. Result is u64,
-// ConstExpr. Diagnostic on opaque types.
 fn types::Type* synth_alignof(Sema* s, ast::AlignofNode* n) {
     return null; // TODO
 }
 
-// `typeof(expr)`. Synths expr without emitting it, returns the comptime
-// `Type` value. Result is types::prim_type(), ConstExpr.
 fn types::Type* synth_typeof(Sema* s, ast::TypeofNode* n) {
     return null; // TODO
 }
 
-// `type_info(T)`. Resolves T, builds the TypeInfo struct value from the
-// canonical Type*. Result is the user-facing TypeInfo struct type.
 fn types::Type* synth_type_info(Sema* s, ast::TypeInfoNode* n) {
     return null; // TODO
 }
 
-// `compcode { ... }`. Body is captured into a Code value at comptime; no
-// runtime emission. Result is the comptime Code type.
 fn types::Type* synth_compcode(Sema* s, ast::CompCodeNode* n) {
     return null; // TODO
 }
@@ -1007,9 +971,7 @@ fn types::Type* synth_compcode(Sema* s, ast::CompCodeNode* n) {
 // Per-AstKind check helpers (only kinds that need explicit context)
 // ----------------------------------------------------------------------------
 
-// Spec §2.11 rule 10: an int literal fits any int type whose range holds it.
-// `negative` is inferred from the parent context (fused `-IntLit` case).
-// Diagnostic "literal `<value>` does not fit in `<type>`" on overflow.
+// An int literal fits any int type whose range holds it.
 export fn bool check_int_lit(Sema* s, ast::IntLitNode* n, types::Type* expected) {
     return check_int_lit_signed(s, n, expected, false);
 }
@@ -1024,23 +986,14 @@ fn bool check_int_lit_signed(Sema* s, ast::IntLitNode* n, types::Type* expected,
     return false;
 }
 
-// Designated, positional, or mixed field initialization. Each init is
-// `check`ed against the corresponding field type. Duplicates and unknown
-// field names are errors; missing fields are a warning per spec §3.8.
-// Also handles slice-literal target via check_slice_lit.
 fn bool check_struct_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
     return false; // TODO
 }
 
-// `{a, b, c}` against an array or slice target. For T[N] the element count
-// must match exactly; each element is `check`ed against T. For T[] the
-// elements determine the length and each is `check`ed against T.
 fn bool check_array_lit(Sema* s, ast::ArrayLitNode* n, types::Type* expected) {
     return false; // TODO
 }
 
-// `{ .ptr = ..., .len = ... }` or positional `{ptr, len}` against a slice
-// target. ptr must check against T*; len must check against u64.
 fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
     return false; // TODO
 }
@@ -1050,16 +1003,10 @@ fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
 // §9 — Statement checking
 // ============================================================================
 
-// Dispatch on statement kind. One arm each for VarDecl, IfStmt, WhileStmt,
-// ForStmt, SwitchStmt, ReturnStmt, BreakStmt, ContinueStmt, DeferStmt,
-// AssignmentStmt, ExprStmt, ComprunStmt, Comp{insert,splice,error,warning}Stmt.
-// Pushes/pops scopes around blocks; bumps loop_depth / switch_depth.
 fn void stmt(Sema* s, ast::AstNode* st) {
     // TODO
 }
 
-// Condition context: `if`, `while`, `for` cond. Accepts bool, ints (nonzero),
-// pointers and slices (non-null). Diagnostic names the offending type.
 fn bool check_cond(Sema* s, ast::AstNode* e) {
     return false; // TODO
 }
@@ -1173,6 +1120,20 @@ export fn void diag_arity(Sema* s, u32 src_pos, u64 expected, u64 got) {
     emit_diag(s, src_pos, &scratch[0], written);
 }
 
+// "left of '::' is not a module or enum". Used by synth_ns_access.
+export fn void diag_not_namespace(Sema* s, u32 src_pos) {
+    u8[] msg = "left of '::' is not a module or enum";
+    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "no member named `<name>`". Used by synth_ns_access.
+export fn void diag_unknown_member(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "no member named %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
 // "cannot cast `<src>` to `<target>`". Used by synth_cast on is_castable fail.
 export fn void diag_cast_invalid(Sema* s, u32 src_pos, types::Type* src, types::Type* target) {
     u8[] src_str = types_print::print_to_arena(src, s.m.arena);
@@ -1230,9 +1191,7 @@ export fn void stack_pop(ResolutionStack* st) {
     if(st.entries.len > 0) { st.entries.len -= 1; }
 }
 
-// Linear scan; the stack is at most as deep as nested aliases, which is small
-// in practice. Returns true if `key` is already on the stack — i.e. we're
-// recursing through the same named entity.
+// Linear scan; the alias-nesting depth is small in practice.
 export fn bool stack_contains(ResolutionStack* st, ResolutionKey key) {
     for(u64 entry_index = 0; entry_index < st.entries.len; entry_index += 1) {
         if(st.entries[entry_index].mod == key.mod && st.entries[entry_index].name == key.name) { return true; }
@@ -1245,16 +1204,14 @@ export fn bool stack_contains(ResolutionStack* st, ResolutionKey key) {
 // Decl helpers
 // ============================================================================
 
-// True for storage-backed decls (vars, params, fields). Fns, types, enum
-// members, and imports are not lvalues. Drives the LValue flag on Ident.
+// Vars, params, and fields are lvalues; fns, types, enum members are not.
 export fn bool decl_is_lvalue(Decl* d) {
     if(d == null) { return false; }
     if(d.kind == (u16)DeclKind::Field || d.kind == (u16)DeclKind::Param) { return true; }
     return d.kind == (u16)DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl;
 }
 
-// True when the decl's value is known at compile time: a `const` var, an enum
-// member, or a function. Drives the ConstExpr flag on Ident.
+// const vars, enum members, and fns are compile-time-known.
 export fn bool decl_is_const_expr(Decl* d) {
     if(d == null) { return false; }
     if(d.kind == (u16)DeclKind::EnumMember) { return true; }
@@ -1264,8 +1221,7 @@ export fn bool decl_is_const_expr(Decl* d) {
     return node.h.kind == ast::AstKind::VarDecl && ((ast::VarDeclNode*)node).is_const;
 }
 
-// Given a struct/union/enum Type, recover the decl node the typer keyed it by.
-// Used to walk fields during member access and lit checks.
+// Recover the decl node the typer keyed a struct/union/enum Type by.
 export fn ast::AstNode* container_decl(types::Type* t) {
     if(t == null) { return null; }
     if(t.kind == types::TypeKind::Struct) { return (ast::AstNode*)t.data.struct_decl; }
@@ -1287,8 +1243,7 @@ export fn ast::FieldDecl* find_field(ast::AstNode* decl, symbol::Symbol* name) {
     return null;
 }
 
-// Find a field's positional index in a struct decl. Returns (u64)-1 on miss.
-// Used by struct-literal checking for designated / positional mixing.
+// Returns (u64)-1 on miss.
 export fn u64 find_field_index(ast::StructDeclNode* decl, symbol::Symbol* name) {
     if(decl == null) { return 18446744073709551615; }
     for(u64 field_index = 0; field_index < decl.fields.len; field_index += 1) {
@@ -1306,8 +1261,6 @@ export fn ast::EnumMember* find_enum_member(ast::EnumDeclNode* decl, symbol::Sym
     return null;
 }
 
-// Allocate a Field-kind Decl wrapping `f`, with resolved type `ty`.
-// Used by synth_member_access to populate MemberAccessNode.resolved.
 export fn Decl* make_field_decl(Sema* s, ast::FieldDecl* f, types::Type* ty) {
     Decl* decl = (Decl*)arena::alloc(s.m.arena, sizeof(Decl));
     sys::memset(decl, 0, sizeof(Decl));
@@ -1318,8 +1271,6 @@ export fn Decl* make_field_decl(Sema* s, ast::FieldDecl* f, types::Type* ty) {
     return decl;
 }
 
-// Allocate an EnumMember-kind Decl wrapping `m`, with the enum's type `enum_ty`.
-// Used by synth_ns_access to populate NamespaceAccessNode.resolved.
 export fn Decl* make_enum_member_decl(Sema* s, ast::EnumMember* m, types::Type* enum_ty) {
     Decl* decl = (Decl*)arena::alloc(s.m.arena, sizeof(Decl));
     sys::memset(decl, 0, sizeof(Decl));
