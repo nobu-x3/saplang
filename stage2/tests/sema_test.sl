@@ -216,6 +216,47 @@ fn sema::Decl* register_var(arena::Arena* a, sema::Scope* sc, symbol::Symbol* na
     return d;
 }
 
+fn ast::MemberAccessNode* fake_member(arena::Arena* a, ast::AstNode* base, symbol::Symbol* field, u32 src_pos) {
+    ast::MemberAccessNode* n = (ast::MemberAccessNode*)arena::alloc(a, sizeof(ast::MemberAccessNode));
+    sys::memset(n, 0, sizeof(ast::MemberAccessNode));
+    n.h.kind = ast::AstKind::MemberAccess;
+    n.h.src_pos = src_pos;
+    n.base = base;
+    n.field = field;
+    return n;
+}
+
+fn ast::ArrayIndexNode* fake_index(arena::Arena* a, ast::AstNode* base, ast::AstNode* index, u32 src_pos) {
+    ast::ArrayIndexNode* n = (ast::ArrayIndexNode*)arena::alloc(a, sizeof(ast::ArrayIndexNode));
+    sys::memset(n, 0, sizeof(ast::ArrayIndexNode));
+    n.h.kind = ast::AstKind::ArrayIndex;
+    n.h.src_pos = src_pos;
+    n.base = base;
+    n.index = index;
+    return n;
+}
+
+fn ast::SliceRangeNode* fake_slice_range(arena::Arena* a, ast::AstNode* base, ast::AstNode* lo, ast::AstNode* hi, u32 src_pos) {
+    ast::SliceRangeNode* n = (ast::SliceRangeNode*)arena::alloc(a, sizeof(ast::SliceRangeNode));
+    sys::memset(n, 0, sizeof(ast::SliceRangeNode));
+    n.h.kind = ast::AstKind::SliceRange;
+    n.h.src_pos = src_pos;
+    n.base = base;
+    n.lo = lo;
+    n.hi = hi;
+    return n;
+}
+
+fn types::Type* mk_point_type(arena::Arena* a) {
+    symbol::Symbol*[2] fnames; fnames[0] = interner::intern("x"); fnames[1] = interner::intern("y");
+    types::Type*[2] ftys; ftys[0] = types::prim_i32(); ftys[1] = types::prim_i32();
+    symbol::Symbol*[] fn_slice = {&fnames[0], 2};
+    types::Type*[] ft_slice = {&ftys[0], 2};
+    ast::StructDeclNode* d = fake_struct_decl_with_fields(a, fn_slice, ft_slice);
+    d.qualified_name = interner::intern("Point");
+    return types::intern_struct((void*)d);
+}
+
 fn ast::StructDeclNode* fake_struct_decl_with_fields(arena::Arena* a, symbol::Symbol*[] names, types::Type*[] tys) {
     ast::StructDeclNode* d = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
     sys::memset(d, 0, sizeof(ast::StructDeclNode));
@@ -2906,6 +2947,303 @@ fn i32 check_fused_neg_to_unsigned_fails(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 member_struct_field(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* point = mk_point_type(a);
+    symbol::Symbol* p = interner::intern("p");
+    register_var(a, sc, p, point, false);
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, p, 0), interner::intern("x"), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)acc, ast::AstFlags::LValue), m)) { return -2; }
+    if(!testing::expect_not_null((void*)acc.resolved, m)) { return -3; }
+    return 0;
+}
+
+fn i32 member_pointer_autoderef(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* point_ptr = types::intern_pointer(mk_point_type(a), false);
+    symbol::Symbol* p = interner::intern("p");
+    register_var(a, sc, p, point_ptr, false);
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, p, 0), interner::intern("y"), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)acc, ast::AstFlags::LValue), m)) { return -2; }
+    return 0;
+}
+
+fn i32 member_slice_ptr(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    symbol::Symbol* sl = interner::intern("sl");
+    register_var(a, sc, sl, slice, false);
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, sl, 0), interner::intern("ptr"), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Type* want = types::intern_pointer(types::prim_i32(), false);
+    if(!testing::expect_eq((void*)t, (void*)want, m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)acc, ast::AstFlags::LValue), m)) { return -2; }
+    return 0;
+}
+
+fn i32 member_slice_len(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    symbol::Symbol* sl = interner::intern("sl");
+    register_var(a, sc, sl, slice, false);
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, sl, 0), interner::intern("len"), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 member_slice_unknown_field(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    symbol::Symbol* sl = interner::intern("sl");
+    register_var(a, sc, sl, slice, false);
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, sl, 0), interner::intern("foo"), 4);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "type i32[] has no field foo", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -3; }
+    return 0;
+}
+
+fn i32 member_unknown_struct_field(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* point = mk_point_type(a);
+    symbol::Symbol* p = interner::intern("p");
+    register_var(a, sc, p, point, false);
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, p, 0), interner::intern("z"), 8);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "type Point has no field z", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 8, m)) { return -3; }
+    return 0;
+}
+
+fn i32 member_on_non_aggregate(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, types::prim_i32(), false);
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, x, 0), interner::intern("foo"), 2);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot access field of i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 2, m)) { return -3; }
+    return 0;
+}
+
+fn i32 member_base_error(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0), interner::intern("x"), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 index_array(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    symbol::Symbol* av = interner::intern("av");
+    register_var(a, sc, av, arr, false);
+    ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)idx, ast::AstFlags::LValue), m)) { return -2; }
+    return 0;
+}
+
+fn i32 index_slice(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* slice = types::intern_slice(types::prim_f32());
+    symbol::Symbol* sl = interner::intern("sl");
+    register_var(a, sc, sl, slice, false);
+    ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, sl, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_f32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)idx, ast::AstFlags::LValue), m)) { return -2; }
+    return 0;
+}
+
+fn i32 index_pointer(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* ptr = types::intern_pointer(types::prim_i32(), false);
+    symbol::Symbol* p = interner::intern("p");
+    register_var(a, sc, p, ptr, false);
+    ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, p, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)idx, ast::AstFlags::LValue), m)) { return -2; }
+    return 0;
+}
+
+fn i32 index_non_indexable(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, types::prim_i32(), false);
+    ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, x, 0), (ast::AstNode*)fake_int_lit(a, 0, 0), 3);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot index i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
+    return 0;
+}
+
+fn i32 index_bad_index_type(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    symbol::Symbol* av = interner::intern("av");
+    register_var(a, sc, av, arr, false);
+    ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_bool_lit(a, true, 5), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected u64, found bool", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
+    return 0;
+}
+
+fn i32 slice_range_of_array(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    symbol::Symbol* av = interner::intern("av");
+    register_var(a, sc, av, arr, false);
+    ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), (ast::AstNode*)fake_int_lit(a, 3, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    if(!testing::expect_eq((void*)t, (void*)types::intern_slice(types::prim_i32()), m)) { return -1; }
+    if(!testing::expect_true(!has_flag((ast::AstNode*)sr, ast::AstFlags::LValue), m)) { return -2; }
+    return 0;
+}
+
+fn i32 slice_range_of_slice(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    symbol::Symbol* sl = interner::intern("sl");
+    register_var(a, sc, sl, slice, false);
+    ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, sl, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    if(!testing::expect_eq((void*)t, (void*)slice, m)) { return -1; }
+    return 0;
+}
+
+fn i32 slice_range_of_pointer(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* ptr = types::intern_pointer(types::prim_i32(), false);
+    symbol::Symbol* p = interner::intern("p");
+    register_var(a, sc, p, ptr, false);
+    ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, p, 0), (ast::AstNode*)fake_int_lit(a, 0, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    if(!testing::expect_eq((void*)t, (void*)types::intern_slice(types::prim_i32()), m)) { return -1; }
+    return 0;
+}
+
+fn i32 slice_range_omit_lo(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    symbol::Symbol* av = interner::intern("av");
+    register_var(a, sc, av, arr, false);
+    ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, av, 0), null, (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    if(!testing::expect_eq((void*)t, (void*)types::intern_slice(types::prim_i32()), m)) { return -1; }
+    return 0;
+}
+
+fn i32 slice_range_omit_hi(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    symbol::Symbol* av = interner::intern("av");
+    register_var(a, sc, av, arr, false);
+    ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), null, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    if(!testing::expect_eq((void*)t, (void*)types::intern_slice(types::prim_i32()), m)) { return -1; }
+    return 0;
+}
+
+fn i32 slice_range_non_indexable(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, types::prim_i32(), false);
+    ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, x, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 6);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot index i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 6, m)) { return -3; }
+    return 0;
+}
+
+fn i32 slice_range_bad_bound(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    symbol::Symbol* av = interner::intern("av");
+    register_var(a, sc, av, arr, false);
+    ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_bool_lit(a, true, 5), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected u64, found bool", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -3131,6 +3469,28 @@ fn i32 main() {
     testing::add(binu, "check_fused_neg_fits",      &check_fused_neg_fits);
     testing::add(binu, "check_fused_neg_overflow",  &check_fused_neg_overflow);
     testing::add(binu, "check_fused_neg_to_unsigned_fails", &check_fused_neg_to_unsigned_fails);
+
+    u8[] acc = "Sema Access Tests";
+    testing::add(acc, "member_struct_field",        &member_struct_field);
+    testing::add(acc, "member_pointer_autoderef",   &member_pointer_autoderef);
+    testing::add(acc, "member_slice_ptr",           &member_slice_ptr);
+    testing::add(acc, "member_slice_len",           &member_slice_len);
+    testing::add(acc, "member_slice_unknown_field", &member_slice_unknown_field);
+    testing::add(acc, "member_unknown_struct_field", &member_unknown_struct_field);
+    testing::add(acc, "member_on_non_aggregate",    &member_on_non_aggregate);
+    testing::add(acc, "member_base_error",          &member_base_error);
+    testing::add(acc, "index_array",                &index_array);
+    testing::add(acc, "index_slice",                &index_slice);
+    testing::add(acc, "index_pointer",              &index_pointer);
+    testing::add(acc, "index_non_indexable",        &index_non_indexable);
+    testing::add(acc, "index_bad_index_type",       &index_bad_index_type);
+    testing::add(acc, "slice_range_of_array",       &slice_range_of_array);
+    testing::add(acc, "slice_range_of_slice",       &slice_range_of_slice);
+    testing::add(acc, "slice_range_of_pointer",     &slice_range_of_pointer);
+    testing::add(acc, "slice_range_omit_lo",        &slice_range_omit_lo);
+    testing::add(acc, "slice_range_omit_hi",        &slice_range_omit_hi);
+    testing::add(acc, "slice_range_non_indexable",  &slice_range_non_indexable);
+    testing::add(acc, "slice_range_bad_bound",      &slice_range_bad_bound);
 
     return testing::run();
 }

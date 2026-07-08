@@ -782,20 +782,90 @@ fn types::Type* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
 // recognizes the magic .ptr / .len fields. On struct/union, looks up the
 // field by symbol; sets n.resolved and propagates LValue when applicable.
 fn types::Type* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
-    return null; // TODO
+    types::Type* base = synth(s, n.base);
+    if(base == null) { return null; }
+    types::Type* container = base;
+    if(container.kind == types::TypeKind::Pointer) { container = container.data.pointee; }
+    u16 field_flags = 0;
+    if(expr_has_flag(n.base, ast::AstFlags::LValue) || base.kind == types::TypeKind::Pointer) {
+        field_flags = (u16)ast::AstFlags::LValue;
+    }
+    if(container.kind == types::TypeKind::Slice) {
+        if(n.field == interner::intern("ptr")) {
+            types::Type* elem_ptr = types::intern_pointer(container.data.slice_elem, false);
+            set_expr((ast::AstNode*)n, elem_ptr, field_flags);
+            return elem_ptr;
+        }
+        if(n.field == interner::intern("len")) {
+            set_expr((ast::AstNode*)n, types::prim_u64(), field_flags);
+            return types::prim_u64();
+        }
+        diag_unknown_field(s, n.h.src_pos, n.field, container);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    if(container.kind != types::TypeKind::Struct && container.kind != types::TypeKind::Union) {
+        diag_not_aggregate(s, n.h.src_pos, base);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    ast::FieldDecl* field = find_field(container_decl(container), n.field);
+    if(field == null) {
+        diag_unknown_field(s, n.h.src_pos, n.field, container);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    types::Type* field_ty = (types::Type*)field.resolved_type;
+    n.resolved = (void*)make_field_decl(s, field, field_ty);
+    set_expr((ast::AstNode*)n, field_ty, field_flags);
+    return field_ty;
 }
 
 // `a[i]`. Base must be array, slice, or pointer; index must be convertible
 // to u64. Result is the element type; lvalue when base is lvalue (array)
 // or always (slice/pointer).
 fn types::Type* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
-    return null; // TODO
+    types::Type* base = synth(s, n.base);
+    if(base == null) { return null; }
+    types::Type* elem = null;
+    bool base_is_array = false;
+    if(base.kind == types::TypeKind::Array)   { elem = base.data.array.elem; base_is_array = true; }
+    else if(base.kind == types::TypeKind::Slice)   { elem = base.data.slice_elem; }
+    else if(base.kind == types::TypeKind::Pointer) { elem = base.data.pointee; }
+    else {
+        diag_not_indexable(s, n.h.src_pos, base);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    if(!check(s, n.index, types::prim_u64())) {
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    u16 flags = (u16)ast::AstFlags::LValue;
+    if(base_is_array && !expr_has_flag(n.base, ast::AstFlags::LValue)) { flags = 0; }
+    set_expr((ast::AstNode*)n, elem, flags);
+    return elem;
 }
 
 // `a[lo..hi]`. Base must be array, slice, or pointer; bounds must be u64-
 // convertible. Result is the slice type of the element. Never an lvalue.
 fn types::Type* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
-    return null; // TODO
+    types::Type* base = synth(s, n.base);
+    if(base == null) { return null; }
+    types::Type* elem = null;
+    if(base.kind == types::TypeKind::Array)   { elem = base.data.array.elem; }
+    else if(base.kind == types::TypeKind::Slice)   { elem = base.data.slice_elem; }
+    else if(base.kind == types::TypeKind::Pointer) { elem = base.data.pointee; }
+    else {
+        diag_not_indexable(s, n.h.src_pos, base);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    if(n.lo != null && !check(s, n.lo, types::prim_u64())) { mark_error((ast::AstNode*)n); return null; }
+    if(n.hi != null && !check(s, n.hi, types::prim_u64())) { mark_error((ast::AstNode*)n); return null; }
+    types::Type* result = types::intern_slice(elem);
+    set_expr((ast::AstNode*)n, result, 0);
+    return result;
 }
 
 // `f(args)`. Callee may be a fn name, a fn-pointer variable, or a method-
@@ -1021,6 +1091,31 @@ export fn void diag_unary_mismatch(Sema* s, u32 src_pos, token::TokenKind op, ty
 export fn void diag_not_lvalue(Sema* s, u32 src_pos) {
     u8[] msg = "cannot take the address of a non-lvalue";
     diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "type `<T>` has no field `<name>`". Used by synth_member_access.
+export fn void diag_unknown_field(Sema* s, u32 src_pos, symbol::Symbol* field, types::Type* container) {
+    u8[] container_str = types_print::print_to_arena(container, s.m.arena);
+    u8[] field_str = interner::symbol_str(field);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "type %.*s has no field %.*s", (i32)container_str.len, (i8*)container_str.ptr, (i32)field_str.len, (i8*)field_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "cannot access field of %T". Used by synth_member_access on a non-aggregate.
+export fn void diag_not_aggregate(Sema* s, u32 src_pos, types::Type* got) {
+    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot access field of %.*s", (i32)got_str.len, (i8*)got_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "cannot index %T". Used by synth_array_index / synth_slice_range.
+export fn void diag_not_indexable(Sema* s, u32 src_pos, types::Type* got) {
+    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot index %.*s", (i32)got_str.len, (i8*)got_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
 // "cannot cast `<src>` to `<target>`". Used by synth_cast on is_castable fail.
