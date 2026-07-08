@@ -1,10 +1,8 @@
 import arena;
 import diag;
-import interner;
 import symbol;
 import token;
 import mutex;
-import types;
 import ast;
 
 export struct Module {
@@ -16,8 +14,6 @@ export struct Module {
     ast::AstNode*           root_node;
     u8[]                    literal_pool;    // decoded string-literal bytes
     u64                     literal_pool_cap;
-    types::TypeInterner*    typer;
-    interner::Interner*     interner;
     arena::Arena*           arena;
     diag::DiagBuf           diag;
 

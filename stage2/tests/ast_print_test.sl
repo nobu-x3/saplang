@@ -12,15 +12,12 @@ const u64 BUCKET_COUNT = 64;
 
 struct Ctx {
     arena::Arena*       arena;
-    interner::Interner* interner;
     io::OutBuf          buf;
 }
 
 fn void setup(Ctx* c, arena::Arena* a) {
-    interner::Interner* it = arena::alloc(a, sizeof(interner::Interner));
-    interner::init(it, a, BUCKET_COUNT);
+    interner::init(a, BUCKET_COUNT);
     c.arena = a;
-    c.interner = it;
     io::outbuf_init(&c.buf, a, 256);
 }
 
@@ -84,12 +81,12 @@ fn ast::StringLitNode* string_lit(arena::Arena* a, u32 off, u32 len) {
     return n;
 }
 
-fn ast::IdentNode* ident(arena::Arena* a, interner::Interner* it, u8[] name) {
+fn ast::IdentNode* ident(arena::Arena* a, u8[] name) {
     ast::IdentNode* n = arena::alloc(a, sizeof(ast::IdentNode));
     n.h.kind = ast::AstKind::Ident;
     n.h.flags = (ast::AstFlags)0;
     n.h.src_pos = 0;
-    n.name = interner::intern(it, name);
+    n.name = interner::intern(name);
     return n;
 }
 
@@ -102,14 +99,14 @@ fn ast::TypePrimitiveNode* prim_type(arena::Arena* a, token::TokenKind k) {
     return n;
 }
 
-fn ast::TypeNamedNode* named_type(arena::Arena* a, interner::Interner* it, u8[] ns, u8[] name) {
+fn ast::TypeNamedNode* named_type(arena::Arena* a, u8[] ns, u8[] name) {
     ast::TypeNamedNode* n = arena::alloc(a, sizeof(ast::TypeNamedNode));
     n.h.kind = ast::AstKind::NamedType;
     n.h.flags = (ast::AstFlags)0;
     n.h.src_pos = 0;
-    if(ns.len > 0) { n.namespace = interner::intern(it, ns); }
+    if(ns.len > 0) { n.namespace = interner::intern(ns); }
     else           { n.namespace = null; }
-    n.name = interner::intern(it, name);
+    n.name = interner::intern(name);
     return n;
 }
 
@@ -148,7 +145,7 @@ fn ast::BlockNode* empty_block(arena::Arena* a) {
 fn i32 print_invalid(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print(bare(&local, ast::AstKind::INVALID), c.interner, 0, &c.buf);
+    ast_print::print(bare(&local, ast::AstKind::INVALID), 0, &c.buf);
     if(!check(&c, "Invalid\n", m)) { return -1; }
     return 0;
 }
@@ -156,7 +153,7 @@ fn i32 print_invalid(arena::Arena* a, u8[] m) {
 fn i32 print_error(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print(bare(&local, ast::AstKind::ERROR), c.interner, 0, &c.buf);
+    ast_print::print(bare(&local, ast::AstKind::ERROR), 0, &c.buf);
     if(!check(&c, "Error\n", m)) { return -1; }
     return 0;
 }
@@ -164,7 +161,7 @@ fn i32 print_error(arena::Arena* a, u8[] m) {
 fn i32 print_null_node(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print(null, c.interner, 0, &c.buf);
+    ast_print::print(null, 0, &c.buf);
     if(!check(&c, "<null>\n", m)) { return -1; }
     return 0;
 }
@@ -174,7 +171,7 @@ fn i32 print_null_node(arena::Arena* a, u8[] m) {
 fn i32 print_intlit(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)int_lit(&local, (u64)42), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)int_lit(&local, (u64)42), 0, &c.buf);
     if(!check(&c, "IntLit 42\n", m)) { return -1; }
     return 0;
 }
@@ -182,7 +179,7 @@ fn i32 print_intlit(arena::Arena* a, u8[] m) {
 fn i32 print_intlit_indented(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)int_lit(&local, (u64)5), c.interner, 2, &c.buf);
+    ast_print::print((ast::AstNode*)int_lit(&local, (u64)5), 2, &c.buf);
     if(!check(&c, "    IntLit 5\n", m)) { return -1; }
     return 0;
 }
@@ -190,7 +187,7 @@ fn i32 print_intlit_indented(arena::Arena* a, u8[] m) {
 fn i32 print_floatlit(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)float_lit(&local, 1.5), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)float_lit(&local, 1.5), 0, &c.buf);
     if(!check(&c, "FloatLit 1.5\n", m)) { return -1; }
     return 0;
 }
@@ -198,7 +195,7 @@ fn i32 print_floatlit(arena::Arena* a, u8[] m) {
 fn i32 print_boollit_true(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)bool_lit(&local, true), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)bool_lit(&local, true), 0, &c.buf);
     if(!check(&c, "BoolLit true\n", m)) { return -1; }
     return 0;
 }
@@ -206,7 +203,7 @@ fn i32 print_boollit_true(arena::Arena* a, u8[] m) {
 fn i32 print_boollit_false(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)bool_lit(&local, false), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)bool_lit(&local, false), 0, &c.buf);
     if(!check(&c, "BoolLit false\n", m)) { return -1; }
     return 0;
 }
@@ -214,7 +211,7 @@ fn i32 print_boollit_false(arena::Arena* a, u8[] m) {
 fn i32 print_charlit(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)char_lit(&local, 'A'), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)char_lit(&local, 'A'), 0, &c.buf);
     if(!check(&c, "CharLit 65\n", m)) { return -1; }
     return 0;
 }
@@ -222,7 +219,7 @@ fn i32 print_charlit(arena::Arena* a, u8[] m) {
 fn i32 print_stringlit(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)string_lit(&local, (u32)16, (u32)5), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)string_lit(&local, (u32)16, (u32)5), 0, &c.buf);
     if(!check(&c, "StringLit off=16 len=5\n", m)) { return -1; }
     return 0;
 }
@@ -230,7 +227,7 @@ fn i32 print_stringlit(arena::Arena* a, u8[] m) {
 fn i32 print_nulllit(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print(bare(&local, ast::AstKind::NullLit), c.interner, 0, &c.buf);
+    ast_print::print(bare(&local, ast::AstKind::NullLit), 0, &c.buf);
     if(!check(&c, "NullLit\n", m)) { return -1; }
     return 0;
 }
@@ -238,7 +235,7 @@ fn i32 print_nulllit(arena::Arena* a, u8[] m) {
 fn i32 print_undefinedlit(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print(bare(&local, ast::AstKind::UndefinedLit), c.interner, 0, &c.buf);
+    ast_print::print(bare(&local, ast::AstKind::UndefinedLit), 0, &c.buf);
     if(!check(&c, "UndefinedLit\n", m)) { return -1; }
     return 0;
 }
@@ -248,7 +245,7 @@ fn i32 print_undefinedlit(arena::Arena* a, u8[] m) {
 fn i32 print_ident(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)ident(&local, c.interner, "foo"), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)ident(&local, "foo"), 0, &c.buf);
     if(!check(&c, "Ident foo\n", m)) { return -1; }
     return 0;
 }
@@ -258,12 +255,12 @@ fn i32 print_namespace_access(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::IdentNode* base = arena::alloc(&local, sizeof(ast::IdentNode));
     base.h.kind = ast::AstKind::Ident;
-    base.name = interner::intern(c.interner, "io");
+    base.name = interner::intern("io");
     ast::NamespaceAccessNode* n = arena::alloc(&local, sizeof(ast::NamespaceAccessNode));
     n.h.kind = ast::AstKind::NamespaceAccess;
     n.base = (ast::AstNode*)base;
-    n.name = interner::intern(c.interner, "write");
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    n.name = interner::intern("write");
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "NamespaceAccess io::write\n", m)) { return -1; }
     return 0;
 }
@@ -273,9 +270,9 @@ fn i32 print_member_access(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::MemberAccessNode* n = arena::alloc(&local, sizeof(ast::MemberAccessNode));
     n.h.kind = ast::AstKind::MemberAccess;
-    n.base = (ast::AstNode*)ident(&local, c.interner, "v");
-    n.field = interner::intern(c.interner, "len");
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    n.base = (ast::AstNode*)ident(&local, "v");
+    n.field = interner::intern("len");
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "MemberAccess .len\n  Ident v\n", m)) { return -1; }
     return 0;
 }
@@ -287,9 +284,9 @@ fn i32 print_array_index(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::ArrayIndexNode* n = arena::alloc(&local, sizeof(ast::ArrayIndexNode));
     n.h.kind = ast::AstKind::ArrayIndex;
-    n.base = (ast::AstNode*)ident(&local, c.interner, "arr");
+    n.base = (ast::AstNode*)ident(&local, "arr");
     n.index = (ast::AstNode*)int_lit(&local, (u64)3);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "ArrayIndex\n  base:\n    Ident arr\n  index:\n    IntLit 3\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -300,10 +297,10 @@ fn i32 print_slice_range(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::SliceRangeNode* n = arena::alloc(&local, sizeof(ast::SliceRangeNode));
     n.h.kind = ast::AstKind::SliceRange;
-    n.base = (ast::AstNode*)ident(&local, c.interner, "s");
+    n.base = (ast::AstNode*)ident(&local, "s");
     n.lo = (ast::AstNode*)int_lit(&local, (u64)1);
     n.hi = (ast::AstNode*)int_lit(&local, (u64)4);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "SliceRange\n  base:\n    Ident s\n  lo:\n    IntLit 1\n  hi:\n    IntLit 4\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -314,9 +311,9 @@ fn i32 print_call_no_args(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::CallNode* n = arena::alloc(&local, sizeof(ast::CallNode));
     n.h.kind = ast::AstKind::Call;
-    n.callee = (ast::AstNode*)ident(&local, c.interner, "f");
+    n.callee = (ast::AstNode*)ident(&local, "f");
     n.args = {null, 0};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "Call\n  callee:\n    Ident f\n  args\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -330,9 +327,9 @@ fn i32 print_call_with_args(arena::Arena* a, u8[] m) {
     args[1] = (ast::AstNode*)int_lit(&local, (u64)2);
     ast::CallNode* n = arena::alloc(&local, sizeof(ast::CallNode));
     n.h.kind = ast::AstKind::Call;
-    n.callee = (ast::AstNode*)ident(&local, c.interner, "g");
+    n.callee = (ast::AstNode*)ident(&local, "g");
     n.args = {args, 2};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "Call\n  callee:\n    Ident g\n  args\n    IntLit 1\n    IntLit 2\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -344,8 +341,8 @@ fn i32 print_cast(arena::Arena* a, u8[] m) {
     ast::CastNode* n = arena::alloc(&local, sizeof(ast::CastNode));
     n.h.kind = ast::AstKind::Cast;
     n.target_type = (ast::AstNode*)prim_type(&local, token::TokenKind::I64);
-    n.expr = (ast::AstNode*)ident(&local, c.interner, "x");
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    n.expr = (ast::AstNode*)ident(&local, "x");
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "Cast\n  type:\n    PrimitiveType 'i64'\n  expr:\n    Ident x\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -357,7 +354,7 @@ fn i32 print_unary_minus(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::UnaryOpNode* n = unop(&local, token::TokenKind::Minus, (ast::AstNode*)int_lit(&local, (u64)7));
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "UnaryOp '-'\n  IntLit 7\n", m)) { return -1; }
     return 0;
 }
@@ -368,7 +365,7 @@ fn i32 print_binary_plus(arena::Arena* a, u8[] m) {
     ast::BinaryOpNode* n = binop(&local, token::TokenKind::Plus,
         (ast::AstNode*)int_lit(&local, (u64)1),
         (ast::AstNode*)int_lit(&local, (u64)2));
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "BinaryOp '+'\n  IntLit 1\n  IntLit 2\n", m)) { return -1; }
     return 0;
 }
@@ -379,7 +376,7 @@ fn i32 print_binary_eqeq(arena::Arena* a, u8[] m) {
     ast::BinaryOpNode* n = binop(&local, token::TokenKind::EqEq,
         (ast::AstNode*)int_lit(&local, (u64)1),
         (ast::AstNode*)int_lit(&local, (u64)1));
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "BinaryOp '=='\n  IntLit 1\n  IntLit 1\n", m)) { return -1; }
     return 0;
 }
@@ -396,7 +393,7 @@ fn i32 print_struct_lit_positional(arena::Arena* a, u8[] m) {
     ast::StructLitNode* n = arena::alloc(&local, sizeof(ast::StructLitNode));
     n.h.kind = ast::AstKind::StructLit;
     n.inits = {inits, 1};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "StructLit\n  positional\n    IntLit 9\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -406,13 +403,13 @@ fn i32 print_struct_lit_named(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::FieldInitializer* inits = arena::alloc(&local, sizeof(ast::FieldInitializer) * 1);
-    inits[0].name = interner::intern(c.interner, "x");
+    inits[0].name = interner::intern("x");
     inits[0].value = (ast::AstNode*)int_lit(&local, (u64)1);
     inits[0].src_pos = 0;
     ast::StructLitNode* n = arena::alloc(&local, sizeof(ast::StructLitNode));
     n.h.kind = ast::AstKind::StructLit;
     n.inits = {inits, 1};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "StructLit\n  .x\n    IntLit 1\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -427,7 +424,7 @@ fn i32 print_array_lit(arena::Arena* a, u8[] m) {
     ast::ArrayLitNode* n = arena::alloc(&local, sizeof(ast::ArrayLitNode));
     n.h.kind = ast::AstKind::ArrayLit;
     n.elems = {elems, 2};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "ArrayLit\n  IntLit 1\n  IntLit 2\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -441,7 +438,7 @@ fn i32 print_sizeof(arena::Arena* a, u8[] m) {
     ast::SizeofNode* n = arena::alloc(&local, sizeof(ast::SizeofNode));
     n.h.kind = ast::AstKind::Sizeof;
     n.arg = (ast::AstNode*)prim_type(&local, token::TokenKind::U64);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "Sizeof\n  PrimitiveType 'u64'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -453,7 +450,7 @@ fn i32 print_alignof(arena::Arena* a, u8[] m) {
     ast::AlignofNode* n = arena::alloc(&local, sizeof(ast::AlignofNode));
     n.h.kind = ast::AstKind::Alignof;
     n.arg = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Alignof\n  PrimitiveType 'i32'\n", m)) { return -1; }
     return 0;
 }
@@ -463,8 +460,8 @@ fn i32 print_typeof(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::TypeofNode* n = arena::alloc(&local, sizeof(ast::TypeofNode));
     n.h.kind = ast::AstKind::Typeof;
-    n.expr = (ast::AstNode*)ident(&local, c.interner, "x");
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    n.expr = (ast::AstNode*)ident(&local, "x");
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Typeof\n  Ident x\n", m)) { return -1; }
     return 0;
 }
@@ -475,7 +472,7 @@ fn i32 print_type_info(arena::Arena* a, u8[] m) {
     ast::TypeInfoNode* n = arena::alloc(&local, sizeof(ast::TypeInfoNode));
     n.h.kind = ast::AstKind::Type_info;
     n.arg = (ast::AstNode*)prim_type(&local, token::TokenKind::BOOL);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "TypeInfo\n  PrimitiveType 'bool'\n", m)) { return -1; }
     return 0;
 }
@@ -486,7 +483,7 @@ fn i32 print_compcode(arena::Arena* a, u8[] m) {
     ast::CompCodeNode* n = arena::alloc(&local, sizeof(ast::CompCodeNode));
     n.h.kind = ast::AstKind::Compcode;
     n.body = (ast::AstNode*)empty_block(&local);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "CompCode\n  Block\n", m)) { return -1; }
     return 0;
 }
@@ -496,7 +493,7 @@ fn i32 print_compcode(arena::Arena* a, u8[] m) {
 fn i32 print_primitive_type(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)prim_type(&local, token::TokenKind::U32), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)prim_type(&local, token::TokenKind::U32), 0, &c.buf);
     if(!check(&c, "PrimitiveType 'u32'\n", m)) { return -1; }
     return 0;
 }
@@ -504,7 +501,7 @@ fn i32 print_primitive_type(arena::Arena* a, u8[] m) {
 fn i32 print_named_type_unqualified(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)named_type(&local, c.interner, "", "Foo"), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)named_type(&local, "", "Foo"), 0, &c.buf);
     if(!check(&c, "NamedType Foo\n", m)) { return -1; }
     return 0;
 }
@@ -512,7 +509,7 @@ fn i32 print_named_type_unqualified(arena::Arena* a, u8[] m) {
 fn i32 print_named_type_qualified(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)named_type(&local, c.interner, "io", "File"), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)named_type(&local, "io", "File"), 0, &c.buf);
     if(!check(&c, "NamedType io::File\n", m)) { return -1; }
     return 0;
 }
@@ -524,7 +521,7 @@ fn i32 print_pointer_type(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::PointerType;
     n.pointee = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     n.is_const = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "PointerType\n  PrimitiveType 'i32'\n", m)) { return -1; }
     return 0;
 }
@@ -536,7 +533,7 @@ fn i32 print_pointer_type_const(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::PointerType;
     n.pointee = (ast::AstNode*)prim_type(&local, token::TokenKind::U8);
     n.is_const = true;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "PointerType const\n  PrimitiveType 'u8'\n", m)) { return -1; }
     return 0;
 }
@@ -548,7 +545,7 @@ fn i32 print_array_type(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::ArrayType;
     n.element = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     n.size_expr = (ast::AstNode*)int_lit(&local, (u64)8);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "ArrayType\n  element:\n    PrimitiveType 'i32'\n  size:\n    IntLit 8\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -560,7 +557,7 @@ fn i32 print_slice_type(arena::Arena* a, u8[] m) {
     ast::TypeSliceNode* n = arena::alloc(&local, sizeof(ast::TypeSliceNode));
     n.h.kind = ast::AstKind::SliceType;
     n.element = (ast::AstNode*)prim_type(&local, token::TokenKind::U8);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "SliceType\n  PrimitiveType 'u8'\n", m)) { return -1; }
     return 0;
 }
@@ -574,7 +571,7 @@ fn i32 print_fnptr_type(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::FnPtrType;
     n.return_type = (ast::AstNode*)prim_type(&local, token::TokenKind::VOID);
     n.param_types = {params, 1};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "FnPtrType\n  return:\n    PrimitiveType 'void'\n  params\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -584,13 +581,13 @@ fn i32 print_struct_type(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
-    fields[0].name = interner::intern(c.interner, "x");
+    fields[0].name = interner::intern("x");
     fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     fields[0].src_pos = 0;
     ast::TypeStructNode* n = arena::alloc(&local, sizeof(ast::TypeStructNode));
     n.h.kind = ast::AstKind::StructType;
     n.fields = {fields, 1};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "StructType\n  Field x\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -600,13 +597,13 @@ fn i32 print_union_type(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
-    fields[0].name = interner::intern(c.interner, "v");
+    fields[0].name = interner::intern("v");
     fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::U64);
     fields[0].src_pos = 0;
     ast::TypeUnionNode* n = arena::alloc(&local, sizeof(ast::TypeUnionNode));
     n.h.kind = ast::AstKind::UnionType;
     n.fields = {fields, 1};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "UnionType\n  Field v\n    PrimitiveType 'u64'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -619,9 +616,9 @@ fn i32 print_import(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::ImportNode* n = arena::alloc(&local, sizeof(ast::ImportNode));
     n.h.kind = ast::AstKind::ImportDecl;
-    n.module_name = interner::intern(c.interner, "io");
+    n.module_name = interner::intern("io");
     n.is_reexport = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Import io\n", m)) { return -1; }
     return 0;
 }
@@ -631,9 +628,9 @@ fn i32 print_import_reexport(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::ImportNode* n = arena::alloc(&local, sizeof(ast::ImportNode));
     n.h.kind = ast::AstKind::ImportDecl;
-    n.module_name = interner::intern(c.interner, "io");
+    n.module_name = interner::intern("io");
     n.is_reexport = true;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Import io reexport\n", m)) { return -1; }
     return 0;
 }
@@ -643,12 +640,12 @@ fn i32 print_var_decl(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::VarDeclNode* n = arena::alloc(&local, sizeof(ast::VarDeclNode));
     n.h.kind = ast::AstKind::VarDecl;
-    n.name = interner::intern(c.interner, "x");
+    n.name = interner::intern("x");
     n.type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     n.init = (ast::AstNode*)int_lit(&local, (u64)7);
     n.is_const = false;
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "VarDecl x\n  type:\n    PrimitiveType 'i32'\n  init:\n    IntLit 7\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -659,12 +656,12 @@ fn i32 print_var_decl_const_exported(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::VarDeclNode* n = arena::alloc(&local, sizeof(ast::VarDeclNode));
     n.h.kind = ast::AstKind::VarDecl;
-    n.name = interner::intern(c.interner, "K");
+    n.name = interner::intern("K");
     n.type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::U32);
     n.init = (ast::AstNode*)int_lit(&local, (u64)42);
     n.is_const = true;
     n.is_exported = true;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "VarDecl K const exported\n  type:\n    PrimitiveType 'u32'\n  init:\n    IntLit 42\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -675,12 +672,12 @@ fn i32 print_var_decl_no_init(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::VarDeclNode* n = arena::alloc(&local, sizeof(ast::VarDeclNode));
     n.h.kind = ast::AstKind::VarDecl;
-    n.name = interner::intern(c.interner, "x");
+    n.name = interner::intern("x");
     n.type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     n.init = null;
     n.is_const = false;
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "VarDecl x\n  type:\n    PrimitiveType 'i32'\n  init: <null>\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -690,20 +687,20 @@ fn i32 print_fn_decl(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::Param* params = arena::alloc(&local, sizeof(ast::Param) * 1);
-    params[0].name = interner::intern(c.interner, "a");
+    params[0].name = interner::intern("a");
     params[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     params[0].is_const = false;
     params[0].is_comptime = false;
     params[0].src_pos = 0;
     ast::FnDeclNode* n = arena::alloc(&local, sizeof(ast::FnDeclNode));
     n.h.kind = ast::AstKind::FnDecl;
-    n.name = interner::intern(c.interner, "id");
+    n.name = interner::intern("id");
     n.return_type = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     n.params = {params, 1};
     n.body = (ast::AstNode*)empty_block(&local);
     n.comptime_safe = 0;
     n.is_exported = true;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "FnDecl id exported\n  return:\n    PrimitiveType 'i32'\n  Param a\n    PrimitiveType 'i32'\n  body:\n    Block\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -713,15 +710,15 @@ fn i32 print_struct_decl(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
-    fields[0].name = interner::intern(c.interner, "x");
+    fields[0].name = interner::intern("x");
     fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     fields[0].src_pos = 0;
     ast::StructDeclNode* n = arena::alloc(&local, sizeof(ast::StructDeclNode));
     n.h.kind = ast::AstKind::StructDecl;
-    n.name = interner::intern(c.interner, "Point");
+    n.name = interner::intern("Point");
     n.fields = {fields, 1};
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "StructDecl Point\n  Field x\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -731,15 +728,15 @@ fn i32 print_union_decl(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
-    fields[0].name = interner::intern(c.interner, "i");
+    fields[0].name = interner::intern("i");
     fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I64);
     fields[0].src_pos = 0;
     ast::UnionDeclNode* n = arena::alloc(&local, sizeof(ast::UnionDeclNode));
     n.h.kind = ast::AstKind::UnionDecl;
-    n.name = interner::intern(c.interner, "U");
+    n.name = interner::intern("U");
     n.fields = {fields, 1};
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "UnionDecl U\n  Field i\n    PrimitiveType 'i64'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -749,19 +746,19 @@ fn i32 print_enum_decl(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::EnumMember* members = arena::alloc(&local, sizeof(ast::EnumMember) * 2);
-    members[0].name = interner::intern(c.interner, "A");
+    members[0].name = interner::intern("A");
     members[0].value_expr = null;
     members[0].src_pos = 0;
-    members[1].name = interner::intern(c.interner, "B");
+    members[1].name = interner::intern("B");
     members[1].value_expr = (ast::AstNode*)int_lit(&local, (u64)5);
     members[1].src_pos = 0;
     ast::EnumDeclNode* n = arena::alloc(&local, sizeof(ast::EnumDeclNode));
     n.h.kind = ast::AstKind::EnumDecl;
-    n.name = interner::intern(c.interner, "E");
+    n.name = interner::intern("E");
     n.base_type = (ast::AstNode*)prim_type(&local, token::TokenKind::U8);
     n.members = {members, 2};
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "EnumDecl E\n  base:\n    PrimitiveType 'u8'\n  Member A\n  Member B\n    IntLit 5\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -772,10 +769,10 @@ fn i32 print_alias_decl(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::AliasDeclNode* n = arena::alloc(&local, sizeof(ast::AliasDeclNode));
     n.h.kind = ast::AstKind::AliasDecl;
-    n.name = interner::intern(c.interner, "Bytes");
+    n.name = interner::intern("Bytes");
     n.target = (ast::AstNode*)prim_type(&local, token::TokenKind::U8);
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "AliasDecl Bytes\n  target:\n    PrimitiveType 'u8'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -788,7 +785,7 @@ fn i32 print_extern_block(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::ExternBlock;
     n.lib_name = null;
     n.items = {null, 0};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "ExternBlock c\n", m)) { return -1; }
     return 0;
 }
@@ -798,13 +795,13 @@ fn i32 print_extern_fn_decl(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::ExternFnDeclNode* n = arena::alloc(&local, sizeof(ast::ExternFnDeclNode));
     n.h.kind = ast::AstKind::ExternFnDecl;
-    n.name = interner::intern(c.interner, "printf");
+    n.name = interner::intern("printf");
     n.return_type = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     n.params = {null, 0};
     n.is_variadic = true;
     n.is_exported = true;
     n.comptime_safe = (i8)-1;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "ExternFnDecl printf variadic exported\n  return:\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -815,11 +812,11 @@ fn i32 print_extern_struct_decl_opaque(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::ExternStructDeclNode* n = arena::alloc(&local, sizeof(ast::ExternStructDeclNode));
     n.h.kind = ast::AstKind::ExternStructDecl;
-    n.name = interner::intern(c.interner, "FILE");
+    n.name = interner::intern("FILE");
     n.fields = {null, 0};
     n.is_opaque = true;
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "ExternStructDecl FILE opaque\n", m)) { return -1; }
     return 0;
 }
@@ -829,11 +826,11 @@ fn i32 print_extern_struct_decl_opaque_exported(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::ExternStructDeclNode* n = arena::alloc(&local, sizeof(ast::ExternStructDeclNode));
     n.h.kind = ast::AstKind::ExternStructDecl;
-    n.name = interner::intern(c.interner, "FILE");
+    n.name = interner::intern("FILE");
     n.fields = {null, 0};
     n.is_opaque = true;
     n.is_exported = true;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "ExternStructDecl FILE opaque exported\n", m)) { return -1; }
     return 0;
 }
@@ -842,16 +839,16 @@ fn i32 print_extern_struct_decl_full(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
-    fields[0].name = interner::intern(c.interner, "x");
+    fields[0].name = interner::intern("x");
     fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     fields[0].src_pos = 0;
     ast::ExternStructDeclNode* n = arena::alloc(&local, sizeof(ast::ExternStructDeclNode));
     n.h.kind = ast::AstKind::ExternStructDecl;
-    n.name = interner::intern(c.interner, "Point");
+    n.name = interner::intern("Point");
     n.fields = {fields, 1};
     n.is_opaque = false;
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "ExternStructDecl Point\n  Field x\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -861,16 +858,16 @@ fn i32 print_extern_struct_decl_full_exported(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
-    fields[0].name = interner::intern(c.interner, "x");
+    fields[0].name = interner::intern("x");
     fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     fields[0].src_pos = 0;
     ast::ExternStructDeclNode* n = arena::alloc(&local, sizeof(ast::ExternStructDeclNode));
     n.h.kind = ast::AstKind::ExternStructDecl;
-    n.name = interner::intern(c.interner, "Point");
+    n.name = interner::intern("Point");
     n.fields = {fields, 1};
     n.is_opaque = false;
     n.is_exported = true;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "ExternStructDecl Point exported\n  Field x\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -881,11 +878,11 @@ fn i32 print_extern_union_decl_opaque(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::ExternUnionDeclNode* n = arena::alloc(&local, sizeof(ast::ExternUnionDeclNode));
     n.h.kind = ast::AstKind::ExternUnionDecl;
-    n.name = interner::intern(c.interner, "Variant");
+    n.name = interner::intern("Variant");
     n.fields = {null, 0};
     n.is_opaque = true;
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "ExternUnionDecl Variant opaque\n", m)) { return -1; }
     return 0;
 }
@@ -895,11 +892,11 @@ fn i32 print_extern_union_decl_opaque_exported(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::ExternUnionDeclNode* n = arena::alloc(&local, sizeof(ast::ExternUnionDeclNode));
     n.h.kind = ast::AstKind::ExternUnionDecl;
-    n.name = interner::intern(c.interner, "Variant");
+    n.name = interner::intern("Variant");
     n.fields = {null, 0};
     n.is_opaque = true;
     n.is_exported = true;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "ExternUnionDecl Variant opaque exported\n", m)) { return -1; }
     return 0;
 }
@@ -908,16 +905,16 @@ fn i32 print_extern_union_decl_full(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
-    fields[0].name = interner::intern(c.interner, "i");
+    fields[0].name = interner::intern("i");
     fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I64);
     fields[0].src_pos = 0;
     ast::ExternUnionDeclNode* n = arena::alloc(&local, sizeof(ast::ExternUnionDeclNode));
     n.h.kind = ast::AstKind::ExternUnionDecl;
-    n.name = interner::intern(c.interner, "U");
+    n.name = interner::intern("U");
     n.fields = {fields, 1};
     n.is_opaque = false;
     n.is_exported = false;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "ExternUnionDecl U\n  Field i\n    PrimitiveType 'i64'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -927,16 +924,16 @@ fn i32 print_extern_union_decl_full_exported(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
     ast::FieldDecl* fields = arena::alloc(&local, sizeof(ast::FieldDecl) * 1);
-    fields[0].name = interner::intern(c.interner, "i");
+    fields[0].name = interner::intern("i");
     fields[0].type_expr = (ast::AstNode*)prim_type(&local, token::TokenKind::I64);
     fields[0].src_pos = 0;
     ast::ExternUnionDeclNode* n = arena::alloc(&local, sizeof(ast::ExternUnionDeclNode));
     n.h.kind = ast::AstKind::ExternUnionDecl;
-    n.name = interner::intern(c.interner, "U");
+    n.name = interner::intern("U");
     n.fields = {fields, 1};
     n.is_opaque = false;
     n.is_exported = true;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "ExternUnionDecl U exported\n  Field i\n    PrimitiveType 'i64'\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -947,7 +944,7 @@ fn i32 print_extern_union_decl_full_exported(arena::Arena* a, u8[] m) {
 fn i32 print_empty_block(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print((ast::AstNode*)empty_block(&local), c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)empty_block(&local), 0, &c.buf);
     if(!check(&c, "Block\n", m)) { return -1; }
     return 0;
 }
@@ -961,7 +958,7 @@ fn i32 print_block_with_stmts(arena::Arena* a, u8[] m) {
     ast::BlockNode* n = arena::alloc(&local, sizeof(ast::BlockNode));
     n.h.kind = ast::AstKind::BlockStmt;
     n.stmts = {stmts, 2};
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Block\n  IntLit 1\n  IntLit 2\n", m)) { return -1; }
     return 0;
 }
@@ -974,7 +971,7 @@ fn i32 print_if_no_else(arena::Arena* a, u8[] m) {
     n.cond = (ast::AstNode*)bool_lit(&local, true);
     n.then_block = (ast::AstNode*)empty_block(&local);
     n.else_block = null;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "If\n  cond:\n    BoolLit true\n  then:\n    Block\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -988,7 +985,7 @@ fn i32 print_if_with_else(arena::Arena* a, u8[] m) {
     n.cond = (ast::AstNode*)bool_lit(&local, false);
     n.then_block = (ast::AstNode*)empty_block(&local);
     n.else_block = (ast::AstNode*)empty_block(&local);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "If\n  cond:\n    BoolLit false\n  then:\n    Block\n  else:\n    Block\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -1001,7 +998,7 @@ fn i32 print_while(arena::Arena* a, u8[] m) {
     n.h.kind = ast::AstKind::WhileStmt;
     n.cond = (ast::AstNode*)bool_lit(&local, true);
     n.body = (ast::AstNode*)empty_block(&local);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "While\n  cond:\n    BoolLit true\n  body:\n    Block\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -1016,7 +1013,7 @@ fn i32 print_for(arena::Arena* a, u8[] m) {
     n.cond = (ast::AstNode*)bool_lit(&local, true);
     n.post = null;
     n.body = (ast::AstNode*)empty_block(&local);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "For\n  init: <null>\n  cond:\n    BoolLit true\n  post: <null>\n  body:\n    Block\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -1033,10 +1030,10 @@ fn i32 print_switch(arena::Arena* a, u8[] m) {
     arms[0].src_pos = 0;
     ast::SwitchNode* n = arena::alloc(&local, sizeof(ast::SwitchNode));
     n.h.kind = ast::AstKind::SwitchStmt;
-    n.discriminant = (ast::AstNode*)ident(&local, c.interner, "x");
+    n.discriminant = (ast::AstNode*)ident(&local, "x");
     n.arms = {arms, 1};
     n.else_block = null;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "Switch\n  discriminant:\n    Ident x\n  Arm\n    labels\n      IntLit 1\n    body:\n      Block\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;
@@ -1048,7 +1045,7 @@ fn i32 print_return_with_expr(arena::Arena* a, u8[] m) {
     ast::ReturnNode* n = arena::alloc(&local, sizeof(ast::ReturnNode));
     n.h.kind = ast::AstKind::ReturnStmt;
     n.expr = (ast::AstNode*)int_lit(&local, (u64)0);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Return\n  IntLit 0\n", m)) { return -1; }
     return 0;
 }
@@ -1059,7 +1056,7 @@ fn i32 print_return_bare(arena::Arena* a, u8[] m) {
     ast::ReturnNode* n = arena::alloc(&local, sizeof(ast::ReturnNode));
     n.h.kind = ast::AstKind::ReturnStmt;
     n.expr = null;
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Return\n", m)) { return -1; }
     return 0;
 }
@@ -1067,7 +1064,7 @@ fn i32 print_return_bare(arena::Arena* a, u8[] m) {
 fn i32 print_break(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print(bare(&local, ast::AstKind::BreakStmt), c.interner, 0, &c.buf);
+    ast_print::print(bare(&local, ast::AstKind::BreakStmt), 0, &c.buf);
     if(!check(&c, "Break\n", m)) { return -1; }
     return 0;
 }
@@ -1075,7 +1072,7 @@ fn i32 print_break(arena::Arena* a, u8[] m) {
 fn i32 print_continue(arena::Arena* a, u8[] m) {
     arena::Arena local = {4096, null};
     Ctx c; setup(&c, &local);
-    ast_print::print(bare(&local, ast::AstKind::ContinueStmt), c.interner, 0, &c.buf);
+    ast_print::print(bare(&local, ast::AstKind::ContinueStmt), 0, &c.buf);
     if(!check(&c, "Continue\n", m)) { return -1; }
     return 0;
 }
@@ -1086,7 +1083,7 @@ fn i32 print_defer(arena::Arena* a, u8[] m) {
     ast::DeferNode* n = arena::alloc(&local, sizeof(ast::DeferNode));
     n.h.kind = ast::AstKind::DeferStmt;
     n.body = (ast::AstNode*)empty_block(&local);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Defer\n  Block\n", m)) { return -1; }
     return 0;
 }
@@ -1097,9 +1094,9 @@ fn i32 print_assignment(arena::Arena* a, u8[] m) {
     ast::AssignmentNode* n = arena::alloc(&local, sizeof(ast::AssignmentNode));
     n.h.kind = ast::AstKind::AssignmentStmt;
     n.op = token::TokenKind::PlusEq;
-    n.lhs = (ast::AstNode*)ident(&local, c.interner, "x");
+    n.lhs = (ast::AstNode*)ident(&local, "x");
     n.rhs = (ast::AstNode*)int_lit(&local, (u64)1);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Assign '+='\n  Ident x\n  IntLit 1\n", m)) { return -1; }
     return 0;
 }
@@ -1110,7 +1107,7 @@ fn i32 print_expr_stmt(arena::Arena* a, u8[] m) {
     ast::ExprStmtNode* n = arena::alloc(&local, sizeof(ast::ExprStmtNode));
     n.h.kind = ast::AstKind::ExprStmt;
     n.expr = (ast::AstNode*)int_lit(&local, (u64)1);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "ExprStmt\n  IntLit 1\n", m)) { return -1; }
     return 0;
 }
@@ -1121,7 +1118,7 @@ fn i32 print_comprun(arena::Arena* a, u8[] m) {
     ast::CompRunNode* n = arena::alloc(&local, sizeof(ast::CompRunNode));
     n.h.kind = ast::AstKind::ComprunStmt;
     n.body = (ast::AstNode*)empty_block(&local);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Comprun\n  Block\n", m)) { return -1; }
     return 0;
 }
@@ -1131,8 +1128,8 @@ fn i32 print_compinsert(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::CompInsertNode* n = arena::alloc(&local, sizeof(ast::CompInsertNode));
     n.h.kind = ast::AstKind::CompinsertStmt;
-    n.source_expr = (ast::AstNode*)ident(&local, c.interner, "code");
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    n.source_expr = (ast::AstNode*)ident(&local, "code");
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Compinsert\n  Ident code\n", m)) { return -1; }
     return 0;
 }
@@ -1142,8 +1139,8 @@ fn i32 print_compsplice(arena::Arena* a, u8[] m) {
     Ctx c; setup(&c, &local);
     ast::CompSpliceNode* n = arena::alloc(&local, sizeof(ast::CompSpliceNode));
     n.h.kind = ast::AstKind::CompspliceStmt;
-    n.code_expr = (ast::AstNode*)ident(&local, c.interner, "code");
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    n.code_expr = (ast::AstNode*)ident(&local, "code");
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Compsplice\n  Ident code\n", m)) { return -1; }
     return 0;
 }
@@ -1154,7 +1151,7 @@ fn i32 print_comperror(arena::Arena* a, u8[] m) {
     ast::CompErrorNode* n = arena::alloc(&local, sizeof(ast::CompErrorNode));
     n.h.kind = ast::AstKind::ComperrorStmt;
     n.msg_expr = (ast::AstNode*)int_lit(&local, (u64)1);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Comperror\n  IntLit 1\n", m)) { return -1; }
     return 0;
 }
@@ -1165,7 +1162,7 @@ fn i32 print_compwarning(arena::Arena* a, u8[] m) {
     ast::CompWarningNode* n = arena::alloc(&local, sizeof(ast::CompWarningNode));
     n.h.kind = ast::AstKind::CompwarningStmt;
     n.msg_expr = (ast::AstNode*)int_lit(&local, (u64)1);
-    ast_print::print((ast::AstNode*)n, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Compwarning\n  IntLit 1\n", m)) { return -1; }
     return 0;
 }
@@ -1181,7 +1178,7 @@ fn i32 print_nested_binop(arena::Arena* a, u8[] m) {
     ast::BinaryOpNode* outer = binop(&local, token::TokenKind::Plus,
         (ast::AstNode*)int_lit(&local, (u64)1),
         (ast::AstNode*)inner);
-    ast_print::print((ast::AstNode*)outer, c.interner, 0, &c.buf);
+    ast_print::print((ast::AstNode*)outer, 0, &c.buf);
     u8[] e = "BinaryOp '+'\n  IntLit 1\n  BinaryOp '*'\n    IntLit 2\n    IntLit 3\n";
     if(!check(&c, e, m)) { return -1; }
     return 0;

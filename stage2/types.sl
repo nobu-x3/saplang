@@ -89,20 +89,39 @@ export struct TypeInterner {
     u64             count;
     u64             cap;        // power of 2
     arena::Arena*   arena;
-    mutex::Mutex    lock;       // guards lazy layout computation; intern_* locking lands with the driver
+    mutex::Mutex    lock;       // guards intern + lazy layout computation
 }
 
-export fn void typer_init(TypeInterner* it, arena::Arena* a, u64 initial_cap) {
+// Process-global; reached only through acquire()/release() or the self-locking wrappers.
+TypeInterner GLOBAL_TYPER;
+
+export fn void typer_init(arena::Arena* a, u64 initial_cap) {
     u64 bytes = initial_cap * sizeof(TypeBucket);
-    it.buckets = {(TypeBucket*)arena::alloc(a, bytes), initial_cap};
-    sys::memset(it.buckets.ptr, 0, bytes);
-    it.count = 0;
-    it.cap   = initial_cap;
-    it.arena = a;
-    mutex::create(&it.lock);
+    GLOBAL_TYPER.buckets = {(TypeBucket*)arena::alloc(a, bytes), initial_cap};
+    sys::memset(GLOBAL_TYPER.buckets.ptr, 0, bytes);
+    GLOBAL_TYPER.count = 0;
+    GLOBAL_TYPER.cap   = initial_cap;
+    GLOBAL_TYPER.arena = a;
+    mutex::create(&GLOBAL_TYPER.lock);
 }
 
-export fn Type* intern_pointer(TypeInterner* it, Type* pointee, bool is_const) {
+export fn TypeInterner* acquire() {
+    mutex::lock(&GLOBAL_TYPER.lock);
+    return &GLOBAL_TYPER;
+}
+
+export fn void release() {
+    mutex::unlock(&GLOBAL_TYPER.lock);
+}
+
+export fn Type* intern_pointer(Type* pointee, bool is_const) {
+    TypeInterner* it = types::acquire();
+    Type* t = _intern_pointer(it, pointee, is_const);
+    types::release();
+    return t;
+}
+
+fn Type* _intern_pointer(TypeInterner* it, Type* pointee, bool is_const) {
     u32 hash = hash_pointer(pointee, is_const);
     u64 mask = it.cap - 1;
     u64 idx = (u64)hash & mask;
@@ -131,7 +150,14 @@ export fn Type* intern_pointer(TypeInterner* it, Type* pointee, bool is_const) {
     return install(it, hash, type);
 }
 
-export fn Type* intern_array(TypeInterner* it, Type* elem, u64 count) {
+export fn Type* intern_array(Type* elem, u64 count) {
+    TypeInterner* it = types::acquire();
+    Type* t = _intern_array(it, elem, count);
+    types::release();
+    return t;
+}
+
+fn Type* _intern_array(TypeInterner* it, Type* elem, u64 count) {
     u32 hash = hash_array(elem, count);
     u64 mask = it.cap - 1;
     u64 idx = (u64)hash & mask;
@@ -153,7 +179,14 @@ export fn Type* intern_array(TypeInterner* it, Type* elem, u64 count) {
     return install(it, hash, type);
 }
 
-export fn Type* intern_slice(TypeInterner* it, Type* elem) {
+export fn Type* intern_slice(Type* elem) {
+    TypeInterner* it = types::acquire();
+    Type* t = _intern_slice(it, elem);
+    types::release();
+    return t;
+}
+
+fn Type* _intern_slice(TypeInterner* it, Type* elem) {
     u32 hash = hash_slice(elem);
     u64 mask = it.cap - 1;
     u64 idx = (u64)hash & mask;
@@ -176,7 +209,14 @@ export fn Type* intern_slice(TypeInterner* it, Type* elem) {
     return install(it, hash, type);
 }
 
-export fn Type* intern_fn_ptr(TypeInterner* it, Type* ret, Type*[] params, bool variadic) {
+export fn Type* intern_fn_ptr(Type* ret, Type*[] params, bool variadic) {
+    TypeInterner* it = types::acquire();
+    Type* t = _intern_fn_ptr(it, ret, params, variadic);
+    types::release();
+    return t;
+}
+
+fn Type* _intern_fn_ptr(TypeInterner* it, Type* ret, Type*[] params, bool variadic) {
     u32 hash = hash_fn_ptr(ret, params, variadic);
     u64 mask = it.cap - 1;
     u64 idx = (u64)hash & mask;
@@ -203,7 +243,14 @@ export fn Type* intern_fn_ptr(TypeInterner* it, Type* ret, Type*[] params, bool 
     return install(it, hash, type);
 }
 
-export fn Type* intern_struct(TypeInterner* it, void* decl) {    // ast::StructDeclNode*
+export fn Type* intern_struct(void* decl) {    // ast::StructDeclNode*
+    TypeInterner* it = types::acquire();
+    Type* t = _intern_struct(it, decl);
+    types::release();
+    return t;
+}
+
+fn Type* _intern_struct(TypeInterner* it, void* decl) {
     u32 hash = hash_decl(decl, 0x10000005);
     u64 mask = it.cap - 1;
     u64 idx  = (u64)hash & mask;
@@ -223,7 +270,14 @@ export fn Type* intern_struct(TypeInterner* it, void* decl) {    // ast::StructD
     return install(it, hash, t);
 }
 
-export fn Type* intern_union(TypeInterner* it, void* decl) {    // ast::UnionDeclNode*
+export fn Type* intern_union(void* decl) {    // ast::UnionDeclNode*
+    TypeInterner* it = types::acquire();
+    Type* t = _intern_union(it, decl);
+    types::release();
+    return t;
+}
+
+fn Type* _intern_union(TypeInterner* it, void* decl) {
     u32 hash = hash_decl(decl, 0x10000006);
     u64 mask = it.cap - 1;
     u64 idx  = (u64)hash & mask;
@@ -243,7 +297,14 @@ export fn Type* intern_union(TypeInterner* it, void* decl) {    // ast::UnionDec
     return install(it, hash, t);
 }
 
-export fn Type* intern_enum(TypeInterner* it, void* decl) {    // ast::EnumDeclNode*
+export fn Type* intern_enum(void* decl) {    // ast::EnumDeclNode*
+    TypeInterner* it = types::acquire();
+    Type* t = _intern_enum(it, decl);
+    types::release();
+    return t;
+}
+
+fn Type* _intern_enum(TypeInterner* it, void* decl) {
     u32 hash = hash_decl(decl, 0x10000007);
     if(hash == 0) { hash = 1; }
     u64 mask = it.cap - 1;
@@ -265,35 +326,35 @@ export fn Type* intern_enum(TypeInterner* it, void* decl) {    // ast::EnumDeclN
 }
 
 // sizeof/alignof — diag is nullable; layout/cycle errors report there when set.
-export fn u32 size_of(TypeInterner* it, diag::DiagBuf* diag, Type* type) {
+export fn u32 size_of(diag::DiagBuf* diag, Type* type) {
     if(((u8)type.flags & (u8)LayoutFlags::Opaque) != 0) {
         if(diag != null) {
-            diag::report(diag, it.arena, decl_src_pos(type), "cannot take size of opaque type");
+            diag::report(diag, GLOBAL_TYPER.arena, decl_src_pos(type), "cannot take size of opaque type");
         }
         return 0;
     }
     if(((u8)type.flags & (u8)LayoutFlags::Computed) != 0) {
         return type.size;
     }
-    mutex::lock(&it.lock);
+    TypeInterner* it = types::acquire();
     compute_layout(it, diag, type);
-    mutex::unlock(&it.lock);
+    types::release();
     return type.size;
 }
 
-export fn u32 align_of(TypeInterner* it, diag::DiagBuf* diag, Type* type) {
+export fn u32 align_of(diag::DiagBuf* diag, Type* type) {
     if(((u8)type.flags & (u8)LayoutFlags::Opaque) != 0) {
         if(diag != null) {
-            diag::report(diag, it.arena, decl_src_pos(type), "cannot take alignment of opaque type");
+            diag::report(diag, GLOBAL_TYPER.arena, decl_src_pos(type), "cannot take alignment of opaque type");
         }
         return 0;
     }
     if(((u8)type.flags & (u8)LayoutFlags::Computed) != 0) {
         return type.align;
     }
-    mutex::lock(&it.lock);
+    TypeInterner* it = types::acquire();
     compute_layout(it, diag, type);
-    mutex::unlock(&it.lock);
+    types::release();
     return type.align;
 }
 

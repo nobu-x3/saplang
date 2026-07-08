@@ -14,10 +14,9 @@ const u64 BUCKET_COUNT = 64;
 
 // MODULE SETUP / DRIVER //////////////////////////////////////////////////////
 export fn module::Module* prepare(arena::Arena* a, u8[] src) {
-    interner::Interner* it = arena::alloc(a, sizeof(interner::Interner));
-    interner::init(it, a, BUCKET_COUNT);
+    interner::init(a, BUCKET_COUNT);
     for(u64 i = 0; i < token::KEYWORDS.len; i += 1) {
-        symbol::Symbol* sym = interner::intern(it, token::KEYWORDS[i].bytes);
+        symbol::Symbol* sym = interner::intern(token::KEYWORDS[i].bytes);
         sym.keyword_kind = (u16)token::KEYWORDS[i].kind;
     }
     module::Module* m = arena::alloc(a, sizeof(module::Module));
@@ -28,7 +27,6 @@ export fn module::Module* prepare(arena::Arena* a, u8[] src) {
     m.tokens_cap = 0;
     m.literal_pool = {null, 0};
     m.literal_pool_cap = 0;
-    m.interner = it;
     m.arena = a;
     m.diag.entries = {null, 0};
     m.diag.entries_cap = 0;
@@ -91,7 +89,7 @@ export fn bool has_paren_flag(ast::AstNode* n) {
 }
 
 export fn symbol::Symbol* sym(module::Module* m, u8[] s) {
-    return interner::intern(m.interner, s);
+    return interner::intern(s);
 }
 
 // LITERAL / LEAF ASSERTS (return bool) ///////////////////////////////////////

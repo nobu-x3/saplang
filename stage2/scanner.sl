@@ -163,7 +163,7 @@ fn u32 scan_identifier(module::Module* m, u32 start) {
         pos += 1;
     }
     u8[] bytes = {&m.source[start], (u64)(pos - start)};
-    symbol::Symbol* sym = interner::intern(m.interner, bytes);
+    symbol::Symbol* sym = interner::intern(bytes);
     token::TokenKind kind = (token::TokenKind)sym.keyword_kind;
     if(sym.keyword_kind == 0) { kind = token::TokenKind::Ident; }
     emit_sym_token(m, kind, start, sym);

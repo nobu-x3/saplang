@@ -24,20 +24,8 @@ fn module::Module* fresh_module(arena::Arena* a) {
 }
 
 fn module::Module* fresh_module_with_interner(arena::Arena* a) {
-    module::Module* m = fresh_module(a);
-    interner::Interner* it = (interner::Interner*)arena::alloc(a, sizeof(interner::Interner));
-    sys::memset(it, 0, sizeof(interner::Interner));
-    it.slab_arena = a;
-    it.slab = {null, 0};
-    it.slab_cap = 0;
-    u64 bucket_count = 16;
-    u64 nbytes = bucket_count * sizeof(symbol::Symbol*);
-    void* raw = arena::alloc(a, nbytes);
-    sys::memset(raw, 0, nbytes);
-    it.buckets = {(symbol::Symbol**)raw, bucket_count};
-    it.entry_count = 0;
-    m.interner = it;
-    return m;
+    interner::init(a, 16);
+    return fresh_module(a);
 }
 
 fn sema::Sema mk_sema(module::Module* m) {
@@ -54,7 +42,7 @@ fn symbol::Symbol* fake_sym(arena::Arena* a) {
 }
 
 fn symbol::Symbol* fake_sym_interned(module::Module* m, u8[] bytes) {
-    return interner::intern(m.interner, bytes);
+    return interner::intern(bytes);
 }
 
 fn sema::Decl* fake_decl(arena::Arena* a, u16 kind, symbol::Symbol* name, types::Type* ty) {
@@ -181,14 +169,14 @@ fn ast::EnumDeclNode* fake_enum_decl_with_members(arena::Arena* a, symbol::Symbo
     return d;
 }
 
-fn types::Type* mk_struct_type(arena::Arena* a, types::TypeInterner* it, symbol::Symbol*[] names, types::Type*[] tys) {
+fn types::Type* mk_struct_type(arena::Arena* a, symbol::Symbol*[] names, types::Type*[] tys) {
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
-    return types::intern_struct(it, (void*)d);
+    return types::intern_struct((void*)d);
 }
 
-fn types::Type* mk_union_type(arena::Arena* a, types::TypeInterner* it, symbol::Symbol*[] names, types::Type*[] tys) {
+fn types::Type* mk_union_type(arena::Arena* a, symbol::Symbol*[] names, types::Type*[] tys) {
     ast::UnionDeclNode* d = fake_union_decl_with_fields(a, names, tys);
-    return types::intern_union(it, (void*)d);
+    return types::intern_union((void*)d);
 }
 
 fn symbol::Symbol*[] mk_syms2(arena::Arena* a, symbol::Symbol* s0, symbol::Symbol* s1) {
@@ -215,10 +203,8 @@ fn types::Type*[] mk_tys3(arena::Arena* a, types::Type* t0, types::Type* t1, typ
     types::Type*[] r; r.ptr = mem; r.len = 3; return r;
 }
 
-fn types::TypeInterner* fresh_typer(arena::Arena* a) {
-    types::TypeInterner* it = (types::TypeInterner*)arena::alloc(a, sizeof(types::TypeInterner));
-    types::typer_init(it, a, null, 16);
-    return it;
+fn void fresh_typer(arena::Arena* a) {
+    types::typer_init(a, 16);
 }
 
 fn bool has_ast_flag(ast::AstNode* n, ast::AstFlags f) {
@@ -489,6 +475,657 @@ fn i32 scope_grow_cap_is_power_of_two(arena::Arena* a, u8[] m) {
 
 
 // ============================================================================
+// ResolutionStack
+// ============================================================================
+
+fn i32 stack_empty_does_not_contain(arena::Arena* a, u8[] m) {
+    sema::ResolutionStack st;
+    sys::memset(&st, 0, sizeof(sema::ResolutionStack));
+    st.arena = a;
+    sema::ResolutionKey k = { fresh_module(a), fake_sym(a) };
+    if(!testing::expect_eq(sema::stack_contains(&st, k), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 stack_push_then_contains(arena::Arena* a, u8[] m) {
+    sema::ResolutionStack st;
+    sys::memset(&st, 0, sizeof(sema::ResolutionStack));
+    st.arena = a;
+    sema::ResolutionKey k = { fresh_module(a), fake_sym(a) };
+    sema::stack_push(&st, k);
+    if(!testing::expect_eq(sema::stack_contains(&st, k), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 stack_push_pop_no_longer_contains(arena::Arena* a, u8[] m) {
+    sema::ResolutionStack st;
+    sys::memset(&st, 0, sizeof(sema::ResolutionStack));
+    st.arena = a;
+    sema::ResolutionKey k = { fresh_module(a), fake_sym(a) };
+    sema::stack_push(&st, k);
+    sema::stack_pop(&st);
+    if(!testing::expect_eq(sema::stack_contains(&st, k), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 stack_distinguishes_module(arena::Arena* a, u8[] m) {
+    sema::ResolutionStack st;
+    sys::memset(&st, 0, sizeof(sema::ResolutionStack));
+    st.arena = a;
+    symbol::Symbol* name = fake_sym(a);
+    sema::ResolutionKey kA = { fresh_module(a), name };
+    sema::ResolutionKey kB = { fresh_module(a), name };
+    sema::stack_push(&st, kA);
+    if(!testing::expect_eq(sema::stack_contains(&st, kB), false, m)) { return -1; }
+    if(!testing::expect_eq(sema::stack_contains(&st, kA), true,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 stack_distinguishes_name(arena::Arena* a, u8[] m) {
+    sema::ResolutionStack st;
+    sys::memset(&st, 0, sizeof(sema::ResolutionStack));
+    st.arena = a;
+    module::Module* mm = fresh_module(a);
+    sema::ResolutionKey kA = { mm, fake_sym(a) };
+    sema::ResolutionKey kB = { mm, fake_sym(a) };
+    sema::stack_push(&st, kA);
+    if(!testing::expect_eq(sema::stack_contains(&st, kB), false, m)) { return -1; }
+    if(!testing::expect_eq(sema::stack_contains(&st, kA), true,  m)) { return -2; }
+    return 0;
+}
+
+fn i32 stack_multi_push_all_contained(arena::Arena* a, u8[] m) {
+    sema::ResolutionStack st;
+    sys::memset(&st, 0, sizeof(sema::ResolutionStack));
+    st.arena = a;
+    module::Module* mm = fresh_module(a);
+    sema::ResolutionKey k1 = { mm, fake_sym(a) };
+    sema::ResolutionKey k2 = { mm, fake_sym(a) };
+    sema::ResolutionKey k3 = { mm, fake_sym(a) };
+    sema::stack_push(&st, k1);
+    sema::stack_push(&st, k2);
+    sema::stack_push(&st, k3);
+    if(!testing::expect_eq(sema::stack_contains(&st, k1), true, m)) { return -1; }
+    if(!testing::expect_eq(sema::stack_contains(&st, k2), true, m)) { return -2; }
+    if(!testing::expect_eq(sema::stack_contains(&st, k3), true, m)) { return -3; }
+    return 0;
+}
+
+fn i32 stack_pop_only_removes_top(arena::Arena* a, u8[] m) {
+    sema::ResolutionStack st;
+    sys::memset(&st, 0, sizeof(sema::ResolutionStack));
+    st.arena = a;
+    module::Module* mm = fresh_module(a);
+    sema::ResolutionKey k1 = { mm, fake_sym(a) };
+    sema::ResolutionKey k2 = { mm, fake_sym(a) };
+    sema::stack_push(&st, k1);
+    sema::stack_push(&st, k2);
+    sema::stack_pop(&st);
+    if(!testing::expect_eq(sema::stack_contains(&st, k1), true,  m)) { return -1; }
+    if(!testing::expect_eq(sema::stack_contains(&st, k2), false, m)) { return -2; }
+    return 0;
+}
+
+
+// ============================================================================
+// decl_is_lvalue / decl_is_const_expr per DeclKind
+// ============================================================================
+
+fn i32 lvalue_var_non_const_true(arena::Arena* a, u8[] m) {
+    ast::VarDeclNode* v = fake_var_decl(a, fake_sym(a), false);
+    sema::Decl* d = fake_node_decl(a, v.name, null, (ast::AstNode*)v);
+    if(!testing::expect_eq(sema::decl_is_lvalue(d), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 lvalue_var_const_true(arena::Arena* a, u8[] m) {
+    ast::VarDeclNode* v = fake_var_decl(a, fake_sym(a), true);
+    sema::Decl* d = fake_node_decl(a, v.name, null, (ast::AstNode*)v);
+    if(!testing::expect_eq(sema::decl_is_lvalue(d), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 lvalue_fn_false(arena::Arena* a, u8[] m) {
+    ast::FnDeclNode* f = fake_fn_decl(a, fake_sym(a));
+    sema::Decl* d = fake_node_decl(a, f.name, null, (ast::AstNode*)f);
+    if(!testing::expect_eq(sema::decl_is_lvalue(d), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 lvalue_param_true(arena::Arena* a, u8[] m) {
+    sema::Decl* d = fake_param_decl(a, fake_sym(a), null);
+    if(!testing::expect_eq(sema::decl_is_lvalue(d), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 lvalue_field_true(arena::Arena* a, u8[] m) {
+    sema::Decl* d = fake_field_decl_value(a, fake_sym(a), null);
+    if(!testing::expect_eq(sema::decl_is_lvalue(d), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 lvalue_enum_member_false(arena::Arena* a, u8[] m) {
+    sema::Decl* d = fake_enum_member_decl_value(a, fake_sym(a), null);
+    if(!testing::expect_eq(sema::decl_is_lvalue(d), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 lvalue_import_false(arena::Arena* a, u8[] m) {
+    sema::Decl* d = fake_import_decl(a, fake_sym(a), fresh_module(a));
+    if(!testing::expect_eq(sema::decl_is_lvalue(d), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 constexpr_var_const_true(arena::Arena* a, u8[] m) {
+    ast::VarDeclNode* v = fake_var_decl(a, fake_sym(a), true);
+    sema::Decl* d = fake_node_decl(a, v.name, null, (ast::AstNode*)v);
+    if(!testing::expect_eq(sema::decl_is_const_expr(d), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 constexpr_var_non_const_false(arena::Arena* a, u8[] m) {
+    ast::VarDeclNode* v = fake_var_decl(a, fake_sym(a), false);
+    sema::Decl* d = fake_node_decl(a, v.name, null, (ast::AstNode*)v);
+    if(!testing::expect_eq(sema::decl_is_const_expr(d), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 constexpr_enum_member_true(arena::Arena* a, u8[] m) {
+    sema::Decl* d = fake_enum_member_decl_value(a, fake_sym(a), null);
+    if(!testing::expect_eq(sema::decl_is_const_expr(d), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 constexpr_fn_true(arena::Arena* a, u8[] m) {
+    ast::FnDeclNode* f = fake_fn_decl(a, fake_sym(a));
+    sema::Decl* d = fake_node_decl(a, f.name, null, (ast::AstNode*)f);
+    if(!testing::expect_eq(sema::decl_is_const_expr(d), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 constexpr_param_false(arena::Arena* a, u8[] m) {
+    sema::Decl* d = fake_param_decl(a, fake_sym(a), null);
+    if(!testing::expect_eq(sema::decl_is_const_expr(d), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 constexpr_field_false(arena::Arena* a, u8[] m) {
+    sema::Decl* d = fake_field_decl_value(a, fake_sym(a), null);
+    if(!testing::expect_eq(sema::decl_is_const_expr(d), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 constexpr_import_false(arena::Arena* a, u8[] m) {
+    sema::Decl* d = fake_import_decl(a, fake_sym(a), fresh_module(a));
+    if(!testing::expect_eq(sema::decl_is_const_expr(d), false, m)) { return -1; }
+    return 0;
+}
+
+
+// ============================================================================
+// container_decl
+// ============================================================================
+
+fn i32 container_decl_for_struct(arena::Arena* a, u8[] m) {
+    fresh_typer(a);
+    symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
+    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
+    types::Type* t = types::intern_struct((void*)d);
+    if(!testing::expect_eq((void*)sema::container_decl(t), (void*)d, m)) { return -1; }
+    return 0;
+}
+
+fn i32 container_decl_for_union(arena::Arena* a, u8[] m) {
+    fresh_typer(a);
+    symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
+    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    ast::UnionDeclNode* d = fake_union_decl_with_fields(a, names, tys);
+    types::Type* t = types::intern_union((void*)d);
+    if(!testing::expect_eq((void*)sema::container_decl(t), (void*)d, m)) { return -1; }
+    return 0;
+}
+
+fn i32 container_decl_for_primitive_null(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq((void*)sema::container_decl(types::prim_i32()), (void*)null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 container_decl_for_pointer_null(arena::Arena* a, u8[] m) {
+    fresh_typer(a);
+    types::Type* p = types::intern_pointer(types::prim_i32(), false);
+    if(!testing::expect_eq((void*)sema::container_decl(p), (void*)null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 container_decl_for_slice_null(arena::Arena* a, u8[] m) {
+    fresh_typer(a);
+    types::Type* sl = types::intern_slice(types::prim_i32());
+    if(!testing::expect_eq((void*)sema::container_decl(sl), (void*)null, m)) { return -1; }
+    return 0;
+}
+
+
+// ============================================================================
+// find_field / find_field_index
+// ============================================================================
+
+fn i32 find_field_returns_existing(arena::Arena* a, u8[] m) {
+    symbol::Symbol* n0 = fake_sym(a);
+    symbol::Symbol* n1 = fake_sym(a);
+    symbol::Symbol*[] names = mk_syms2(a, n0, n1);
+    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
+    ast::FieldDecl* found = sema::find_field((ast::AstNode*)d, n1);
+    if(!testing::expect_not_null((void*)found, m)) { return -1; }
+    if(!testing::expect_eq((void*)found.name, (void*)n1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 find_field_returns_null_for_missing(arena::Arena* a, u8[] m) {
+    symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
+    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
+    symbol::Symbol* missing = fake_sym(a);
+    if(!testing::expect_eq((void*)sema::find_field((ast::AstNode*)d, missing), (void*)null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 find_field_empty_returns_null(arena::Arena* a, u8[] m) {
+    symbol::Symbol*[] names = {null, 0};
+    types::Type*[] tys = {null, 0};
+    ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
+    if(!testing::expect_eq((void*)sema::find_field((ast::AstNode*)d, fake_sym(a)), (void*)null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 find_field_works_on_union(arena::Arena* a, u8[] m) {
+    symbol::Symbol* n0 = fake_sym(a);
+    symbol::Symbol* n1 = fake_sym(a);
+    symbol::Symbol*[] names = mk_syms2(a, n0, n1);
+    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    ast::UnionDeclNode* d = fake_union_decl_with_fields(a, names, tys);
+    ast::FieldDecl* found = sema::find_field((ast::AstNode*)d, n0);
+    if(!testing::expect_not_null((void*)found, m)) { return -1; }
+    if(!testing::expect_eq((void*)found.name, (void*)n0, m)) { return -2; }
+    return 0;
+}
+
+fn i32 find_field_index_first(arena::Arena* a, u8[] m) {
+    symbol::Symbol* n0 = fake_sym(a);
+    symbol::Symbol*[] names = mk_syms3(a, n0, fake_sym(a), fake_sym(a));
+    types::Type*[] tys = mk_tys3(a, types::prim_i32(), types::prim_u8(), types::prim_bool());
+    ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
+    if(!testing::expect_eq(sema::find_field_index(d, n0), 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 find_field_index_last(arena::Arena* a, u8[] m) {
+    symbol::Symbol* n2 = fake_sym(a);
+    symbol::Symbol*[] names = mk_syms3(a, fake_sym(a), fake_sym(a), n2);
+    types::Type*[] tys = mk_tys3(a, types::prim_i32(), types::prim_u8(), types::prim_bool());
+    ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
+    if(!testing::expect_eq(sema::find_field_index(d, n2), 2, m)) { return -1; }
+    return 0;
+}
+
+fn i32 find_field_index_missing_is_max(arena::Arena* a, u8[] m) {
+    symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
+    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
+    u64 idx = sema::find_field_index(d, fake_sym(a));
+    if(!testing::expect_eq(idx, (u64)-1, m)) { return -1; }
+    return 0;
+}
+
+
+// ============================================================================
+// find_enum_member
+// ============================================================================
+
+fn i32 find_enum_member_existing(arena::Arena* a, u8[] m) {
+    symbol::Symbol* red   = fake_sym(a);
+    symbol::Symbol* green = fake_sym(a);
+    symbol::Symbol*[] names = mk_syms2(a, red, green);
+    ast::EnumDeclNode* d = fake_enum_decl_with_members(a, names);
+    ast::EnumMember* mem = sema::find_enum_member(d, green);
+    if(!testing::expect_not_null((void*)mem, m)) { return -1; }
+    if(!testing::expect_eq((void*)mem.name, (void*)green, m)) { return -2; }
+    return 0;
+}
+
+fn i32 find_enum_member_missing(arena::Arena* a, u8[] m) {
+    symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
+    ast::EnumDeclNode* d = fake_enum_decl_with_members(a, names);
+    if(!testing::expect_eq((void*)sema::find_enum_member(d, fake_sym(a)), (void*)null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 find_enum_member_empty(arena::Arena* a, u8[] m) {
+    symbol::Symbol*[] names = {null, 0};
+    ast::EnumDeclNode* d = fake_enum_decl_with_members(a, names);
+    if(!testing::expect_eq((void*)sema::find_enum_member(d, fake_sym(a)), (void*)null, m)) { return -1; }
+    return 0;
+}
+
+
+// ============================================================================
+// make_field_decl / make_enum_member_decl
+// ============================================================================
+
+fn i32 make_field_decl_kind(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module(a);
+    sema::Sema s = mk_sema(mm);
+    ast::FieldDecl f;
+    sys::memset(&f, 0, sizeof(ast::FieldDecl));
+    symbol::Symbol* n = fake_sym(a);
+    f.name = n;
+    sema::Decl* d = sema::make_field_decl(&s, &f, types::prim_i32());
+    if(!testing::expect_not_null((void*)d, m)) { return -1; }
+    if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Field, m)) { return -2; }
+    return 0;
+}
+
+fn i32 make_field_decl_name_set(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module(a);
+    sema::Sema s = mk_sema(mm);
+    ast::FieldDecl f;
+    sys::memset(&f, 0, sizeof(ast::FieldDecl));
+    symbol::Symbol* n = fake_sym(a);
+    f.name = n;
+    sema::Decl* d = sema::make_field_decl(&s, &f, types::prim_i32());
+    if(!testing::expect_not_null((void*)d, m)) { return -1; }
+    if(!testing::expect_eq((void*)d.name, (void*)n, m)) { return -2; }
+    return 0;
+}
+
+fn i32 make_field_decl_ty_set(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module(a);
+    sema::Sema s = mk_sema(mm);
+    ast::FieldDecl f;
+    sys::memset(&f, 0, sizeof(ast::FieldDecl));
+    types::Type* ty = types::prim_u64();
+    sema::Decl* d = sema::make_field_decl(&s, &f, ty);
+    if(!testing::expect_not_null((void*)d, m)) { return -1; }
+    if(!testing::expect_eq((void*)d.ty, (void*)ty, m)) { return -2; }
+    return 0;
+}
+
+fn i32 make_field_decl_data_field_set(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module(a);
+    sema::Sema s = mk_sema(mm);
+    ast::FieldDecl f;
+    sys::memset(&f, 0, sizeof(ast::FieldDecl));
+    sema::Decl* d = sema::make_field_decl(&s, &f, types::prim_i32());
+    if(!testing::expect_not_null((void*)d, m)) { return -1; }
+    if(!testing::expect_eq((void*)d.data.field, (void*)&f, m)) { return -2; }
+    return 0;
+}
+
+fn i32 make_enum_member_decl_kind(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module(a);
+    sema::Sema s = mk_sema(mm);
+    ast::EnumMember em;
+    sys::memset(&em, 0, sizeof(ast::EnumMember));
+    symbol::Symbol* n = fake_sym(a);
+    em.name = n;
+    types::Type* ety = types::prim_i32();
+    sema::Decl* d = sema::make_enum_member_decl(&s, &em, ety);
+    if(!testing::expect_not_null((void*)d, m)) { return -1; }
+    if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::EnumMember, m)) { return -2; }
+    return 0;
+}
+
+fn i32 make_enum_member_decl_name_set(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module(a);
+    sema::Sema s = mk_sema(mm);
+    ast::EnumMember em;
+    sys::memset(&em, 0, sizeof(ast::EnumMember));
+    symbol::Symbol* n = fake_sym(a);
+    em.name = n;
+    sema::Decl* d = sema::make_enum_member_decl(&s, &em, types::prim_i32());
+    if(!testing::expect_not_null((void*)d, m)) { return -1; }
+    if(!testing::expect_eq((void*)d.name, (void*)n, m)) { return -2; }
+    return 0;
+}
+
+fn i32 make_enum_member_decl_ty_set(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module(a);
+    sema::Sema s = mk_sema(mm);
+    ast::EnumMember em;
+    sys::memset(&em, 0, sizeof(ast::EnumMember));
+    types::Type* ety = types::prim_i32();
+    sema::Decl* d = sema::make_enum_member_decl(&s, &em, ety);
+    if(!testing::expect_not_null((void*)d, m)) { return -1; }
+    if(!testing::expect_eq((void*)d.ty, (void*)ety, m)) { return -2; }
+    return 0;
+}
+
+fn i32 make_enum_member_decl_data_set(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module(a);
+    sema::Sema s = mk_sema(mm);
+    ast::EnumMember em;
+    sys::memset(&em, 0, sizeof(ast::EnumMember));
+    sema::Decl* d = sema::make_enum_member_decl(&s, &em, types::prim_i32());
+    if(!testing::expect_not_null((void*)d, m)) { return -1; }
+    if(!testing::expect_eq((void*)d.data.member, (void*)&em, m)) { return -2; }
+    return 0;
+}
+
+
+// ============================================================================
+// Diagnostic helpers
+// ============================================================================
+
+fn i32 diag_type_mismatch_emits_one_entry(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_type_mismatch(&s, 42, types::prim_u32(), types::prim_i32());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    return 0;
+}
+
+fn i32 diag_type_mismatch_records_src_pos(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_type_mismatch(&s, 137, types::prim_u32(), types::prim_i32());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 137, m)) { return -2; }
+    return 0;
+}
+
+fn i32 diag_type_mismatch_mentions_expected(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_type_mismatch(&s, 0, types::prim_u32(), types::prim_i32());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "i32", m)) { return -2; }
+    return 0;
+}
+
+fn i32 diag_type_mismatch_mentions_got(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_type_mismatch(&s, 0, types::prim_u32(), types::prim_i32());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "u32", m)) { return -2; }
+    return 0;
+}
+
+fn i32 diag_type_mismatch_is_error_not_warning(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_type_mismatch(&s, 0, types::prim_u32(), types::prim_i32());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].is_warning, false, m)) { return -2; }
+    return 0;
+}
+
+fn i32 diag_lit_overflow_emits_entry(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_lit_overflow(&s, 7, 300, types::prim_u8());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 7, m)) { return -2; }
+    return 0;
+}
+
+fn i32 diag_lit_overflow_mentions_type(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_lit_overflow(&s, 0, 300, types::prim_u8());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "u8", m)) { return -2; }
+    return 0;
+}
+
+fn i32 diag_lit_overflow_mentions_value(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_lit_overflow(&s, 0, 300, types::prim_u8());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "300", m)) { return -2; }
+    return 0;
+}
+
+fn i32 diag_cast_invalid_mentions_both_types(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_cast_invalid(&s, 0, types::prim_bool(), types::prim_f32());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "bool", m)) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "f32",  m)) { return -3; }
+    return 0;
+}
+
+fn i32 diag_binop_mismatch_mentions_both_types(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::diag_binop_mismatch(&s, 0, token::TokenKind::Plus, types::prim_i32(), types::prim_bool());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "i32",  m)) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "bool", m)) { return -3; }
+    return 0;
+}
+
+fn i32 diag_not_bool_convertible_mentions_type(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    fresh_typer(a);
+    symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
+    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    types::Type* st = mk_struct_type(a, names, tys);
+    sema::diag_not_bool_convertible(&s, 0, st);
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    return 0;
+}
+
+fn i32 diag_resolution_cycle_emits_entry(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::ResolutionKey k = { mm, fake_sym_interned(mm, "Foo") };
+    sema::diag_resolution_cycle(&s, 0, k);
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    return 0;
+}
+
+fn i32 diag_resolution_cycle_mentions_name(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    sema::ResolutionKey k = { mm, fake_sym_interned(mm, "Foo") };
+    sema::diag_resolution_cycle(&s, 0, k);
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "Foo", m)) { return -2; }
+    return 0;
+}
+
+fn i32 diag_needs_context_emits_entry(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    ast::StructLitNode* lit = fake_struct_lit(a, 99);
+    sema::diag_needs_context(&s, (ast::AstNode*)lit);
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 99, m)) { return -2; }
+    return 0;
+}
+
+
+// ============================================================================
+// check_int_lit
+// ============================================================================
+
+fn i32 check_int_lit_positive_fits_u8(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    ast::IntLitNode* n = fake_int_lit(a, 200, 0);
+    if(!testing::expect_eq(sema::check_int_lit(&s, n, types::prim_u8()), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_int_lit_sets_ty_on_success(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    ast::IntLitNode* n = fake_int_lit(a, 200, 0);
+    sema::check_int_lit(&s, n, types::prim_u8());
+    if(!testing::expect_eq((void*)n.h.ty, (void*)types::prim_u8(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_int_lit_overflow_returns_false(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    ast::IntLitNode* n = fake_int_lit(a, 256, 0);
+    if(!testing::expect_eq(sema::check_int_lit(&s, n, types::prim_u8()), false, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_int_lit_overflow_emits_diag(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    ast::IntLitNode* n = fake_int_lit(a, 256, 11);
+    sema::check_int_lit(&s, n, types::prim_u8());
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 11, m)) { return -2; }
+    return 0;
+}
+
+fn i32 check_int_lit_overflow_sets_had_error(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    ast::IntLitNode* n = fake_int_lit(a, 256, 0);
+    sema::check_int_lit(&s, n, types::prim_u8());
+    if(!testing::expect_eq(has_ast_flag((ast::AstNode*)n, ast::AstFlags::HadError), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_int_lit_float_target_rejected(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    ast::IntLitNode* n = fake_int_lit(a, 1, 0);
+    if(!testing::expect_eq(sema::check_int_lit(&s, n, types::prim_f32()), false, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 check_int_lit_fits_largest_u64(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    ast::IntLitNode* n = fake_int_lit(a, 18446744073709551615, 0);
+    if(!testing::expect_eq(sema::check_int_lit(&s, n, types::prim_u64()), true, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_int_lit_zero_fits_any_int(arena::Arena* a, u8[] m) {
+    module::Module* mm = fresh_module_with_interner(a);
+    sema::Sema s = mk_sema(mm);
+    ast::IntLitNode* n = fake_int_lit(a, 0, 0);
+    if(!testing::expect_eq(sema::check_int_lit(&s, n, types::prim_u8()),  true, m)) { return -1; }
+    if(!testing::expect_eq(sema::check_int_lit(&s, n, types::prim_i64()), true, m)) { return -2; }
+    return 0;
+}
+
+
+// ============================================================================
 // scope_add: first-write-wins on duplicate
 // ============================================================================
 
@@ -515,7 +1152,7 @@ fn i32 scope_add_duplicate_keeps_first(arena::Arena* a, u8[] m) {
 
 fn module::Module* run_module(arena::Arena* a, u8[] mod_name) {
     module::Module* m = fresh_module_with_interner(a);
-    m.name = interner::intern(m.interner, mod_name);
+    m.name = interner::intern(mod_name);
     mutex::create(&m.sema_mutex);
     return m;
 }
@@ -678,7 +1315,7 @@ fn i32 cn_fn_qualified_name(arena::Arena* a, u8[] m) {
     set_root(mm, a, &stmts[0], 1);
     sema::run(mm);
     if(!testing::expect_not_null((void*)func.qualified_name, m)) { return -1; }
-    u8[] q = interner::symbol_str(func.qualified_name, mm.interner);
+    u8[] q = interner::symbol_str(func.qualified_name);
     if(!testing::expect_eq(q, "testmod::foo", m)) { return -2; }
     return 0;
 }
@@ -722,7 +1359,7 @@ fn i32 cn_var_qualified_and_exported(arena::Arena* a, u8[] m) {
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Node, m)) { return -2; }
     if(!testing::expect_eq(d.is_exported, true, m)) { return -3; }
-    u8[] q = interner::symbol_str(v.qualified_name, mm.interner);
+    u8[] q = interner::symbol_str(v.qualified_name);
     if(!testing::expect_eq(q, "testmod::g", m)) { return -4; }
     return 0;
 }
@@ -763,8 +1400,8 @@ fn i32 cn_two_distinct_no_diag(arena::Arena* a, u8[] m) {
 
 fn i32 cn_import_resolves_module(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
-    module::Module* target = fresh_module_with_interner(a);
-    target.name = interner::intern(target.interner, "io");
+    module::Module* target = fresh_module(a);        // shares the one global interner with mm
+    target.name = interner::intern("io");
     module::Module*[1] imps;
     imps[0] = target;
     mm.imports.ptr = &imps[0];
@@ -835,7 +1472,7 @@ fn i32 cn_extern_var_qualified(arena::Arena* a, u8[] m) {
     sema::run(mm);
     if(!testing::expect_not_null((void*)registered(mm, errno_s), m)) { return -1; }
     if(!testing::expect_not_null((void*)v.qualified_name, m)) { return -2; }
-    u8[] q = interner::symbol_str(v.qualified_name, mm.interner);
+    u8[] q = interner::symbol_str(v.qualified_name);
     if(!testing::expect_eq(q, "testmod::errno", m)) { return -3; }
     return 0;
 }
@@ -957,6 +1594,87 @@ fn i32 main() {
 
     testing::add(sc, "scope_grow_preserves_entries",        &scope_grow_preserves_entries);
     testing::add(sc, "scope_grow_cap_is_power_of_two",      &scope_grow_cap_is_power_of_two);
+
+    u8[] rs = "Sema ResolutionStack Tests";
+    testing::add(rs, "stack_empty_does_not_contain",        &stack_empty_does_not_contain);
+    testing::add(rs, "stack_push_then_contains",            &stack_push_then_contains);
+    testing::add(rs, "stack_push_pop_no_longer_contains",   &stack_push_pop_no_longer_contains);
+    testing::add(rs, "stack_distinguishes_module",          &stack_distinguishes_module);
+    testing::add(rs, "stack_distinguishes_name",            &stack_distinguishes_name);
+    testing::add(rs, "stack_multi_push_all_contained",      &stack_multi_push_all_contained);
+    testing::add(rs, "stack_pop_only_removes_top",          &stack_pop_only_removes_top);
+
+    u8[] dh = "Sema Decl Helper Tests";
+    testing::add(dh, "lvalue_var_non_const_true",  &lvalue_var_non_const_true);
+    testing::add(dh, "lvalue_var_const_true",      &lvalue_var_const_true);
+    testing::add(dh, "lvalue_fn_false",            &lvalue_fn_false);
+    testing::add(dh, "lvalue_param_true",          &lvalue_param_true);
+    testing::add(dh, "lvalue_field_true",          &lvalue_field_true);
+    testing::add(dh, "lvalue_enum_member_false",   &lvalue_enum_member_false);
+    testing::add(dh, "lvalue_import_false",        &lvalue_import_false);
+
+    testing::add(dh, "constexpr_var_const_true",     &constexpr_var_const_true);
+    testing::add(dh, "constexpr_var_non_const_false", &constexpr_var_non_const_false);
+    testing::add(dh, "constexpr_enum_member_true",   &constexpr_enum_member_true);
+    testing::add(dh, "constexpr_fn_true",            &constexpr_fn_true);
+    testing::add(dh, "constexpr_param_false",        &constexpr_param_false);
+    testing::add(dh, "constexpr_field_false",        &constexpr_field_false);
+    testing::add(dh, "constexpr_import_false",       &constexpr_import_false);
+
+    u8[] cd = "Sema container_decl Tests";
+    testing::add(cd, "container_decl_for_struct",         &container_decl_for_struct);
+    testing::add(cd, "container_decl_for_union",          &container_decl_for_union);
+    testing::add(cd, "container_decl_for_primitive_null", &container_decl_for_primitive_null);
+    testing::add(cd, "container_decl_for_pointer_null",   &container_decl_for_pointer_null);
+    testing::add(cd, "container_decl_for_slice_null",     &container_decl_for_slice_null);
+
+    u8[] ff = "Sema Field / Enum Lookup Tests";
+    testing::add(ff, "find_field_returns_existing",       &find_field_returns_existing);
+    testing::add(ff, "find_field_returns_null_for_missing", &find_field_returns_null_for_missing);
+    testing::add(ff, "find_field_empty_returns_null",     &find_field_empty_returns_null);
+    testing::add(ff, "find_field_works_on_union",         &find_field_works_on_union);
+    testing::add(ff, "find_field_index_first",            &find_field_index_first);
+    testing::add(ff, "find_field_index_last",             &find_field_index_last);
+    testing::add(ff, "find_field_index_missing_is_max",   &find_field_index_missing_is_max);
+    testing::add(ff, "find_enum_member_existing",         &find_enum_member_existing);
+    testing::add(ff, "find_enum_member_missing",          &find_enum_member_missing);
+    testing::add(ff, "find_enum_member_empty",            &find_enum_member_empty);
+
+    u8[] mk = "Sema make_*_decl Tests";
+    testing::add(mk, "make_field_decl_kind",            &make_field_decl_kind);
+    testing::add(mk, "make_field_decl_name_set",        &make_field_decl_name_set);
+    testing::add(mk, "make_field_decl_ty_set",          &make_field_decl_ty_set);
+    testing::add(mk, "make_field_decl_data_field_set",  &make_field_decl_data_field_set);
+    testing::add(mk, "make_enum_member_decl_kind",      &make_enum_member_decl_kind);
+    testing::add(mk, "make_enum_member_decl_name_set",  &make_enum_member_decl_name_set);
+    testing::add(mk, "make_enum_member_decl_ty_set",    &make_enum_member_decl_ty_set);
+    testing::add(mk, "make_enum_member_decl_data_set",  &make_enum_member_decl_data_set);
+
+    u8[] dg = "Sema Diagnostic Tests";
+    testing::add(dg, "diag_type_mismatch_emits_one_entry",       &diag_type_mismatch_emits_one_entry);
+    testing::add(dg, "diag_type_mismatch_records_src_pos",       &diag_type_mismatch_records_src_pos);
+    testing::add(dg, "diag_type_mismatch_mentions_expected",     &diag_type_mismatch_mentions_expected);
+    testing::add(dg, "diag_type_mismatch_mentions_got",          &diag_type_mismatch_mentions_got);
+    testing::add(dg, "diag_type_mismatch_is_error_not_warning",  &diag_type_mismatch_is_error_not_warning);
+    testing::add(dg, "diag_lit_overflow_emits_entry",            &diag_lit_overflow_emits_entry);
+    testing::add(dg, "diag_lit_overflow_mentions_type",          &diag_lit_overflow_mentions_type);
+    testing::add(dg, "diag_lit_overflow_mentions_value",         &diag_lit_overflow_mentions_value);
+    testing::add(dg, "diag_cast_invalid_mentions_both_types",    &diag_cast_invalid_mentions_both_types);
+    testing::add(dg, "diag_binop_mismatch_mentions_both_types",  &diag_binop_mismatch_mentions_both_types);
+    testing::add(dg, "diag_not_bool_convertible_mentions_type",  &diag_not_bool_convertible_mentions_type);
+    testing::add(dg, "diag_resolution_cycle_emits_entry",        &diag_resolution_cycle_emits_entry);
+    testing::add(dg, "diag_resolution_cycle_mentions_name",      &diag_resolution_cycle_mentions_name);
+    testing::add(dg, "diag_needs_context_emits_entry",           &diag_needs_context_emits_entry);
+
+    u8[] ci = "Sema check_int_lit Tests";
+    testing::add(ci, "check_int_lit_positive_fits_u8",     &check_int_lit_positive_fits_u8);
+    testing::add(ci, "check_int_lit_sets_ty_on_success",   &check_int_lit_sets_ty_on_success);
+    testing::add(ci, "check_int_lit_overflow_returns_false", &check_int_lit_overflow_returns_false);
+    testing::add(ci, "check_int_lit_overflow_emits_diag",  &check_int_lit_overflow_emits_diag);
+    testing::add(ci, "check_int_lit_overflow_sets_had_error", &check_int_lit_overflow_sets_had_error);
+    testing::add(ci, "check_int_lit_float_target_rejected", &check_int_lit_float_target_rejected);
+    testing::add(ci, "check_int_lit_fits_largest_u64",     &check_int_lit_fits_largest_u64);
+    testing::add(ci, "check_int_lit_zero_fits_any_int",    &check_int_lit_zero_fits_any_int);
 
     testing::add(sc, "scope_add_duplicate_keeps_first",    &scope_add_duplicate_keeps_first);
 

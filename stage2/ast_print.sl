@@ -11,7 +11,7 @@ import token;
 // AstKind — unknown values produce "<unknown kind N>", a soft failure that
 // makes a missing arm visible in tests rather than silently dropping the node.
 
-export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::OutBuf* out) {
+export fn void print(ast::AstNode* n, i32 indent, io::OutBuf* out) {
     write_indent(out, indent);
     if(!n) {
         io::outbuf_write(out, "<null>\n");
@@ -25,187 +25,187 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
     case ast::AstKind::ImportDecl: {
         ast::ImportNode* d = (ast::ImportNode*)n;
         io::outbuf_write(out, "Import ");
-        write_sym(out, d.module_name, it);
+        write_sym(out, d.module_name);
         if(d.is_reexport) { io::outbuf_write(out, " reexport"); }
         io::outbuf_write_byte(out, '\n');
     }
     case ast::AstKind::VarDecl: {
         ast::VarDeclNode* d = (ast::VarDeclNode*)n;
         io::outbuf_write(out, "VarDecl ");
-        write_sym(out, d.name, it);
+        write_sym(out, d.name);
         if(d.is_const) { io::outbuf_write(out, " const"); }
         if(d.is_exported) { io::outbuf_write(out, " exported"); }
         io::outbuf_write_byte(out, '\n');
-        write_labeled_child(out, indent + 1, "type", d.type_expr, it);
-        write_labeled_child(out, indent + 1, "init", d.init, it);
+        write_labeled_child(out, indent + 1, "type", d.type_expr);
+        write_labeled_child(out, indent + 1, "init", d.init);
     }
     case ast::AstKind::FnDecl: {
         ast::FnDeclNode* d = (ast::FnDeclNode*)n;
         io::outbuf_write(out, "FnDecl ");
-        write_sym(out, d.name, it);
+        write_sym(out, d.name);
         if(d.is_exported) { io::outbuf_write(out, " exported"); }
         io::outbuf_write_byte(out, '\n');
-        write_labeled_child(out, indent + 1, "return", d.return_type, it);
-        write_params(out, indent + 1, d.params, it);
-        write_labeled_child(out, indent + 1, "body", d.body, it);
+        write_labeled_child(out, indent + 1, "return", d.return_type);
+        write_params(out, indent + 1, d.params);
+        write_labeled_child(out, indent + 1, "body", d.body);
     }
     case ast::AstKind::StructDecl: {
         ast::StructDeclNode* d = (ast::StructDeclNode*)n;
         io::outbuf_write(out, "StructDecl ");
-        write_sym(out, d.name, it);
+        write_sym(out, d.name);
         if(d.is_exported) { io::outbuf_write(out, " exported"); }
         io::outbuf_write_byte(out, '\n');
-        write_fields(out, indent + 1, d.fields, it);
+        write_fields(out, indent + 1, d.fields);
     }
     case ast::AstKind::UnionDecl: {
         ast::UnionDeclNode* d = (ast::UnionDeclNode*)n;
         io::outbuf_write(out, "UnionDecl ");
-        write_sym(out, d.name, it);
+        write_sym(out, d.name);
         if(d.is_exported) { io::outbuf_write(out, " exported"); }
         io::outbuf_write_byte(out, '\n');
-        write_fields(out, indent + 1, d.fields, it);
+        write_fields(out, indent + 1, d.fields);
     }
     case ast::AstKind::EnumDecl: {
         ast::EnumDeclNode* d = (ast::EnumDeclNode*)n;
         io::outbuf_write(out, "EnumDecl ");
-        write_sym(out, d.name, it);
+        write_sym(out, d.name);
         if(d.is_exported) { io::outbuf_write(out, " exported"); }
         io::outbuf_write_byte(out, '\n');
-        write_labeled_child(out, indent + 1, "base", d.base_type, it);
-        write_enum_members(out, indent + 1, d.members, it);
+        write_labeled_child(out, indent + 1, "base", d.base_type);
+        write_enum_members(out, indent + 1, d.members);
     }
     case ast::AstKind::AliasDecl: {
         ast::AliasDeclNode* d = (ast::AliasDeclNode*)n;
         io::outbuf_write(out, "AliasDecl ");
-        write_sym(out, d.name, it);
+        write_sym(out, d.name);
         if(d.is_exported) { io::outbuf_write(out, " exported"); }
         io::outbuf_write_byte(out, '\n');
-        write_labeled_child(out, indent + 1, "target", d.target, it);
+        write_labeled_child(out, indent + 1, "target", d.target);
     }
     case ast::AstKind::ExternBlock: {
         ast::ExternBlockNode* d = (ast::ExternBlockNode*)n;
         io::outbuf_write(out, "ExternBlock ");
-        if(d.lib_name) { write_sym(out, d.lib_name, it); }
+        if(d.lib_name) { write_sym(out, d.lib_name); }
         else           { io::outbuf_write(out, "c"); }
         io::outbuf_write_byte(out, '\n');
-        write_children(out, indent + 1, d.items, it);
+        write_children(out, indent + 1, d.items);
     }
     case ast::AstKind::ExternFnDecl: {
         ast::ExternFnDeclNode* d = (ast::ExternFnDeclNode*)n;
         io::outbuf_write(out, "ExternFnDecl ");
-        write_sym(out, d.name, it);
+        write_sym(out, d.name);
         if(d.is_variadic) { io::outbuf_write(out, " variadic"); }
         if(d.is_exported) { io::outbuf_write(out, " exported"); }
         io::outbuf_write_byte(out, '\n');
-        write_labeled_child(out, indent + 1, "return", d.return_type, it);
-        write_params(out, indent + 1, d.params, it);
+        write_labeled_child(out, indent + 1, "return", d.return_type);
+        write_params(out, indent + 1, d.params);
     }
     case ast::AstKind::ExternStructDecl: {
         ast::ExternStructDeclNode* d = (ast::ExternStructDeclNode*)n;
         io::outbuf_write(out, "ExternStructDecl ");
-        write_sym(out, d.name, it);
+        write_sym(out, d.name);
         if(d.is_opaque)   { io::outbuf_write(out, " opaque"); }
         if(d.is_exported) { io::outbuf_write(out, " exported"); }
         io::outbuf_write_byte(out, '\n');
-        write_fields(out, indent + 1, d.fields, it);
+        write_fields(out, indent + 1, d.fields);
     }
     case ast::AstKind::ExternUnionDecl: {
         ast::ExternUnionDeclNode* d = (ast::ExternUnionDeclNode*)n;
         io::outbuf_write(out, "ExternUnionDecl ");
-        write_sym(out, d.name, it);
+        write_sym(out, d.name);
         if(d.is_opaque)   { io::outbuf_write(out, " opaque"); }
         if(d.is_exported) { io::outbuf_write(out, " exported"); }
         io::outbuf_write_byte(out, '\n');
-        write_fields(out, indent + 1, d.fields, it);
+        write_fields(out, indent + 1, d.fields);
     }
 
     // statements /////////////////////////////////////////////////////////////
     case ast::AstKind::BlockStmt: {
         ast::BlockNode* s = (ast::BlockNode*)n;
         io::outbuf_write(out, "Block\n");
-        write_children(out, indent + 1, s.stmts, it);
+        write_children(out, indent + 1, s.stmts);
     }
     case ast::AstKind::IfStmt: {
         ast::IfNode* s = (ast::IfNode*)n;
         io::outbuf_write(out, "If\n");
-        write_labeled_child(out, indent + 1, "cond", s.cond, it);
-        write_labeled_child(out, indent + 1, "then", s.then_block, it);
+        write_labeled_child(out, indent + 1, "cond", s.cond);
+        write_labeled_child(out, indent + 1, "then", s.then_block);
         if(s.else_block) {
-            write_labeled_child(out, indent + 1, "else", s.else_block, it);
+            write_labeled_child(out, indent + 1, "else", s.else_block);
         }
     }
     case ast::AstKind::WhileStmt: {
         ast::WhileNode* s = (ast::WhileNode*)n;
         io::outbuf_write(out, "While\n");
-        write_labeled_child(out, indent + 1, "cond", s.cond, it);
-        write_labeled_child(out, indent + 1, "body", s.body, it);
+        write_labeled_child(out, indent + 1, "cond", s.cond);
+        write_labeled_child(out, indent + 1, "body", s.body);
     }
     case ast::AstKind::ForStmt: {
         ast::ForNode* s = (ast::ForNode*)n;
         io::outbuf_write(out, "For\n");
-        write_labeled_child(out, indent + 1, "init", s.init, it);
-        write_labeled_child(out, indent + 1, "cond", s.cond, it);
-        write_labeled_child(out, indent + 1, "post", s.post, it);
-        write_labeled_child(out, indent + 1, "body", s.body, it);
+        write_labeled_child(out, indent + 1, "init", s.init);
+        write_labeled_child(out, indent + 1, "cond", s.cond);
+        write_labeled_child(out, indent + 1, "post", s.post);
+        write_labeled_child(out, indent + 1, "body", s.body);
     }
     case ast::AstKind::SwitchStmt: {
         ast::SwitchNode* s = (ast::SwitchNode*)n;
         io::outbuf_write(out, "Switch\n");
-        write_labeled_child(out, indent + 1, "discriminant", s.discriminant, it);
-        write_switch_arms(out, indent + 1, s.arms, it);
+        write_labeled_child(out, indent + 1, "discriminant", s.discriminant);
+        write_switch_arms(out, indent + 1, s.arms);
         if(s.else_block) {
-            write_labeled_child(out, indent + 1, "else", s.else_block, it);
+            write_labeled_child(out, indent + 1, "else", s.else_block);
         }
     }
     case ast::AstKind::ReturnStmt: {
         ast::ReturnNode* s = (ast::ReturnNode*)n;
         io::outbuf_write(out, "Return\n");
-        if(s.expr) { print(s.expr, it, indent + 1, out); }
+        if(s.expr) { print(s.expr, indent + 1, out); }
     }
     case ast::AstKind::BreakStmt:    { io::outbuf_write(out, "Break\n"); }
     case ast::AstKind::ContinueStmt: { io::outbuf_write(out, "Continue\n"); }
     case ast::AstKind::DeferStmt: {
         ast::DeferNode* s = (ast::DeferNode*)n;
         io::outbuf_write(out, "Defer\n");
-        print(s.body, it, indent + 1, out);
+        print(s.body, indent + 1, out);
     }
     case ast::AstKind::AssignmentStmt: {
         ast::AssignmentNode* s = (ast::AssignmentNode*)n;
         io::outbuf_write(out, "Assign ");
         io::outbuf_write(out, token::kind_name(s.op));
         io::outbuf_write_byte(out, '\n');
-        print(s.lhs, it, indent + 1, out);
-        print(s.rhs, it, indent + 1, out);
+        print(s.lhs, indent + 1, out);
+        print(s.rhs, indent + 1, out);
     }
     case ast::AstKind::ExprStmt: {
         ast::ExprStmtNode* s = (ast::ExprStmtNode*)n;
         io::outbuf_write(out, "ExprStmt\n");
-        print(s.expr, it, indent + 1, out);
+        print(s.expr, indent + 1, out);
     }
     case ast::AstKind::ComprunStmt: {
         ast::CompRunNode* s = (ast::CompRunNode*)n;
         io::outbuf_write(out, "Comprun\n");
-        print(s.body, it, indent + 1, out);
+        print(s.body, indent + 1, out);
     }
     case ast::AstKind::CompinsertStmt: {
         ast::CompInsertNode* s = (ast::CompInsertNode*)n;
         io::outbuf_write(out, "Compinsert\n");
-        print(s.source_expr, it, indent + 1, out);
+        print(s.source_expr, indent + 1, out);
     }
     case ast::AstKind::CompspliceStmt: {
         ast::CompSpliceNode* s = (ast::CompSpliceNode*)n;
         io::outbuf_write(out, "Compsplice\n");
-        print(s.code_expr, it, indent + 1, out);
+        print(s.code_expr, indent + 1, out);
     }
     case ast::AstKind::ComperrorStmt: {
         ast::CompErrorNode* s = (ast::CompErrorNode*)n;
         io::outbuf_write(out, "Comperror\n");
-        print(s.msg_expr, it, indent + 1, out);
+        print(s.msg_expr, indent + 1, out);
     }
     case ast::AstKind::CompwarningStmt: {
         ast::CompWarningNode* s = (ast::CompWarningNode*)n;
         io::outbuf_write(out, "Compwarning\n");
-        print(s.msg_expr, it, indent + 1, out);
+        print(s.msg_expr, indent + 1, out);
     }
 
     // expressions ////////////////////////////////////////////////////////////
@@ -245,98 +245,98 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
     case ast::AstKind::Ident: {
         ast::IdentNode* e = (ast::IdentNode*)n;
         io::outbuf_write(out, "Ident ");
-        write_sym(out, e.name, it);
+        write_sym(out, e.name);
         io::outbuf_write_byte(out, '\n');
     }
     case ast::AstKind::NamespaceAccess: {
         ast::NamespaceAccessNode* e = (ast::NamespaceAccessNode*)n;
         io::outbuf_write(out, "NamespaceAccess ");
-        write_ns_chain(out, (ast::AstNode*)e, it);
+        write_ns_chain(out, (ast::AstNode*)e);
         io::outbuf_write_byte(out, '\n');
     }
     case ast::AstKind::MemberAccess: {
         ast::MemberAccessNode* e = (ast::MemberAccessNode*)n;
         io::outbuf_write(out, "MemberAccess .");
-        write_sym(out, e.field, it);
+        write_sym(out, e.field);
         io::outbuf_write_byte(out, '\n');
-        print(e.base, it, indent + 1, out);
+        print(e.base, indent + 1, out);
     }
     case ast::AstKind::ArrayIndex: {
         ast::ArrayIndexNode* e = (ast::ArrayIndexNode*)n;
         io::outbuf_write(out, "ArrayIndex\n");
-        write_labeled_child(out, indent + 1, "base", e.base, it);
-        write_labeled_child(out, indent + 1, "index", e.index, it);
+        write_labeled_child(out, indent + 1, "base", e.base);
+        write_labeled_child(out, indent + 1, "index", e.index);
     }
     case ast::AstKind::SliceRange: {
         ast::SliceRangeNode* e = (ast::SliceRangeNode*)n;
         io::outbuf_write(out, "SliceRange\n");
-        write_labeled_child(out, indent + 1, "base", e.base, it);
-        write_labeled_child(out, indent + 1, "lo", e.lo, it);
-        write_labeled_child(out, indent + 1, "hi", e.hi, it);
+        write_labeled_child(out, indent + 1, "base", e.base);
+        write_labeled_child(out, indent + 1, "lo", e.lo);
+        write_labeled_child(out, indent + 1, "hi", e.hi);
     }
     case ast::AstKind::Call: {
         ast::CallNode* e = (ast::CallNode*)n;
         io::outbuf_write(out, "Call\n");
-        write_labeled_child(out, indent + 1, "callee", e.callee, it);
+        write_labeled_child(out, indent + 1, "callee", e.callee);
         write_indent(out, indent + 1);
         io::outbuf_write(out, "args\n");
-        write_children(out, indent + 2, e.args, it);
+        write_children(out, indent + 2, e.args);
     }
     case ast::AstKind::Cast: {
         ast::CastNode* e = (ast::CastNode*)n;
         io::outbuf_write(out, "Cast\n");
-        write_labeled_child(out, indent + 1, "type", e.target_type, it);
-        write_labeled_child(out, indent + 1, "expr", e.expr, it);
+        write_labeled_child(out, indent + 1, "type", e.target_type);
+        write_labeled_child(out, indent + 1, "expr", e.expr);
     }
     case ast::AstKind::UnaryOp: {
         ast::UnaryOpNode* e = (ast::UnaryOpNode*)n;
         io::outbuf_write(out, "UnaryOp ");
         io::outbuf_write(out, token::kind_name(e.op));
         io::outbuf_write_byte(out, '\n');
-        print(e.operand, it, indent + 1, out);
+        print(e.operand, indent + 1, out);
     }
     case ast::AstKind::BinaryOp: {
         ast::BinaryOpNode* e = (ast::BinaryOpNode*)n;
         io::outbuf_write(out, "BinaryOp ");
         io::outbuf_write(out, token::kind_name(e.op));
         io::outbuf_write_byte(out, '\n');
-        print(e.lhs, it, indent + 1, out);
-        print(e.rhs, it, indent + 1, out);
+        print(e.lhs, indent + 1, out);
+        print(e.rhs, indent + 1, out);
     }
     case ast::AstKind::StructLit: {
         ast::StructLitNode* e = (ast::StructLitNode*)n;
         io::outbuf_write(out, "StructLit\n");
-        write_field_inits(out, indent + 1, e.inits, it);
+        write_field_inits(out, indent + 1, e.inits);
     }
     case ast::AstKind::ArrayLit: {
         ast::ArrayLitNode* e = (ast::ArrayLitNode*)n;
         io::outbuf_write(out, "ArrayLit\n");
-        write_children(out, indent + 1, e.elems, it);
+        write_children(out, indent + 1, e.elems);
     }
     case ast::AstKind::Sizeof: {
         ast::SizeofNode* e = (ast::SizeofNode*)n;
         io::outbuf_write(out, "Sizeof\n");
-        print(e.arg, it, indent + 1, out);
+        print(e.arg, indent + 1, out);
     }
     case ast::AstKind::Alignof: {
         ast::AlignofNode* e = (ast::AlignofNode*)n;
         io::outbuf_write(out, "Alignof\n");
-        print(e.arg, it, indent + 1, out);
+        print(e.arg, indent + 1, out);
     }
     case ast::AstKind::Typeof: {
         ast::TypeofNode* e = (ast::TypeofNode*)n;
         io::outbuf_write(out, "Typeof\n");
-        print(e.expr, it, indent + 1, out);
+        print(e.expr, indent + 1, out);
     }
     case ast::AstKind::Type_info: {
         ast::TypeInfoNode* e = (ast::TypeInfoNode*)n;
         io::outbuf_write(out, "TypeInfo\n");
-        print(e.arg, it, indent + 1, out);
+        print(e.arg, indent + 1, out);
     }
     case ast::AstKind::Compcode: {
         ast::CompCodeNode* e = (ast::CompCodeNode*)n;
         io::outbuf_write(out, "CompCode\n");
-        print(e.body, it, indent + 1, out);
+        print(e.body, indent + 1, out);
     }
 
     // type expressions ///////////////////////////////////////////////////////
@@ -350,10 +350,10 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
         ast::TypeNamedNode* t = (ast::TypeNamedNode*)n;
         io::outbuf_write(out, "NamedType ");
         if(t.namespace) {
-            write_sym(out, t.namespace, it);
+            write_sym(out, t.namespace);
             io::outbuf_write(out, "::");
         }
-        write_sym(out, t.name, it);
+        write_sym(out, t.name);
         io::outbuf_write_byte(out, '\n');
     }
     case ast::AstKind::PointerType: {
@@ -361,36 +361,36 @@ export fn void print(ast::AstNode* n, interner::Interner* it, i32 indent, io::Ou
         io::outbuf_write(out, "PointerType");
         if(t.is_const) { io::outbuf_write(out, " const"); }
         io::outbuf_write_byte(out, '\n');
-        print(t.pointee, it, indent + 1, out);
+        print(t.pointee, indent + 1, out);
     }
     case ast::AstKind::ArrayType: {
         ast::TypeArrayNode* t = (ast::TypeArrayNode*)n;
         io::outbuf_write(out, "ArrayType\n");
-        write_labeled_child(out, indent + 1, "element", t.element, it);
-        write_labeled_child(out, indent + 1, "size", t.size_expr, it);
+        write_labeled_child(out, indent + 1, "element", t.element);
+        write_labeled_child(out, indent + 1, "size", t.size_expr);
     }
     case ast::AstKind::SliceType: {
         ast::TypeSliceNode* t = (ast::TypeSliceNode*)n;
         io::outbuf_write(out, "SliceType\n");
-        print(t.element, it, indent + 1, out);
+        print(t.element, indent + 1, out);
     }
     case ast::AstKind::FnPtrType: {
         ast::TypeFnPtrNode* t = (ast::TypeFnPtrNode*)n;
         io::outbuf_write(out, "FnPtrType\n");
-        write_labeled_child(out, indent + 1, "return", t.return_type, it);
+        write_labeled_child(out, indent + 1, "return", t.return_type);
         write_indent(out, indent + 1);
         io::outbuf_write(out, "params\n");
-        write_children(out, indent + 2, t.param_types, it);
+        write_children(out, indent + 2, t.param_types);
     }
     case ast::AstKind::StructType: {
         ast::TypeStructNode* t = (ast::TypeStructNode*)n;
         io::outbuf_write(out, "StructType\n");
-        write_fields(out, indent + 1, t.fields, it);
+        write_fields(out, indent + 1, t.fields);
     }
     case ast::AstKind::UnionType: {
         ast::TypeUnionNode* t = (ast::TypeUnionNode*)n;
         io::outbuf_write(out, "UnionType\n");
-        write_fields(out, indent + 1, t.fields, it);
+        write_fields(out, indent + 1, t.fields);
     }
 
     else {
@@ -409,30 +409,30 @@ fn void write_indent(io::OutBuf* out, i32 indent) {
     }
 }
 
-fn void write_sym(io::OutBuf* out, symbol::Symbol* s, interner::Interner* it) {
+fn void write_sym(io::OutBuf* out, symbol::Symbol* s) {
     if(!s) { io::outbuf_write(out, "<null>"); return; }
-    u8[] bytes = interner::symbol_str(s, it);
+    u8[] bytes = interner::symbol_str(s);
     io::outbuf_write(out, bytes);
 }
 
-fn void write_ns_chain(io::OutBuf* out, ast::AstNode* n, interner::Interner* it) {
+fn void write_ns_chain(io::OutBuf* out, ast::AstNode* n) {
     if(!n) { io::outbuf_write(out, "<null>"); return; }
     if(n.h.kind == ast::AstKind::NamespaceAccess) {
         ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)n;
-        write_ns_chain(out, na.base, it);
+        write_ns_chain(out, na.base);
         io::outbuf_write(out, "::");
-        write_sym(out, na.name, it);
+        write_sym(out, na.name);
         return;
     }
     if(n.h.kind == ast::AstKind::Ident) {
         ast::IdentNode* id = (ast::IdentNode*)n;
-        write_sym(out, id.name, it);
+        write_sym(out, id.name);
         return;
     }
     io::outbuf_write(out, "<bad-ns-base>");
 }
 
-fn void write_labeled_child(io::OutBuf* out, i32 indent, u8[] label, ast::AstNode* child, interner::Interner* it) {
+fn void write_labeled_child(io::OutBuf* out, i32 indent, u8[] label, ast::AstNode* child) {
     write_indent(out, indent);
     io::outbuf_write(out, label);
     if(!child) {
@@ -441,72 +441,72 @@ fn void write_labeled_child(io::OutBuf* out, i32 indent, u8[] label, ast::AstNod
     }
     io::outbuf_write_byte(out, ':');
     io::outbuf_write_byte(out, '\n');
-    print(child, it, indent + 1, out);
+    print(child, indent + 1, out);
 }
 
-fn void write_children(io::OutBuf* out, i32 indent, ast::AstNode*[] list, interner::Interner* it) {
+fn void write_children(io::OutBuf* out, i32 indent, ast::AstNode*[] list) {
     for(u64 i = 0; i < list.len; i += 1) {
-        print(list[i], it, indent, out);
+        print(list[i], indent, out);
     }
 }
 
-fn void write_params(io::OutBuf* out, i32 indent, ast::Param[] params, interner::Interner* it) {
+fn void write_params(io::OutBuf* out, i32 indent, ast::Param[] params) {
     for(u64 i = 0; i < params.len; i += 1) {
         write_indent(out, indent);
         io::outbuf_write(out, "Param ");
-        write_sym(out, params[i].name, it);
+        write_sym(out, params[i].name);
         if(params[i].is_const) { io::outbuf_write(out, " const"); }
         if(params[i].is_comptime) { io::outbuf_write(out, " comptime"); }
         io::outbuf_write_byte(out, '\n');
-        print(params[i].type_expr, it, indent + 1, out);
+        print(params[i].type_expr, indent + 1, out);
     }
 }
 
-fn void write_fields(io::OutBuf* out, i32 indent, ast::FieldDecl[] fields, interner::Interner* it) {
+fn void write_fields(io::OutBuf* out, i32 indent, ast::FieldDecl[] fields) {
     for(u64 i = 0; i < fields.len; i += 1) {
         write_indent(out, indent);
         io::outbuf_write(out, "Field ");
-        write_sym(out, fields[i].name, it);
+        write_sym(out, fields[i].name);
         io::outbuf_write_byte(out, '\n');
-        print(fields[i].type_expr, it, indent + 1, out);
+        print(fields[i].type_expr, indent + 1, out);
     }
 }
 
-fn void write_enum_members(io::OutBuf* out, i32 indent, ast::EnumMember[] members, interner::Interner* it) {
+fn void write_enum_members(io::OutBuf* out, i32 indent, ast::EnumMember[] members) {
     for(u64 i = 0; i < members.len; i += 1) {
         write_indent(out, indent);
         io::outbuf_write(out, "Member ");
-        write_sym(out, members[i].name, it);
+        write_sym(out, members[i].name);
         io::outbuf_write_byte(out, '\n');
         if(members[i].value_expr) {
-            print(members[i].value_expr, it, indent + 1, out);
+            print(members[i].value_expr, indent + 1, out);
         }
     }
 }
 
-fn void write_field_inits(io::OutBuf* out, i32 indent, ast::FieldInitializer[] inits, interner::Interner* it) {
+fn void write_field_inits(io::OutBuf* out, i32 indent, ast::FieldInitializer[] inits) {
     for(u64 i = 0; i < inits.len; i += 1) {
         write_indent(out, indent);
         if(inits[i].name) {
             io::outbuf_write(out, ".");
-            write_sym(out, inits[i].name, it);
+            write_sym(out, inits[i].name);
             io::outbuf_write_byte(out, '\n');
         } else {
             io::outbuf_write(out, "positional\n");
         }
-        print(inits[i].value, it, indent + 1, out);
+        print(inits[i].value, indent + 1, out);
     }
 }
 
-fn void write_switch_arms(io::OutBuf* out, i32 indent, ast::SwitchArm[] arms, interner::Interner* it) {
+fn void write_switch_arms(io::OutBuf* out, i32 indent, ast::SwitchArm[] arms) {
     for(u64 i = 0; i < arms.len; i += 1) {
         write_indent(out, indent);
         io::outbuf_write(out, "Arm\n");
         write_indent(out, indent + 1);
         io::outbuf_write(out, "labels\n");
-        write_children(out, indent + 2, arms[i].labels, it);
+        write_children(out, indent + 2, arms[i].labels);
         if(arms[i].body) {
-            write_labeled_child(out, indent + 1, "body", arms[i].body, it);
+            write_labeled_child(out, indent + 1, "body", arms[i].body);
         }
     }
 }

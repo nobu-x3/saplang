@@ -12,17 +12,16 @@ import token;
 
 const u64 BUCKET_COUNT = 64;
 
-fn void load_kw_local(interner::Interner* it) {
+fn void load_kw_local() {
     for(u64 i = 0; i < token::KEYWORDS.len; i += 1) {
-        symbol::Symbol* sym = interner::intern(it, token::KEYWORDS[i].bytes);
+        symbol::Symbol* sym = interner::intern(token::KEYWORDS[i].bytes);
         sym.keyword_kind = (u16)token::KEYWORDS[i].kind;
     }
 }
 
 fn module::Module* prepare(arena::Arena* a, u8[] src) {
-    interner::Interner* it = arena::alloc(a, sizeof(interner::Interner));
-    interner::init(it, a, BUCKET_COUNT);
-    load_kw_local(it);
+    interner::init(a, BUCKET_COUNT);
+    load_kw_local();
 
     module::Module* m = arena::alloc(a, sizeof(module::Module));
     m.name = null;
@@ -32,7 +31,6 @@ fn module::Module* prepare(arena::Arena* a, u8[] src) {
     m.tokens_cap = 0;
     m.literal_pool = {null, 0};
     m.literal_pool_cap = 0;
-    m.interner = it;
     m.arena = a;
     m.diag.entries = {null, 0};
     m.diag.entries_cap = 0;
@@ -56,7 +54,7 @@ fn u8[] string_bytes(module::Module* m, u64 i) {
 }
 
 fn u8[] ident_text(module::Module* m, u64 i) {
-    return interner::symbol_str(m.tokens[i].data.sym, m.interner);
+    return interner::symbol_str(m.tokens[i].data.sym);
 }
 
 // ---------- empty / whitespace / comments ----------

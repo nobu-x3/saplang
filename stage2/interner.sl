@@ -10,23 +10,42 @@ export struct Interner {
     u64                 slab_cap;
     symbol::Symbol*[]   buckets;
     u64                 entry_count;
-    mutex::Mutex        lock;       // the interner is process-global; intern locking lands with the driver
+    mutex::Mutex        lock;
 }
 
+// Process-global; reached only through acquire()/release() or the self-locking wrappers.
+Interner GLOBAL;
+
 // bucket_count must be a power of two.
-export fn void init(Interner* it, arena::Arena* a, u64 bucket_count) {
+export fn void init(arena::Arena* a, u64 bucket_count) {
     u64 nbytes = bucket_count * sizeof(symbol::Symbol*);
     void* raw = arena::alloc(a, nbytes);
     sys::memset(raw, 0, nbytes);
-    it.slab_arena = a;
-    it.slab = {null, 0};
-    it.slab_cap = 0;
-    it.buckets = {(symbol::Symbol**)raw, bucket_count};
-    it.entry_count = 0;
-    mutex::create(&it.lock);
+    GLOBAL.slab_arena = a;
+    GLOBAL.slab = {null, 0};
+    GLOBAL.slab_cap = 0;
+    GLOBAL.buckets = {(symbol::Symbol**)raw, bucket_count};
+    GLOBAL.entry_count = 0;
+    mutex::create(&GLOBAL.lock);
 }
 
-export fn symbol::Symbol* intern(Interner* it, u8[] bytes) {
+export fn Interner* acquire() {
+    mutex::lock(&GLOBAL.lock);
+    return &GLOBAL;
+}
+
+export fn void release() {
+    mutex::unlock(&GLOBAL.lock);
+}
+
+export fn symbol::Symbol* intern(u8[] bytes) {
+    Interner* it = interner::acquire();
+    symbol::Symbol* result = _intern(it, bytes);
+    interner::release();
+    return result;
+}
+
+fn symbol::Symbol* _intern(Interner* it, u8[] bytes) {
     u32 hash = hash::fnv1a_32(bytes);
     u64 idx = (u64)hash & (it.buckets.len - 1);
     // walk the chain at this bucket
@@ -49,8 +68,9 @@ export fn symbol::Symbol* intern(Interner* it, u8[] bytes) {
     return sym;
 }
 
-export fn u8[] symbol_str(symbol::Symbol* s, Interner* it) {
-    return { .ptr = &it.slab[s.offset], .len = (u64)s.len };
+// Lock-free: the slab is append-only, so a concurrent grow leaves these bytes valid.
+export fn u8[] symbol_str(symbol::Symbol* s) {
+    return { .ptr = &GLOBAL.slab[s.offset], .len = (u64)s.len };
 }
 
 // PRIVATE

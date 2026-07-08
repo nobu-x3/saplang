@@ -213,9 +213,9 @@ export const KeywordEntry[] KEYWORDS = [
     { "typeof", TokenKind::TYPEOF }, { "type_info", TokenKind::TYPE_INFO },
 ];
 
-export fn void load_keywords(interner::Interner* it) {
+export fn void load_keywords() {
     for (u64 i = 0; i < token::KEYWORDS.len; i += 1) {
-        symbol::Symbol* sym = interner::intern(it, KEYWORDS[i].bytes);
+        symbol::Symbol* sym = interner::intern(KEYWORDS[i].bytes);
         sym.keyword_kind = structs::KEYWORDS[i].kind;
     }
 }

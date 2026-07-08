@@ -656,7 +656,7 @@ fn ast::AstNode* parse_extern_block(Parser* p) {
         u8[] bytes;
         bytes.ptr = &p.m.literal_pool.ptr[s.data.bytes.off];
         bytes.len = (u64)s.data.bytes.len;
-        lib_name = interner::intern(p.m.interner, bytes);
+        lib_name = interner::intern(bytes);
     }
     token::Token lbrace = expect(p, token::TokenKind::LBrace);
     if(lbrace.kind == token::TokenKind::ERROR) { had_err = true; }
