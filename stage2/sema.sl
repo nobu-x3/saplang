@@ -873,13 +873,53 @@ fn types::Type* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
 // corresponding param type. Result type is the callee's return type.
 // Triggers comptime monomorphization when params are `comptime`.
 fn types::Type* synth_call(Sema* s, ast::CallNode* n) {
-    return null; // TODO
+    types::Type* callee = synth(s, n.callee);
+    if(callee == null) { return null; }
+    if(callee.kind != types::TypeKind::FnPtr) {
+        diag_not_callable(s, n.h.src_pos, callee);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    types::Type*[] params = callee.data.fn_ptr.params;
+    bool variadic = callee.data.fn_ptr.is_variadic;
+    bool arity_ok = n.args.len == params.len;
+    if(variadic && n.args.len >= params.len) { arity_ok = true; }
+    if(!arity_ok) {
+        diag_arity(s, n.h.src_pos, params.len, n.args.len);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    bool ok = true;
+    for(u64 arg_index = 0; arg_index < params.len; arg_index += 1) {
+        if(!check(s, n.args[arg_index], params[arg_index])) { ok = false; }
+    }
+    for(u64 extra_index = params.len; extra_index < n.args.len; extra_index += 1) {
+        if(synth(s, n.args[extra_index]) == null) { ok = false; }
+    }
+    if(!ok) {
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    types::Type* ret = callee.data.fn_ptr.ret;
+    set_expr((ast::AstNode*)n, ret, 0);
+    return ret;
 }
 
 // `(T)expr`. Resolves the target type, synths the source, runs is_castable
 // per spec §2.12. Diagnostic names both types on rejection. Result is T.
 fn types::Type* synth_cast(Sema* s, ast::CastNode* n) {
-    return null; // TODO
+    types::Type* target = resolve_type(s, n.target_type);
+    types::Type* src = synth(s, n.expr);
+    if(src == null || target == null) { return null; }
+    if(!types::is_castable(src, target)) {
+        diag_cast_invalid(s, n.h.src_pos, src, target);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    u16 flags = 0;
+    if(expr_has_flag(n.expr, ast::AstFlags::ConstExpr)) { flags = (u16)ast::AstFlags::ConstExpr; }
+    set_expr((ast::AstNode*)n, target, flags);
+    return target;
 }
 
 // Unary ops: `-x`, `!x`, `~x`, `&x`, `*x`. Delegates result-type rules to
@@ -1115,6 +1155,21 @@ export fn void diag_not_indexable(Sema* s, u32 src_pos, types::Type* got) {
     u8[] got_str = types_print::print_to_arena(got, s.m.arena);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot index %.*s", (i32)got_str.len, (i8*)got_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "cannot call value of type %T". Used by synth_call on a non-function callee.
+export fn void diag_not_callable(Sema* s, u32 src_pos, types::Type* got) {
+    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot call value of type %.*s", (i32)got_str.len, (i8*)got_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "call expects N arguments but got M". Used by synth_call on arity mismatch.
+export fn void diag_arity(Sema* s, u32 src_pos, u64 expected, u64 got) {
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "call expects %lu arguments but got %lu", expected, got);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 

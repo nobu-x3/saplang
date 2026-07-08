@@ -247,6 +247,32 @@ fn ast::SliceRangeNode* fake_slice_range(arena::Arena* a, ast::AstNode* base, as
     return n;
 }
 
+fn ast::CallNode* fake_call(arena::Arena* a, ast::AstNode* callee, ast::AstNode** args, u64 argc, u32 src_pos) {
+    ast::CallNode* n = (ast::CallNode*)arena::alloc(a, sizeof(ast::CallNode));
+    sys::memset(n, 0, sizeof(ast::CallNode));
+    n.h.kind = ast::AstKind::Call;
+    n.h.src_pos = src_pos;
+    n.callee = callee;
+    n.args = {args, argc};
+    return n;
+}
+
+fn ast::CastNode* fake_cast(arena::Arena* a, ast::AstNode* target_type, ast::AstNode* expr, u32 src_pos) {
+    ast::CastNode* n = (ast::CastNode*)arena::alloc(a, sizeof(ast::CastNode));
+    sys::memset(n, 0, sizeof(ast::CastNode));
+    n.h.kind = ast::AstKind::Cast;
+    n.h.src_pos = src_pos;
+    n.target_type = target_type;
+    n.expr = expr;
+    return n;
+}
+
+fn sema::Decl* register_fn(arena::Arena* a, sema::Scope* sc, symbol::Symbol* name, types::Type* fnty) {
+    sema::Decl* d = fake_node_decl(a, name, fnty, (ast::AstNode*)fake_fn_decl(a, name));
+    sema::scope_add(sc, name, d);
+    return d;
+}
+
 fn types::Type* mk_point_type(arena::Arena* a) {
     symbol::Symbol*[2] fnames; fnames[0] = interner::intern("x"); fnames[1] = interner::intern("y");
     types::Type*[2] ftys; ftys[0] = types::prim_i32(); ftys[1] = types::prim_i32();
@@ -3244,6 +3270,248 @@ fn i32 slice_range_bad_bound(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 call_no_args(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type*[] noparams = {null, 0};
+    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), noparams, false);
+    symbol::Symbol* f = interner::intern("f");
+    register_fn(a, sc, f, fnty);
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), null, 0, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 call_one_arg(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Type*[] params = {&pbuf[0], 1};
+    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
+    symbol::Symbol* f = interner::intern("f");
+    register_fn(a, sc, f, fnty);
+    ast::AstNode*[1] args; args[0] = (ast::AstNode*)fake_int_lit(a, 5, 0);
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 1, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_eq((void*)args[0].h.ty, (void*)types::prim_i32(), m)) { return -2; }
+    return 0;
+}
+
+fn i32 call_arg_widen(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Type*[] params = {&pbuf[0], 1};
+    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
+    symbol::Symbol* f = interner::intern("f");
+    register_fn(a, sc, f, fnty);
+    symbol::Symbol* v = interner::intern("v");
+    register_var(a, sc, v, types::prim_i16(), false);
+    ast::AstNode*[1] args; args[0] = (ast::AstNode*)fake_ident(a, v, 0);
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 1, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 call_arg_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Type*[] params = {&pbuf[0], 1};
+    types::Type* fnty = types::intern_fn_ptr(types::prim_void(), params, false);
+    symbol::Symbol* f = interner::intern("f");
+    register_fn(a, sc, f, fnty);
+    ast::AstNode*[1] args; args[0] = (ast::AstNode*)fake_float_lit(a, 1.0, 11);
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 1, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 11, m)) { return -3; }
+    return 0;
+}
+
+fn i32 call_arity_too_few(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type*[2] pbuf; pbuf[0] = types::prim_i32(); pbuf[1] = types::prim_i32();
+    types::Type*[] params = {&pbuf[0], 2};
+    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
+    symbol::Symbol* f = interner::intern("f");
+    register_fn(a, sc, f, fnty);
+    ast::AstNode*[1] args; args[0] = (ast::AstNode*)fake_int_lit(a, 1, 0);
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 1, 4);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "call expects 2 arguments but got 1", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -3; }
+    return 0;
+}
+
+fn i32 call_arity_too_many(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Type*[] params = {&pbuf[0], 1};
+    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
+    symbol::Symbol* f = interner::intern("f");
+    register_fn(a, sc, f, fnty);
+    ast::AstNode*[2] args; args[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); args[1] = (ast::AstNode*)fake_int_lit(a, 2, 0);
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 2, 6);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "call expects 1 arguments but got 2", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 6, m)) { return -3; }
+    return 0;
+}
+
+fn i32 call_non_function(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, types::prim_i32(), false);
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, x, 0), null, 0, 3);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot call value of type i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
+    return 0;
+}
+
+fn i32 call_variadic(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Type*[] params = {&pbuf[0], 1};
+    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, true);
+    symbol::Symbol* f = interner::intern("f");
+    register_fn(a, sc, f, fnty);
+    ast::AstNode*[3] args; args[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); args[1] = (ast::AstNode*)fake_int_lit(a, 2, 0); args[2] = (ast::AstNode*)fake_int_lit(a, 3, 0);
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 3, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 call_returns_void(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type*[] noparams = {null, 0};
+    types::Type* fnty = types::intern_fn_ptr(types::prim_void(), noparams, false);
+    symbol::Symbol* f = interner::intern("f");
+    register_fn(a, sc, f, fnty);
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), null, 0, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_void(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 call_callee_error(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0), null, 0, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 cast_int_to_int(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::I16), (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i16(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 cast_int_to_float(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::F32), (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_f32(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 cast_float_to_int(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_float_lit(a, 2.5, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 cast_ptr_to_ptr(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* p = interner::intern("p");
+    register_var(a, sc, p, types::intern_pointer(types::prim_i8(), false), false);
+    ast::CastNode* cast = fake_cast(a, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false), (ast::AstNode*)fake_ident(a, p, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    if(!testing::expect_eq((void*)t, (void*)types::intern_pointer(types::prim_i32(), false), m)) { return -1; }
+    return 0;
+}
+
+fn i32 cast_const_propagation(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::I16), (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    sema::synth(&s, (ast::AstNode*)cast);
+    if(!testing::expect_true(has_flag((ast::AstNode*)cast, ast::AstFlags::ConstExpr), m)) { return -1; }
+    return 0;
+}
+
+fn i32 cast_invalid(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* p = interner::intern("p");
+    register_var(a, sc, p, mk_point_type(a), false);
+    ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_ident(a, p, 0), 7);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot cast Point to i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 7, m)) { return -3; }
+    return 0;
+}
+
+fn i32 cast_expr_error(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -3491,6 +3759,25 @@ fn i32 main() {
     testing::add(acc, "slice_range_omit_hi",        &slice_range_omit_hi);
     testing::add(acc, "slice_range_non_indexable",  &slice_range_non_indexable);
     testing::add(acc, "slice_range_bad_bound",      &slice_range_bad_bound);
+
+    u8[] cc = "Sema Call/Cast Tests";
+    testing::add(cc, "call_no_args",         &call_no_args);
+    testing::add(cc, "call_one_arg",         &call_one_arg);
+    testing::add(cc, "call_arg_widen",       &call_arg_widen);
+    testing::add(cc, "call_arg_mismatch",    &call_arg_mismatch);
+    testing::add(cc, "call_arity_too_few",   &call_arity_too_few);
+    testing::add(cc, "call_arity_too_many",  &call_arity_too_many);
+    testing::add(cc, "call_non_function",    &call_non_function);
+    testing::add(cc, "call_variadic",        &call_variadic);
+    testing::add(cc, "call_returns_void",    &call_returns_void);
+    testing::add(cc, "call_callee_error",    &call_callee_error);
+    testing::add(cc, "cast_int_to_int",      &cast_int_to_int);
+    testing::add(cc, "cast_int_to_float",    &cast_int_to_float);
+    testing::add(cc, "cast_float_to_int",    &cast_float_to_int);
+    testing::add(cc, "cast_ptr_to_ptr",      &cast_ptr_to_ptr);
+    testing::add(cc, "cast_const_propagation", &cast_const_propagation);
+    testing::add(cc, "cast_invalid",         &cast_invalid);
+    testing::add(cc, "cast_expr_error",      &cast_expr_error);
 
     return testing::run();
 }
