@@ -626,16 +626,111 @@ fn void check_bodies(Sema* s) {
 // returns null and sets AstFlags::HadError on failure (with a diagnostic already
 // reported). One arm per AstKind::Expr*. StructLit / ArrayLit are not synth-able
 // — they require check-mode (the caller must supply an expected type).
-fn types::Type* synth(Sema* s, ast::AstNode* e) {
-    return null; // TODO
+export fn types::Type* synth(Sema* s, ast::AstNode* e) {
+    if(e == null) { return null; }
+    switch(e.h.kind) {
+    case ast::AstKind::IntLit: {
+        ast::IntLitNode* lit = (ast::IntLitNode*)e;
+        types::Type* t = types::prim_i32();
+        if(!types::int_lit_fits(lit.value, false, t)) { t = types::prim_i64(); }
+        if(!types::int_lit_fits(lit.value, false, t)) { t = types::prim_u64(); }
+        set_expr(e, t, (u16)ast::AstFlags::ConstExpr);
+        return t;
+    }
+    case ast::AstKind::FloatLit: {
+        set_expr(e, types::prim_f64(), (u16)ast::AstFlags::ConstExpr);
+        return types::prim_f64();
+    }
+    case ast::AstKind::BoolLit: {
+        set_expr(e, types::prim_bool(), (u16)ast::AstFlags::ConstExpr);
+        return types::prim_bool();
+    }
+    case ast::AstKind::CharLit: {
+        set_expr(e, types::prim_u8(), (u16)ast::AstFlags::ConstExpr);
+        return types::prim_u8();
+    }
+    case ast::AstKind::StringLit: {
+        types::Type* t = types::intern_pointer(types::prim_u8(), false);
+        set_expr(e, t, (u16)ast::AstFlags::ConstExpr);
+        return t;
+    }
+    case ast::AstKind::NullLit: {
+        set_expr(e, types::prim_null_ptr(), (u16)ast::AstFlags::ConstExpr);
+        return types::prim_null_ptr();
+    }
+    case ast::AstKind::Ident:           { return synth_ident(s, (ast::IdentNode*)e); }
+    case ast::AstKind::NamespaceAccess: { return synth_ns_access(s, (ast::NamespaceAccessNode*)e); }
+    case ast::AstKind::MemberAccess:    { return synth_member_access(s, (ast::MemberAccessNode*)e); }
+    case ast::AstKind::ArrayIndex:      { return synth_array_index(s, (ast::ArrayIndexNode*)e); }
+    case ast::AstKind::SliceRange:      { return synth_slice_range(s, (ast::SliceRangeNode*)e); }
+    case ast::AstKind::Call:            { return synth_call(s, (ast::CallNode*)e); }
+    case ast::AstKind::Cast:            { return synth_cast(s, (ast::CastNode*)e); }
+    case ast::AstKind::UnaryOp:         { return synth_unary(s, (ast::UnaryOpNode*)e); }
+    case ast::AstKind::BinaryOp:        { return synth_binary(s, (ast::BinaryOpNode*)e); }
+    case ast::AstKind::Sizeof:          { return synth_sizeof(s, (ast::SizeofNode*)e); }
+    case ast::AstKind::Alignof:         { return synth_alignof(s, (ast::AlignofNode*)e); }
+    case ast::AstKind::Typeof:          { return synth_typeof(s, (ast::TypeofNode*)e); }
+    case ast::AstKind::Type_info:       { return synth_type_info(s, (ast::TypeInfoNode*)e); }
+    case ast::AstKind::Compcode:        { return synth_compcode(s, (ast::CompCodeNode*)e); }
+    case ast::AstKind::StructLit:
+    case ast::AstKind::ArrayLit:
+    case ast::AstKind::UndefinedLit: {
+        diag_needs_context(s, e);
+        return null;
+    }
+    else { return null; }
+    }
+    return null;
+}
+
+fn void set_expr(ast::AstNode* e, types::Type* ty, u16 add_flags) {
+    e.h.ty = (void*)ty;
+    e.h.flags = (ast::AstFlags)((u16)e.h.flags | add_flags);
+}
+
+fn void mark_error(ast::AstNode* e) {
+    e.h.flags = (ast::AstFlags)((u16)e.h.flags | (u16)ast::AstFlags::HadError);
 }
 
 // Top-down: fit `e` to `expected`. Handles the literal carve-outs (int lit
 // fits target int type, null lit fits any pointer/slice, undefined fits any
 // var-init), the struct/array literal coercions, then falls back to synth
 // followed by is_convertible. Sets e.h.ty on success.
-fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
-    return false; // TODO
+export fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
+    if(e == null || expected == null) { return false; }
+    switch(e.h.kind) {
+    case ast::AstKind::IntLit: {
+        return check_int_lit(s, (ast::IntLitNode*)e, expected);
+    }
+    case ast::AstKind::NullLit: {
+        if(types::is_ptr(expected) || types::is_slice(expected)) {
+            set_expr(e, expected, (u16)ast::AstFlags::ConstExpr);
+            return true;
+        }
+        diag_type_mismatch(s, e.h.src_pos, types::prim_null_ptr(), expected);
+        mark_error(e);
+        return false;
+    }
+    case ast::AstKind::UndefinedLit: {
+        set_expr(e, expected, 0);
+        return true;
+    }
+    case ast::AstKind::StructLit: {
+        return check_struct_lit(s, (ast::StructLitNode*)e, expected);
+    }
+    case ast::AstKind::ArrayLit: {
+        return check_array_lit(s, (ast::ArrayLitNode*)e, expected);
+    }
+    else {
+        types::Type* got = synth(s, e);
+        if(got == null) { return false; }
+        if(types::is_convertible(got, expected)) { return true; }
+        diag_type_mismatch(s, e.h.src_pos, got, expected);
+        mark_error(e);
+        return false;
+    }
+    }
+    return false;
 }
 
 
@@ -645,8 +740,19 @@ fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
 
 // Look up the ident in the scope chain, set n.resolved, propagate LValue/
 // ConstExpr flags. Diagnostic "undefined identifier `<name>`" on miss.
-fn types::Type* synth_ident(Sema* s, ast::IdentNode* n) {
-    return null; // TODO
+export fn types::Type* synth_ident(Sema* s, ast::IdentNode* n) {
+    Decl* d = scope_lookup(s.scope, n.name);
+    if(d == null) {
+        diag_undefined_ident(s, n.h.src_pos, n.name);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    n.resolved = (void*)d;
+    u16 flags = 0;
+    if(decl_is_lvalue(d)) { flags = flags | (u16)ast::AstFlags::LValue; }
+    if(decl_is_const_expr(d)) { flags = flags | (u16)ast::AstFlags::ConstExpr; }
+    set_expr((ast::AstNode*)n, d.ty, flags);
+    return d.ty;
 }
 
 // `ns::name`. The namespace must resolve to either a Import (cross-module
@@ -869,6 +975,14 @@ export fn void diag_unknown_type(Sema* s, u32 src_pos, symbol::Symbol* name) {
     u8[] name_str = interner::symbol_str(name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "unknown type %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "undefined identifier `<name>`". Used by synth_ident on a scope miss.
+export fn void diag_undefined_ident(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "undefined identifier %.*s", (i32)name_str.len, (i8*)name_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 
