@@ -283,6 +283,24 @@ fn ast::NamespaceAccessNode* fake_ns_access(arena::Arena* a, ast::AstNode* base,
     return n;
 }
 
+fn ast::StructLitNode* fake_struct_lit_with(arena::Arena* a, ast::FieldInitializer* inits, u64 count, u32 src_pos) {
+    ast::StructLitNode* n = fake_struct_lit(a, src_pos);
+    n.inits = {inits, count};
+    return n;
+}
+
+fn ast::ArrayLitNode* fake_array_lit_with(arena::Arena* a, ast::AstNode** elems, u64 count, u32 src_pos) {
+    ast::ArrayLitNode* n = fake_array_lit(a, src_pos);
+    n.elems = {elems, count};
+    return n;
+}
+
+fn void set_init(ast::FieldInitializer* fi, symbol::Symbol* name, ast::AstNode* value, u32 src_pos) {
+    fi.name = name;
+    fi.value = value;
+    fi.src_pos = src_pos;
+}
+
 fn types::Type* register_color_enum(arena::Arena* a, sema::Scope* sc) {
     symbol::Symbol*[2] names; names[0] = interner::intern("Red"); names[1] = interner::intern("Green");
     symbol::Symbol*[] nslice = {&names[0], 2};
@@ -3682,6 +3700,247 @@ fn i32 ns_nested_mod_enum_member(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 slit_positional(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* point = mk_point_type(a);
+    ast::FieldInitializer[2] inits;
+    set_init(&inits[0], null, (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    set_init(&inits[1], null, (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 2, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, point);
+    if(!testing::expect_true(ok, m)) { return -1; }
+    if(!testing::expect_eq((void*)lit.h.ty, (void*)point, m)) { return -2; }
+    return 0;
+}
+
+fn i32 slit_designated(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* point = mk_point_type(a);
+    ast::FieldInitializer[2] inits;
+    set_init(&inits[0], interner::intern("y"), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    set_init(&inits[1], interner::intern("x"), (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 2, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, point);
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 slit_mixed(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* point = mk_point_type(a);
+    ast::FieldInitializer[2] inits;
+    set_init(&inits[0], null, (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    set_init(&inits[1], interner::intern("y"), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 2, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, point);
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 slit_unknown_field(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* point = mk_point_type(a);
+    ast::FieldInitializer[1] inits;
+    set_init(&inits[0], interner::intern("z"), (ast::AstNode*)fake_int_lit(a, 1, 0), 6);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 1, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, point);
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "type Point has no field z", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 6, m)) { return -3; }
+    return 0;
+}
+
+fn i32 slit_duplicate(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* point = mk_point_type(a);
+    ast::FieldInitializer[2] inits;
+    set_init(&inits[0], interner::intern("x"), (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    set_init(&inits[1], interner::intern("x"), (ast::AstNode*)fake_int_lit(a, 2, 0), 8);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 2, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, point);
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "duplicate field x in literal", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 8, m)) { return -3; }
+    return 0;
+}
+
+fn i32 slit_extra_positional(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* point = mk_point_type(a);
+    ast::FieldInitializer[3] inits;
+    set_init(&inits[0], null, (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    set_init(&inits[1], null, (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    set_init(&inits[2], null, (ast::AstNode*)fake_int_lit(a, 3, 0), 9);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 3, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, point);
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "too many initializers", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 9, m)) { return -3; }
+    return 0;
+}
+
+fn i32 slit_field_type_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* point = mk_point_type(a);
+    ast::FieldInitializer[1] inits;
+    set_init(&inits[0], interner::intern("x"), (ast::AstNode*)fake_float_lit(a, 1.0, 4), 0);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 1, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, point);
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -3; }
+    return 0;
+}
+
+fn i32 slit_non_struct_target(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::FieldInitializer[1] inits;
+    set_init(&inits[0], null, (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 1, 5);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, types::prim_i32());
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot use struct literal as i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
+    return 0;
+}
+
+fn i32 alit_exact(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* arr = types::intern_array(types::prim_i32(), 3);
+    ast::AstNode*[3] elems; elems[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); elems[1] = (ast::AstNode*)fake_int_lit(a, 2, 0); elems[2] = (ast::AstNode*)fake_int_lit(a, 3, 0);
+    ast::ArrayLitNode* lit = fake_array_lit_with(a, &elems[0], 3, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, arr);
+    if(!testing::expect_true(ok, m)) { return -1; }
+    if(!testing::expect_eq((void*)lit.h.ty, (void*)arr, m)) { return -2; }
+    return 0;
+}
+
+fn i32 alit_count_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* arr = types::intern_array(types::prim_i32(), 3);
+    ast::AstNode*[2] elems; elems[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); elems[1] = (ast::AstNode*)fake_int_lit(a, 2, 0);
+    ast::ArrayLitNode* lit = fake_array_lit_with(a, &elems[0], 2, 3);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, arr);
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "array literal has 2 elements but 3 expected", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
+    return 0;
+}
+
+fn i32 alit_slice_target(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    ast::AstNode*[2] elems; elems[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); elems[1] = (ast::AstNode*)fake_int_lit(a, 2, 0);
+    ast::ArrayLitNode* lit = fake_array_lit_with(a, &elems[0], 2, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, slice);
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 alit_elem_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* arr = types::intern_array(types::prim_i32(), 2);
+    ast::AstNode*[2] elems; elems[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); elems[1] = (ast::AstNode*)fake_float_lit(a, 2.0, 7);
+    ast::ArrayLitNode* lit = fake_array_lit_with(a, &elems[0], 2, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, arr);
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 7, m)) { return -3; }
+    return 0;
+}
+
+fn i32 alit_non_array_target(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode*[1] elems; elems[0] = (ast::AstNode*)fake_int_lit(a, 1, 0);
+    ast::ArrayLitNode* lit = fake_array_lit_with(a, &elems[0], 1, 2);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, types::prim_i32());
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot use array literal as i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 2, m)) { return -3; }
+    return 0;
+}
+
+fn i32 sllit_designated(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    symbol::Symbol* p = interner::intern("p");
+    register_var(a, sc, p, types::intern_pointer(types::prim_i32(), false), false);
+    ast::FieldInitializer[2] inits;
+    set_init(&inits[0], interner::intern("ptr"), (ast::AstNode*)fake_ident(a, p, 0), 0);
+    set_init(&inits[1], interner::intern("len"), (ast::AstNode*)fake_int_lit(a, 3, 0), 0);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 2, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, slice);
+    if(!testing::expect_true(ok, m)) { return -1; }
+    if(!testing::expect_eq((void*)lit.h.ty, (void*)slice, m)) { return -2; }
+    return 0;
+}
+
+fn i32 sllit_positional(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    symbol::Symbol* p = interner::intern("p");
+    register_var(a, sc, p, types::intern_pointer(types::prim_i32(), false), false);
+    ast::FieldInitializer[2] inits;
+    set_init(&inits[0], null, (ast::AstNode*)fake_ident(a, p, 0), 0);
+    set_init(&inits[1], null, (ast::AstNode*)fake_int_lit(a, 3, 0), 0);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 2, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, slice);
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 sllit_unknown_field(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    ast::FieldInitializer[1] inits;
+    set_init(&inits[0], interner::intern("foo"), (ast::AstNode*)fake_int_lit(a, 1, 0), 5);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 1, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, slice);
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "type i32[] has no field foo", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
+    return 0;
+}
+
+fn i32 sllit_ptr_type_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    symbol::Symbol* v = interner::intern("v");
+    register_var(a, sc, v, types::prim_i32(), false);
+    ast::FieldInitializer[2] inits;
+    set_init(&inits[0], interner::intern("ptr"), (ast::AstNode*)fake_ident(a, v, 3), 0);
+    set_init(&inits[1], interner::intern("len"), (ast::AstNode*)fake_int_lit(a, 3, 0), 0);
+    ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 2, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, slice);
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected i32*, found i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -3958,6 +4217,25 @@ fn i32 main() {
     testing::add(ns, "ns_import_non_exported",   &ns_import_non_exported);
     testing::add(ns, "ns_import_unknown_member", &ns_import_unknown_member);
     testing::add(ns, "ns_nested_mod_enum_member", &ns_nested_mod_enum_member);
+
+    u8[] lit = "Sema Literal Check Tests";
+    testing::add(lit, "slit_positional",          &slit_positional);
+    testing::add(lit, "slit_designated",          &slit_designated);
+    testing::add(lit, "slit_mixed",               &slit_mixed);
+    testing::add(lit, "slit_unknown_field",       &slit_unknown_field);
+    testing::add(lit, "slit_duplicate",           &slit_duplicate);
+    testing::add(lit, "slit_extra_positional",    &slit_extra_positional);
+    testing::add(lit, "slit_field_type_mismatch", &slit_field_type_mismatch);
+    testing::add(lit, "slit_non_struct_target",   &slit_non_struct_target);
+    testing::add(lit, "alit_exact",               &alit_exact);
+    testing::add(lit, "alit_count_mismatch",      &alit_count_mismatch);
+    testing::add(lit, "alit_slice_target",        &alit_slice_target);
+    testing::add(lit, "alit_elem_mismatch",       &alit_elem_mismatch);
+    testing::add(lit, "alit_non_array_target",    &alit_non_array_target);
+    testing::add(lit, "sllit_designated",         &sllit_designated);
+    testing::add(lit, "sllit_positional",         &sllit_positional);
+    testing::add(lit, "sllit_unknown_field",      &sllit_unknown_field);
+    testing::add(lit, "sllit_ptr_type_mismatch",  &sllit_ptr_type_mismatch);
 
     return testing::run();
 }

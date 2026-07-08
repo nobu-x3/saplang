@@ -986,16 +986,113 @@ fn bool check_int_lit_signed(Sema* s, ast::IntLitNode* n, types::Type* expected,
     return false;
 }
 
+fn ast::FieldDecl[] decl_fields(ast::AstNode* decl) {
+    ast::FieldDecl[] empty = {null, 0};
+    if(decl == null) { return empty; }
+    if(decl.h.kind == ast::AstKind::StructDecl) { return ((ast::StructDeclNode*)decl).fields; }
+    if(decl.h.kind == ast::AstKind::UnionDecl)  { return ((ast::UnionDeclNode*)decl).fields; }
+    return empty;
+}
+
+fn u64 fields_index_of(ast::FieldDecl[] fields, symbol::Symbol* name) {
+    for(u64 i = 0; i < fields.len; i += 1) {
+        if(fields[i].name == name) { return i; }
+    }
+    return 18446744073709551615;
+}
+
 fn bool check_struct_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
-    return false; // TODO
+    if(expected.kind == types::TypeKind::Slice) { return check_slice_lit(s, n, expected); }
+    if(expected.kind != types::TypeKind::Struct && expected.kind != types::TypeKind::Union) {
+        diag_lit_wrong_target(s, n.h.src_pos, "struct", expected);
+        mark_error((ast::AstNode*)n);
+        return false;
+    }
+    ast::FieldDecl[] fields = decl_fields(container_decl(expected));
+    bool* seen = (bool*)arena::alloc(s.m.arena, fields.len + 1);
+    sys::memset(seen, 0, fields.len + 1);
+    bool ok = true;
+    u64 positional = 0;
+    for(u64 i = 0; i < n.inits.len; i += 1) {
+        ast::FieldInitializer* fi = &n.inits[i];
+        u64 field_idx = positional;
+        if(fi.name == null) { positional += 1; }
+        else { field_idx = fields_index_of(fields, fi.name); }
+        if(field_idx >= fields.len) {
+            if(fi.name == null) { diag_extra_initializer(s, fi.src_pos); }
+            else { diag_unknown_field(s, fi.src_pos, fi.name, expected); }
+            ok = false;
+            continue;
+        }
+        if(seen[field_idx]) {
+            diag_dup_field(s, fi.src_pos, fields[field_idx].name);
+            ok = false;
+            continue;
+        }
+        seen[field_idx] = true;
+        if(!check(s, fi.value, (types::Type*)fields[field_idx].resolved_type)) { ok = false; }
+    }
+    set_expr((ast::AstNode*)n, expected, 0);
+    if(!ok) { mark_error((ast::AstNode*)n); }
+    return ok;
 }
 
 fn bool check_array_lit(Sema* s, ast::ArrayLitNode* n, types::Type* expected) {
-    return false; // TODO
+    types::Type* elem = null;
+    bool fixed = false;
+    u64 want = 0;
+    if(expected.kind == types::TypeKind::Array) { elem = expected.data.array.elem; want = expected.data.array.count; fixed = true; }
+    else if(expected.kind == types::TypeKind::Slice) { elem = expected.data.slice_elem; }
+    else {
+        diag_lit_wrong_target(s, n.h.src_pos, "array", expected);
+        mark_error((ast::AstNode*)n);
+        return false;
+    }
+    bool ok = true;
+    if(fixed && n.elems.len != want) {
+        diag_array_len_mismatch(s, n.h.src_pos, want, n.elems.len);
+        ok = false;
+    }
+    for(u64 i = 0; i < n.elems.len; i += 1) {
+        if(!check(s, n.elems[i], elem)) { ok = false; }
+    }
+    set_expr((ast::AstNode*)n, expected, 0);
+    if(!ok) { mark_error((ast::AstNode*)n); }
+    return ok;
 }
 
+// `{.ptr = ..., .len = ...}` or positional `{ptr, len}` against a slice target.
 fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
-    return false; // TODO
+    types::Type* ptr_ty = types::intern_pointer(expected.data.slice_elem, false);
+    bool ok = true;
+    bool seen_ptr = false;
+    bool seen_len = false;
+    u64 positional = 0;
+    for(u64 i = 0; i < n.inits.len; i += 1) {
+        ast::FieldInitializer* fi = &n.inits[i];
+        bool is_ptr = true;
+        if(fi.name == null) {
+            if(positional == 0) { is_ptr = true; }
+            else if(positional == 1) { is_ptr = false; }
+            else { diag_extra_initializer(s, fi.src_pos); ok = false; positional += 1; continue; }
+            positional += 1;
+        }
+        else if(fi.name == interner::intern("ptr")) { is_ptr = true; }
+        else if(fi.name == interner::intern("len")) { is_ptr = false; }
+        else { diag_unknown_field(s, fi.src_pos, fi.name, expected); ok = false; continue; }
+        if(is_ptr) {
+            if(seen_ptr) { diag_dup_field(s, fi.src_pos, interner::intern("ptr")); ok = false; continue; }
+            seen_ptr = true;
+            if(!check(s, fi.value, ptr_ty)) { ok = false; }
+        } else {
+            if(seen_len) { diag_dup_field(s, fi.src_pos, interner::intern("len")); ok = false; continue; }
+            seen_len = true;
+            if(!check(s, fi.value, types::prim_u64())) { ok = false; }
+        }
+    }
+    set_expr((ast::AstNode*)n, expected, 0);
+    if(!ok) { mark_error((ast::AstNode*)n); }
+    return ok;
 }
 
 
@@ -1131,6 +1228,35 @@ export fn void diag_unknown_member(Sema* s, u32 src_pos, symbol::Symbol* name) {
     u8[] name_str = interner::symbol_str(name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "no member named %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "cannot use `<kind>` literal as `<T>`". Used by the literal-check helpers.
+export fn void diag_lit_wrong_target(Sema* s, u32 src_pos, u8[] kind, types::Type* expected) {
+    u8[] expected_str = types_print::print_to_arena(expected, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot use %.*s literal as %.*s", (i32)kind.len, (i8*)kind.ptr, (i32)expected_str.len, (i8*)expected_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "duplicate field `<name>` in literal". Used by check_struct_lit / check_slice_lit.
+export fn void diag_dup_field(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "duplicate field %.*s in literal", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "too many initializers". Used by check_struct_lit / check_slice_lit.
+export fn void diag_extra_initializer(Sema* s, u32 src_pos) {
+    u8[] msg = "too many initializers";
+    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "array literal has M elements but N expected". Used by check_array_lit.
+export fn void diag_array_len_mismatch(Sema* s, u32 src_pos, u64 expected, u64 got) {
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "array literal has %lu elements but %lu expected", got, expected);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 
