@@ -220,9 +220,81 @@ fn module::Module* find_import_module(Sema* s, symbol::Symbol* import_name) {
 // Signature resolution. Resolves every top-level decl's signature into canonical Type*.
 // Walks param/return/field/base type expressions, fills FieldDecl.resolved_type,
 // Param.resolved_type, Decl.ty. Sets Signatures on m.sema_phase.
-// Triggers cross-module ensure_signatures_resolved for any imported NamedType.
 fn void resolve_signatures_locked(Sema* s) {
-    // TODO
+    if((s.m.sema_phase & (u16)SemaPhase::Signatures) != 0) { return; }
+    s.scope = (Scope*)s.m.global_scope;
+    if(s.m.root_node == null) {
+        s.m.sema_phase |= SemaPhase::Signatures;
+        return;
+    }
+    ast::BlockNode* global_block = (ast::BlockNode*)s.m.root_node;
+    for(u64 stmt_index = 0; stmt_index < global_block.stmts.len; stmt_index += 1) {
+        resolve_decl_signature(s, global_block.stmts[stmt_index]);
+    }
+    s.m.sema_phase |= SemaPhase::Signatures;
+}
+
+fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
+    switch(decl_node.h.kind) {
+    case ast::AstKind::VarDecl: {
+        ast::VarDeclNode* var_decl = (ast::VarDeclNode*)decl_node;
+        set_decl_ty(s, var_decl.name, resolve_type(s, var_decl.type_expr));
+    }
+    case ast::AstKind::FnDecl: {
+        resolve_fn_signature(s, (ast::FnDeclNode*)decl_node);
+    }
+    case ast::AstKind::StructDecl: {
+        ast::StructDeclNode* struct_decl = (ast::StructDeclNode*)decl_node;
+        resolve_fields(s, struct_decl.fields);
+        set_decl_ty(s, struct_decl.name, types::intern_struct((void*)struct_decl));
+    }
+    case ast::AstKind::UnionDecl: {
+        ast::UnionDeclNode* union_decl = (ast::UnionDeclNode*)decl_node;
+        resolve_fields(s, union_decl.fields);
+        set_decl_ty(s, union_decl.name, types::intern_union((void*)union_decl));
+    }
+    case ast::AstKind::EnumDecl: {
+        ast::EnumDeclNode* enum_decl = (ast::EnumDeclNode*)decl_node;
+        if(enum_decl.base_type != null) { resolve_type(s, enum_decl.base_type); }
+        set_decl_ty(s, enum_decl.name, types::intern_enum((void*)enum_decl));
+    }
+    case ast::AstKind::AliasDecl: {
+        ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)decl_node;
+        set_decl_ty(s, alias_decl.name, resolve_type(s, alias_decl.target));
+    }
+    else { }
+    }
+}
+
+fn void resolve_fields(Sema* s, ast::FieldDecl[] fields) {
+    for(u64 field_index = 0; field_index < fields.len; field_index += 1) {
+        fields[field_index].resolved_type = (void*)resolve_type(s, fields[field_index].type_expr);
+    }
+}
+
+fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
+    types::Type* return_type = types::prim_void();
+    if(fn_decl.return_type != null) {
+        types::Type* resolved_return = resolve_type(s, fn_decl.return_type);
+        if(resolved_return != null) { return_type = resolved_return; }
+    }
+    types::Type*[] param_types = {null, 0};
+    if(fn_decl.params.len > 0) {
+        types::Type** param_type_mem = (types::Type**)arena::alloc(s.m.arena, fn_decl.params.len * sizeof(types::Type*));
+        for(u64 param_index = 0; param_index < fn_decl.params.len; param_index += 1) {
+            types::Type* param_type = resolve_type(s, fn_decl.params[param_index].type_expr);
+            fn_decl.params[param_index].resolved_type = (void*)param_type;
+            param_type_mem[param_index] = param_type;
+        }
+        param_types = {param_type_mem, fn_decl.params.len};
+    }
+    set_decl_ty(s, fn_decl.name, types::intern_fn_ptr(return_type, param_types, false));
+}
+
+// Look up a top-level decl by name in the module scope and record its resolved type.
+fn void set_decl_ty(Sema* s, symbol::Symbol* name, types::Type* ty) {
+    Decl* decl = scope_lookup_local(s.scope, name);
+    if(decl != null) { decl.ty = ty; }
 }
 
 // Body checking. Walks every function body with bidirectional check/synth.
