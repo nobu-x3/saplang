@@ -4,20 +4,9 @@ import arena;
 import sys;
 import symbol;
 
-fn void setup(interner::Interner* it, arena::Arena* a, u64 bucket_count) {
-    u64 nbytes = bucket_count * sizeof(symbol::Symbol*);
-    void* raw = arena::alloc(a, nbytes);
-    sys::memset(raw, 0, nbytes);
-    it.slab_arena = a;
-    it.slab = {null, 0};
-    it.slab_cap = 0;
-    it.buckets = {(symbol::Symbol**)raw, bucket_count};
-    it.entry_count = 0;
-}
-
 fn i32 intern_dedup(arena::Arena* a, u8[] m) {
     interner::Interner it;
-    setup(&it, a, 16);
+    interner::init(&it, a, 16);
     u8[] s = "hello";
     symbol::Symbol* a1 = interner::intern(&it, s);
     symbol::Symbol* a2 = interner::intern(&it, s);
@@ -28,7 +17,7 @@ fn i32 intern_dedup(arena::Arena* a, u8[] m) {
 
 fn i32 intern_distinct(arena::Arena* a, u8[] m) {
     interner::Interner it;
-    setup(&it, a, 16);
+    interner::init(&it, a, 16);
     symbol::Symbol* a1 = interner::intern(&it, "foo");
     symbol::Symbol* a2 = interner::intern(&it, "bar");
     if(!testing::expect_ne((void*)a1, (void*)a2, m)) { return -1; }
@@ -38,7 +27,7 @@ fn i32 intern_distinct(arena::Arena* a, u8[] m) {
 
 fn i32 intern_roundtrip(arena::Arena* a, u8[] m) {
     interner::Interner it;
-    setup(&it, a, 16);
+    interner::init(&it, a, 16);
     u8[] s = "round-trip";
     symbol::Symbol* sym = interner::intern(&it, s);
     u8[] back = interner::symbol_str(sym, &it);
@@ -48,7 +37,7 @@ fn i32 intern_roundtrip(arena::Arena* a, u8[] m) {
 
 fn i32 intern_symbol_fields(arena::Arena* a, u8[] m) {
     interner::Interner it;
-    setup(&it, a, 16);
+    interner::init(&it, a, 16);
     u8[] s = "abcdef";
     symbol::Symbol* sym = interner::intern(&it, s);
     if(!testing::expect_eq((u64)sym.len, s.len, m)) { return -1; }
@@ -62,7 +51,7 @@ fn i32 intern_symbol_fields(arena::Arena* a, u8[] m) {
 // 4+ inserts guarantee collisions on at least one chain.
 fn i32 intern_chain_dedup(arena::Arena* a, u8[] m) {
     interner::Interner it;
-    setup(&it, a, 2);
+    interner::init(&it, a, 2);
     symbol::Symbol* s1 = interner::intern(&it, "alpha");
     symbol::Symbol* s2 = interner::intern(&it, "beta");
     symbol::Symbol* s3 = interner::intern(&it, "gamma");
@@ -78,7 +67,7 @@ fn i32 intern_chain_dedup(arena::Arena* a, u8[] m) {
 
 fn i32 intern_empty_bytes(arena::Arena* a, u8[] m) {
     interner::Interner it;
-    setup(&it, a, 16);
+    interner::init(&it, a, 16);
     u8[] empty = {null, 0};
     symbol::Symbol* s1 = interner::intern(&it, empty);
     symbol::Symbol* s2 = interner::intern(&it, empty);
@@ -89,7 +78,7 @@ fn i32 intern_empty_bytes(arena::Arena* a, u8[] m) {
 
 fn i32 intern_dedup_distinct_buffers(arena::Arena* a, u8[] m) {
     interner::Interner it;
-    setup(&it, a, 16);
+    interner::init(&it, a, 16);
     u8[] b1 = {(u8*)arena::alloc(a, 3), 3};
     u8[] b2 = {(u8*)arena::alloc(a, 3), 3};
     b1[0] = 'f'; b1[1] = 'o'; b1[2] = 'o';
@@ -106,8 +95,8 @@ fn i32 intern_dedup_distinct_buffers(arena::Arena* a, u8[] m) {
 fn i32 intern_hash_buffer_independent(arena::Arena* a, u8[] m) {
     interner::Interner it1;
     interner::Interner it2;
-    setup(&it1, a, 16);
-    setup(&it2, a, 16);
+    interner::init(&it1, a, 16);
+    interner::init(&it2, a, 16);
     u8[] b1 = {(u8*)arena::alloc(a, 5), 5};
     u8[] b2 = {(u8*)arena::alloc(a, 5), 5};
     for(u64 i = 0; i < 5; i += 1) { b1[i] = (u8)('a' + i); b2[i] = (u8)('a' + i); }
@@ -120,7 +109,7 @@ fn i32 intern_hash_buffer_independent(arena::Arena* a, u8[] m) {
 // Forces slab capacity to grow past the initial 4096-byte floor.
 fn i32 intern_slab_growth(arena::Arena* a, u8[] m) {
     interner::Interner it;
-    setup(&it, a, 16);
+    interner::init(&it, a, 16);
     u64 chunk_size = 600;
     u8[] chunk = {(u8*)arena::alloc(a, chunk_size), chunk_size};
     for(u64 i = 0; i < chunk_size; i += 1) {

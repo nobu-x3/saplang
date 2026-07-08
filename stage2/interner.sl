@@ -1,5 +1,6 @@
 import arena;
 import hash;
+import mutex;
 import sys;
 import symbol;
 
@@ -9,6 +10,20 @@ export struct Interner {
     u64                 slab_cap;
     symbol::Symbol*[]   buckets;
     u64                 entry_count;
+    mutex::Mutex        lock;       // the interner is process-global; intern locking lands with the driver
+}
+
+// bucket_count must be a power of two.
+export fn void init(Interner* it, arena::Arena* a, u64 bucket_count) {
+    u64 nbytes = bucket_count * sizeof(symbol::Symbol*);
+    void* raw = arena::alloc(a, nbytes);
+    sys::memset(raw, 0, nbytes);
+    it.slab_arena = a;
+    it.slab = {null, 0};
+    it.slab_cap = 0;
+    it.buckets = {(symbol::Symbol**)raw, bucket_count};
+    it.entry_count = 0;
+    mutex::create(&it.lock);
 }
 
 export fn symbol::Symbol* intern(Interner* it, u8[] bytes) {

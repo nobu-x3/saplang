@@ -15,14 +15,7 @@ const u64 BUCKET_COUNT = 64;
 // MODULE SETUP / DRIVER //////////////////////////////////////////////////////
 export fn module::Module* prepare(arena::Arena* a, u8[] src) {
     interner::Interner* it = arena::alloc(a, sizeof(interner::Interner));
-    u64 nbytes = BUCKET_COUNT * sizeof(symbol::Symbol*);
-    void* raw = arena::alloc(a, nbytes);
-    sys::memset(raw, 0, nbytes);
-    it.slab_arena = a;
-    it.slab = {null, 0};
-    it.slab_cap = 0;
-    it.buckets = {(symbol::Symbol**)raw, BUCKET_COUNT};
-    it.entry_count = 0;
+    interner::init(it, a, BUCKET_COUNT);
     for(u64 i = 0; i < token::KEYWORDS.len; i += 1) {
         symbol::Symbol* sym = interner::intern(it, token::KEYWORDS[i].bytes);
         sym.keyword_kind = (u16)token::KEYWORDS[i].kind;

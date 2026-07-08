@@ -9,18 +9,7 @@ import symbol;
 import sys;
 
 fn void setup_typer(types::TypeInterner* it, arena::Arena* a, u64 cap) {
-    types::typer_init(it, a, null, cap);
-}
-
-fn void setup_interner(interner::Interner* it, arena::Arena* a, u64 bucket_count) {
-    u64 nbytes = bucket_count * sizeof(symbol::Symbol*);
-    void* raw = arena::alloc(a, nbytes);
-    sys::memset(raw, 0, nbytes);
-    it.slab_arena = a;
-    it.slab = {null, 0};
-    it.slab_cap = 0;
-    it.buckets = {(symbol::Symbol**)raw, bucket_count};
-    it.entry_count = 0;
+    types::typer_init(it, a, cap);
 }
 
 fn types::Type* fake_prim(arena::Arena* a, types::PrimitiveKind p) {
@@ -302,7 +291,7 @@ fn i32 print_pointer_to_fnptr(arena::Arena* a, u8[] m) {
 
 fn i32 print_struct_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
-    interner::Interner names; setup_interner(&names, a, 16);
+    interner::Interner names; interner::init(&names, a, 16);
     symbol::Symbol* nm = interner::intern(&names, "mod::Foo");
     types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
     if(!testing::expect_eq(do_print_named(a, s, &names), "mod::Foo", m)) { return -1; }
@@ -311,7 +300,7 @@ fn i32 print_struct_qualified(arena::Arena* a, u8[] m) {
 
 fn i32 print_union_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
-    interner::Interner names; setup_interner(&names, a, 16);
+    interner::Interner names; interner::init(&names, a, 16);
     symbol::Symbol* nm = interner::intern(&names, "shapes::Variant");
     types::Type* u = types::intern_union(&ty, (void*)fake_union_decl_qualified(a, nm));
     if(!testing::expect_eq(do_print_named(a, u, &names), "shapes::Variant", m)) { return -1; }
@@ -320,7 +309,7 @@ fn i32 print_union_qualified(arena::Arena* a, u8[] m) {
 
 fn i32 print_enum_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
-    interner::Interner names; setup_interner(&names, a, 16);
+    interner::Interner names; interner::init(&names, a, 16);
     symbol::Symbol* nm = interner::intern(&names, "ui::Color");
     types::Type* e = types::intern_enum(&ty, (void*)fake_enum_decl_qualified(a, nm));
     if(!testing::expect_eq(do_print_named(a, e, &names), "ui::Color", m)) { return -1; }
@@ -329,7 +318,7 @@ fn i32 print_enum_qualified(arena::Arena* a, u8[] m) {
 
 fn i32 print_struct_with_null_qualified_says_anon(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
-    interner::Interner names; setup_interner(&names, a, 16);
+    interner::Interner names; interner::init(&names, a, 16);
     types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, null));
     if(!testing::expect_eq(do_print_named(a, s, &names), "<anon>", m)) { return -1; }
     return 0;
@@ -337,7 +326,7 @@ fn i32 print_struct_with_null_qualified_says_anon(arena::Arena* a, u8[] m) {
 
 fn i32 print_struct_with_null_interner_says_anon(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
-    interner::Interner names; setup_interner(&names, a, 16);
+    interner::Interner names; interner::init(&names, a, 16);
     symbol::Symbol* nm = interner::intern(&names, "mod::Foo");
     types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
     if(!testing::expect_eq(do_print(a, s), "<anon>", m)) { return -1; }
@@ -346,7 +335,7 @@ fn i32 print_struct_with_null_interner_says_anon(arena::Arena* a, u8[] m) {
 
 fn i32 print_pointer_to_struct_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
-    interner::Interner names; setup_interner(&names, a, 16);
+    interner::Interner names; interner::init(&names, a, 16);
     symbol::Symbol* nm = interner::intern(&names, "ds::Node");
     types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
     types::Type* p = types::intern_pointer(&ty, s, false);
@@ -356,7 +345,7 @@ fn i32 print_pointer_to_struct_qualified(arena::Arena* a, u8[] m) {
 
 fn i32 print_array_of_struct_qualified(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
-    interner::Interner names; setup_interner(&names, a, 16);
+    interner::Interner names; interner::init(&names, a, 16);
     symbol::Symbol* nm = interner::intern(&names, "inv::Item");
     types::Type* s   = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
     types::Type* arr = types::intern_array(&ty, s, 4);
@@ -366,7 +355,7 @@ fn i32 print_array_of_struct_qualified(arena::Arena* a, u8[] m) {
 
 fn i32 print_struct_bare_name_no_module(arena::Arena* a, u8[] m) {
     types::TypeInterner ty; setup_typer(&ty, a, 16);
-    interner::Interner names; setup_interner(&names, a, 16);
+    interner::Interner names; interner::init(&names, a, 16);
     symbol::Symbol* nm = interner::intern(&names, "Bare");
     types::Type* s = types::intern_struct(&ty, (void*)fake_struct_decl_qualified(a, nm));
     if(!testing::expect_eq(do_print_named(a, s, &names), "Bare", m)) { return -1; }
