@@ -6,6 +6,7 @@ import diag;
 import token;
 import types;
 import types_print;
+import op;
 import mutex;
 import sys;
 import interner;
@@ -692,12 +693,27 @@ fn void mark_error(ast::AstNode* e) {
     e.h.flags = (ast::AstFlags)((u16)e.h.flags | (u16)ast::AstFlags::HadError);
 }
 
+fn bool expr_has_flag(ast::AstNode* e, ast::AstFlags f) {
+    return ((u16)e.h.flags & (u16)f) != 0;
+}
+
 // Top-down: fit `e` to `expected`. Handles the literal carve-outs (int lit
 // fits target int type, null lit fits any pointer/slice, undefined fits any
 // var-init), the struct/array literal coercions, then falls back to synth
 // followed by is_convertible. Sets e.h.ty on success.
 export fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
     if(e == null || expected == null) { return false; }
+    if(e.h.kind == ast::AstKind::UnaryOp) {
+        ast::UnaryOpNode* unary = (ast::UnaryOpNode*)e;
+        if(unary.op == token::TokenKind::Minus && unary.operand != null && unary.operand.h.kind == ast::AstKind::IntLit) {
+            if(!check_int_lit_signed(s, (ast::IntLitNode*)unary.operand, expected, true)) {
+                mark_error(e);
+                return false;
+            }
+            set_expr(e, expected, (u16)ast::AstFlags::ConstExpr);
+            return true;
+        }
+    }
     switch(e.h.kind) {
     case ast::AstKind::IntLit: {
         return check_int_lit(s, (ast::IntLitNode*)e, expected);
@@ -800,14 +816,49 @@ fn types::Type* synth_cast(Sema* s, ast::CastNode* n) {
 // op.sl::unaryop_result_type. Special-case fused `-IntLit`: re-checks the
 // literal against the parent's expected type with negative=true.
 fn types::Type* synth_unary(Sema* s, ast::UnaryOpNode* n) {
-    return null; // TODO
+    types::Type* operand = synth(s, n.operand);
+    if(operand == null) { return null; }
+    if(n.op == token::TokenKind::Amp && !expr_has_flag(n.operand, ast::AstFlags::LValue)) {
+        diag_not_lvalue(s, n.operand.h.src_pos);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    types::Type* result = op::unaryop_result_type(n.op, operand);
+    if(result == null) {
+        diag_unary_mismatch(s, n.h.src_pos, n.op, operand);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    u16 flags = 0;
+    if(n.op == token::TokenKind::Star) {
+        flags = (u16)ast::AstFlags::LValue;
+    } else if(n.op != token::TokenKind::Amp && expr_has_flag(n.operand, ast::AstFlags::ConstExpr)) {
+        flags = (u16)ast::AstFlags::ConstExpr;
+    }
+    set_expr((ast::AstNode*)n, result, flags);
+    return result;
 }
 
 // Binary ops. Synths both operands, then delegates to op.sl::binop_result_type
 // for the result type (or null on invalid combination). Marks ConstExpr when
 // both operands are ConstExpr.
 fn types::Type* synth_binary(Sema* s, ast::BinaryOpNode* n) {
-    return null; // TODO
+    types::Type* lt = synth(s, n.lhs);
+    if(lt == null) { return null; }
+    types::Type* rt = synth(s, n.rhs);
+    if(rt == null) { return null; }
+    types::Type* result = op::binop_result_type(n.op, lt, rt);
+    if(result == null) {
+        diag_binop_mismatch(s, n.h.src_pos, n.op, lt, rt);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    u16 flags = 0;
+    if(expr_has_flag(n.lhs, ast::AstFlags::ConstExpr) && expr_has_flag(n.rhs, ast::AstFlags::ConstExpr)) {
+        flags = (u16)ast::AstFlags::ConstExpr;
+    }
+    set_expr((ast::AstNode*)n, result, flags);
+    return result;
 }
 
 // `sizeof(T)` or `sizeof(expr)`. If arg is a type expression, resolve it and
@@ -850,12 +901,16 @@ fn types::Type* synth_compcode(Sema* s, ast::CompCodeNode* n) {
 // `negative` is inferred from the parent context (fused `-IntLit` case).
 // Diagnostic "literal `<value>` does not fit in `<type>`" on overflow.
 export fn bool check_int_lit(Sema* s, ast::IntLitNode* n, types::Type* expected) {
-    if(types::is_int(expected) && types::int_lit_fits(n.value, false, expected)) {
+    return check_int_lit_signed(s, n, expected, false);
+}
+
+fn bool check_int_lit_signed(Sema* s, ast::IntLitNode* n, types::Type* expected, bool negative) {
+    if(types::is_int(expected) && types::int_lit_fits(n.value, negative, expected)) {
         n.h.ty = (void*)expected;
         return true;
     }
     diag_lit_overflow(s, n.h.src_pos, n.value, expected);
-    n.h.flags = (ast::AstFlags)((u16)n.h.flags | (u16)ast::AstFlags::HadError);
+    mark_error((ast::AstNode*)n);
     return false;
 }
 
@@ -951,6 +1006,21 @@ export fn void diag_binop_mismatch(Sema* s, u32 src_pos, token::TokenKind op, ty
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "operator is not defined for %.*s and %.*s", (i32)lt_str.len, (i8*)lt_str.ptr, (i32)rt_str.len, (i8*)rt_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "operator `<op>` is not defined for `<type>`". Used by synth_unary.
+export fn void diag_unary_mismatch(Sema* s, u32 src_pos, token::TokenKind op, types::Type* operand) {
+    u8[] op_str = token::kind_name(op);
+    u8[] operand_str = types_print::print_to_arena(operand, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "operator %.*s is not defined for %.*s", (i32)op_str.len, (i8*)op_str.ptr, (i32)operand_str.len, (i8*)operand_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "cannot take the address of a non-lvalue". Used by synth_unary for `&x`.
+export fn void diag_not_lvalue(Sema* s, u32 src_pos) {
+    u8[] msg = "cannot take the address of a non-lvalue";
+    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
 }
 
 // "cannot cast `<src>` to `<target>`". Used by synth_cast on is_castable fail.

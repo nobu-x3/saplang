@@ -189,6 +189,33 @@ fn bool has_flag(ast::AstNode* e, ast::AstFlags f) {
     return ((u16)e.h.flags & (u16)f) != 0;
 }
 
+fn ast::BinaryOpNode* fake_binop(arena::Arena* a, token::TokenKind op, ast::AstNode* lhs, ast::AstNode* rhs, u32 src_pos) {
+    ast::BinaryOpNode* n = (ast::BinaryOpNode*)arena::alloc(a, sizeof(ast::BinaryOpNode));
+    sys::memset(n, 0, sizeof(ast::BinaryOpNode));
+    n.h.kind = ast::AstKind::BinaryOp;
+    n.h.src_pos = src_pos;
+    n.op = op;
+    n.lhs = lhs;
+    n.rhs = rhs;
+    return n;
+}
+
+fn ast::UnaryOpNode* fake_unary(arena::Arena* a, token::TokenKind op, ast::AstNode* operand, u32 src_pos) {
+    ast::UnaryOpNode* n = (ast::UnaryOpNode*)arena::alloc(a, sizeof(ast::UnaryOpNode));
+    sys::memset(n, 0, sizeof(ast::UnaryOpNode));
+    n.h.kind = ast::AstKind::UnaryOp;
+    n.h.src_pos = src_pos;
+    n.op = op;
+    n.operand = operand;
+    return n;
+}
+
+fn sema::Decl* register_var(arena::Arena* a, sema::Scope* sc, symbol::Symbol* name, types::Type* ty, bool is_const) {
+    sema::Decl* d = fake_node_decl(a, name, ty, (ast::AstNode*)fake_var_decl(a, name, is_const));
+    sema::scope_add(sc, name, d);
+    return d;
+}
+
 fn ast::StructDeclNode* fake_struct_decl_with_fields(arena::Arena* a, symbol::Symbol*[] names, types::Type*[] tys) {
     ast::StructDeclNode* d = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
     sys::memset(d, 0, sizeof(ast::StructDeclNode));
@@ -2643,6 +2670,242 @@ fn i32 check_string_to_u8_ptr(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 bin_add_two_lits(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* lhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
+    ast::AstNode* rhs = (ast::AstNode*)fake_int_lit(a, 2, 0);
+    ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::Plus, lhs, rhs, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)bin, ast::AstFlags::ConstExpr), m)) { return -2; }
+    return 0;
+}
+
+fn i32 bin_comparison_is_bool(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* lhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
+    ast::AstNode* rhs = (ast::AstNode*)fake_int_lit(a, 2, 0);
+    ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::LT, lhs, rhs, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_bool(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 bin_logical_is_bool(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* lhs = (ast::AstNode*)fake_bool_lit(a, true, 0);
+    ast::AstNode* rhs = (ast::AstNode*)fake_bool_lit(a, false, 0);
+    ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::AmpAmp, lhs, rhs, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_bool(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 bin_nested_const(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* inner = (ast::AstNode*)fake_binop(a, token::TokenKind::Plus, (ast::AstNode*)fake_int_lit(a, 1, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
+    ast::BinaryOpNode* outer = fake_binop(a, token::TokenKind::Star, inner, (ast::AstNode*)fake_int_lit(a, 3, 0), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)outer);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)outer, ast::AstFlags::ConstExpr), m)) { return -2; }
+    return 0;
+}
+
+fn i32 bin_non_const_operand(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, types::prim_i32(), false);
+    ast::AstNode* lhs = (ast::AstNode*)fake_ident(a, x, 0);
+    ast::AstNode* rhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
+    ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::Plus, lhs, rhs, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_true(!has_flag((ast::AstNode*)bin, ast::AstFlags::ConstExpr), m)) { return -2; }
+    return 0;
+}
+
+fn i32 bin_mismatch_reports(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* lhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
+    ast::AstNode* rhs = (ast::AstNode*)fake_float_lit(a, 2.0, 0);
+    ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::Plus, lhs, rhs, 6);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "operator is not defined for i32 and f64", m)) { return -3; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 6, m)) { return -4; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)bin, ast::AstFlags::HadError), m)) { return -5; }
+    return 0;
+}
+
+fn i32 bin_operand_error_propagates(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    ast::AstNode* lhs = (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0);
+    ast::AstNode* rhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
+    ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::Plus, lhs, rhs, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 un_neg_int(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* operand = (ast::AstNode*)fake_int_lit(a, 5, 0);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Minus, operand, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)un, ast::AstFlags::ConstExpr), m)) { return -2; }
+    return 0;
+}
+
+fn i32 un_not_bool(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* operand = (ast::AstNode*)fake_bool_lit(a, true, 0);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Bang, operand, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_bool(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 un_complement_int(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* operand = (ast::AstNode*)fake_int_lit(a, 5, 0);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Tilde, operand, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 un_complement_float_fails(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* operand = (ast::AstNode*)fake_float_lit(a, 2.0, 0);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Tilde, operand, 4);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "operator '~' is not defined for f64", m)) { return -3; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -4; }
+    return 0;
+}
+
+fn i32 un_deref_ptr(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* p = interner::intern("p");
+    types::Type* ptr = types::intern_pointer(types::prim_i32(), false);
+    register_var(a, sc, p, ptr, false);
+    ast::AstNode* operand = (ast::AstNode*)fake_ident(a, p, 0);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Star, operand, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)un, ast::AstFlags::LValue), m)) { return -2; }
+    return 0;
+}
+
+fn i32 un_deref_non_ptr_fails(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* operand = (ast::AstNode*)fake_int_lit(a, 5, 0);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Star, operand, 8);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "operator '*' is not defined for i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 8, m)) { return -3; }
+    return 0;
+}
+
+fn i32 un_addr_of_lvalue(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, types::prim_i32(), false);
+    ast::AstNode* operand = (ast::AstNode*)fake_ident(a, x, 0);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Amp, operand, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Type* want = types::intern_pointer(types::prim_i32(), false);
+    if(!testing::expect_eq((void*)t, (void*)want, m)) { return -1; }
+    return 0;
+}
+
+fn i32 un_addr_of_non_lvalue_fails(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* operand = (ast::AstNode*)fake_int_lit(a, 5, 3);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Amp, operand, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot take the address of a non-lvalue", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
+    return 0;
+}
+
+fn i32 un_operand_error_propagates(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    ast::AstNode* operand = (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Minus, operand, 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    if(!testing::expect_eq((void*)t, null, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_fused_neg_fits(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* lit = (ast::AstNode*)fake_int_lit(a, 2147483648, 0);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Minus, lit, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)un, types::prim_i32());
+    if(!testing::expect_true(ok, m)) { return -1; }
+    if(!testing::expect_eq((void*)un.h.ty, (void*)types::prim_i32(), m)) { return -2; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)un, ast::AstFlags::ConstExpr), m)) { return -3; }
+    return 0;
+}
+
+fn i32 check_fused_neg_overflow(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* lit = (ast::AstNode*)fake_int_lit(a, 2147483649, 5);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Minus, lit, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)un, types::prim_i32());
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "literal 2147483649 does not fit in i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
+    return 0;
+}
+
+fn i32 check_fused_neg_to_unsigned_fails(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* lit = (ast::AstNode*)fake_int_lit(a, 5, 2);
+    ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Minus, lit, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)un, types::prim_u32());
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "literal 5 does not fit in u32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 2, m)) { return -3; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -2847,6 +3110,27 @@ fn i32 main() {
     testing::add(chk, "check_ident_narrow_fails",  &check_ident_narrow_fails);
     testing::add(chk, "check_char_to_u8",          &check_char_to_u8);
     testing::add(chk, "check_string_to_u8_ptr",    &check_string_to_u8_ptr);
+
+    u8[] binu = "Sema Binary/Unary Tests";
+    testing::add(binu, "bin_add_two_lits",          &bin_add_two_lits);
+    testing::add(binu, "bin_comparison_is_bool",    &bin_comparison_is_bool);
+    testing::add(binu, "bin_logical_is_bool",       &bin_logical_is_bool);
+    testing::add(binu, "bin_nested_const",          &bin_nested_const);
+    testing::add(binu, "bin_non_const_operand",     &bin_non_const_operand);
+    testing::add(binu, "bin_mismatch_reports",      &bin_mismatch_reports);
+    testing::add(binu, "bin_operand_error_propagates", &bin_operand_error_propagates);
+    testing::add(binu, "un_neg_int",                &un_neg_int);
+    testing::add(binu, "un_not_bool",               &un_not_bool);
+    testing::add(binu, "un_complement_int",         &un_complement_int);
+    testing::add(binu, "un_complement_float_fails", &un_complement_float_fails);
+    testing::add(binu, "un_deref_ptr",              &un_deref_ptr);
+    testing::add(binu, "un_deref_non_ptr_fails",    &un_deref_non_ptr_fails);
+    testing::add(binu, "un_addr_of_lvalue",         &un_addr_of_lvalue);
+    testing::add(binu, "un_addr_of_non_lvalue_fails", &un_addr_of_non_lvalue_fails);
+    testing::add(binu, "un_operand_error_propagates", &un_operand_error_propagates);
+    testing::add(binu, "check_fused_neg_fits",      &check_fused_neg_fits);
+    testing::add(binu, "check_fused_neg_overflow",  &check_fused_neg_overflow);
+    testing::add(binu, "check_fused_neg_to_unsigned_fails", &check_fused_neg_to_unsigned_fails);
 
     return testing::run();
 }
