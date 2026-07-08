@@ -224,6 +224,7 @@ fn module::Module* find_import_module(Sema* s, symbol::Symbol* import_name) {
 fn void resolve_signatures_locked(Sema* s) {
     if((s.m.sema_phase & (u16)SemaPhase::Signatures) != 0) { return; }
     s.scope = (Scope*)s.m.global_scope;
+    s.resolution_stack.arena = s.m.arena;
     if(s.m.root_node == null) {
         s.m.sema_phase |= SemaPhase::Signatures;
         return;
@@ -541,7 +542,21 @@ export fn types::Type*[] resolve_type_list(Sema* s, ast::AstNode*[] type_exprs) 
 // onto s.resolution_stack and reports a cycle if the same key is already there.
 // Triggers ensure_signatures_resolved on the target module.
 fn types::Type* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
-    return null; // TODO
+    module::Module* target = s.m;
+    if(n.namespace != null) {
+        Decl* namespace_decl = scope_lookup(s.scope, n.namespace);
+        if(namespace_decl == null || namespace_decl.kind != (u16)DeclKind::Import || namespace_decl.data.module == null) {
+            diag_unknown_type(s, n.h.src_pos, n.name);
+            return null;
+        }
+        target = namespace_decl.data.module;
+    }
+    Decl* decl = scope_lookup_local((Scope*)target.global_scope, n.name);
+    if(decl == null || (target != s.m && !decl.is_exported)) {
+        diag_unknown_type(s, n.h.src_pos, n.name);
+        return null;
+    }
+    return decl_to_type(s, target, decl);
 }
 
 // Take an anonymous `struct { ... }` at type position and intern it.
@@ -570,8 +585,29 @@ export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
 // Given a Decl that may be an alias, follow the alias chain until a
 // non-alias Type* is reached. Used by resolve_named_type so aliases never
 // enter the typer.
-fn types::Type* decl_to_type(Sema* s, Decl* d) {
-    return null; // TODO
+fn types::Type* decl_to_type(Sema* s, module::Module* target, Decl* d) {
+    ast::AstNode* node = d.data.node;
+    if(node == null) { return null; }
+    // Nominal types intern idempotently by decl pointer, so no per-decl cache;
+    // the cache below is only for aliases (whose target must not be re-resolved).
+    if(node.h.kind == ast::AstKind::StructDecl) { d.ty = types::intern_struct((void*)node); return d.ty; }
+    if(node.h.kind == ast::AstKind::UnionDecl)  { d.ty = types::intern_union((void*)node);  return d.ty; }
+    if(node.h.kind == ast::AstKind::EnumDecl)   { d.ty = types::intern_enum((void*)node);   return d.ty; }
+    if(node.h.kind == ast::AstKind::AliasDecl) {
+        if(d.ty != null) { return d.ty; }
+        ResolutionKey key = {target, d.name};
+        if(stack_contains(&s.resolution_stack, key)) {
+            diag_resolution_cycle(s, node.h.src_pos, key);
+            return null;
+        }
+        stack_push(&s.resolution_stack, key);
+        types::Type* resolved = resolve_type(s, ((ast::AliasDeclNode*)node).target);
+        stack_pop(&s.resolution_stack);
+        d.ty = resolved;
+        return resolved;
+    }
+    diag_unknown_type(s, node.h.src_pos, d.name);
+    return null;
 }
 
 
@@ -825,6 +861,14 @@ export fn void diag_resolution_cycle(Sema* s, u32 src_pos, ResolutionKey key) {
     u8[] name_str = interner::symbol_str(key.name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "circular type resolution: %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "unknown type `<name>`". Used by resolve_named_type on a missing/non-type name.
+export fn void diag_unknown_type(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "unknown type %.*s", (i32)name_str.len, (i8*)name_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 

@@ -1839,6 +1839,390 @@ fn i32 rs_sets_signatures_phase(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// ---- named-type resolution tests ----
+fn ast::AstNode* mk_ty_named(arena::Arena* a, symbol::Symbol* namespace, symbol::Symbol* name) {
+    ast::TypeNamedNode* node = (ast::TypeNamedNode*)arena::alloc(a, sizeof(ast::TypeNamedNode));
+    sys::memset(node, 0, sizeof(ast::TypeNamedNode));
+    node.h.kind = ast::AstKind::NamedType;
+    node.namespace = namespace;
+    node.name = name;
+    return (ast::AstNode*)node;
+}
+
+fn ast::AstNode* mk_alias_typed(arena::Arena* a, symbol::Symbol* name, ast::AstNode* target, u32 pos) {
+    ast::AstNode* alias = mk_alias_decl(a, name, false, pos);
+    ((ast::AliasDeclNode*)alias).target = target;
+    return alias;
+}
+
+fn i32 rnt_named_struct(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "Foo");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, foo));
+    ast::AstNode*[2] stmts; stmts[0] = struct_decl; stmts[1] = var;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    sema::Decl* dx = registered(mm, x);
+    if(!testing::expect_eq((u64)dx.ty.kind, (u64)types::TypeKind::Struct, m)) { return -1; }
+    if(!testing::expect_eq((void*)sema::container_decl(dx.ty), (void*)struct_decl, m)) { return -2; }
+    return 0;
+}
+
+fn i32 rnt_named_enum(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* color = fake_sym_interned(mm, "Color");
+    symbol::Symbol* c = fake_sym_interned(mm, "c");
+    ast::AstNode* enum_decl = mk_enum_decl(a, color, false, 0);
+    ast::AstNode* var = mk_var_typed(a, c, mk_ty_named(a, null, color));
+    ast::AstNode*[2] stmts; stmts[0] = enum_decl; stmts[1] = var;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    if(!testing::expect_eq((u64)registered(mm, c).ty.kind, (u64)types::TypeKind::Enum, m)) { return -1; }
+    return 0;
+}
+
+fn i32 rnt_named_union(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* u = fake_sym_interned(mm, "U");
+    symbol::Symbol* v = fake_sym_interned(mm, "v");
+    ast::AstNode* union_decl = mk_union_decl(a, u, false, 0);
+    ast::AstNode* var = mk_var_typed(a, v, mk_ty_named(a, null, u));
+    ast::AstNode*[2] stmts; stmts[0] = union_decl; stmts[1] = var;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    if(!testing::expect_eq((u64)registered(mm, v).ty.kind, (u64)types::TypeKind::Union, m)) { return -1; }
+    return 0;
+}
+
+fn i32 rnt_named_in_pointer(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "Foo");
+    symbol::Symbol* p = fake_sym_interned(mm, "p");
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ast::AstNode* var = mk_var_typed(a, p, mk_ty_ptr(a, mk_ty_named(a, null, foo), false));
+    ast::AstNode*[2] stmts; stmts[0] = struct_decl; stmts[1] = var;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    sema::Decl* dp = registered(mm, p);
+    if(!testing::expect_eq((u64)dp.ty.kind, (u64)types::TypeKind::Pointer, m)) { return -1; }
+    if(!testing::expect_eq((u64)dp.ty.data.pointee.kind, (u64)types::TypeKind::Struct, m)) { return -2; }
+    return 0;
+}
+
+fn i32 rnt_named_in_slice(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "Foo");
+    symbol::Symbol* s = fake_sym_interned(mm, "s");
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ast::AstNode* var = mk_var_typed(a, s, mk_ty_slice(a, mk_ty_named(a, null, foo)));
+    ast::AstNode*[2] stmts; stmts[0] = struct_decl; stmts[1] = var;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    if(!testing::expect_eq((u64)registered(mm, s).ty.kind, (u64)types::TypeKind::Slice, m)) { return -1; }
+    return 0;
+}
+
+fn i32 rnt_named_as_field(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "Foo");
+    symbol::Symbol* bar = fake_sym_interned(mm, "Bar");
+    ast::AstNode* foo_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ast::AstNode* bar_decl = mk_struct_sig(a, bar, mk_texprs1(a, mk_ty_named(a, null, foo)));
+    ast::AstNode*[2] stmts; stmts[0] = foo_decl; stmts[1] = bar_decl;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    ast::StructDeclNode* bar_node = (ast::StructDeclNode*)bar_decl;
+    types::Type* field_type = (types::Type*)bar_node.fields[0].resolved_type;
+    if(!testing::expect_eq((u64)field_type.kind, (u64)types::TypeKind::Struct, m)) { return -1; }
+    if(!testing::expect_eq((void*)sema::container_decl(field_type), (void*)foo_decl, m)) { return -2; }
+    return 0;
+}
+
+fn i32 rnt_alias_to_primitive(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* id = fake_sym_interned(mm, "Id");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    ast::AstNode* alias = mk_alias_typed(a, id, mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, id));
+    ast::AstNode*[2] stmts; stmts[0] = alias; stmts[1] = var;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    if(!testing::expect_eq((void*)registered(mm, x).ty, (void*)types::prim_i32(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 rnt_alias_to_pointer(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* p = fake_sym_interned(mm, "P");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    ast::AstNode* alias = mk_alias_typed(a, p, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false), 0);
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, p));
+    ast::AstNode*[2] stmts; stmts[0] = alias; stmts[1] = var;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    sema::Decl* dx = registered(mm, x);
+    if(!testing::expect_eq((u64)dx.ty.kind, (u64)types::TypeKind::Pointer, m)) { return -1; }
+    if(!testing::expect_eq((void*)dx.ty.data.pointee, (void*)types::prim_i32(), m)) { return -2; }
+    return 0;
+}
+
+fn i32 rnt_alias_to_named(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "Foo");
+    symbol::Symbol* b = fake_sym_interned(mm, "B");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ast::AstNode* alias = mk_alias_typed(a, b, mk_ty_named(a, null, foo), 0);
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, b));
+    ast::AstNode*[3] stmts; stmts[0] = struct_decl; stmts[1] = alias; stmts[2] = var;
+    set_root(mm, a, &stmts[0], 3);
+    sema::run(mm);
+    if(!testing::expect_eq((void*)sema::container_decl(registered(mm, x).ty), (void*)struct_decl, m)) { return -1; }
+    return 0;
+}
+
+fn i32 rnt_alias_chain(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* first = fake_sym_interned(mm, "A");
+    symbol::Symbol* second = fake_sym_interned(mm, "B");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    ast::AstNode* alias_a = mk_alias_typed(a, first, mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* alias_b = mk_alias_typed(a, second, mk_ty_named(a, null, first), 0);
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, second));
+    ast::AstNode*[3] stmts; stmts[0] = alias_a; stmts[1] = alias_b; stmts[2] = var;
+    set_root(mm, a, &stmts[0], 3);
+    sema::run(mm);
+    if(!testing::expect_eq((void*)registered(mm, x).ty, (void*)types::prim_i32(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 rnt_alias_cycle_reports(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* first = fake_sym_interned(mm, "A");
+    symbol::Symbol* second = fake_sym_interned(mm, "B");
+    ast::AstNode* alias_a = mk_alias_typed(a, first, mk_ty_named(a, null, second), 0);
+    ast::AstNode* alias_b = mk_alias_typed(a, second, mk_ty_named(a, null, first), 42);
+    ast::AstNode*[2] stmts; stmts[0] = alias_a; stmts[1] = alias_b;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "circular type resolution", m)) { return -2; }
+    return 0;
+}
+
+fn i32 rnt_unknown_name_reports(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* missing = fake_sym_interned(mm, "Missing");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, missing));
+    ast::AstNode*[1] stmts; stmts[0] = var;
+    set_root(mm, a, &stmts[0], 1);
+    sema::run(mm);
+    if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "unknown type", m)) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "Missing", m)) { return -3; }
+    if(!testing::expect_eq((void*)registered(mm, x).ty, null, m)) { return -4; }
+    return 0;
+}
+
+fn i32 rnt_order_independent(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "Foo");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, foo));
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ast::AstNode*[2] stmts; stmts[0] = var; stmts[1] = struct_decl;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    if(!testing::expect_eq((void*)sema::container_decl(registered(mm, x).ty), (void*)struct_decl, m)) { return -1; }
+    return 0;
+}
+
+fn i32 rnt_identity(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "Foo");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    symbol::Symbol* y = fake_sym_interned(mm, "y");
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ast::AstNode* vx = mk_var_typed(a, x, mk_ty_named(a, null, foo));
+    ast::AstNode* vy = mk_var_typed(a, y, mk_ty_named(a, null, foo));
+    ast::AstNode*[3] stmts; stmts[0] = struct_decl; stmts[1] = vx; stmts[2] = vy;
+    set_root(mm, a, &stmts[0], 3);
+    sema::run(mm);
+    if(!testing::expect_eq((void*)registered(mm, x).ty, (void*)registered(mm, y).ty, m)) { return -1; }
+    return 0;
+}
+
+fn i32 rnt_cross_module_struct(arena::Arena* a, u8[] m) {
+    interner::init(a, 16);
+    types::typer_init(a, 16);
+    module::Module* other = fresh_module(a);
+    other.name = interner::intern("other");
+    mutex::create(&other.sema_mutex);
+    symbol::Symbol* foo = interner::intern("Foo");
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ((ast::StructDeclNode*)struct_decl).is_exported = true;
+    ast::AstNode*[1] other_stmts; other_stmts[0] = struct_decl;
+    set_root(other, a, &other_stmts[0], 1);
+    sema::run(other);
+
+    module::Module* main_mod = fresh_module(a);
+    main_mod.name = interner::intern("main");
+    mutex::create(&main_mod.sema_mutex);
+    module::Module*[1] imports; imports[0] = other;
+    main_mod.imports.ptr = &imports[0];
+    main_mod.imports.len = 1;
+    symbol::Symbol* other_name = interner::intern("other");
+    symbol::Symbol* x = interner::intern("x");
+    ast::AstNode* imp = mk_import_decl(a, other_name, false, 0);
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, other_name, foo));
+    ast::AstNode*[2] main_stmts; main_stmts[0] = imp; main_stmts[1] = var;
+    set_root(main_mod, a, &main_stmts[0], 2);
+    sema::run(main_mod);
+    sema::Decl* dx = registered(main_mod, x);
+    if(!testing::expect_not_null((void*)dx, m)) { return -1; }
+    if(!testing::expect_eq((u64)dx.ty.kind, (u64)types::TypeKind::Struct, m)) { return -2; }
+    if(!testing::expect_eq((void*)sema::container_decl(dx.ty), (void*)struct_decl, m)) { return -3; }
+    return 0;
+}
+
+fn i32 rnt_cross_module_not_exported_reports(arena::Arena* a, u8[] m) {
+    interner::init(a, 16);
+    types::typer_init(a, 16);
+    module::Module* other = fresh_module(a);
+    other.name = interner::intern("other");
+    mutex::create(&other.sema_mutex);
+    symbol::Symbol* foo = interner::intern("Foo");
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ast::AstNode*[1] other_stmts; other_stmts[0] = struct_decl;
+    set_root(other, a, &other_stmts[0], 1);
+    sema::run(other);
+
+    module::Module* main_mod = fresh_module(a);
+    main_mod.name = interner::intern("main");
+    mutex::create(&main_mod.sema_mutex);
+    module::Module*[1] imports; imports[0] = other;
+    main_mod.imports.ptr = &imports[0];
+    main_mod.imports.len = 1;
+    symbol::Symbol* other_name = interner::intern("other");
+    symbol::Symbol* x = interner::intern("x");
+    ast::AstNode* imp = mk_import_decl(a, other_name, false, 0);
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, other_name, foo));
+    ast::AstNode*[2] main_stmts; main_stmts[0] = imp; main_stmts[1] = var;
+    set_root(main_mod, a, &main_stmts[0], 2);
+    sema::run(main_mod);
+    if(!testing::expect_ge(main_mod.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq((void*)registered(main_mod, x).ty, null, m)) { return -2; }
+    return 0;
+}
+
+fn i32 rnt_non_type_used_as_type(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* v = fake_sym_interned(mm, "v");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    ast::AstNode* var_v = mk_var_typed(a, v, mk_ty_prim(a, token::TokenKind::I32));
+    ast::AstNode* var_x = mk_var_typed(a, x, mk_ty_named(a, null, v));
+    ast::AstNode*[2] stmts; stmts[0] = var_v; stmts[1] = var_x;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "unknown type", m)) { return -2; }
+    if(!testing::expect_eq((void*)registered(mm, x).ty, null, m)) { return -3; }
+    return 0;
+}
+
+fn i32 rnt_qualified_namespace_not_imported(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* nomod = fake_sym_interned(mm, "NoMod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "Foo");
+    symbol::Symbol* x = fake_sym_interned(mm, "x");
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, nomod, foo));
+    ast::AstNode*[1] stmts; stmts[0] = var;
+    set_root(mm, a, &stmts[0], 1);
+    sema::run(mm);
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "unknown type", m)) { return -2; }
+    if(!testing::expect_eq((void*)registered(mm, x).ty, null, m)) { return -3; }
+    return 0;
+}
+
+fn i32 rnt_qualified_name_not_in_target(arena::Arena* a, u8[] m) {
+    interner::init(a, 16);
+    types::typer_init(a, 16);
+    module::Module* other = fresh_module(a);
+    other.name = interner::intern("other");
+    mutex::create(&other.sema_mutex);
+    symbol::Symbol* foo = interner::intern("Foo");
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ((ast::StructDeclNode*)struct_decl).is_exported = true;
+    ast::AstNode*[1] other_stmts; other_stmts[0] = struct_decl;
+    set_root(other, a, &other_stmts[0], 1);
+    sema::run(other);
+
+    module::Module* main_mod = fresh_module(a);
+    main_mod.name = interner::intern("main");
+    mutex::create(&main_mod.sema_mutex);
+    module::Module*[1] imports; imports[0] = other;
+    main_mod.imports.ptr = &imports[0];
+    main_mod.imports.len = 1;
+    symbol::Symbol* other_name = interner::intern("other");
+    symbol::Symbol* missing = interner::intern("Missing");
+    symbol::Symbol* x = interner::intern("x");
+    ast::AstNode* imp = mk_import_decl(a, other_name, false, 0);
+    ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, other_name, missing));
+    ast::AstNode*[2] main_stmts; main_stmts[0] = imp; main_stmts[1] = var;
+    set_root(main_mod, a, &main_stmts[0], 2);
+    sema::run(main_mod);
+    if(!testing::expect_ge(main_mod.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq((void*)registered(main_mod, x).ty, null, m)) { return -2; }
+    return 0;
+}
+
+fn i32 rnt_self_alias_cycle_reports(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* self = fake_sym_interned(mm, "A");
+    ast::AstNode* alias = mk_alias_typed(a, self, mk_ty_named(a, null, self), 0);
+    ast::AstNode*[1] stmts; stmts[0] = alias;
+    set_root(mm, a, &stmts[0], 1);
+    sema::run(mm);
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "circular type resolution", m)) { return -2; }
+    return 0;
+}
+
+fn i32 rnt_alias_to_unknown_reports(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* first = fake_sym_interned(mm, "A");
+    symbol::Symbol* missing = fake_sym_interned(mm, "Missing");
+    ast::AstNode* alias = mk_alias_typed(a, first, mk_ty_named(a, null, missing), 0);
+    ast::AstNode*[1] stmts; stmts[0] = alias;
+    set_root(mm, a, &stmts[0], 1);
+    sema::run(mm);
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "unknown type", m)) { return -2; }
+    if(!testing::expect_eq((void*)registered(mm, first).ty, null, m)) { return -3; }
+    return 0;
+}
+
+fn i32 rnt_fn_named_param_return(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "Foo");
+    symbol::Symbol* make = fake_sym_interned(mm, "make");
+    ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
+    ast::AstNode* fn_decl = mk_fn_sig(a, make, mk_ty_named(a, null, foo), mk_texprs1(a, mk_ty_named(a, null, foo)));
+    ast::AstNode*[2] stmts; stmts[0] = struct_decl; stmts[1] = fn_decl;
+    set_root(mm, a, &stmts[0], 2);
+    sema::run(mm);
+    sema::Decl* d = registered(mm, make);
+    if(!testing::expect_eq((u64)d.ty.data.fn_ptr.ret.kind, (u64)types::TypeKind::Struct, m)) { return -1; }
+    if(!testing::expect_eq((u64)d.ty.data.fn_ptr.params[0].kind, (u64)types::TypeKind::Struct, m)) { return -2; }
+    ast::FnDeclNode* fn_node = (ast::FnDeclNode*)fn_decl;
+    if(!testing::expect_eq((void*)sema::container_decl((types::Type*)fn_node.params[0].resolved_type), (void*)struct_decl, m)) { return -3; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -1986,6 +2370,30 @@ fn i32 main() {
     testing::add(sig, "rs_enum_base",             &rs_enum_base);
     testing::add(sig, "rs_alias_dissolves",       &rs_alias_dissolves);
     testing::add(sig, "rs_sets_signatures_phase", &rs_sets_signatures_phase);
+
+    u8[] rnt = "Sema Named Type Resolution Tests";
+    testing::add(rnt, "rnt_named_struct",           &rnt_named_struct);
+    testing::add(rnt, "rnt_named_enum",             &rnt_named_enum);
+    testing::add(rnt, "rnt_named_union",            &rnt_named_union);
+    testing::add(rnt, "rnt_named_in_pointer",       &rnt_named_in_pointer);
+    testing::add(rnt, "rnt_named_in_slice",         &rnt_named_in_slice);
+    testing::add(rnt, "rnt_named_as_field",         &rnt_named_as_field);
+    testing::add(rnt, "rnt_alias_to_primitive",     &rnt_alias_to_primitive);
+    testing::add(rnt, "rnt_alias_to_pointer",       &rnt_alias_to_pointer);
+    testing::add(rnt, "rnt_alias_to_named",         &rnt_alias_to_named);
+    testing::add(rnt, "rnt_alias_chain",            &rnt_alias_chain);
+    testing::add(rnt, "rnt_alias_cycle_reports",    &rnt_alias_cycle_reports);
+    testing::add(rnt, "rnt_unknown_name_reports",   &rnt_unknown_name_reports);
+    testing::add(rnt, "rnt_order_independent",      &rnt_order_independent);
+    testing::add(rnt, "rnt_identity",               &rnt_identity);
+    testing::add(rnt, "rnt_cross_module_struct",    &rnt_cross_module_struct);
+    testing::add(rnt, "rnt_cross_module_not_exported_reports", &rnt_cross_module_not_exported_reports);
+    testing::add(rnt, "rnt_non_type_used_as_type",  &rnt_non_type_used_as_type);
+    testing::add(rnt, "rnt_qualified_namespace_not_imported", &rnt_qualified_namespace_not_imported);
+    testing::add(rnt, "rnt_qualified_name_not_in_target", &rnt_qualified_name_not_in_target);
+    testing::add(rnt, "rnt_self_alias_cycle_reports", &rnt_self_alias_cycle_reports);
+    testing::add(rnt, "rnt_alias_to_unknown_reports", &rnt_alias_to_unknown_reports);
+    testing::add(rnt, "rnt_fn_named_param_return",  &rnt_fn_named_param_return);
 
     return testing::run();
 }
