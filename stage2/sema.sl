@@ -5,6 +5,7 @@ import ast;
 import diag;
 import token;
 import types;
+import types_print;
 import mutex;
 import sys;
 import interner;
@@ -707,7 +708,13 @@ fn types::Type* synth_compcode(Sema* s, ast::CompCodeNode* n) {
 // `negative` is inferred from the parent context (fused `-IntLit` case).
 // Diagnostic "literal `<value>` does not fit in `<type>`" on overflow.
 export fn bool check_int_lit(Sema* s, ast::IntLitNode* n, types::Type* expected) {
-    return false; // TODO
+    if(types::is_int(expected) && types::int_lit_fits(n.value, false, expected)) {
+        n.h.ty = (void*)expected;
+        return true;
+    }
+    diag_lit_overflow(s, n.h.src_pos, n.value, expected);
+    n.h.flags = (ast::AstFlags)((u16)n.h.flags | (u16)ast::AstFlags::HadError);
+    return false;
 }
 
 // Designated, positional, or mixed field initialization. Each init is
@@ -755,44 +762,70 @@ fn bool check_cond(Sema* s, ast::AstNode* e) {
 // §13 — Diagnostic helpers
 // ============================================================================
 
-// "expected `<expected>`, found `<got>`" formatted via types_print::print.
-// The canonical type-mismatch diagnostic; used at every conversion failure.
+// Report a snprintf result (a stack buffer + its return code) as an error.
+fn void emit_diag(Sema* s, u32 src_pos, u8* buf, i32 written) {
+    if(written <= 0) { return; }
+    u64 len = (u64)written;
+    if(len > 255) { len = 255; }
+    u8[] msg = {buf, len};
+    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "expected `<expected>`, found `<got>`" — the canonical conversion-failure diagnostic.
 export fn void diag_type_mismatch(Sema* s, u32 src_pos, types::Type* got, types::Type* expected) {
-    // TODO
+    u8[] expected_str = types_print::print_to_arena(expected, s.m.arena);
+    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "expected %.*s, found %.*s", (i32)expected_str.len, (i8*)expected_str.ptr, (i32)got_str.len, (i8*)got_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
 // "literal `<value>` does not fit in `<expected>`". Used by check_int_lit.
 export fn void diag_lit_overflow(Sema* s, u32 src_pos, u64 value, types::Type* expected) {
-    // TODO
+    u8[] expected_str = types_print::print_to_arena(expected, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "literal %lu does not fit in %.*s", value, (i32)expected_str.len, (i8*)expected_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
-// "<kind> literal requires an expected type". Emitted when synth is called
-// on a StructLit or ArrayLit with no context to anchor element types.
+// Emitted when synth is called on a StructLit or ArrayLit with no expected type.
 export fn void diag_needs_context(Sema* s, ast::AstNode* e) {
-    // TODO
+    u8[] msg = "literal requires an expected type";
+    diag::report(&s.m.diag, s.m.arena, e.h.src_pos, msg);
 }
 
 // "cannot use `<type>` in condition; expected bool, integer, pointer, or slice".
-// Used by check_cond.
 export fn void diag_not_bool_convertible(Sema* s, u32 src_pos, types::Type* got) {
-    // TODO
+    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot use %.*s in condition; expected bool, integer, pointer, or slice", (i32)got_str.len, (i8*)got_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
-// "operator `<op>` is not defined for `<lhs>` and `<rhs>`".
-// Used by synth_binary when binop_result_type returns null.
+// "operator is not defined for `<lhs>` and `<rhs>`".
 export fn void diag_binop_mismatch(Sema* s, u32 src_pos, token::TokenKind op, types::Type* lt, types::Type* rt) {
-    // TODO
+    u8[] lt_str = types_print::print_to_arena(lt, s.m.arena);
+    u8[] rt_str = types_print::print_to_arena(rt, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "operator is not defined for %.*s and %.*s", (i32)lt_str.len, (i8*)lt_str.ptr, (i32)rt_str.len, (i8*)rt_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
 // "cannot cast `<src>` to `<target>`". Used by synth_cast on is_castable fail.
 export fn void diag_cast_invalid(Sema* s, u32 src_pos, types::Type* src, types::Type* target) {
-    // TODO
+    u8[] src_str = types_print::print_to_arena(src, s.m.arena);
+    u8[] target_str = types_print::print_to_arena(target, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot cast %.*s to %.*s", (i32)src_str.len, (i8*)src_str.ptr, (i32)target_str.len, (i8*)target_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
-// "circular type resolution: <mod>::<name> -> ... -> <mod>::<name>".
-// Used by resolve_named_type when the resolution stack already contains the key.
+// "circular type resolution: `<name>`". Used by resolve_named_type on a cycle.
 export fn void diag_resolution_cycle(Sema* s, u32 src_pos, ResolutionKey key) {
-    // TODO
+    u8[] name_str = interner::symbol_str(key.name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "circular type resolution: %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
 
@@ -802,19 +835,31 @@ export fn void diag_resolution_cycle(Sema* s, u32 src_pos, ResolutionKey key) {
 
 // Push a (module, name) key onto the stack. Grows the backing array if needed.
 export fn void stack_push(ResolutionStack* st, ResolutionKey key) {
-    // TODO
+    if(st.entries.len + 1 > st.cap) {
+        u64 new_cap = st.cap * 2;
+        if(new_cap < 8) { new_cap = 8; }
+        ResolutionKey* mem = (ResolutionKey*)arena::alloc(st.arena, new_cap * sizeof(ResolutionKey));
+        if(st.entries.len > 0) { sys::memcpy(mem, st.entries.ptr, st.entries.len * sizeof(ResolutionKey)); }
+        st.entries.ptr = mem;
+        st.cap = new_cap;
+    }
+    st.entries[st.entries.len] = key;
+    st.entries.len += 1;
 }
 
 // Pop the top key. Caller is responsible for matching push/pop.
 export fn void stack_pop(ResolutionStack* st) {
-    // TODO
+    if(st.entries.len > 0) { st.entries.len -= 1; }
 }
 
 // Linear scan; the stack is at most as deep as nested aliases, which is small
 // in practice. Returns true if `key` is already on the stack — i.e. we're
 // recursing through the same named entity.
 export fn bool stack_contains(ResolutionStack* st, ResolutionKey key) {
-    return false; // TODO
+    for(u64 entry_index = 0; entry_index < st.entries.len; entry_index += 1) {
+        if(st.entries[entry_index].mod == key.mod && st.entries[entry_index].name == key.name) { return true; }
+    }
+    return false;
 }
 
 
@@ -825,46 +870,84 @@ export fn bool stack_contains(ResolutionStack* st, ResolutionKey key) {
 // True for storage-backed decls (vars, params, fields). Fns, types, enum
 // members, and imports are not lvalues. Drives the LValue flag on Ident.
 export fn bool decl_is_lvalue(Decl* d) {
-    return false; // TODO
+    if(d == null) { return false; }
+    if(d.kind == (u16)DeclKind::Field || d.kind == (u16)DeclKind::Param) { return true; }
+    return d.kind == (u16)DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl;
 }
 
-// True when the decl's value is known at compile time: a `const` var with a
-// constant initializer, an enum member, or a function (Fn pointers are
-// constants). Drives the ConstExpr flag on Ident.
+// True when the decl's value is known at compile time: a `const` var, an enum
+// member, or a function. Drives the ConstExpr flag on Ident.
 export fn bool decl_is_const_expr(Decl* d) {
-    return false; // TODO
+    if(d == null) { return false; }
+    if(d.kind == (u16)DeclKind::EnumMember) { return true; }
+    if(d.kind != (u16)DeclKind::Node || d.data.node == null) { return false; }
+    ast::AstNode* node = d.data.node;
+    if(node.h.kind == ast::AstKind::FnDecl) { return true; }
+    return node.h.kind == ast::AstKind::VarDecl && ((ast::VarDeclNode*)node).is_const;
 }
 
-// Given a struct/union Type, recover the StructDeclNode / UnionDeclNode the
-// typer keyed it by. Used to walk fields during member access and lit checks.
+// Given a struct/union/enum Type, recover the decl node the typer keyed it by.
+// Used to walk fields during member access and lit checks.
 export fn ast::AstNode* container_decl(types::Type* t) {
-    return null; // TODO
+    if(t == null) { return null; }
+    if(t.kind == types::TypeKind::Struct) { return (ast::AstNode*)t.data.struct_decl; }
+    if(t.kind == types::TypeKind::Union)  { return (ast::AstNode*)t.data.union_decl; }
+    if(t.kind == types::TypeKind::Enum)   { return (ast::AstNode*)t.data.enum_decl; }
+    return null;
 }
 
 // Look up a field by symbol in a struct/union decl. Returns null if absent.
 export fn ast::FieldDecl* find_field(ast::AstNode* decl, symbol::Symbol* name) {
-    return null; // TODO
+    if(decl == null) { return null; }
+    ast::FieldDecl[] fields = {null, 0};
+    if(decl.h.kind == ast::AstKind::StructDecl) { fields = ((ast::StructDeclNode*)decl).fields; }
+    else if(decl.h.kind == ast::AstKind::UnionDecl) { fields = ((ast::UnionDeclNode*)decl).fields; }
+    else { return null; }
+    for(u64 field_index = 0; field_index < fields.len; field_index += 1) {
+        if(fields[field_index].name == name) { return &fields[field_index]; }
+    }
+    return null;
 }
 
-// Find a field's positional index in a struct decl. Returns U64_MAX on miss.
+// Find a field's positional index in a struct decl. Returns (u64)-1 on miss.
 // Used by struct-literal checking for designated / positional mixing.
 export fn u64 find_field_index(ast::StructDeclNode* decl, symbol::Symbol* name) {
-    return 0; // TODO
+    if(decl == null) { return 18446744073709551615; }
+    for(u64 field_index = 0; field_index < decl.fields.len; field_index += 1) {
+        if(decl.fields[field_index].name == name) { return field_index; }
+    }
+    return 18446744073709551615;
 }
 
 // Look up an enum member by symbol on an EnumDeclNode. Returns null on miss.
 export fn ast::EnumMember* find_enum_member(ast::EnumDeclNode* decl, symbol::Symbol* name) {
-    return null; // TODO
+    if(decl == null) { return null; }
+    for(u64 member_index = 0; member_index < decl.members.len; member_index += 1) {
+        if(decl.members[member_index].name == name) { return &decl.members[member_index]; }
+    }
+    return null;
 }
 
-// Allocate a Field wrapping `f`, with resolved type `ty`.
+// Allocate a Field-kind Decl wrapping `f`, with resolved type `ty`.
 // Used by synth_member_access to populate MemberAccessNode.resolved.
 export fn Decl* make_field_decl(Sema* s, ast::FieldDecl* f, types::Type* ty) {
-    return null; // TODO
+    Decl* decl = (Decl*)arena::alloc(s.m.arena, sizeof(Decl));
+    sys::memset(decl, 0, sizeof(Decl));
+    decl.kind = (u16)DeclKind::Field;
+    decl.name = f.name;
+    decl.ty = ty;
+    decl.data.field = f;
+    return decl;
 }
 
-// Allocate a EnumMember wrapping `m`, with the enum's type `enum_ty`.
+// Allocate an EnumMember-kind Decl wrapping `m`, with the enum's type `enum_ty`.
 // Used by synth_ns_access to populate NamespaceAccessNode.resolved.
 export fn Decl* make_enum_member_decl(Sema* s, ast::EnumMember* m, types::Type* enum_ty) {
-    return null; // TODO
+    Decl* decl = (Decl*)arena::alloc(s.m.arena, sizeof(Decl));
+    sys::memset(decl, 0, sizeof(Decl));
+    decl.kind = (u16)DeclKind::EnumMember;
+    decl.name = m.name;
+    decl.ty = enum_ty;
+    decl.data.member = m;
+    return decl;
 }

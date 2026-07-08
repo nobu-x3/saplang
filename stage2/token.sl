@@ -216,6 +216,6 @@ export const KeywordEntry[] KEYWORDS = [
 export fn void load_keywords() {
     for (u64 i = 0; i < token::KEYWORDS.len; i += 1) {
         symbol::Symbol* sym = interner::intern(KEYWORDS[i].bytes);
-        sym.keyword_kind = structs::KEYWORDS[i].kind;
+        sym.keyword_kind = KEYWORDS[i].kind;
     }
 }
