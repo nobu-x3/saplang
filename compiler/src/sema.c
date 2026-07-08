@@ -1020,30 +1020,36 @@ CompilerResult analyze_ast(Symbol *table, ASTNode *node, int scope_level, const 
 
 	case AST_EXPR_IDENT: {
 		if (node->data.ident.resolved_name[0] == '\0') {
-			// Per-overload params can collide on short name; prefer the scoped match.
-			if (scope_specifier[0] != '\0') {
-				char scoped[512];
-				int n = snprintf(scoped, sizeof(scoped), "%s_%s", scope_specifier, node->data.ident.name);
-				if (n > 0 && (size_t)n < sizeof(scoped)) {
-					Symbol *scoped_sym = lookup_symbol(table, scoped, scope_level);
-					if (scoped_sym) {
-						strncpy(node->data.ident.resolved_name, scoped_sym->resolved_name, sizeof(node->data.ident.resolved_name));
-						return RESULT_SUCCESS;
+			if (node->data.ident.namespace[0] != '\0') {
+				// Qualified Foo::Bar: an enum member of Foo, else Foo's module
+				// member (__Foo_Bar below). Never the namespace-blind bare-name
+				// lookup, which would match a colliding global type.
+				Symbol *enum_symbol = lookup_symbol_weak(table, node->data.ident.namespace, scope_level);
+				if (enum_symbol && enum_symbol->kind == SYMB_ENUM) {
+					node->type = AST_ENUM_VALUE;
+					strncpy(node->data.enum_value.member, node->data.ident.name, sizeof(node->data.enum_value.member));
+					node->data.enum_value.enum_type = copy_type(enum_symbol->type);
+					CompilerResult result = analyze_ast(table, node, scope_level, scope_specifier);
+					return result;
+				}
+			} else {
+				// Per-overload params can collide on short name; prefer the scoped match.
+				if (scope_specifier[0] != '\0') {
+					char scoped[512];
+					int n = snprintf(scoped, sizeof(scoped), "%s_%s", scope_specifier, node->data.ident.name);
+					if (n > 0 && (size_t)n < sizeof(scoped)) {
+						Symbol *scoped_sym = lookup_symbol(table, scoped, scope_level);
+						if (scoped_sym) {
+							strncpy(node->data.ident.resolved_name, scoped_sym->resolved_name, sizeof(node->data.ident.resolved_name));
+							return RESULT_SUCCESS;
+						}
 					}
 				}
-			}
-			Symbol *sym = lookup_symbol_weak(table, node->data.ident.name, scope_level);
-			if (sym) {
-				strncpy(node->data.ident.resolved_name, sym->resolved_name, sizeof(node->data.ident.resolved_name));
-				return RESULT_SUCCESS;
-			}
-			Symbol *enum_symbol = lookup_symbol_weak(table, node->data.ident.namespace, scope_level);
-			if (enum_symbol && enum_symbol->kind == SYMB_ENUM) {
-				node->type = AST_ENUM_VALUE;
-				strncpy(node->data.enum_value.member, node->data.ident.name, sizeof(node->data.enum_value.member));
-				node->data.enum_value.enum_type = copy_type(enum_symbol->type);
-				CompilerResult result = analyze_ast(table, node, scope_level, scope_specifier);
-				return result;
+				Symbol *sym = lookup_symbol_weak(table, node->data.ident.name, scope_level);
+				if (sym) {
+					strncpy(node->data.ident.resolved_name, sym->resolved_name, sizeof(node->data.ident.resolved_name));
+					return RESULT_SUCCESS;
+				}
 			}
 		}
 		// We've either already done this or it's a global we don't want to touch
