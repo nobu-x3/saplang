@@ -73,6 +73,61 @@ export fn void set_multithreaded(Compiler* c, bool on) {
     c.is_multithreaded = on;
 }
 
+// Recognizes <file>.sl, -i <;-list>, -target <name>, -mt; false on anything else.
+export fn bool parse_argv(Compiler* c, u8[][] args) {
+    bool ok = true;
+    u64 arg_index = 0;
+    while(arg_index < args.len) {
+        u8[] arg = args[arg_index];
+        if(slice_eq(arg, "-i")) {
+            arg_index += 1;
+            if(arg_index < args.len) { add_import_path_list(c, args[arg_index]); } else { ok = false; }
+        } else if(slice_eq(arg, "-target")) {
+            arg_index += 1;
+            if(arg_index < args.len) { c.target = args[arg_index]; } else { ok = false; }
+        } else if(slice_eq(arg, "-mt")) {
+            c.is_multithreaded = true;
+        } else if(ends_with(arg, ".sl")) {
+            add_source(c, arg);
+        } else {
+            sys::dprintf(2, "unknown argument: %.*s\n", (i32)arg.len, (i8*)arg.ptr);
+            ok = false;
+        }
+        arg_index += 1;
+    }
+    return ok;
+}
+
+fn void add_import_path_list(Compiler* c, u8[] list) {
+    u64 start = 0;
+    for(u64 char_index = 0; char_index <= list.len; char_index += 1) {
+        if(char_index == list.len || list[char_index] == ';') {
+            if(char_index > start) {
+                u8[] part = {&list.ptr[start], char_index - start};
+                add_import_path(c, part);
+            }
+            start = char_index + 1;
+        }
+    }
+}
+
+fn bool slice_eq(u8[] a, u8[] b) {
+    if(a.len != b.len) { return false; }
+    for(u64 char_index = 0; char_index < a.len; char_index += 1) {
+        if(a[char_index] != b[char_index]) { return false; }
+    }
+    return true;
+}
+
+fn bool ends_with(u8[] s, u8[] suffix) {
+    if(suffix.len > s.len) { return false; }
+    u64 offset = s.len - suffix.len;
+    for(u64 char_index = 0; char_index < suffix.len; char_index += 1) {
+        if(s[offset + char_index] != suffix[char_index]) { return false; }
+    }
+    return true;
+}
+
 // Scanner output only, no parsing; import cycles are fine.
 export fn void discover(Compiler* c) {
     for(u64 entry_index = 0; entry_index < c.entry_sources.len; entry_index += 1) {

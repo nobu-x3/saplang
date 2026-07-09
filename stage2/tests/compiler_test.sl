@@ -370,6 +370,52 @@ fn i32 no_double_scan(arena::Arena* a, u8[] msg) {
     return result;
 }
 
+fn u8[][] mk_args(arena::Arena* a, u64 count) {
+    u8[][] args = {null, 0};
+    args.len = count;
+    args.ptr = arena::alloc(a, count * sizeof(u8[]));
+    return args;
+}
+
+fn i32 argv_full(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 6);
+    args[0] = "main.sl";
+    args[1] = "-i";
+    args[2] = "/tmp;/usr/lib";
+    args[3] = "-target";
+    args[4] = "linux";
+    args[5] = "-mt";
+    if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
+    if(!testing::expect_eq(c.entry_sources.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq(c.entry_sources[0], "main.sl", msg)) { return -3; }
+    if(!testing::expect_eq(c.import_paths.len, (u64)2, msg)) { return -4; }
+    if(!testing::expect_eq(c.import_paths[0], "/tmp", msg)) { return -5; }
+    if(!testing::expect_eq(c.import_paths[1], "/usr/lib", msg)) { return -6; }
+    if(!testing::expect_eq(c.target, "linux", msg)) { return -7; }
+    if(!testing::expect_true(c.is_multithreaded, msg)) { return -8; }
+    return 0;
+}
+
+fn i32 argv_unknown_fails(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 1);
+    args[0] = "--nonsense";
+    if(!testing::expect_true(!compiler::parse_argv(c, args), msg)) { return -1; }
+    return 0;
+}
+
+fn i32 argv_dangling_flag_fails(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 1);
+    args[0] = "-i";
+    if(!testing::expect_true(!compiler::parse_argv(c, args), msg)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -401,6 +447,11 @@ fn i32 main() {
     testing::add(rn, "run_file_missing_import", &run_file_missing_import);
     testing::add(rn, "run_file_sema_error",     &run_file_sema_error);
     testing::add(rn, "no_double_scan",          &no_double_scan);
+
+    u8[] av = "Compiler Argv Tests";
+    testing::add(av, "argv_full",               &argv_full);
+    testing::add(av, "argv_unknown_fails",      &argv_unknown_fails);
+    testing::add(av, "argv_dangling_flag_fails", &argv_dangling_flag_fails);
 
     return testing::run();
 }
