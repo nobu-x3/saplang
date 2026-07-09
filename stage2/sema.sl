@@ -986,11 +986,26 @@ fn types::Type* synth_binary(Sema* s, ast::BinaryOpNode* n) {
 }
 
 fn types::Type* synth_sizeof(Sema* s, ast::SizeofNode* n) {
-    return null; // TODO
+    types::Type* target = sizeof_operand_type(s, n.arg);
+    if(target == null) { return null; }
+    types::size_of(&s.m.diag, target);
+    set_expr((ast::AstNode*)n, types::prim_u64(), (u16)ast::AstFlags::ConstExpr);
+    return types::prim_u64();
 }
 
 fn types::Type* synth_alignof(Sema* s, ast::AlignofNode* n) {
-    return null; // TODO
+    types::Type* target = sizeof_operand_type(s, n.arg);
+    if(target == null) { return null; }
+    types::align_of(&s.m.diag, target);
+    set_expr((ast::AstNode*)n, types::prim_u64(), (u16)ast::AstFlags::ConstExpr);
+    return types::prim_u64();
+}
+
+// The argument is either a type expression or a value expression to take the type of.
+fn types::Type* sizeof_operand_type(Sema* s, ast::AstNode* arg) {
+    if(arg == null) { return null; }
+    if(ast::is_type((u16)arg.h.kind)) { return resolve_type(s, arg); }
+    return synth(s, arg);
 }
 
 fn types::Type* synth_typeof(Sema* s, ast::TypeofNode* n) {

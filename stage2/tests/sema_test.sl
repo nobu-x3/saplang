@@ -450,6 +450,37 @@ fn types::Type* register_color_enum(arena::Arena* a, sema::Scope* sc) {
     return ety;
 }
 
+fn ast::AstNode* fake_sizeof(arena::Arena* a, ast::AstNode* arg, u32 pos) {
+    ast::SizeofNode* n = (ast::SizeofNode*)arena::alloc(a, sizeof(ast::SizeofNode));
+    sys::memset(n, 0, sizeof(ast::SizeofNode));
+    n.h.kind = ast::AstKind::Sizeof;
+    n.h.src_pos = pos;
+    n.arg = arg;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_alignof(arena::Arena* a, ast::AstNode* arg, u32 pos) {
+    ast::AlignofNode* n = (ast::AlignofNode*)arena::alloc(a, sizeof(ast::AlignofNode));
+    sys::memset(n, 0, sizeof(ast::AlignofNode));
+    n.h.kind = ast::AstKind::Alignof;
+    n.h.src_pos = pos;
+    n.arg = arg;
+    return (ast::AstNode*)n;
+}
+
+fn types::Type* mk_opaque_type(arena::Arena* a, u32 decl_pos) {
+    symbol::Symbol*[1] fnames; fnames[0] = interner::intern("x");
+    types::Type*[1] ftys; ftys[0] = types::prim_i32();
+    symbol::Symbol*[] fs = {&fnames[0], 1};
+    types::Type*[] ft = {&ftys[0], 1};
+    ast::StructDeclNode* d = fake_struct_decl_with_fields(a, fs, ft);
+    d.h.src_pos = decl_pos;
+    d.qualified_name = interner::intern("Opaque");
+    types::Type* t = types::intern_struct((void*)d);
+    t.flags = (types::LayoutFlags)((u8)t.flags | (u8)types::LayoutFlags::Opaque);
+    return t;
+}
+
 fn types::Type* mk_point_type(arena::Arena* a) {
     symbol::Symbol*[2] fnames; fnames[0] = interner::intern("x"); fnames[1] = interner::intern("y");
     types::Type*[2] ftys; ftys[0] = types::prim_i32(); ftys[1] = types::prim_i32();
@@ -4369,6 +4400,100 @@ fn i32 st_block_scope_pops(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 sizeof_type_prim(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* so = fake_sizeof(a, mk_ty_prim(a, token::TokenKind::I32), 0);
+    types::Type* t = sema::synth(&s, so);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
+    if(!testing::expect_true(has_flag(so, ast::AstFlags::ConstExpr), m)) { return -2; }
+    return 0;
+}
+
+fn i32 sizeof_type_ptr(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* so = fake_sizeof(a, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false), 0);
+    types::Type* t = sema::synth(&s, so);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 sizeof_expr_lit(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* so = fake_sizeof(a, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    types::Type* t = sema::synth(&s, so);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 sizeof_expr_var(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, types::prim_i32(), false);
+    ast::AstNode* so = fake_sizeof(a, (ast::AstNode*)fake_ident(a, x, 0), 0);
+    types::Type* t = sema::synth(&s, so);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 alignof_type_prim(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::AstNode* ao = fake_alignof(a, mk_ty_prim(a, token::TokenKind::F64), 0);
+    types::Type* t = sema::synth(&s, ao);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
+    if(!testing::expect_true(has_flag(ao, ast::AstFlags::ConstExpr), m)) { return -2; }
+    return 0;
+}
+
+fn i32 alignof_expr_var(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, types::prim_i32(), false);
+    ast::AstNode* ao = fake_alignof(a, (ast::AstNode*)fake_ident(a, x, 0), 0);
+    types::Type* t = sema::synth(&s, ao);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 sizeof_opaque_reports(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, mk_opaque_type(a, 13), false);
+    ast::AstNode* so = fake_sizeof(a, (ast::AstNode*)fake_ident(a, x, 0), 0);
+    sema::synth(&s, so);
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot take size of opaque type", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 13, m)) { return -3; }
+    return 0;
+}
+
+fn i32 alignof_opaque_reports(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* x = interner::intern("x");
+    register_var(a, sc, x, mk_opaque_type(a, 21), false);
+    ast::AstNode* ao = fake_alignof(a, (ast::AstNode*)fake_ident(a, x, 0), 0);
+    sema::synth(&s, ao);
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot take alignment of opaque type", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 21, m)) { return -3; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -4693,6 +4818,16 @@ fn i32 main() {
     testing::add(stm, "st_defer_ok",               &st_defer_ok);
     testing::add(stm, "st_expr_stmt_ok",           &st_expr_stmt_ok);
     testing::add(stm, "st_block_scope_pops",       &st_block_scope_pops);
+
+    u8[] sz = "Sema Sizeof/Alignof Tests";
+    testing::add(sz, "sizeof_type_prim",      &sizeof_type_prim);
+    testing::add(sz, "sizeof_type_ptr",       &sizeof_type_ptr);
+    testing::add(sz, "sizeof_expr_lit",       &sizeof_expr_lit);
+    testing::add(sz, "sizeof_expr_var",       &sizeof_expr_var);
+    testing::add(sz, "alignof_type_prim",     &alignof_type_prim);
+    testing::add(sz, "alignof_expr_var",      &alignof_expr_var);
+    testing::add(sz, "sizeof_opaque_reports", &sizeof_opaque_reports);
+    testing::add(sz, "alignof_opaque_reports", &alignof_opaque_reports);
 
     return testing::run();
 }
