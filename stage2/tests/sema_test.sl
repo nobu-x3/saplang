@@ -446,6 +446,11 @@ fn types::Type* register_color_enum(arena::Arena* a, sema::Scope* sc) {
     base.h.ty = (void*)types::prim_i32();
     d.base_type = base;
     types::Type* ety = types::intern_enum((void*)d);
+    for(u64 i = 0; i < d.members.len; i += 1) {
+        sema::Decl* md = fake_enum_member_decl_value(a, d.members[i].name, ety);
+        md.data.member = &d.members[i];
+        d.members[i].decl = (void*)md;
+    }
     symbol::Symbol* cname = interner::intern("Color");
     sema::Decl* cd = fake_node_decl(a, cname, ety, (ast::AstNode*)d);
     cd.is_exported = true;
@@ -476,6 +481,7 @@ fn void set_field(ast::FieldDecl* f, symbol::Symbol* name, ast::AstNode* type_ex
     f.type_expr = type_expr;
     f.resolved_type = null;
     f.src_pos = pos;
+    f.decl = null;
 }
 
 fn ast::AstNode* fake_anon_struct(arena::Arena* a, ast::FieldDecl* fields, u64 count, u32 pos) {
@@ -529,6 +535,9 @@ fn ast::StructDeclNode* fake_struct_decl_with_fields(arena::Arena* a, symbol::Sy
         for(u64 i = 0; i < names.len; i += 1) {
             fields[i].name = names[i];
             fields[i].resolved_type = (void*)tys[i];
+            sema::Decl* fd = fake_field_decl_value(a, names[i], tys[i]);
+            fd.data.field = &fields[i];
+            fields[i].decl = (void*)fd;
         }
         d.fields = {fields, names.len};
     } else {
@@ -547,6 +556,9 @@ fn ast::UnionDeclNode* fake_union_decl_with_fields(arena::Arena* a, symbol::Symb
         for(u64 i = 0; i < names.len; i += 1) {
             fields[i].name = names[i];
             fields[i].resolved_type = (void*)tys[i];
+            sema::Decl* fd = fake_field_decl_value(a, names[i], tys[i]);
+            fd.data.field = &fields[i];
+            fields[i].decl = (void*)fd;
         }
         d.fields = {fields, names.len};
     } else {
@@ -1213,105 +1225,118 @@ fn i32 find_enum_member_empty(arena::Arena* a, u8[] m) {
 
 
 // ============================================================================
-// make_field_decl / make_enum_member_decl
+// Field / enum-member Decl backlinks (set during signature resolution)
 // ============================================================================
 
-fn i32 make_field_decl_kind(arena::Arena* a, u8[] m) {
-    module::Module* mm = fresh_module(a);
+fn i32 field_backlink_kind(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    ast::FieldDecl f;
-    sys::memset(&f, 0, sizeof(ast::FieldDecl));
-    symbol::Symbol* n = fake_sym(a);
-    f.name = n;
-    sema::Decl* d = sema::make_field_decl(&s, &f, types::prim_i32());
+    ast::FieldDecl[1] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    sema::resolve_type(&s, fake_anon_struct(a, &fields[0], 1, 0));
+    sema::Decl* d = (sema::Decl*)fields[0].decl;
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Field, m)) { return -2; }
     return 0;
 }
 
-fn i32 make_field_decl_name_set(arena::Arena* a, u8[] m) {
-    module::Module* mm = fresh_module(a);
+fn i32 field_backlink_name(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    ast::FieldDecl f;
-    sys::memset(&f, 0, sizeof(ast::FieldDecl));
-    symbol::Symbol* n = fake_sym(a);
-    f.name = n;
-    sema::Decl* d = sema::make_field_decl(&s, &f, types::prim_i32());
-    if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq((void*)d.name, (void*)n, m)) { return -2; }
+    symbol::Symbol* x = interner::intern("x");
+    ast::FieldDecl[1] fields;
+    set_field(&fields[0], x, mk_ty_prim(a, token::TokenKind::I32), 0);
+    sema::resolve_type(&s, fake_anon_struct(a, &fields[0], 1, 0));
+    sema::Decl* d = (sema::Decl*)fields[0].decl;
+    if(!testing::expect_eq((void*)d.name, (void*)x, m)) { return -1; }
     return 0;
 }
 
-fn i32 make_field_decl_ty_set(arena::Arena* a, u8[] m) {
-    module::Module* mm = fresh_module(a);
+fn i32 field_backlink_ty(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    ast::FieldDecl f;
-    sys::memset(&f, 0, sizeof(ast::FieldDecl));
-    types::Type* ty = types::prim_u64();
-    sema::Decl* d = sema::make_field_decl(&s, &f, ty);
-    if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq((void*)d.ty, (void*)ty, m)) { return -2; }
+    ast::FieldDecl[1] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::U64), 0);
+    sema::resolve_type(&s, fake_anon_struct(a, &fields[0], 1, 0));
+    sema::Decl* d = (sema::Decl*)fields[0].decl;
+    if(!testing::expect_eq((void*)d.ty, (void*)types::prim_u64(), m)) { return -1; }
     return 0;
 }
 
-fn i32 make_field_decl_data_field_set(arena::Arena* a, u8[] m) {
-    module::Module* mm = fresh_module(a);
+fn i32 field_backlink_data_field(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    ast::FieldDecl f;
-    sys::memset(&f, 0, sizeof(ast::FieldDecl));
-    sema::Decl* d = sema::make_field_decl(&s, &f, types::prim_i32());
-    if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq((void*)d.data.field, (void*)&f, m)) { return -2; }
+    ast::FieldDecl[1] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    sema::resolve_type(&s, fake_anon_struct(a, &fields[0], 1, 0));
+    sema::Decl* d = (sema::Decl*)fields[0].decl;
+    if(!testing::expect_eq((void*)d.data.field, (void*)&fields[0], m)) { return -1; }
     return 0;
 }
 
-fn i32 make_enum_member_decl_kind(arena::Arena* a, u8[] m) {
-    module::Module* mm = fresh_module(a);
-    sema::Sema s = mk_sema(mm);
-    ast::EnumMember em;
-    sys::memset(&em, 0, sizeof(ast::EnumMember));
-    symbol::Symbol* n = fake_sym(a);
-    em.name = n;
-    types::Type* ety = types::prim_i32();
-    sema::Decl* d = sema::make_enum_member_decl(&s, &em, ety);
+fn i32 enum_member_backlink_kind(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol*[1] mnames; mnames[0] = interner::intern("Red");
+    symbol::Symbol*[] ms = {&mnames[0], 1};
+    ast::EnumDeclNode* ed = fake_enum_decl_with_members(a, ms);
+    ed.name = interner::intern("E");
+    ed.qualified_name = interner::intern("E");
+    ed.base_type = mk_ty_prim(a, token::TokenKind::I32);
+    ast::AstNode*[1] root; root[0] = (ast::AstNode*)ed;
+    set_root(mm, a, &root[0], 1);
+    sema::run(mm);
+    sema::Decl* d = (sema::Decl*)ed.members[0].decl;
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::EnumMember, m)) { return -2; }
     return 0;
 }
 
-fn i32 make_enum_member_decl_name_set(arena::Arena* a, u8[] m) {
-    module::Module* mm = fresh_module(a);
-    sema::Sema s = mk_sema(mm);
-    ast::EnumMember em;
-    sys::memset(&em, 0, sizeof(ast::EnumMember));
-    symbol::Symbol* n = fake_sym(a);
-    em.name = n;
-    sema::Decl* d = sema::make_enum_member_decl(&s, &em, types::prim_i32());
-    if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq((void*)d.name, (void*)n, m)) { return -2; }
+fn i32 enum_member_backlink_name(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* red = interner::intern("Red");
+    symbol::Symbol*[1] mnames; mnames[0] = red;
+    symbol::Symbol*[] ms = {&mnames[0], 1};
+    ast::EnumDeclNode* ed = fake_enum_decl_with_members(a, ms);
+    ed.name = interner::intern("E");
+    ed.qualified_name = interner::intern("E");
+    ed.base_type = mk_ty_prim(a, token::TokenKind::I32);
+    ast::AstNode*[1] root; root[0] = (ast::AstNode*)ed;
+    set_root(mm, a, &root[0], 1);
+    sema::run(mm);
+    sema::Decl* d = (sema::Decl*)ed.members[0].decl;
+    if(!testing::expect_eq((void*)d.name, (void*)red, m)) { return -1; }
     return 0;
 }
 
-fn i32 make_enum_member_decl_ty_set(arena::Arena* a, u8[] m) {
-    module::Module* mm = fresh_module(a);
-    sema::Sema s = mk_sema(mm);
-    ast::EnumMember em;
-    sys::memset(&em, 0, sizeof(ast::EnumMember));
-    types::Type* ety = types::prim_i32();
-    sema::Decl* d = sema::make_enum_member_decl(&s, &em, ety);
-    if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq((void*)d.ty, (void*)ety, m)) { return -2; }
+fn i32 enum_member_backlink_ty(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol*[1] mnames; mnames[0] = interner::intern("Red");
+    symbol::Symbol*[] ms = {&mnames[0], 1};
+    ast::EnumDeclNode* ed = fake_enum_decl_with_members(a, ms);
+    ed.name = interner::intern("E");
+    ed.qualified_name = interner::intern("E");
+    ed.base_type = mk_ty_prim(a, token::TokenKind::I32);
+    ast::AstNode*[1] root; root[0] = (ast::AstNode*)ed;
+    set_root(mm, a, &root[0], 1);
+    sema::run(mm);
+    sema::Decl* d = (sema::Decl*)ed.members[0].decl;
+    if(!testing::expect_eq((void*)d.ty, (void*)types::intern_enum((void*)ed), m)) { return -1; }
     return 0;
 }
 
-fn i32 make_enum_member_decl_data_set(arena::Arena* a, u8[] m) {
-    module::Module* mm = fresh_module(a);
-    sema::Sema s = mk_sema(mm);
-    ast::EnumMember em;
-    sys::memset(&em, 0, sizeof(ast::EnumMember));
-    sema::Decl* d = sema::make_enum_member_decl(&s, &em, types::prim_i32());
-    if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq((void*)d.data.member, (void*)&em, m)) { return -2; }
+fn i32 enum_member_backlink_data(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol*[1] mnames; mnames[0] = interner::intern("Red");
+    symbol::Symbol*[] ms = {&mnames[0], 1};
+    ast::EnumDeclNode* ed = fake_enum_decl_with_members(a, ms);
+    ed.name = interner::intern("E");
+    ed.qualified_name = interner::intern("E");
+    ed.base_type = mk_ty_prim(a, token::TokenKind::I32);
+    ast::AstNode*[1] root; root[0] = (ast::AstNode*)ed;
+    set_root(mm, a, &root[0], 1);
+    sema::run(mm);
+    sema::Decl* d = (sema::Decl*)ed.members[0].decl;
+    if(!testing::expect_eq((void*)d.data.member, (void*)&ed.members[0], m)) { return -1; }
     return 0;
 }
 
@@ -4984,15 +5009,15 @@ fn i32 main() {
     testing::add(ff, "find_enum_member_missing",          &find_enum_member_missing);
     testing::add(ff, "find_enum_member_empty",            &find_enum_member_empty);
 
-    u8[] mk = "Sema make_*_decl Tests";
-    testing::add(mk, "make_field_decl_kind",            &make_field_decl_kind);
-    testing::add(mk, "make_field_decl_name_set",        &make_field_decl_name_set);
-    testing::add(mk, "make_field_decl_ty_set",          &make_field_decl_ty_set);
-    testing::add(mk, "make_field_decl_data_field_set",  &make_field_decl_data_field_set);
-    testing::add(mk, "make_enum_member_decl_kind",      &make_enum_member_decl_kind);
-    testing::add(mk, "make_enum_member_decl_name_set",  &make_enum_member_decl_name_set);
-    testing::add(mk, "make_enum_member_decl_ty_set",    &make_enum_member_decl_ty_set);
-    testing::add(mk, "make_enum_member_decl_data_set",  &make_enum_member_decl_data_set);
+    u8[] mk = "Sema Decl Backlink Tests";
+    testing::add(mk, "field_backlink_kind",             &field_backlink_kind);
+    testing::add(mk, "field_backlink_name",             &field_backlink_name);
+    testing::add(mk, "field_backlink_ty",               &field_backlink_ty);
+    testing::add(mk, "field_backlink_data_field",       &field_backlink_data_field);
+    testing::add(mk, "enum_member_backlink_kind",       &enum_member_backlink_kind);
+    testing::add(mk, "enum_member_backlink_name",       &enum_member_backlink_name);
+    testing::add(mk, "enum_member_backlink_ty",         &enum_member_backlink_ty);
+    testing::add(mk, "enum_member_backlink_data",       &enum_member_backlink_data);
 
     u8[] dg = "Sema Diagnostic Tests";
     testing::add(dg, "diag_type_mismatch_emits_one_entry",       &diag_type_mismatch_emits_one_entry);

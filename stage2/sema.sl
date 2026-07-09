@@ -114,13 +114,13 @@ fn void collect_names_locked(Sema* s) {
             ast::VarDeclNode* var_decl = (ast::VarDeclNode*)top_level_node;
             var_decl.qualified_name = qualify_decl_name(s, var_decl.name);
             Decl* decl = register_sym(s, module_scope, var_decl.name, var_decl.is_exported, (u16)DeclKind::Node, var_decl.h.src_pos);
-            if(decl != null) { decl.data.node = top_level_node; }
+            if(decl != null) { decl.data.node = top_level_node; var_decl.decl = (void*)decl; }
         }
         case ast::AstKind::FnDecl: {
             ast::FnDeclNode* fn_decl = (ast::FnDeclNode*)top_level_node;
             fn_decl.qualified_name = qualify_decl_name(s, fn_decl.name);
             Decl* decl = register_sym(s, module_scope, fn_decl.name, fn_decl.is_exported, (u16)DeclKind::Node, fn_decl.h.src_pos);
-            if(decl != null) { decl.data.node = top_level_node; }
+            if(decl != null) { decl.data.node = top_level_node; fn_decl.decl = (void*)decl; }
         }
         case ast::AstKind::StructDecl: {
             ast::StructDeclNode* struct_decl = (ast::StructDeclNode*)top_level_node;
@@ -170,7 +170,7 @@ fn void collect_names_locked(Sema* s) {
                     ast::VarDeclNode* extern_var = (ast::VarDeclNode*)extern_item;
                     extern_var.qualified_name = qualify_decl_name(s, extern_var.name);
                     Decl* decl = register_sym(s, module_scope, extern_var.name, extern_var.is_exported, (u16)DeclKind::Node, extern_var.h.src_pos);
-                    if(decl != null) { decl.data.node = extern_item; }
+                    if(decl != null) { decl.data.node = extern_item; extern_var.decl = (void*)decl; }
                 }
                 else { }
                 }
@@ -253,7 +253,13 @@ fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
     case ast::AstKind::EnumDecl: {
         ast::EnumDeclNode* enum_decl = (ast::EnumDeclNode*)decl_node;
         if(enum_decl.base_type != null) { resolve_type(s, enum_decl.base_type); }
-        set_decl_ty(s, enum_decl.name, types::intern_enum((void*)enum_decl));
+        types::Type* enum_ty = types::intern_enum((void*)enum_decl);
+        set_decl_ty(s, enum_decl.name, enum_ty);
+        for(u64 member_index = 0; member_index < enum_decl.members.len; member_index += 1) {
+            Decl* member_decl = new_decl(s, (u16)DeclKind::EnumMember, enum_decl.members[member_index].name, enum_ty);
+            member_decl.data.member = &enum_decl.members[member_index];
+            enum_decl.members[member_index].decl = (void*)member_decl;
+        }
     }
     case ast::AstKind::AliasDecl: {
         ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)decl_node;
@@ -265,7 +271,11 @@ fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
 
 fn void resolve_fields(Sema* s, ast::FieldDecl[] fields) {
     for(u64 field_index = 0; field_index < fields.len; field_index += 1) {
-        fields[field_index].resolved_type = (void*)resolve_type(s, fields[field_index].type_expr);
+        types::Type* field_ty = resolve_type(s, fields[field_index].type_expr);
+        fields[field_index].resolved_type = (void*)field_ty;
+        Decl* field_decl = new_decl(s, (u16)DeclKind::Field, fields[field_index].name, field_ty);
+        field_decl.data.field = &fields[field_index];
+        fields[field_index].decl = (void*)field_decl;
     }
 }
 
@@ -315,6 +325,7 @@ fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
         if(param_decl != null) {
             param_decl.ty = (types::Type*)func.params[i].resolved_type;
             param_decl.data.param = &func.params[i];
+            func.params[i].decl = (void*)param_decl;
         }
     }
     Scope* saved_scope = s.scope;
@@ -819,7 +830,7 @@ fn types::Type* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
             mark_error((ast::AstNode*)n);
             return null;
         }
-        n.resolved = (void*)make_enum_member_decl(s, mem, ns.ty);
+        n.resolved = mem.decl;
         set_expr((ast::AstNode*)n, ns.ty, (u16)ast::AstFlags::ConstExpr);
         return ns.ty;
     }
@@ -868,7 +879,7 @@ fn types::Type* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
         return null;
     }
     types::Type* field_ty = (types::Type*)field.resolved_type;
-    n.resolved = (void*)make_field_decl(s, field, field_ty);
+    n.resolved = field.decl;
     set_expr((ast::AstNode*)n, field_ty, field_flags);
     return field_ty;
 }
@@ -1300,6 +1311,7 @@ fn void stmt_var_decl(Sema* s, ast::VarDeclNode* var) {
     if(decl != null) {
         decl.ty = declared;
         decl.data.node = (ast::AstNode*)var;
+        var.decl = (void*)decl;
     }
 }
 
@@ -1690,22 +1702,11 @@ export fn ast::EnumMember* find_enum_member(ast::EnumDeclNode* decl, symbol::Sym
     return null;
 }
 
-export fn Decl* make_field_decl(Sema* s, ast::FieldDecl* f, types::Type* ty) {
+export fn Decl* new_decl(Sema* s, u16 kind, symbol::Symbol* name, types::Type* ty) {
     Decl* decl = (Decl*)arena::alloc(s.m.arena, sizeof(Decl));
     sys::memset(decl, 0, sizeof(Decl));
-    decl.kind = (u16)DeclKind::Field;
-    decl.name = f.name;
+    decl.kind = kind;
+    decl.name = name;
     decl.ty = ty;
-    decl.data.field = f;
-    return decl;
-}
-
-export fn Decl* make_enum_member_decl(Sema* s, ast::EnumMember* m, types::Type* enum_ty) {
-    Decl* decl = (Decl*)arena::alloc(s.m.arena, sizeof(Decl));
-    sys::memset(decl, 0, sizeof(Decl));
-    decl.kind = (u16)DeclKind::EnumMember;
-    decl.name = m.name;
-    decl.ty = enum_ty;
-    decl.data.member = m;
     return decl;
 }

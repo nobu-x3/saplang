@@ -61,6 +61,7 @@ export struct VarDeclNode {
     AstNode*            init;                     // expression or AstKind::UndefinedLit or null
     bool                is_const;
     bool                is_exported;              // only meaningful at top-level
+    void*               decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
 }
 
 export struct FnDeclNode {
@@ -73,6 +74,7 @@ export struct FnDeclNode {
     // Cfg*      cfg;                   // cfg::Cfg* — null until CFG construction runs
     i8        comptime_safe;            // 0 = unchecked, 1 = safe, -1 = unsafe; set lazily by comptime
     bool      is_exported;
+    void*     decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
 }
 
 export struct StructDeclNode {
@@ -395,6 +397,7 @@ export struct Param {
     bool      is_const;
     bool      is_comptime;
     u32       src_pos;
+    void*     decl;                     // sema::Decl* backlink; set during body checking
 }
 
 export struct FieldDecl {
@@ -402,12 +405,14 @@ export struct FieldDecl {
     AstNode*  type_expr;                // AstKind::*Type
     void*     resolved_type;            // types::Type*; filled by sema
     u32       src_pos;
+    void*     decl;                     // sema::Decl* backlink; set during signature resolution
 }
 
 export struct EnumMember {
     symbol::Symbol*   name;
     AstNode*  value_expr;               // optional explicit value (literal, identifier, or null)
     u32       src_pos;
+    void*     decl;                     // sema::Decl* backlink; set during signature resolution
 }
 
 export struct FieldInitializer {
