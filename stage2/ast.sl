@@ -71,7 +71,7 @@ export struct FnDeclNode {
     AstNode*  return_type;              // AstKind::*Type
     Param[]   params;
     AstNode*  body;                     // AstKind::BlockStmt
-    // Cfg*      cfg;                   // cfg::Cfg* — null until CFG construction runs
+    void*     cfg;                      // cfg::Cfg* — null until CFG construction runs (void* breaks the cycle)
     i8        comptime_safe;            // 0 = unchecked, 1 = safe, -1 = unsafe; set lazily by comptime
     bool      is_exported;
     void*     decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
