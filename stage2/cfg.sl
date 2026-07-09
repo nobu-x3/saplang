@@ -2,6 +2,7 @@ import ast;
 import module;
 import arena;
 import types;
+import diag;
 import sys;
 
 export const u32 INVALID_BLOCK = 4294967295;
@@ -126,7 +127,13 @@ fn void build_block(CfgBuilder* b, ast::BlockNode* blk) {
     push_scope(b);
     for(u64 stmt_index = 0; stmt_index < blk.stmts.len; stmt_index += 1) {
         build_stmt(b, blk.stmts[stmt_index]);
-        if(block_terminated(b, b.current)) { break; }
+        if(block_terminated(b, b.current)) {
+            if(stmt_index + 1 < blk.stmts.len) {
+                u8[] msg = "unreachable code";
+                diag::report_warning(&b.m.diag, b.m.arena, blk.stmts[stmt_index + 1].h.src_pos, msg);
+            }
+            break;
+        }
     }
     if(!block_terminated(b, b.current)) {
         emit_pending_defers(b, current_scope(b));
@@ -528,4 +535,88 @@ export fn types::Type* fn_return_type(ast::FnDeclNode* func) {
     types::Type* t = (types::Type*)func.return_type.h.ty;
     if(t == null) { return types::prim_void(); }
     return t;
+}
+
+// ANALYSES
+
+fn u64 mark_successor(bool[] reachable, u32* stack, u64 sp, u32 target) {
+    if(!reachable[target]) {
+        reachable[target] = true;
+        stack[sp] = target;
+        sp += 1;
+    }
+    return sp;
+}
+
+fn bool[] bfs_reachable_from(Cfg* g, arena::Arena* a, u32 entry) {
+    bool[] reachable;
+    reachable.ptr = arena::alloc(a, g.blocks.len * sizeof(bool));
+    reachable.len = g.blocks.len;
+    for(u64 block_index = 0; block_index < reachable.len; block_index += 1) { reachable[block_index] = false; }
+
+    u32* stack = arena::alloc(a, g.blocks.len * sizeof(u32));
+    u64 sp = 0;
+    reachable[entry] = true;
+    stack[0] = entry;
+    sp = 1;
+    while(sp > 0) {
+        sp -= 1;
+        u32 blk = stack[sp];
+        Terminator* t = &g.blocks[blk].term;
+        u32 kind = (u32)t.kind;
+        if(kind == (u32)TermKind::Goto) {
+            sp = mark_successor(reachable, stack, sp, t.goto_target);
+        } else if(kind == (u32)TermKind::CondBranch) {
+            sp = mark_successor(reachable, stack, sp, t.then_target);
+            sp = mark_successor(reachable, stack, sp, t.else_target);
+        } else if(kind == (u32)TermKind::Switch) {
+            sp = mark_successor(reachable, stack, sp, t.switch_default);
+            for(u64 arm_index = 0; arm_index < t.switch_arms.len; arm_index += 1) {
+                sp = mark_successor(reachable, stack, sp, t.switch_arms[arm_index].target);
+            }
+        }
+    }
+    return reachable;
+}
+
+export fn bool check_return_paths(module::Module* m, ast::FnDeclNode* func) {
+    if(types::is_void(fn_return_type(func))) { return true; }
+    Cfg* g = (Cfg*)func.cfg;
+    bool[] reachable = bfs_reachable_from(g, m.arena, g.entry);
+    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
+        if(!reachable[block_index]) { continue; }
+        if((u32)g.blocks[block_index].term.kind == (u32)TermKind::Unreachable) {
+            u8[] msg = "function may exit without a return statement";
+            diag::report(&m.diag, m.arena, func.h.src_pos, msg);
+            return false;
+        }
+    }
+    return true;
+}
+
+export fn void check_unreachable(module::Module* m, ast::FnDeclNode* func) {
+    Cfg* g = (Cfg*)func.cfg;
+    bool[] reachable = bfs_reachable_from(g, m.arena, g.entry);
+    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
+        if(g.blocks[block_index].id <= 1) { continue; }             // entry/exit
+        if(reachable[block_index]) { continue; }
+        if(g.blocks[block_index].stmts.len == 0) { continue; }      // synthetic post-terminator continuation
+        u32 pos = g.blocks[block_index].stmts[0].h.src_pos;
+        u8[] msg = "unreachable code";
+        diag::report_warning(&m.diag, m.arena, pos, msg);
+    }
+}
+
+export fn void build_all_functions(module::Module* m) {
+    if(m.root_node == null) { return; }
+    ast::BlockNode* global_block = (ast::BlockNode*)m.root_node;
+    for(u64 stmt_index = 0; stmt_index < global_block.stmts.len; stmt_index += 1) {
+        ast::AstNode* node = global_block.stmts[stmt_index];
+        if(node.h.kind != ast::AstKind::FnDecl) { continue; }
+        ast::FnDeclNode* func = (ast::FnDeclNode*)node;
+        if(func.body == null) { continue; }
+        func.cfg = (void*)build_cfg(m, func);
+        check_return_paths(m, func);
+        check_unreachable(m, func);
+    }
 }

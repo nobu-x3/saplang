@@ -688,6 +688,241 @@ fn i32 comp_stmt_emits_nothing(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 non_void_missing_return_errors(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] body;
+    body[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::AstNode* ret_ty = mk_prim_type(a, types::prim_i32());
+    ast::FnDeclNode* func = mk_fn(a, ret_ty, mk_block(a, &body[0], 1));
+    func.cfg = (void*)cfg::build_cfg(mm, func);
+    bool ok = cfg::check_return_paths(mm, func);
+    if(ok) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "without a return", m)) { return -3; }
+    if(mm.diag.entries[0].is_warning) { return -4; }
+    return 0;
+}
+
+fn i32 non_void_all_paths_return_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] then_s;
+    then_s[0] = mk_return(a, mk_int_lit(a));
+    ast::AstNode*[1] else_s;
+    else_s[0] = mk_return(a, mk_int_lit(a));
+    ast::AstNode* iff = mk_if(a, mk_int_lit(a), mk_block(a, &then_s[0], 1), mk_block(a, &else_s[0], 1));
+    ast::AstNode*[1] body;
+    body[0] = iff;
+    ast::AstNode* ret_ty = mk_prim_type(a, types::prim_i32());
+    ast::FnDeclNode* func = mk_fn(a, ret_ty, mk_block(a, &body[0], 1));
+    func.cfg = (void*)cfg::build_cfg(mm, func);
+    bool ok = cfg::check_return_paths(mm, func);
+    if(!ok) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)0, m)) { return -2; }
+    return 0;
+}
+
+fn i32 void_skips_return_check(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] body;
+    body[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &body[0], 1));
+    func.cfg = (void*)cfg::build_cfg(mm, func);
+    bool ok = cfg::check_return_paths(mm, func);
+    if(!ok) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)0, m)) { return -2; }
+    return 0;
+}
+
+fn i32 unreachable_after_both_return_warns(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] then_s;
+    then_s[0] = mk_return(a, null);
+    ast::AstNode*[1] else_s;
+    else_s[0] = mk_return(a, null);
+    ast::AstNode* iff = mk_if(a, mk_int_lit(a), mk_block(a, &then_s[0], 1), mk_block(a, &else_s[0], 1));
+    ast::AstNode* dead = mk_expr_stmt(a, mk_int_lit(a));
+    dead.h.src_pos = 4242;
+    ast::AstNode*[2] body;
+    body[0] = iff;
+    body[1] = dead;
+    ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &body[0], 2));
+    func.cfg = (void*)cfg::build_cfg(mm, func);
+    cfg::check_unreachable(mm, func);
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((u64)mm.diag.entries[0].src_pos, (u64)4242, m)) { return -2; }
+    if(!mm.diag.entries[0].is_warning) { return -3; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "unreachable", m)) { return -4; }
+    return 0;
+}
+
+fn i32 no_unreachable_clean(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] body;
+    body[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &body[0], 1));
+    func.cfg = (void*)cfg::build_cfg(mm, func);
+    cfg::check_unreachable(mm, func);
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 build_all_functions_reports(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] fbody;
+    fbody[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::AstNode* ret_ty = mk_prim_type(a, types::prim_i32());
+    ast::FnDeclNode* func = mk_fn(a, ret_ty, mk_block(a, &fbody[0], 1));
+    ast::AstNode*[1] root_stmts;
+    root_stmts[0] = (ast::AstNode*)func;
+    mm.root_node = mk_block(a, &root_stmts[0], 1);
+    cfg::build_all_functions(mm);
+    if(func.cfg == null) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "without a return", m)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_all_arms_return_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] arm_s;
+    arm_s[0] = mk_return(a, mk_int_lit(a));
+    ast::AstNode*[1] els;
+    els[0] = mk_return(a, mk_int_lit(a));
+    ast::AstNode*[1] l0;
+    l0[0] = mk_int_lit(a);
+    ast::SwitchArm[1] arms;
+    set_arm(&arms[0], &l0[0], 1, mk_block(a, &arm_s[0], 1));
+    ast::SwitchArm[] arms_slice = {&arms[0], 1};
+    ast::AstNode* sw = mk_switch(a, mk_int_lit(a), arms_slice, mk_block(a, &els[0], 1));
+    ast::AstNode*[1] body;
+    body[0] = sw;
+    ast::AstNode* ret_ty = mk_prim_type(a, types::prim_i32());
+    ast::FnDeclNode* func = mk_fn(a, ret_ty, mk_block(a, &body[0], 1));
+    func.cfg = (void*)cfg::build_cfg(mm, func);
+    bool ok = cfg::check_return_paths(mm, func);
+    if(!ok) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)0, m)) { return -2; }
+    return 0;
+}
+
+fn i32 switch_no_else_missing_return_errors(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] arm_s;
+    arm_s[0] = mk_return(a, mk_int_lit(a));
+    ast::AstNode*[1] l0;
+    l0[0] = mk_int_lit(a);
+    ast::SwitchArm[1] arms;
+    set_arm(&arms[0], &l0[0], 1, mk_block(a, &arm_s[0], 1));
+    ast::SwitchArm[] arms_slice = {&arms[0], 1};
+    ast::AstNode* sw = mk_switch(a, mk_int_lit(a), arms_slice, null);
+    ast::AstNode*[1] body;
+    body[0] = sw;
+    ast::AstNode* ret_ty = mk_prim_type(a, types::prim_i32());
+    ast::FnDeclNode* func = mk_fn(a, ret_ty, mk_block(a, &body[0], 1));
+    func.cfg = (void*)cfg::build_cfg(mm, func);
+    bool ok = cfg::check_return_paths(mm, func);
+    if(ok) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "without a return", m)) { return -3; }
+    return 0;
+}
+
+fn i32 build_all_functions_multiple(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] good_b;
+    good_b[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::FnDeclNode* good = mk_fn(a, null, mk_block(a, &good_b[0], 1));
+    ast::AstNode*[1] bad_b;
+    bad_b[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::FnDeclNode* bad = mk_fn(a, mk_prim_type(a, types::prim_i32()), mk_block(a, &bad_b[0], 1));
+    ast::AstNode*[3] root_stmts;
+    root_stmts[0] = (ast::AstNode*)good;
+    root_stmts[1] = (ast::AstNode*)bad;
+    root_stmts[2] = mk_kind(a, ast::AstKind::VarDecl);
+    mm.root_node = mk_block(a, &root_stmts[0], 3);
+    cfg::build_all_functions(mm);
+    if(good.cfg == null) { return -1; }
+    if(bad.cfg == null) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -3; }
+    return 0;
+}
+
+fn i32 code_after_return_warns(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode* dead = mk_expr_stmt(a, mk_int_lit(a));
+    dead.h.src_pos = 777;
+    ast::AstNode*[2] body;
+    body[0] = mk_return(a, null);
+    body[1] = dead;
+    ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &body[0], 2));
+    cfg::build_cfg(mm, func);
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((u64)mm.diag.entries[0].src_pos, (u64)777, m)) { return -2; }
+    if(!mm.diag.entries[0].is_warning) { return -3; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "unreachable", m)) { return -4; }
+    return 0;
+}
+
+fn i32 code_after_break_warns(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode* dead = mk_expr_stmt(a, mk_int_lit(a));
+    dead.h.src_pos = 888;
+    ast::AstNode*[2] wbody;
+    wbody[0] = mk_break(a);
+    wbody[1] = dead;
+    ast::AstNode* wh = mk_while(a, mk_int_lit(a), mk_block(a, &wbody[0], 2));
+    ast::AstNode*[1] body;
+    body[0] = wh;
+    ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &body[0], 1));
+    cfg::build_cfg(mm, func);
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((u64)mm.diag.entries[0].src_pos, (u64)888, m)) { return -2; }
+    return 0;
+}
+
+fn i32 code_after_continue_warns(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode* dead = mk_expr_stmt(a, mk_int_lit(a));
+    dead.h.src_pos = 999;
+    ast::AstNode*[2] wbody;
+    wbody[0] = mk_continue(a);
+    wbody[1] = dead;
+    ast::AstNode* wh = mk_while(a, mk_int_lit(a), mk_block(a, &wbody[0], 2));
+    ast::AstNode*[1] body;
+    body[0] = wh;
+    ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &body[0], 1));
+    cfg::build_cfg(mm, func);
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((u64)mm.diag.entries[0].src_pos, (u64)999, m)) { return -2; }
+    return 0;
+}
+
+fn i32 code_after_return_single_warning(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode* first_dead = mk_expr_stmt(a, mk_int_lit(a));
+    first_dead.h.src_pos = 500;
+    ast::AstNode*[3] body;
+    body[0] = mk_return(a, null);
+    body[1] = first_dead;
+    body[2] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &body[0], 3));
+    cfg::build_cfg(mm, func);
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((u64)mm.diag.entries[0].src_pos, (u64)500, m)) { return -2; }
+    return 0;
+}
+
+fn i32 return_at_block_end_no_warning(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[2] body;
+    body[0] = mk_expr_stmt(a, mk_int_lit(a));
+    body[1] = mk_return(a, null);
+    ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &body[0], 2));
+    cfg::build_cfg(mm, func);
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "CFG Construction Tests";
@@ -725,5 +960,19 @@ fn i32 main() {
     testing::add(suite, "nested_block_defers",             &nested_block_defers);
     testing::add(suite, "if_then_returns_else_falls",      &if_then_returns_else_falls);
     testing::add(suite, "comp_stmt_emits_nothing",         &comp_stmt_emits_nothing);
+    testing::add(suite, "non_void_missing_return_errors",  &non_void_missing_return_errors);
+    testing::add(suite, "non_void_all_paths_return_ok",    &non_void_all_paths_return_ok);
+    testing::add(suite, "void_skips_return_check",         &void_skips_return_check);
+    testing::add(suite, "unreachable_after_both_return_warns", &unreachable_after_both_return_warns);
+    testing::add(suite, "no_unreachable_clean",            &no_unreachable_clean);
+    testing::add(suite, "build_all_functions_reports",     &build_all_functions_reports);
+    testing::add(suite, "switch_all_arms_return_ok",       &switch_all_arms_return_ok);
+    testing::add(suite, "switch_no_else_missing_return_errors", &switch_no_else_missing_return_errors);
+    testing::add(suite, "build_all_functions_multiple",    &build_all_functions_multiple);
+    testing::add(suite, "code_after_return_warns",         &code_after_return_warns);
+    testing::add(suite, "code_after_break_warns",          &code_after_break_warns);
+    testing::add(suite, "code_after_continue_warns",       &code_after_continue_warns);
+    testing::add(suite, "code_after_return_single_warning", &code_after_return_single_warning);
+    testing::add(suite, "return_at_block_end_no_warning",  &return_at_block_end_no_warning);
     return testing::run();
 }
