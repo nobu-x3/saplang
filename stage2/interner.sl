@@ -62,6 +62,8 @@ fn symbol::Symbol* _intern(Interner* it, u8[] bytes) {
     sym.offset = off;
     sym.len = (u32)bytes.len;
     sym.hash = hash;
+    sym.keyword_kind = 0;                // arena memory may be dirty
+    sym._pad = 0;
     sym.chain = it.buckets[idx];
     it.buckets[idx] = sym;
     it.entry_count += 1;
