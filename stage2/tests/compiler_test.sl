@@ -268,6 +268,49 @@ fn i32 discover_target_fallback(arena::Arena* a, u8[] msg) {
     return result;
 }
 
+fn i32 multithreaded_frontend(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    compiler::set_multithreaded(c, true);
+    module::Module* b = mk_source_module(a, "b", "export fn i32 foo() { return 5; }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { return b::foo(); }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 multithreaded_circular_stress(arena::Arena* a, u8[] msg) {
+    boot(a);
+    for(u64 iter = 0; iter < 20; iter += 1) {
+        compiler::Compiler* c = compiler::new(a);
+        compiler::set_multithreaded(c, true);
+        module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 fa() { return b::fb(); }");
+        module::Module* b = mk_source_module(a, "b", "import a;\nexport fn i32 fb() { return a::fa(); }");
+        wire_imports(a, av, b);
+        wire_imports(a, b, av);
+        compiler::add_module(c, av);
+        compiler::add_module(c, b);
+        if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+        if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    }
+    return 0;
+}
+
+fn i32 multithreaded_error_bails(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    compiler::set_multithreaded(c, true);
+    compiler::add_module(c, mk_source_module(a, "main", "export fn i32 main() { return undefined_thing; }"));
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 1, msg)) { return -1; }
+    if(!testing::expect_true(c.error_count > 0, msg)) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -280,6 +323,9 @@ fn i32 main() {
     testing::add(fe, "parse_error_bails",      &parse_error_bails);
     testing::add(fe, "drain_warning_not_counted", &drain_warning_not_counted);
     testing::add(fe, "add_module_grows",       &add_module_grows);
+    testing::add(fe, "multithreaded_frontend", &multithreaded_frontend);
+    testing::add(fe, "multithreaded_circular_stress", &multithreaded_circular_stress);
+    testing::add(fe, "multithreaded_error_bails", &multithreaded_error_bails);
 
     u8[] dv = "Compiler Discovery Tests";
     testing::add(dv, "discover_multi",              &discover_multi);
