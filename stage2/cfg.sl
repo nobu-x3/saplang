@@ -49,9 +49,9 @@ export struct Cfg {
     u32             exit;
 }
 
-struct LoopFrame { u32 header; u32 after; }
+struct LoopFrame { u32 header; u32 after; u64 scope_base; }
 struct DeferEntry { ast::AstNode* body; u32 src_pos; }
-struct ScopeFrame { DeferEntry[] defers; u64 defer_count; u64 defer_cap; }
+struct ScopeFrame { DeferEntry[] defers; u64 defer_cap; }
 
 struct CfgBuilder {
     Cfg*            cfg;
@@ -112,6 +112,12 @@ fn void build_stmt(CfgBuilder* b, ast::AstNode* s) {
     case ast::AstKind::VarDecl:        { append_stmt(b, s); }
     case ast::AstKind::AssignmentStmt: { append_stmt(b, s); }
     case ast::AstKind::ExprStmt:       { append_stmt(b, s); }
+    // comp* statements are resolved by sema/comptime — no runtime control flow
+    case ast::AstKind::ComprunStmt:     { }
+    case ast::AstKind::CompinsertStmt:  { }
+    case ast::AstKind::CompspliceStmt:  { }
+    case ast::AstKind::ComperrorStmt:   { }
+    case ast::AstKind::CompwarningStmt: { }
     else { }
     }
 }
@@ -123,51 +129,206 @@ fn void build_block(CfgBuilder* b, ast::BlockNode* blk) {
         if(block_terminated(b, b.current)) { break; }
     }
     if(!block_terminated(b, b.current)) {
-        emit_pending_defers(b);
+        emit_pending_defers(b, current_scope(b));
     }
     pop_scope(b);
 }
 
-// control-flow builders — filled in subsequent increments
-
 fn void build_if(CfgBuilder* b, ast::IfNode* n) {
-    // TODO
+    u32 then_blk = new_block(b.cfg, b.arena);
+    u32 else_blk = new_block(b.cfg, b.arena);
+    u32 after    = new_block(b.cfg, b.arena);
+
+    terminate_cond(b, b.current, n.cond, then_blk, else_blk, n.h.src_pos);
+
+    b.current = then_blk;
+    build_stmt(b, n.then_block);
+    if(!block_terminated(b, b.current)) { terminate_goto(b, b.current, after, n.h.src_pos); }
+
+    b.current = else_blk;
+    if(n.else_block != null) { build_stmt(b, n.else_block); }
+    if(!block_terminated(b, b.current)) { terminate_goto(b, b.current, after, n.h.src_pos); }
+
+    b.current = after;
 }
 
 fn void build_while(CfgBuilder* b, ast::WhileNode* n) {
-    // TODO
+    u32 header = new_block(b.cfg, b.arena);
+    u32 body   = new_block(b.cfg, b.arena);
+    u32 after  = new_block(b.cfg, b.arena);
+
+    terminate_goto(b, b.current, header, n.h.src_pos);
+    terminate_cond(b, header, n.cond, body, after, n.h.src_pos);
+
+    push_loop(b, header, after);
+    push_scope(b);
+    b.current = body;
+    build_stmt(b, n.body);
+    if(!block_terminated(b, b.current)) {
+        emit_pending_defers(b, current_scope(b));
+        terminate_goto(b, b.current, header, n.h.src_pos);
+    }
+    pop_scope(b);
+    pop_loop(b);
+
+    b.current = after;
 }
 
 fn void build_for(CfgBuilder* b, ast::ForNode* n) {
-    // TODO
+    push_scope(b);
+    if(n.init != null) { build_stmt(b, n.init); }
+    u32 header = new_block(b.cfg, b.arena);
+    u32 body   = new_block(b.cfg, b.arena);
+    u32 post   = new_block(b.cfg, b.arena);
+    u32 after  = new_block(b.cfg, b.arena);
+
+    terminate_goto(b, b.current, header, n.h.src_pos);
+    if(n.cond != null) {
+        terminate_cond(b, header, n.cond, body, after, n.h.src_pos);
+    } else {
+        terminate_goto(b, header, body, n.h.src_pos);
+    }
+
+    push_loop(b, post, after);
+    push_scope(b);
+    b.current = body;
+    build_stmt(b, n.body);
+    if(!block_terminated(b, b.current)) {
+        emit_pending_defers(b, current_scope(b));
+        terminate_goto(b, b.current, post, n.h.src_pos);
+    }
+    pop_scope(b);
+    pop_loop(b);
+
+    b.current = post;
+    if(n.post != null) { build_stmt(b, n.post); }
+    terminate_goto(b, b.current, header, n.h.src_pos);
+
+    b.current = after;
+    pop_scope(b);
 }
 
 fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
-    // TODO
+    u32 origin = b.current;
+    u32 after = new_block(b.cfg, b.arena);
+    u32 def_blk = new_block(b.cfg, b.arena);
+    if(n.else_block == null) { terminate_unreachable(b, def_blk); }
+
+    u32* arm_blocks = arena::alloc(b.arena, n.arms.len * sizeof(u32));
+    for(u64 arm_index = 0; arm_index < n.arms.len; arm_index += 1) {
+        ast::SwitchArm* arm = &n.arms[arm_index];
+        if(arm.body == null) {
+            arm_blocks[arm_index] = INVALID_BLOCK;
+        } else {
+            u32 arm_blk = new_block(b.cfg, b.arena);
+            arm_blocks[arm_index] = arm_blk;
+            push_loop(b, INVALID_BLOCK, after);
+            push_scope(b);
+            b.current = arm_blk;
+            build_stmt(b, arm.body);
+            if(!block_terminated(b, b.current)) {
+                emit_pending_defers(b, current_scope(b));
+                terminate_goto(b, b.current, after, n.h.src_pos);
+            }
+            pop_scope(b);
+            pop_loop(b);
+        }
+    }
+
+    SwitchTarget[] arms = {null, 0};
+    u64 arms_cap = 0;
+    for(u64 arm_index = 0; arm_index < n.arms.len; arm_index += 1) {
+        u32 target = arm_blocks[arm_index];
+        if(target == INVALID_BLOCK) {                       // null body: fall through to the next bodied arm
+            u64 look = arm_index + 1;
+            while(look < n.arms.len) {
+                if(arm_blocks[look] != INVALID_BLOCK) { break; }
+                look += 1;
+            }
+            if(look < n.arms.len) { target = arm_blocks[look]; } else { target = after; }
+        }
+        ast::SwitchArm* arm = &n.arms[arm_index];
+        for(u64 label_index = 0; label_index < arm.labels.len; label_index += 1) {
+            arms = push_switch_target(arms, &arms_cap, b.arena, arm.labels[label_index], target);
+        }
+    }
+
+    if(n.else_block != null) {
+        push_scope(b);
+        b.current = def_blk;
+        build_stmt(b, n.else_block);
+        if(!block_terminated(b, b.current)) {
+            emit_pending_defers(b, current_scope(b));
+            terminate_goto(b, b.current, after, n.h.src_pos);
+        }
+        pop_scope(b);
+    }
+
+    terminate_switch(b, origin, n.discriminant, def_blk, arms, n.h.src_pos);
+    b.current = after;
 }
 
 fn void build_return(CfgBuilder* b, ast::ReturnNode* n) {
-    // TODO
+    emit_pending_defers_for_exit(b);
+    terminate_return(b, b.current, n.expr, n.h.src_pos);
+    b.current = new_block(b.cfg, b.arena);
+    terminate_unreachable(b, b.current);
 }
 
 fn void build_break(CfgBuilder* b, ast::BreakNode* n) {
-    // TODO
+    LoopFrame* frame = top_loop(b);
+    if(frame == null) { return; }
+    u32 after = frame.after;
+    u64 base = frame.scope_base;
+    emit_pending_defers_through_loop(b, base);
+    terminate_goto(b, b.current, after, n.h.src_pos);
+    b.current = new_block(b.cfg, b.arena);
+    terminate_unreachable(b, b.current);
 }
 
 fn void build_continue(CfgBuilder* b, ast::ContinueNode* n) {
-    // TODO
+    LoopFrame* frame = nearest_loop(b);
+    if(frame == null) { return; }
+    u32 header = frame.header;
+    u64 base = frame.scope_base;
+    emit_pending_defers_through_loop(b, base);
+    terminate_goto(b, b.current, header, n.h.src_pos);
+    b.current = new_block(b.cfg, b.arena);
+    terminate_unreachable(b, b.current);
 }
 
 fn void register_defer(CfgBuilder* b, ast::DeferNode* n) {
-    // TODO
+    push_defer(current_scope(b), b.arena, n.body, n.h.src_pos);
 }
 
-fn void emit_pending_defers(CfgBuilder* b) {
-    // TODO
+fn void inline_defer_body(CfgBuilder* b, ast::AstNode* body) {
+    if(body == null) { return; }
+    if(body.h.kind == ast::AstKind::BlockStmt) {
+        ast::BlockNode* blk = (ast::BlockNode*)body;
+        for(u64 stmt_index = 0; stmt_index < blk.stmts.len; stmt_index += 1) {
+            inline_defer_body(b, blk.stmts[stmt_index]);
+        }
+    } else {
+        append_stmt(b, body);
+    }
+}
+
+fn void emit_pending_defers(CfgBuilder* b, ScopeFrame* sc) {
+    for(i64 defer_index = (i64)sc.defers.len - 1; defer_index >= 0; defer_index -= 1) {
+        inline_defer_body(b, sc.defers[(u64)defer_index].body);
+    }
 }
 
 fn void emit_pending_defers_for_exit(CfgBuilder* b) {
-    // TODO
+    for(i64 scope_index = (i64)b.scope_stack.len - 1; scope_index >= 0; scope_index -= 1) {
+        emit_pending_defers(b, &b.scope_stack[(u64)scope_index]);
+    }
+}
+
+fn void emit_pending_defers_through_loop(CfgBuilder* b, u64 scope_base) {
+    for(i64 scope_index = (i64)b.scope_stack.len - 1; scope_index >= (i64)scope_base; scope_index -= 1) {
+        emit_pending_defers(b, &b.scope_stack[(u64)scope_index]);
+    }
 }
 
 // HELPERS
@@ -261,6 +422,70 @@ fn void pop_scope(CfgBuilder* b) {
     if(b.scope_stack.len > 0) { b.scope_stack.len -= 1; }
 }
 
+fn ScopeFrame* current_scope(CfgBuilder* b) {
+    return &b.scope_stack[b.scope_stack.len - 1];
+}
+
+fn void push_defer(ScopeFrame* sc, arena::Arena* a, ast::AstNode* body, u32 src_pos) {
+    if(sc.defers.len == sc.defer_cap) {
+        u64 new_cap = 4;
+        if(sc.defer_cap > 0) { new_cap = sc.defer_cap * 2; }
+        sc.defers.ptr = arena::realloc_grow(a, (void*)sc.defers.ptr, sc.defers.len * sizeof(DeferEntry), new_cap * sizeof(DeferEntry));
+        sc.defer_cap = new_cap;
+    }
+    DeferEntry e;
+    e.body = body;
+    e.src_pos = src_pos;
+    sc.defers[sc.defers.len] = e;
+    sc.defers.len += 1;
+}
+
+fn void push_loop(CfgBuilder* b, u32 header, u32 after) {
+    if(b.loop_stack.len == b.loop_cap) {
+        u64 new_cap = 4;
+        if(b.loop_cap > 0) { new_cap = b.loop_cap * 2; }
+        b.loop_stack.ptr = arena::realloc_grow(b.arena, (void*)b.loop_stack.ptr, b.loop_stack.len * sizeof(LoopFrame), new_cap * sizeof(LoopFrame));
+        b.loop_cap = new_cap;
+    }
+    LoopFrame frame;
+    frame.header = header;
+    frame.after = after;
+    frame.scope_base = b.scope_stack.len;
+    b.loop_stack[b.loop_stack.len] = frame;
+    b.loop_stack.len += 1;
+}
+
+fn void pop_loop(CfgBuilder* b) {
+    if(b.loop_stack.len > 0) { b.loop_stack.len -= 1; }
+}
+
+fn LoopFrame* top_loop(CfgBuilder* b) {
+    if(b.loop_stack.len == 0) { return null; }
+    return &b.loop_stack[b.loop_stack.len - 1];
+}
+
+fn LoopFrame* nearest_loop(CfgBuilder* b) {
+    for(i64 frame_index = (i64)b.loop_stack.len - 1; frame_index >= 0; frame_index -= 1) {
+        if(b.loop_stack[(u64)frame_index].header != INVALID_BLOCK) { return &b.loop_stack[(u64)frame_index]; }
+    }
+    return null;
+}
+
+fn SwitchTarget[] push_switch_target(SwitchTarget[] arms, u64* cap, arena::Arena* a, ast::AstNode* label, u32 target) {
+    if(arms.len == *cap) {
+        u64 new_cap = 4;
+        if(*cap > 0) { new_cap = *cap * 2; }
+        arms.ptr = arena::realloc_grow(a, (void*)arms.ptr, arms.len * sizeof(SwitchTarget), new_cap * sizeof(SwitchTarget));
+        *cap = new_cap;
+    }
+    SwitchTarget t;
+    t.label = label;
+    t.target = target;
+    arms[arms.len] = t;
+    arms.len += 1;
+    return arms;
+}
+
 fn void add_predecessor(Cfg* g, arena::Arena* a, u32 block_id, u32 pred) {
     BasicBlock* block = &g.blocks[block_id];
     if(block.predecessors.len == block.pred_cap) {
@@ -284,10 +509,16 @@ export fn void compute_predecessors(Cfg* g, arena::Arena* a) {
             add_predecessor(g, a, block.term.then_target, (u32)block_index);
             add_predecessor(g, a, block.term.else_target, (u32)block_index);
         } else if(kind == (u32)TermKind::Switch) {
-            for(u64 arm_index = 0; arm_index < block.term.switch_arms.len; arm_index += 1) {
-                add_predecessor(g, a, block.term.switch_arms[arm_index].target, (u32)block_index);
-            }
             add_predecessor(g, a, block.term.switch_default, (u32)block_index);
+            for(u64 arm_index = 0; arm_index < block.term.switch_arms.len; arm_index += 1) {
+                u32 target = block.term.switch_arms[arm_index].target;
+                if(target == block.term.switch_default) { continue; }
+                bool seen = false;
+                for(u64 prev = 0; prev < arm_index; prev += 1) {
+                    if(block.term.switch_arms[prev].target == target) { seen = true; }
+                }
+                if(!seen) { add_predecessor(g, a, target, (u32)block_index); }
+            }
         }
     }
 }
