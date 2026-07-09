@@ -295,7 +295,46 @@ fn void set_decl_ty(Sema* s, symbol::Symbol* name, types::Type* ty) {
 }
 
 fn void check_bodies_locked(Sema* s) {
-    // TODO
+    if((s.m.sema_phase & (u16)SemaPhase::Bodies) != 0) { return; }
+    s.scope = (Scope*)s.m.global_scope;
+    if(s.m.root_node != null) {
+        ast::BlockNode* global_block = (ast::BlockNode*)s.m.root_node;
+        for(u64 i = 0; i < global_block.stmts.len; i += 1) {
+            ast::AstNode* node = global_block.stmts[i];
+            if(node.h.kind == ast::AstKind::FnDecl) { check_fn_body(s, (ast::FnDeclNode*)node); }
+        }
+    }
+    s.m.sema_phase |= SemaPhase::Bodies;
+}
+
+fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
+    if(func.body == null) { return; }
+    Scope* fn_scope = scope_new(s.m.arena, (Scope*)s.m.global_scope, 16);
+    for(u64 i = 0; i < func.params.len; i += 1) {
+        Decl* param_decl = register_sym(s, fn_scope, func.params[i].name, false, (u16)DeclKind::Param, func.h.src_pos);
+        if(param_decl != null) {
+            param_decl.ty = (types::Type*)func.params[i].resolved_type;
+            param_decl.data.param = &func.params[i];
+        }
+    }
+    Scope* saved_scope = s.scope;
+    ast::AstNode* saved_fn = s.current_fn;
+    types::Type* saved_return = s.current_return;
+    s.scope = fn_scope;
+    s.current_fn = (ast::AstNode*)func;
+    s.current_return = fn_return_type(s, func);
+    stmt(s, func.body);
+    s.scope = saved_scope;
+    s.current_fn = saved_fn;
+    s.current_return = saved_return;
+}
+
+fn types::Type* fn_return_type(Sema* s, ast::FnDeclNode* func) {
+    Decl* fn_decl = scope_lookup_local((Scope*)s.m.global_scope, func.name);
+    if(fn_decl != null && fn_decl.ty != null && fn_decl.ty.kind == types::TypeKind::FnPtr) {
+        return fn_decl.ty.data.fn_ptr.ret;
+    }
+    return types::prim_void();
 }
 
 
@@ -1101,11 +1140,157 @@ fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
 // ============================================================================
 
 fn void stmt(Sema* s, ast::AstNode* st) {
-    // TODO
+    if(st == null) { return; }
+    switch(st.h.kind) {
+    case ast::AstKind::BlockStmt: {
+        ast::BlockNode* block = (ast::BlockNode*)st;
+        Scope* block_scope = scope_new(s.m.arena, s.scope, 8);
+        Scope* saved = s.scope;
+        s.scope = block_scope;
+        for(u64 i = 0; i < block.stmts.len; i += 1) { stmt(s, block.stmts[i]); }
+        s.scope = saved;
+    }
+    case ast::AstKind::VarDecl: {
+        stmt_var_decl(s, (ast::VarDeclNode*)st);
+    }
+    case ast::AstKind::IfStmt: {
+        ast::IfNode* if_node = (ast::IfNode*)st;
+        check_cond(s, if_node.cond);
+        stmt(s, if_node.then_block);
+        if(if_node.else_block != null) { stmt(s, if_node.else_block); }
+    }
+    case ast::AstKind::WhileStmt: {
+        ast::WhileNode* while_node = (ast::WhileNode*)st;
+        check_cond(s, while_node.cond);
+        s.loop_depth += 1;
+        stmt(s, while_node.body);
+        s.loop_depth -= 1;
+    }
+    case ast::AstKind::ForStmt: {
+        ast::ForNode* for_node = (ast::ForNode*)st;
+        Scope* for_scope = scope_new(s.m.arena, s.scope, 8);
+        Scope* saved = s.scope;
+        s.scope = for_scope;
+        stmt_or_expr(s, for_node.init);
+        if(for_node.cond != null) { check_cond(s, for_node.cond); }
+        stmt_or_expr(s, for_node.post);
+        s.loop_depth += 1;
+        stmt(s, for_node.body);
+        s.loop_depth -= 1;
+        s.scope = saved;
+    }
+    case ast::AstKind::SwitchStmt: {
+        ast::SwitchNode* switch_node = (ast::SwitchNode*)st;
+        types::Type* disc = synth(s, switch_node.discriminant);
+        s.switch_depth += 1;
+        for(u64 arm_index = 0; arm_index < switch_node.arms.len; arm_index += 1) {
+            ast::SwitchArm* arm = &switch_node.arms[arm_index];
+            for(u64 label_index = 0; label_index < arm.labels.len; label_index += 1) {
+                if(disc != null) { check(s, arm.labels[label_index], disc); }
+                else { synth(s, arm.labels[label_index]); }
+            }
+            if(arm.body != null) { stmt(s, arm.body); }
+        }
+        if(switch_node.else_block != null) { stmt(s, switch_node.else_block); }
+        s.switch_depth -= 1;
+    }
+    case ast::AstKind::ReturnStmt: {
+        stmt_return(s, (ast::ReturnNode*)st);
+    }
+    case ast::AstKind::BreakStmt: {
+        if(s.loop_depth == 0 && s.switch_depth == 0) { diag_break_outside(s, st.h.src_pos); }
+    }
+    case ast::AstKind::ContinueStmt: {
+        if(s.loop_depth == 0) { diag_continue_outside(s, st.h.src_pos); }
+    }
+    case ast::AstKind::DeferStmt: {
+        stmt(s, ((ast::DeferNode*)st).body);
+    }
+    case ast::AstKind::AssignmentStmt: {
+        stmt_assignment(s, (ast::AssignmentNode*)st);
+    }
+    case ast::AstKind::ExprStmt: {
+        synth(s, ((ast::ExprStmtNode*)st).expr);
+    }
+    else { }
+    }
+}
+
+fn void stmt_or_expr(Sema* s, ast::AstNode* node) {
+    if(node == null) { return; }
+    if(node.h.kind == ast::AstKind::VarDecl || node.h.kind == ast::AstKind::AssignmentStmt) { stmt(s, node); }
+    else { synth(s, node); }
+}
+
+fn void stmt_var_decl(Sema* s, ast::VarDeclNode* var) {
+    types::Type* declared = resolve_type(s, var.type_expr);
+    if(var.init != null) {
+        if(declared != null) { check(s, var.init, declared); }
+        else { synth(s, var.init); }
+    }
+    Decl* decl = register_sym(s, s.scope, var.name, false, (u16)DeclKind::Node, var.h.src_pos);
+    if(decl != null) {
+        decl.ty = declared;
+        decl.data.node = (ast::AstNode*)var;
+    }
+}
+
+fn void stmt_return(Sema* s, ast::ReturnNode* ret) {
+    if(ret.expr != null) {
+        if(s.current_return == types::prim_void()) {
+            diag_return_value_in_void(s, ret.h.src_pos);
+            synth(s, ret.expr);
+        } else if(s.current_return != null) {
+            check(s, ret.expr, s.current_return);
+        } else {
+            synth(s, ret.expr);
+        }
+    } else if(s.current_return != null && s.current_return != types::prim_void()) {
+        diag_return_missing_value(s, ret.h.src_pos, s.current_return);
+    }
+}
+
+fn void stmt_assignment(Sema* s, ast::AssignmentNode* assign) {
+    types::Type* lt = synth(s, assign.lhs);
+    if(lt == null) { synth(s, assign.rhs); return; }
+    if(!expr_has_flag(assign.lhs, ast::AstFlags::LValue)) {
+        diag_not_assignable(s, assign.lhs.h.src_pos);
+        synth(s, assign.rhs);
+        return;
+    }
+    if(assign.op == token::TokenKind::Eq) {
+        check(s, assign.rhs, lt);
+        return;
+    }
+    types::Type* rt = synth(s, assign.rhs);
+    if(rt == null) { return; }
+    if(op::binop_result_type(compound_binop(assign.op), lt, rt) == null) {
+        diag_binop_mismatch(s, assign.h.src_pos, assign.op, lt, rt);
+    }
+}
+
+fn token::TokenKind compound_binop(token::TokenKind op) {
+    switch(op) {
+    case token::TokenKind::PlusEq:    { return token::TokenKind::Plus; }
+    case token::TokenKind::MinusEq:   { return token::TokenKind::Minus; }
+    case token::TokenKind::StarEq:    { return token::TokenKind::Star; }
+    case token::TokenKind::SlashEq:   { return token::TokenKind::Slash; }
+    case token::TokenKind::PercentEq: { return token::TokenKind::Percent; }
+    case token::TokenKind::AmpEq:     { return token::TokenKind::Amp; }
+    case token::TokenKind::PipeEq:    { return token::TokenKind::Pipe; }
+    case token::TokenKind::CaretEq:   { return token::TokenKind::Caret; }
+    else { return token::TokenKind::Plus; }
+    }
+    return token::TokenKind::Plus;
 }
 
 fn bool check_cond(Sema* s, ast::AstNode* e) {
-    return false; // TODO
+    types::Type* t = synth(s, e);
+    if(t == null) { return false; }
+    if(types::is_convertible_in_cond(t)) { return true; }
+    diag_not_bool_convertible(s, e.h.src_pos, t);
+    mark_error(e);
+    return false;
 }
 
 
@@ -1257,6 +1442,38 @@ export fn void diag_extra_initializer(Sema* s, u32 src_pos) {
 export fn void diag_array_len_mismatch(Sema* s, u32 src_pos, u64 expected, u64 got) {
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "array literal has %lu elements but %lu expected", got, expected);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "cannot assign to a non-lvalue". Used by stmt_assignment.
+export fn void diag_not_assignable(Sema* s, u32 src_pos) {
+    u8[] msg = "cannot assign to a non-lvalue";
+    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "break outside loop or switch". Used by stmt.
+export fn void diag_break_outside(Sema* s, u32 src_pos) {
+    u8[] msg = "break outside loop or switch";
+    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "continue outside loop". Used by stmt.
+export fn void diag_continue_outside(Sema* s, u32 src_pos) {
+    u8[] msg = "continue outside loop";
+    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "cannot return a value from a void function". Used by stmt_return.
+export fn void diag_return_value_in_void(Sema* s, u32 src_pos) {
+    u8[] msg = "cannot return a value from a void function";
+    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "missing return value; function returns `<T>`". Used by stmt_return.
+export fn void diag_return_missing_value(Sema* s, u32 src_pos, types::Type* expected) {
+    u8[] expected_str = types_print::print_to_arena(expected, s.m.arena);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "missing return value; function returns %.*s", (i32)expected_str.len, (i8*)expected_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 

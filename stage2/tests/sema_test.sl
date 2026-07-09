@@ -301,6 +301,142 @@ fn void set_init(ast::FieldInitializer* fi, symbol::Symbol* name, ast::AstNode* 
     fi.src_pos = src_pos;
 }
 
+fn ast::AstNode* mk_block(arena::Arena* a, ast::AstNode** stmts, u64 count) {
+    ast::BlockNode* block = (ast::BlockNode*)arena::alloc(a, sizeof(ast::BlockNode));
+    sys::memset(block, 0, sizeof(ast::BlockNode));
+    block.h.kind = ast::AstKind::BlockStmt;
+    block.stmts = {stmts, count};
+    return (ast::AstNode*)block;
+}
+
+fn ast::FnDeclNode* mk_fn_body(arena::Arena* a, symbol::Symbol* name, ast::AstNode* return_type, ast::AstNode* body) {
+    ast::FnDeclNode* node = (ast::FnDeclNode*)arena::alloc(a, sizeof(ast::FnDeclNode));
+    sys::memset(node, 0, sizeof(ast::FnDeclNode));
+    node.h.kind = ast::AstKind::FnDecl;
+    node.name = name;
+    node.return_type = return_type;
+    node.body = body;
+    return node;
+}
+
+// The module must already exist (interner initialized) before the caller builds
+// the fn AST, so interned symbols live in the current interner, not an orphaned one.
+fn void run_fn(arena::Arena* a, module::Module* mm, ast::FnDeclNode* func) {
+    ast::AstNode** root = (ast::AstNode**)arena::alloc(a, sizeof(ast::AstNode*));
+    root[0] = (ast::AstNode*)func;
+    set_root(mm, a, root, 1);
+    sema::run(mm);
+}
+
+fn ast::AstNode* fake_local_var(arena::Arena* a, symbol::Symbol* name, ast::AstNode* type_expr, ast::AstNode* init, u32 pos) {
+    ast::VarDeclNode* n = (ast::VarDeclNode*)arena::alloc(a, sizeof(ast::VarDeclNode));
+    sys::memset(n, 0, sizeof(ast::VarDeclNode));
+    n.h.kind = ast::AstKind::VarDecl;
+    n.h.src_pos = pos;
+    n.name = name;
+    n.type_expr = type_expr;
+    n.init = init;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_return(arena::Arena* a, ast::AstNode* expr, u32 pos) {
+    ast::ReturnNode* n = (ast::ReturnNode*)arena::alloc(a, sizeof(ast::ReturnNode));
+    sys::memset(n, 0, sizeof(ast::ReturnNode));
+    n.h.kind = ast::AstKind::ReturnStmt;
+    n.h.src_pos = pos;
+    n.expr = expr;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_if(arena::Arena* a, ast::AstNode* cond, ast::AstNode* then_block, ast::AstNode* else_block, u32 pos) {
+    ast::IfNode* n = (ast::IfNode*)arena::alloc(a, sizeof(ast::IfNode));
+    sys::memset(n, 0, sizeof(ast::IfNode));
+    n.h.kind = ast::AstKind::IfStmt;
+    n.h.src_pos = pos;
+    n.cond = cond;
+    n.then_block = then_block;
+    n.else_block = else_block;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_while(arena::Arena* a, ast::AstNode* cond, ast::AstNode* body, u32 pos) {
+    ast::WhileNode* n = (ast::WhileNode*)arena::alloc(a, sizeof(ast::WhileNode));
+    sys::memset(n, 0, sizeof(ast::WhileNode));
+    n.h.kind = ast::AstKind::WhileStmt;
+    n.h.src_pos = pos;
+    n.cond = cond;
+    n.body = body;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_for(arena::Arena* a, ast::AstNode* init, ast::AstNode* cond, ast::AstNode* post, ast::AstNode* body, u32 pos) {
+    ast::ForNode* n = (ast::ForNode*)arena::alloc(a, sizeof(ast::ForNode));
+    sys::memset(n, 0, sizeof(ast::ForNode));
+    n.h.kind = ast::AstKind::ForStmt;
+    n.h.src_pos = pos;
+    n.init = init;
+    n.cond = cond;
+    n.post = post;
+    n.body = body;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_break(arena::Arena* a, u32 pos) {
+    ast::BreakNode* n = (ast::BreakNode*)arena::alloc(a, sizeof(ast::BreakNode));
+    sys::memset(n, 0, sizeof(ast::BreakNode));
+    n.h.kind = ast::AstKind::BreakStmt;
+    n.h.src_pos = pos;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_continue(arena::Arena* a, u32 pos) {
+    ast::ContinueNode* n = (ast::ContinueNode*)arena::alloc(a, sizeof(ast::ContinueNode));
+    sys::memset(n, 0, sizeof(ast::ContinueNode));
+    n.h.kind = ast::AstKind::ContinueStmt;
+    n.h.src_pos = pos;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_defer(arena::Arena* a, ast::AstNode* body, u32 pos) {
+    ast::DeferNode* n = (ast::DeferNode*)arena::alloc(a, sizeof(ast::DeferNode));
+    sys::memset(n, 0, sizeof(ast::DeferNode));
+    n.h.kind = ast::AstKind::DeferStmt;
+    n.h.src_pos = pos;
+    n.body = body;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_assign(arena::Arena* a, token::TokenKind op, ast::AstNode* lhs, ast::AstNode* rhs, u32 pos) {
+    ast::AssignmentNode* n = (ast::AssignmentNode*)arena::alloc(a, sizeof(ast::AssignmentNode));
+    sys::memset(n, 0, sizeof(ast::AssignmentNode));
+    n.h.kind = ast::AstKind::AssignmentStmt;
+    n.h.src_pos = pos;
+    n.op = op;
+    n.lhs = lhs;
+    n.rhs = rhs;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_expr_stmt(arena::Arena* a, ast::AstNode* expr, u32 pos) {
+    ast::ExprStmtNode* n = (ast::ExprStmtNode*)arena::alloc(a, sizeof(ast::ExprStmtNode));
+    sys::memset(n, 0, sizeof(ast::ExprStmtNode));
+    n.h.kind = ast::AstKind::ExprStmt;
+    n.h.src_pos = pos;
+    n.expr = expr;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_switch(arena::Arena* a, ast::AstNode* disc, ast::SwitchArm* arms, u64 arm_count, ast::AstNode* else_block, u32 pos) {
+    ast::SwitchNode* n = (ast::SwitchNode*)arena::alloc(a, sizeof(ast::SwitchNode));
+    sys::memset(n, 0, sizeof(ast::SwitchNode));
+    n.h.kind = ast::AstKind::SwitchStmt;
+    n.h.src_pos = pos;
+    n.discriminant = disc;
+    n.arms = {arms, arm_count};
+    n.else_block = else_block;
+    return (ast::AstNode*)n;
+}
+
 fn types::Type* register_color_enum(arena::Arena* a, sema::Scope* sc) {
     symbol::Symbol*[2] names; names[0] = interner::intern("Red"); names[1] = interner::intern("Green");
     symbol::Symbol*[] nslice = {&names[0], 2};
@@ -3941,6 +4077,298 @@ fn i32 sllit_ptr_type_mismatch(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 st_local_var_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* vd = fake_local_var(a, interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[1] stmts; stmts[0] = vd;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_local_var_type_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* vd = fake_local_var(a, interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_float_lit(a, 1.0, 12), 0);
+    ast::AstNode*[1] stmts; stmts[0] = vd;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 12, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_local_var_use(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* vx = fake_local_var(a, interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode* vy = fake_local_var(a, interner::intern("y"), mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_ident(a, interner::intern("x"), 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vx; stmts[1] = vy;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_local_var_undefined_use(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* vy = fake_local_var(a, interner::intern("y"), mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_ident(a, interner::intern("nope"), 14), 0);
+    ast::AstNode*[1] stmts; stmts[0] = vy;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "undefined identifier nope", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 14, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_duplicate_local(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* v1 = fake_local_var(a, interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    ast::AstNode* v2 = fake_local_var(a, interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 2, 0), 20);
+    ast::AstNode*[2] stmts; stmts[0] = v1; stmts[1] = v2;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "duplicate declaration of x", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 20, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_return_value_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* r = fake_return(a, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[1] stmts; stmts[0] = r;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), mk_ty_prim(a, token::TokenKind::I32), mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_return_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* r = fake_return(a, (ast::AstNode*)fake_float_lit(a, 1.0, 8), 0);
+    ast::AstNode*[1] stmts; stmts[0] = r;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), mk_ty_prim(a, token::TokenKind::I32), mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 8, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_return_value_in_void(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* r = fake_return(a, (ast::AstNode*)fake_int_lit(a, 5, 0), 3);
+    ast::AstNode*[1] stmts; stmts[0] = r;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot return a value from a void function", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_return_missing_value(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* r = fake_return(a, null, 6);
+    ast::AstNode*[1] stmts; stmts[0] = r;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), mk_ty_prim(a, token::TokenKind::I32), mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "missing return value; function returns i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 6, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_return_void_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* r = fake_return(a, null, 0);
+    ast::AstNode*[1] stmts; stmts[0] = r;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_if_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* iff = fake_if(a, (ast::AstNode*)fake_bool_lit(a, true, 0), mk_block(a, null, 0), null, 0);
+    ast::AstNode*[1] stmts; stmts[0] = iff;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_if_int_cond_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* iff = fake_if(a, (ast::AstNode*)fake_int_lit(a, 1, 0), mk_block(a, null, 0), null, 0);
+    ast::AstNode*[1] stmts; stmts[0] = iff;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_if_cond_not_bool(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* iff = fake_if(a, (ast::AstNode*)fake_float_lit(a, 1.0, 10), mk_block(a, null, 0), null, 0);
+    ast::AstNode*[1] stmts; stmts[0] = iff;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot use f64 in condition; expected bool, integer, pointer, or slice", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 10, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_while_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* w = fake_while(a, (ast::AstNode*)fake_bool_lit(a, true, 0), mk_block(a, null, 0), 0);
+    ast::AstNode*[1] stmts; stmts[0] = w;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_for_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* i = interner::intern("i");
+    ast::AstNode* init = fake_local_var(a, i, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    ast::AstNode* cond = (ast::AstNode*)fake_binop(a, token::TokenKind::LT, (ast::AstNode*)fake_ident(a, i, 0), (ast::AstNode*)fake_int_lit(a, 10, 0), 0);
+    ast::AstNode* post = fake_assign(a, token::TokenKind::PlusEq, (ast::AstNode*)fake_ident(a, i, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    ast::AstNode* forstmt = fake_for(a, init, cond, post, mk_block(a, null, 0), 0);
+    ast::AstNode*[1] stmts; stmts[0] = forstmt;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_break_in_loop_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode*[1] body_stmts; body_stmts[0] = fake_break(a, 0);
+    ast::AstNode* w = fake_while(a, (ast::AstNode*)fake_bool_lit(a, true, 0), mk_block(a, &body_stmts[0], 1), 0);
+    ast::AstNode*[1] stmts; stmts[0] = w;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_break_outside(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode*[1] stmts; stmts[0] = fake_break(a, 5);
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "break outside loop or switch", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_continue_outside(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode*[1] stmts; stmts[0] = fake_continue(a, 4);
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "continue outside loop", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_break_in_switch_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode*[1] arm_body; arm_body[0] = fake_break(a, 0);
+    ast::AstNode*[1] labels; labels[0] = (ast::AstNode*)fake_int_lit(a, 1, 0);
+    ast::SwitchArm[1] arms;
+    arms[0].labels = {&labels[0], 1};
+    arms[0].body = mk_block(a, &arm_body[0], 1);
+    arms[0].src_pos = 0;
+    ast::AstNode* sw = fake_switch(a, (ast::AstNode*)fake_int_lit(a, 1, 0), &arms[0], 1, null, 0);
+    ast::AstNode*[1] stmts; stmts[0] = sw;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_assign_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* x = interner::intern("x");
+    ast::AstNode* vd = fake_local_var(a, x, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, (ast::AstNode*)fake_ident(a, x, 0), (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_assign_non_lvalue(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, (ast::AstNode*)fake_int_lit(a, 5, 9), (ast::AstNode*)fake_int_lit(a, 3, 0), 0);
+    ast::AstNode*[1] stmts; stmts[0] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot assign to a non-lvalue", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 9, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_assign_type_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* x = interner::intern("x");
+    ast::AstNode* vd = fake_local_var(a, x, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, (ast::AstNode*)fake_ident(a, x, 0), (ast::AstNode*)fake_float_lit(a, 1.0, 15), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 15, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_compound_assign_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* x = interner::intern("x");
+    ast::AstNode* vd = fake_local_var(a, x, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::PlusEq, (ast::AstNode*)fake_ident(a, x, 0), (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_compound_assign_bad(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* b = interner::intern("b");
+    ast::AstNode* vd = fake_local_var(a, b, mk_ty_prim(a, token::TokenKind::BOOL), (ast::AstNode*)fake_bool_lit(a, true, 0), 0);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::PlusEq, (ast::AstNode*)fake_ident(a, b, 0), (ast::AstNode*)fake_int_lit(a, 5, 0), 18);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "operator is not defined for bool and i32", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 18, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_defer_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode* d = fake_defer(a, mk_block(a, null, 0), 0);
+    ast::AstNode*[1] stmts; stmts[0] = d;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_expr_stmt_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* x = interner::intern("x");
+    ast::AstNode* vd = fake_local_var(a, x, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    ast::AstNode* es = fake_expr_stmt(a, (ast::AstNode*)fake_binop(a, token::TokenKind::Plus, (ast::AstNode*)fake_ident(a, x, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = es;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_block_scope_pops(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode*[1] inner; inner[0] = fake_local_var(a, interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    ast::AstNode* nested = mk_block(a, &inner[0], 1);
+    ast::AstNode* use = fake_expr_stmt(a, (ast::AstNode*)fake_ident(a, interner::intern("x"), 22), 0);
+    ast::AstNode*[2] stmts; stmts[0] = nested; stmts[1] = use;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "undefined identifier x", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 22, m)) { return -3; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -4236,6 +4664,35 @@ fn i32 main() {
     testing::add(lit, "sllit_positional",         &sllit_positional);
     testing::add(lit, "sllit_unknown_field",      &sllit_unknown_field);
     testing::add(lit, "sllit_ptr_type_mismatch",  &sllit_ptr_type_mismatch);
+
+    u8[] stm = "Sema Statement Tests";
+    testing::add(stm, "st_local_var_ok",           &st_local_var_ok);
+    testing::add(stm, "st_local_var_type_mismatch", &st_local_var_type_mismatch);
+    testing::add(stm, "st_local_var_use",          &st_local_var_use);
+    testing::add(stm, "st_local_var_undefined_use", &st_local_var_undefined_use);
+    testing::add(stm, "st_duplicate_local",        &st_duplicate_local);
+    testing::add(stm, "st_return_value_ok",        &st_return_value_ok);
+    testing::add(stm, "st_return_mismatch",        &st_return_mismatch);
+    testing::add(stm, "st_return_value_in_void",   &st_return_value_in_void);
+    testing::add(stm, "st_return_missing_value",   &st_return_missing_value);
+    testing::add(stm, "st_return_void_ok",         &st_return_void_ok);
+    testing::add(stm, "st_if_ok",                  &st_if_ok);
+    testing::add(stm, "st_if_int_cond_ok",         &st_if_int_cond_ok);
+    testing::add(stm, "st_if_cond_not_bool",       &st_if_cond_not_bool);
+    testing::add(stm, "st_while_ok",               &st_while_ok);
+    testing::add(stm, "st_for_ok",                 &st_for_ok);
+    testing::add(stm, "st_break_in_loop_ok",       &st_break_in_loop_ok);
+    testing::add(stm, "st_break_outside",          &st_break_outside);
+    testing::add(stm, "st_continue_outside",       &st_continue_outside);
+    testing::add(stm, "st_break_in_switch_ok",     &st_break_in_switch_ok);
+    testing::add(stm, "st_assign_ok",              &st_assign_ok);
+    testing::add(stm, "st_assign_non_lvalue",      &st_assign_non_lvalue);
+    testing::add(stm, "st_assign_type_mismatch",   &st_assign_type_mismatch);
+    testing::add(stm, "st_compound_assign_ok",     &st_compound_assign_ok);
+    testing::add(stm, "st_compound_assign_bad",    &st_compound_assign_bad);
+    testing::add(stm, "st_defer_ok",               &st_defer_ok);
+    testing::add(stm, "st_expr_stmt_ok",           &st_expr_stmt_ok);
+    testing::add(stm, "st_block_scope_pops",       &st_block_scope_pops);
 
     return testing::run();
 }
