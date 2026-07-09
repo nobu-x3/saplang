@@ -517,6 +517,7 @@ export fn types::Type* resolve_type(Sema* s, ast::AstNode* texpr) {
         return resolved;
     }
     case ast::AstKind::StructType: {
+        if(texpr.h.ty != null) { return (types::Type*)texpr.h.ty; }
         ast::StructDeclNode* anon_decl = synth_anon_struct_decl(s, (ast::TypeStructNode*)texpr);
         if(anon_decl == null) { return null; }
         types::Type* resolved = types::intern_struct((void*)anon_decl);
@@ -524,6 +525,7 @@ export fn types::Type* resolve_type(Sema* s, ast::AstNode* texpr) {
         return resolved;
     }
     case ast::AstKind::UnionType: {
+        if(texpr.h.ty != null) { return (types::Type*)texpr.h.ty; }
         ast::UnionDeclNode* anon_decl = synth_anon_union_decl(s, (ast::TypeUnionNode*)texpr);
         if(anon_decl == null) { return null; }
         types::Type* resolved = types::intern_union((void*)anon_decl);
@@ -568,11 +570,23 @@ fn types::Type* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
 }
 
 fn ast::StructDeclNode* synth_anon_struct_decl(Sema* s, ast::TypeStructNode* n) {
-    return null; // TODO
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(s.m.arena, sizeof(ast::StructDeclNode));
+    sys::memset(decl, 0, sizeof(ast::StructDeclNode));
+    decl.h.kind = ast::AstKind::StructDecl;
+    decl.h.src_pos = n.h.src_pos;
+    decl.fields = n.fields;
+    resolve_fields(s, decl.fields);
+    return decl;
 }
 
 fn ast::UnionDeclNode* synth_anon_union_decl(Sema* s, ast::TypeUnionNode* n) {
-    return null; // TODO
+    ast::UnionDeclNode* decl = (ast::UnionDeclNode*)arena::alloc(s.m.arena, sizeof(ast::UnionDeclNode));
+    sys::memset(decl, 0, sizeof(ast::UnionDeclNode));
+    decl.h.kind = ast::AstKind::UnionDecl;
+    decl.h.src_pos = n.h.src_pos;
+    decl.fields = n.fields;
+    resolve_fields(s, decl.fields);
+    return decl;
 }
 
 // Only int literals until the comptime interpreter lands.

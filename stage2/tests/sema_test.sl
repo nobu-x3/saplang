@@ -468,6 +468,31 @@ fn ast::AstNode* fake_alignof(arena::Arena* a, ast::AstNode* arg, u32 pos) {
     return (ast::AstNode*)n;
 }
 
+fn void set_field(ast::FieldDecl* f, symbol::Symbol* name, ast::AstNode* type_expr, u32 pos) {
+    f.name = name;
+    f.type_expr = type_expr;
+    f.resolved_type = null;
+    f.src_pos = pos;
+}
+
+fn ast::AstNode* fake_anon_struct(arena::Arena* a, ast::FieldDecl* fields, u64 count, u32 pos) {
+    ast::TypeStructNode* n = (ast::TypeStructNode*)arena::alloc(a, sizeof(ast::TypeStructNode));
+    sys::memset(n, 0, sizeof(ast::TypeStructNode));
+    n.h.kind = ast::AstKind::StructType;
+    n.h.src_pos = pos;
+    n.fields = {fields, count};
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* fake_anon_union(arena::Arena* a, ast::FieldDecl* fields, u64 count, u32 pos) {
+    ast::TypeUnionNode* n = (ast::TypeUnionNode*)arena::alloc(a, sizeof(ast::TypeUnionNode));
+    sys::memset(n, 0, sizeof(ast::TypeUnionNode));
+    n.h.kind = ast::AstKind::UnionType;
+    n.h.src_pos = pos;
+    n.fields = {fields, count};
+    return (ast::AstNode*)n;
+}
+
 fn types::Type* mk_opaque_type(arena::Arena* a, u32 decl_pos) {
     symbol::Symbol*[1] fnames; fnames[0] = interner::intern("x");
     types::Type*[1] ftys; ftys[0] = types::prim_i32();
@@ -4494,6 +4519,91 @@ fn i32 alignof_opaque_reports(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 anon_struct_resolves(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::FieldDecl[2] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    set_field(&fields[1], interner::intern("y"), mk_ty_prim(a, token::TokenKind::F32), 0);
+    ast::AstNode* sn = fake_anon_struct(a, &fields[0], 2, 0);
+    types::Type* t = sema::resolve_type(&s, sn);
+    if(!testing::expect_not_null((void*)t, m)) { return -1; }
+    if(!testing::expect_eq((u64)t.kind, (u64)types::TypeKind::Struct, m)) { return -2; }
+    if(!testing::expect_eq((void*)fields[0].resolved_type, (void*)types::prim_i32(), m)) { return -3; }
+    if(!testing::expect_eq((void*)fields[1].resolved_type, (void*)types::prim_f32(), m)) { return -4; }
+    return 0;
+}
+
+fn i32 anon_union_resolves(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::FieldDecl[2] fields;
+    set_field(&fields[0], interner::intern("a"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    set_field(&fields[1], interner::intern("b"), mk_ty_prim(a, token::TokenKind::F32), 0);
+    ast::AstNode* un = fake_anon_union(a, &fields[0], 2, 0);
+    types::Type* t = sema::resolve_type(&s, un);
+    if(!testing::expect_not_null((void*)t, m)) { return -1; }
+    if(!testing::expect_eq((u64)t.kind, (u64)types::TypeKind::Union, m)) { return -2; }
+    return 0;
+}
+
+fn i32 anon_struct_idempotent(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::FieldDecl[1] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* sn = fake_anon_struct(a, &fields[0], 1, 0);
+    types::Type* t1 = sema::resolve_type(&s, sn);
+    types::Type* t2 = sema::resolve_type(&s, sn);
+    if(!testing::expect_eq((void*)t1, (void*)t2, m)) { return -1; }
+    return 0;
+}
+
+fn i32 anon_struct_distinct_nodes(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::FieldDecl[1] f1;
+    set_field(&f1[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::FieldDecl[1] f2;
+    set_field(&f2[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    types::Type* t1 = sema::resolve_type(&s, fake_anon_struct(a, &f1[0], 1, 0));
+    types::Type* t2 = sema::resolve_type(&s, fake_anon_struct(a, &f2[0], 1, 0));
+    if(!testing::expect_ne((void*)t1, (void*)t2, m)) { return -1; }
+    return 0;
+}
+
+fn i32 anon_struct_member_access(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    ast::FieldDecl[2] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    set_field(&fields[1], interner::intern("y"), mk_ty_prim(a, token::TokenKind::F32), 0);
+    types::Type* st = sema::resolve_type(&s, fake_anon_struct(a, &fields[0], 2, 0));
+    symbol::Symbol* v = interner::intern("v");
+    register_var(a, sc, v, st, false);
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, v, 0), interner::intern("y"), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_f32(), m)) { return -1; }
+    if(!testing::expect_true(has_flag((ast::AstNode*)acc, ast::AstFlags::LValue), m)) { return -2; }
+    return 0;
+}
+
+fn i32 anon_struct_nested_field(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::FieldDecl[1] inner_fields;
+    set_field(&inner_fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* inner = fake_anon_struct(a, &inner_fields[0], 1, 0);
+    ast::FieldDecl[1] outer_fields;
+    set_field(&outer_fields[0], interner::intern("p"), inner, 0);
+    types::Type* t = sema::resolve_type(&s, fake_anon_struct(a, &outer_fields[0], 1, 0));
+    if(!testing::expect_not_null((void*)t, m)) { return -1; }
+    if(!testing::expect_eq((u64)((types::Type*)outer_fields[0].resolved_type).kind, (u64)types::TypeKind::Struct, m)) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -4828,6 +4938,14 @@ fn i32 main() {
     testing::add(sz, "alignof_expr_var",      &alignof_expr_var);
     testing::add(sz, "sizeof_opaque_reports", &sizeof_opaque_reports);
     testing::add(sz, "alignof_opaque_reports", &alignof_opaque_reports);
+
+    u8[] an = "Sema Anonymous Type Tests";
+    testing::add(an, "anon_struct_resolves",       &anon_struct_resolves);
+    testing::add(an, "anon_union_resolves",        &anon_union_resolves);
+    testing::add(an, "anon_struct_idempotent",     &anon_struct_idempotent);
+    testing::add(an, "anon_struct_distinct_nodes", &anon_struct_distinct_nodes);
+    testing::add(an, "anon_struct_member_access",  &anon_struct_member_access);
+    testing::add(an, "anon_struct_nested_field",   &anon_struct_nested_field);
 
     return testing::run();
 }
