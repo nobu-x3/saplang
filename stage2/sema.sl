@@ -7,7 +7,6 @@ import token;
 import types;
 import types_print;
 import op;
-import mutex;
 import sys;
 import interner;
 
@@ -77,19 +76,12 @@ export struct ResolutionStack {
 }
 
 // Idempotent per Module.sema_phase bits; called by the driver per module.
-export fn void run(module::Module* m) {
-    Sema s;
-    sys::memset(&s, 0, sizeof(Sema));
-    s.m = m;
-    mutex::lock(&m.sema_mutex);
-    collect_names_locked(&s);
-    resolve_signatures_locked(&s);
-    check_bodies_locked(&s);
-    mutex::unlock(&m.sema_mutex);
-}
-
-// Registers every top-level decl in m.global_scope. Caller must hold m.sema_mutex.
-fn void collect_names_locked(Sema* s) {
+// Driver-scheduled sub-pass: registers every top-level decl in m.global_scope.
+export fn void collect_names(module::Module* m) {
+    Sema sema;
+    sys::memset(&sema, 0, sizeof(Sema));
+    sema.m = m;
+    Sema* s = &sema;
     if((s.m.sema_phase & (u16)SemaPhase::Names) != 0) {
         s.scope = (Scope*)s.m.global_scope;     // re-entry: reattach the existing module scope
         return;
@@ -216,7 +208,12 @@ fn module::Module* find_import_module(Sema* s, symbol::Symbol* import_name) {
     return null;
 }
 
-fn void resolve_signatures_locked(Sema* s) {
+// Driver-scheduled sub-pass: resolves every top-level decl's signature.
+export fn void resolve_signatures(module::Module* m) {
+    Sema sema;
+    sys::memset(&sema, 0, sizeof(Sema));
+    sema.m = m;
+    Sema* s = &sema;
     if((s.m.sema_phase & (u16)SemaPhase::Signatures) != 0) { return; }
     s.scope = (Scope*)s.m.global_scope;
     s.resolution_stack.arena = s.m.arena;
@@ -304,7 +301,12 @@ fn void set_decl_ty(Sema* s, symbol::Symbol* name, types::Type* ty) {
     if(decl != null) { decl.ty = ty; }
 }
 
-fn void check_bodies_locked(Sema* s) {
+// Driver-scheduled sub-pass: bidirectional type-checks every function body.
+export fn void check_bodies(module::Module* m) {
+    Sema sema;
+    sys::memset(&sema, 0, sizeof(Sema));
+    sema.m = m;
+    Sema* s = &sema;
     if((s.m.sema_phase & (u16)SemaPhase::Bodies) != 0) { return; }
     s.scope = (Scope*)s.m.global_scope;
     if(s.m.root_node != null) {
@@ -346,23 +348,6 @@ fn types::Type* fn_return_type(Sema* s, ast::FnDeclNode* func) {
         return fn_decl.ty.data.fn_ptr.ret;
     }
     return types::prim_void();
-}
-
-
-// ============================================================================
-// §10 — Cross-module lazy resolution
-// ============================================================================
-
-fn void ensure_names_collected(Sema* s, module::Module* target) {
-    // TODO
-}
-
-fn void ensure_signatures_resolved(Sema* s, module::Module* target) {
-    // TODO
-}
-
-fn void ensure_bodies_checked(Sema* s, module::Module* target) {
-    // TODO
 }
 
 
@@ -451,10 +436,6 @@ fn void _scope_insert(Scope* s, symbol::Symbol* name, Decl* d) {
 // Name collection
 // ============================================================================
 
-fn void collect_names(Sema* s) {
-    // TODO
-}
-
 // Intern the "module::name" form for the decl's qualified_name.
 fn symbol::Symbol* qualify_decl_name(Sema* s, symbol::Symbol* bare_name) {
     if(bare_name == null || s.m.name == null) { return bare_name; }
@@ -473,10 +454,6 @@ fn symbol::Symbol* qualify_decl_name(Sema* s, symbol::Symbol* bare_name) {
 // ============================================================================
 // §7 — Signature resolution
 // ============================================================================
-
-fn void resolve_signatures(Sema* s) {
-    // TODO
-}
 
 // Aliases are dissolved here; the returned Type* is never an alias wrapper.
 export fn types::Type* resolve_type(Sema* s, ast::AstNode* texpr) {
@@ -637,10 +614,6 @@ fn types::Type* decl_to_type(Sema* s, module::Module* target, Decl* d) {
 // ============================================================================
 // §8 — Body checking: bidirectional type checking
 // ============================================================================
-
-fn void check_bodies(Sema* s) {
-    // TODO
-}
 
 // StructLit / ArrayLit / UndefinedLit are not synth-able — they need check-mode.
 export fn types::Type* synth(Sema* s, ast::AstNode* e) {

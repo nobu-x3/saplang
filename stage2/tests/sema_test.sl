@@ -9,7 +9,6 @@ import arena;
 import interner;
 import sys;
 import token;
-import mutex;
 
 
 // ============================================================================
@@ -325,7 +324,7 @@ fn void run_fn(arena::Arena* a, module::Module* mm, ast::FnDeclNode* func) {
     ast::AstNode** root = (ast::AstNode**)arena::alloc(a, sizeof(ast::AstNode*));
     root[0] = (ast::AstNode*)func;
     set_root(mm, a, root, 1);
-    sema::run(mm);
+    sema_run(mm);
 }
 
 fn ast::AstNode* fake_local_var(arena::Arena* a, symbol::Symbol* name, ast::AstNode* type_expr, ast::AstNode* init, u32 pos) {
@@ -1284,7 +1283,7 @@ fn i32 enum_member_backlink_kind(arena::Arena* a, u8[] m) {
     ed.base_type = mk_ty_prim(a, token::TokenKind::I32);
     ast::AstNode*[1] root; root[0] = (ast::AstNode*)ed;
     set_root(mm, a, &root[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = (sema::Decl*)ed.members[0].decl;
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::EnumMember, m)) { return -2; }
@@ -1302,7 +1301,7 @@ fn i32 enum_member_backlink_name(arena::Arena* a, u8[] m) {
     ed.base_type = mk_ty_prim(a, token::TokenKind::I32);
     ast::AstNode*[1] root; root[0] = (ast::AstNode*)ed;
     set_root(mm, a, &root[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = (sema::Decl*)ed.members[0].decl;
     if(!testing::expect_eq((void*)d.name, (void*)red, m)) { return -1; }
     return 0;
@@ -1318,7 +1317,7 @@ fn i32 enum_member_backlink_ty(arena::Arena* a, u8[] m) {
     ed.base_type = mk_ty_prim(a, token::TokenKind::I32);
     ast::AstNode*[1] root; root[0] = (ast::AstNode*)ed;
     set_root(mm, a, &root[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = (sema::Decl*)ed.members[0].decl;
     if(!testing::expect_eq((void*)d.ty, (void*)types::intern_enum((void*)ed), m)) { return -1; }
     return 0;
@@ -1334,7 +1333,7 @@ fn i32 enum_member_backlink_data(arena::Arena* a, u8[] m) {
     ed.base_type = mk_ty_prim(a, token::TokenKind::I32);
     ast::AstNode*[1] root; root[0] = (ast::AstNode*)ed;
     set_root(mm, a, &root[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = (sema::Decl*)ed.members[0].decl;
     if(!testing::expect_eq((void*)d.data.member, (void*)&ed.members[0], m)) { return -1; }
     return 0;
@@ -1571,19 +1570,24 @@ fn i32 scope_add_duplicate_keeps_first(arena::Arena* a, u8[] m) {
 
 
 // ============================================================================
-// collect_names_locked — driven through the exported sema::run entry point.
-// collect_names_locked is private by design, so we exercise it via run(): build
-// a top-level block, run sema, then inspect the module's global_scope, the
+// Name collection — driven through the sema_run helper (the three sub-passes).
+// Build a top-level block, run sema, then inspect the module's global_scope, the
 // buffered diagnostics, and the qualified_name written back onto each decl.
-// (run's other two sub-passes are no-op stubs, so run == name collection here.)
 // ============================================================================
 
 fn module::Module* run_module(arena::Arena* a, u8[] mod_name) {
     module::Module* m = fresh_module_with_interner(a);
     types::typer_init(a, 16);
     m.name = interner::intern(mod_name);
-    mutex::create(&m.sema_mutex);
     return m;
+}
+
+// The driver runs these as barriered parallel phases; a single-module test runs
+// them in sequence.
+fn void sema_run(module::Module* mm) {
+    sema::collect_names(mm);
+    sema::resolve_signatures(mm);
+    sema::check_bodies(mm);
 }
 
 fn void set_root(module::Module* m, arena::Arena* a, ast::AstNode** stmts, u64 count) {
@@ -1711,7 +1715,7 @@ fn i32 cn_registers_single_fn(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] stmts;
     stmts[0] = func;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_not_null(mm.global_scope, m)) { return -1; }
     sema::Decl* d = registered(mm, foo);
     if(!testing::expect_not_null((void*)d, m)) { return -2; }
@@ -1728,7 +1732,7 @@ fn i32 cn_fn_not_exported(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] stmts;
     stmts[0] = func;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, foo);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq(d.is_exported, false, m)) { return -2; }
@@ -1742,7 +1746,7 @@ fn i32 cn_fn_qualified_name(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] stmts;
     stmts[0] = (ast::AstNode*)func;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_not_null((void*)func.qualified_name, m)) { return -1; }
     u8[] q = interner::symbol_str(func.qualified_name);
     if(!testing::expect_eq(q, "testmod::foo", m)) { return -2; }
@@ -1765,7 +1769,7 @@ fn i32 cn_all_decl_kinds_registered(arena::Arena* a, u8[] m) {
     stmts[4] = mk_alias_decl(a, al, false, 0);
     stmts[5] = mk_var_decl2(a, vv, false, false, 0);
     set_root(mm, a, &stmts[0], 6);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_not_null((void*)registered(mm, f),  m)) { return -1; }
     if(!testing::expect_not_null((void*)registered(mm, st), m)) { return -2; }
     if(!testing::expect_not_null((void*)registered(mm, un), m)) { return -3; }
@@ -1783,7 +1787,7 @@ fn i32 cn_var_qualified_and_exported(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] stmts;
     stmts[0] = (ast::AstNode*)v;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, g);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Node, m)) { return -2; }
@@ -1802,7 +1806,7 @@ fn i32 cn_duplicate_one_diag_exact(arena::Arena* a, u8[] m) {
     stmts[0] = fn1;
     stmts[1] = fn2;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "duplicate declaration of foo", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 42, m)) { return -3; }
@@ -1821,7 +1825,7 @@ fn i32 cn_two_distinct_no_diag(arena::Arena* a, u8[] m) {
     stmts[0] = mk_fn_decl(a, foo, false, 0);
     stmts[1] = mk_fn_decl(a, bar, false, 0);
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
     if(!testing::expect_eq(scope_count(mm), 2, m)) { return -2; }
     return 0;
@@ -1840,7 +1844,7 @@ fn i32 cn_import_resolves_module(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] stmts;
     stmts[0] = imp;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, io);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Import, m)) { return -2; }
@@ -1855,7 +1859,7 @@ fn i32 cn_import_reexport_no_match(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] stmts;
     stmts[0] = imp;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, io);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Import, m)) { return -2; }
@@ -1877,7 +1881,7 @@ fn i32 cn_extern_block_items_registered(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] stmts;
     stmts[0] = eblock;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* dm = registered(mm, malloc_s);
     sema::Decl* df = registered(mm, file_s);
     if(!testing::expect_not_null((void*)dm, m)) { return -1; }
@@ -1898,7 +1902,7 @@ fn i32 cn_extern_var_qualified(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] stmts;
     stmts[0] = eblock;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_not_null((void*)registered(mm, errno_s), m)) { return -1; }
     if(!testing::expect_not_null((void*)v.qualified_name, m)) { return -2; }
     u8[] q = interner::symbol_str(v.qualified_name);
@@ -1909,7 +1913,7 @@ fn i32 cn_extern_var_qualified(arena::Arena* a, u8[] m) {
 fn i32 cn_sets_names_phase(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     set_root(mm, a, null, 0);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((mm.sema_phase & (u16)sema::SemaPhase::Names) != 0, true, m)) { return -1; }
     return 0;
 }
@@ -1917,7 +1921,7 @@ fn i32 cn_sets_names_phase(arena::Arena* a, u8[] m) {
 fn i32 cn_null_root_no_crash(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     mm.root_node = null;
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_not_null(mm.global_scope, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -2; }
     return 0;
@@ -1926,7 +1930,7 @@ fn i32 cn_null_root_no_crash(arena::Arena* a, u8[] m) {
 fn i32 cn_empty_block_no_decls(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     set_root(mm, a, null, 0);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_not_null(mm.global_scope, m)) { return -1; }
     if(!testing::expect_eq(scope_count(mm), 0, m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -3; }
@@ -1939,10 +1943,10 @@ fn i32 cn_idempotent_second_run(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] stmts;
     stmts[0] = mk_fn_decl(a, foo, false, 0);
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     u64 count_after_first = scope_count(mm);
     u64 diags_after_first = mm.diag.entries.len;
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq(scope_count(mm), count_after_first, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries.len, diags_after_first, m)) { return -2; }
     if(!testing::expect_eq(count_after_first, 1, m)) { return -3; }
@@ -1957,7 +1961,7 @@ fn i32 cn_non_decl_skipped(arena::Arena* a, u8[] m) {
     stmts[0] = (ast::AstNode*)lit;
     stmts[1] = mk_fn_decl(a, foo, false, 0);
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_not_null((void*)registered(mm, foo), m)) { return -1; }
     if(!testing::expect_eq(scope_count(mm), 1, m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -3; }
@@ -1975,7 +1979,7 @@ fn i32 cn_combined_mixed(arena::Arena* a, u8[] m) {
     stmts[2] = mk_var_decl2(a, g, false, true, 5);
     stmts[3] = mk_var_decl2(a, g, false, true, 30);
     set_root(mm, a, &stmts[0], 4);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* ds  = registered(mm, st);
     sema::Decl* dfn = registered(mm, func_sym);
     if(!testing::expect_eq(ds.is_exported, true, m)) { return -1; }
@@ -2104,7 +2108,7 @@ fn i32 rs_var_primitive(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_prim(a, token::TokenKind::I32));
     ast::AstNode*[1] stmts; stmts[0] = var;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, x);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq((void*)d.ty, (void*)types::prim_i32(), m)) { return -2; }
@@ -2117,7 +2121,7 @@ fn i32 rs_var_pointer(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, p, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false));
     ast::AstNode*[1] stmts; stmts[0] = var;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, p);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq((u64)d.ty.kind, (u64)types::TypeKind::Pointer, m)) { return -2; }
@@ -2131,7 +2135,7 @@ fn i32 rs_var_const_pointer(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, p, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), true));
     ast::AstNode*[1] stmts; stmts[0] = var;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, p);
     bool is_const = ((u8)d.ty.flags & (u8)types::LayoutFlags::Const) != 0;
     if(!testing::expect_true(is_const, m)) { return -1; }
@@ -2144,7 +2148,7 @@ fn i32 rs_var_slice(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, s, mk_ty_slice(a, mk_ty_prim(a, token::TokenKind::U8)));
     ast::AstNode*[1] stmts; stmts[0] = var;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, s);
     if(!testing::expect_eq((u64)d.ty.kind, (u64)types::TypeKind::Slice, m)) { return -1; }
     if(!testing::expect_eq((void*)d.ty.data.slice_elem, (void*)types::prim_u8(), m)) { return -2; }
@@ -2158,7 +2162,7 @@ fn i32 rs_var_array(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, arr, mk_ty_array(a, elem, mk_int_lit_node(a, 4)));
     ast::AstNode*[1] stmts; stmts[0] = var;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, arr);
     if(!testing::expect_eq((u64)d.ty.kind, (u64)types::TypeKind::Array, m)) { return -1; }
     if(!testing::expect_eq(d.ty.data.array.count, (u64)4, m)) { return -2; }
@@ -2174,7 +2178,7 @@ fn i32 rs_var_identity(arena::Arena* a, u8[] m) {
     ast::AstNode* vq = mk_var_typed(a, q, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false));
     ast::AstNode*[2] stmts; stmts[0] = vp; stmts[1] = vq;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((void*)registered(mm, p).ty, (void*)registered(mm, q).ty, m)) { return -1; }
     return 0;
 }
@@ -2186,7 +2190,7 @@ fn i32 rs_fn_void_no_params(arena::Arena* a, u8[] m) {
     ast::AstNode* func = mk_fn_sig(a, foo, null, no_params);
     ast::AstNode*[1] stmts; stmts[0] = func;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, foo);
     if(!testing::expect_eq((u64)d.ty.kind, (u64)types::TypeKind::FnPtr, m)) { return -1; }
     if(!testing::expect_eq((void*)d.ty.data.fn_ptr.ret, (void*)types::prim_void(), m)) { return -2; }
@@ -2201,7 +2205,7 @@ fn i32 rs_fn_return_and_params(arena::Arena* a, u8[] m) {
     ast::AstNode* func = mk_fn_sig(a, foo, mk_ty_prim(a, token::TokenKind::I32), param_types);
     ast::AstNode*[1] stmts; stmts[0] = func;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, foo);
     if(!testing::expect_eq((void*)d.ty.data.fn_ptr.ret, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_eq(d.ty.data.fn_ptr.params.len, (u64)2, m)) { return -2; }
@@ -2218,7 +2222,7 @@ fn i32 rs_struct_fields(arena::Arena* a, u8[] m) {
     ast::AstNode* struct_decl = mk_struct_sig(a, point, field_types);
     ast::AstNode*[1] stmts; stmts[0] = struct_decl;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, point);
     if(!testing::expect_eq((u64)d.ty.kind, (u64)types::TypeKind::Struct, m)) { return -1; }
     ast::StructDeclNode* struct_node = (ast::StructDeclNode*)struct_decl;
@@ -2234,7 +2238,7 @@ fn i32 rs_enum_base(arena::Arena* a, u8[] m) {
     ((ast::EnumDeclNode*)enum_decl).base_type = mk_ty_prim(a, token::TokenKind::U8);
     ast::AstNode*[1] stmts; stmts[0] = enum_decl;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, color);
     if(!testing::expect_eq((u64)d.ty.kind, (u64)types::TypeKind::Enum, m)) { return -1; }
     if(!testing::expect_eq((void*)((ast::EnumDeclNode*)enum_decl).base_type.h.ty, (void*)types::prim_u8(), m)) { return -2; }
@@ -2248,7 +2252,7 @@ fn i32 rs_alias_dissolves(arena::Arena* a, u8[] m) {
     ((ast::AliasDeclNode*)alias_decl).target = mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false);
     ast::AstNode*[1] stmts; stmts[0] = alias_decl;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, my_int);
     if(!testing::expect_eq((u64)d.ty.kind, (u64)types::TypeKind::Pointer, m)) { return -1; }
     if(!testing::expect_eq((void*)d.ty.data.pointee, (void*)types::prim_i32(), m)) { return -2; }
@@ -2261,7 +2265,7 @@ fn i32 rs_sets_signatures_phase(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_prim(a, token::TokenKind::I32));
     ast::AstNode*[1] stmts; stmts[0] = var;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     bool has_signatures = (mm.sema_phase & (u16)sema::SemaPhase::Signatures) != 0;
     if(!testing::expect_true(has_signatures, m)) { return -1; }
     return 0;
@@ -2291,7 +2295,7 @@ fn i32 rnt_named_struct(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, foo));
     ast::AstNode*[2] stmts; stmts[0] = struct_decl; stmts[1] = var;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* dx = registered(mm, x);
     if(!testing::expect_eq((u64)dx.ty.kind, (u64)types::TypeKind::Struct, m)) { return -1; }
     if(!testing::expect_eq((void*)sema::container_decl(dx.ty), (void*)struct_decl, m)) { return -2; }
@@ -2306,7 +2310,7 @@ fn i32 rnt_named_enum(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, c, mk_ty_named(a, null, color));
     ast::AstNode*[2] stmts; stmts[0] = enum_decl; stmts[1] = var;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((u64)registered(mm, c).ty.kind, (u64)types::TypeKind::Enum, m)) { return -1; }
     return 0;
 }
@@ -2319,7 +2323,7 @@ fn i32 rnt_named_union(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, v, mk_ty_named(a, null, u));
     ast::AstNode*[2] stmts; stmts[0] = union_decl; stmts[1] = var;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((u64)registered(mm, v).ty.kind, (u64)types::TypeKind::Union, m)) { return -1; }
     return 0;
 }
@@ -2332,7 +2336,7 @@ fn i32 rnt_named_in_pointer(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, p, mk_ty_ptr(a, mk_ty_named(a, null, foo), false));
     ast::AstNode*[2] stmts; stmts[0] = struct_decl; stmts[1] = var;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* dp = registered(mm, p);
     if(!testing::expect_eq((u64)dp.ty.kind, (u64)types::TypeKind::Pointer, m)) { return -1; }
     if(!testing::expect_eq((u64)dp.ty.data.pointee.kind, (u64)types::TypeKind::Struct, m)) { return -2; }
@@ -2347,7 +2351,7 @@ fn i32 rnt_named_in_slice(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, s, mk_ty_slice(a, mk_ty_named(a, null, foo)));
     ast::AstNode*[2] stmts; stmts[0] = struct_decl; stmts[1] = var;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((u64)registered(mm, s).ty.kind, (u64)types::TypeKind::Slice, m)) { return -1; }
     return 0;
 }
@@ -2360,7 +2364,7 @@ fn i32 rnt_named_as_field(arena::Arena* a, u8[] m) {
     ast::AstNode* bar_decl = mk_struct_sig(a, bar, mk_texprs1(a, mk_ty_named(a, null, foo)));
     ast::AstNode*[2] stmts; stmts[0] = foo_decl; stmts[1] = bar_decl;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     ast::StructDeclNode* bar_node = (ast::StructDeclNode*)bar_decl;
     types::Type* field_type = (types::Type*)bar_node.fields[0].resolved_type;
     if(!testing::expect_eq((u64)field_type.kind, (u64)types::TypeKind::Struct, m)) { return -1; }
@@ -2376,7 +2380,7 @@ fn i32 rnt_alias_to_primitive(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, id));
     ast::AstNode*[2] stmts; stmts[0] = alias; stmts[1] = var;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((void*)registered(mm, x).ty, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
@@ -2389,7 +2393,7 @@ fn i32 rnt_alias_to_pointer(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, p));
     ast::AstNode*[2] stmts; stmts[0] = alias; stmts[1] = var;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* dx = registered(mm, x);
     if(!testing::expect_eq((u64)dx.ty.kind, (u64)types::TypeKind::Pointer, m)) { return -1; }
     if(!testing::expect_eq((void*)dx.ty.data.pointee, (void*)types::prim_i32(), m)) { return -2; }
@@ -2406,7 +2410,7 @@ fn i32 rnt_alias_to_named(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, b));
     ast::AstNode*[3] stmts; stmts[0] = struct_decl; stmts[1] = alias; stmts[2] = var;
     set_root(mm, a, &stmts[0], 3);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((void*)sema::container_decl(registered(mm, x).ty), (void*)struct_decl, m)) { return -1; }
     return 0;
 }
@@ -2421,7 +2425,7 @@ fn i32 rnt_alias_chain(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, second));
     ast::AstNode*[3] stmts; stmts[0] = alias_a; stmts[1] = alias_b; stmts[2] = var;
     set_root(mm, a, &stmts[0], 3);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((void*)registered(mm, x).ty, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
@@ -2434,7 +2438,7 @@ fn i32 rnt_alias_cycle_reports(arena::Arena* a, u8[] m) {
     ast::AstNode* alias_b = mk_alias_typed(a, second, mk_ty_named(a, null, first), 42);
     ast::AstNode*[2] stmts; stmts[0] = alias_a; stmts[1] = alias_b;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_substr(mm.diag.entries[0].msg, "circular type resolution", m)) { return -2; }
     return 0;
@@ -2447,7 +2451,7 @@ fn i32 rnt_unknown_name_reports(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, missing));
     ast::AstNode*[1] stmts; stmts[0] = var;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_substr(mm.diag.entries[0].msg, "unknown type", m)) { return -2; }
     if(!testing::expect_substr(mm.diag.entries[0].msg, "Missing", m)) { return -3; }
@@ -2463,7 +2467,7 @@ fn i32 rnt_order_independent(arena::Arena* a, u8[] m) {
     ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
     ast::AstNode*[2] stmts; stmts[0] = var; stmts[1] = struct_decl;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((void*)sema::container_decl(registered(mm, x).ty), (void*)struct_decl, m)) { return -1; }
     return 0;
 }
@@ -2478,7 +2482,7 @@ fn i32 rnt_identity(arena::Arena* a, u8[] m) {
     ast::AstNode* vy = mk_var_typed(a, y, mk_ty_named(a, null, foo));
     ast::AstNode*[3] stmts; stmts[0] = struct_decl; stmts[1] = vx; stmts[2] = vy;
     set_root(mm, a, &stmts[0], 3);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_eq((void*)registered(mm, x).ty, (void*)registered(mm, y).ty, m)) { return -1; }
     return 0;
 }
@@ -2488,17 +2492,15 @@ fn i32 rnt_cross_module_struct(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     module::Module* other = fresh_module(a);
     other.name = interner::intern("other");
-    mutex::create(&other.sema_mutex);
     symbol::Symbol* foo = interner::intern("Foo");
     ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
     ((ast::StructDeclNode*)struct_decl).is_exported = true;
     ast::AstNode*[1] other_stmts; other_stmts[0] = struct_decl;
     set_root(other, a, &other_stmts[0], 1);
-    sema::run(other);
+    sema_run(other);
 
     module::Module* main_mod = fresh_module(a);
     main_mod.name = interner::intern("main");
-    mutex::create(&main_mod.sema_mutex);
     module::Module*[1] imports; imports[0] = other;
     main_mod.imports.ptr = &imports[0];
     main_mod.imports.len = 1;
@@ -2508,7 +2510,7 @@ fn i32 rnt_cross_module_struct(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, other_name, foo));
     ast::AstNode*[2] main_stmts; main_stmts[0] = imp; main_stmts[1] = var;
     set_root(main_mod, a, &main_stmts[0], 2);
-    sema::run(main_mod);
+    sema_run(main_mod);
     sema::Decl* dx = registered(main_mod, x);
     if(!testing::expect_not_null((void*)dx, m)) { return -1; }
     if(!testing::expect_eq((u64)dx.ty.kind, (u64)types::TypeKind::Struct, m)) { return -2; }
@@ -2521,16 +2523,14 @@ fn i32 rnt_cross_module_not_exported_reports(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     module::Module* other = fresh_module(a);
     other.name = interner::intern("other");
-    mutex::create(&other.sema_mutex);
     symbol::Symbol* foo = interner::intern("Foo");
     ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
     ast::AstNode*[1] other_stmts; other_stmts[0] = struct_decl;
     set_root(other, a, &other_stmts[0], 1);
-    sema::run(other);
+    sema_run(other);
 
     module::Module* main_mod = fresh_module(a);
     main_mod.name = interner::intern("main");
-    mutex::create(&main_mod.sema_mutex);
     module::Module*[1] imports; imports[0] = other;
     main_mod.imports.ptr = &imports[0];
     main_mod.imports.len = 1;
@@ -2540,7 +2540,7 @@ fn i32 rnt_cross_module_not_exported_reports(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, other_name, foo));
     ast::AstNode*[2] main_stmts; main_stmts[0] = imp; main_stmts[1] = var;
     set_root(main_mod, a, &main_stmts[0], 2);
-    sema::run(main_mod);
+    sema_run(main_mod);
     if(!testing::expect_ge(main_mod.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_eq((void*)registered(main_mod, x).ty, null, m)) { return -2; }
     return 0;
@@ -2554,7 +2554,7 @@ fn i32 rnt_non_type_used_as_type(arena::Arena* a, u8[] m) {
     ast::AstNode* var_x = mk_var_typed(a, x, mk_ty_named(a, null, v));
     ast::AstNode*[2] stmts; stmts[0] = var_v; stmts[1] = var_x;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_substr(mm.diag.entries[0].msg, "unknown type", m)) { return -2; }
     if(!testing::expect_eq((void*)registered(mm, x).ty, null, m)) { return -3; }
@@ -2569,7 +2569,7 @@ fn i32 rnt_qualified_namespace_not_imported(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, nomod, foo));
     ast::AstNode*[1] stmts; stmts[0] = var;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_substr(mm.diag.entries[0].msg, "unknown type", m)) { return -2; }
     if(!testing::expect_eq((void*)registered(mm, x).ty, null, m)) { return -3; }
@@ -2581,17 +2581,15 @@ fn i32 rnt_qualified_name_not_in_target(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     module::Module* other = fresh_module(a);
     other.name = interner::intern("other");
-    mutex::create(&other.sema_mutex);
     symbol::Symbol* foo = interner::intern("Foo");
     ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
     ((ast::StructDeclNode*)struct_decl).is_exported = true;
     ast::AstNode*[1] other_stmts; other_stmts[0] = struct_decl;
     set_root(other, a, &other_stmts[0], 1);
-    sema::run(other);
+    sema_run(other);
 
     module::Module* main_mod = fresh_module(a);
     main_mod.name = interner::intern("main");
-    mutex::create(&main_mod.sema_mutex);
     module::Module*[1] imports; imports[0] = other;
     main_mod.imports.ptr = &imports[0];
     main_mod.imports.len = 1;
@@ -2602,7 +2600,7 @@ fn i32 rnt_qualified_name_not_in_target(arena::Arena* a, u8[] m) {
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, other_name, missing));
     ast::AstNode*[2] main_stmts; main_stmts[0] = imp; main_stmts[1] = var;
     set_root(main_mod, a, &main_stmts[0], 2);
-    sema::run(main_mod);
+    sema_run(main_mod);
     if(!testing::expect_ge(main_mod.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_eq((void*)registered(main_mod, x).ty, null, m)) { return -2; }
     return 0;
@@ -2614,7 +2612,7 @@ fn i32 rnt_self_alias_cycle_reports(arena::Arena* a, u8[] m) {
     ast::AstNode* alias = mk_alias_typed(a, self, mk_ty_named(a, null, self), 0);
     ast::AstNode*[1] stmts; stmts[0] = alias;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_substr(mm.diag.entries[0].msg, "circular type resolution", m)) { return -2; }
     return 0;
@@ -2627,7 +2625,7 @@ fn i32 rnt_alias_to_unknown_reports(arena::Arena* a, u8[] m) {
     ast::AstNode* alias = mk_alias_typed(a, first, mk_ty_named(a, null, missing), 0);
     ast::AstNode*[1] stmts; stmts[0] = alias;
     set_root(mm, a, &stmts[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_substr(mm.diag.entries[0].msg, "unknown type", m)) { return -2; }
     if(!testing::expect_eq((void*)registered(mm, first).ty, null, m)) { return -3; }
@@ -2642,7 +2640,7 @@ fn i32 rnt_fn_named_param_return(arena::Arena* a, u8[] m) {
     ast::AstNode* fn_decl = mk_fn_sig(a, make, mk_ty_named(a, null, foo), mk_texprs1(a, mk_ty_named(a, null, foo)));
     ast::AstNode*[2] stmts; stmts[0] = struct_decl; stmts[1] = fn_decl;
     set_root(mm, a, &stmts[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     sema::Decl* d = registered(mm, make);
     if(!testing::expect_eq((u64)d.ty.data.fn_ptr.ret.kind, (u64)types::TypeKind::Struct, m)) { return -1; }
     if(!testing::expect_eq((u64)d.ty.data.fn_ptr.params[0].kind, (u64)types::TypeKind::Struct, m)) { return -2; }
@@ -4815,7 +4813,7 @@ fn i32 collect_duplicate_toplevel(arena::Arena* a, u8[] m) {
     ast::AstNode* f2 = mk_fn_decl(a, f, false, 30);
     ast::AstNode*[2] root; root[0] = f1; root[1] = f2;
     set_root(mm, a, &root[0], 2);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "duplicate declaration of dup", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 30, m)) { return -3; }
@@ -4831,7 +4829,7 @@ fn i32 collect_extern_block(arena::Arena* a, u8[] m) {
     ast::AstNode* eb = mk_extern_block(a, items, 1);
     ast::AstNode*[1] root; root[0] = eb;
     set_root(mm, a, &root[0], 1);
-    sema::run(mm);
+    sema_run(mm);
     if(!testing::expect_not_null((void*)registered(mm, puts), m)) { return -1; }
     return 0;
 }

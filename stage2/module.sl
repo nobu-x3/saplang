@@ -2,7 +2,6 @@ import arena;
 import diag;
 import symbol;
 import token;
-import mutex;
 import ast;
 
 export struct Module {
@@ -19,7 +18,6 @@ export struct Module {
 
     Module*[]               imports;         // resolved at discovery; sema reads to map DeclKind::Import
     void*                   global_scope;    // sema::Scope* — every top-level decl; exports filtered by Decl.is_exported
-    u16                     sema_phase;      // bitflags from sema::SemaPhase; guards cross-module re-entry
-    mutex::Mutex            sema_mutex;
+    u16                     sema_phase;      // bitflags from sema::SemaPhase; later phases assert earlier bits
     // cfg/codegen fields added by later phases
 }
