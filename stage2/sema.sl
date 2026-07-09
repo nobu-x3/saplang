@@ -729,6 +729,9 @@ export fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
         mark_error(e);
         return false;
     }
+    case ast::AstKind::StringLit: {
+        return check_string_lit(s, (ast::StringLitNode*)e, expected);
+    }
     case ast::AstKind::UndefinedLit: {
         set_expr(e, expected, 0);
         return true;
@@ -1129,6 +1132,34 @@ fn bool check_array_lit(Sema* s, ast::ArrayLitNode* n, types::Type* expected) {
     return ok;
 }
 
+fn bool is_byte(types::Type* t) {
+    if(t == null || t.kind != types::TypeKind::Primitive) { return false; }
+    return t.prim == types::PrimitiveKind::U8 || t.prim == types::PrimitiveKind::I8;
+}
+
+// A string literal targets a `u8`/`i8` pointer, slice, or array (spec §2.13).
+fn bool check_string_lit(Sema* s, ast::StringLitNode* n, types::Type* expected) {
+    types::Type* elem = null;
+    if(expected.kind == types::TypeKind::Pointer)   { elem = expected.data.pointee; }
+    else if(expected.kind == types::TypeKind::Slice) { elem = expected.data.slice_elem; }
+    else if(expected.kind == types::TypeKind::Array) { elem = expected.data.array.elem; }
+    if(!is_byte(elem)) {
+        diag_type_mismatch(s, n.h.src_pos, types::intern_pointer(types::prim_u8(), false), expected);
+        mark_error((ast::AstNode*)n);
+        return false;
+    }
+    if(expected.kind == types::TypeKind::Array) {
+        u64 lit_len = (u64)n.pool_len + 1;
+        if(expected.data.array.count != lit_len) {
+            diag_string_len_mismatch(s, n.h.src_pos, expected.data.array.count, lit_len);
+            mark_error((ast::AstNode*)n);
+            return false;
+        }
+    }
+    set_expr((ast::AstNode*)n, expected, (u16)ast::AstFlags::ConstExpr);
+    return true;
+}
+
 // `{.ptr = ..., .len = ...}` or positional `{ptr, len}` against a slice target.
 fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
     types::Type* ptr_ty = types::intern_pointer(expected.data.slice_elem, false);
@@ -1284,6 +1315,11 @@ fn void stmt_assignment(Sema* s, ast::AssignmentNode* assign) {
     if(lt == null) { synth(s, assign.rhs); return; }
     if(!expr_has_flag(assign.lhs, ast::AstFlags::LValue)) {
         diag_not_assignable(s, assign.lhs.h.src_pos);
+        synth(s, assign.rhs);
+        return;
+    }
+    if(expr_has_flag(assign.lhs, ast::AstFlags::ConstExpr)) {
+        diag_assign_to_const(s, assign.lhs.h.src_pos);
         synth(s, assign.rhs);
         return;
     }
@@ -1478,6 +1514,19 @@ export fn void diag_array_len_mismatch(Sema* s, u32 src_pos, u64 expected, u64 g
 export fn void diag_not_assignable(Sema* s, u32 src_pos) {
     u8[] msg = "cannot assign to a non-lvalue";
     diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "cannot assign to a constant". Used by stmt_assignment.
+export fn void diag_assign_to_const(Sema* s, u32 src_pos) {
+    u8[] msg = "cannot assign to a constant";
+    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+}
+
+// "string literal has M bytes (incl. NUL) but N expected". Used by check_string_lit.
+export fn void diag_string_len_mismatch(Sema* s, u32 src_pos, u64 expected, u64 got) {
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "string literal has %lu bytes (incl. NUL) but %lu expected", got, expected);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
 // "break outside loop or switch". Used by stmt.

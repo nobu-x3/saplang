@@ -442,6 +442,9 @@ fn types::Type* register_color_enum(arena::Arena* a, sema::Scope* sc) {
     symbol::Symbol*[] nslice = {&names[0], 2};
     ast::EnumDeclNode* d = fake_enum_decl_with_members(a, nslice);
     d.qualified_name = interner::intern("Color");
+    ast::AstNode* base = mk_ty_prim(a, token::TokenKind::I32);
+    base.h.ty = (void*)types::prim_i32();
+    d.base_type = base;
     types::Type* ety = types::intern_enum((void*)d);
     symbol::Symbol* cname = interner::intern("Color");
     sema::Decl* cd = fake_node_decl(a, cname, ety, (ast::AstNode*)d);
@@ -4604,6 +4607,210 @@ fn i32 anon_struct_nested_field(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 check_string_to_u8_slice(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::StringLitNode* lit = fake_string_lit_node(a, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, types::intern_slice(types::prim_u8()));
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_string_to_i8_ptr(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::StringLitNode* lit = fake_string_lit_node(a, 0);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, types::intern_pointer(types::prim_i8(), false));
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_string_to_u8_array_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::StringLitNode* lit = fake_string_lit_node(a, 0);
+    lit.pool_len = 2;
+    bool ok = sema::check(&s, (ast::AstNode*)lit, types::intern_array(types::prim_u8(), 3));
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_string_to_u8_array_bad(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::StringLitNode* lit = fake_string_lit_node(a, 4);
+    lit.pool_len = 2;
+    bool ok = sema::check(&s, (ast::AstNode*)lit, types::intern_array(types::prim_u8(), 2));
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "string literal has 3 bytes (incl. NUL) but 2 expected", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -3; }
+    return 0;
+}
+
+fn i32 check_string_wrong_elem(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    ast::StringLitNode* lit = fake_string_lit_node(a, 6);
+    bool ok = sema::check(&s, (ast::AstNode*)lit, types::intern_slice(types::prim_i32()));
+    if(!testing::expect_true(!ok, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 6, m)) { return -2; }
+    return 0;
+}
+
+fn i32 check_enum_to_base(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    register_color_enum(a, sc);
+    ast::NamespaceAccessNode* na = fake_ns_access(a, (ast::AstNode*)fake_ident(a, interner::intern("Color"), 0), interner::intern("Red"), 0);
+    bool ok = sema::check(&s, (ast::AstNode*)na, types::prim_i32());
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_array_to_slice(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* av = interner::intern("av");
+    register_var(a, sc, av, types::intern_array(types::prim_i32(), 3), false);
+    bool ok = sema::check(&s, (ast::AstNode*)fake_ident(a, av, 0), types::intern_slice(types::prim_i32()));
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 check_array_to_pointer(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol* av = interner::intern("av");
+    register_var(a, sc, av, types::intern_array(types::prim_i32(), 3), false);
+    bool ok = sema::check(&s, (ast::AstNode*)fake_ident(a, av, 0), types::intern_pointer(types::prim_i32(), false));
+    if(!testing::expect_true(ok, m)) { return -1; }
+    return 0;
+}
+
+fn i32 member_union_field(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    sema::Sema s = mk_sema(mm);
+    sema::Scope* sc = sema::scope_new(a, null, 16);
+    s.scope = sc;
+    symbol::Symbol*[2] fnames; fnames[0] = interner::intern("a"); fnames[1] = interner::intern("b");
+    types::Type*[2] ftys; ftys[0] = types::prim_i32(); ftys[1] = types::prim_f32();
+    symbol::Symbol*[] fs = {&fnames[0], 2};
+    types::Type*[] ft = {&ftys[0], 2};
+    ast::UnionDeclNode* d = fake_union_decl_with_fields(a, fs, ft);
+    d.qualified_name = interner::intern("U");
+    types::Type* ut = types::intern_union((void*)d);
+    symbol::Symbol* u = interner::intern("u");
+    register_var(a, sc, u, ut, false);
+    ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, u, 0), interner::intern("b"), 0);
+    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    if(!testing::expect_eq((void*)t, (void*)types::prim_f32(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_assign_to_const(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* c = interner::intern("c");
+    ast::AstNode* vc = fake_local_var(a, c, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    ((ast::VarDeclNode*)vc).is_const = true;
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, (ast::AstNode*)fake_ident(a, c, 7), (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vc; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot assign to a constant", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 7, m)) { return -3; }
+    return 0;
+}
+
+fn i32 st_assign_to_member(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* sv = interner::intern("s");
+    ast::FieldDecl[1] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* vd = fake_local_var(a, sv, fake_anon_struct(a, &fields[0], 1, 0), null, 0);
+    ((ast::VarDeclNode*)vd).init = (ast::AstNode*)fake_undefined_lit(a, 0);
+    ast::AstNode* lhs = (ast::AstNode*)fake_member(a, (ast::AstNode*)fake_ident(a, sv, 0), interner::intern("x"), 0);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, lhs, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 st_assign_to_index(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* av = interner::intern("av");
+    ast::AstNode* vd = fake_local_var(a, av, mk_ty_array(a, mk_ty_prim(a, token::TokenKind::I32), mk_int_lit_node(a, 3)), (ast::AstNode*)fake_undefined_lit(a, 0), 0);
+    ast::AstNode* lhs = (ast::AstNode*)fake_index(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, lhs, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 switch_else_arm_walked(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode*[1] else_stmts; else_stmts[0] = fake_expr_stmt(a, (ast::AstNode*)fake_ident(a, interner::intern("nope"), 17), 0);
+    ast::AstNode* else_block = mk_block(a, &else_stmts[0], 1);
+    ast::AstNode* sw = fake_switch(a, (ast::AstNode*)fake_int_lit(a, 1, 0), null, 0, else_block, 0);
+    ast::AstNode*[1] stmts; stmts[0] = sw;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "undefined identifier nope", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 17, m)) { return -3; }
+    return 0;
+}
+
+fn i32 switch_label_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    ast::AstNode*[1] labels; labels[0] = (ast::AstNode*)fake_float_lit(a, 1.0, 19);
+    ast::SwitchArm[1] arms;
+    arms[0].labels = {&labels[0], 1};
+    arms[0].body = mk_block(a, null, 0);
+    arms[0].src_pos = 0;
+    ast::AstNode* sw = fake_switch(a, (ast::AstNode*)fake_int_lit(a, 1, 0), &arms[0], 1, null, 0);
+    ast::AstNode*[1] stmts; stmts[0] = sw;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 1)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 19, m)) { return -3; }
+    return 0;
+}
+
+fn i32 collect_duplicate_toplevel(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* f = interner::intern("dup");
+    ast::AstNode* f1 = mk_fn_decl(a, f, false, 0);
+    ast::AstNode* f2 = mk_fn_decl(a, f, false, 30);
+    ast::AstNode*[2] root; root[0] = f1; root[1] = f2;
+    set_root(mm, a, &root[0], 2);
+    sema::run(mm);
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "duplicate declaration of dup", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 30, m)) { return -3; }
+    return 0;
+}
+
+fn i32 collect_extern_block(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* puts = interner::intern("puts");
+    ast::AstNode* efn = mk_extern_fn_decl(a, puts, false, 0);
+    ast::AstNode** items = (ast::AstNode**)arena::alloc(a, sizeof(ast::AstNode*));
+    items[0] = efn;
+    ast::AstNode* eb = mk_extern_block(a, items, 1);
+    ast::AstNode*[1] root; root[0] = eb;
+    set_root(mm, a, &root[0], 1);
+    sema::run(mm);
+    if(!testing::expect_not_null((void*)registered(mm, puts), m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -4946,6 +5153,24 @@ fn i32 main() {
     testing::add(an, "anon_struct_distinct_nodes", &anon_struct_distinct_nodes);
     testing::add(an, "anon_struct_member_access",  &anon_struct_member_access);
     testing::add(an, "anon_struct_nested_field",   &anon_struct_nested_field);
+
+    u8[] gap = "Sema Coverage Backfill Tests";
+    testing::add(gap, "check_string_to_u8_slice",   &check_string_to_u8_slice);
+    testing::add(gap, "check_string_to_i8_ptr",     &check_string_to_i8_ptr);
+    testing::add(gap, "check_string_to_u8_array_ok", &check_string_to_u8_array_ok);
+    testing::add(gap, "check_string_to_u8_array_bad", &check_string_to_u8_array_bad);
+    testing::add(gap, "check_string_wrong_elem",    &check_string_wrong_elem);
+    testing::add(gap, "check_enum_to_base",         &check_enum_to_base);
+    testing::add(gap, "check_array_to_slice",       &check_array_to_slice);
+    testing::add(gap, "check_array_to_pointer",     &check_array_to_pointer);
+    testing::add(gap, "member_union_field",         &member_union_field);
+    testing::add(gap, "st_assign_to_const",         &st_assign_to_const);
+    testing::add(gap, "st_assign_to_member",        &st_assign_to_member);
+    testing::add(gap, "st_assign_to_index",         &st_assign_to_index);
+    testing::add(gap, "switch_else_arm_walked",     &switch_else_arm_walked);
+    testing::add(gap, "switch_label_mismatch",      &switch_label_mismatch);
+    testing::add(gap, "collect_duplicate_toplevel", &collect_duplicate_toplevel);
+    testing::add(gap, "collect_extern_block",       &collect_extern_block);
 
     return testing::run();
 }
