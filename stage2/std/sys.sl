@@ -12,6 +12,7 @@ extern {
     // process
     export fn void exit(i32 code);
     export fn void abort();
+    export fn i64  sysconf(i32 name);
 
     // stdio
     export struct FILE { i8 _opaque; }
@@ -54,3 +55,11 @@ extern {
 export const i32 SEEK_SET = 0;
 export const i32 SEEK_CUR = 1;
 export const i32 SEEK_END = 2;
+
+export const i32 SC_NPROCESSORS_ONLN = 84;   // _SC_NPROCESSORS_ONLN (glibc)
+
+export fn u32 cpu_count() {
+    i64 count = sysconf(SC_NPROCESSORS_ONLN);
+    if(count < 1) { return 1; }
+    return (u32)count;
+}
