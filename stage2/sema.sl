@@ -838,6 +838,10 @@ fn types::Type* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
     if(expr_has_flag(n.base, ast::AstFlags::LValue) || base.kind == types::TypeKind::Pointer) {
         field_flags = (u16)ast::AstFlags::LValue;
     }
+    // A field of a const value is read-only; through a pointer it is separate storage.
+    if(base.kind != types::TypeKind::Pointer && expr_has_flag(n.base, ast::AstFlags::ConstExpr)) {
+        field_flags = field_flags | (u16)ast::AstFlags::ConstExpr;
+    }
     if(container.kind == types::TypeKind::Slice) {
         if(n.field == interner::intern("ptr")) {
             types::Type* elem_ptr = types::intern_pointer(container.data.slice_elem, false);
@@ -888,6 +892,10 @@ fn types::Type* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
     }
     u16 flags = (u16)ast::AstFlags::LValue;
     if(base_is_array && !expr_has_flag(n.base, ast::AstFlags::LValue)) { flags = 0; }
+    // An element of a const value array is read-only; a slice/pointer reaches separate storage.
+    if(base_is_array && expr_has_flag(n.base, ast::AstFlags::ConstExpr)) {
+        flags = flags | (u16)ast::AstFlags::ConstExpr;
+    }
     set_expr((ast::AstNode*)n, elem, flags);
     return elem;
 }

@@ -4811,6 +4811,102 @@ fn i32 collect_extern_block(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 const_struct_field_rejected(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* sv = interner::intern("s");
+    ast::FieldDecl[1] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* vd = fake_local_var(a, sv, fake_anon_struct(a, &fields[0], 1, 0), (ast::AstNode*)fake_undefined_lit(a, 0), 0);
+    ((ast::VarDeclNode*)vd).is_const = true;
+    ast::AstNode* lhs = (ast::AstNode*)fake_member(a, (ast::AstNode*)fake_ident(a, sv, 0), interner::intern("x"), 9);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, lhs, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot assign to a constant", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 9, m)) { return -3; }
+    return 0;
+}
+
+fn i32 const_array_elem_rejected(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* av = interner::intern("av");
+    ast::AstNode* vd = fake_local_var(a, av, mk_ty_array(a, mk_ty_prim(a, token::TokenKind::I32), mk_int_lit_node(a, 3)), (ast::AstNode*)fake_undefined_lit(a, 0), 0);
+    ((ast::VarDeclNode*)vd).is_const = true;
+    ast::AstNode* lhs = (ast::AstNode*)fake_index(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_int_lit(a, 0, 0), 11);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, lhs, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot assign to a constant", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 11, m)) { return -3; }
+    return 0;
+}
+
+fn i32 const_nested_field_rejected(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* ov = interner::intern("o");
+    ast::FieldDecl[1] inner_fields;
+    set_field(&inner_fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* inner_ty = fake_anon_struct(a, &inner_fields[0], 1, 0);
+    ast::FieldDecl[1] outer_fields;
+    set_field(&outer_fields[0], interner::intern("inner"), inner_ty, 0);
+    ast::AstNode* vd = fake_local_var(a, ov, fake_anon_struct(a, &outer_fields[0], 1, 0), (ast::AstNode*)fake_undefined_lit(a, 0), 0);
+    ((ast::VarDeclNode*)vd).is_const = true;
+    ast::AstNode* inner_access = (ast::AstNode*)fake_member(a, (ast::AstNode*)fake_ident(a, ov, 0), interner::intern("inner"), 0);
+    ast::AstNode* lhs = (ast::AstNode*)fake_member(a, inner_access, interner::intern("x"), 13);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, lhs, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot assign to a constant", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].src_pos, 13, m)) { return -3; }
+    return 0;
+}
+
+fn i32 const_through_pointer_field_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* p = interner::intern("p");
+    ast::FieldDecl[1] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* ptr_ty = mk_ty_ptr(a, fake_anon_struct(a, &fields[0], 1, 0), false);
+    ast::AstNode* vd = fake_local_var(a, p, ptr_ty, (ast::AstNode*)fake_undefined_lit(a, 0), 0);
+    ((ast::VarDeclNode*)vd).is_const = true;
+    ast::AstNode* lhs = (ast::AstNode*)fake_member(a, (ast::AstNode*)fake_ident(a, p, 0), interner::intern("x"), 0);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, lhs, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 const_slice_elem_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* sv = interner::intern("sl");
+    ast::AstNode* vd = fake_local_var(a, sv, mk_ty_slice(a, mk_ty_prim(a, token::TokenKind::I32)), (ast::AstNode*)fake_undefined_lit(a, 0), 0);
+    ((ast::VarDeclNode*)vd).is_const = true;
+    ast::AstNode* lhs = (ast::AstNode*)fake_index(a, (ast::AstNode*)fake_ident(a, sv, 0), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, lhs, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 nonconst_field_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* sv = interner::intern("s");
+    ast::FieldDecl[1] fields;
+    set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* vd = fake_local_var(a, sv, fake_anon_struct(a, &fields[0], 1, 0), (ast::AstNode*)fake_undefined_lit(a, 0), 0);
+    ast::AstNode* lhs = (ast::AstNode*)fake_member(a, (ast::AstNode*)fake_ident(a, sv, 0), interner::intern("x"), 0);
+    ast::AstNode* asg = fake_assign(a, token::TokenKind::Eq, lhs, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
+    ast::AstNode*[2] stmts; stmts[0] = vd; stmts[1] = asg;
+    run_fn(a, mm, mk_fn_body(a, interner::intern("f"), null, mk_block(a, &stmts[0], 2)));
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -5171,6 +5267,14 @@ fn i32 main() {
     testing::add(gap, "switch_label_mismatch",      &switch_label_mismatch);
     testing::add(gap, "collect_duplicate_toplevel", &collect_duplicate_toplevel);
     testing::add(gap, "collect_extern_block",       &collect_extern_block);
+
+    u8[] dc = "Sema Deep Const Tests";
+    testing::add(dc, "const_struct_field_rejected",   &const_struct_field_rejected);
+    testing::add(dc, "const_array_elem_rejected",     &const_array_elem_rejected);
+    testing::add(dc, "const_nested_field_rejected",   &const_nested_field_rejected);
+    testing::add(dc, "const_through_pointer_field_ok", &const_through_pointer_field_ok);
+    testing::add(dc, "const_slice_elem_ok",           &const_slice_elem_ok);
+    testing::add(dc, "nonconst_field_ok",             &nonconst_field_ok);
 
     return testing::run();
 }
