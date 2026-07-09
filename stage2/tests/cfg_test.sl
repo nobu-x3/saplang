@@ -1,9 +1,11 @@
 import testing;
 import cfg;
+import cfg_print;
 import ast;
 import module;
 import types;
 import arena;
+import io;
 import sys;
 
 fn module::Module* mk_module(arena::Arena* a) {
@@ -923,6 +925,74 @@ fn i32 return_at_block_end_no_warning(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 print_straight_line(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] body;
+    body[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &body[0], 1));
+    func.cfg = (void*)cfg::build_cfg(mm, func);
+    io::OutBuf out;
+    io::outbuf_init(&out, a, 256);
+    cfg_print::print_fn(func, &out);
+    u8[] s = io::outbuf_bytes(&out);
+    if(!testing::expect_substr(s, "bb0 (entry)", m)) { return -1; }
+    if(!testing::expect_substr(s, "-> return", m)) { return -2; }
+    return 0;
+}
+
+fn i32 print_if_terminators(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] then_s;
+    then_s[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::AstNode*[1] else_s;
+    else_s[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::AstNode* iff = mk_if(a, mk_int_lit(a), mk_block(a, &then_s[0], 1), mk_block(a, &else_s[0], 1));
+    ast::AstNode*[1] body;
+    body[0] = iff;
+    cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
+    io::OutBuf out;
+    io::outbuf_init(&out, a, 256);
+    cfg_print::print_cfg(g, &out);
+    u8[] s = io::outbuf_bytes(&out);
+    if(!testing::expect_substr(s, "cond bb2 bb3", m)) { return -1; }
+    if(!testing::expect_substr(s, "goto bb4", m)) { return -2; }
+    return 0;
+}
+
+fn i32 print_switch_terminator(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] a0;
+    a0[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::AstNode*[1] l0;
+    l0[0] = mk_int_lit(a);
+    ast::SwitchArm[1] arms;
+    set_arm(&arms[0], &l0[0], 1, mk_block(a, &a0[0], 1));
+    ast::SwitchArm[] arms_slice = {&arms[0], 1};
+    ast::AstNode* sw = mk_switch(a, mk_int_lit(a), arms_slice, null);
+    ast::AstNode*[1] body;
+    body[0] = sw;
+    cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
+    io::OutBuf out;
+    io::outbuf_init(&out, a, 256);
+    cfg_print::print_cfg(g, &out);
+    u8[] s = io::outbuf_bytes(&out);
+    if(!testing::expect_substr(s, "switch default bb", m)) { return -1; }
+    return 0;
+}
+
+fn i32 print_unreachable_role(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] body;
+    body[0] = mk_return(a, null);
+    cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
+    io::OutBuf out;
+    io::outbuf_init(&out, a, 256);
+    cfg_print::print_cfg(g, &out);
+    u8[] s = io::outbuf_bytes(&out);
+    if(!testing::expect_substr(s, "(unreachable)", m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "CFG Construction Tests";
@@ -974,5 +1044,9 @@ fn i32 main() {
     testing::add(suite, "code_after_continue_warns",       &code_after_continue_warns);
     testing::add(suite, "code_after_return_single_warning", &code_after_return_single_warning);
     testing::add(suite, "return_at_block_end_no_warning",  &return_at_block_end_no_warning);
+    testing::add(suite, "print_straight_line",             &print_straight_line);
+    testing::add(suite, "print_if_terminators",            &print_if_terminators);
+    testing::add(suite, "print_switch_terminator",         &print_switch_terminator);
+    testing::add(suite, "print_unreachable_role",          &print_unreachable_role);
     return testing::run();
 }
