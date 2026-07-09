@@ -2,6 +2,8 @@ import module;
 import scanner;
 import parser;
 import sema;
+import cfg;
+import cfg_print;
 import diag;
 import arena;
 import sys;
@@ -21,6 +23,7 @@ export struct Compiler {
     u64                  import_paths_cap;
     u8[]                 target;          // conditional-compilation infix; empty = none
     bool                 is_multithreaded; // run phases on a thread pool sized to cpu_count
+    bool                 cfg_dump;         // -cfg-dump: print each function's CFG to stdout
     pool::ThreadPool*    pool;            // non-null only while multithreaded
     i64                  error_count;
 }
@@ -73,7 +76,7 @@ export fn void set_multithreaded(Compiler* c, bool on) {
     c.is_multithreaded = on;
 }
 
-// Recognizes <file>.sl, -i <;-list>, -target <name>, -mt; false on anything else.
+// Recognizes <file>.sl, -i <;-list>, -target <name>, -mt, -cfg-dump; false on anything else.
 export fn bool parse_argv(Compiler* c, u8[][] args) {
     bool ok = true;
     u64 arg_index = 0;
@@ -87,6 +90,8 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
             if(arg_index < args.len) { c.target = args[arg_index]; } else { ok = false; }
         } else if(slice_eq(arg, "-mt")) {
             c.is_multithreaded = true;
+        } else if(slice_eq(arg, "-cfg-dump")) {
+            c.cfg_dump = true;
         } else if(ends_with(arg, ".sl")) {
             add_source(c, arg);
         } else {
@@ -291,7 +296,13 @@ export fn i32 run_frontend(Compiler* c) {
         rc = 1;
     } else {
         run_sema(c);
-        if(bail_on_errors(c)) { rc = 1; }
+        if(bail_on_errors(c)) {
+            rc = 1;
+        } else {
+            run_cfg(c);
+            if(bail_on_errors(c)) { rc = 1; }
+            if(c.cfg_dump) { dump_cfgs(c); }
+        }
     }
     if(c.pool != null) {
         pool::destroy(c.pool);
@@ -340,6 +351,24 @@ fn void parse_job(void* arg) {
 fn void collect_names_job(void* arg) { sema::collect_names((module::Module*)arg); }
 fn void resolve_signatures_job(void* arg) { sema::resolve_signatures((module::Module*)arg); }
 fn void check_bodies_job(void* arg) { sema::check_bodies((module::Module*)arg); }
+
+// Per-module CFG construction + return-path / unreachable-code analyses.
+fn void run_cfg(Compiler* c) {
+    run_phase(c, &build_cfg_job);
+    drain_diagnostics(c);
+}
+
+fn void build_cfg_job(void* arg) { cfg::build_all_functions((module::Module*)arg); }
+
+fn void dump_cfgs(Compiler* c) {
+    io::OutBuf out;
+    io::outbuf_init(&out, c.arena, 4096);
+    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
+        cfg_print::print_module(c.modules[module_index], &out);
+    }
+    u8[] bytes = io::outbuf_bytes(&out);
+    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+}
 
 // Write each module's diagnostics to stderr in ModuleId order, tally errors, reset.
 export fn void drain_diagnostics(Compiler* c) {
