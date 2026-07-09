@@ -73,8 +73,7 @@ export fn void set_multithreaded(Compiler* c, bool on) {
     c.is_multithreaded = on;
 }
 
-// Walk imports from the entry sources, resolving each to a file and building the
-// module graph. Uses scanner output only — no parsing. Import cycles are fine.
+// Scanner output only, no parsing; import cycles are fine.
 export fn void discover(Compiler* c) {
     for(u64 entry_index = 0; entry_index < c.entry_sources.len; entry_index += 1) {
         add_entry_module(c, c.entry_sources[entry_index]);
@@ -88,8 +87,7 @@ export fn void discover(Compiler* c) {
     }
 }
 
-// Entry sources need a not-found check (imports get theirs via resolve_import);
-// an unreadable file is an error, but an empty file is legitimately valid.
+// Unreadable is an error; an empty file is valid (imports get their check in resolve_import).
 fn void add_entry_module(Compiler* c, u8[] path) {
     u8[] empty = {null, 0};
     module::Module* m = new_source_module(c, interner::intern(path_stem(path)), empty);
@@ -221,6 +219,14 @@ fn u8[] path_stem(u8[] path) {
     return out;
 }
 
+// Discover + frontend; CFG/codegen/link land later. Returns 0 on success.
+export fn i32 run(Compiler* c) {
+    discover(c);
+    drain_diagnostics(c);
+    if(bail_on_errors(c)) { return 1; }
+    return run_frontend(c);
+}
+
 // Runs the frontend phases (parse -> barriered sema); 0 on success, 1 on any error.
 export fn i32 run_frontend(Compiler* c) {
     if(c.is_multithreaded) { c.pool = pool::new(c.arena, sys::cpu_count()); }
@@ -258,8 +264,7 @@ fn void run_parse(Compiler* c) {
     drain_diagnostics(c);
 }
 
-// The three sema sub-passes are barriered: every module completes a sub-pass
-// before any starts the next, so cross-module lookups always read a complete world.
+// Barriered sub-passes: cross-module lookups always read a complete world.
 fn void run_sema(Compiler* c) {
     run_phase(c, &collect_names_job);
     drain_diagnostics(c);
@@ -273,7 +278,7 @@ fn void run_sema(Compiler* c) {
 
 fn void parse_job(void* arg) {
     module::Module* m = (module::Module*)arg;
-    scanner::scan(m);
+    if(m.tokens.len == 0) { scanner::scan(m); }      // discover already scans; don't re-scan
     m.root_node = parser::parse(m);
 }
 
