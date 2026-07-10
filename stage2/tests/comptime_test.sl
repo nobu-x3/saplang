@@ -1146,6 +1146,228 @@ fn i32 comptime_safe_extern_in_comperror(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 mono_cache_hit_and_miss(arena::Arena* a, u8[] m) {
+    comptime::MonoCache cache;
+    sys::memset(&cache, 0, sizeof(comptime::MonoCache));
+    ast::FnDeclNode* callee = mk_fn_node(a, null);
+    ast::FnDeclNode* clone_i32 = mk_fn_node(a, null);
+    ast::FnDeclNode* clone_f64 = mk_fn_node(a, null);
+
+    value::Value[1] args_i32;
+    args_i32[0] = value::val_type(types::prim_i32());
+    comptime::MonoKey key_i32;
+    key_i32.callee = callee;
+    key_i32.args = {&args_i32[0], 1};
+
+    if(comptime::mono_cache_lookup(&cache, &key_i32) != null) { return -1; }
+    comptime::mono_cache_insert(&cache, a, key_i32, clone_i32);
+    if(comptime::mono_cache_lookup(&cache, &key_i32) != clone_i32) { return -2; }
+
+    value::Value[1] args_f64;
+    args_f64[0] = value::val_type(types::prim_f64());
+    comptime::MonoKey key_f64;
+    key_f64.callee = callee;
+    key_f64.args = {&args_f64[0], 1};
+    if(comptime::mono_cache_lookup(&cache, &key_f64) != null) { return -3; }
+    comptime::mono_cache_insert(&cache, a, key_f64, clone_f64);
+    if(comptime::mono_cache_lookup(&cache, &key_f64) != clone_f64) { return -4; }
+    if(comptime::mono_cache_lookup(&cache, &key_i32) != clone_i32) { return -5; }
+
+    ast::FnDeclNode* other = mk_fn_node(a, null);
+    comptime::MonoKey key_other;
+    key_other.callee = other;
+    key_other.args = {&args_i32[0], 1};
+    if(comptime::mono_cache_lookup(&cache, &key_other) != null) { return -6; }
+    return 0;
+}
+
+fn i32 mono_cache_grows(arena::Arena* a, u8[] m) {
+    comptime::MonoCache cache;
+    sys::memset(&cache, 0, sizeof(comptime::MonoCache));
+    ast::FnDeclNode* callee = mk_fn_node(a, null);
+    ast::FnDeclNode*[20] clones;
+    for(u64 i = 0; i < 20; i += 1) {
+        clones[i] = mk_fn_node(a, null);
+        value::Value* args = (value::Value*)arena::alloc(a, sizeof(value::Value));
+        args[0] = value::val_int((i64)i, types::prim_i32());
+        comptime::MonoKey key;
+        key.callee = callee;
+        key.args = {args, 1};
+        comptime::mono_cache_insert(&cache, a, key, clones[i]);
+    }
+    for(u64 i = 0; i < 20; i += 1) {
+        value::Value* args = (value::Value*)arena::alloc(a, sizeof(value::Value));
+        args[0] = value::val_int((i64)i, types::prim_i32());
+        comptime::MonoKey key;
+        key.callee = callee;
+        key.args = {args, 1};
+        if(comptime::mono_cache_lookup(&cache, &key) != clones[i]) { return -1; }
+    }
+    if(!testing::expect_eq(cache.count, (u64)20, m)) { return -2; }
+    return 0;
+}
+
+fn i32 mono_cache_composite_args(arena::Arena* a, u8[] m) {
+    comptime::MonoCache cache;
+    sys::memset(&cache, 0, sizeof(comptime::MonoCache));
+    ast::FnDeclNode* callee = mk_fn_node(a, null);
+    ast::FnDeclNode* clone = mk_fn_node(a, null);
+
+    value::Value[2] fields;
+    fields[0] = value::val_int(1, types::prim_i32());
+    fields[1] = value::val_int(2, types::prim_i32());
+    value::Value[1] args;
+    value::Value[] fslice = {&fields[0], 2};
+    args[0] = value::val_struct(null, fslice);
+    comptime::MonoKey key;
+    key.callee = callee;
+    key.args = {&args[0], 1};
+    comptime::mono_cache_insert(&cache, a, key, clone);
+
+    value::Value[2] fields2;
+    fields2[0] = value::val_int(1, types::prim_i32());
+    fields2[1] = value::val_int(2, types::prim_i32());
+    value::Value[1] args2;
+    value::Value[] fslice2 = {&fields2[0], 2};
+    args2[0] = value::val_struct(null, fslice2);
+    comptime::MonoKey key2;
+    key2.callee = callee;
+    key2.args = {&args2[0], 1};
+    if(comptime::mono_cache_lookup(&cache, &key2) != clone) { return -1; }
+
+    value::Value[2] fields3;
+    fields3[0] = value::val_int(1, types::prim_i32());
+    fields3[1] = value::val_int(3, types::prim_i32());
+    value::Value[1] args3;
+    value::Value[] fslice3 = {&fields3[0], 2};
+    args3[0] = value::val_struct(null, fslice3);
+    comptime::MonoKey key3;
+    key3.callee = callee;
+    key3.args = {&args3[0], 1};
+    if(comptime::mono_cache_lookup(&cache, &key3) != null) { return -2; }
+    return 0;
+}
+
+fn i32 mono_cache_zero_args(arena::Arena* a, u8[] m) {
+    comptime::MonoCache cache;
+    sys::memset(&cache, 0, sizeof(comptime::MonoCache));
+    ast::FnDeclNode* callee_a = mk_fn_node(a, null);
+    ast::FnDeclNode* callee_b = mk_fn_node(a, null);
+    ast::FnDeclNode* clone_a = mk_fn_node(a, null);
+    value::Value[] empty = {null, 0};
+    comptime::MonoKey key_a;
+    key_a.callee = callee_a;
+    key_a.args = empty;
+    comptime::mono_cache_insert(&cache, a, key_a, clone_a);
+    comptime::MonoKey key_a2;
+    key_a2.callee = callee_a;
+    key_a2.args = empty;
+    if(comptime::mono_cache_lookup(&cache, &key_a2) != clone_a) { return -1; }
+    comptime::MonoKey key_b;
+    key_b.callee = callee_b;
+    key_b.args = empty;
+    if(comptime::mono_cache_lookup(&cache, &key_b) != null) { return -2; }
+    return 0;
+}
+
+fn i32 mono_cache_multi_args(arena::Arena* a, u8[] m) {
+    comptime::MonoCache cache;
+    sys::memset(&cache, 0, sizeof(comptime::MonoCache));
+    ast::FnDeclNode* callee = mk_fn_node(a, null);
+    ast::FnDeclNode* clone = mk_fn_node(a, null);
+    value::Value[2] args;
+    args[0] = value::val_type(types::prim_i32());
+    args[1] = value::val_type(types::prim_f64());
+    comptime::MonoKey key;
+    key.callee = callee;
+    key.args = {&args[0], 2};
+    comptime::mono_cache_insert(&cache, a, key, clone);
+
+    value::Value[2] args2;
+    args2[0] = value::val_type(types::prim_i32());
+    args2[1] = value::val_type(types::prim_f64());
+    comptime::MonoKey key2;
+    key2.callee = callee;
+    key2.args = {&args2[0], 2};
+    if(comptime::mono_cache_lookup(&cache, &key2) != clone) { return -1; }
+
+    value::Value[2] swapped;
+    swapped[0] = value::val_type(types::prim_f64());
+    swapped[1] = value::val_type(types::prim_i32());
+    comptime::MonoKey key_swapped;
+    key_swapped.callee = callee;
+    key_swapped.args = {&swapped[0], 2};
+    if(comptime::mono_cache_lookup(&cache, &key_swapped) != null) { return -2; }
+
+    value::Value[1] shorter;
+    shorter[0] = value::val_type(types::prim_i32());
+    comptime::MonoKey key_short;
+    key_short.callee = callee;
+    key_short.args = {&shorter[0], 1};
+    if(comptime::mono_cache_lookup(&cache, &key_short) != null) { return -3; }
+    return 0;
+}
+
+fn i32 mono_cache_float_args(arena::Arena* a, u8[] m) {
+    comptime::MonoCache cache;
+    sys::memset(&cache, 0, sizeof(comptime::MonoCache));
+    ast::FnDeclNode* callee = mk_fn_node(a, null);
+    ast::FnDeclNode* clone = mk_fn_node(a, null);
+    value::Value[1] args;
+    args[0] = value::val_float(3.14, types::prim_f64());
+    comptime::MonoKey key;
+    key.callee = callee;
+    key.args = {&args[0], 1};
+    comptime::mono_cache_insert(&cache, a, key, clone);
+
+    value::Value[1] args2;
+    args2[0] = value::val_float(3.14, types::prim_f64());
+    comptime::MonoKey key2;
+    key2.callee = callee;
+    key2.args = {&args2[0], 1};
+    if(comptime::mono_cache_lookup(&cache, &key2) != clone) { return -1; }
+
+    value::Value[1] args3;
+    args3[0] = value::val_float(2.71, types::prim_f64());
+    comptime::MonoKey key3;
+    key3.callee = callee;
+    key3.args = {&args3[0], 1};
+    if(comptime::mono_cache_lookup(&cache, &key3) != null) { return -2; }
+    return 0;
+}
+
+fn i32 mono_cache_bytes_args(arena::Arena* a, u8[] m) {
+    comptime::MonoCache cache;
+    sys::memset(&cache, 0, sizeof(comptime::MonoCache));
+    ast::FnDeclNode* callee = mk_fn_node(a, null);
+    ast::FnDeclNode* clone = mk_fn_node(a, null);
+
+    u8[] s1 = "abc";
+    value::Value[1] args;
+    args[0] = value::val_bytes(s1, null);
+    comptime::MonoKey key;
+    key.callee = callee;
+    key.args = {&args[0], 1};
+    comptime::mono_cache_insert(&cache, a, key, clone);
+
+    u8[] s2 = "abc";
+    value::Value[1] args2;
+    args2[0] = value::val_bytes(s2, null);
+    comptime::MonoKey key2;
+    key2.callee = callee;
+    key2.args = {&args2[0], 1};
+    if(comptime::mono_cache_lookup(&cache, &key2) != clone) { return -1; }
+
+    u8[] s3 = "abd";
+    value::Value[1] args3;
+    args3[0] = value::val_bytes(s3, null);
+    comptime::MonoKey key3;
+    key3.callee = callee;
+    key3.args = {&args3[0], 1};
+    if(comptime::mono_cache_lookup(&cache, &key3) != null) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Comptime Tests";
@@ -1214,5 +1436,12 @@ fn i32 main() {
     testing::add(suite, "eval_compwarning_continues_comprun", &eval_compwarning_continues_comprun);
     testing::add(suite, "eval_comperror_non_string",     &eval_comperror_non_string);
     testing::add(suite, "comptime_safe_extern_in_comperror", &comptime_safe_extern_in_comperror);
+    testing::add(suite, "mono_cache_hit_and_miss",     &mono_cache_hit_and_miss);
+    testing::add(suite, "mono_cache_grows",            &mono_cache_grows);
+    testing::add(suite, "mono_cache_composite_args",   &mono_cache_composite_args);
+    testing::add(suite, "mono_cache_zero_args",        &mono_cache_zero_args);
+    testing::add(suite, "mono_cache_multi_args",       &mono_cache_multi_args);
+    testing::add(suite, "mono_cache_float_args",       &mono_cache_float_args);
+    testing::add(suite, "mono_cache_bytes_args",       &mono_cache_bytes_args);
     return testing::run();
 }

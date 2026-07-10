@@ -532,3 +532,145 @@ fn void diag_unsupported(Interp* ip, u32 pos) {
     u8[] msg = "not supported at comptime";
     diag::report(&ip.m.diag, ip.m.arena, pos, msg);
 }
+
+// MONOMORPHIZATION CACHE
+
+const u64 FNV_BASIS = 14695981039346656037;
+const u64 FNV_PRIME = 1099511628211;
+
+export struct MonoKey {
+    ast::FnDeclNode* callee;
+    value::Value[]   args;
+}
+
+export struct MonoEntry {
+    u64              hash;      // 0 = empty slot
+    MonoKey          key;
+    ast::FnDeclNode* clone;
+}
+
+export struct MonoCache {
+    MonoEntry* buckets;
+    u64        count;
+    u64        cap;
+}
+
+union FloatBits { f64 f; u64 u; }
+
+fn u64 hash_combine(u64 h, u64 v) { return (h ^ v) * FNV_PRIME; }
+
+fn u64 float_bits(f64 f) {
+    FloatBits fb;
+    fb.f = f;
+    return fb.u;
+}
+
+fn u64 hash_value(value::Value v) {
+    u32 kind = (u32)v.kind;
+    u64 h = hash_combine(FNV_BASIS, (u64)kind);
+    if(kind == (u32)value::ValueKind::Int || kind == (u32)value::ValueKind::Char) { return hash_combine(h, (u64)v.data.i); }
+    if(kind == (u32)value::ValueKind::Float) { return hash_combine(h, float_bits(v.data.f)); }
+    if(kind == (u32)value::ValueKind::Bool) {
+        u64 b = 0;
+        if(v.data.b) { b = 1; }
+        return hash_combine(h, b);
+    }
+    if(kind == (u32)value::ValueKind::Bytes) {
+        for(u64 byte_index = 0; byte_index < v.data.bytes.len; byte_index += 1) { h = hash_combine(h, (u64)v.data.bytes[byte_index]); }
+        return h;
+    }
+    if(kind == (u32)value::ValueKind::Type) { return hash_combine(h, (u64)v.data.type_ref); }
+    if(kind == (u32)value::ValueKind::FnRef) { return hash_combine(h, (u64)v.data.fn_ref); }
+    if(kind == (u32)value::ValueKind::Struct || kind == (u32)value::ValueKind::Array) {
+        for(u64 elem_index = 0; elem_index < v.data.elems.len; elem_index += 1) { h = hash_combine(h, hash_value(v.data.elems[elem_index])); }
+        return h;
+    }
+    return h;
+}
+
+fn bool value_equal(value::Value a, value::Value b) {
+    if(a.kind != b.kind) { return false; }
+    u32 kind = (u32)a.kind;
+    if(kind == (u32)value::ValueKind::Int || kind == (u32)value::ValueKind::Char) { return a.data.i == b.data.i; }
+    if(kind == (u32)value::ValueKind::Float) { return a.data.f == b.data.f; }
+    if(kind == (u32)value::ValueKind::Bool) { return a.data.b == b.data.b; }
+    if(kind == (u32)value::ValueKind::Bytes) {
+        if(a.data.bytes.len != b.data.bytes.len) { return false; }
+        for(u64 byte_index = 0; byte_index < a.data.bytes.len; byte_index += 1) { if(a.data.bytes[byte_index] != b.data.bytes[byte_index]) { return false; } }
+        return true;
+    }
+    if(kind == (u32)value::ValueKind::Type) { return a.data.type_ref == b.data.type_ref; }
+    if(kind == (u32)value::ValueKind::FnRef) { return a.data.fn_ref == b.data.fn_ref; }
+    if(kind == (u32)value::ValueKind::Struct || kind == (u32)value::ValueKind::Array) {
+        if(a.data.elems.len != b.data.elems.len) { return false; }
+        for(u64 elem_index = 0; elem_index < a.data.elems.len; elem_index += 1) { if(!value_equal(a.data.elems[elem_index], b.data.elems[elem_index])) { return false; } }
+        return true;
+    }
+    return true;
+}
+
+fn u64 hash_mono_key(MonoKey* k) {
+    u64 h = hash_combine(FNV_BASIS, (u64)k.callee);
+    for(u64 arg_index = 0; arg_index < k.args.len; arg_index += 1) { h = hash_combine(h, hash_value(k.args[arg_index])); }
+    if(h == 0) { h = 1; }
+    return h;
+}
+
+fn bool mono_key_equal(MonoKey* a, MonoKey* b) {
+    if(a.callee != b.callee) { return false; }
+    if(a.args.len != b.args.len) { return false; }
+    for(u64 arg_index = 0; arg_index < a.args.len; arg_index += 1) { if(!value_equal(a.args[arg_index], b.args[arg_index])) { return false; } }
+    return true;
+}
+
+fn void mono_cache_grow(MonoCache* c, arena::Arena* a) {
+    if(c.cap == 0) {
+        c.cap = 8;
+        c.buckets = arena::alloc(a, c.cap * sizeof(MonoEntry));
+        for(u64 slot = 0; slot < c.cap; slot += 1) { c.buckets[slot].hash = 0; }
+        return;
+    }
+    if(c.count * 4 < c.cap * 3) { return; }
+    u64 old_cap = c.cap;
+    MonoEntry* old = c.buckets;
+    u64 new_cap = c.cap * 2;
+    MonoEntry* nb = arena::alloc(a, new_cap * sizeof(MonoEntry));
+    for(u64 slot = 0; slot < new_cap; slot += 1) { nb[slot].hash = 0; }
+    for(u64 slot = 0; slot < old_cap; slot += 1) {
+        if(old[slot].hash != 0) {
+            u64 idx = old[slot].hash % new_cap;
+            while(nb[idx].hash != 0) { idx = (idx + 1) % new_cap; }
+            nb[idx] = old[slot];
+        }
+    }
+    c.buckets = nb;
+    c.cap = new_cap;
+}
+
+export fn ast::FnDeclNode* mono_cache_lookup(MonoCache* c, MonoKey* key) {
+    if(c.cap == 0) { return null; }
+    u64 h = hash_mono_key(key);
+    u64 idx = h % c.cap;
+    while(c.buckets[idx].hash != 0) {
+        if(c.buckets[idx].hash == h && mono_key_equal(&c.buckets[idx].key, key)) { return c.buckets[idx].clone; }
+        idx = (idx + 1) % c.cap;
+    }
+    return null;
+}
+
+export fn void mono_cache_insert(MonoCache* c, arena::Arena* a, MonoKey key, ast::FnDeclNode* clone) {
+    mono_cache_grow(c, a);
+    u64 h = hash_mono_key(&key);
+    u64 idx = h % c.cap;
+    while(c.buckets[idx].hash != 0) {
+        if(c.buckets[idx].hash == h && mono_key_equal(&c.buckets[idx].key, &key)) {
+            c.buckets[idx].clone = clone;
+            return;
+        }
+        idx = (idx + 1) % c.cap;
+    }
+    c.buckets[idx].hash = h;
+    c.buckets[idx].key = key;
+    c.buckets[idx].clone = clone;
+    c.count += 1;
+}
