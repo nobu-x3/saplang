@@ -1464,7 +1464,7 @@ fn i32 eval_call_extern_rejected(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 eval_call_generic_unsupported(arena::Arena* a, u8[] m) {
+fn i32 eval_call_generic_needs_inference(arena::Arena* a, u8[] m) {
     module::Module* mm = mk_module(a);
     comptime::Interp ip = comptime::new_interp(mm);
     ast::FnDeclNode* gen = mk_fn_node(a, mk_block(a, null, 0));
@@ -1476,7 +1476,7 @@ fn i32 eval_call_generic_unsupported(arena::Arena* a, u8[] m) {
     gen.params = {&params[0], 1};
     value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_gen, null), null, 0));
     if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
-    if(!testing::expect_substr(mm.diag.entries[0].msg, "monomorphization", m)) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "inference", m)) { return -2; }
     return 0;
 }
 
@@ -1517,6 +1517,184 @@ fn i32 eval_call_arg_error(arena::Arena* a, u8[] m) {
     call_args[0] = mk_ident(a);
     value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_f, null), &call_args[0], 1));
     if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    return 0;
+}
+
+fn i32 clone_fn_deep_copy(arena::Arena* a, u8[] m) {
+    ast::FnDeclNode* orig = mk_fn_node(a, null);
+    sema::Decl* px = mk_param_decl(a);
+    ast::Param[1] params;
+    sys::memset(&params[0], 0, sizeof(ast::Param));
+    params[0].decl = (void*)px;
+    orig.params = {&params[0], 1};
+    ast::AstNode* lit1 = mk_int(a, 1, types::prim_i32());
+    ast::AstNode* binop = mk_binary(a, token::TokenKind::Plus, mk_ident_resolved(a, px, types::prim_i32()), lit1, types::prim_i32());
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_return(a, binop);
+    orig.body = mk_block(a, &body_s[0], 1);
+
+    ast::FnDeclNode* clone = comptime::clone_fn_decl(a, orig);
+    if((void*)clone == (void*)orig) { return -1; }
+    if((void*)clone.body == (void*)orig.body) { return -2; }
+    if(clone.params.len != 1) { return -3; }
+    ast::BlockNode* cb = (ast::BlockNode*)clone.body;
+    if(cb.stmts.len != 1) { return -4; }
+    ast::ReturnNode* cret = (ast::ReturnNode*)cb.stmts[0];
+    ast::BinaryOpNode* cbin = (ast::BinaryOpNode*)cret.expr;
+    ast::IntLitNode* crhs = (ast::IntLitNode*)cbin.rhs;
+    if(!testing::expect_eq((u64)crhs.value, (u64)1, m)) { return -5; }
+    if((void*)crhs == (void*)lit1) { return -6; }
+    crhs.value = 99;
+    ast::IntLitNode* olit = (ast::IntLitNode*)lit1;
+    if(!testing::expect_eq((u64)olit.value, (u64)1, m)) { return -7; }
+    return 0;
+}
+
+fn i32 monomorphize_caches_and_dedups(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* gen = mk_fn_node(a, mk_block(a, null, 0));
+    value::Value[1] c_i32;
+    c_i32[0] = value::val_type(types::prim_i32());
+    value::Value[] cargs_i32 = {&c_i32[0], 1};
+    ast::FnDeclNode* clone1 = comptime::monomorphize(&ip, gen, cargs_i32);
+    value::Value[1] c_i32b;
+    c_i32b[0] = value::val_type(types::prim_i32());
+    value::Value[] cargs_i32b = {&c_i32b[0], 1};
+    ast::FnDeclNode* clone1b = comptime::monomorphize(&ip, gen, cargs_i32b);
+    if((void*)clone1 != (void*)clone1b) { return -1; }
+    value::Value[1] c_f64;
+    c_f64[0] = value::val_type(types::prim_f64());
+    value::Value[] cargs_f64 = {&c_f64[0], 1};
+    ast::FnDeclNode* clone2 = comptime::monomorphize(&ip, gen, cargs_f64);
+    if((void*)clone2 == (void*)clone1) { return -2; }
+    if((void*)clone1 == (void*)gen) { return -3; }
+    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)2, m)) { return -4; }
+    return 0;
+}
+
+fn i32 eval_call_int_generic(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* make = mk_fn_node(a, null);
+    sema::Decl* decl_make = mk_fn_decl_for(a, make);
+    sema::Decl* pn = mk_param_decl(a);
+    sema::Decl* py = mk_param_decl(a);
+    ast::Param[2] params;
+    sys::memset(&params[0], 0, 2 * sizeof(ast::Param));
+    params[0].is_comptime = true;
+    params[0].decl = (void*)pn;
+    params[1].decl = (void*)py;
+    make.params = {&params[0], 2};
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_return(a, mk_binary(a, token::TokenKind::Star, mk_ident_resolved(a, pn, types::prim_i32()), mk_ident_resolved(a, py, types::prim_i32()), types::prim_i32()));
+    make.body = mk_block(a, &body_s[0], 1);
+
+    ast::AstNode*[2] call1;
+    call1[0] = mk_int(a, 5, types::prim_i32());
+    call1[1] = mk_int(a, 3, types::prim_i32());
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_make, null), &call1[0], 2));
+    if(!testing::expect_eq((u64)v.data.i, (u64)15, m)) { return -1; }
+
+    ast::AstNode*[2] call2;
+    call2[0] = mk_int(a, 5, types::prim_i32());
+    call2[1] = mk_int(a, 4, types::prim_i32());
+    value::Value v2 = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_make, null), &call2[0], 2));
+    if(!testing::expect_eq((u64)v2.data.i, (u64)20, m)) { return -2; }
+    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)1, m)) { return -3; }
+
+    ast::AstNode*[2] call3;
+    call3[0] = mk_int(a, 6, types::prim_i32());
+    call3[1] = mk_int(a, 3, types::prim_i32());
+    value::Value v3 = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_make, null), &call3[0], 2));
+    if(!testing::expect_eq((u64)v3.data.i, (u64)18, m)) { return -4; }
+    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)2, m)) { return -5; }
+    return 0;
+}
+
+fn i32 eval_type_expr_to_value(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    value::Value v = comptime::eval(&ip, mk_type_arg(a, types::prim_i32()));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Type, m)) { return -1; }
+    if(!testing::expect_eq((void*)v.data.type_ref, (void*)types::prim_i32(), m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_call_type_generic(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* id = mk_fn_node(a, null);
+    sema::Decl* decl_id = mk_fn_decl_for(a, id);
+    sema::Decl* pt = mk_param_decl(a);
+    sema::Decl* px = mk_param_decl(a);
+    ast::Param[2] params;
+    sys::memset(&params[0], 0, 2 * sizeof(ast::Param));
+    params[0].is_comptime = true;
+    params[0].decl = (void*)pt;
+    params[1].decl = (void*)px;
+    id.params = {&params[0], 2};
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_return(a, mk_ident_resolved(a, px, types::prim_i32()));
+    id.body = mk_block(a, &body_s[0], 1);
+
+    ast::AstNode*[2] call1;
+    call1[0] = mk_type_arg(a, types::prim_i32());
+    call1[1] = mk_int(a, 5, types::prim_i32());
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_id, null), &call1[0], 2));
+    if(!testing::expect_eq((u64)v.data.i, (u64)5, m)) { return -1; }
+
+    ast::AstNode*[2] call2;
+    call2[0] = mk_type_arg(a, types::prim_f64());
+    call2[1] = mk_int(a, 5, types::prim_i32());
+    value::Value v2 = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_id, null), &call2[0], 2));
+    if(!testing::expect_eq((u64)v2.data.i, (u64)5, m)) { return -2; }
+    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)2, m)) { return -3; }
+
+    ast::AstNode*[2] call3;
+    call3[0] = mk_type_arg(a, types::prim_i32());
+    call3[1] = mk_int(a, 9, types::prim_i32());
+    value::Value v3 = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_id, null), &call3[0], 2));
+    if(!testing::expect_eq((u64)v3.data.i, (u64)9, m)) { return -4; }
+    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)2, m)) { return -5; }
+    return 0;
+}
+
+fn i32 eval_call_recursive_generic(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* rec = mk_fn_node(a, null);
+    sema::Decl* decl_rec = mk_fn_decl_for(a, rec);
+    sema::Decl* pn = mk_param_decl(a);
+    sema::Decl* px = mk_param_decl(a);
+    ast::Param[2] params;
+    sys::memset(&params[0], 0, 2 * sizeof(ast::Param));
+    params[0].is_comptime = true;
+    params[0].decl = (void*)pn;
+    params[1].decl = (void*)px;
+    rec.params = {&params[0], 2};
+
+    ast::AstNode* cond = mk_binary(a, token::TokenKind::LTEQ, mk_ident_resolved(a, px, types::prim_i32()), mk_int(a, 0, types::prim_i32()), types::prim_i32());
+    ast::AstNode*[1] then_s;
+    then_s[0] = mk_return(a, mk_int(a, 0, types::prim_i32()));
+    ast::AstNode* iff = mk_if(a, cond, mk_block(a, &then_s[0], 1), null);
+
+    ast::AstNode*[2] rec_args;
+    rec_args[0] = mk_ident_resolved(a, pn, types::prim_i32());
+    rec_args[1] = mk_binary(a, token::TokenKind::Minus, mk_ident_resolved(a, px, types::prim_i32()), mk_int(a, 1, types::prim_i32()), types::prim_i32());
+    ast::AstNode* rec_call = mk_call_args(a, mk_ident_resolved(a, decl_rec, null), &rec_args[0], 2);
+    ast::AstNode* sum = mk_binary(a, token::TokenKind::Plus, mk_ident_resolved(a, px, types::prim_i32()), rec_call, types::prim_i32());
+    ast::AstNode*[2] body_s;
+    body_s[0] = iff;
+    body_s[1] = mk_return(a, sum);
+    rec.body = mk_block(a, &body_s[0], 2);
+
+    ast::AstNode*[2] call1;
+    call1[0] = mk_int(a, 5, types::prim_i32());
+    call1[1] = mk_int(a, 3, types::prim_i32());
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_rec, null), &call1[0], 2));
+    if(!testing::expect_eq((u64)v.data.i, (u64)6, m)) { return -1; }
+    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)1, m)) { return -2; }
     return 0;
 }
 
@@ -1599,8 +1777,14 @@ fn i32 main() {
     testing::add(suite, "eval_call_recursive_factorial", &eval_call_recursive_factorial);
     testing::add(suite, "eval_call_recursion_limit",   &eval_call_recursion_limit);
     testing::add(suite, "eval_call_extern_rejected",   &eval_call_extern_rejected);
-    testing::add(suite, "eval_call_generic_unsupported", &eval_call_generic_unsupported);
+    testing::add(suite, "eval_call_generic_needs_inference", &eval_call_generic_needs_inference);
     testing::add(suite, "eval_call_multi_param",        &eval_call_multi_param);
     testing::add(suite, "eval_call_arg_error",          &eval_call_arg_error);
+    testing::add(suite, "clone_fn_deep_copy",           &clone_fn_deep_copy);
+    testing::add(suite, "monomorphize_caches_and_dedups", &monomorphize_caches_and_dedups);
+    testing::add(suite, "eval_call_int_generic",        &eval_call_int_generic);
+    testing::add(suite, "eval_type_expr_to_value",      &eval_type_expr_to_value);
+    testing::add(suite, "eval_call_type_generic",       &eval_call_type_generic);
+    testing::add(suite, "eval_call_recursive_generic",  &eval_call_recursive_generic);
     return testing::run();
 }

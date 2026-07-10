@@ -124,6 +124,12 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::Sizeof:    { return eval_sizeof(ip, (ast::SizeofNode*)e); }
     case ast::AstKind::Alignof:   { return eval_alignof(ip, (ast::AlignofNode*)e); }
     case ast::AstKind::Typeof:    { return eval_typeof(ip, (ast::TypeofNode*)e); }
+    case ast::AstKind::PrimitiveType:
+    case ast::AstKind::NamedType:
+    case ast::AstKind::PointerType:
+    case ast::AstKind::ArrayType:
+    case ast::AstKind::SliceType:
+    case ast::AstKind::FnPtrType: { return eval_type_expr(ip, e); }
     case ast::AstKind::ComprunStmt: { return eval_comprun(ip, (ast::CompRunNode*)e); }
     case ast::AstKind::ComperrorStmt:   { return eval_comperror(ip, (ast::CompErrorNode*)e); }
     case ast::AstKind::CompwarningStmt: { return eval_compwarning(ip, (ast::CompWarningNode*)e); }
@@ -401,11 +407,6 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
-    if(has_comptime_params(func)) {
-        u8[] msg = "comptime monomorphization not yet supported";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
-        return value::val_error();
-    }
     value::Value[] args;
     args.ptr = null;
     args.len = 0;
@@ -416,6 +417,24 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
             args[arg_index] = eval(ip, n.args[arg_index]);
             if(args[arg_index].kind == (u16)value::ValueKind::Error) { return args[arg_index]; }
         }
+    }
+    if(has_comptime_params(func)) {
+        if(n.args.len != func.params.len) {
+            u8[] msg = "comptime argument inference not yet supported; pass all arguments explicitly";
+            diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+            return value::val_error();
+        }
+        value::Value[] cargs;
+        cargs.ptr = arena::alloc(ip.m.arena, func.params.len * sizeof(value::Value));
+        cargs.len = 0;
+        for(u64 param_index = 0; param_index < func.params.len; param_index += 1) {
+            if(func.params[param_index].is_comptime) {
+                cargs[cargs.len] = args[param_index];
+                cargs.len += 1;
+            }
+        }
+        ast::FnDeclNode* mono = monomorphize(ip, func, cargs);
+        return invoke(ip, mono, args, n.h.src_pos);
     }
     return invoke(ip, func, args, n.h.src_pos);
 }
@@ -455,6 +474,15 @@ fn value::Value eval_comprun(Interp* ip, ast::CompRunNode* n) {
     env_pop(ip.env);
     ip.env = saved;
     return value::val_void();
+}
+
+fn value::Value eval_type_expr(Interp* ip, ast::AstNode* e) {
+    if(e.h.ty == null) {
+        u8[] msg = "type expression is unresolved at comptime";
+        diag::report(&ip.m.diag, ip.m.arena, e.h.src_pos, msg);
+        return value::val_error();
+    }
+    return value::val_type((types::Type*)e.h.ty);
 }
 
 fn value::Value eval_typeof(Interp* ip, ast::TypeofNode* n) {
@@ -751,4 +779,339 @@ export fn void mono_cache_insert(MonoCache* c, arena::Arena* a, MonoKey key, ast
     c.buckets[idx].key = key;
     c.buckets[idx].clone = clone;
     c.count += 1;
+}
+
+// AST DEEP-CLONE (for monomorphization)
+
+fn ast::AstNode* dup(arena::Arena* a, ast::AstNode* n, u64 size) {
+    void* c = arena::alloc(a, size);
+    sys::memcpy(c, (void*)n, size);
+    return (ast::AstNode*)c;
+}
+
+fn ast::AstNode*[] clone_node_list(arena::Arena* a, ast::AstNode*[] list) {
+    ast::AstNode*[] out;
+    out.ptr = null;
+    out.len = 0;
+    if(list.len > 0) {
+        out.ptr = arena::alloc(a, list.len * sizeof(ast::AstNode*));
+        out.len = list.len;
+        for(u64 i = 0; i < list.len; i += 1) { out[i] = clone_node(a, list[i]); }
+    }
+    return out;
+}
+
+fn ast::Param[] clone_params(arena::Arena* a, ast::Param[] params) {
+    ast::Param[] out;
+    out.ptr = null;
+    out.len = 0;
+    if(params.len > 0) {
+        out.ptr = arena::alloc(a, params.len * sizeof(ast::Param));
+        out.len = params.len;
+        for(u64 i = 0; i < params.len; i += 1) {
+            out[i] = params[i];
+            out[i].type_expr = clone_node(a, params[i].type_expr);
+        }
+    }
+    return out;
+}
+
+fn ast::FieldDecl[] clone_fields(arena::Arena* a, ast::FieldDecl[] fields) {
+    ast::FieldDecl[] out;
+    out.ptr = null;
+    out.len = 0;
+    if(fields.len > 0) {
+        out.ptr = arena::alloc(a, fields.len * sizeof(ast::FieldDecl));
+        out.len = fields.len;
+        for(u64 i = 0; i < fields.len; i += 1) {
+            out[i] = fields[i];
+            out[i].type_expr = clone_node(a, fields[i].type_expr);
+        }
+    }
+    return out;
+}
+
+fn ast::SwitchArm[] clone_arms(arena::Arena* a, ast::SwitchArm[] arms) {
+    ast::SwitchArm[] out;
+    out.ptr = null;
+    out.len = 0;
+    if(arms.len > 0) {
+        out.ptr = arena::alloc(a, arms.len * sizeof(ast::SwitchArm));
+        out.len = arms.len;
+        for(u64 i = 0; i < arms.len; i += 1) {
+            out[i] = arms[i];
+            out[i].labels = clone_node_list(a, arms[i].labels);
+            out[i].body = clone_node(a, arms[i].body);
+        }
+    }
+    return out;
+}
+
+fn ast::FieldInitializer[] clone_inits(arena::Arena* a, ast::FieldInitializer[] inits) {
+    ast::FieldInitializer[] out;
+    out.ptr = null;
+    out.len = 0;
+    if(inits.len > 0) {
+        out.ptr = arena::alloc(a, inits.len * sizeof(ast::FieldInitializer));
+        out.len = inits.len;
+        for(u64 i = 0; i < inits.len; i += 1) {
+            out[i] = inits[i];
+            out[i].value = clone_node(a, inits[i].value);
+        }
+    }
+    return out;
+}
+
+fn ast::AstNode* clone_node(arena::Arena* a, ast::AstNode* n) {
+    if(n == null) { return null; }
+    switch(n.h.kind) {
+    case ast::AstKind::IntLit:       { return dup(a, n, sizeof(ast::IntLitNode)); }
+    case ast::AstKind::FloatLit:     { return dup(a, n, sizeof(ast::FloatLitNode)); }
+    case ast::AstKind::BoolLit:      { return dup(a, n, sizeof(ast::BoolLitNode)); }
+    case ast::AstKind::CharLit:      { return dup(a, n, sizeof(ast::CharLitNode)); }
+    case ast::AstKind::StringLit:    { return dup(a, n, sizeof(ast::StringLitNode)); }
+    case ast::AstKind::NullLit:      { return dup(a, n, sizeof(ast::NullLitNode)); }
+    case ast::AstKind::UndefinedLit: { return dup(a, n, sizeof(ast::UndefinedLitNode)); }
+    case ast::AstKind::Ident:        { return dup(a, n, sizeof(ast::IdentNode)); }
+    case ast::AstKind::PrimitiveType: { return dup(a, n, sizeof(ast::TypePrimitiveNode)); }
+    case ast::AstKind::NamedType:    { return dup(a, n, sizeof(ast::TypeNamedNode)); }
+    case ast::AstKind::NamespaceAccess: {
+        ast::NamespaceAccessNode* c = (ast::NamespaceAccessNode*)dup(a, n, sizeof(ast::NamespaceAccessNode));
+        c.base = clone_node(a, c.base);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::MemberAccess: {
+        ast::MemberAccessNode* c = (ast::MemberAccessNode*)dup(a, n, sizeof(ast::MemberAccessNode));
+        c.base = clone_node(a, c.base);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::ArrayIndex: {
+        ast::ArrayIndexNode* c = (ast::ArrayIndexNode*)dup(a, n, sizeof(ast::ArrayIndexNode));
+        c.base = clone_node(a, c.base);
+        c.index = clone_node(a, c.index);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::SliceRange: {
+        ast::SliceRangeNode* c = (ast::SliceRangeNode*)dup(a, n, sizeof(ast::SliceRangeNode));
+        c.base = clone_node(a, c.base);
+        c.lo = clone_node(a, c.lo);
+        c.hi = clone_node(a, c.hi);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::Call: {
+        ast::CallNode* c = (ast::CallNode*)dup(a, n, sizeof(ast::CallNode));
+        c.callee = clone_node(a, c.callee);
+        c.args = clone_node_list(a, c.args);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::Cast: {
+        ast::CastNode* c = (ast::CastNode*)dup(a, n, sizeof(ast::CastNode));
+        c.target_type = clone_node(a, c.target_type);
+        c.expr = clone_node(a, c.expr);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::UnaryOp: {
+        ast::UnaryOpNode* c = (ast::UnaryOpNode*)dup(a, n, sizeof(ast::UnaryOpNode));
+        c.operand = clone_node(a, c.operand);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::BinaryOp: {
+        ast::BinaryOpNode* c = (ast::BinaryOpNode*)dup(a, n, sizeof(ast::BinaryOpNode));
+        c.lhs = clone_node(a, c.lhs);
+        c.rhs = clone_node(a, c.rhs);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::StructLit: {
+        ast::StructLitNode* c = (ast::StructLitNode*)dup(a, n, sizeof(ast::StructLitNode));
+        c.inits = clone_inits(a, c.inits);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::ArrayLit: {
+        ast::ArrayLitNode* c = (ast::ArrayLitNode*)dup(a, n, sizeof(ast::ArrayLitNode));
+        c.elems = clone_node_list(a, c.elems);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::Sizeof: {
+        ast::SizeofNode* c = (ast::SizeofNode*)dup(a, n, sizeof(ast::SizeofNode));
+        c.arg = clone_node(a, c.arg);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::Alignof: {
+        ast::AlignofNode* c = (ast::AlignofNode*)dup(a, n, sizeof(ast::AlignofNode));
+        c.arg = clone_node(a, c.arg);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::Typeof: {
+        ast::TypeofNode* c = (ast::TypeofNode*)dup(a, n, sizeof(ast::TypeofNode));
+        c.expr = clone_node(a, c.expr);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::Type_info: {
+        ast::TypeInfoNode* c = (ast::TypeInfoNode*)dup(a, n, sizeof(ast::TypeInfoNode));
+        c.arg = clone_node(a, c.arg);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::BlockStmt: {
+        ast::BlockNode* c = (ast::BlockNode*)dup(a, n, sizeof(ast::BlockNode));
+        c.stmts = clone_node_list(a, c.stmts);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::IfStmt: {
+        ast::IfNode* c = (ast::IfNode*)dup(a, n, sizeof(ast::IfNode));
+        c.cond = clone_node(a, c.cond);
+        c.then_block = clone_node(a, c.then_block);
+        c.else_block = clone_node(a, c.else_block);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::WhileStmt: {
+        ast::WhileNode* c = (ast::WhileNode*)dup(a, n, sizeof(ast::WhileNode));
+        c.cond = clone_node(a, c.cond);
+        c.body = clone_node(a, c.body);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::ForStmt: {
+        ast::ForNode* c = (ast::ForNode*)dup(a, n, sizeof(ast::ForNode));
+        c.init = clone_node(a, c.init);
+        c.cond = clone_node(a, c.cond);
+        c.post = clone_node(a, c.post);
+        c.body = clone_node(a, c.body);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::SwitchStmt: {
+        ast::SwitchNode* c = (ast::SwitchNode*)dup(a, n, sizeof(ast::SwitchNode));
+        c.discriminant = clone_node(a, c.discriminant);
+        c.arms = clone_arms(a, c.arms);
+        c.else_block = clone_node(a, c.else_block);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::ReturnStmt: {
+        ast::ReturnNode* c = (ast::ReturnNode*)dup(a, n, sizeof(ast::ReturnNode));
+        c.expr = clone_node(a, c.expr);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::DeferStmt: {
+        ast::DeferNode* c = (ast::DeferNode*)dup(a, n, sizeof(ast::DeferNode));
+        c.body = clone_node(a, c.body);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::AssignmentStmt: {
+        ast::AssignmentNode* c = (ast::AssignmentNode*)dup(a, n, sizeof(ast::AssignmentNode));
+        c.lhs = clone_node(a, c.lhs);
+        c.rhs = clone_node(a, c.rhs);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::VarDecl: {
+        ast::VarDeclNode* c = (ast::VarDeclNode*)dup(a, n, sizeof(ast::VarDeclNode));
+        c.type_expr = clone_node(a, c.type_expr);
+        c.init = clone_node(a, c.init);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::ExprStmt: {
+        ast::ExprStmtNode* c = (ast::ExprStmtNode*)dup(a, n, sizeof(ast::ExprStmtNode));
+        c.expr = clone_node(a, c.expr);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::ComprunStmt: {
+        ast::CompRunNode* c = (ast::CompRunNode*)dup(a, n, sizeof(ast::CompRunNode));
+        c.body = clone_node(a, c.body);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::ComperrorStmt: {
+        ast::CompErrorNode* c = (ast::CompErrorNode*)dup(a, n, sizeof(ast::CompErrorNode));
+        c.msg_expr = clone_node(a, c.msg_expr);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::CompwarningStmt: {
+        ast::CompWarningNode* c = (ast::CompWarningNode*)dup(a, n, sizeof(ast::CompWarningNode));
+        c.msg_expr = clone_node(a, c.msg_expr);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::CompinsertStmt: {
+        ast::CompInsertNode* c = (ast::CompInsertNode*)dup(a, n, sizeof(ast::CompInsertNode));
+        c.source_expr = clone_node(a, c.source_expr);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::CompspliceStmt: {
+        ast::CompSpliceNode* c = (ast::CompSpliceNode*)dup(a, n, sizeof(ast::CompSpliceNode));
+        c.code_expr = clone_node(a, c.code_expr);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::Compcode: {
+        ast::CompCodeNode* c = (ast::CompCodeNode*)dup(a, n, sizeof(ast::CompCodeNode));
+        c.body = clone_node(a, c.body);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::PointerType: {
+        ast::TypePointerNode* c = (ast::TypePointerNode*)dup(a, n, sizeof(ast::TypePointerNode));
+        c.pointee = clone_node(a, c.pointee);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::ArrayType: {
+        ast::TypeArrayNode* c = (ast::TypeArrayNode*)dup(a, n, sizeof(ast::TypeArrayNode));
+        c.element = clone_node(a, c.element);
+        c.size_expr = clone_node(a, c.size_expr);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::SliceType: {
+        ast::TypeSliceNode* c = (ast::TypeSliceNode*)dup(a, n, sizeof(ast::TypeSliceNode));
+        c.element = clone_node(a, c.element);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::FnPtrType: {
+        ast::TypeFnPtrNode* c = (ast::TypeFnPtrNode*)dup(a, n, sizeof(ast::TypeFnPtrNode));
+        c.return_type = clone_node(a, c.return_type);
+        c.param_types = clone_node_list(a, c.param_types);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::StructType: {
+        ast::TypeStructNode* c = (ast::TypeStructNode*)dup(a, n, sizeof(ast::TypeStructNode));
+        c.fields = clone_fields(a, c.fields);
+        return (ast::AstNode*)c;
+    }
+    case ast::AstKind::UnionType: {
+        ast::TypeUnionNode* c = (ast::TypeUnionNode*)dup(a, n, sizeof(ast::TypeUnionNode));
+        c.fields = clone_fields(a, c.fields);
+        return (ast::AstNode*)c;
+    }
+    else { return n; }      // unreachable — all in-body kinds enumerated; share rather than risk garbage child pointers
+    }
+    return null;
+}
+
+export fn ast::FnDeclNode* clone_fn_decl(arena::Arena* a, ast::FnDeclNode* orig) {
+    ast::FnDeclNode* c = (ast::FnDeclNode*)dup(a, (ast::AstNode*)orig, sizeof(ast::FnDeclNode));
+    c.return_type = clone_node(a, orig.return_type);
+    c.params = clone_params(a, orig.params);
+    c.body = clone_node(a, orig.body);
+    c.cfg = null;
+    c.decl = null;
+    return c;
+}
+
+fn void instantiated_fns_push(module::Module* m, ast::FnDeclNode* clone) {
+    if(m.instantiated_fns.len == m.instantiated_fns_cap) {
+        u64 new_cap = 4;
+        if(m.instantiated_fns_cap > 0) { new_cap = m.instantiated_fns_cap * 2; }
+        m.instantiated_fns.ptr = arena::realloc_grow(m.arena, (void*)m.instantiated_fns.ptr, m.instantiated_fns.len * sizeof(ast::FnDeclNode*), new_cap * sizeof(ast::FnDeclNode*));
+        m.instantiated_fns_cap = new_cap;
+    }
+    m.instantiated_fns[m.instantiated_fns.len] = clone;
+    m.instantiated_fns.len += 1;
+}
+
+export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, value::Value[] cargs) {
+    if(ip.m.mono_cache == null) {
+        ip.m.mono_cache = arena::alloc(ip.m.arena, sizeof(MonoCache));
+        sys::memset(ip.m.mono_cache, 0, sizeof(MonoCache));
+    }
+    MonoCache* cache = (MonoCache*)ip.m.mono_cache;
+    MonoKey key;
+    key.callee = callee;
+    key.args = cargs;
+    ast::FnDeclNode* hit = mono_cache_lookup(cache, &key);
+    if(hit != null) { return hit; }
+    ast::FnDeclNode* clone = clone_fn_decl(ip.m.arena, callee);
+    mono_cache_insert(cache, ip.m.arena, key, clone);
+    instantiated_fns_push(ip.m, clone);
+    return clone;
 }
