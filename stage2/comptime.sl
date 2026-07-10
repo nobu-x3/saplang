@@ -350,6 +350,134 @@ fn value::Value eval_typeof(Interp* ip, ast::TypeofNode* n) {
     return value::val_type(t);
 }
 
+fn sema::Decl* resolved_decl(ast::AstNode* n) {
+    if(n == null) { return null; }
+    if(n.h.kind == ast::AstKind::Ident) { return (sema::Decl*)((ast::IdentNode*)n).resolved; }
+    if(n.h.kind == ast::AstKind::NamespaceAccess) { return (sema::Decl*)((ast::NamespaceAccessNode*)n).resolved; }
+    return null;
+}
+
+fn bool decl_is_mutable_global(sema::Decl* d) {
+    if(d == null || d.kind != (u16)sema::DeclKind::Node || d.data.node == null) { return false; }
+    if(d.data.node.h.kind != ast::AstKind::VarDecl) { return false; }
+    ast::VarDeclNode* vd = (ast::VarDeclNode*)d.data.node;
+    return vd.qualified_name != null && !vd.is_const;
+}
+
+export fn bool ensure_comptime_safe(Interp* ip, ast::FnDeclNode* func) {
+    if(func.comptime_safe == ast::CompSafe::Safe) { return true; }
+    if(func.comptime_safe == ast::CompSafe::Unsafe) { return false; }
+    if(func.comptime_safe == ast::CompSafe::InProgress) { return true; }   // mid-check: tolerate the recursion cycle
+    func.comptime_safe = ast::CompSafe::InProgress;
+    bool safe = walk_safe(ip, func.body);
+    if(safe) { func.comptime_safe = ast::CompSafe::Safe; } else { func.comptime_safe = ast::CompSafe::Unsafe; }
+    return safe;
+}
+
+fn bool walk_safe(Interp* ip, ast::AstNode* n) {
+    if(n == null) { return true; }
+    switch(n.h.kind) {
+    case ast::AstKind::BlockStmt: {
+        ast::BlockNode* b = (ast::BlockNode*)n;
+        for(u64 stmt_index = 0; stmt_index < b.stmts.len; stmt_index += 1) {
+            if(!walk_safe(ip, b.stmts[stmt_index])) { return false; }
+        }
+        return true;
+    }
+    case ast::AstKind::IfStmt: {
+        ast::IfNode* s = (ast::IfNode*)n;
+        if(!walk_safe(ip, s.cond)) { return false; }
+        if(!walk_safe(ip, s.then_block)) { return false; }
+        return walk_safe(ip, s.else_block);
+    }
+    case ast::AstKind::WhileStmt: {
+        ast::WhileNode* s = (ast::WhileNode*)n;
+        if(!walk_safe(ip, s.cond)) { return false; }
+        return walk_safe(ip, s.body);
+    }
+    case ast::AstKind::ForStmt: {
+        ast::ForNode* s = (ast::ForNode*)n;
+        if(!walk_safe(ip, s.init)) { return false; }
+        if(!walk_safe(ip, s.cond)) { return false; }
+        if(!walk_safe(ip, s.post)) { return false; }
+        return walk_safe(ip, s.body);
+    }
+    case ast::AstKind::ReturnStmt:     { return walk_safe(ip, ((ast::ReturnNode*)n).expr); }
+    case ast::AstKind::AssignmentStmt: {
+        ast::AssignmentNode* s = (ast::AssignmentNode*)n;
+        if(!walk_safe(ip, s.lhs)) { return false; }
+        return walk_safe(ip, s.rhs);
+    }
+    case ast::AstKind::VarDecl:  { return walk_safe(ip, ((ast::VarDeclNode*)n).init); }
+    case ast::AstKind::ExprStmt: { return walk_safe(ip, ((ast::ExprStmtNode*)n).expr); }
+    case ast::AstKind::BinaryOp: {
+        ast::BinaryOpNode* e = (ast::BinaryOpNode*)n;
+        if(!walk_safe(ip, e.lhs)) { return false; }
+        return walk_safe(ip, e.rhs);
+    }
+    case ast::AstKind::UnaryOp: { return walk_safe(ip, ((ast::UnaryOpNode*)n).operand); }
+    case ast::AstKind::Call: {
+        ast::CallNode* c = (ast::CallNode*)n;
+        sema::Decl* callee_d = resolved_decl(c.callee);
+        if(callee_d != null && callee_d.kind == (u16)sema::DeclKind::Node && callee_d.data.node != null) {
+            ast::AstNode* fnode = callee_d.data.node;
+            if(fnode.h.kind == ast::AstKind::ExternFnDecl) { return false; }
+            if(fnode.h.kind == ast::AstKind::FnDecl) {
+                if(!ensure_comptime_safe(ip, (ast::FnDeclNode*)fnode)) { return false; }
+            }
+        }
+        if(!walk_safe(ip, c.callee)) { return false; }
+        for(u64 arg_index = 0; arg_index < c.args.len; arg_index += 1) {
+            if(!walk_safe(ip, c.args[arg_index])) { return false; }
+        }
+        return true;
+    }
+    case ast::AstKind::Ident:           { return !decl_is_mutable_global(resolved_decl(n)); }
+    case ast::AstKind::NamespaceAccess: { return !decl_is_mutable_global(resolved_decl(n)); }
+    case ast::AstKind::MemberAccess:    { return walk_safe(ip, ((ast::MemberAccessNode*)n).base); }
+    case ast::AstKind::ArrayIndex: {
+        ast::ArrayIndexNode* e = (ast::ArrayIndexNode*)n;
+        if(!walk_safe(ip, e.base)) { return false; }
+        return walk_safe(ip, e.index);
+    }
+    case ast::AstKind::SliceRange: {
+        ast::SliceRangeNode* e = (ast::SliceRangeNode*)n;
+        if(!walk_safe(ip, e.base)) { return false; }
+        if(!walk_safe(ip, e.lo)) { return false; }
+        return walk_safe(ip, e.hi);
+    }
+    case ast::AstKind::Cast: { return walk_safe(ip, ((ast::CastNode*)n).expr); }
+    case ast::AstKind::StructLit: {
+        ast::StructLitNode* e = (ast::StructLitNode*)n;
+        for(u64 init_index = 0; init_index < e.inits.len; init_index += 1) {
+            if(!walk_safe(ip, e.inits[init_index].value)) { return false; }
+        }
+        return true;
+    }
+    case ast::AstKind::ArrayLit: {
+        ast::ArrayLitNode* e = (ast::ArrayLitNode*)n;
+        for(u64 elem_index = 0; elem_index < e.elems.len; elem_index += 1) {
+            if(!walk_safe(ip, e.elems[elem_index])) { return false; }
+        }
+        return true;
+    }
+    case ast::AstKind::DeferStmt: { return walk_safe(ip, ((ast::DeferNode*)n).body); }
+    case ast::AstKind::SwitchStmt: {
+        ast::SwitchNode* s = (ast::SwitchNode*)n;
+        if(!walk_safe(ip, s.discriminant)) { return false; }
+        for(u64 arm_index = 0; arm_index < s.arms.len; arm_index += 1) {
+            for(u64 label_index = 0; label_index < s.arms[arm_index].labels.len; label_index += 1) {
+                if(!walk_safe(ip, s.arms[arm_index].labels[label_index])) { return false; }
+            }
+            if(!walk_safe(ip, s.arms[arm_index].body)) { return false; }
+        }
+        return walk_safe(ip, s.else_block);
+    }
+    else { return true; }
+    }
+    return true;
+}
+
 fn value::Value eval_string_lit(Interp* ip, ast::StringLitNode* n) {
     u8[] bytes;
     bytes.ptr = &ip.m.literal_pool[n.pool_off];

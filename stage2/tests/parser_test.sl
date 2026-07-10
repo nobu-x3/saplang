@@ -11122,7 +11122,7 @@ fn i32 extern_fn_exported(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_comptime_safe_is_minus_one(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_comptime_safe_is_unsafe(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f(); }", &m);
@@ -11130,7 +11130,7 @@ fn i32 extern_fn_comptime_safe_is_minus_one(arena::Arena* a, u8[] msg) {
     if(!b) { return -1; }
     ast::ExternFnDeclNode* f = compiler_testing::expect_extern_fn(b.items[0], compiler_testing::sym(m, "f"), 0, false, false, msg);
     if(!f) { return -2; }
-    if(!testing::expect_eq((i32)f.comptime_safe, (i32)-1, msg)) { return -3; }
+    if(f.comptime_safe != ast::CompSafe::Unsafe) { return -3; }
     return 0;
 }
 
@@ -13422,7 +13422,7 @@ fn i32 main() {
     testing::add(s_ext, "extern_fn_variadic_only", &extern_fn_variadic_only);
     testing::add(s_ext, "extern_fn_multi_param_variadic", &extern_fn_multi_param_variadic);
     testing::add(s_ext, "extern_fn_exported", &extern_fn_exported);
-    testing::add(s_ext, "extern_fn_comptime_safe_is_minus_one", &extern_fn_comptime_safe_is_minus_one);
+    testing::add(s_ext, "extern_fn_comptime_safe_is_unsafe", &extern_fn_comptime_safe_is_unsafe);
     testing::add(s_ext, "extern_struct_opaque", &extern_struct_opaque);
     testing::add(s_ext, "extern_struct_opaque_exported", &extern_struct_opaque_exported);
     testing::add(s_ext, "extern_struct_full", &extern_struct_full);

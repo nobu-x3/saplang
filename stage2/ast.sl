@@ -64,6 +64,13 @@ export struct VarDeclNode {
     void*               decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
 }
 
+export enum CompSafe : i8 {
+    Unchecked  = 0,
+    Safe       = 1,
+    Unsafe     = 2,
+    InProgress = 3,
+}
+
 export struct FnDeclNode {
     AstHeader h;
     symbol::Symbol*   name;
@@ -72,7 +79,7 @@ export struct FnDeclNode {
     Param[]   params;
     AstNode*  body;                     // AstKind::BlockStmt
     void*     cfg;                      // cfg::Cfg* — null until CFG construction runs (void* breaks the cycle)
-    i8        comptime_safe;            // 0 = unchecked, 1 = safe, -1 = unsafe; set lazily by comptime
+    CompSafe  comptime_safe;            // set lazily by comptime
     bool      is_exported;
     void*     decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
 }
@@ -128,7 +135,7 @@ export struct ExternFnDeclNode {
     Param[]   params;
     bool      is_variadic;
     bool      is_exported;
-    i8        comptime_safe;            // always -1 for extern; pre-set at sema time
+    CompSafe  comptime_safe;            // always Unsafe for extern; pre-set at parse time
 }
 
 export struct ExternStructDeclNode {

@@ -906,7 +906,7 @@ fn i32 externfn_variadic_flag_roundtrip(arena::Arena* a, u8[] m) {
     ast::ExternFnDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternFnDeclNode));
     n.h.kind = ast::AstKind::ExternFnDecl;
     n.is_variadic = true;
-    n.comptime_safe = (i8)-1;
+    n.comptime_safe = ast::CompSafe::Unsafe;
     if(!testing::expect_true(n.is_variadic, m)) { return -1; }
     return 0;
 }

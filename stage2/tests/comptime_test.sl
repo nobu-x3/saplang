@@ -6,6 +6,7 @@ import module;
 import types;
 import arena;
 import sema;
+import symbol;
 import token;
 import sys;
 
@@ -226,6 +227,78 @@ fn i64 sz(arena::Arena* a, comptime::Interp* ip, types::Type* ty) {
 fn i64 al(arena::Arena* a, comptime::Interp* ip, types::Type* ty) {
     value::Value v = comptime::eval(ip, mk_alignof(a, ty));
     return v.data.i;
+}
+
+fn ast::AstNode* mk_defer(arena::Arena* a, ast::AstNode* body) {
+    ast::DeferNode* n = (ast::DeferNode*)arena::alloc(a, sizeof(ast::DeferNode));
+    sys::memset(n, 0, sizeof(ast::DeferNode));
+    n.h.kind = ast::AstKind::DeferStmt;
+    n.body = body;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_slice_range(arena::Arena* a, ast::AstNode* base, ast::AstNode* lo, ast::AstNode* hi) {
+    ast::SliceRangeNode* n = (ast::SliceRangeNode*)arena::alloc(a, sizeof(ast::SliceRangeNode));
+    sys::memset(n, 0, sizeof(ast::SliceRangeNode));
+    n.h.kind = ast::AstKind::SliceRange;
+    n.base = base;
+    n.lo = lo;
+    n.hi = hi;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_cast(arena::Arena* a, ast::AstNode* expr) {
+    ast::CastNode* n = (ast::CastNode*)arena::alloc(a, sizeof(ast::CastNode));
+    sys::memset(n, 0, sizeof(ast::CastNode));
+    n.h.kind = ast::AstKind::Cast;
+    n.expr = expr;
+    return (ast::AstNode*)n;
+}
+
+fn ast::FnDeclNode* mk_fn_node(arena::Arena* a, ast::AstNode* body) {
+    ast::FnDeclNode* n = (ast::FnDeclNode*)arena::alloc(a, sizeof(ast::FnDeclNode));
+    sys::memset(n, 0, sizeof(ast::FnDeclNode));
+    n.h.kind = ast::AstKind::FnDecl;
+    n.body = body;
+    return n;
+}
+
+fn ast::AstNode* mk_call(arena::Arena* a, ast::AstNode* callee) {
+    ast::CallNode* n = (ast::CallNode*)arena::alloc(a, sizeof(ast::CallNode));
+    sys::memset(n, 0, sizeof(ast::CallNode));
+    n.h.kind = ast::AstKind::Call;
+    n.callee = callee;
+    return (ast::AstNode*)n;
+}
+
+fn sema::Decl* mk_fn_decl_for(arena::Arena* a, ast::FnDeclNode* func) {
+    sema::Decl* d = mk_decl(a);
+    d.kind = (u16)sema::DeclKind::Node;
+    d.data.node = (ast::AstNode*)func;
+    return d;
+}
+
+fn sema::Decl* mk_extern_decl(arena::Arena* a) {
+    ast::ExternFnDeclNode* e = (ast::ExternFnDeclNode*)arena::alloc(a, sizeof(ast::ExternFnDeclNode));
+    sys::memset(e, 0, sizeof(ast::ExternFnDeclNode));
+    e.h.kind = ast::AstKind::ExternFnDecl;
+    e.comptime_safe = ast::CompSafe::Unsafe;
+    sema::Decl* d = mk_decl(a);
+    d.kind = (u16)sema::DeclKind::Node;
+    d.data.node = (ast::AstNode*)e;
+    return d;
+}
+
+fn sema::Decl* mk_global_decl(arena::Arena* a, bool is_const) {
+    ast::VarDeclNode* vd = (ast::VarDeclNode*)arena::alloc(a, sizeof(ast::VarDeclNode));
+    sys::memset(vd, 0, sizeof(ast::VarDeclNode));
+    vd.h.kind = ast::AstKind::VarDecl;
+    vd.is_const = is_const;
+    vd.qualified_name = (symbol::Symbol*)arena::alloc(a, 8);
+    sema::Decl* d = mk_decl(a);
+    d.kind = (u16)sema::DeclKind::Node;
+    d.data.node = (ast::AstNode*)vd;
+    return d;
 }
 
 fn i32 env_bind_lookup(arena::Arena* a, u8[] m) {
@@ -768,6 +841,131 @@ fn i32 eval_sizeof_in_expression(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 comptime_safe_pure_fn(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::AstNode* ret = mk_return(a, mk_binary(a, token::TokenKind::Plus, mk_int(a, 1, types::prim_i32()), mk_int(a, 2, types::prim_i32()), types::prim_i32()));
+    ast::AstNode*[1] stmts;
+    stmts[0] = ret;
+    ast::FnDeclNode* func = mk_fn_node(a, mk_block(a, &stmts[0], 1));
+    if(!comptime::ensure_comptime_safe(&ip, func)) { return -1; }
+    if(func.comptime_safe != ast::CompSafe::Safe) { return -2; }
+    return 0;
+}
+
+fn i32 comptime_safe_recursion(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* func = mk_fn_node(a, null);
+    sema::Decl* df = mk_fn_decl_for(a, func);
+    ast::AstNode*[1] stmts;
+    stmts[0] = mk_call(a, mk_ident_resolved(a, df, null));
+    func.body = mk_block(a, &stmts[0], 1);
+    if(!comptime::ensure_comptime_safe(&ip, func)) { return -1; }
+    if(func.comptime_safe != ast::CompSafe::Safe) { return -2; }
+    return 0;
+}
+
+fn i32 comptime_safe_extern_unsafe(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* de = mk_extern_decl(a);
+    ast::AstNode*[1] stmts;
+    stmts[0] = mk_call(a, mk_ident_resolved(a, de, null));
+    ast::FnDeclNode* func = mk_fn_node(a, mk_block(a, &stmts[0], 1));
+    if(comptime::ensure_comptime_safe(&ip, func)) { return -1; }
+    if(func.comptime_safe != ast::CompSafe::Unsafe) { return -2; }
+    return 0;
+}
+
+fn i32 comptime_safe_global_read_unsafe(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* dg = mk_global_decl(a, false);
+    ast::AstNode*[1] stmts;
+    stmts[0] = mk_return(a, mk_ident_resolved(a, dg, types::prim_i32()));
+    ast::FnDeclNode* func = mk_fn_node(a, mk_block(a, &stmts[0], 1));
+    if(comptime::ensure_comptime_safe(&ip, func)) { return -1; }
+    return 0;
+}
+
+fn i32 comptime_safe_const_global_safe(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* dg = mk_global_decl(a, true);
+    ast::AstNode*[1] stmts;
+    stmts[0] = mk_return(a, mk_ident_resolved(a, dg, types::prim_i32()));
+    ast::FnDeclNode* func = mk_fn_node(a, mk_block(a, &stmts[0], 1));
+    if(!comptime::ensure_comptime_safe(&ip, func)) { return -1; }
+    return 0;
+}
+
+fn i32 comptime_safe_transitive(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::AstNode*[1] b_stmts;
+    b_stmts[0] = mk_return(a, mk_int(a, 1, types::prim_i32()));
+    ast::FnDeclNode* fn_b = mk_fn_node(a, mk_block(a, &b_stmts[0], 1));
+    sema::Decl* db = mk_fn_decl_for(a, fn_b);
+    ast::AstNode*[1] a_stmts;
+    a_stmts[0] = mk_call(a, mk_ident_resolved(a, db, null));
+    ast::FnDeclNode* fn_a = mk_fn_node(a, mk_block(a, &a_stmts[0], 1));
+    if(!comptime::ensure_comptime_safe(&ip, fn_a)) { return -1; }
+    if(fn_b.comptime_safe != ast::CompSafe::Safe) { return -2; }
+    return 0;
+}
+
+fn i32 comptime_safe_calling_unsafe_is_unsafe(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* de = mk_extern_decl(a);
+    ast::AstNode*[1] b_stmts;
+    b_stmts[0] = mk_call(a, mk_ident_resolved(a, de, null));
+    ast::FnDeclNode* fn_b = mk_fn_node(a, mk_block(a, &b_stmts[0], 1));
+    sema::Decl* db = mk_fn_decl_for(a, fn_b);
+    ast::AstNode*[1] a_stmts;
+    a_stmts[0] = mk_call(a, mk_ident_resolved(a, db, null));
+    ast::FnDeclNode* fn_a = mk_fn_node(a, mk_block(a, &a_stmts[0], 1));
+    if(comptime::ensure_comptime_safe(&ip, fn_a)) { return -1; }
+    return 0;
+}
+
+fn i32 comptime_safe_extern_in_defer(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* de = mk_extern_decl(a);
+    ast::AstNode*[1] defer_stmts;
+    defer_stmts[0] = mk_call(a, mk_ident_resolved(a, de, null));
+    ast::AstNode*[1] stmts;
+    stmts[0] = mk_defer(a, mk_block(a, &defer_stmts[0], 1));
+    ast::FnDeclNode* func = mk_fn_node(a, mk_block(a, &stmts[0], 1));
+    if(comptime::ensure_comptime_safe(&ip, func)) { return -1; }
+    return 0;
+}
+
+fn i32 comptime_safe_extern_in_cast(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* de = mk_extern_decl(a);
+    ast::AstNode*[1] stmts;
+    stmts[0] = mk_return(a, mk_cast(a, mk_call(a, mk_ident_resolved(a, de, null))));
+    ast::FnDeclNode* func = mk_fn_node(a, mk_block(a, &stmts[0], 1));
+    if(comptime::ensure_comptime_safe(&ip, func)) { return -1; }
+    return 0;
+}
+
+fn i32 comptime_safe_extern_in_slice_range(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* de = mk_extern_decl(a);
+    ast::AstNode* range = mk_slice_range(a, mk_int(a, 0, types::prim_i32()), mk_call(a, mk_ident_resolved(a, de, null)), mk_int(a, 1, types::prim_i32()));
+    ast::AstNode*[1] stmts;
+    stmts[0] = mk_return(a, range);
+    ast::FnDeclNode* func = mk_fn_node(a, mk_block(a, &stmts[0], 1));
+    if(comptime::ensure_comptime_safe(&ip, func)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Comptime Tests";
@@ -814,5 +1012,15 @@ fn i32 main() {
     testing::add(suite, "eval_sizeof_unresolved_errors", &eval_sizeof_unresolved_errors);
     testing::add(suite, "eval_type_comparison",         &eval_type_comparison);
     testing::add(suite, "eval_sizeof_in_expression",    &eval_sizeof_in_expression);
+    testing::add(suite, "comptime_safe_pure_fn",        &comptime_safe_pure_fn);
+    testing::add(suite, "comptime_safe_recursion",      &comptime_safe_recursion);
+    testing::add(suite, "comptime_safe_extern_unsafe",  &comptime_safe_extern_unsafe);
+    testing::add(suite, "comptime_safe_global_read_unsafe", &comptime_safe_global_read_unsafe);
+    testing::add(suite, "comptime_safe_const_global_safe", &comptime_safe_const_global_safe);
+    testing::add(suite, "comptime_safe_transitive",     &comptime_safe_transitive);
+    testing::add(suite, "comptime_safe_calling_unsafe_is_unsafe", &comptime_safe_calling_unsafe_is_unsafe);
+    testing::add(suite, "comptime_safe_extern_in_defer", &comptime_safe_extern_in_defer);
+    testing::add(suite, "comptime_safe_extern_in_cast", &comptime_safe_extern_in_cast);
+    testing::add(suite, "comptime_safe_extern_in_slice_range", &comptime_safe_extern_in_slice_range);
     return testing::run();
 }

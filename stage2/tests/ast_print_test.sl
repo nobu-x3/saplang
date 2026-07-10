@@ -698,7 +698,7 @@ fn i32 print_fn_decl(arena::Arena* a, u8[] m) {
     n.return_type = (ast::AstNode*)prim_type(&local, token::TokenKind::I32);
     n.params = {params, 1};
     n.body = (ast::AstNode*)empty_block(&local);
-    n.comptime_safe = 0;
+    n.comptime_safe = ast::CompSafe::Unchecked;
     n.is_exported = true;
     ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "FnDecl id exported\n  return:\n    PrimitiveType 'i32'\n  Param a\n    PrimitiveType 'i32'\n  body:\n    Block\n";
@@ -800,7 +800,7 @@ fn i32 print_extern_fn_decl(arena::Arena* a, u8[] m) {
     n.params = {null, 0};
     n.is_variadic = true;
     n.is_exported = true;
-    n.comptime_safe = (i8)-1;
+    n.comptime_safe = ast::CompSafe::Unsafe;
     ast_print::print((ast::AstNode*)n, 0, &c.buf);
     u8[] e = "ExternFnDecl printf variadic exported\n  return:\n    PrimitiveType 'i32'\n";
     if(!check(&c, e, m)) { return -1; }

@@ -201,7 +201,7 @@ fn ast::AstNode* parse_fn_decl(Parser* p, bool is_exported) {
     fn_decl_node.return_type = type_expr;
     fn_decl_node.params = params;
     fn_decl_node.body = body;
-    fn_decl_node.comptime_safe = 0;
+    fn_decl_node.comptime_safe = ast::CompSafe::Unchecked;
     fn_decl_node.is_exported = is_exported;
     return (ast::AstNode*)fn_decl_node;
 }
@@ -474,7 +474,7 @@ fn ast::AstNode* parse_extern_fn_decl(Parser* p, bool is_exported, u32 start) {
     n.params = params;
     n.is_variadic = is_variadic;
     n.is_exported = is_exported;
-    n.comptime_safe = (i8)-1;
+    n.comptime_safe = ast::CompSafe::Unsafe;
     return (ast::AstNode*)n;
 }
 
