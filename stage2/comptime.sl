@@ -6,6 +6,7 @@ import types;
 import diag;
 import sema;
 import op;
+import token;
 import sys;
 
 export struct EnvEntry { sema::Decl* key; value::Value val; }
@@ -27,7 +28,8 @@ export struct Interp {
     module::Module* m;
     Env*            env;
     i32             depth;
-    i32             max_depth;
+    i32             max_depth;      // recursion-call limit; -comptime-depth
+    u64             max_iterations; // per-loop iteration cap; -comptime-iterations
     MonoCtx[]       mono_stack;
     u64             mono_cap;
     bool            returning;      // set by eval_return; unwinds block/loop evaluation
@@ -77,6 +79,7 @@ export fn Interp new_interp(module::Module* m) {
     sys::memset(&ip, 0, sizeof(Interp));
     ip.m = m;
     ip.max_depth = 1024;
+    ip.max_iterations = 10000000;
     ip.env = env_push(null, m.arena, 16);
     return ip;
 }
@@ -112,6 +115,11 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
         ast::ExprStmtNode* s = (ast::ExprStmtNode*)e;
         return eval(ip, s.expr);
     }
+    case ast::AstKind::IfStmt:        { return eval_if(ip, (ast::IfNode*)e); }
+    case ast::AstKind::WhileStmt:     { return eval_while(ip, (ast::WhileNode*)e); }
+    case ast::AstKind::ForStmt:       { return eval_for(ip, (ast::ForNode*)e); }
+    case ast::AstKind::ReturnStmt:    { return eval_return(ip, (ast::ReturnNode*)e); }
+    case ast::AstKind::AssignmentStmt: { return eval_assignment(ip, (ast::AssignmentNode*)e); }
     else {
         diag_unsupported(ip, e.h.src_pos);
         return value::val_error();
@@ -166,6 +174,129 @@ fn value::Value eval_local_var_decl(Interp* ip, ast::VarDeclNode* n) {
         if(v.kind == (u16)value::ValueKind::Error) { return v; }
     }
     env_bind(ip.env, ip.m.arena, d, v);
+    return value::val_void();
+}
+
+// Saplang conditions accept bool, integer (zero/non-zero), and pointer/slice (null/non-null).
+fn value::Value eval_cond(Interp* ip, ast::AstNode* cond) {
+    value::Value v = eval(ip, cond);
+    if(v.kind == (u16)value::ValueKind::Error) { return v; }
+    if(v.kind == (u16)value::ValueKind::Bool) { return v; }
+    if(v.kind == (u16)value::ValueKind::Int) { return value::val_bool(v.data.i != 0); }
+    if(v.kind == (u16)value::ValueKind::Null) { return value::val_bool(false); }
+    if(v.kind == (u16)value::ValueKind::Bytes) { return value::val_bool(v.data.bytes.ptr != null); }
+    u8[] msg = "comptime condition is not convertible to bool";
+    diag::report(&ip.m.diag, ip.m.arena, cond.h.src_pos, msg);
+    return value::val_error();
+}
+
+fn value::Value iteration_limit_error(Interp* ip, u32 pos) {
+    u8[] msg = "comptime loop exceeded iteration limit";
+    diag::report(&ip.m.diag, ip.m.arena, pos, msg);
+    return value::val_error();
+}
+
+fn value::Value eval_return(Interp* ip, ast::ReturnNode* n) {
+    value::Value v = value::val_void();
+    if(n.expr != null) {
+        v = eval(ip, n.expr);
+        if(v.kind == (u16)value::ValueKind::Error) { return v; }
+    }
+    ip.return_value = v;
+    ip.returning = true;
+    return v;
+}
+
+fn value::Value eval_if(Interp* ip, ast::IfNode* n) {
+    value::Value cond = eval_cond(ip, n.cond);
+    if(cond.kind == (u16)value::ValueKind::Error) { return cond; }
+    if(cond.data.b) { return eval(ip, n.then_block); }
+    if(n.else_block != null) { return eval(ip, n.else_block); }
+    return value::val_void();
+}
+
+fn value::Value eval_while(Interp* ip, ast::WhileNode* n) {
+    u64 iterations = 0;
+    while(true) {
+        value::Value cond = eval_cond(ip, n.cond);
+        if(cond.kind == (u16)value::ValueKind::Error) { return cond; }
+        if(!cond.data.b) { break; }
+        value::Value body = eval(ip, n.body);
+        if(body.kind == (u16)value::ValueKind::Error) { return body; }
+        if(ip.returning) { break; }
+        iterations += 1;
+        if(iterations > ip.max_iterations) { return iteration_limit_error(ip, n.h.src_pos); }
+    }
+    return value::val_void();
+}
+
+fn value::Value eval_for(Interp* ip, ast::ForNode* n) {
+    Env* saved = ip.env;
+    ip.env = env_push(saved, ip.m.arena, 8);
+    value::Value result = value::val_void();
+    if(n.init != null) {
+        value::Value iv = eval(ip, n.init);
+        if(iv.kind == (u16)value::ValueKind::Error) { result = iv; }
+    }
+    if(result.kind != (u16)value::ValueKind::Error) {
+        u64 iterations = 0;
+        while(true) {
+            if(n.cond != null) {
+                value::Value c = eval_cond(ip, n.cond);
+                if(c.kind == (u16)value::ValueKind::Error) { result = c; break; }
+                if(!c.data.b) { break; }
+            }
+            value::Value b = eval(ip, n.body);
+            if(b.kind == (u16)value::ValueKind::Error) { result = b; break; }
+            if(ip.returning) { break; }
+            if(n.post != null) {
+                value::Value p = eval(ip, n.post);
+                if(p.kind == (u16)value::ValueKind::Error) { result = p; break; }
+            }
+            iterations += 1;
+            if(iterations > ip.max_iterations) { result = iteration_limit_error(ip, n.h.src_pos); break; }
+        }
+    }
+    env_pop(ip.env);
+    ip.env = saved;
+    return result;
+}
+
+fn token::TokenKind compound_base(token::TokenKind op) {
+    if(op == token::TokenKind::PlusEq) { return token::TokenKind::Plus; }
+    if(op == token::TokenKind::MinusEq) { return token::TokenKind::Minus; }
+    if(op == token::TokenKind::StarEq) { return token::TokenKind::Star; }
+    if(op == token::TokenKind::SlashEq) { return token::TokenKind::Slash; }
+    if(op == token::TokenKind::PercentEq) { return token::TokenKind::Percent; }
+    if(op == token::TokenKind::AmpEq) { return token::TokenKind::Amp; }
+    if(op == token::TokenKind::PipeEq) { return token::TokenKind::Pipe; }
+    return token::TokenKind::Caret;
+}
+
+fn value::Value eval_assignment(Interp* ip, ast::AssignmentNode* n) {
+    if(n.lhs.h.kind != ast::AstKind::Ident) {
+        u8[] msg = "comptime assignment target must be a local variable";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    ast::IdentNode* target = (ast::IdentNode*)n.lhs;
+    sema::Decl* d = (sema::Decl*)target.resolved;
+    value::Value rhs = eval(ip, n.rhs);
+    if(rhs.kind == (u16)value::ValueKind::Error) { return rhs; }
+    value::Value* slot = null;
+    if(d != null) { slot = env_lookup(ip.env, d); }
+    if(slot == null) {
+        u8[] msg = "comptime assignment target is not a comptime local";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    value::Value newval = rhs;
+    if(n.op != token::TokenKind::Eq) {
+        value::Value combined = op::binop_eval(compound_base(n.op), *slot, rhs);
+        if(combined.kind == (u16)value::ValueKind::Error) { return combined; }
+        newval = combined;
+    }
+    *slot = newval;
     return value::val_void();
 }
 

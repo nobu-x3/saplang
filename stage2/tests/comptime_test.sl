@@ -138,6 +138,54 @@ fn sema::Decl* mk_global_var(arena::Arena* a, i64 value, bool is_const) {
     return d;
 }
 
+fn ast::AstNode* mk_if(arena::Arena* a, ast::AstNode* cond, ast::AstNode* then_block, ast::AstNode* else_block) {
+    ast::IfNode* n = (ast::IfNode*)arena::alloc(a, sizeof(ast::IfNode));
+    sys::memset(n, 0, sizeof(ast::IfNode));
+    n.h.kind = ast::AstKind::IfStmt;
+    n.cond = cond;
+    n.then_block = then_block;
+    n.else_block = else_block;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_while(arena::Arena* a, ast::AstNode* cond, ast::AstNode* body) {
+    ast::WhileNode* n = (ast::WhileNode*)arena::alloc(a, sizeof(ast::WhileNode));
+    sys::memset(n, 0, sizeof(ast::WhileNode));
+    n.h.kind = ast::AstKind::WhileStmt;
+    n.cond = cond;
+    n.body = body;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_for(arena::Arena* a, ast::AstNode* init, ast::AstNode* cond, ast::AstNode* post, ast::AstNode* body) {
+    ast::ForNode* n = (ast::ForNode*)arena::alloc(a, sizeof(ast::ForNode));
+    sys::memset(n, 0, sizeof(ast::ForNode));
+    n.h.kind = ast::AstKind::ForStmt;
+    n.init = init;
+    n.cond = cond;
+    n.post = post;
+    n.body = body;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_return(arena::Arena* a, ast::AstNode* expr) {
+    ast::ReturnNode* n = (ast::ReturnNode*)arena::alloc(a, sizeof(ast::ReturnNode));
+    sys::memset(n, 0, sizeof(ast::ReturnNode));
+    n.h.kind = ast::AstKind::ReturnStmt;
+    n.expr = expr;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_assign(arena::Arena* a, token::TokenKind op, ast::AstNode* lhs, ast::AstNode* rhs) {
+    ast::AssignmentNode* n = (ast::AssignmentNode*)arena::alloc(a, sizeof(ast::AssignmentNode));
+    sys::memset(n, 0, sizeof(ast::AssignmentNode));
+    n.h.kind = ast::AstKind::AssignmentStmt;
+    n.op = op;
+    n.lhs = lhs;
+    n.rhs = rhs;
+    return (ast::AstNode*)n;
+}
+
 fn i32 env_bind_lookup(arena::Arena* a, u8[] m) {
     sema::Decl* decls = (sema::Decl*)arena::alloc(a, 50 * sizeof(sema::Decl));
     comptime::Env* env = comptime::env_push(null, a, 4);
@@ -480,6 +528,128 @@ fn i32 eval_block_outer_local(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 eval_if_branches(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* dx = mk_decl(a);
+    comptime::eval(&ip, mk_var_decl(a, dx, mk_int(a, 0, types::prim_i32())));
+    ast::AstNode*[1] then_s;
+    then_s[0] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, dx, types::prim_i32()), mk_int(a, 1, types::prim_i32()));
+    ast::AstNode*[1] else_s;
+    else_s[0] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, dx, types::prim_i32()), mk_int(a, 2, types::prim_i32()));
+    comptime::eval(&ip, mk_if(a, mk_bool(a, true), mk_block(a, &then_s[0], 1), mk_block(a, &else_s[0], 1)));
+    value::Value* xv = comptime::env_lookup(ip.env, dx);
+    if(!testing::expect_eq((u64)xv.data.i, (u64)1, m)) { return -1; }
+    comptime::eval(&ip, mk_if(a, mk_bool(a, false), mk_block(a, &then_s[0], 1), mk_block(a, &else_s[0], 1)));
+    if(!testing::expect_eq((u64)xv.data.i, (u64)2, m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_return_sets_returning(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* dx = mk_decl(a);
+    comptime::eval(&ip, mk_var_decl(a, dx, mk_int(a, 0, types::prim_i32())));
+    ast::AstNode*[2] stmts;
+    stmts[0] = mk_return(a, mk_int(a, 5, types::prim_i32()));
+    stmts[1] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, dx, types::prim_i32()), mk_int(a, 99, types::prim_i32()));
+    comptime::eval(&ip, mk_block(a, &stmts[0], 2));
+    if(!ip.returning) { return -1; }
+    if(!testing::expect_eq((u64)ip.return_value.data.i, (u64)5, m)) { return -2; }
+    value::Value* xv = comptime::env_lookup(ip.env, dx);
+    if(!testing::expect_eq((u64)xv.data.i, (u64)0, m)) { return -3; }
+    return 0;
+}
+
+fn i32 eval_while_counts(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* di = mk_decl(a);
+    comptime::eval(&ip, mk_var_decl(a, di, mk_int(a, 0, types::prim_i32())));
+    ast::AstNode* cond = mk_binary(a, token::TokenKind::LT, mk_ident_resolved(a, di, types::prim_i32()), mk_int(a, 3, types::prim_i32()), types::prim_i32());
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, di, types::prim_i32()), mk_binary(a, token::TokenKind::Plus, mk_ident_resolved(a, di, types::prim_i32()), mk_int(a, 1, types::prim_i32()), types::prim_i32()));
+    comptime::eval(&ip, mk_while(a, cond, mk_block(a, &body_s[0], 1)));
+    value::Value* iv = comptime::env_lookup(ip.env, di);
+    if(!testing::expect_eq((u64)iv.data.i, (u64)3, m)) { return -1; }
+    return 0;
+}
+
+fn i32 eval_for_factorial(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* dacc = mk_decl(a);
+    comptime::eval(&ip, mk_var_decl(a, dacc, mk_int(a, 1, types::prim_i64())));
+    sema::Decl* di = mk_decl(a);
+    ast::AstNode* init = mk_var_decl(a, di, mk_int(a, 1, types::prim_i64()));
+    ast::AstNode* cond = mk_binary(a, token::TokenKind::LTEQ, mk_ident_resolved(a, di, types::prim_i64()), mk_int(a, 10, types::prim_i64()), types::prim_i64());
+    ast::AstNode* post = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, di, types::prim_i64()), mk_binary(a, token::TokenKind::Plus, mk_ident_resolved(a, di, types::prim_i64()), mk_int(a, 1, types::prim_i64()), types::prim_i64()));
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, dacc, types::prim_i64()), mk_binary(a, token::TokenKind::Star, mk_ident_resolved(a, dacc, types::prim_i64()), mk_ident_resolved(a, di, types::prim_i64()), types::prim_i64()));
+    comptime::eval(&ip, mk_for(a, init, cond, post, mk_block(a, &body_s[0], 1)));
+    value::Value* accv = comptime::env_lookup(ip.env, dacc);
+    if(!testing::expect_eq((u64)accv.data.i, (u64)3628800, m)) { return -1; }
+    return 0;
+}
+
+fn i32 eval_cond_int_truthy(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* dx = mk_decl(a);
+    comptime::eval(&ip, mk_var_decl(a, dx, mk_int(a, 0, types::prim_i32())));
+    ast::AstNode*[1] set1;
+    set1[0] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, dx, types::prim_i32()), mk_int(a, 1, types::prim_i32()));
+    ast::AstNode*[1] set2;
+    set2[0] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, dx, types::prim_i32()), mk_int(a, 2, types::prim_i32()));
+    comptime::eval(&ip, mk_if(a, mk_int(a, 5, types::prim_i32()), mk_block(a, &set1[0], 1), mk_block(a, &set2[0], 1)));
+    value::Value* xv = comptime::env_lookup(ip.env, dx);
+    if(!testing::expect_eq((u64)xv.data.i, (u64)1, m)) { return -1; }
+    comptime::eval(&ip, mk_if(a, mk_int(a, 0, types::prim_i32()), mk_block(a, &set1[0], 1), mk_block(a, &set2[0], 1)));
+    if(!testing::expect_eq((u64)xv.data.i, (u64)2, m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_compound_assignment(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* dacc = mk_decl(a);
+    comptime::eval(&ip, mk_var_decl(a, dacc, mk_int(a, 6, types::prim_i32())));
+    comptime::eval(&ip, mk_assign(a, token::TokenKind::StarEq, mk_ident_resolved(a, dacc, types::prim_i32()), mk_int(a, 7, types::prim_i32())));
+    value::Value* accv = comptime::env_lookup(ip.env, dacc);
+    if(!testing::expect_eq((u64)accv.data.i, (u64)42, m)) { return -1; }
+    comptime::eval(&ip, mk_assign(a, token::TokenKind::MinusEq, mk_ident_resolved(a, dacc, types::prim_i32()), mk_int(a, 2, types::prim_i32())));
+    if(!testing::expect_eq((u64)accv.data.i, (u64)40, m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_assign_errors(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* unbound = mk_decl(a);
+    value::Value v1 = comptime::eval(&ip, mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, unbound, types::prim_i32()), mk_int(a, 1, types::prim_i32())));
+    if(!testing::expect_eq((u64)v1.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "not a comptime local", m)) { return -2; }
+    value::Value v2 = comptime::eval(&ip, mk_assign(a, token::TokenKind::Eq, mk_int(a, 3, types::prim_i32()), mk_int(a, 1, types::prim_i32())));
+    if(!testing::expect_eq((u64)v2.kind, (u64)value::ValueKind::Error, m)) { return -3; }
+    if(!testing::expect_substr(mm.diag.entries[1].msg, "must be a local variable", m)) { return -4; }
+    return 0;
+}
+
+fn i32 eval_iteration_limit(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ip.max_iterations = 5;
+    sema::Decl* di = mk_decl(a);
+    comptime::eval(&ip, mk_var_decl(a, di, mk_int(a, 0, types::prim_i32())));
+    ast::AstNode* cond = mk_binary(a, token::TokenKind::LT, mk_ident_resolved(a, di, types::prim_i32()), mk_int(a, 100, types::prim_i32()), types::prim_i32());
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, di, types::prim_i32()), mk_binary(a, token::TokenKind::Plus, mk_ident_resolved(a, di, types::prim_i32()), mk_int(a, 1, types::prim_i32()), types::prim_i32()));
+    value::Value v = comptime::eval(&ip, mk_while(a, cond, mk_block(a, &body_s[0], 1)));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "iteration limit", m)) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Comptime Tests";
@@ -511,5 +681,13 @@ fn i32 main() {
     testing::add(suite, "eval_global_const_ident",      &eval_global_const_ident);
     testing::add(suite, "eval_mutable_global_not_comptime", &eval_mutable_global_not_comptime);
     testing::add(suite, "eval_block_outer_local",       &eval_block_outer_local);
+    testing::add(suite, "eval_if_branches",             &eval_if_branches);
+    testing::add(suite, "eval_return_sets_returning",   &eval_return_sets_returning);
+    testing::add(suite, "eval_while_counts",            &eval_while_counts);
+    testing::add(suite, "eval_for_factorial",           &eval_for_factorial);
+    testing::add(suite, "eval_cond_int_truthy",         &eval_cond_int_truthy);
+    testing::add(suite, "eval_compound_assignment",     &eval_compound_assignment);
+    testing::add(suite, "eval_assign_errors",           &eval_assign_errors);
+    testing::add(suite, "eval_iteration_limit",         &eval_iteration_limit);
     return testing::run();
 }
