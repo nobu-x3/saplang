@@ -30,6 +30,8 @@ export struct Interp {
     i32             max_depth;
     MonoCtx[]       mono_stack;
     u64             mono_cap;
+    bool            returning;      // set by eval_return; unwinds block/loop evaluation
+    value::Value    return_value;
 }
 
 export fn Env* env_push(Env* parent, arena::Arena* a, u64 initial_cap) {
@@ -103,12 +105,68 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::NullLit:   { return value::val_null((types::Type*)e.h.ty); }
     case ast::AstKind::BinaryOp:  { return eval_binary(ip, (ast::BinaryOpNode*)e); }
     case ast::AstKind::UnaryOp:   { return eval_unary(ip, (ast::UnaryOpNode*)e); }
+    case ast::AstKind::Ident:     { return eval_ident(ip, (ast::IdentNode*)e); }
+    case ast::AstKind::BlockStmt: { return eval_block(ip, (ast::BlockNode*)e); }
+    case ast::AstKind::VarDecl:   { return eval_local_var_decl(ip, (ast::VarDeclNode*)e); }
+    case ast::AstKind::ExprStmt: {
+        ast::ExprStmtNode* s = (ast::ExprStmtNode*)e;
+        return eval(ip, s.expr);
+    }
     else {
         diag_unsupported(ip, e.h.src_pos);
         return value::val_error();
     }
     }
     return value::val_error();
+}
+
+fn value::Value eval_ident(Interp* ip, ast::IdentNode* n) {
+    sema::Decl* d = (sema::Decl*)n.resolved;
+    if(d == null) {
+        diag_unsupported(ip, n.h.src_pos);
+        return value::val_error();
+    }
+    value::Value* slot = env_lookup(ip.env, d);
+    if(slot != null) {
+        value::Value copy = *slot;
+        return copy;
+    }
+    if(d.kind == (u16)sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl) {
+        ast::VarDeclNode* vd = (ast::VarDeclNode*)d.data.node;
+        if(vd.is_const && vd.init != null) { return eval(ip, vd.init); }
+    }
+    u8[] msg = "identifier is not a comptime value";
+    diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+    return value::val_error();
+}
+
+fn value::Value eval_block(Interp* ip, ast::BlockNode* n) {
+    Env* saved = ip.env;
+    ip.env = env_push(saved, ip.m.arena, 8);
+    value::Value result = value::val_void();
+    for(u64 stmt_index = 0; stmt_index < n.stmts.len; stmt_index += 1) {
+        value::Value v = eval(ip, n.stmts[stmt_index]);
+        if(v.kind == (u16)value::ValueKind::Error) { result = v; break; }
+        if(ip.returning) { break; }
+    }
+    env_pop(ip.env);
+    ip.env = saved;
+    return result;
+}
+
+fn value::Value eval_local_var_decl(Interp* ip, ast::VarDeclNode* n) {
+    sema::Decl* d = (sema::Decl*)n.decl;
+    if(d == null) {
+        diag_unsupported(ip, n.h.src_pos);
+        return value::val_error();
+    }
+    value::Value v = value::val_void();
+    if(n.init != null) {
+        v = eval(ip, n.init);
+        if(v.kind == (u16)value::ValueKind::Error) { return v; }
+    }
+    env_bind(ip.env, ip.m.arena, d, v);
+    return value::val_void();
 }
 
 fn value::Value eval_binary(Interp* ip, ast::BinaryOpNode* n) {
