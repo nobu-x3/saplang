@@ -109,6 +109,7 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::BinaryOp:  { return eval_binary(ip, (ast::BinaryOpNode*)e); }
     case ast::AstKind::UnaryOp:   { return eval_unary(ip, (ast::UnaryOpNode*)e); }
     case ast::AstKind::Ident:     { return eval_ident(ip, (ast::IdentNode*)e); }
+    case ast::AstKind::Call:      { return eval_call(ip, (ast::CallNode*)e); }
     case ast::AstKind::BlockStmt: { return eval_block(ip, (ast::BlockNode*)e); }
     case ast::AstKind::VarDecl:   { return eval_local_var_decl(ip, (ast::VarDeclNode*)e); }
     case ast::AstKind::ExprStmt: {
@@ -340,6 +341,83 @@ fn value::Value eval_alignof(Interp* ip, ast::AlignofNode* n) {
         return value::val_error();
     }
     return value::val_int((i64)types::align_of(&ip.m.diag, t), types::prim_u64());
+}
+
+fn bool has_comptime_params(ast::FnDeclNode* func) {
+    for(u64 param_index = 0; param_index < func.params.len; param_index += 1) {
+        if(func.params[param_index].is_comptime) { return true; }
+    }
+    return false;
+}
+
+fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u32 call_site_pos) {
+    if(ip.depth >= ip.max_depth) {
+        u8[] msg = "comptime recursion limit exceeded";
+        diag::report(&ip.m.diag, ip.m.arena, call_site_pos, msg);
+        return value::val_error();
+    }
+    ip.depth += 1;
+    Env* saved = ip.env;
+    ip.env = env_push(saved, ip.m.arena, 16);
+    for(u64 param_index = 0; param_index < func.params.len; param_index += 1) {
+        sema::Decl* pd = (sema::Decl*)func.params[param_index].decl;
+        if(pd != null && param_index < args.len) { env_bind(ip.env, ip.m.arena, pd, args[param_index]); }
+    }
+    bool saved_returning = ip.returning;
+    value::Value saved_return_value = ip.return_value;
+    ip.returning = false;
+    value::Value body_result = eval(ip, func.body);
+    value::Value result = value::val_void();
+    if(body_result.kind == (u16)value::ValueKind::Error) { result = body_result; } else if(ip.returning) { result = ip.return_value; }
+    ip.returning = saved_returning;
+    ip.return_value = saved_return_value;
+    env_pop(ip.env);
+    ip.env = saved;
+    ip.depth -= 1;
+    return result;
+}
+
+fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
+    sema::Decl* d = resolved_decl(n.callee);
+    if(d == null || d.kind != (u16)sema::DeclKind::Node || d.data.node == null) {
+        u8[] msg = "cannot resolve comptime call target";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    ast::AstNode* fnode = d.data.node;
+    if(fnode.h.kind == ast::AstKind::ExternFnDecl) {
+        u8[] msg = "cannot call an extern function at comptime";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    if(fnode.h.kind != ast::AstKind::FnDecl) {
+        u8[] msg = "comptime call target is not a function";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    ast::FnDeclNode* func = (ast::FnDeclNode*)fnode;
+    if(!ensure_comptime_safe(ip, func)) {
+        u8[] msg = "cannot call a non-comptime-safe function at comptime";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    if(has_comptime_params(func)) {
+        u8[] msg = "comptime monomorphization not yet supported";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    value::Value[] args;
+    args.ptr = null;
+    args.len = 0;
+    if(n.args.len > 0) {
+        args.ptr = arena::alloc(ip.m.arena, n.args.len * sizeof(value::Value));
+        args.len = n.args.len;
+        for(u64 arg_index = 0; arg_index < n.args.len; arg_index += 1) {
+            args[arg_index] = eval(ip, n.args[arg_index]);
+            if(args[arg_index].kind == (u16)value::ValueKind::Error) { return args[arg_index]; }
+        }
+    }
+    return invoke(ip, func, args, n.h.src_pos);
 }
 
 fn value::Value eval_comperror(Interp* ip, ast::CompErrorNode* n) {

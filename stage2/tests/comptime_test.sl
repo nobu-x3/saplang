@@ -295,6 +295,21 @@ fn ast::AstNode* mk_call(arena::Arena* a, ast::AstNode* callee) {
     return (ast::AstNode*)n;
 }
 
+fn ast::AstNode* mk_call_args(arena::Arena* a, ast::AstNode* callee, ast::AstNode** args, u64 nargs) {
+    ast::CallNode* n = (ast::CallNode*)arena::alloc(a, sizeof(ast::CallNode));
+    sys::memset(n, 0, sizeof(ast::CallNode));
+    n.h.kind = ast::AstKind::Call;
+    n.callee = callee;
+    n.args = {args, nargs};
+    return (ast::AstNode*)n;
+}
+
+fn sema::Decl* mk_param_decl(arena::Arena* a) {
+    sema::Decl* d = mk_decl(a);
+    d.kind = (u16)sema::DeclKind::Param;
+    return d;
+}
+
 fn sema::Decl* mk_fn_decl_for(arena::Arena* a, ast::FnDeclNode* func) {
     sema::Decl* d = mk_decl(a);
     d.kind = (u16)sema::DeclKind::Node;
@@ -1368,6 +1383,143 @@ fn i32 mono_cache_bytes_args(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 eval_call_simple(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* add1 = mk_fn_node(a, null);
+    sema::Decl* decl_add1 = mk_fn_decl_for(a, add1);
+    sema::Decl* param_x = mk_param_decl(a);
+    ast::Param[1] params;
+    sys::memset(&params[0], 0, sizeof(ast::Param));
+    params[0].decl = (void*)param_x;
+    add1.params = {&params[0], 1};
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_return(a, mk_binary(a, token::TokenKind::Plus, mk_ident_resolved(a, param_x, types::prim_i32()), mk_int(a, 1, types::prim_i32()), types::prim_i32()));
+    add1.body = mk_block(a, &body_s[0], 1);
+    ast::AstNode*[1] args;
+    args[0] = mk_int(a, 41, types::prim_i32());
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_add1, null), &args[0], 1));
+    if(!testing::expect_eq((u64)v.data.i, (u64)42, m)) { return -1; }
+    return 0;
+}
+
+fn i32 eval_call_recursive_factorial(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* fact = mk_fn_node(a, null);
+    sema::Decl* decl_fact = mk_fn_decl_for(a, fact);
+    sema::Decl* param_n = mk_param_decl(a);
+    ast::Param[1] params;
+    sys::memset(&params[0], 0, sizeof(ast::Param));
+    params[0].decl = (void*)param_n;
+    fact.params = {&params[0], 1};
+
+    ast::AstNode* cond = mk_binary(a, token::TokenKind::LTEQ, mk_ident_resolved(a, param_n, types::prim_i32()), mk_int(a, 1, types::prim_i32()), types::prim_i32());
+    ast::AstNode*[1] then_s;
+    then_s[0] = mk_return(a, mk_int(a, 1, types::prim_i32()));
+    ast::AstNode* iff = mk_if(a, cond, mk_block(a, &then_s[0], 1), null);
+
+    ast::AstNode*[1] rec_args;
+    rec_args[0] = mk_binary(a, token::TokenKind::Minus, mk_ident_resolved(a, param_n, types::prim_i32()), mk_int(a, 1, types::prim_i32()), types::prim_i32());
+    ast::AstNode* rec_call = mk_call_args(a, mk_ident_resolved(a, decl_fact, null), &rec_args[0], 1);
+    ast::AstNode* mul = mk_binary(a, token::TokenKind::Star, mk_ident_resolved(a, param_n, types::prim_i32()), rec_call, types::prim_i32());
+    ast::AstNode* ret = mk_return(a, mul);
+
+    ast::AstNode*[2] body_s;
+    body_s[0] = iff;
+    body_s[1] = ret;
+    fact.body = mk_block(a, &body_s[0], 2);
+
+    ast::AstNode*[1] top_args;
+    top_args[0] = mk_int(a, 5, types::prim_i32());
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_fact, null), &top_args[0], 1));
+    if(!testing::expect_eq((u64)v.data.i, (u64)120, m)) { return -1; }
+    return 0;
+}
+
+fn i32 eval_call_recursion_limit(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ip.max_depth = 10;
+    ast::FnDeclNode* looper = mk_fn_node(a, null);
+    sema::Decl* decl_looper = mk_fn_decl_for(a, looper);
+    ast::AstNode* inner_call = mk_call_args(a, mk_ident_resolved(a, decl_looper, null), null, 0);
+    inner_call.h.src_pos = 555;
+    ast::AstNode*[1] body_s;
+    body_s[0] = inner_call;
+    looper.body = mk_block(a, &body_s[0], 1);
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_looper, null), null, 0));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    if(!testing::expect_eq((u64)mm.diag.entries[0].src_pos, (u64)555, m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_call_extern_rejected(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* de = mk_extern_decl(a);
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, de, null), null, 0));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "extern", m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_call_generic_unsupported(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* gen = mk_fn_node(a, mk_block(a, null, 0));
+    sema::Decl* decl_gen = mk_fn_decl_for(a, gen);
+    ast::Param[1] params;
+    sys::memset(&params[0], 0, sizeof(ast::Param));
+    params[0].is_comptime = true;
+    params[0].decl = (void*)mk_param_decl(a);
+    gen.params = {&params[0], 1};
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_gen, null), null, 0));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "monomorphization", m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_call_multi_param(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* sub = mk_fn_node(a, null);
+    sema::Decl* decl_sub = mk_fn_decl_for(a, sub);
+    sema::Decl* pa = mk_param_decl(a);
+    sema::Decl* pb = mk_param_decl(a);
+    ast::Param[2] params;
+    sys::memset(&params[0], 0, 2 * sizeof(ast::Param));
+    params[0].decl = (void*)pa;
+    params[1].decl = (void*)pb;
+    sub.params = {&params[0], 2};
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_return(a, mk_binary(a, token::TokenKind::Minus, mk_ident_resolved(a, pa, types::prim_i32()), mk_ident_resolved(a, pb, types::prim_i32()), types::prim_i32()));
+    sub.body = mk_block(a, &body_s[0], 1);
+    ast::AstNode*[2] call_args;
+    call_args[0] = mk_int(a, 10, types::prim_i32());
+    call_args[1] = mk_int(a, 3, types::prim_i32());
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_sub, null), &call_args[0], 2));
+    if(!testing::expect_eq((u64)v.data.i, (u64)7, m)) { return -1; }
+    return 0;
+}
+
+fn i32 eval_call_arg_error(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* f = mk_fn_node(a, null);
+    sema::Decl* decl_f = mk_fn_decl_for(a, f);
+    sema::Decl* px = mk_param_decl(a);
+    ast::Param[1] params;
+    sys::memset(&params[0], 0, sizeof(ast::Param));
+    params[0].decl = (void*)px;
+    f.params = {&params[0], 1};
+    ast::AstNode*[1] call_args;
+    call_args[0] = mk_ident(a);
+    value::Value v = comptime::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_f, null), &call_args[0], 1));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Comptime Tests";
@@ -1443,5 +1595,12 @@ fn i32 main() {
     testing::add(suite, "mono_cache_multi_args",       &mono_cache_multi_args);
     testing::add(suite, "mono_cache_float_args",       &mono_cache_float_args);
     testing::add(suite, "mono_cache_bytes_args",       &mono_cache_bytes_args);
+    testing::add(suite, "eval_call_simple",            &eval_call_simple);
+    testing::add(suite, "eval_call_recursive_factorial", &eval_call_recursive_factorial);
+    testing::add(suite, "eval_call_recursion_limit",   &eval_call_recursion_limit);
+    testing::add(suite, "eval_call_extern_rejected",   &eval_call_extern_rejected);
+    testing::add(suite, "eval_call_generic_unsupported", &eval_call_generic_unsupported);
+    testing::add(suite, "eval_call_multi_param",        &eval_call_multi_param);
+    testing::add(suite, "eval_call_arg_error",          &eval_call_arg_error);
     return testing::run();
 }
