@@ -151,6 +151,7 @@ fn value::Value val_eq(value::Value l, value::Value r, bool negate) {
     if(l.kind == (u16)value::ValueKind::Int && r.kind == (u16)value::ValueKind::Int) { eq = l.data.i == r.data.i; }
     else if(l.kind == (u16)value::ValueKind::Float && r.kind == (u16)value::ValueKind::Float) { eq = l.data.f == r.data.f; }
     else if(l.kind == (u16)value::ValueKind::Bool && r.kind == (u16)value::ValueKind::Bool) { eq = l.data.b == r.data.b; }
+    else if(l.kind == (u16)value::ValueKind::Type && r.kind == (u16)value::ValueKind::Type) { eq = l.data.type_ref == r.data.type_ref; }
     else if(l.kind == (u16)value::ValueKind::Null && r.kind == (u16)value::ValueKind::Null) { eq = true; }
     else { return value::val_error(); }
     if(negate) { eq = !eq; }

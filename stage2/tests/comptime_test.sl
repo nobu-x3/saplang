@@ -186,6 +186,48 @@ fn ast::AstNode* mk_assign(arena::Arena* a, token::TokenKind op, ast::AstNode* l
     return (ast::AstNode*)n;
 }
 
+fn ast::AstNode* mk_type_arg(arena::Arena* a, types::Type* ty) {
+    ast::TypePrimitiveNode* n = (ast::TypePrimitiveNode*)arena::alloc(a, sizeof(ast::TypePrimitiveNode));
+    sys::memset(n, 0, sizeof(ast::TypePrimitiveNode));
+    n.h.kind = ast::AstKind::PrimitiveType;
+    n.h.ty = (void*)ty;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_sizeof(arena::Arena* a, types::Type* ty) {
+    ast::SizeofNode* n = (ast::SizeofNode*)arena::alloc(a, sizeof(ast::SizeofNode));
+    sys::memset(n, 0, sizeof(ast::SizeofNode));
+    n.h.kind = ast::AstKind::Sizeof;
+    n.arg = mk_type_arg(a, ty);
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_alignof(arena::Arena* a, types::Type* ty) {
+    ast::AlignofNode* n = (ast::AlignofNode*)arena::alloc(a, sizeof(ast::AlignofNode));
+    sys::memset(n, 0, sizeof(ast::AlignofNode));
+    n.h.kind = ast::AstKind::Alignof;
+    n.arg = mk_type_arg(a, ty);
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_typeof(arena::Arena* a, types::Type* ty) {
+    ast::TypeofNode* n = (ast::TypeofNode*)arena::alloc(a, sizeof(ast::TypeofNode));
+    sys::memset(n, 0, sizeof(ast::TypeofNode));
+    n.h.kind = ast::AstKind::Typeof;
+    n.expr = mk_type_arg(a, ty);
+    return (ast::AstNode*)n;
+}
+
+fn i64 sz(arena::Arena* a, comptime::Interp* ip, types::Type* ty) {
+    value::Value v = comptime::eval(ip, mk_sizeof(a, ty));
+    return v.data.i;
+}
+
+fn i64 al(arena::Arena* a, comptime::Interp* ip, types::Type* ty) {
+    value::Value v = comptime::eval(ip, mk_alignof(a, ty));
+    return v.data.i;
+}
+
 fn i32 env_bind_lookup(arena::Arena* a, u8[] m) {
     sema::Decl* decls = (sema::Decl*)arena::alloc(a, 50 * sizeof(sema::Decl));
     comptime::Env* env = comptime::env_push(null, a, 4);
@@ -650,6 +692,82 @@ fn i32 eval_iteration_limit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 eval_sizeof_primitives(arena::Arena* a, u8[] m) {
+    types::typer_init(a, 64);
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    if(!testing::expect_eq((u64)sz(a, &ip, types::prim_i32()), (u64)4, m)) { return -1; }
+    if(!testing::expect_eq((u64)sz(a, &ip, types::prim_i64()), (u64)8, m)) { return -2; }
+    if(!testing::expect_eq((u64)sz(a, &ip, types::prim_u8()), (u64)1, m)) { return -3; }
+    if(!testing::expect_eq((u64)sz(a, &ip, types::prim_u16()), (u64)2, m)) { return -4; }
+    value::Value v = comptime::eval(&ip, mk_sizeof(a, types::prim_i32()));
+    if(!testing::expect_eq((void*)v.ty, (void*)types::prim_u64(), m)) { return -5; }
+    return 0;
+}
+
+fn i32 eval_sizeof_pointer_slice(arena::Arena* a, u8[] m) {
+    types::typer_init(a, 64);
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    types::Type* ptr = types::intern_pointer(types::prim_i32(), false);
+    types::Type* slice = types::intern_slice(types::prim_i32());
+    if(!testing::expect_eq((u64)sz(a, &ip, ptr), (u64)8, m)) { return -1; }
+    if(!testing::expect_eq((u64)sz(a, &ip, slice), (u64)16, m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_alignof_primitives(arena::Arena* a, u8[] m) {
+    types::typer_init(a, 64);
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    if(!testing::expect_eq((u64)al(a, &ip, types::prim_i32()), (u64)4, m)) { return -1; }
+    if(!testing::expect_eq((u64)al(a, &ip, types::prim_i64()), (u64)8, m)) { return -2; }
+    if(!testing::expect_eq((u64)al(a, &ip, types::prim_u8()), (u64)1, m)) { return -3; }
+    return 0;
+}
+
+fn i32 eval_typeof_expr(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    value::Value v = comptime::eval(&ip, mk_typeof(a, types::prim_i32()));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Type, m)) { return -1; }
+    if(!testing::expect_eq((void*)v.data.type_ref, (void*)types::prim_i32(), m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_sizeof_unresolved_errors(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    value::Value v = comptime::eval(&ip, mk_sizeof(a, null));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "unresolved", m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_type_comparison(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    value::Value same = comptime::eval(&ip, mk_binary(a, token::TokenKind::EqEq, mk_typeof(a, types::prim_i32()), mk_typeof(a, types::prim_i32()), types::prim_bool()));
+    if(!testing::expect_eq((u64)same.kind, (u64)value::ValueKind::Bool, m)) { return -1; }
+    if(!same.data.b) { return -2; }
+    value::Value diff = comptime::eval(&ip, mk_binary(a, token::TokenKind::EqEq, mk_typeof(a, types::prim_i32()), mk_typeof(a, types::prim_u32()), types::prim_bool()));
+    if(diff.data.b) { return -3; }
+    value::Value ne = comptime::eval(&ip, mk_binary(a, token::TokenKind::BangEq, mk_typeof(a, types::prim_i32()), mk_typeof(a, types::prim_u32()), types::prim_bool()));
+    if(!ne.data.b) { return -4; }
+    return 0;
+}
+
+fn i32 eval_sizeof_in_expression(arena::Arena* a, u8[] m) {
+    types::typer_init(a, 64);
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::AstNode* expr = mk_binary(a, token::TokenKind::Plus, mk_sizeof(a, types::prim_i32()), mk_int(a, 4, types::prim_u64()), types::prim_u64());
+    value::Value v = comptime::eval(&ip, expr);
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Int, m)) { return -1; }
+    if(!testing::expect_eq((u64)v.data.i, (u64)8, m)) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Comptime Tests";
@@ -689,5 +807,12 @@ fn i32 main() {
     testing::add(suite, "eval_compound_assignment",     &eval_compound_assignment);
     testing::add(suite, "eval_assign_errors",           &eval_assign_errors);
     testing::add(suite, "eval_iteration_limit",         &eval_iteration_limit);
+    testing::add(suite, "eval_sizeof_primitives",       &eval_sizeof_primitives);
+    testing::add(suite, "eval_sizeof_pointer_slice",    &eval_sizeof_pointer_slice);
+    testing::add(suite, "eval_alignof_primitives",      &eval_alignof_primitives);
+    testing::add(suite, "eval_typeof_expr",             &eval_typeof_expr);
+    testing::add(suite, "eval_sizeof_unresolved_errors", &eval_sizeof_unresolved_errors);
+    testing::add(suite, "eval_type_comparison",         &eval_type_comparison);
+    testing::add(suite, "eval_sizeof_in_expression",    &eval_sizeof_in_expression);
     return testing::run();
 }

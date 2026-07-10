@@ -120,6 +120,9 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::ForStmt:       { return eval_for(ip, (ast::ForNode*)e); }
     case ast::AstKind::ReturnStmt:    { return eval_return(ip, (ast::ReturnNode*)e); }
     case ast::AstKind::AssignmentStmt: { return eval_assignment(ip, (ast::AssignmentNode*)e); }
+    case ast::AstKind::Sizeof:    { return eval_sizeof(ip, (ast::SizeofNode*)e); }
+    case ast::AstKind::Alignof:   { return eval_alignof(ip, (ast::AlignofNode*)e); }
+    case ast::AstKind::Typeof:    { return eval_typeof(ip, (ast::TypeofNode*)e); }
     else {
         diag_unsupported(ip, e.h.src_pos);
         return value::val_error();
@@ -312,6 +315,39 @@ fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
     value::Value v = eval(ip, n.operand);
     if(v.kind == (u16)value::ValueKind::Error) { return v; }
     return op::unaryop_eval(n.op, v);
+}
+
+fn value::Value eval_sizeof(Interp* ip, ast::SizeofNode* n) {
+    types::Type* t = null;
+    if(n.arg != null) { t = (types::Type*)n.arg.h.ty; }
+    if(t == null) {
+        u8[] msg = "sizeof operand type is unresolved";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    return value::val_int((i64)types::size_of(&ip.m.diag, t), types::prim_u64());
+}
+
+fn value::Value eval_alignof(Interp* ip, ast::AlignofNode* n) {
+    types::Type* t = null;
+    if(n.arg != null) { t = (types::Type*)n.arg.h.ty; }
+    if(t == null) {
+        u8[] msg = "alignof operand type is unresolved";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    return value::val_int((i64)types::align_of(&ip.m.diag, t), types::prim_u64());
+}
+
+fn value::Value eval_typeof(Interp* ip, ast::TypeofNode* n) {
+    types::Type* t = null;
+    if(n.expr != null) { t = (types::Type*)n.expr.h.ty; }
+    if(t == null) {
+        u8[] msg = "typeof operand type is unresolved";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    return value::val_type(t);
 }
 
 fn value::Value eval_string_lit(Interp* ip, ast::StringLitNode* n) {
