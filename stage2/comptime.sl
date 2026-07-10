@@ -123,6 +123,7 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::Sizeof:    { return eval_sizeof(ip, (ast::SizeofNode*)e); }
     case ast::AstKind::Alignof:   { return eval_alignof(ip, (ast::AlignofNode*)e); }
     case ast::AstKind::Typeof:    { return eval_typeof(ip, (ast::TypeofNode*)e); }
+    case ast::AstKind::ComprunStmt: { return eval_comprun(ip, (ast::CompRunNode*)e); }
     else {
         diag_unsupported(ip, e.h.src_pos);
         return value::val_error();
@@ -339,6 +340,19 @@ fn value::Value eval_alignof(Interp* ip, ast::AlignofNode* n) {
     return value::val_int((i64)types::align_of(&ip.m.diag, t), types::prim_u64());
 }
 
+fn value::Value eval_comprun(Interp* ip, ast::CompRunNode* n) {
+    Env* saved = ip.env;
+    ip.env = env_push(saved, ip.m.arena, 16);
+    bool saved_returning = ip.returning;
+    value::Value saved_return_value = ip.return_value;
+    eval(ip, n.body);
+    ip.returning = saved_returning;             // a comprun is an execution boundary; a return inside it doesn't propagate out
+    ip.return_value = saved_return_value;
+    env_pop(ip.env);
+    ip.env = saved;
+    return value::val_void();
+}
+
 fn value::Value eval_typeof(Interp* ip, ast::TypeofNode* n) {
     types::Type* t = null;
     if(n.expr != null) { t = (types::Type*)n.expr.h.ty; }
@@ -461,7 +475,8 @@ fn bool walk_safe(Interp* ip, ast::AstNode* n) {
         }
         return true;
     }
-    case ast::AstKind::DeferStmt: { return walk_safe(ip, ((ast::DeferNode*)n).body); }
+    case ast::AstKind::DeferStmt:   { return walk_safe(ip, ((ast::DeferNode*)n).body); }
+    case ast::AstKind::ComprunStmt: { return walk_safe(ip, ((ast::CompRunNode*)n).body); }
     case ast::AstKind::SwitchStmt: {
         ast::SwitchNode* s = (ast::SwitchNode*)n;
         if(!walk_safe(ip, s.discriminant)) { return false; }
