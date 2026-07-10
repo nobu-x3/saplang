@@ -124,6 +124,8 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::Alignof:   { return eval_alignof(ip, (ast::AlignofNode*)e); }
     case ast::AstKind::Typeof:    { return eval_typeof(ip, (ast::TypeofNode*)e); }
     case ast::AstKind::ComprunStmt: { return eval_comprun(ip, (ast::CompRunNode*)e); }
+    case ast::AstKind::ComperrorStmt:   { return eval_comperror(ip, (ast::CompErrorNode*)e); }
+    case ast::AstKind::CompwarningStmt: { return eval_compwarning(ip, (ast::CompWarningNode*)e); }
     else {
         diag_unsupported(ip, e.h.src_pos);
         return value::val_error();
@@ -340,6 +342,30 @@ fn value::Value eval_alignof(Interp* ip, ast::AlignofNode* n) {
     return value::val_int((i64)types::align_of(&ip.m.diag, t), types::prim_u64());
 }
 
+fn value::Value eval_comperror(Interp* ip, ast::CompErrorNode* n) {
+    value::Value msg = eval(ip, n.msg_expr);
+    if(msg.kind == (u16)value::ValueKind::Error) { return msg; }
+    if(msg.kind != (u16)value::ValueKind::Bytes) {
+        u8[] bad = "comperror message must be a string";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, bad);
+        return value::val_error();
+    }
+    diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg.data.bytes);
+    return value::val_error();
+}
+
+fn value::Value eval_compwarning(Interp* ip, ast::CompWarningNode* n) {
+    value::Value msg = eval(ip, n.msg_expr);
+    if(msg.kind == (u16)value::ValueKind::Error) { return msg; }
+    if(msg.kind != (u16)value::ValueKind::Bytes) {
+        u8[] bad = "compwarning message must be a string";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, bad);
+        return value::val_error();
+    }
+    diag::report_warning(&ip.m.diag, ip.m.arena, n.h.src_pos, msg.data.bytes);
+    return value::val_void();
+}
+
 fn value::Value eval_comprun(Interp* ip, ast::CompRunNode* n) {
     Env* saved = ip.env;
     ip.env = env_push(saved, ip.m.arena, 16);
@@ -477,6 +503,8 @@ fn bool walk_safe(Interp* ip, ast::AstNode* n) {
     }
     case ast::AstKind::DeferStmt:   { return walk_safe(ip, ((ast::DeferNode*)n).body); }
     case ast::AstKind::ComprunStmt: { return walk_safe(ip, ((ast::CompRunNode*)n).body); }
+    case ast::AstKind::ComperrorStmt:   { return walk_safe(ip, ((ast::CompErrorNode*)n).msg_expr); }
+    case ast::AstKind::CompwarningStmt: { return walk_safe(ip, ((ast::CompWarningNode*)n).msg_expr); }
     case ast::AstKind::SwitchStmt: {
         ast::SwitchNode* s = (ast::SwitchNode*)n;
         if(!walk_safe(ip, s.discriminant)) { return false; }

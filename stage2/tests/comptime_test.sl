@@ -229,6 +229,22 @@ fn i64 al(arena::Arena* a, comptime::Interp* ip, types::Type* ty) {
     return v.data.i;
 }
 
+fn ast::AstNode* mk_comperror(arena::Arena* a, ast::AstNode* msg) {
+    ast::CompErrorNode* n = (ast::CompErrorNode*)arena::alloc(a, sizeof(ast::CompErrorNode));
+    sys::memset(n, 0, sizeof(ast::CompErrorNode));
+    n.h.kind = ast::AstKind::ComperrorStmt;
+    n.msg_expr = msg;
+    return (ast::AstNode*)n;
+}
+
+fn ast::AstNode* mk_compwarning(arena::Arena* a, ast::AstNode* msg) {
+    ast::CompWarningNode* n = (ast::CompWarningNode*)arena::alloc(a, sizeof(ast::CompWarningNode));
+    sys::memset(n, 0, sizeof(ast::CompWarningNode));
+    n.h.kind = ast::AstKind::CompwarningStmt;
+    n.msg_expr = msg;
+    return (ast::AstNode*)n;
+}
+
 fn ast::AstNode* mk_comprun(arena::Arena* a, ast::AstNode* body) {
     ast::CompRunNode* n = (ast::CompRunNode*)arena::alloc(a, sizeof(ast::CompRunNode));
     sys::memset(n, 0, sizeof(ast::CompRunNode));
@@ -1055,6 +1071,81 @@ fn i32 comptime_safe_extern_in_comprun(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 eval_comperror_reports_and_halts(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    mm.literal_pool = "bad value";
+    comptime::Interp ip = comptime::new_interp(mm);
+    value::Value v = comptime::eval(&ip, mk_comperror(a, mk_string(a, 0, 9)));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -2; }
+    if(mm.diag.entries[0].is_warning) { return -3; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "bad value", m)) { return -4; }
+    return 0;
+}
+
+fn i32 eval_compwarning_continues(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    mm.literal_pool = "heads up";
+    comptime::Interp ip = comptime::new_interp(mm);
+    value::Value v = comptime::eval(&ip, mk_compwarning(a, mk_string(a, 0, 8)));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Void, m)) { return -1; }
+    if(!mm.diag.entries[0].is_warning) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "heads up", m)) { return -3; }
+    return 0;
+}
+
+fn i32 eval_comperror_halts_comprun(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    mm.literal_pool = "stop";
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* dx = mk_decl(a);
+    comptime::eval(&ip, mk_var_decl(a, dx, mk_int(a, 0, types::prim_i32())));
+    ast::AstNode*[2] body_stmts;
+    body_stmts[0] = mk_comperror(a, mk_string(a, 0, 4));
+    body_stmts[1] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, dx, types::prim_i32()), mk_int(a, 99, types::prim_i32()));
+    comptime::eval(&ip, mk_comprun(a, mk_block(a, &body_stmts[0], 2)));
+    value::Value* xv = comptime::env_lookup(ip.env, dx);
+    if(!testing::expect_eq((u64)xv.data.i, (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 eval_compwarning_continues_comprun(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    mm.literal_pool = "warn";
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* dx = mk_decl(a);
+    comptime::eval(&ip, mk_var_decl(a, dx, mk_int(a, 0, types::prim_i32())));
+    ast::AstNode*[2] body_stmts;
+    body_stmts[0] = mk_compwarning(a, mk_string(a, 0, 4));
+    body_stmts[1] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, dx, types::prim_i32()), mk_int(a, 7, types::prim_i32()));
+    comptime::eval(&ip, mk_comprun(a, mk_block(a, &body_stmts[0], 2)));
+    value::Value* xv = comptime::env_lookup(ip.env, dx);
+    if(!testing::expect_eq((u64)xv.data.i, (u64)7, m)) { return -1; }
+    if(!mm.diag.entries[0].is_warning) { return -2; }
+    return 0;
+}
+
+fn i32 eval_comperror_non_string(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    value::Value v = comptime::eval(&ip, mk_comperror(a, mk_int(a, 5, types::prim_i32())));
+    if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "must be a string", m)) { return -2; }
+    return 0;
+}
+
+fn i32 comptime_safe_extern_in_comperror(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    sema::Decl* de = mk_extern_decl(a);
+    ast::AstNode*[1] stmts;
+    stmts[0] = mk_comperror(a, mk_call(a, mk_ident_resolved(a, de, null)));
+    ast::FnDeclNode* func = mk_fn_node(a, mk_block(a, &stmts[0], 1));
+    if(comptime::ensure_comptime_safe(&ip, func)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Comptime Tests";
@@ -1117,5 +1208,11 @@ fn i32 main() {
     testing::add(suite, "eval_comprun_isolates_return", &eval_comprun_isolates_return);
     testing::add(suite, "eval_comprun_body_error_continues", &eval_comprun_body_error_continues);
     testing::add(suite, "comptime_safe_extern_in_comprun", &comptime_safe_extern_in_comprun);
+    testing::add(suite, "eval_comperror_reports_and_halts", &eval_comperror_reports_and_halts);
+    testing::add(suite, "eval_compwarning_continues",    &eval_compwarning_continues);
+    testing::add(suite, "eval_comperror_halts_comprun",  &eval_comperror_halts_comprun);
+    testing::add(suite, "eval_compwarning_continues_comprun", &eval_compwarning_continues_comprun);
+    testing::add(suite, "eval_comperror_non_string",     &eval_comperror_non_string);
+    testing::add(suite, "comptime_safe_extern_in_comperror", &comptime_safe_extern_in_comperror);
     return testing::run();
 }
