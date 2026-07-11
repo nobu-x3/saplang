@@ -18,6 +18,7 @@ export struct Sema {
     i32                 loop_depth;         // for break/continue validity
     i32                 switch_depth;
     ResolutionStack     resolution_stack;   // alias / named-type cycle detection
+    symbol::Symbol*[]   comptime_type_names; // comptime Type params of the generic whose signature is resolving
 }
 
 export enum DeclKind : u16 {
@@ -276,7 +277,33 @@ fn void resolve_fields(Sema* s, ast::FieldDecl[] fields) {
     }
 }
 
+fn bool is_type_kw(ast::AstNode* type_expr) {
+    return type_expr != null && type_expr.h.kind == ast::AstKind::PrimitiveType && ((ast::TypePrimitiveNode*)type_expr).kind == token::TokenKind::TYPE;
+}
+
+fn symbol::Symbol*[] collect_comptime_type_names(Sema* s, ast::FnDeclNode* fn_decl) {
+    u64 count = 0;
+    for(u64 i = 0; i < fn_decl.params.len; i += 1) {
+        if(fn_decl.params[i].is_comptime && is_type_kw(fn_decl.params[i].type_expr)) { count += 1; }
+    }
+    if(count == 0) {
+        symbol::Symbol*[] empty = {null, 0};
+        return empty;
+    }
+    symbol::Symbol** names_mem = (symbol::Symbol**)arena::alloc(s.m.arena, count * sizeof(symbol::Symbol*));
+    symbol::Symbol*[] names = {names_mem, 0};
+    for(u64 i = 0; i < fn_decl.params.len; i += 1) {
+        if(fn_decl.params[i].is_comptime && is_type_kw(fn_decl.params[i].type_expr)) {
+            names[names.len] = fn_decl.params[i].name;
+            names.len += 1;
+        }
+    }
+    return names;
+}
+
 fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
+    symbol::Symbol*[] saved_type_names = s.comptime_type_names;
+    s.comptime_type_names = collect_comptime_type_names(s, fn_decl);
     types::Type* return_type = types::prim_void();
     if(fn_decl.return_type != null) {
         types::Type* resolved_return = resolve_type(s, fn_decl.return_type);
@@ -293,6 +320,7 @@ fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
         param_types = {param_type_mem, fn_decl.params.len};
     }
     set_decl_ty(s, fn_decl.name, types::intern_fn_ptr(return_type, param_types, false));
+    s.comptime_type_names = saved_type_names;
 }
 
 // Look up a top-level decl by name in the module scope and record its resolved type.
@@ -313,10 +341,20 @@ export fn void check_bodies(module::Module* m) {
         ast::BlockNode* global_block = (ast::BlockNode*)s.m.root_node;
         for(u64 i = 0; i < global_block.stmts.len; i += 1) {
             ast::AstNode* node = global_block.stmts[i];
-            if(node.h.kind == ast::AstKind::FnDecl) { check_fn_body(s, (ast::FnDeclNode*)node); }
+            if(node.h.kind == ast::AstKind::FnDecl && !is_generic_fn((ast::FnDeclNode*)node)) {
+                check_fn_body(s, (ast::FnDeclNode*)node);
+            }
         }
     }
     s.m.sema_phase |= SemaPhase::Bodies;
+}
+
+// A generic template can't be body-checked in the abstract; only its instantiations (clones) are.
+export fn bool is_generic_fn(ast::FnDeclNode* func) {
+    for(u64 i = 0; i < func.params.len; i += 1) {
+        if(func.params[i].is_comptime) { return true; }
+    }
+    return false;
 }
 
 fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
@@ -340,6 +378,39 @@ fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
     s.scope = saved_scope;
     s.current_fn = saved_fn;
     s.current_return = saved_return;
+}
+
+// Full body-check of a substituted clone; the clone isn't in global_scope, so its return type comes from its own node.
+export fn void sema_check_clone(module::Module* caller, module::Module* defining, ast::FnDeclNode* clone) {
+    Sema sema;
+    sys::memset(&sema, 0, sizeof(Sema));
+    sema.m = caller;
+    Sema* s = &sema;
+    s.scope = (Scope*)defining.global_scope;
+    s.resolution_stack.arena = caller.arena;
+
+    types::Type* return_type = types::prim_void();
+    if(clone.return_type != null) {
+        types::Type* resolved = resolve_type(s, clone.return_type);
+        if(resolved != null) { return_type = resolved; }
+    }
+    Scope* fn_scope = scope_new(caller.arena, (Scope*)defining.global_scope, 16);
+    for(u64 i = 0; i < clone.params.len; i += 1) {
+        types::Type* param_type = resolve_type(s, clone.params[i].type_expr);
+        clone.params[i].resolved_type = (void*)param_type;
+        Decl* param_decl = register_sym(s, fn_scope, clone.params[i].name, false, (u16)DeclKind::Param, clone.params[i].src_pos);
+        if(param_decl != null) {
+            param_decl.ty = param_type;
+            param_decl.data.param = &clone.params[i];
+            clone.params[i].decl = (void*)param_decl;
+        }
+    }
+    if(clone.body != null) {
+        s.scope = fn_scope;
+        s.current_fn = (ast::AstNode*)clone;
+        s.current_return = return_type;
+        stmt(s, clone.body);
+    }
 }
 
 fn types::Type* fn_return_type(Sema* s, ast::FnDeclNode* func) {
@@ -460,8 +531,10 @@ export fn types::Type* resolve_type(Sema* s, ast::AstNode* texpr) {
     if(texpr == null) { return null; }
     switch(texpr.h.kind) {
     case ast::AstKind::PrimitiveType: {
+        if(texpr.h.ty != null) { return (types::Type*)texpr.h.ty; }
         ast::TypePrimitiveNode* primitive_node = (ast::TypePrimitiveNode*)texpr;
         types::Type* resolved = types::primitive(types::get_primitive_kind_from_token(primitive_node.kind));
+        if(primitive_node.kind == token::TokenKind::TYPE) { resolved = types::prim_type(); }
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
@@ -540,6 +613,12 @@ export fn types::Type*[] resolve_type_list(Sema* s, ast::AstNode*[] type_exprs) 
 
 // Crosses a module boundary when n.namespace names an import.
 fn types::Type* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
+    if(n.h.ty != null) { return (types::Type*)n.h.ty; }   // pre-bound by comptime type-param substitution
+    if(n.namespace == null) {
+        for(u64 i = 0; i < s.comptime_type_names.len; i += 1) {
+            if(n.name == s.comptime_type_names[i]) { return types::prim_type(); }
+        }
+    }
     module::Module* target = s.m;
     if(n.namespace != null) {
         Decl* namespace_decl = scope_lookup(s.scope, n.namespace);
@@ -1567,6 +1646,7 @@ export fn void diag_resolution_cycle(Sema* s, u32 src_pos, ResolutionKey key) {
 
 // "unknown type `<name>`". Used by resolve_named_type on a missing/non-type name.
 export fn void diag_unknown_type(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    if(name == null) { return; }
     u8[] name_str = interner::symbol_str(name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "unknown type %.*s", (i32)name_str.len, (i8*)name_str.ptr);
@@ -1575,6 +1655,7 @@ export fn void diag_unknown_type(Sema* s, u32 src_pos, symbol::Symbol* name) {
 
 // "undefined identifier `<name>`". Used by synth_ident on a scope miss.
 export fn void diag_undefined_ident(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    if(name == null) { return; }
     u8[] name_str = interner::symbol_str(name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "undefined identifier %.*s", (i32)name_str.len, (i8*)name_str.ptr);

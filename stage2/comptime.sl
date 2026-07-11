@@ -7,6 +7,7 @@ import diag;
 import sema;
 import op;
 import token;
+import symbol;
 import sys;
 
 export struct EnvEntry { sema::Decl* key; value::Value val; }
@@ -1111,7 +1112,233 @@ export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, val
     ast::FnDeclNode* hit = mono_cache_lookup(cache, &key);
     if(hit != null) { return hit; }
     ast::FnDeclNode* clone = clone_fn_decl(ip.m.arena, callee);
+    substitute_type_params(ip.m.arena, clone, cargs);
+    sema::sema_check_clone(ip.m, ip.m, clone);
     mono_cache_insert(cache, ip.m.arena, key, clone);
     instantiated_fns_push(ip.m, clone);
     return clone;
+}
+
+// A value-param ident is rewritten in place to an IntLit (fits an IdentNode) so eval_const_u64 reads N in T[N].
+struct SubstCtx {
+    symbol::Symbol*[] tnames;
+    types::Type*[]    ttys;
+    symbol::Symbol*[] vnames;
+    u64[]             vvals;
+    types::Type*[]    vtys;
+}
+
+fn void subst_node(SubstCtx* c, ast::AstNode* n) {
+    if(n == null) { return; }
+    switch(n.h.kind) {
+    case ast::AstKind::NamedType: {
+        ast::TypeNamedNode* t = (ast::TypeNamedNode*)n;
+        if(t.namespace == null) {
+            for(u64 i = 0; i < c.tnames.len; i += 1) {
+                if(t.name == c.tnames[i]) { t.h.ty = (void*)c.ttys[i]; return; }
+            }
+        }
+        return;
+    }
+    case ast::AstKind::PointerType: { subst_node(c, ((ast::TypePointerNode*)n).pointee); return; }
+    case ast::AstKind::SliceType:   { subst_node(c, ((ast::TypeSliceNode*)n).element); return; }
+    case ast::AstKind::ArrayType: {
+        ast::TypeArrayNode* t = (ast::TypeArrayNode*)n;
+        subst_node(c, t.element);
+        subst_size_expr(c, t.size_expr);
+        return;
+    }
+    case ast::AstKind::FnPtrType: {
+        ast::TypeFnPtrNode* t = (ast::TypeFnPtrNode*)n;
+        subst_node(c, t.return_type);
+        for(u64 i = 0; i < t.param_types.len; i += 1) { subst_node(c, t.param_types[i]); }
+        return;
+    }
+    case ast::AstKind::StructType: {
+        ast::TypeStructNode* t = (ast::TypeStructNode*)n;
+        for(u64 i = 0; i < t.fields.len; i += 1) { subst_node(c, t.fields[i].type_expr); }
+        return;
+    }
+    case ast::AstKind::UnionType: {
+        ast::TypeUnionNode* t = (ast::TypeUnionNode*)n;
+        for(u64 i = 0; i < t.fields.len; i += 1) { subst_node(c, t.fields[i].type_expr); }
+        return;
+    }
+    case ast::AstKind::BlockStmt: {
+        ast::BlockNode* b = (ast::BlockNode*)n;
+        for(u64 i = 0; i < b.stmts.len; i += 1) { subst_node(c, b.stmts[i]); }
+        return;
+    }
+    case ast::AstKind::IfStmt: {
+        ast::IfNode* s = (ast::IfNode*)n;
+        subst_node(c, s.cond);
+        subst_node(c, s.then_block);
+        subst_node(c, s.else_block);
+        return;
+    }
+    case ast::AstKind::WhileStmt: {
+        ast::WhileNode* s = (ast::WhileNode*)n;
+        subst_node(c, s.cond);
+        subst_node(c, s.body);
+        return;
+    }
+    case ast::AstKind::ForStmt: {
+        ast::ForNode* s = (ast::ForNode*)n;
+        subst_node(c, s.init);
+        subst_node(c, s.cond);
+        subst_node(c, s.post);
+        subst_node(c, s.body);
+        return;
+    }
+    case ast::AstKind::SwitchStmt: {
+        ast::SwitchNode* s = (ast::SwitchNode*)n;
+        subst_node(c, s.discriminant);
+        for(u64 i = 0; i < s.arms.len; i += 1) {
+            for(u64 j = 0; j < s.arms[i].labels.len; j += 1) { subst_node(c, s.arms[i].labels[j]); }
+            subst_node(c, s.arms[i].body);
+        }
+        subst_node(c, s.else_block);
+        return;
+    }
+    case ast::AstKind::ReturnStmt:     { subst_node(c, ((ast::ReturnNode*)n).expr); return; }
+    case ast::AstKind::DeferStmt:      { subst_node(c, ((ast::DeferNode*)n).body); return; }
+    case ast::AstKind::ExprStmt:       { subst_node(c, ((ast::ExprStmtNode*)n).expr); return; }
+    case ast::AstKind::AssignmentStmt: {
+        ast::AssignmentNode* s = (ast::AssignmentNode*)n;
+        subst_node(c, s.lhs);
+        subst_node(c, s.rhs);
+        return;
+    }
+    case ast::AstKind::VarDecl: {
+        ast::VarDeclNode* s = (ast::VarDeclNode*)n;
+        subst_node(c, s.type_expr);
+        subst_node(c, s.init);
+        return;
+    }
+    case ast::AstKind::BinaryOp: {
+        ast::BinaryOpNode* e = (ast::BinaryOpNode*)n;
+        subst_node(c, e.lhs);
+        subst_node(c, e.rhs);
+        return;
+    }
+    case ast::AstKind::UnaryOp:      { subst_node(c, ((ast::UnaryOpNode*)n).operand); return; }
+    case ast::AstKind::MemberAccess: { subst_node(c, ((ast::MemberAccessNode*)n).base); return; }
+    case ast::AstKind::ArrayIndex: {
+        ast::ArrayIndexNode* e = (ast::ArrayIndexNode*)n;
+        subst_node(c, e.base);
+        subst_node(c, e.index);
+        return;
+    }
+    case ast::AstKind::SliceRange: {
+        ast::SliceRangeNode* e = (ast::SliceRangeNode*)n;
+        subst_node(c, e.base);
+        subst_node(c, e.lo);
+        subst_node(c, e.hi);
+        return;
+    }
+    case ast::AstKind::Call: {
+        ast::CallNode* e = (ast::CallNode*)n;
+        subst_node(c, e.callee);
+        for(u64 i = 0; i < e.args.len; i += 1) { subst_node(c, e.args[i]); }
+        return;
+    }
+    case ast::AstKind::Cast: {
+        ast::CastNode* e = (ast::CastNode*)n;
+        subst_node(c, e.target_type);
+        subst_node(c, e.expr);
+        return;
+    }
+    case ast::AstKind::StructLit: {
+        ast::StructLitNode* e = (ast::StructLitNode*)n;
+        for(u64 i = 0; i < e.inits.len; i += 1) { subst_node(c, e.inits[i].value); }
+        return;
+    }
+    case ast::AstKind::ArrayLit: {
+        ast::ArrayLitNode* e = (ast::ArrayLitNode*)n;
+        for(u64 i = 0; i < e.elems.len; i += 1) { subst_node(c, e.elems[i]); }
+        return;
+    }
+    case ast::AstKind::Sizeof:    { subst_node(c, ((ast::SizeofNode*)n).arg); return; }
+    case ast::AstKind::Alignof:   { subst_node(c, ((ast::AlignofNode*)n).arg); return; }
+    case ast::AstKind::Typeof:    { subst_node(c, ((ast::TypeofNode*)n).expr); return; }
+    case ast::AstKind::Type_info: { subst_node(c, ((ast::TypeInfoNode*)n).arg); return; }
+    case ast::AstKind::ComprunStmt:     { subst_node(c, ((ast::CompRunNode*)n).body); return; }
+    case ast::AstKind::ComperrorStmt:   { subst_node(c, ((ast::CompErrorNode*)n).msg_expr); return; }
+    case ast::AstKind::CompwarningStmt: { subst_node(c, ((ast::CompWarningNode*)n).msg_expr); return; }
+    case ast::AstKind::CompinsertStmt:  { subst_node(c, ((ast::CompInsertNode*)n).source_expr); return; }
+    case ast::AstKind::CompspliceStmt:  { subst_node(c, ((ast::CompSpliceNode*)n).code_expr); return; }
+    case ast::AstKind::Compcode:        { subst_node(c, ((ast::CompCodeNode*)n).body); return; }
+    case ast::AstKind::NamespaceAccess: { subst_node(c, ((ast::NamespaceAccessNode*)n).base); return; }
+    else { return; }
+    }
+}
+
+// Only array sizes need a value param as a sema-time literal; value idents elsewhere resolve via env (shadow-safe).
+fn void subst_size_expr(SubstCtx* c, ast::AstNode* n) {
+    if(n == null) { return; }
+    switch(n.h.kind) {
+    case ast::AstKind::Ident: {
+        ast::IdentNode* id = (ast::IdentNode*)n;
+        for(u64 i = 0; i < c.vnames.len; i += 1) {
+            if(id.name == c.vnames[i]) {
+                n.h.kind = ast::AstKind::IntLit;
+                n.h.ty = (void*)c.vtys[i];
+                ((ast::IntLitNode*)n).value = c.vvals[i];
+                return;
+            }
+        }
+        return;
+    }
+    case ast::AstKind::BinaryOp: {
+        ast::BinaryOpNode* e = (ast::BinaryOpNode*)n;
+        subst_size_expr(c, e.lhs);
+        subst_size_expr(c, e.rhs);
+        return;
+    }
+    case ast::AstKind::UnaryOp: { subst_size_expr(c, ((ast::UnaryOpNode*)n).operand); return; }
+    else { subst_node(c, n); return; }
+    }
+}
+
+fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::Value[] cargs) {
+    u64 n_type = 0;
+    u64 n_val = 0;
+    u64 carg_index = 0;
+    for(u64 i = 0; i < clone.params.len; i += 1) {
+        if(clone.params[i].is_comptime) {
+            if(cargs[carg_index].kind == (u16)value::ValueKind::Type) { n_type += 1; }
+            else if(cargs[carg_index].kind == (u16)value::ValueKind::Int) { n_val += 1; }
+            carg_index += 1;
+        }
+    }
+    if(n_type == 0 && n_val == 0) { return; }
+    SubstCtx c;
+    sys::memset(&c, 0, sizeof(SubstCtx));
+    c.tnames.ptr = arena::alloc(a, n_type * sizeof(symbol::Symbol*));
+    c.ttys.ptr = arena::alloc(a, n_type * sizeof(types::Type*));
+    c.vnames.ptr = arena::alloc(a, n_val * sizeof(symbol::Symbol*));
+    c.vvals.ptr = arena::alloc(a, n_val * sizeof(u64));
+    c.vtys.ptr = arena::alloc(a, n_val * sizeof(types::Type*));
+    carg_index = 0;
+    for(u64 i = 0; i < clone.params.len; i += 1) {
+        if(clone.params[i].is_comptime) {
+            if(cargs[carg_index].kind == (u16)value::ValueKind::Type) {
+                c.tnames[c.tnames.len] = clone.params[i].name;
+                c.tnames.len += 1;
+                c.ttys[c.ttys.len] = cargs[carg_index].data.type_ref;
+                c.ttys.len += 1;
+            } else if(cargs[carg_index].kind == (u16)value::ValueKind::Int) {
+                c.vnames[c.vnames.len] = clone.params[i].name;
+                c.vnames.len += 1;
+                c.vvals[c.vvals.len] = (u64)cargs[carg_index].data.i;
+                c.vvals.len += 1;
+                c.vtys[c.vtys.len] = cargs[carg_index].ty;
+                c.vtys.len += 1;
+            }
+            carg_index += 1;
+        }
+    }
+    subst_node(&c, clone.return_type);
+    for(u64 i = 0; i < clone.params.len; i += 1) { subst_node(&c, clone.params[i].type_expr); }
+    subst_node(&c, clone.body);
 }
