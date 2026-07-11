@@ -17,12 +17,12 @@ mkdir -p "$OUT_DIR"
 
 build_fail=0
 build_ok=0
-for src in "$SRC_DIR"/*.sl; do
+for src in "$SRC_DIR"/*_test.sl; do
 	[ -e "$src" ] || continue
 	name="$(basename "$src" .sl)"
 	out="$OUT_DIR/$name"
 	echo "==> building $name"
-	if timeout 10 "$SAPLANGC" "$src" -o "$out" -i "stage2/std;stage2" -dbg; then
+	if timeout 10 "$SAPLANGC" "$src" -o "$out" -i "stage2/std;stage2;stage2/tests" -dbg; then
 		build_ok=$((build_ok + 1))
 	else
 		echo "    BUILD FAILED ($name)"
