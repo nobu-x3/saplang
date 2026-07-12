@@ -31,6 +31,21 @@ fn void wire_imports(arena::Arena* a, module::Module* m, module::Module* dep) {
     m.imports = {imps, 1};
 }
 
+fn i32 cross_module_generic_call(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "export fn T id(comptime Type T, T x) { return x; }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { return b::id(5); }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    if(!testing::expect_eq(av.instantiated_fns.len, (u64)1, msg)) { return -3; }
+    return 0;
+}
+
 fn i32 generic_call_frontend(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -457,6 +472,7 @@ fn i32 main() {
     testing::add(fe, "single_module_ok",       &single_module_ok);
     testing::add(fe, "generic_template_frontend", &generic_template_frontend);
     testing::add(fe, "generic_call_frontend",    &generic_call_frontend);
+    testing::add(fe, "cross_module_generic_call", &cross_module_generic_call);
     testing::add(fe, "cross_module_ok",        &cross_module_ok);
     testing::add(fe, "cross_module_overload",  &cross_module_overload);
     testing::add(fe, "circular_imports_ok",    &circular_imports_ok);

@@ -2,6 +2,8 @@ import testing;
 import test_util;
 import module;
 import arena;
+import ast;
+import interner;
 
 fn i32 ok_arithmetic(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = 1 + 2; return x; }");
@@ -338,6 +340,40 @@ fn i32 err_generic_value_as_type_arg(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_generic_negative_value(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 make(comptime Type T, comptime i32 N, T x) { return 0; }\nexport fn i32 f() { return make(i32, -3, 5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A generic function cannot be overloaded (with a generic or a concrete same-name function).
+fn i32 err_overload_generic(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nfn i32 id(i32 a) { return a; }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "generic functions cannot be overloaded", m)) { return -2; }
+    return 0;
+}
+
+fn i32 ok_generic_infer_fnptr(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 use(comptime Type T, fn* T(T) f) { return 0; }\nexport fn i32 main() { fn* i32(i32) g; return use(g); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_generic_explicit_value(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 make(comptime Type T, comptime i32 N, T x) { return 0; }\nexport fn i32 f() { return make(i32, 3, 5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A comptime value argument must be an integer literal (const-eval is literal-only).
+fn i32 err_generic_value_arg_nonliteral(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 make(comptime Type T, comptime i32 N, T x) { return 0; }\nexport fn i32 f() { i32 k = 3; return make(i32, k, 5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "comptime value argument must be an integer literal", m)) { return -2; }
+    return 0;
+}
+
 fn i32 ok_generic_two_type_params(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 pair(comptime Type A, comptime Type B, A a, B b) { return 0; }\nexport fn i32 f() { return pair(1, 2.0); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -364,6 +400,49 @@ fn i32 err_generic_infer_mismatch(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn T deref(comptime Type T, T* p) { return *p; }\nexport fn i32 f() { i32 x = 5; return deref(x); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
     if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot infer comptime arguments for deref", m)) { return -2; }
+    return 0;
+}
+
+// Two different type args → two distinct instances with distinct, correctly-mangled names.
+fn i32 ok_generic_two_instances(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { i32 p = id(i32, 5); f64 q = id(f64, 1.5); return p; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)2, m)) { return -2; }
+    if(!testing::expect_ne((void*)mod.instantiated_fns[0].name, (void*)mod.instantiated_fns[1].name, m)) { return -3; }
+    if(!testing::expect_substr(interner::symbol_str(mod.instantiated_fns[0].name), "i32", m)) { return -4; }
+    if(!testing::expect_substr(interner::symbol_str(mod.instantiated_fns[1].name), "f64", m)) { return -5; }
+    return 0;
+}
+
+// Distinct comptime value args produce distinct instances (the value is part of the key + mangled name).
+fn i32 ok_generic_value_distinct_instances(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 make(comptime Type T, comptime i32 N, T x) { return 0; }\nexport fn i32 f() { i32 p = make(i32, 3, 5); i32 q = make(i32, 4, 6); return p + q; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)2, m)) { return -2; }
+    if(!testing::expect_ne((void*)mod.instantiated_fns[0].name, (void*)mod.instantiated_fns[1].name, m)) { return -3; }
+    return 0;
+}
+
+// The same type arg reuses one cached instance.
+fn i32 ok_generic_cached_instance(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { i32 p = id(i32, 5); i32 q = id(i32, 6); return p + q; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)1, m)) { return -2; }
+    return 0;
+}
+
+// A call in a body links to its instance (CallNode.resolved_fn), whose name carries the type arg.
+fn i32 ok_generic_call_resolves_to_instance(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { i32 p = id(i32, 5); return p; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    ast::BlockNode* root = (ast::BlockNode*)mod.root_node;
+    ast::FnDeclNode* fdecl = (ast::FnDeclNode*)root.stmts[1];
+    ast::BlockNode* body = (ast::BlockNode*)fdecl.body;
+    ast::VarDeclNode* vd = (ast::VarDeclNode*)body.stmts[0];
+    ast::CallNode* call = (ast::CallNode*)vd.init;
+    if(!testing::expect_not_null(call.resolved_fn, m)) { return -2; }
+    ast::FnDeclNode* clone = (ast::FnDeclNode*)call.resolved_fn;
+    if(!testing::expect_substr(interner::symbol_str(clone.name), "i32", m)) { return -3; }
     return 0;
 }
 
@@ -419,6 +498,15 @@ fn i32 main() {
     testing::add(suite, "ok_generic_infer_slice",    &ok_generic_infer_slice);
     testing::add(suite, "ok_generic_explicit",      &ok_generic_explicit);
     testing::add(suite, "err_generic_explicit_arg_mismatch", &err_generic_explicit_arg_mismatch);
+    testing::add(suite, "ok_generic_two_instances", &ok_generic_two_instances);
+    testing::add(suite, "ok_generic_value_distinct_instances", &ok_generic_value_distinct_instances);
+    testing::add(suite, "ok_generic_cached_instance", &ok_generic_cached_instance);
+    testing::add(suite, "ok_generic_call_resolves_to_instance", &ok_generic_call_resolves_to_instance);
+    testing::add(suite, "ok_generic_negative_value", &ok_generic_negative_value);
+    testing::add(suite, "err_overload_generic",     &err_overload_generic);
+    testing::add(suite, "ok_generic_infer_fnptr",   &ok_generic_infer_fnptr);
+    testing::add(suite, "ok_generic_explicit_value", &ok_generic_explicit_value);
+    testing::add(suite, "err_generic_value_arg_nonliteral", &err_generic_value_arg_nonliteral);
     testing::add(suite, "err_generic_type_at_runtime", &err_generic_type_at_runtime);
     testing::add(suite, "ok_generic_user_type_explicit", &ok_generic_user_type_explicit);
     testing::add(suite, "err_generic_value_as_type_arg", &err_generic_value_as_type_arg);

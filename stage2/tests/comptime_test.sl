@@ -1981,6 +1981,43 @@ fn i32 sema_check_clone_catches_type_error(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 monomorphize_mangles_distinct(arena::Arena* a, u8[] m) {
+    types::typer_init(a, 64);
+    interner::init(a, 16);
+    symbol::Symbol* sym_t = interner::intern("T");
+    symbol::Symbol* sym_x = interner::intern("x");
+    module::Module* mm = mk_module(a);
+    comptime::Interp ip = comptime::new_interp(mm);
+    ast::FnDeclNode* id = mk_fn_node(a, null);
+    id.name = interner::intern("id");
+    id.qualified_name = interner::intern("id");
+    ast::Param[2] params;
+    sys::memset(&params[0], 0, 2 * sizeof(ast::Param));
+    params[0].is_comptime = true;
+    params[0].name = sym_t;
+    params[0].type_expr = mk_type_arg(a, types::prim_type());
+    params[1].name = sym_x;
+    params[1].type_expr = mk_named_type(a, sym_t);
+    id.params = {&params[0], 2};
+    id.return_type = mk_named_type(a, sym_t);
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_return(a, mk_ident_named(a, sym_x));
+    id.body = mk_block(a, &body_s[0], 1);
+
+    value::Value c_i32 = value::val_type(types::prim_i32());
+    value::Value[] cargs_i32 = {&c_i32, 1};
+    ast::FnDeclNode* clone_i32 = comptime::monomorphize(&ip, id, cargs_i32);
+    value::Value c_f64 = value::val_type(types::prim_f64());
+    value::Value[] cargs_f64 = {&c_f64, 1};
+    ast::FnDeclNode* clone_f64 = comptime::monomorphize(&ip, id, cargs_f64);
+
+    if(!testing::expect_ne((void*)clone_i32.name, (void*)clone_f64.name, m)) { return -1; }
+    if(!testing::expect_ne((void*)clone_i32.name, (void*)id.name, m)) { return -2; }
+    if(!testing::expect_eq(interner::symbol_str(clone_i32.name), "id__i32", m)) { return -3; }
+    if(!testing::expect_eq(interner::symbol_str(clone_f64.name), "id__f64", m)) { return -4; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Comptime Tests";
@@ -2070,6 +2107,7 @@ fn i32 main() {
     testing::add(suite, "eval_call_type_generic",       &eval_call_type_generic);
     testing::add(suite, "eval_call_recursive_generic",  &eval_call_recursive_generic);
     testing::add(suite, "eval_call_generic_sizeof",     &eval_call_generic_sizeof);
+    testing::add(suite, "monomorphize_mangles_distinct", &monomorphize_mangles_distinct);
     testing::add(suite, "eval_call_generic_sizeof_array", &eval_call_generic_sizeof_array);
     testing::add(suite, "eval_call_generic_sizeof_anon_struct", &eval_call_generic_sizeof_anon_struct);
     testing::add(suite, "eval_call_generic_array_value_param", &eval_call_generic_array_value_param);

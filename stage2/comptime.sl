@@ -3,11 +3,13 @@ import ast;
 import module;
 import arena;
 import types;
+import types_print;
 import diag;
 import sema;
 import op;
 import token;
 import symbol;
+import interner;
 import sys;
 
 export struct EnvEntry { sema::Decl* key; value::Value val; }
@@ -1100,6 +1102,30 @@ fn void instantiated_fns_push(module::Module* m, ast::FnDeclNode* clone) {
     m.instantiated_fns.len += 1;
 }
 
+// Distinct deterministic name per instantiation (module-qualified type reprs) so it mangles identically across modules for linkonce_odr dedup.
+fn void rename_mangled(module::Module* m, ast::FnDeclNode* clone, value::Value[] cargs) {
+    symbol::Symbol* base = clone.qualified_name;
+    if(base == null) { base = clone.name; }
+    if(base == null) { return; }
+    u8[256] scratch;
+    u8[] base_str = interner::symbol_str(base);
+    i32 off = sys::snprintf((i8*)&scratch[0], 256, "%.*s", (i32)base_str.len, (i8*)base_str.ptr);
+    for(u64 k = 0; k < cargs.len; k += 1) {
+        if(off < 0 || off >= 240) { break; }
+        if(cargs[k].kind == (u16)value::ValueKind::Type) {
+            u8[] ts = types_print::print_to_arena(cargs[k].data.type_ref, m.arena);
+            off += sys::snprintf((i8*)&scratch[off], (u64)(256 - off), "__%.*s", (i32)ts.len, (i8*)ts.ptr);
+        } else if(cargs[k].kind == (u16)value::ValueKind::Int) {
+            off += sys::snprintf((i8*)&scratch[off], (u64)(256 - off), "__%ld", cargs[k].data.i);
+        }
+    }
+    if(off <= 0) { return; }
+    u8[] mangled = {&scratch[0], (u64)off};
+    symbol::Symbol* sym = interner::intern(mangled);
+    clone.name = sym;
+    clone.qualified_name = sym;
+}
+
 export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, value::Value[] cargs) {
     if(ip.m.mono_cache == null) {
         ip.m.mono_cache = arena::alloc(ip.m.arena, sizeof(MonoCache));
@@ -1112,6 +1138,7 @@ export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, val
     ast::FnDeclNode* hit = mono_cache_lookup(cache, &key);
     if(hit != null) { return hit; }
     ast::FnDeclNode* clone = clone_fn_decl(ip.m.arena, callee);
+    rename_mangled(ip.m, clone, cargs);
     substitute_type_params(ip.m.arena, clone, cargs);
     // Cache before re-checking, so a recursive generic call in the body hits the cache, not endless monomorphization.
     mono_cache_insert(cache, ip.m.arena, key, clone);
@@ -1344,8 +1371,7 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
     subst_node(&c, clone.body);
 }
 
-// GENERIC CALL RESOLUTION (sema seam): infer comptime args by unifying runtime param patterns
-// against the concrete arg types, then monomorphize.
+// GENERIC CALL RESOLUTION (sema seam): infer comptime args by unifying param patterns against arg types, then monomorphize.
 
 fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* pattern, types::Type* concrete) {
     if(pattern == null || concrete == null) { return false; }
@@ -1373,6 +1399,16 @@ fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* 
     case ast::AstKind::ArrayType: {
         if(concrete.kind != types::TypeKind::Array) { return false; }
         return unify_type(names, binds, ((ast::TypeArrayNode*)pattern).element, concrete.data.array.elem);
+    }
+    case ast::AstKind::FnPtrType: {
+        if(concrete.kind != types::TypeKind::FnPtr) { return false; }
+        ast::TypeFnPtrNode* fp = (ast::TypeFnPtrNode*)pattern;
+        if(!unify_type(names, binds, fp.return_type, concrete.data.fn_ptr.ret)) { return false; }
+        if(fp.param_types.len != concrete.data.fn_ptr.params.len) { return false; }
+        for(u64 i = 0; i < fp.param_types.len; i += 1) {
+            if(!unify_type(names, binds, fp.param_types[i], concrete.data.fn_ptr.params[i])) { return false; }
+        }
+        return true;
     }
     else { return true; }
     }
@@ -1409,10 +1445,7 @@ export fn ast::FnDeclNode* resolve_generic_call(module::Module* m, ast::FnDeclNo
     return monomorphize(&ip, callee, binds);
 }
 
-export fn ast::FnDeclNode* resolve_generic_explicit(module::Module* m, ast::FnDeclNode* callee, types::Type*[] comptime_types) {
-    value::Value* cargs_mem = (value::Value*)arena::alloc(m.arena, comptime_types.len * sizeof(value::Value));
-    for(u64 k = 0; k < comptime_types.len; k += 1) { cargs_mem[k] = value::val_type(comptime_types[k]); }
-    value::Value[] cargs = {cargs_mem, comptime_types.len};
+export fn ast::FnDeclNode* resolve_generic_explicit(module::Module* m, ast::FnDeclNode* callee, value::Value[] cargs) {
     Interp ip = new_interp(m);
     return monomorphize(&ip, callee, cargs);
 }

@@ -9,6 +9,7 @@ import types_print;
 import op;
 import sys;
 import interner;
+import value;
 
 export struct Sema {
     module::Module*     m;
@@ -35,12 +36,11 @@ export enum SemaPhase : u16 {
     Bodies     = 4,    // 1 << 2 — function bodies checked
 }
 
-// Installed by the driver (comptime imports sema, not vice versa): infers a generic call's comptime args
-// from the runtime arg types, monomorphizes, and returns the concrete clone (null on failure).
+// Driver-installed (comptime imports sema, not vice versa): infers comptime args from runtime arg types → clone.
 export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, types::Type*[]) resolve_generic_call_hook;
 
-// Explicit form: the caller passes the comptime Type args directly; monomorphize on those resolved types.
-export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, types::Type*[]) resolve_generic_explicit_hook;
+// Explicit form: the caller passes the comptime args as values (val_type / val_int); monomorphize on them.
+export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, value::Value[]) resolve_generic_explicit_hook;
 
 export union DeclData {
     ast::AstNode*       node;
@@ -120,7 +120,7 @@ export fn void collect_names(module::Module* m) {
         case ast::AstKind::FnDecl: {
             ast::FnDeclNode* fn_decl = (ast::FnDeclNode*)top_level_node;
             fn_decl.qualified_name = qualify_decl_name(s, fn_decl.name);
-            Decl* decl = register_fn(s, module_scope, fn_decl.name, fn_decl.is_exported, fn_decl.h.src_pos);
+            Decl* decl = register_fn(s, module_scope, fn_decl, fn_decl.is_exported);
             if(decl != null) { decl.data.node = top_level_node; fn_decl.decl = (void*)decl; }
         }
         case ast::AstKind::StructDecl: {
@@ -213,10 +213,25 @@ fn bool decl_is_fn(Decl* d) {
 }
 
 // A same-name existing function chains the new one as an overload; any other collision re-emits the duplicate error.
-fn Decl* register_fn(Sema* s, Scope* scope, symbol::Symbol* name, bool is_exported, u32 src_pos) {
+fn bool chain_has_generic(Decl* head) {
+    Decl* d = head;
+    while(d != null) {
+        if(d.kind == (u16)DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl && is_generic_fn((ast::FnDeclNode*)d.data.node)) { return true; }
+        d = d.next_overload;
+    }
+    return false;
+}
+
+fn Decl* register_fn(Sema* s, Scope* scope, ast::FnDeclNode* fn_decl, bool is_exported) {
+    symbol::Symbol* name = fn_decl.name;
     Decl* existing = scope_lookup_local(scope, name);
     if(existing == null || !decl_is_fn(existing)) {
-        return register_sym(s, scope, name, is_exported, (u16)DeclKind::Node, src_pos);
+        return register_sym(s, scope, name, is_exported, (u16)DeclKind::Node, fn_decl.h.src_pos);
+    }
+    if(is_generic_fn(fn_decl) || chain_has_generic(existing)) {
+        u8[] msg = "generic functions cannot be overloaded";
+        diag::report(&s.m.diag, s.m.arena, fn_decl.h.src_pos, msg);
+        return null;
     }
     Decl* overload = new_decl(s, (u16)DeclKind::Node, name, null);
     overload.is_exported = is_exported;
@@ -1126,8 +1141,7 @@ fn types::Type* clone_return_type(ast::FnDeclNode* clone) {
     return types::prim_void();
 }
 
-// Callee is a generic fn: sema synths the runtime args, the comptime hook infers the comptime args and
-// monomorphizes, then sema checks the runtime args against the concrete clone's runtime params.
+// Generic callee: sema synths runtime args, the hook infers comptime args + monomorphizes, then sema checks args vs the clone.
 fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
     if(resolve_generic_call_hook == null) {
         u8[] msg = "generic calls require the comptime interpreter";
@@ -1221,22 +1235,40 @@ fn types::Type* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDe
     for(u64 i = 0; i < generic.params.len; i += 1) {
         if(generic.params[i].is_comptime) { n_comptime += 1; }
     }
-    types::Type** ct_mem = (types::Type**)arena::alloc(s.m.arena, n_comptime * sizeof(types::Type*));
-    types::Type*[] comptime_types = {ct_mem, 0};
+    value::Value* carg_mem = (value::Value*)arena::alloc(s.m.arena, n_comptime * sizeof(value::Value));
+    value::Value[] cargs = {carg_mem, 0};
     for(u64 i = 0; i < generic.params.len; i += 1) {
         if(!generic.params[i].is_comptime) { continue; }
-        if(!is_type_kw(generic.params[i].type_expr)) {
-            u8[] msg = "explicit comptime value arguments are not yet supported";
-            diag::report(&s.m.diag, s.m.arena, n.h.src_pos, msg);
-            mark_error((ast::AstNode*)n);
-            return null;
+        if(is_type_kw(generic.params[i].type_expr)) {
+            types::Type* t = resolve_type_arg(s, n.args[i]);
+            if(t == null) { mark_error((ast::AstNode*)n); return null; }
+            cargs[cargs.len] = value::val_type(t);
+        } else {
+            ast::AstNode* varg = n.args[i];
+            i64 v = 0;
+            bool is_const = false;
+            if(varg.h.kind == ast::AstKind::IntLit) {
+                v = (i64)((ast::IntLitNode*)varg).value;
+                is_const = true;
+            } else if(varg.h.kind == ast::AstKind::UnaryOp) {
+                ast::UnaryOpNode* u = (ast::UnaryOpNode*)varg;
+                if(u.op == token::TokenKind::Minus && u.operand != null && u.operand.h.kind == ast::AstKind::IntLit) {
+                    v = -(i64)((ast::IntLitNode*)u.operand).value;
+                    is_const = true;
+                }
+            }
+            if(!is_const) {
+                u8[] msg = "comptime value argument must be an integer literal";
+                diag::report(&s.m.diag, s.m.arena, varg.h.src_pos, msg);
+                mark_error((ast::AstNode*)n);
+                return null;
+            }
+            types::Type* pt = resolve_type(s, generic.params[i].type_expr);
+            cargs[cargs.len] = value::val_int(v, pt);
         }
-        types::Type* t = resolve_type_arg(s, n.args[i]);
-        if(t == null) { mark_error((ast::AstNode*)n); return null; }
-        comptime_types[comptime_types.len] = t;
-        comptime_types.len += 1;
+        cargs.len += 1;
     }
-    ast::FnDeclNode* clone = resolve_generic_explicit_hook(s.m, generic, comptime_types);
+    ast::FnDeclNode* clone = resolve_generic_explicit_hook(s.m, generic, cargs);
     if(clone == null) { diag_infer_failure(s, n.h.src_pos, generic.name); mark_error((ast::AstNode*)n); return null; }
     for(u64 i = 0; i < clone.params.len; i += 1) {
         if(clone.params[i].is_comptime) { continue; }
@@ -1258,9 +1290,7 @@ fn types::Type* synth_call(Sema* s, ast::CallNode* n) {
             for(u64 i = 0; i < generic.params.len; i += 1) {
                 if(!generic.params[i].is_comptime) { n_runtime += 1; }
             }
-            // Inference form (only runtime args) infers the comptime args; the explicit all-args form
-            // resolves the passed comptime Type args; value-param generics (no comptime Type param)
-            // fall through to the normal call path (they have concrete signatures).
+            // Inference form (runtime args only) vs explicit all-args form; value-param generics (no comptime Type param) use the normal path.
             if(n.args.len == n_runtime) { return synth_generic_call(s, n, generic); }
             if(n.args.len == generic.params.len && has_comptime_type_param(generic)) {
                 return synth_generic_call_explicit(s, n, generic);
