@@ -289,6 +289,26 @@ fn i32 err_generic_call_return_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_generic_infer_pointer(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T deref(comptime Type T, T* p) { return *p; }\nexport fn i32 f() { i32 x = 5; return deref(&x); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_generic_infer_slice(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T first(comptime Type T, T[] s) { return s[0]; }\nexport fn i32 f() { i32[3] arr; return first(arr[0..2]); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A non-pointer arg where the pattern is T* can't unify, so inference fails.
+fn i32 err_generic_infer_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T deref(comptime Type T, T* p) { return *p; }\nexport fn i32 f() { i32 x = 5; return deref(x); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot infer comptime arguments for deref", m)) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "E2E Sema Tests";
@@ -337,5 +357,8 @@ fn i32 main() {
     testing::add(suite, "warn_unreachable_code",    &warn_unreachable_code);
     testing::add(suite, "ok_generic_call_infer",    &ok_generic_call_infer);
     testing::add(suite, "err_generic_call_return_type", &err_generic_call_return_type);
+    testing::add(suite, "ok_generic_infer_pointer",  &ok_generic_infer_pointer);
+    testing::add(suite, "ok_generic_infer_slice",    &ok_generic_infer_slice);
+    testing::add(suite, "err_generic_infer_mismatch", &err_generic_infer_mismatch);
     return testing::run();
 }
