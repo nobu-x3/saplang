@@ -301,6 +301,13 @@ fn i32 ok_generic_infer_slice(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A recursive type-param generic must terminate at compile time (clone cached before re-checking).
+fn i32 ok_generic_recursive(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T rec(comptime Type T, T x) { return rec(x); }\nexport fn i32 f() { return rec(5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 // A non-pointer arg where the pattern is T* can't unify, so inference fails.
 fn i32 err_generic_infer_mismatch(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn T deref(comptime Type T, T* p) { return *p; }\nexport fn i32 f() { i32 x = 5; return deref(x); }");
@@ -359,6 +366,7 @@ fn i32 main() {
     testing::add(suite, "err_generic_call_return_type", &err_generic_call_return_type);
     testing::add(suite, "ok_generic_infer_pointer",  &ok_generic_infer_pointer);
     testing::add(suite, "ok_generic_infer_slice",    &ok_generic_infer_slice);
+    testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);
     testing::add(suite, "err_generic_infer_mismatch", &err_generic_infer_mismatch);
     return testing::run();
 }
