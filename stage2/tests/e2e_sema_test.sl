@@ -301,6 +301,20 @@ fn i32 ok_generic_infer_slice(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_generic_two_type_params(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 pair(comptime Type A, comptime Type B, A a, B b) { return 0; }\nexport fn i32 f() { return pair(1, 2.0); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// The same var bound to two different types (i32 then f64) is a conflict, so inference fails.
+fn i32 err_generic_conflicting_infer(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 same(comptime Type T, T a, T b) { return 0; }\nexport fn i32 f() { return same(1, 2.0); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot infer comptime arguments for same", m)) { return -2; }
+    return 0;
+}
+
 // A recursive type-param generic must terminate at compile time (clone cached before re-checking).
 fn i32 ok_generic_recursive(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn T rec(comptime Type T, T x) { return rec(x); }\nexport fn i32 f() { return rec(5); }");
@@ -366,6 +380,8 @@ fn i32 main() {
     testing::add(suite, "err_generic_call_return_type", &err_generic_call_return_type);
     testing::add(suite, "ok_generic_infer_pointer",  &ok_generic_infer_pointer);
     testing::add(suite, "ok_generic_infer_slice",    &ok_generic_infer_slice);
+    testing::add(suite, "ok_generic_two_type_params", &ok_generic_two_type_params);
+    testing::add(suite, "err_generic_conflicting_infer", &err_generic_conflicting_infer);
     testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);
     testing::add(suite, "err_generic_infer_mismatch", &err_generic_infer_mismatch);
     return testing::run();
