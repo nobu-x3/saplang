@@ -919,6 +919,8 @@ LLVMValueRef codegen_literal(CodegenLLVM *cg, ASTNode *node, Symbol *table, Pass
 
 LLVMValueRef codegen_global_var_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table, int is_extern) {
 	LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
+	if (node->data.var_decl.type->type_kind == TYPE_FUNCTION)
+		ty = LLVMPointerType(ty, 0);
 	LLVMValueRef global_var = LLVMGetNamedGlobal(cg->module, node->data.var_decl.resolved_name);
 	if (!global_var)
 		global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
@@ -1248,6 +1250,8 @@ void codegen_imported_symbol(CodegenLLVM *cg, Symbol *sym, Symbol *table) {
 	switch (node->type) {
 	case AST_VAR_DECL: {
 		LLVMTypeRef ty = map_to_llvm(cg, node->data.var_decl.type, table);
+		if (node->data.var_decl.type->type_kind == TYPE_FUNCTION)
+			ty = LLVMPointerType(ty, 0);
 		LLVMValueRef global_var = LLVMAddGlobal(cg->module, ty, node->data.var_decl.resolved_name);
 		assert(global_var);
 		LLVMSetGlobalConstant(global_var, node->data.var_decl.is_const);
@@ -1473,6 +1477,8 @@ LLVMValueRef codegen_ast(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassCont
 			if (is_fn_ptr) {
 				LLVMTypeRef fn_ty = map_to_llvm(cg, callee_type, table);
 				LLVMValueRef ptr = hashmap_get(ctx.loaded_values, fn_sym->resolved_name);
+				if (!ptr)
+					ptr = LLVMGetNamedGlobal(cg->module, fn_sym->resolved_name);
 				assert(ptr);
 				callee = LLVMBuildLoad2(cg->builder, LLVMPointerType(fn_ty, 0), ptr, "");
 			} else {
@@ -1850,6 +1856,8 @@ void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 			codegen_predeclare_fn(cg, current->data.func_decl.resolved_name, table, 0);
 		} else if (current->type == AST_VAR_DECL) {
 			LLVMTypeRef ty = map_to_llvm(cg, current->data.var_decl.type, table);
+			if (current->data.var_decl.type->type_kind == TYPE_FUNCTION)
+				ty = LLVMPointerType(ty, 0);
 			if (ty && !LLVMGetNamedGlobal(cg->module, current->data.var_decl.resolved_name))
 				LLVMAddGlobal(cg->module, ty, current->data.var_decl.resolved_name);
 		} else if (current->type == AST_EXTERN_BLOCK) {
