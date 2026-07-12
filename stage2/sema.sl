@@ -392,7 +392,7 @@ export fn void check_bodies(module::Module* m) {
         for(u64 i = 0; i < global_block.stmts.len; i += 1) {
             ast::AstNode* node = global_block.stmts[i];
             if(node.h.kind == ast::AstKind::FnDecl && !is_generic_fn((ast::FnDeclNode*)node)) {
-                check_fn_body(s, (ast::FnDeclNode*)node);
+                ensure_body_checked(s.m, (ast::FnDeclNode*)node);
             }
             else if(node.h.kind == ast::AstKind::ComprunStmt) {
                 ast::CompRunNode* comprun = (ast::CompRunNode*)node;
@@ -410,6 +410,21 @@ export fn bool is_generic_fn(ast::FnDeclNode* func) {
         if(func.params[i].is_comptime) { return true; }
     }
     return false;
+}
+
+// Idempotent per FnDeclNode.body_state; InProgress tolerates a comptime call cycling back into the fn being checked.
+export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func) {
+    if(func.body_state == ast::BodyState::Checked) { return; }
+    if(func.body_state == ast::BodyState::InProgress) { return; }
+    func.body_state = ast::BodyState::InProgress;
+    Sema sema;
+    sys::memset(&sema, 0, sizeof(Sema));
+    sema.m = m;
+    Sema* s = &sema;
+    s.scope = (Scope*)m.global_scope;
+    s.resolution_stack.arena = m.arena;
+    check_fn_body(s, func);
+    func.body_state = ast::BodyState::Checked;
 }
 
 fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
@@ -466,6 +481,7 @@ export fn void sema_check_clone(module::Module* caller, module::Module* defining
         s.current_return = return_type;
         stmt(s, clone.body);
     }
+    clone.body_state = ast::BodyState::Checked;
 }
 
 fn types::Type* fn_return_type(Sema* s, ast::FnDeclNode* func) {

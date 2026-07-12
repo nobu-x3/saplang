@@ -403,6 +403,14 @@ fn i32 err_comprun_while(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// comprun calls a function defined later in the module; on-demand resolution + eval run it at comptime.
+fn i32 err_comprun_calls_fn(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { if(dbl(5) == 10) { comperror(\"ten\"); } } return 0; } fn i32 dbl(i32 n) { return n * 2; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "ten", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comprun_toplevel(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "comprun { comperror(\"toplvl\"); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -581,6 +589,7 @@ fn i32 main() {
     testing::add(suite, "err_comprun_var_driven",    &err_comprun_var_driven);
     testing::add(suite, "ok_comprun_var_no_error",   &ok_comprun_var_no_error);
     testing::add(suite, "err_comprun_while",         &err_comprun_while);
+    testing::add(suite, "err_comprun_calls_fn",      &err_comprun_calls_fn);
     testing::add(suite, "err_comprun_toplevel",      &err_comprun_toplevel);
     testing::add(suite, "ok_generic_negative_value", &ok_generic_negative_value);
     testing::add(suite, "err_overload_generic",     &err_overload_generic);

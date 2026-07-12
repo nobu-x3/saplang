@@ -439,6 +439,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
         ast::FnDeclNode* mono = monomorphize(ip, func, cargs);
         return invoke(ip, mono, args, n.h.src_pos);
     }
+    if(n.callee.h.kind == ast::AstKind::Ident) { sema::ensure_body_checked(ip.m, func); }
     return invoke(ip, func, args, n.h.src_pos);
 }
 

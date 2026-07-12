@@ -318,6 +318,7 @@ fn ast::FnDeclNode* mk_fn_node(arena::Arena* a, ast::AstNode* body) {
     sys::memset(n, 0, sizeof(ast::FnDeclNode));
     n.h.kind = ast::AstKind::FnDecl;
     n.body = body;
+    n.body_state = ast::BodyState::Checked;     // hand-resolved: params + decls set directly, no sema pass
     return n;
 }
 

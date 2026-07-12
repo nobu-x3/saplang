@@ -71,6 +71,13 @@ export enum CompSafe : i8 {
     InProgress = 3,
 }
 
+// Per-fn body-check state; drives on-demand checking when a comptime call reaches an as-yet-unchecked callee.
+export enum BodyState : i8 {
+    Unchecked  = 0,
+    InProgress = 1,
+    Checked    = 2,
+}
+
 export struct FnDeclNode {
     AstHeader h;
     symbol::Symbol*   name;
@@ -80,6 +87,7 @@ export struct FnDeclNode {
     AstNode*  body;                     // AstKind::BlockStmt
     void*     cfg;                      // cfg::Cfg* — null until CFG construction runs (void* breaks the cycle)
     CompSafe  comptime_safe;            // set lazily by comptime
+    BodyState body_state;               // Unchecked until sema checks the body (in the pass or on-demand from comptime)
     bool      is_exported;
     void*     decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
 }
