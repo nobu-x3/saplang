@@ -1342,3 +1342,72 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
     for(u64 i = 0; i < clone.params.len; i += 1) { subst_node(&c, clone.params[i].type_expr); }
     subst_node(&c, clone.body);
 }
+
+// GENERIC CALL RESOLUTION (sema seam): infer comptime args by unifying runtime param patterns
+// against the concrete arg types, then monomorphize.
+
+fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* pattern, types::Type* concrete) {
+    if(pattern == null || concrete == null) { return false; }
+    switch(pattern.h.kind) {
+    case ast::AstKind::NamedType: {
+        ast::TypeNamedNode* tn = (ast::TypeNamedNode*)pattern;
+        if(tn.namespace == null) {
+            for(u64 k = 0; k < names.len; k += 1) {
+                if(tn.name == names[k]) {
+                    if(binds[k].kind == (u16)value::ValueKind::Void) { binds[k] = value::val_type(concrete); return true; }
+                    return binds[k].data.type_ref == concrete;
+                }
+            }
+        }
+        return true;
+    }
+    case ast::AstKind::PointerType: {
+        if(concrete.kind != types::TypeKind::Pointer) { return false; }
+        return unify_type(names, binds, ((ast::TypePointerNode*)pattern).pointee, concrete.data.pointee);
+    }
+    case ast::AstKind::SliceType: {
+        if(concrete.kind != types::TypeKind::Slice) { return false; }
+        return unify_type(names, binds, ((ast::TypeSliceNode*)pattern).element, concrete.data.slice_elem);
+    }
+    case ast::AstKind::ArrayType: {
+        if(concrete.kind != types::TypeKind::Array) { return false; }
+        return unify_type(names, binds, ((ast::TypeArrayNode*)pattern).element, concrete.data.array.elem);
+    }
+    else { return true; }
+    }
+    return true;
+}
+
+export fn ast::FnDeclNode* resolve_generic_call(module::Module* m, ast::FnDeclNode* callee, types::Type*[] arg_types) {
+    u64 n_comptime = 0;
+    for(u64 i = 0; i < callee.params.len; i += 1) {
+        if(callee.params[i].is_comptime) { n_comptime += 1; }
+    }
+    if(n_comptime == 0) { return null; }
+    symbol::Symbol*[] names;
+    names.ptr = (symbol::Symbol**)arena::alloc(m.arena, n_comptime * sizeof(symbol::Symbol*));
+    names.len = 0;
+    value::Value[] binds;
+    binds.ptr = (value::Value*)arena::alloc(m.arena, n_comptime * sizeof(value::Value));
+    binds.len = n_comptime;
+    for(u64 i = 0; i < callee.params.len; i += 1) {
+        if(callee.params[i].is_comptime) { names[names.len] = callee.params[i].name; names.len += 1; }
+    }
+    for(u64 k = 0; k < n_comptime; k += 1) { binds[k] = value::val_void(); }
+    u64 runtime_index = 0;
+    for(u64 i = 0; i < callee.params.len; i += 1) {
+        if(callee.params[i].is_comptime) { continue; }
+        if(runtime_index >= arg_types.len) { return null; }
+        if(!unify_type(names, binds, callee.params[i].type_expr, arg_types[runtime_index])) { return null; }
+        runtime_index += 1;
+    }
+    for(u64 k = 0; k < n_comptime; k += 1) {
+        if(binds[k].kind == (u16)value::ValueKind::Void) { return null; }
+    }
+    Interp ip = new_interp(m);
+    return monomorphize(&ip, callee, binds);
+}
+
+export fn void install_hooks() {
+    sema::resolve_generic_call_hook = &resolve_generic_call;
+}

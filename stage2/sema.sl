@@ -35,6 +35,10 @@ export enum SemaPhase : u16 {
     Bodies     = 4,    // 1 << 2 — function bodies checked
 }
 
+// Installed by the driver (comptime imports sema, not vice versa): infers a generic call's comptime args
+// from the runtime arg types, monomorphizes, and returns the concrete clone (null on failure).
+export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, types::Type*[]) resolve_generic_call_hook;
+
 export union DeclData {
     ast::AstNode*       node;
     ast::Param*         param;
@@ -1106,10 +1110,81 @@ fn types::Type* synth_overloaded_call(Sema* s, ast::CallNode* n, Decl* head) {
     return ret;
 }
 
+fn ast::FnDeclNode* as_generic_fn(Decl* d) {
+    if(d.kind != (u16)DeclKind::Node || d.data.node == null) { return null; }
+    if(d.data.node.h.kind != ast::AstKind::FnDecl) { return null; }
+    ast::FnDeclNode* fnd = (ast::FnDeclNode*)d.data.node;
+    if(!is_generic_fn(fnd)) { return null; }
+    return fnd;
+}
+
+fn types::Type* clone_return_type(ast::FnDeclNode* clone) {
+    if(clone.return_type != null && clone.return_type.h.ty != null) { return (types::Type*)clone.return_type.h.ty; }
+    return types::prim_void();
+}
+
+// Callee is a generic fn: sema synths the runtime args, the comptime hook infers the comptime args and
+// monomorphizes, then sema checks the runtime args against the concrete clone's runtime params.
+fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
+    if(resolve_generic_call_hook == null) {
+        u8[] msg = "generic calls require the comptime interpreter";
+        diag::report(&s.m.diag, s.m.arena, n.h.src_pos, msg);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    u64 n_runtime = 0;
+    for(u64 i = 0; i < generic.params.len; i += 1) {
+        if(!generic.params[i].is_comptime) { n_runtime += 1; }
+    }
+    if(n.args.len != n_runtime) {
+        u8[] msg = "generic call: pass exactly the runtime arguments (explicit comptime args not yet supported)";
+        diag::report(&s.m.diag, s.m.arena, n.h.src_pos, msg);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    types::Type** arg_type_mem = (types::Type**)arena::alloc(s.m.arena, n.args.len * sizeof(types::Type*));
+    types::Type*[] arg_types = {arg_type_mem, n.args.len};
+    bool args_ok = true;
+    for(u64 i = 0; i < n.args.len; i += 1) {
+        arg_types[i] = synth(s, n.args[i]);
+        if(arg_types[i] == null) { args_ok = false; }
+    }
+    if(!args_ok) { mark_error((ast::AstNode*)n); return null; }
+    ast::FnDeclNode* clone = resolve_generic_call_hook(s.m, generic, arg_types);
+    if(clone == null) {
+        diag_infer_failure(s, n.h.src_pos, generic.name);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    u64 runtime_index = 0;
+    for(u64 i = 0; i < clone.params.len; i += 1) {
+        if(clone.params[i].is_comptime) { continue; }
+        types::Type* param_type = (types::Type*)clone.params[i].resolved_type;
+        if(runtime_index < n.args.len && param_type != null) { check(s, n.args[runtime_index], param_type); }
+        runtime_index += 1;
+    }
+    n.resolved_fn = (void*)clone;
+    types::Type* ret = clone_return_type(clone);
+    set_expr((ast::AstNode*)n, ret, 0);
+    return ret;
+}
+
 fn types::Type* synth_call(Sema* s, ast::CallNode* n) {
-    Decl* overload_head = callee_overload_head(s, n.callee);
-    if(overload_head != null && overload_head.next_overload != null) {
-        return synth_overloaded_call(s, n, overload_head);
+    Decl* callee_decl = callee_overload_head(s, n.callee);
+    if(callee_decl != null && callee_decl.next_overload == null) {
+        ast::FnDeclNode* generic = as_generic_fn(callee_decl);
+        if(generic != null) {
+            u64 n_runtime = 0;
+            for(u64 i = 0; i < generic.params.len; i += 1) {
+                if(!generic.params[i].is_comptime) { n_runtime += 1; }
+            }
+            // Inference form (only runtime args) needs monomorphization; the explicit/all-args form
+            // type-checks against the concrete signature via the normal path (value-param generics).
+            if(n.args.len == n_runtime) { return synth_generic_call(s, n, generic); }
+        }
+    }
+    if(callee_decl != null && callee_decl.next_overload != null) {
+        return synth_overloaded_call(s, n, callee_decl);
     }
     types::Type* callee = synth(s, n.callee);
     if(callee == null) { return null; }
@@ -1682,6 +1757,14 @@ export fn void diag_overload_return_mismatch(Sema* s, u32 src_pos, symbol::Symbo
     u8[] name_str = interner::symbol_str(name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "overloads of %.*s must have the same return type", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+export fn void diag_infer_failure(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    if(name == null) { return; }
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot infer comptime arguments for %.*s", (i32)name_str.len, (i8*)name_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 

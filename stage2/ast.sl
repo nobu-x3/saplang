@@ -295,6 +295,7 @@ export struct CallNode {
     AstHeader h;
     AstNode*  callee;
     AstNode*[] args;
+    void*     resolved_fn;              // ast::FnDeclNode* — monomorphized instance for a generic call
 }
 
 export struct CastNode {
