@@ -42,6 +42,9 @@ export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, types::Type*[]) r
 // Explicit form: the caller passes the comptime args as values (val_type / val_int); monomorphize on them.
 export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, value::Value[]) resolve_generic_explicit_hook;
 
+// Evaluates a comprun block through the interpreter; side effects are diagnostics / compinsert mutations.
+export fn* void(module::Module*, ast::CompRunNode*) run_comprun_hook;
+
 export union DeclData {
     ast::AstNode*       node;
     ast::Param*         param;
@@ -390,6 +393,11 @@ export fn void check_bodies(module::Module* m) {
             ast::AstNode* node = global_block.stmts[i];
             if(node.h.kind == ast::AstKind::FnDecl && !is_generic_fn((ast::FnDeclNode*)node)) {
                 check_fn_body(s, (ast::FnDeclNode*)node);
+            }
+            else if(node.h.kind == ast::AstKind::ComprunStmt) {
+                ast::CompRunNode* comprun = (ast::CompRunNode*)node;
+                stmt(s, comprun.body);
+                if(run_comprun_hook != null) { run_comprun_hook(s.m, comprun); }
             }
         }
     }
@@ -1667,6 +1675,17 @@ fn void stmt(Sema* s, ast::AstNode* st) {
     }
     case ast::AstKind::ExprStmt: {
         synth(s, ((ast::ExprStmtNode*)st).expr);
+    }
+    case ast::AstKind::ComprunStmt: {
+        ast::CompRunNode* comprun = (ast::CompRunNode*)st;
+        stmt(s, comprun.body);                  // resolve local decls / idents so eval can read them
+        if(run_comprun_hook != null) { run_comprun_hook(s.m, comprun); }
+    }
+    case ast::AstKind::ComperrorStmt: {
+        synth(s, ((ast::CompErrorNode*)st).msg_expr);
+    }
+    case ast::AstKind::CompwarningStmt: {
+        synth(s, ((ast::CompWarningNode*)st).msg_expr);
     }
     else { }
     }

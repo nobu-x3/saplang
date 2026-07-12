@@ -1450,7 +1450,13 @@ export fn ast::FnDeclNode* resolve_generic_explicit(module::Module* m, ast::FnDe
     return monomorphize(&ip, callee, cargs);
 }
 
+fn void run_comprun(module::Module* m, ast::CompRunNode* n) {
+    Interp ip = new_interp(m);
+    eval_comprun(&ip, n);
+}
+
 export fn void install_hooks() {
     sema::resolve_generic_call_hook = &resolve_generic_call;
     sema::resolve_generic_explicit_hook = &resolve_generic_explicit;
+    sema::run_comprun_hook = &run_comprun;
 }

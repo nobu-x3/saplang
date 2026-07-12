@@ -360,6 +360,56 @@ fn i32 err_typeof_resolves_operand_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_comprun_local(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 x = 2 + 3; } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_comprun_comperror(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { comperror(\"boom\"); } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "boom", m)) { return -2; }
+    return 0;
+}
+
+fn i32 warn_comprun_compwarning(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { compwarning(\"careful\"); } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(test_util::warning_count(mod), (u64)1, m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "careful", m)) { return -3; }
+    return 0;
+}
+
+// A comptime local drives control flow inside the comprun; the taken branch fires comperror.
+fn i32 err_comprun_var_driven(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 x = 5; if(x > 3) { comperror(\"big\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "big", m)) { return -2; }
+    return 0;
+}
+
+fn i32 ok_comprun_var_no_error(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 x = 1; if(x > 3) { comperror(\"big\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A while loop runs to completion at comptime, then the post-condition fires comperror.
+fn i32 err_comprun_while(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 i = 0; while(i < 3) { i = i + 1; } if(i == 3) { comperror(\"looped\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "looped", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comprun_toplevel(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { comperror(\"toplvl\"); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "toplvl", m)) { return -2; }
+    return 0;
+}
+
 fn i32 ok_generic_negative_value(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 make(comptime Type T, comptime i32 N, T x) { return 0; }\nexport fn i32 f() { return make(i32, -3, 5); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -525,6 +575,13 @@ fn i32 main() {
     testing::add(suite, "ok_typeof_sizeof",         &ok_typeof_sizeof);
     testing::add(suite, "ok_typeof_var_type",       &ok_typeof_var_type);
     testing::add(suite, "err_typeof_resolves_operand_type", &err_typeof_resolves_operand_type);
+    testing::add(suite, "ok_comprun_local",          &ok_comprun_local);
+    testing::add(suite, "err_comprun_comperror",     &err_comprun_comperror);
+    testing::add(suite, "warn_comprun_compwarning",  &warn_comprun_compwarning);
+    testing::add(suite, "err_comprun_var_driven",    &err_comprun_var_driven);
+    testing::add(suite, "ok_comprun_var_no_error",   &ok_comprun_var_no_error);
+    testing::add(suite, "err_comprun_while",         &err_comprun_while);
+    testing::add(suite, "err_comprun_toplevel",      &err_comprun_toplevel);
     testing::add(suite, "ok_generic_negative_value", &ok_generic_negative_value);
     testing::add(suite, "err_overload_generic",     &err_overload_generic);
     testing::add(suite, "ok_generic_infer_fnptr",   &ok_generic_infer_fnptr);
