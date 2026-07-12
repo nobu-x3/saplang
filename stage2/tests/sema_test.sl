@@ -1800,11 +1800,11 @@ fn i32 cn_var_qualified_and_exported(arena::Arena* a, u8[] m) {
 fn i32 cn_duplicate_one_diag_exact(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     symbol::Symbol* foo = fake_sym_interned(mm, "foo");
-    ast::AstNode* fn1 = mk_fn_decl(a, foo, false, 10);
-    ast::AstNode* fn2 = mk_fn_decl(a, foo, false, 42);
+    ast::AstNode* s1 = mk_struct_decl(a, foo, false, 10);
+    ast::AstNode* s2 = mk_struct_decl(a, foo, false, 42);
     ast::AstNode*[2] stmts;
-    stmts[0] = fn1;
-    stmts[1] = fn2;
+    stmts[0] = s1;
+    stmts[1] = s2;
     set_root(mm, a, &stmts[0], 2);
     sema_run(mm);
     if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
@@ -1812,8 +1812,28 @@ fn i32 cn_duplicate_one_diag_exact(arena::Arena* a, u8[] m) {
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 42, m)) { return -3; }
     if(!testing::expect_eq(mm.diag.entries[0].is_warning, false, m)) { return -4; }
     sema::Decl* d = registered(mm, foo);
-    if(!testing::expect_eq((void*)d.data.node, (void*)fn1, m)) { return -5; }
+    if(!testing::expect_eq((void*)d.data.node, (void*)s1, m)) { return -5; }
     if(!testing::expect_eq(scope_count(mm), 1, m)) { return -6; }
+    return 0;
+}
+
+// Two same-name functions overload rather than collide (no diagnostic; chained off the head).
+fn i32 cn_duplicate_fns_overload(arena::Arena* a, u8[] m) {
+    module::Module* mm = run_module(a, "testmod");
+    symbol::Symbol* foo = fake_sym_interned(mm, "foo");
+    ast::AstNode* fn1 = mk_fn_decl(a, foo, false, 10);
+    ast::AstNode* fn2 = mk_fn_decl(a, foo, false, 42);
+    ast::AstNode*[2] stmts;
+    stmts[0] = fn1;
+    stmts[1] = fn2;
+    set_root(mm, a, &stmts[0], 2);
+    sema_run(mm);
+    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    sema::Decl* head = registered(mm, foo);
+    if(!testing::expect_eq((void*)head.data.node, (void*)fn1, m)) { return -2; }
+    if(!testing::expect_not_null((void*)head.next_overload, m)) { return -3; }
+    if(!testing::expect_eq((void*)head.next_overload.data.node, (void*)fn2, m)) { return -4; }
+    if(!testing::expect_eq(scope_count(mm), 1, m)) { return -5; }
     return 0;
 }
 
@@ -4809,8 +4829,8 @@ fn i32 switch_label_mismatch(arena::Arena* a, u8[] m) {
 fn i32 collect_duplicate_toplevel(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     symbol::Symbol* f = interner::intern("dup");
-    ast::AstNode* f1 = mk_fn_decl(a, f, false, 0);
-    ast::AstNode* f2 = mk_fn_decl(a, f, false, 30);
+    ast::AstNode* f1 = mk_struct_decl(a, f, false, 0);
+    ast::AstNode* f2 = mk_struct_decl(a, f, false, 30);
     ast::AstNode*[2] root; root[0] = f1; root[1] = f2;
     set_root(mm, a, &root[0], 2);
     sema_run(mm);
@@ -5052,6 +5072,7 @@ fn i32 main() {
     testing::add(cn, "cn_all_decl_kinds_registered",     &cn_all_decl_kinds_registered);
     testing::add(cn, "cn_var_qualified_and_exported",    &cn_var_qualified_and_exported);
     testing::add(cn, "cn_duplicate_one_diag_exact",      &cn_duplicate_one_diag_exact);
+    testing::add(cn, "cn_duplicate_fns_overload",        &cn_duplicate_fns_overload);
     testing::add(cn, "cn_two_distinct_no_diag",          &cn_two_distinct_no_diag);
     testing::add(cn, "cn_import_resolves_module",        &cn_import_resolves_module);
     testing::add(cn, "cn_import_reexport_no_match",      &cn_import_reexport_no_match);

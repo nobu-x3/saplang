@@ -49,6 +49,7 @@ export struct Decl {
     symbol::Symbol*     name;           // mirrors the key under which the Decl is registered
     types::Type*        ty;             // resolved type; for fns the fn-pointer type; for type-decls the canonical Type*
     DeclData            data;
+    Decl*               next_overload;  // same-name function overloads, chained off the scope-registered head
 }
 
 export struct SymEntry {
@@ -112,7 +113,7 @@ export fn void collect_names(module::Module* m) {
         case ast::AstKind::FnDecl: {
             ast::FnDeclNode* fn_decl = (ast::FnDeclNode*)top_level_node;
             fn_decl.qualified_name = qualify_decl_name(s, fn_decl.name);
-            Decl* decl = register_sym(s, module_scope, fn_decl.name, fn_decl.is_exported, (u16)DeclKind::Node, fn_decl.h.src_pos);
+            Decl* decl = register_fn(s, module_scope, fn_decl.name, fn_decl.is_exported, fn_decl.h.src_pos);
             if(decl != null) { decl.data.node = top_level_node; fn_decl.decl = (void*)decl; }
         }
         case ast::AstKind::StructDecl: {
@@ -197,6 +198,25 @@ fn Decl* register_sym(Sema* s, Scope* scope, symbol::Symbol* name, bool is_expor
     decl.is_exported = is_exported;
     scope_add(scope, name, decl);
     return decl;
+}
+
+fn bool decl_is_fn(Decl* d) {
+    if(d.kind != (u16)DeclKind::Node || d.data.node == null) { return false; }
+    return d.data.node.h.kind == ast::AstKind::FnDecl || d.data.node.h.kind == ast::AstKind::ExternFnDecl;
+}
+
+// A same-name existing function chains the new one as an overload; any other collision re-emits the duplicate error.
+fn Decl* register_fn(Sema* s, Scope* scope, symbol::Symbol* name, bool is_exported, u32 src_pos) {
+    Decl* existing = scope_lookup_local(scope, name);
+    if(existing == null || !decl_is_fn(existing)) {
+        return register_sym(s, scope, name, is_exported, (u16)DeclKind::Node, src_pos);
+    }
+    Decl* overload = new_decl(s, (u16)DeclKind::Node, name, null);
+    overload.is_exported = is_exported;
+    Decl* tail = existing;
+    while(tail.next_overload != null) { tail = tail.next_overload; }
+    tail.next_overload = overload;
+    return overload;
 }
 
 // The interner is process-global, so import names match by Symbol* identity.
@@ -319,7 +339,12 @@ fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
         }
         param_types = {param_type_mem, fn_decl.params.len};
     }
-    set_decl_ty(s, fn_decl.name, types::intern_fn_ptr(return_type, param_types, false));
+    Decl* own = (Decl*)fn_decl.decl;
+    if(own != null) { own.ty = types::intern_fn_ptr(return_type, param_types, false); }
+    Decl* head = scope_lookup_local(s.scope, fn_decl.name);
+    if(head != null && own != null && head != own && head.ty != null && head.ty.kind == types::TypeKind::FnPtr) {
+        if(head.ty.data.fn_ptr.ret != return_type) { diag_overload_return_mismatch(s, fn_decl.h.src_pos, fn_decl.name); }
+    }
     s.comptime_type_names = saved_type_names;
 }
 
@@ -778,10 +803,24 @@ export fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
             set_expr(e, expected, (u16)ast::AstFlags::ConstExpr);
             return true;
         }
+        if(unary.op == token::TokenKind::Minus && unary.operand != null && unary.operand.h.kind == ast::AstKind::FloatLit && types::is_float(expected)) {
+            set_expr(unary.operand, expected, (u16)ast::AstFlags::ConstExpr);
+            set_expr(e, expected, (u16)ast::AstFlags::ConstExpr);
+            return true;
+        }
     }
     switch(e.h.kind) {
     case ast::AstKind::IntLit: {
         return check_int_lit(s, (ast::IntLitNode*)e, expected);
+    }
+    case ast::AstKind::FloatLit: {
+        if(types::is_float(expected)) {
+            set_expr(e, expected, (u16)ast::AstFlags::ConstExpr);
+            return true;
+        }
+        diag_type_mismatch(s, e.h.src_pos, types::prim_f64(), expected);
+        mark_error(e);
+        return false;
     }
     case ast::AstKind::NullLit: {
         if(types::is_ptr(expected) || types::is_slice(expected)) {
@@ -982,7 +1021,96 @@ fn types::Type* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
     return result;
 }
 
+fn Decl* callee_overload_head(Sema* s, ast::AstNode* callee) {
+    if(callee == null) { return null; }
+    if(callee.h.kind == ast::AstKind::Ident) {
+        Decl* d = scope_lookup(s.scope, ((ast::IdentNode*)callee).name);
+        if(d != null && decl_is_fn(d)) { return d; }
+        return null;
+    }
+    if(callee.h.kind == ast::AstKind::NamespaceAccess) {
+        ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)callee;
+        Decl* ns = resolve_namespace_decl(s, na.base);
+        if(ns != null && ns.kind == (u16)DeclKind::Import && ns.data.module != null) {
+            Decl* d = scope_lookup_local((Scope*)ns.data.module.global_scope, na.name);
+            if(d != null && decl_is_fn(d) && d.is_exported) { return d; }
+        }
+        return null;
+    }
+    return null;
+}
+
+fn bool arg_compatible(ast::AstNode* arg, types::Type* arg_type, types::Type* param_type) {
+    if(arg_type == param_type) { return true; }
+    if(arg.h.kind == ast::AstKind::IntLit) { return types::is_int(param_type); }
+    if(arg.h.kind == ast::AstKind::FloatLit) { return types::is_float(param_type); }
+    return types::is_convertible(arg_type, param_type);
+}
+
+// -1 = not a candidate; otherwise the count of exact-type args, so the closest overload wins.
+fn i32 overload_score(Decl* cand, ast::AstNode*[] args, types::Type*[] arg_types) {
+    if(cand.ty == null || cand.ty.kind != types::TypeKind::FnPtr) { return -1; }
+    types::Type*[] params = cand.ty.data.fn_ptr.params;
+    bool variadic = cand.ty.data.fn_ptr.is_variadic;
+    if(!variadic && args.len != params.len) { return -1; }
+    if(variadic && args.len < params.len) { return -1; }
+    i32 score = 0;
+    for(u64 i = 0; i < params.len; i += 1) {
+        if(!arg_compatible(args[i], arg_types[i], params[i])) { return -1; }
+        if(arg_types[i] == params[i]) { score += 1; }
+    }
+    return score;
+}
+
+fn void set_callee_resolved(ast::AstNode* callee, Decl* chosen) {
+    if(callee.h.kind == ast::AstKind::Ident) { ((ast::IdentNode*)callee).resolved = (void*)chosen; }
+    else if(callee.h.kind == ast::AstKind::NamespaceAccess) { ((ast::NamespaceAccessNode*)callee).resolved = (void*)chosen; }
+    set_expr(callee, chosen.ty, 0);
+}
+
+fn types::Type* synth_overloaded_call(Sema* s, ast::CallNode* n, Decl* head) {
+    types::Type** arg_type_mem = (types::Type**)arena::alloc(s.m.arena, n.args.len * sizeof(types::Type*));
+    types::Type*[] arg_types = {arg_type_mem, n.args.len};
+    bool args_ok = true;
+    for(u64 i = 0; i < n.args.len; i += 1) {
+        arg_types[i] = synth(s, n.args[i]);
+        if(arg_types[i] == null) { args_ok = false; }
+    }
+    if(!args_ok) { mark_error((ast::AstNode*)n); return null; }
+    Decl* best = null;
+    i32 best_score = -1;
+    bool ambiguous = false;
+    Decl* cand = head;
+    while(cand != null) {
+        i32 score = overload_score(cand, n.args, arg_types);
+        if(score > best_score) { best = cand; best_score = score; ambiguous = false; }
+        else if(score == best_score && score >= 0) { ambiguous = true; }
+        cand = cand.next_overload;
+    }
+    if(best == null || best_score < 0) {
+        diag_no_overload(s, n.h.src_pos, head.name);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    if(ambiguous) {
+        diag_ambiguous_overload(s, n.h.src_pos, head.name);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
+    types::Type*[] params = best.ty.data.fn_ptr.params;
+    for(u64 i = 0; i < params.len; i += 1) { check(s, n.args[i], params[i]); }
+    for(u64 j = params.len; j < n.args.len; j += 1) { synth(s, n.args[j]); }
+    set_callee_resolved(n.callee, best);
+    types::Type* ret = best.ty.data.fn_ptr.ret;
+    set_expr((ast::AstNode*)n, ret, 0);
+    return ret;
+}
+
 fn types::Type* synth_call(Sema* s, ast::CallNode* n) {
+    Decl* overload_head = callee_overload_head(s, n.callee);
+    if(overload_head != null && overload_head.next_overload != null) {
+        return synth_overloaded_call(s, n, overload_head);
+    }
     types::Type* callee = synth(s, n.callee);
     if(callee == null) { return null; }
     if(callee.kind != types::TypeKind::FnPtr) {
@@ -1533,6 +1661,30 @@ export fn void diag_not_callable(Sema* s, u32 src_pos, types::Type* got) {
 }
 
 // "call expects N arguments but got M". Used by synth_call on arity mismatch.
+export fn void diag_no_overload(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    if(name == null) { return; }
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "no matching overload for %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+export fn void diag_ambiguous_overload(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    if(name == null) { return; }
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "ambiguous call to %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+export fn void diag_overload_return_mismatch(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    if(name == null) { return; }
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "overloads of %.*s must have the same return type", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
 export fn void diag_arity(Sema* s, u32 src_pos, u64 expected, u64 got) {
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "call expects %lu arguments but got %lu", expected, got);
