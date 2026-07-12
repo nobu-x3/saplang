@@ -57,6 +57,100 @@ fn i32 err_return_type_mismatch(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_enum(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum Color : i32 { Red, Green, Blue }\nexport fn i32 f() { return (i32)Color::Green; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_union(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "union U { i32 i; f32 fl; }\nexport fn i32 f() { U u; u.i = 3; return u.i; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_slice(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn u64 f() { i32[3] arr; i32[] s = arr[0..2]; return s.len; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_switch(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = 1; switch(x) { case 1: { return 1; } else { return 0; } } }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_defer(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = 0; defer { x = 1; } return x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_overload(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 a) { return a; }\nfn i32 g(f32 a) { return 0; }\nexport fn i32 f() { return g(3); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_no_matching_overload(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 a) { return a; }\nfn i32 g(f32 a) { return 0; }\nstruct P { i32 x; }\nexport fn i32 f() { P p; return g(p); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "no matching overload for g", m)) { return -2; }
+    return 0;
+}
+
+// Overloads resolve by parameter types, so a differing return type is rejected.
+fn i32 err_overload_return_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 a) { return a; }\nfn f32 g(f32 a) { return a; }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "overloads of g must have the same return type", m)) { return -2; }
+    return 0;
+}
+
+fn i32 ok_cast(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { f32 x = 1.5; return (i32)x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_neg_float_lit(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn f32 f() { f32 x = -1.5; return x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_pointer(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = 5; i32* p = &x; return *p; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_lit_overflow(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i8 x = 300; return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "literal 300 does not fit in i8", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_missing_return(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_break_outside_loop(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { break; return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_unknown_field(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; }\nexport fn i32 f() { P p; return p.zzz; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "E2E Sema Tests";
@@ -68,5 +162,20 @@ fn i32 main() {
     testing::add(suite, "err_undefined_ident",      &err_undefined_ident);
     testing::add(suite, "err_unknown_type",         &err_unknown_type);
     testing::add(suite, "err_return_type_mismatch", &err_return_type_mismatch);
+    testing::add(suite, "ok_enum",                  &ok_enum);
+    testing::add(suite, "ok_union",                 &ok_union);
+    testing::add(suite, "ok_slice",                 &ok_slice);
+    testing::add(suite, "ok_switch",                &ok_switch);
+    testing::add(suite, "ok_defer",                 &ok_defer);
+    testing::add(suite, "ok_overload",              &ok_overload);
+    testing::add(suite, "err_no_matching_overload", &err_no_matching_overload);
+    testing::add(suite, "err_overload_return_mismatch", &err_overload_return_mismatch);
+    testing::add(suite, "ok_cast",                  &ok_cast);
+    testing::add(suite, "ok_neg_float_lit",         &ok_neg_float_lit);
+    testing::add(suite, "ok_pointer",               &ok_pointer);
+    testing::add(suite, "err_lit_overflow",         &err_lit_overflow);
+    testing::add(suite, "err_missing_return",       &err_missing_return);
+    testing::add(suite, "err_break_outside_loop",   &err_break_outside_loop);
+    testing::add(suite, "err_unknown_field",        &err_unknown_field);
     return testing::run();
 }

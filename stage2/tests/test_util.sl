@@ -27,7 +27,9 @@ export fn module::Module* frontend(arena::Arena* a, u8[] src) {
     m.root_node = parser::parse(m);
     if(error_count(m) > 0) { return m; }
     sema::collect_names(m);
+    if(error_count(m) > 0) { return m; }
     sema::resolve_signatures(m);
+    if(error_count(m) > 0) { return m; }
     sema::check_bodies(m);
     if(error_count(m) > 0) { return m; }
     cfg::build_all_functions(m);
