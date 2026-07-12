@@ -640,6 +640,11 @@ export fn types::Type* resolve_type(Sema* s, ast::AstNode* texpr) {
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
+    case ast::AstKind::Typeof: {
+        types::Type* operand = synth(s, ((ast::TypeofNode*)texpr).expr);
+        texpr.h.ty = (void*)operand;
+        return operand;
+    }
     else { return null; }
     }
     return null;
@@ -1409,12 +1414,15 @@ fn types::Type* synth_alignof(Sema* s, ast::AlignofNode* n) {
 // The argument is either a type expression or a value expression to take the type of.
 fn types::Type* sizeof_operand_type(Sema* s, ast::AstNode* arg) {
     if(arg == null) { return null; }
-    if(ast::is_type((u16)arg.h.kind)) { return resolve_type(s, arg); }
+    if(ast::is_type((u16)arg.h.kind) || arg.h.kind == ast::AstKind::Typeof) { return resolve_type(s, arg); }
     return synth(s, arg);
 }
 
 fn types::Type* synth_typeof(Sema* s, ast::TypeofNode* n) {
-    return null; // TODO
+    types::Type* operand = synth(s, n.expr);
+    if(operand == null) { mark_error((ast::AstNode*)n); return null; }
+    set_expr((ast::AstNode*)n, types::prim_type(), (u16)ast::AstFlags::ConstExpr);
+    return types::prim_type();
 }
 
 fn types::Type* synth_type_info(Sema* s, ast::TypeInfoNode* n) {
