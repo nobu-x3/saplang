@@ -219,6 +219,61 @@ fn i32 ok_fn_ptr(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_extern_block(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern \"c\" { fn i32 puts(u8* s); }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_enum_explicit(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum E : i32 { A = 1, B = 5 }\nexport fn i32 f() { return (i32)E::B; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_multi_case(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = 1; switch(x) { case 1: case 2: { return 1; } else { return 0; } } }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_string_lit(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn u8* f() { u8* s = \"hi\"; return s; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_slice_ptr(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32[3] arr; i32[] s = arr[0..2]; i32* p = s.ptr; return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_comprun_empty(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_widen_conversion(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i8 a = 5; i32 b = a; return b; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_if_else_return(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = 1; if(x > 0) { return 1; } else { return 0; } }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 warn_unreachable_code(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { return 0; i32 y = 1; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    if(!testing::expect_ge(test_util::warning_count(mod), (u64)1, m)) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "E2E Sema Tests";
@@ -256,5 +311,14 @@ fn i32 main() {
     testing::add(suite, "ok_const_global",          &ok_const_global);
     testing::add(suite, "ok_nested_field",          &ok_nested_field);
     testing::add(suite, "ok_fn_ptr",                &ok_fn_ptr);
+    testing::add(suite, "ok_extern_block",          &ok_extern_block);
+    testing::add(suite, "ok_enum_explicit",         &ok_enum_explicit);
+    testing::add(suite, "ok_multi_case",            &ok_multi_case);
+    testing::add(suite, "ok_string_lit",            &ok_string_lit);
+    testing::add(suite, "ok_slice_ptr",             &ok_slice_ptr);
+    testing::add(suite, "ok_comprun_empty",         &ok_comprun_empty);
+    testing::add(suite, "ok_widen_conversion",      &ok_widen_conversion);
+    testing::add(suite, "ok_if_else_return",        &ok_if_else_return);
+    testing::add(suite, "warn_unreachable_code",    &warn_unreachable_code);
     return testing::run();
 }

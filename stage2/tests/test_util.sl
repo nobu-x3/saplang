@@ -43,3 +43,11 @@ export fn u64 error_count(module::Module* m) {
     }
     return count;
 }
+
+export fn u64 warning_count(module::Module* m) {
+    u64 count = 0;
+    for(u64 i = 0; i < m.diag.entries.len; i += 1) {
+        if(m.diag.entries[i].is_warning) { count += 1; }
+    }
+    return count;
+}
