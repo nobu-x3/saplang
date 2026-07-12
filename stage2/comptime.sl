@@ -1113,9 +1113,10 @@ export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, val
     if(hit != null) { return hit; }
     ast::FnDeclNode* clone = clone_fn_decl(ip.m.arena, callee);
     substitute_type_params(ip.m.arena, clone, cargs);
-    sema::sema_check_clone(ip.m, ip.m, clone);
+    // Cache before re-checking, so a recursive generic call in the body hits the cache, not endless monomorphization.
     mono_cache_insert(cache, ip.m.arena, key, clone);
     instantiated_fns_push(ip.m, clone);
+    sema::sema_check_clone(ip.m, ip.m, clone);
     return clone;
 }
 
