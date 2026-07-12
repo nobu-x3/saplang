@@ -274,6 +274,21 @@ fn i32 warn_unreachable_code(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_generic_call_infer(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { return id(5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Inferring T=f64 from the arg makes the call f64-typed, so it mismatches the i32 return — proving
+// the inferred return type flows through (not defaulted to the enclosing type).
+fn i32 err_generic_call_return_type(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { return id(1.5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "E2E Sema Tests";
@@ -320,5 +335,7 @@ fn i32 main() {
     testing::add(suite, "ok_widen_conversion",      &ok_widen_conversion);
     testing::add(suite, "ok_if_else_return",        &ok_if_else_return);
     testing::add(suite, "warn_unreachable_code",    &warn_unreachable_code);
+    testing::add(suite, "ok_generic_call_infer",    &ok_generic_call_infer);
+    testing::add(suite, "err_generic_call_return_type", &err_generic_call_return_type);
     return testing::run();
 }
