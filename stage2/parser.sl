@@ -1576,7 +1576,13 @@ fn ast::AstNode* parse_postfix(Parser* p) {
             ast::ListBuilder b;
             ast::list_init(&b, p.m.arena, 4);
             while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
-                ast::list_push(&b, p.m.arena, parse_expr(p, 0));
+                ast::AstNode* arg;
+                if(token::is_type_keyword(peek(p, 0).kind) || peek(p, 0).kind == token::TokenKind::FN) {
+                    arg = parse_type(p);     // explicit type argument to a generic
+                } else {
+                    arg = parse_expr(p, 0);
+                }
+                ast::list_push(&b, p.m.arena, arg);
                 if(!match(p, token::TokenKind::Comma)) { break; }
             }
             expect(p, token::TokenKind::RParen);

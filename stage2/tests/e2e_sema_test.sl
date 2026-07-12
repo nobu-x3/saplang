@@ -301,6 +301,43 @@ fn i32 ok_generic_infer_slice(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_generic_explicit(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { return id(i32, 5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Explicit T=i32, but the runtime arg is a float literal — mismatches the resolved param type.
+fn i32 err_generic_explicit_arg_mismatch(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { return id(i32, 1.5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
+    return 0;
+}
+
+// A type keyword at a runtime position (missing runtime arg) is diagnosed, not silently accepted.
+fn i32 err_generic_type_at_runtime(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { return id(i32); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "type argument passed to a runtime parameter", m)) { return -2; }
+    return 0;
+}
+
+// A user-defined type works as an explicit type argument (resolved as a type name).
+fn i32 ok_generic_user_type_explicit(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 v; }\nfn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { P p; id(P, p); return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A value where the comptime Type param expects a type is diagnosed.
+fn i32 err_generic_value_as_type_arg(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { i32 y = 3; id(5, y); return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expected a type argument for the comptime parameter", m)) { return -2; }
+    return 0;
+}
+
 fn i32 ok_generic_two_type_params(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 pair(comptime Type A, comptime Type B, A a, B b) { return 0; }\nexport fn i32 f() { return pair(1, 2.0); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -380,6 +417,11 @@ fn i32 main() {
     testing::add(suite, "err_generic_call_return_type", &err_generic_call_return_type);
     testing::add(suite, "ok_generic_infer_pointer",  &ok_generic_infer_pointer);
     testing::add(suite, "ok_generic_infer_slice",    &ok_generic_infer_slice);
+    testing::add(suite, "ok_generic_explicit",      &ok_generic_explicit);
+    testing::add(suite, "err_generic_explicit_arg_mismatch", &err_generic_explicit_arg_mismatch);
+    testing::add(suite, "err_generic_type_at_runtime", &err_generic_type_at_runtime);
+    testing::add(suite, "ok_generic_user_type_explicit", &ok_generic_user_type_explicit);
+    testing::add(suite, "err_generic_value_as_type_arg", &err_generic_value_as_type_arg);
     testing::add(suite, "ok_generic_two_type_params", &ok_generic_two_type_params);
     testing::add(suite, "err_generic_conflicting_infer", &err_generic_conflicting_infer);
     testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);

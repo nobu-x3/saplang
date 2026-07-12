@@ -1409,6 +1409,15 @@ export fn ast::FnDeclNode* resolve_generic_call(module::Module* m, ast::FnDeclNo
     return monomorphize(&ip, callee, binds);
 }
 
+export fn ast::FnDeclNode* resolve_generic_explicit(module::Module* m, ast::FnDeclNode* callee, types::Type*[] comptime_types) {
+    value::Value* cargs_mem = (value::Value*)arena::alloc(m.arena, comptime_types.len * sizeof(value::Value));
+    for(u64 k = 0; k < comptime_types.len; k += 1) { cargs_mem[k] = value::val_type(comptime_types[k]); }
+    value::Value[] cargs = {cargs_mem, comptime_types.len};
+    Interp ip = new_interp(m);
+    return monomorphize(&ip, callee, cargs);
+}
+
 export fn void install_hooks() {
     sema::resolve_generic_call_hook = &resolve_generic_call;
+    sema::resolve_generic_explicit_hook = &resolve_generic_explicit;
 }
