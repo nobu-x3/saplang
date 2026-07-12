@@ -46,6 +46,37 @@ fn i32 cross_module_generic_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// A comprun in module `a` calls `b::dbl(5)` at comptime; the callee is body-checked on demand in module b.
+// Positive: condition is false, so no comperror — proves the cross-module call evaluated without error.
+fn i32 cross_module_comptime_call_ok(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "export fn i32 dbl(i32 n) { return n * 2; }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { comprun { if(b::dbl(5) == 999) { comperror(\"nope\"); } } return 0; }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    return 0;
+}
+
+// Negative: condition is true (b::dbl(5) == 10), so the comperror fires — pins the returned comptime value.
+fn i32 cross_module_comptime_call_err(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "export fn i32 dbl(i32 n) { return n * 2; }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { comprun { if(b::dbl(5) == 10) { comperror(\"hit\"); } } return 0; }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 1, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)1, msg)) { return -2; }
+    return 0;
+}
+
 fn i32 generic_call_frontend(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -473,6 +504,8 @@ fn i32 main() {
     testing::add(fe, "generic_template_frontend", &generic_template_frontend);
     testing::add(fe, "generic_call_frontend",    &generic_call_frontend);
     testing::add(fe, "cross_module_generic_call", &cross_module_generic_call);
+    testing::add(fe, "cross_module_comptime_call_ok",  &cross_module_comptime_call_ok);
+    testing::add(fe, "cross_module_comptime_call_err", &cross_module_comptime_call_err);
     testing::add(fe, "cross_module_ok",        &cross_module_ok);
     testing::add(fe, "cross_module_overload",  &cross_module_overload);
     testing::add(fe, "circular_imports_ok",    &circular_imports_ok);

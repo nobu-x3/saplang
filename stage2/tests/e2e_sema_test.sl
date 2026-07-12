@@ -411,6 +411,29 @@ fn i32 err_comprun_calls_fn(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A const global is a comptime value: usable as an array dimension.
+fn i32 ok_const_global_array_dim(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "const i32 N = 4; export fn i32 f() { i32[N] arr; return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A const global's initializer is folded at comptime and drives a comprun condition.
+fn i32 err_const_global_in_comprun(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "const i32 G = 7; export fn i32 f() { comprun { if(G == 7) { comperror(\"seven\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "seven", m)) { return -2; }
+    return 0;
+}
+
+// A mutable global is not a comptime value — its runtime value isn't fixed.
+fn i32 err_mutable_global_at_comptime(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "i32 G = 7; export fn i32 f() { comprun { if(G == 7) { comperror(\"x\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "identifier is not a comptime value", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comprun_toplevel(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "comprun { comperror(\"toplvl\"); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -590,6 +613,9 @@ fn i32 main() {
     testing::add(suite, "ok_comprun_var_no_error",   &ok_comprun_var_no_error);
     testing::add(suite, "err_comprun_while",         &err_comprun_while);
     testing::add(suite, "err_comprun_calls_fn",      &err_comprun_calls_fn);
+    testing::add(suite, "ok_const_global_array_dim", &ok_const_global_array_dim);
+    testing::add(suite, "err_const_global_in_comprun", &err_const_global_in_comprun);
+    testing::add(suite, "err_mutable_global_at_comptime", &err_mutable_global_at_comptime);
     testing::add(suite, "err_comprun_toplevel",      &err_comprun_toplevel);
     testing::add(suite, "ok_generic_negative_value", &ok_generic_negative_value);
     testing::add(suite, "err_overload_generic",     &err_overload_generic);

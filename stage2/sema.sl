@@ -60,6 +60,7 @@ export struct Decl {
     types::Type*        ty;             // resolved type; for fns the fn-pointer type; for type-decls the canonical Type*
     DeclData            data;
     Decl*               next_overload;  // same-name function overloads, chained off the scope-registered head
+    module::Module*     home;           // module that registered this decl; lets comptime body-check a cross-module callee
 }
 
 export struct SymEntry {
@@ -206,6 +207,7 @@ fn Decl* register_sym(Sema* s, Scope* scope, symbol::Symbol* name, bool is_expor
     decl.kind = decl_kind;
     decl.name = name;
     decl.is_exported = is_exported;
+    decl.home = s.m;
     scope_add(scope, name, decl);
     return decl;
 }
@@ -2154,5 +2156,6 @@ export fn Decl* new_decl(Sema* s, u16 kind, symbol::Symbol* name, types::Type* t
     decl.kind = kind;
     decl.name = name;
     decl.ty = ty;
+    decl.home = s.m;
     return decl;
 }
