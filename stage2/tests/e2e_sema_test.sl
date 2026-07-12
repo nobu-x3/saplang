@@ -151,6 +151,74 @@ fn i32 err_unknown_field(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_alias(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "alias I = i32;\nexport fn I f() { I x = 3; return x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_anon_struct(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "alias Pair = struct { i32 x; i32 y; };\nexport fn i32 f() { Pair p; p.x = 1; return p.x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Anonymous structs are only allowed on an alias RHS, not as a variable type.
+fn i32 err_anon_struct_local(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { struct { i32 x; } s; return 0; }");
+    if(!testing::expect_ge(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`", m)) { return -2; }
+    return 0;
+}
+
+fn i32 ok_sizeof(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn u64 f() { return sizeof(i32); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_alignof(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn u64 f() { return alignof(i32); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_char_lit(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn u8 f() { u8 c = 'A'; return c; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_array_index(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32[3] arr; arr[0] = 7; return arr[0]; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_while(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 i = 0; while(i < 3) { i = i + 1; } return i; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_const_global(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "const i32 X = 5;\nexport fn i32 f() { return X; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_nested_field(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct Inner { i32 v; }\nstruct Outer { Inner inner; }\nexport fn i32 f() { Outer o; o.inner.v = 4; return o.inner.v; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_fn_ptr(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 a) { return a; }\nexport fn i32 f() { fn* i32(i32) p = g; return p(5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "E2E Sema Tests";
@@ -177,5 +245,16 @@ fn i32 main() {
     testing::add(suite, "err_missing_return",       &err_missing_return);
     testing::add(suite, "err_break_outside_loop",   &err_break_outside_loop);
     testing::add(suite, "err_unknown_field",        &err_unknown_field);
+    testing::add(suite, "ok_alias",                 &ok_alias);
+    testing::add(suite, "ok_anon_struct",           &ok_anon_struct);
+    testing::add(suite, "err_anon_struct_local",    &err_anon_struct_local);
+    testing::add(suite, "ok_sizeof",                &ok_sizeof);
+    testing::add(suite, "ok_alignof",               &ok_alignof);
+    testing::add(suite, "ok_char_lit",              &ok_char_lit);
+    testing::add(suite, "ok_array_index",           &ok_array_index);
+    testing::add(suite, "ok_while",                 &ok_while);
+    testing::add(suite, "ok_const_global",          &ok_const_global);
+    testing::add(suite, "ok_nested_field",          &ok_nested_field);
+    testing::add(suite, "ok_fn_ptr",                &ok_fn_ptr);
     return testing::run();
 }
