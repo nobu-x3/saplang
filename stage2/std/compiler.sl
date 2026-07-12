@@ -2,6 +2,7 @@ import module;
 import scanner;
 import parser;
 import sema;
+import comptime;
 import cfg;
 import cfg_print;
 import diag;
@@ -289,6 +290,7 @@ export fn i32 run(Compiler* c) {
 
 // Runs the frontend phases (parse -> barriered sema); 0 on success, 1 on any error.
 export fn i32 run_frontend(Compiler* c) {
+    comptime::install_hooks();
     if(c.is_multithreaded) { c.pool = pool::new(c.arena, sys::cpu_count()); }
     run_parse(c);
     i32 rc = 0;
