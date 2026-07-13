@@ -537,6 +537,35 @@ fn i32 err_compinsert_rejects_export(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_comptime_bytes_len(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { u8[] s = \"abc\"; if(s.len == (u64)3) { comperror(\"len3\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "len3", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_bytes_index(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { u8[] s = \"abc\"; u8 c = s[0]; if(c == (u8)97) { comperror(\"s97\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "s97", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_undefined(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 x = undefined; x = 5; if(x == 5) { comperror(\"undef5\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "undef5", m)) { return -2; }
+    return 0;
+}
+
+// A function assigned to a fn-pointer local is a comptime value; calling through it dispatches to the function.
+fn i32 err_comptime_fnptr_call(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 dbl(i32 n) { return n * 2; } export fn i32 f() { comprun { fn* i32(i32) p = dbl; if(p(21) == 42) { comperror(\"fp42\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "fp42", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comptime_array_mutate(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32[3] a = [1, 2, 3]; a[0] = 9; if(a[0] == 9) { comperror(\"a0is9\"); } } return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -824,6 +853,10 @@ fn i32 main() {
     testing::add(suite, "err_compinsert_position_registry", &err_compinsert_position_registry);
     testing::add(suite, "err_compinsert_string_literal", &err_compinsert_string_literal);
     testing::add(suite, "err_compinsert_rejects_export", &err_compinsert_rejects_export);
+    testing::add(suite, "err_comptime_bytes_len",     &err_comptime_bytes_len);
+    testing::add(suite, "err_comptime_bytes_index",   &err_comptime_bytes_index);
+    testing::add(suite, "err_comptime_undefined",     &err_comptime_undefined);
+    testing::add(suite, "err_comptime_fnptr_call",    &err_comptime_fnptr_call);
     testing::add(suite, "err_comptime_array_mutate",  &err_comptime_array_mutate);
     testing::add(suite, "err_comptime_struct_mutate", &err_comptime_struct_mutate);
     testing::add(suite, "err_comptime_enum_chain",    &err_comptime_enum_chain);

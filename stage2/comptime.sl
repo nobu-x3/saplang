@@ -118,6 +118,7 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     }
     case ast::AstKind::StringLit: { return eval_string_lit(ip, (ast::StringLitNode*)e); }
     case ast::AstKind::NullLit:   { return value::val_null((types::Type*)e.h.ty); }
+    case ast::AstKind::UndefinedLit: { return value::val_int(0, (types::Type*)e.h.ty); }
     case ast::AstKind::BinaryOp:  { return eval_binary(ip, (ast::BinaryOpNode*)e); }
     case ast::AstKind::UnaryOp:   { return eval_unary(ip, (ast::UnaryOpNode*)e); }
     case ast::AstKind::Cast:      { return eval_cast(ip, (ast::CastNode*)e); }
@@ -189,6 +190,9 @@ fn value::Value eval_decl_value(Interp* ip, sema::Decl* d, u32 pos) {
     }
     if(d.kind == (u16)sema::DeclKind::EnumMember && d.ty != null && d.ty.kind == types::TypeKind::Enum) {
         return eval_enum_member(ip, d);
+    }
+    if(d.kind == (u16)sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl) {
+        return value::val_fn((ast::FnDeclNode*)d.data.node, d.ty);
     }
     u8[] msg = "identifier is not a comptime value";
     diag::report(&ip.m.diag, ip.m.arena, pos, msg);
@@ -539,6 +543,12 @@ fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
 fn value::Value eval_member_access(Interp* ip, ast::MemberAccessNode* n) {
     value::Value base = eval(ip, n.base);
     if(base.kind == (u16)value::ValueKind::Error) { return base; }
+    if(base.kind == (u16)value::ValueKind::Bytes && n.field == interner::intern("len")) {
+        return value::val_int((i64)base.data.bytes.len, types::prim_u64());
+    }
+    if(base.kind == (u16)value::ValueKind::Array && n.field == interner::intern("len")) {
+        return value::val_int((i64)base.data.elems.len, types::prim_u64());
+    }
     if(base.kind != (u16)value::ValueKind::Struct || base.ty == null || base.ty.kind != types::TypeKind::Struct) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "member access on a non-struct comptime value");
         return value::val_error();
@@ -557,6 +567,13 @@ fn value::Value eval_array_index(Interp* ip, ast::ArrayIndexNode* n) {
     if(base.kind == (u16)value::ValueKind::Error) { return base; }
     value::Value idx = eval(ip, n.index);
     if(idx.kind == (u16)value::ValueKind::Error) { return idx; }
+    if(base.kind == (u16)value::ValueKind::Bytes) {
+        if(idx.data.i < 0 || (u64)idx.data.i >= base.data.bytes.len) {
+            diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "comptime byte slice index out of bounds");
+            return value::val_error();
+        }
+        return value::val_int((i64)base.data.bytes[(u64)idx.data.i], types::prim_u8());
+    }
     if(base.kind != (u16)value::ValueKind::Array) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "index on a non-array comptime value");
         return value::val_error();
@@ -649,23 +666,25 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
 
 fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
     sema::Decl* d = resolved_decl(n.callee);
-    if(d == null || d.kind != (u16)sema::DeclKind::Node || d.data.node == null) {
-        u8[] msg = "cannot resolve comptime call target";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
-        return value::val_error();
-    }
-    ast::AstNode* fnode = d.data.node;
-    if(fnode.h.kind == ast::AstKind::ExternFnDecl) {
+    if(d != null && d.kind == (u16)sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::ExternFnDecl) {
         u8[] msg = "cannot call an extern function at comptime";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
-    if(fnode.h.kind != ast::AstKind::FnDecl) {
-        u8[] msg = "comptime call target is not a function";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
-        return value::val_error();
+    ast::FnDeclNode* func;
+    if(d != null && d.kind == (u16)sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl) {
+        func = (ast::FnDeclNode*)d.data.node;
+    } else {
+        value::Value callee_val = eval(ip, n.callee);       // fn-pointer / indirect call: the callee evaluates to a fn value
+        if(callee_val.kind == (u16)value::ValueKind::Error) { return callee_val; }
+        if(callee_val.kind != (u16)value::ValueKind::FnRef || callee_val.data.fn_ref == null) {
+            u8[] msg = "comptime call target is not a function";
+            diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+            return value::val_error();
+        }
+        func = callee_val.data.fn_ref;
+        sema::ensure_body_checked(ip.m, func);              // v0: fn-pointer targets are checked in the current module
     }
-    ast::FnDeclNode* func = (ast::FnDeclNode*)fnode;
     if(!ensure_comptime_safe(ip, func)) {
         u8[] msg = "cannot call a non-comptime-safe function at comptime";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
@@ -700,7 +719,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
         ast::FnDeclNode* mono = monomorphize(ip, func, cargs);
         return invoke(ip, mono, args, n.h.src_pos);
     }
-    if(d.home != null) { sema::ensure_body_checked(d.home, func); }     // same- or cross-module: check the callee in its own module
+    if(d != null && d.home != null) { sema::ensure_body_checked(d.home, func); }     // same- or cross-module: check the callee in its own module
     return invoke(ip, func, args, n.h.src_pos);
 }
 
