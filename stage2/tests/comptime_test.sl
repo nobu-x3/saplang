@@ -743,7 +743,7 @@ fn i32 eval_return_sets_returning(arena::Arena* a, u8[] m) {
     stmts[0] = mk_return(a, mk_int(a, 5, types::prim_i32()));
     stmts[1] = mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, dx, types::prim_i32()), mk_int(a, 99, types::prim_i32()));
     comptime::eval(&ip, mk_block(a, &stmts[0], 2));
-    if(!ip.returning) { return -1; }
+    if(ip.flow != comptime::Flow::Return) { return -1; }
     if(!testing::expect_eq((u64)ip.return_value.data.i, (u64)5, m)) { return -2; }
     value::Value* xv = comptime::env_lookup(ip.env, dx);
     if(!testing::expect_eq((u64)xv.data.i, (u64)0, m)) { return -3; }
@@ -1093,7 +1093,7 @@ fn i32 eval_comprun_isolates_return(arena::Arena* a, u8[] m) {
     body_stmts[0] = mk_return(a, mk_int(a, 5, types::prim_i32()));
     value::Value v = comptime::eval(&ip, mk_comprun(a, mk_block(a, &body_stmts[0], 1)));
     if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Void, m)) { return -1; }
-    if(ip.returning) { return -2; }
+    if(ip.flow != comptime::Flow::None) { return -2; }
     return 0;
 }
 

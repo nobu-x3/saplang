@@ -37,8 +37,15 @@ export struct Interp {
     u64             max_iterations; // per-loop iteration cap; -comptime-iterations
     MonoCtx[]       mono_stack;
     u64             mono_cap;
-    bool            returning;      // set by eval_return; unwinds block/loop evaluation
+    Flow            flow;           // non-None unwinds block eval; loops consume Break/Continue, fns consume Return
     value::Value    return_value;
+}
+
+export enum Flow : i8 {
+    None     = 0,
+    Return   = 1,
+    Break    = 2,
+    Continue = 3,
 }
 
 export fn Env* env_push(Env* parent, arena::Arena* a, u64 initial_cap) {
@@ -125,6 +132,9 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::IfStmt:        { return eval_if(ip, (ast::IfNode*)e); }
     case ast::AstKind::WhileStmt:     { return eval_while(ip, (ast::WhileNode*)e); }
     case ast::AstKind::ForStmt:       { return eval_for(ip, (ast::ForNode*)e); }
+    case ast::AstKind::SwitchStmt:    { return eval_switch(ip, (ast::SwitchNode*)e); }
+    case ast::AstKind::BreakStmt:     { return eval_break(ip); }
+    case ast::AstKind::ContinueStmt:  { return eval_continue(ip); }
     case ast::AstKind::ReturnStmt:    { return eval_return(ip, (ast::ReturnNode*)e); }
     case ast::AstKind::AssignmentStmt: { return eval_assignment(ip, (ast::AssignmentNode*)e); }
     case ast::AstKind::Sizeof:    { return eval_sizeof(ip, (ast::SizeofNode*)e); }
@@ -192,7 +202,7 @@ fn value::Value eval_block(Interp* ip, ast::BlockNode* n) {
     for(u64 stmt_index = 0; stmt_index < n.stmts.len; stmt_index += 1) {
         value::Value v = eval(ip, n.stmts[stmt_index]);
         if(v.kind == (u16)value::ValueKind::Error) { result = v; break; }
-        if(ip.returning) { break; }
+        if(ip.flow != Flow::None) { break; }
     }
     env_pop(ip.env);
     ip.env = saved;
@@ -240,8 +250,56 @@ fn value::Value eval_return(Interp* ip, ast::ReturnNode* n) {
         if(v.kind == (u16)value::ValueKind::Error) { return v; }
     }
     ip.return_value = v;
-    ip.returning = true;
+    ip.flow = Flow::Return;
     return v;
+}
+
+fn bool values_equal(value::Value a, value::Value b) {
+    if(a.kind != b.kind) { return false; }
+    if(a.kind == (u16)value::ValueKind::Int || a.kind == (u16)value::ValueKind::Char) { return a.data.i == b.data.i; }
+    if(a.kind == (u16)value::ValueKind::Bool) { return a.data.b == b.data.b; }
+    return false;
+}
+
+// A null-body arm chains to the next arm's body; break stops the switch, return/continue propagate.
+fn value::Value eval_switch_body(Interp* ip, ast::SwitchNode* n, u64 start) {
+    for(u64 arm_index = start; arm_index < n.arms.len; arm_index += 1) {
+        if(n.arms[arm_index].body != null) {
+            value::Value r = eval(ip, n.arms[arm_index].body);
+            if(r.kind == (u16)value::ValueKind::Error) { return r; }
+            if(ip.flow == Flow::Break) { ip.flow = Flow::None; }
+            return value::val_void();
+        }
+    }
+    return value::val_void();
+}
+
+fn value::Value eval_switch(Interp* ip, ast::SwitchNode* n) {
+    value::Value disc = eval(ip, n.discriminant);
+    if(disc.kind == (u16)value::ValueKind::Error) { return disc; }
+    for(u64 arm_index = 0; arm_index < n.arms.len; arm_index += 1) {
+        for(u64 label_index = 0; label_index < n.arms[arm_index].labels.len; label_index += 1) {
+            value::Value label = eval(ip, n.arms[arm_index].labels[label_index]);
+            if(label.kind == (u16)value::ValueKind::Error) { return label; }
+            if(values_equal(label, disc)) { return eval_switch_body(ip, n, arm_index); }
+        }
+    }
+    if(n.else_block != null) {
+        value::Value r = eval(ip, n.else_block);
+        if(r.kind == (u16)value::ValueKind::Error) { return r; }
+        if(ip.flow == Flow::Break) { ip.flow = Flow::None; }
+    }
+    return value::val_void();
+}
+
+fn value::Value eval_break(Interp* ip) {
+    ip.flow = Flow::Break;
+    return value::val_void();
+}
+
+fn value::Value eval_continue(Interp* ip) {
+    ip.flow = Flow::Continue;
+    return value::val_void();
 }
 
 fn value::Value eval_if(Interp* ip, ast::IfNode* n) {
@@ -260,7 +318,9 @@ fn value::Value eval_while(Interp* ip, ast::WhileNode* n) {
         if(!cond.data.b) { break; }
         value::Value body = eval(ip, n.body);
         if(body.kind == (u16)value::ValueKind::Error) { return body; }
-        if(ip.returning) { break; }
+        if(ip.flow == Flow::Break) { ip.flow = Flow::None; break; }
+        if(ip.flow == Flow::Return) { break; }
+        if(ip.flow == Flow::Continue) { ip.flow = Flow::None; }
         iterations += 1;
         if(iterations > ip.max_iterations) { return iteration_limit_error(ip, n.h.src_pos); }
     }
@@ -285,7 +345,9 @@ fn value::Value eval_for(Interp* ip, ast::ForNode* n) {
             }
             value::Value b = eval(ip, n.body);
             if(b.kind == (u16)value::ValueKind::Error) { result = b; break; }
-            if(ip.returning) { break; }
+            if(ip.flow == Flow::Break) { ip.flow = Flow::None; break; }
+            if(ip.flow == Flow::Return) { break; }
+            if(ip.flow == Flow::Continue) { ip.flow = Flow::None; }
             if(n.post != null) {
                 value::Value p = eval(ip, n.post);
                 if(p.kind == (u16)value::ValueKind::Error) { result = p; break; }
@@ -393,13 +455,13 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
         sema::Decl* pd = (sema::Decl*)func.params[param_index].decl;
         if(pd != null && param_index < args.len) { env_bind(ip.env, ip.m.arena, pd, args[param_index]); }
     }
-    bool saved_returning = ip.returning;
+    Flow saved_flow = ip.flow;
     value::Value saved_return_value = ip.return_value;
-    ip.returning = false;
+    ip.flow = Flow::None;
     value::Value body_result = eval(ip, func.body);
     value::Value result = value::val_void();
-    if(body_result.kind == (u16)value::ValueKind::Error) { result = body_result; } else if(ip.returning) { result = ip.return_value; }
-    ip.returning = saved_returning;
+    if(body_result.kind == (u16)value::ValueKind::Error) { result = body_result; } else if(ip.flow == Flow::Return) { result = ip.return_value; }
+    ip.flow = saved_flow;
     ip.return_value = saved_return_value;
     env_pop(ip.env);
     ip.env = saved;
@@ -545,10 +607,10 @@ fn ast::AstNode*[] run_compinsert_stmts(module::Module* m, ast::CompInsertNode* 
 fn value::Value eval_comprun(Interp* ip, ast::CompRunNode* n) {
     Env* saved = ip.env;
     ip.env = env_push(saved, ip.m.arena, 16);
-    bool saved_returning = ip.returning;
+    Flow saved_flow = ip.flow;
     value::Value saved_return_value = ip.return_value;
     eval(ip, n.body);
-    ip.returning = saved_returning;             // a comprun is an execution boundary; a return inside it doesn't propagate out
+    ip.flow = saved_flow;                        // a comprun is an execution boundary; a return inside it doesn't propagate out
     ip.return_value = saved_return_value;
     env_pop(ip.env);
     ip.env = saved;

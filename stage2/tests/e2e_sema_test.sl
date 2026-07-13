@@ -537,6 +537,34 @@ fn i32 err_compinsert_rejects_export(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_comptime_break(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 i = 0; while(i < 10) { if(i == 2) { break; } i = i + 1; } if(i == 2) { comperror(\"broke2\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "broke2", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_continue(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 sum = 0; for(i32 i = 0; i < 5; i = i + 1) { if(i == 2) { continue; } sum = sum + i; } if(sum == 8) { comperror(\"skip2\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "skip2", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_switch_case(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 x = 2; switch(x) { case 1: case 2: { comperror(\"oneortwo\"); } else { comperror(\"def\"); } } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "oneortwo", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_switch_default(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 x = 9; switch(x) { case 2: { comperror(\"case2\"); } else { comperror(\"def\"); } } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "def", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comprun_toplevel(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "comprun { comperror(\"toplvl\"); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -732,6 +760,10 @@ fn i32 main() {
     testing::add(suite, "err_compinsert_position_registry", &err_compinsert_position_registry);
     testing::add(suite, "err_compinsert_string_literal", &err_compinsert_string_literal);
     testing::add(suite, "err_compinsert_rejects_export", &err_compinsert_rejects_export);
+    testing::add(suite, "err_comptime_break",        &err_comptime_break);
+    testing::add(suite, "err_comptime_continue",     &err_comptime_continue);
+    testing::add(suite, "err_comptime_switch_case",  &err_comptime_switch_case);
+    testing::add(suite, "err_comptime_switch_default", &err_comptime_switch_default);
     testing::add(suite, "err_comprun_toplevel",      &err_comprun_toplevel);
     testing::add(suite, "ok_generic_negative_value", &ok_generic_negative_value);
     testing::add(suite, "err_overload_generic",     &err_overload_generic);
