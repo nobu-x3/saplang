@@ -470,7 +470,27 @@ fn value::Value eval_compwarning(Interp* ip, ast::CompWarningNode* n) {
     return value::val_void();
 }
 
-// String literals inside the generated source aren't remapped to this module's pool yet.
+// The fragment shares the module's literal pool so generated string offsets stay valid after the splice.
+fn ast::AstNode* compile_fragment(module::Module* m, u8[] bytes, bool as_stmts, u32 generator_pos) {
+    module::Module* frag = (module::Module*)arena::alloc(m.arena, sizeof(module::Module));
+    sys::memset(frag, 0, sizeof(module::Module));
+    frag.arena = m.arena;
+    frag.name = m.name;
+    frag.source = bytes;
+    frag.literal_pool = m.literal_pool;
+    frag.literal_pool_cap = m.literal_pool_cap;
+    scanner::scan(frag);
+    ast::AstNode* root;
+    if(as_stmts) { root = parser::parse_stmt_fragment(frag); } else { root = parser::parse(frag); }
+    m.literal_pool = frag.literal_pool;
+    m.literal_pool_cap = frag.literal_pool_cap;
+    for(u64 diag_index = 0; diag_index < frag.diag.entries.len; diag_index += 1) {
+        diag::report(&m.diag, m.arena, generator_pos, frag.diag.entries[diag_index].msg);
+    }
+    if(frag.diag.entries.len > 0) { return null; }
+    return root;
+}
+
 fn value::Value eval_compinsert(Interp* ip, ast::CompInsertNode* n) {
     value::Value src = eval(ip, n.source_expr);
     if(src.kind == (u16)value::ValueKind::Error) { return src; }
@@ -479,26 +499,27 @@ fn value::Value eval_compinsert(Interp* ip, ast::CompInsertNode* n) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
-    module::Module* frag = (module::Module*)arena::alloc(ip.m.arena, sizeof(module::Module));
-    sys::memset(frag, 0, sizeof(module::Module));
-    frag.arena = ip.m.arena;
-    frag.name = ip.m.name;
-    frag.source = src.data.bytes;
-    frag.literal_pool = ip.m.literal_pool;              // share the module pool so generated string offsets stay valid
-    frag.literal_pool_cap = ip.m.literal_pool_cap;
-    scanner::scan(frag);
-    ast::AstNode* frag_root = parser::parse(frag);
-    ip.m.literal_pool = frag.literal_pool;              // absorb bytes the fragment's string literals appended
-    ip.m.literal_pool_cap = frag.literal_pool_cap;
-    for(u64 diag_index = 0; diag_index < frag.diag.entries.len; diag_index += 1) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, frag.diag.entries[diag_index].msg);
-    }
-    if(frag.diag.entries.len > 0 || frag_root == null) { return value::val_error(); }
+    ast::AstNode* frag_root = compile_fragment(ip.m, src.data.bytes, false, n.h.src_pos);
+    if(frag_root == null) { return value::val_error(); }
     ast::BlockNode* frag_block = (ast::BlockNode*)frag_root;
     for(u64 decl_index = 0; decl_index < frag_block.stmts.len; decl_index += 1) {
         sema::splice_top_decl(ip.m, frag_block.stmts[decl_index], n.h.src_pos);
     }
     return value::val_void();
+}
+
+// In-function compinsert: sema calls this while walking a block, then splices the returned stmts in place.
+fn ast::AstNode*[] run_compinsert_stmts(module::Module* m, ast::CompInsertNode* n) {
+    ast::AstNode*[] empty = {null, 0};
+    Interp ip = new_interp(m);
+    value::Value src = eval(&ip, n.source_expr);
+    if(src.kind != (u16)value::ValueKind::Bytes) {
+        if(src.kind != (u16)value::ValueKind::Error) { diag::report(&m.diag, m.arena, n.h.src_pos, "compinsert argument must be a string"); }
+        return empty;
+    }
+    ast::AstNode* frag_root = compile_fragment(m, src.data.bytes, true, n.h.src_pos);
+    if(frag_root == null) { return empty; }
+    return ((ast::BlockNode*)frag_root).stmts;
 }
 
 fn value::Value eval_comprun(Interp* ip, ast::CompRunNode* n) {
@@ -1494,4 +1515,5 @@ export fn void install_hooks() {
     sema::resolve_generic_call_hook = &resolve_generic_call;
     sema::resolve_generic_explicit_hook = &resolve_generic_explicit;
     sema::run_comprun_hook = &run_comprun;
+    sema::run_compinsert_stmts_hook = &run_compinsert_stmts;
 }

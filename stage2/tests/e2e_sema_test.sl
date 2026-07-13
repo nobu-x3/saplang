@@ -450,6 +450,29 @@ fn i32 err_compinsert_conditional(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// In-function compinsert splices generated statements into the body; the generated `return` satisfies return-path analysis.
+fn i32 ok_compinsert_in_function(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { compinsert(\"i32 x = 40; return x + 2;\"); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// The spliced statements are fully sema-checked in the enclosing block.
+fn i32 err_compinsert_in_function_typecheck(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { compinsert(\"return nope;\"); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "undefined identifier nope", m)) { return -2; }
+    return 0;
+}
+
+// Generated code with no return leaves the function without a return path — caught by CFG on the spliced body.
+fn i32 err_compinsert_in_function_no_return(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { compinsert(\"i32 x = 1;\"); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "function may exit without a return statement", m)) { return -2; }
+    return 0;
+}
+
 // A string literal inside generated code must resolve against the module pool (offsets remapped on splice).
 fn i32 err_compinsert_string_literal(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "comprun { compinsert(\"fn u8[] msg() { return \\\"hello\\\"; }\"); }\nexport fn i32 f() { comprun { comperror(msg()); } return 0; }");
@@ -649,6 +672,9 @@ fn i32 main() {
     testing::add(suite, "err_mutable_global_at_comptime", &err_mutable_global_at_comptime);
     testing::add(suite, "err_compinsert_generated_fn_callable", &err_compinsert_generated_fn_callable);
     testing::add(suite, "err_compinsert_conditional", &err_compinsert_conditional);
+    testing::add(suite, "ok_compinsert_in_function",  &ok_compinsert_in_function);
+    testing::add(suite, "err_compinsert_in_function_typecheck", &err_compinsert_in_function_typecheck);
+    testing::add(suite, "err_compinsert_in_function_no_return", &err_compinsert_in_function_no_return);
     testing::add(suite, "err_compinsert_string_literal", &err_compinsert_string_literal);
     testing::add(suite, "err_compinsert_rejects_export", &err_compinsert_rejects_export);
     testing::add(suite, "err_comprun_toplevel",      &err_comprun_toplevel);

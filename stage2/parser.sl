@@ -31,6 +31,23 @@ export fn ast::AstNode* parse(module::Module* m) {
     return (ast::AstNode*)root;
 }
 
+// Parse a brace-less statement list (used for compinsert fragments in function bodies).
+export fn ast::AstNode* parse_stmt_fragment(module::Module* m) {
+    Parser p = { m, 0, false, false, false };
+    ast::ListBuilder stmts;
+    ast::list_init(&stmts, m.arena, 8);
+    while (peek(&p, 0).kind != token::TokenKind::EOF) {
+        ast::AstNode* s = parse_stmt(&p);
+        if (s != null) { ast::list_push(&stmts, m.arena, s); }
+    }
+    ast::BlockNode* blk = arena::alloc(m.arena, sizeof(ast::BlockNode));
+    blk.h.kind = ast::AstKind::BlockStmt;
+    blk.h.flags = (ast::AstFlags)0;
+    blk.h.src_pos = 0;
+    blk.stmts = ast::list_freeze(&stmts);
+    return (ast::AstNode*)blk;
+}
+
 // private stuff
 // PARSING //////////////////////////////////////////////////////////////////////////////
 fn ast::AstNode* parse_top_decl(Parser* p) {

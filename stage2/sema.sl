@@ -20,6 +20,7 @@ export struct Sema {
     i32                 switch_depth;
     ResolutionStack     resolution_stack;   // alias / named-type cycle detection
     symbol::Symbol*[]   comptime_type_names; // comptime Type params of the generic whose signature is resolving
+    bool                in_comprun;         // inside a comprun body: compinsert there is comptime-evaluated, not stmt-spliced
 }
 
 export enum DeclKind : u16 {
@@ -44,6 +45,9 @@ export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, value::Value[]) r
 
 // Evaluates a comprun block through the interpreter; side effects are diagnostics / compinsert mutations.
 export fn* void(module::Module*, ast::CompRunNode*) run_comprun_hook;
+
+// Evaluates an in-function compinsert and returns the generated statements for the block walk to splice in.
+export fn* ast::AstNode*[](module::Module*, ast::CompInsertNode*) run_compinsert_stmts_hook;
 
 export union DeclData {
     ast::AstNode*       node;
@@ -398,7 +402,9 @@ export fn void check_bodies(module::Module* m) {
             }
             else if(node.h.kind == ast::AstKind::ComprunStmt) {
                 ast::CompRunNode* comprun = (ast::CompRunNode*)node;
+                s.in_comprun = true;
                 stmt(s, comprun.body);
+                s.in_comprun = false;
                 if(run_comprun_hook != null) { run_comprun_hook(s.m, comprun); }
             }
         }
@@ -445,6 +451,19 @@ fn void append_top_decl(module::Module* m, ast::AstNode* node) {
     block.stmts.ptr = (ast::AstNode**)arena::realloc_grow(m.arena, (void*)block.stmts.ptr, count * sizeof(ast::AstNode*), (count + 1) * sizeof(ast::AstNode*));
     block.stmts.ptr[count] = node;
     block.stmts.len = count + 1;
+}
+
+// Replace block.stmts[at] with `generated` (0+ stmts), keeping the rest in order.
+fn void block_splice(module::Module* m, ast::BlockNode* block, u64 at, ast::AstNode*[] generated) {
+    u64 old_len = block.stmts.len;
+    u64 new_len = old_len - 1 + generated.len;
+    ast::AstNode** buf = (ast::AstNode**)arena::alloc(m.arena, new_len * sizeof(ast::AstNode*));
+    u64 write = 0;
+    for(u64 i = 0; i < at; i += 1) { buf[write] = block.stmts[i]; write += 1; }
+    for(u64 i = 0; i < generated.len; i += 1) { buf[write] = generated[i]; write += 1; }
+    for(u64 i = at + 1; i < old_len; i += 1) { buf[write] = block.stmts[i]; write += 1; }
+    block.stmts.ptr = buf;
+    block.stmts.len = new_len;
 }
 
 // Idempotent per FnDeclNode.body_state; InProgress tolerates a comptime call cycling back into the fn being checked.
@@ -1662,7 +1681,16 @@ fn void stmt(Sema* s, ast::AstNode* st) {
         Scope* block_scope = scope_new(s.m.arena, s.scope, 8);
         Scope* saved = s.scope;
         s.scope = block_scope;
-        for(u64 i = 0; i < block.stmts.len; i += 1) { stmt(s, block.stmts[i]); }
+        for(u64 i = 0; i < block.stmts.len; i += 1) {
+            ast::AstNode* inner = block.stmts[i];
+            if(inner.h.kind == ast::AstKind::CompinsertStmt && !s.in_comprun && run_compinsert_stmts_hook != null) {
+                ast::AstNode*[] generated = run_compinsert_stmts_hook(s.m, (ast::CompInsertNode*)inner);
+                block_splice(s.m, block, i, generated);
+                i -= 1;                     // re-walk from the first spliced stmt (or the next stmt if none)
+            } else {
+                stmt(s, inner);
+            }
+        }
         s.scope = saved;
     }
     case ast::AstKind::VarDecl: {
@@ -1729,7 +1757,10 @@ fn void stmt(Sema* s, ast::AstNode* st) {
     }
     case ast::AstKind::ComprunStmt: {
         ast::CompRunNode* comprun = (ast::CompRunNode*)st;
+        bool saved_in_comprun = s.in_comprun;
+        s.in_comprun = true;
         stmt(s, comprun.body);                  // resolve local decls / idents so eval can read them
+        s.in_comprun = saved_in_comprun;
         if(run_comprun_hook != null) { run_comprun_hook(s.m, comprun); }
     }
     case ast::AstKind::ComperrorStmt: {
