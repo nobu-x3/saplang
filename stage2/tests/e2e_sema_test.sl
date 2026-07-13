@@ -434,6 +434,37 @@ fn i32 err_mutable_global_at_comptime(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// compinsert generates a top-level fn; a later comprun resolves and calls it, proving it was registered + body-checked.
+fn i32 err_compinsert_generated_fn_callable(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { compinsert(\"fn i32 gen() { return 42; }\"); }\nexport fn i32 f() { comprun { if(gen() == 42) { comperror(\"ok42\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "ok42", m)) { return -2; }
+    return 0;
+}
+
+// A const chooses which function body compinsert emits — the in-source conditional-compilation pattern.
+fn i32 err_compinsert_conditional(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "const i32 P = 1; comprun { if(P == 1) { compinsert(\"fn i32 impl() { return 100; }\"); } else { compinsert(\"fn i32 impl() { return 200; }\"); } }\nexport fn i32 f() { comprun { if(impl() == 100) { comperror(\"picked\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "picked", m)) { return -2; }
+    return 0;
+}
+
+// A string literal inside generated code must resolve against the module pool (offsets remapped on splice).
+fn i32 err_compinsert_string_literal(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { compinsert(\"fn u8[] msg() { return \\\"hello\\\"; }\"); }\nexport fn i32 f() { comprun { comperror(msg()); } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "hello", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_compinsert_rejects_export(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { compinsert(\"export fn i32 g() { return 1; }\"); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "compinsert-generated declarations may not be `export`", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comprun_toplevel(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "comprun { comperror(\"toplvl\"); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -616,6 +647,10 @@ fn i32 main() {
     testing::add(suite, "ok_const_global_array_dim", &ok_const_global_array_dim);
     testing::add(suite, "err_const_global_in_comprun", &err_const_global_in_comprun);
     testing::add(suite, "err_mutable_global_at_comptime", &err_mutable_global_at_comptime);
+    testing::add(suite, "err_compinsert_generated_fn_callable", &err_compinsert_generated_fn_callable);
+    testing::add(suite, "err_compinsert_conditional", &err_compinsert_conditional);
+    testing::add(suite, "err_compinsert_string_literal", &err_compinsert_string_literal);
+    testing::add(suite, "err_compinsert_rejects_export", &err_compinsert_rejects_export);
     testing::add(suite, "err_comprun_toplevel",      &err_comprun_toplevel);
     testing::add(suite, "ok_generic_negative_value", &ok_generic_negative_value);
     testing::add(suite, "err_overload_generic",     &err_overload_generic);

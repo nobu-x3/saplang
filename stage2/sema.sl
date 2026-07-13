@@ -414,6 +414,39 @@ export fn bool is_generic_fn(ast::FnDeclNode* func) {
     return false;
 }
 
+// Generated decls may not be `export`: an importer's exported surface is fixed when name collection runs.
+export fn void splice_top_decl(module::Module* m, ast::AstNode* node, u32 generator_pos) {
+    if(node.h.kind != ast::AstKind::FnDecl) {
+        diag::report(&m.diag, m.arena, generator_pos, "compinsert currently supports only function declarations");
+        return;
+    }
+    ast::FnDeclNode* fn_decl = (ast::FnDeclNode*)node;
+    if(fn_decl.is_exported) {
+        diag::report(&m.diag, m.arena, generator_pos, "compinsert-generated declarations may not be `export`");
+        return;
+    }
+    Sema sema;
+    sys::memset(&sema, 0, sizeof(Sema));
+    sema.m = m;
+    Sema* s = &sema;
+    s.scope = (Scope*)m.global_scope;
+    s.resolution_stack.arena = m.arena;
+    fn_decl.qualified_name = qualify_decl_name(s, fn_decl.name);
+    Decl* decl = register_fn(s, (Scope*)m.global_scope, fn_decl, false);
+    if(decl != null) { decl.data.node = node; fn_decl.decl = (void*)decl; }
+    resolve_decl_signature(s, node);
+    ensure_body_checked(m, fn_decl);
+    append_top_decl(m, node);
+}
+
+fn void append_top_decl(module::Module* m, ast::AstNode* node) {
+    ast::BlockNode* block = (ast::BlockNode*)m.root_node;
+    u64 count = block.stmts.len;
+    block.stmts.ptr = (ast::AstNode**)arena::realloc_grow(m.arena, (void*)block.stmts.ptr, count * sizeof(ast::AstNode*), (count + 1) * sizeof(ast::AstNode*));
+    block.stmts.ptr[count] = node;
+    block.stmts.len = count + 1;
+}
+
 // Idempotent per FnDeclNode.body_state; InProgress tolerates a comptime call cycling back into the fn being checked.
 export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func) {
     if(func.body_state == ast::BodyState::Checked) { return; }

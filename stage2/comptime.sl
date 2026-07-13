@@ -6,6 +6,8 @@ import types;
 import types_print;
 import diag;
 import sema;
+import scanner;
+import parser;
 import op;
 import token;
 import symbol;
@@ -136,6 +138,7 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::ComprunStmt: { return eval_comprun(ip, (ast::CompRunNode*)e); }
     case ast::AstKind::ComperrorStmt:   { return eval_comperror(ip, (ast::CompErrorNode*)e); }
     case ast::AstKind::CompwarningStmt: { return eval_compwarning(ip, (ast::CompWarningNode*)e); }
+    case ast::AstKind::CompinsertStmt:  { return eval_compinsert(ip, (ast::CompInsertNode*)e); }
     else {
         diag_unsupported(ip, e.h.src_pos);
         return value::val_error();
@@ -464,6 +467,37 @@ fn value::Value eval_compwarning(Interp* ip, ast::CompWarningNode* n) {
         return value::val_error();
     }
     diag::report_warning(&ip.m.diag, ip.m.arena, n.h.src_pos, msg.data.bytes);
+    return value::val_void();
+}
+
+// String literals inside the generated source aren't remapped to this module's pool yet.
+fn value::Value eval_compinsert(Interp* ip, ast::CompInsertNode* n) {
+    value::Value src = eval(ip, n.source_expr);
+    if(src.kind == (u16)value::ValueKind::Error) { return src; }
+    if(src.kind != (u16)value::ValueKind::Bytes) {
+        u8[] msg = "compinsert argument must be a string";
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        return value::val_error();
+    }
+    module::Module* frag = (module::Module*)arena::alloc(ip.m.arena, sizeof(module::Module));
+    sys::memset(frag, 0, sizeof(module::Module));
+    frag.arena = ip.m.arena;
+    frag.name = ip.m.name;
+    frag.source = src.data.bytes;
+    frag.literal_pool = ip.m.literal_pool;              // share the module pool so generated string offsets stay valid
+    frag.literal_pool_cap = ip.m.literal_pool_cap;
+    scanner::scan(frag);
+    ast::AstNode* frag_root = parser::parse(frag);
+    ip.m.literal_pool = frag.literal_pool;              // absorb bytes the fragment's string literals appended
+    ip.m.literal_pool_cap = frag.literal_pool_cap;
+    for(u64 diag_index = 0; diag_index < frag.diag.entries.len; diag_index += 1) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, frag.diag.entries[diag_index].msg);
+    }
+    if(frag.diag.entries.len > 0 || frag_root == null) { return value::val_error(); }
+    ast::BlockNode* frag_block = (ast::BlockNode*)frag_root;
+    for(u64 decl_index = 0; decl_index < frag_block.stmts.len; decl_index += 1) {
+        sema::splice_top_decl(ip.m, frag_block.stmts[decl_index], n.h.src_pos);
+    }
     return value::val_void();
 }
 
