@@ -61,6 +61,7 @@ export struct VarDeclNode {
     AstNode*            init;                     // expression or AstKind::UndefinedLit or null
     bool                is_const;
     bool                is_exported;              // only meaningful at top-level
+    bool                init_checked;             // top-level init sema-checked (in the body pass or on demand from comptime)
     void*               decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
 }
 

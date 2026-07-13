@@ -77,6 +77,35 @@ fn i32 cross_module_comptime_call_err(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// A comprun in module `a` reads a const exported by module `b` at comptime.
+fn i32 cross_module_const_read_ok(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "export const i32 K = 9;");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { comprun { if(b::K == 999) { comperror(\"nope\"); } } return 0; }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    return 0;
+}
+
+fn i32 cross_module_const_read_err(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "export const i32 K = 9;");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { comprun { if(b::K == 9) { comperror(\"k9\"); } } return 0; }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 1, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)1, msg)) { return -2; }
+    return 0;
+}
+
 fn i32 generic_call_frontend(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -506,6 +535,8 @@ fn i32 main() {
     testing::add(fe, "cross_module_generic_call", &cross_module_generic_call);
     testing::add(fe, "cross_module_comptime_call_ok",  &cross_module_comptime_call_ok);
     testing::add(fe, "cross_module_comptime_call_err", &cross_module_comptime_call_err);
+    testing::add(fe, "cross_module_const_read_ok",  &cross_module_const_read_ok);
+    testing::add(fe, "cross_module_const_read_err", &cross_module_const_read_err);
     testing::add(fe, "cross_module_ok",        &cross_module_ok);
     testing::add(fe, "cross_module_overload",  &cross_module_overload);
     testing::add(fe, "circular_imports_ok",    &circular_imports_ok);

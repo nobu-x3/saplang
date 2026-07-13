@@ -426,6 +426,22 @@ fn i32 err_const_global_in_comprun(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A const initializer that references another const folds correctly at comptime (idents in the init are resolved).
+fn i32 err_const_chain_in_comprun(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "const i32 A = 5; const i32 B = A + 1; export fn i32 f() { comprun { if(B == 6) { comperror(\"six\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "six", m)) { return -2; }
+    return 0;
+}
+
+// Top-level const initializers are type-checked in the body pass.
+fn i32 err_bad_const_init(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "const i32 BAD = \"str\"; export fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expected i32, found u8*", m)) { return -2; }
+    return 0;
+}
+
 // A mutable global is not a comptime value — its runtime value isn't fixed.
 fn i32 err_mutable_global_at_comptime(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "i32 G = 7; export fn i32 f() { comprun { if(G == 7) { comperror(\"x\"); } } return 0; }");
@@ -669,6 +685,8 @@ fn i32 main() {
     testing::add(suite, "err_comprun_calls_fn",      &err_comprun_calls_fn);
     testing::add(suite, "ok_const_global_array_dim", &ok_const_global_array_dim);
     testing::add(suite, "err_const_global_in_comprun", &err_const_global_in_comprun);
+    testing::add(suite, "err_const_chain_in_comprun", &err_const_chain_in_comprun);
+    testing::add(suite, "err_bad_const_init",        &err_bad_const_init);
     testing::add(suite, "err_mutable_global_at_comptime", &err_mutable_global_at_comptime);
     testing::add(suite, "err_compinsert_generated_fn_callable", &err_compinsert_generated_fn_callable);
     testing::add(suite, "err_compinsert_conditional", &err_compinsert_conditional);

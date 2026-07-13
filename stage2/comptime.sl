@@ -114,6 +114,7 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::BinaryOp:  { return eval_binary(ip, (ast::BinaryOpNode*)e); }
     case ast::AstKind::UnaryOp:   { return eval_unary(ip, (ast::UnaryOpNode*)e); }
     case ast::AstKind::Ident:     { return eval_ident(ip, (ast::IdentNode*)e); }
+    case ast::AstKind::NamespaceAccess: { return eval_namespace_access(ip, (ast::NamespaceAccessNode*)e); }
     case ast::AstKind::Call:      { return eval_call(ip, (ast::CallNode*)e); }
     case ast::AstKind::BlockStmt: { return eval_block(ip, (ast::BlockNode*)e); }
     case ast::AstKind::VarDecl:   { return eval_local_var_decl(ip, (ast::VarDeclNode*)e); }
@@ -158,13 +159,30 @@ fn value::Value eval_ident(Interp* ip, ast::IdentNode* n) {
         value::Value copy = *slot;
         return copy;
     }
+    return eval_decl_value(ip, d, n.h.src_pos);
+}
+
+// A const global folds to its initializer, checked on demand in its home module so cross-module reads work.
+fn value::Value eval_decl_value(Interp* ip, sema::Decl* d, u32 pos) {
     if(d.kind == (u16)sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl) {
         ast::VarDeclNode* vd = (ast::VarDeclNode*)d.data.node;
-        if(vd.is_const && vd.init != null) { return eval(ip, vd.init); }
+        if(vd.is_const && vd.init != null) {
+            if(d.home != null) { sema::ensure_var_init_checked(d.home, vd); }
+            return eval(ip, vd.init);
+        }
     }
     u8[] msg = "identifier is not a comptime value";
-    diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+    diag::report(&ip.m.diag, ip.m.arena, pos, msg);
     return value::val_error();
+}
+
+fn value::Value eval_namespace_access(Interp* ip, ast::NamespaceAccessNode* n) {
+    sema::Decl* d = (sema::Decl*)n.resolved;
+    if(d == null) {
+        diag_unsupported(ip, n.h.src_pos);
+        return value::val_error();
+    }
+    return eval_decl_value(ip, d, n.h.src_pos);
 }
 
 fn value::Value eval_block(Interp* ip, ast::BlockNode* n) {

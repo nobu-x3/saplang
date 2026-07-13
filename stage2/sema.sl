@@ -400,6 +400,9 @@ export fn void check_bodies(module::Module* m) {
             if(node.h.kind == ast::AstKind::FnDecl && !is_generic_fn((ast::FnDeclNode*)node)) {
                 ensure_body_checked(s.m, (ast::FnDeclNode*)node);
             }
+            else if(node.h.kind == ast::AstKind::VarDecl) {
+                ensure_var_init_checked(s.m, (ast::VarDeclNode*)node);
+            }
             else if(node.h.kind == ast::AstKind::ComprunStmt) {
                 ast::CompRunNode* comprun = (ast::CompRunNode*)node;
                 s.in_comprun = true;
@@ -464,6 +467,21 @@ fn void block_splice(module::Module* m, ast::BlockNode* block, u64 at, ast::AstN
     for(u64 i = at + 1; i < old_len; i += 1) { buf[write] = block.stmts[i]; write += 1; }
     block.stmts.ptr = buf;
     block.stmts.len = new_len;
+}
+
+// Sema-check a top-level var/const initializer, on demand or in the body pass; needed before comptime folds a const.
+export fn void ensure_var_init_checked(module::Module* m, ast::VarDeclNode* vd) {
+    if(vd.init_checked) { return; }
+    vd.init_checked = true;
+    if(vd.init == null) { return; }
+    Sema sema;
+    sys::memset(&sema, 0, sizeof(Sema));
+    sema.m = m;
+    Sema* s = &sema;
+    s.scope = (Scope*)m.global_scope;
+    s.resolution_stack.arena = m.arena;
+    types::Type* declared = resolve_type(s, vd.type_expr);
+    if(declared != null) { check(s, vd.init, declared); } else { synth(s, vd.init); }
 }
 
 // Idempotent per FnDeclNode.body_state; InProgress tolerates a comptime call cycling back into the fn being checked.
