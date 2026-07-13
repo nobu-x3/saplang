@@ -25,12 +25,22 @@ export struct Sema {
     symbol::Symbol*[]   comptime_type_names; // comptime Type params of the generic whose signature is resolving
     bool                in_comprun;         // inside a comprun body: compinsert there is comptime-evaluated, not stmt-spliced
     arena::Arena*       body_arena;         // where body-check allocates; a cross-module on-demand check uses the requester's, keeping each module arena single-writer
+    diag::DiagBuf*      body_diag;          // where body-check diagnostics go; the requester's, so a foreign check never writes the foreign module's diag buffer
 }
 
 // Body-check allocations go here so an on-demand foreign check writes the requester's arena, not the foreign module's.
 fn arena::Arena* balloc(Sema* s) {
     if(s.body_arena != null) { return s.body_arena; }
     return s.m.arena;
+}
+
+fn diag::DiagBuf* bdiag(Sema* s) {
+    if(s.body_diag != null) { return s.body_diag; }
+    return &s.m.diag;
+}
+
+fn void sema_report(Sema* s, u32 pos, u8[] msg) {
+    diag::report(bdiag(s), balloc(s), pos, msg);
 }
 
 export enum DeclKind : u16 {
@@ -218,7 +228,7 @@ fn Decl* register_sym(Sema* s, Scope* scope, symbol::Symbol* name, bool is_expor
             u64 message_len = (u64)written;
             if(message_len > 255) { message_len = 255; }
             u8[] message = {&scratch[0], message_len};
-            diag::report(&s.m.diag, s.m.arena, src_pos, message);
+            sema_report(s, src_pos, message);
         }
         return null;
     }
@@ -255,7 +265,7 @@ fn Decl* register_fn(Sema* s, Scope* scope, ast::FnDeclNode* fn_decl, bool is_ex
     }
     if(is_generic_fn(fn_decl) || chain_has_generic(existing)) {
         u8[] msg = "generic functions cannot be overloaded";
-        diag::report(&s.m.diag, s.m.arena, fn_decl.h.src_pos, msg);
+        sema_report(s, fn_decl.h.src_pos, msg);
         return null;
     }
     Decl* overload = new_decl(s, (u16)DeclKind::Node, name, null);
@@ -436,7 +446,7 @@ export fn void check_bodies(module::Module* m) {
         for(u64 i = 0; i < global_block.stmts.len; i += 1) {
             ast::AstNode* node = global_block.stmts[i];
             if(node.h.kind == ast::AstKind::FnDecl && !is_generic_fn((ast::FnDeclNode*)node)) {
-                ensure_body_checked(s.m, (ast::FnDeclNode*)node, s.m.arena);
+                ensure_body_checked(s.m, (ast::FnDeclNode*)node, s.m);
             }
             else if(node.h.kind == ast::AstKind::VarDecl) {
                 ensure_var_init_checked(s.m, (ast::VarDeclNode*)node);
@@ -497,7 +507,7 @@ export fn void splice_top_decl(module::Module* m, ast::AstNode* node, u32 genera
     s.resolution_stack.arena = m.arena;
     collect_name_for_decl(s, node);
     resolve_decl_signature(s, node);
-    if(node.h.kind == ast::AstKind::FnDecl) { ensure_body_checked(m, (ast::FnDeclNode*)node, m.arena); }
+    if(node.h.kind == ast::AstKind::FnDecl) { ensure_body_checked(m, (ast::FnDeclNode*)node, m); }
     else if(node.h.kind == ast::AstKind::VarDecl) { ensure_var_init_checked(m, (ast::VarDeclNode*)node); }
     append_top_decl(m, node);
 }
@@ -552,7 +562,7 @@ export fn void init_body_sync() {
 
 // Exactly one thread checks a given fn; others wait for Checked. body_owner lets a comptime call recursing into the
 // fn being checked (same thread) proceed instead of self-waiting. check_fn_body runs unlocked, so N fns check at once.
-export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, arena::Arena* alloc_arena) {
+export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, module::Module* requester) {
     if(!g_body_sync_ready) { init_body_sync(); }
     u64 me = threads::self();
     mutex::lock(&g_body_lock);
@@ -571,8 +581,9 @@ export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, are
     sema.m = m;
     Sema* s = &sema;
     s.scope = (Scope*)m.global_scope;
-    s.body_arena = alloc_arena;
-    s.resolution_stack.arena = alloc_arena;
+    s.body_arena = requester.arena;
+    s.body_diag = &requester.diag;
+    s.resolution_stack.arena = requester.arena;
     check_fn_body(s, func);
     mutex::lock(&g_body_lock);
     func.body_state = ast::BodyState::Checked;
@@ -1327,7 +1338,7 @@ fn types::Type* clone_return_type(ast::FnDeclNode* clone) {
 fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
     if(resolve_generic_call_hook == null) {
         u8[] msg = "generic calls require the comptime interpreter";
-        diag::report(&s.m.diag, s.m.arena, n.h.src_pos, msg);
+        sema_report(s, n.h.src_pos, msg);
         mark_error((ast::AstNode*)n);
         return null;
     }
@@ -1337,7 +1348,7 @@ fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* g
     }
     if(n.args.len != n_runtime) {
         u8[] msg = "generic call: pass exactly the runtime arguments (explicit comptime args not yet supported)";
-        diag::report(&s.m.diag, s.m.arena, n.h.src_pos, msg);
+        sema_report(s, n.h.src_pos, msg);
         mark_error((ast::AstNode*)n);
         return null;
     }
@@ -1347,7 +1358,7 @@ fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* g
     for(u64 i = 0; i < n.args.len; i += 1) {
         if(ast::is_type((u16)n.args[i].h.kind)) {
             u8[] msg = "type argument passed to a runtime parameter";
-            diag::report(&s.m.diag, s.m.arena, n.args[i].h.src_pos, msg);
+            sema_report(s, n.args[i].h.src_pos, msg);
             mark_error((ast::AstNode*)n);
             return null;
         }
@@ -1401,7 +1412,7 @@ fn types::Type* resolve_type_arg(Sema* s, ast::AstNode* arg) {
         return null;
     }
     u8[] msg = "expected a type argument for the comptime parameter";
-    diag::report(&s.m.diag, s.m.arena, arg.h.src_pos, msg);
+    sema_report(s, arg.h.src_pos, msg);
     return null;
 }
 
@@ -1409,7 +1420,7 @@ fn types::Type* resolve_type_arg(Sema* s, ast::AstNode* arg) {
 fn types::Type* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
     if(resolve_generic_explicit_hook == null) {
         u8[] msg = "generic calls require the comptime interpreter";
-        diag::report(&s.m.diag, s.m.arena, n.h.src_pos, msg);
+        sema_report(s, n.h.src_pos, msg);
         mark_error((ast::AstNode*)n);
         return null;
     }
@@ -1441,7 +1452,7 @@ fn types::Type* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDe
             }
             if(!is_const) {
                 u8[] msg = "comptime value argument must be an integer literal";
-                diag::report(&s.m.diag, s.m.arena, varg.h.src_pos, msg);
+                sema_report(s, varg.h.src_pos, msg);
                 mark_error((ast::AstNode*)n);
                 return null;
             }
@@ -1575,7 +1586,7 @@ fn types::Type* synth_binary(Sema* s, ast::BinaryOpNode* n) {
 fn types::Type* synth_sizeof(Sema* s, ast::SizeofNode* n) {
     types::Type* target = sizeof_operand_type(s, n.arg);
     if(target == null) { return null; }
-    types::size_of(&s.m.diag, target);
+    types::size_of(bdiag(s), target);
     set_expr((ast::AstNode*)n, types::prim_u64(), (u16)ast::AstFlags::ConstExpr);
     return types::prim_u64();
 }
@@ -1583,7 +1594,7 @@ fn types::Type* synth_sizeof(Sema* s, ast::SizeofNode* n) {
 fn types::Type* synth_alignof(Sema* s, ast::AlignofNode* n) {
     types::Type* target = sizeof_operand_type(s, n.arg);
     if(target == null) { return null; }
-    types::align_of(&s.m.diag, target);
+    types::align_of(bdiag(s), target);
     set_expr((ast::AstNode*)n, types::prim_u64(), (u16)ast::AstFlags::ConstExpr);
     return types::prim_u64();
 }
@@ -2015,13 +2026,13 @@ fn void emit_diag(Sema* s, u32 src_pos, u8* buf, i32 written) {
     u64 len = (u64)written;
     if(len > 255) { len = 255; }
     u8[] msg = {buf, len};
-    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+    sema_report(s, src_pos, msg);
 }
 
 // "expected `<expected>`, found `<got>`" — the canonical conversion-failure diagnostic.
 export fn void diag_type_mismatch(Sema* s, u32 src_pos, types::Type* got, types::Type* expected) {
-    u8[] expected_str = types_print::print_to_arena(expected, s.m.arena);
-    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[] expected_str = types_print::print_to_arena(expected, balloc(s));
+    u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "expected %.*s, found %.*s", (i32)expected_str.len, (i8*)expected_str.ptr, (i32)got_str.len, (i8*)got_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2029,7 +2040,7 @@ export fn void diag_type_mismatch(Sema* s, u32 src_pos, types::Type* got, types:
 
 // "literal `<value>` does not fit in `<expected>`". Used by check_int_lit.
 export fn void diag_lit_overflow(Sema* s, u32 src_pos, u64 value, types::Type* expected) {
-    u8[] expected_str = types_print::print_to_arena(expected, s.m.arena);
+    u8[] expected_str = types_print::print_to_arena(expected, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "literal %lu does not fit in %.*s", value, (i32)expected_str.len, (i8*)expected_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2038,12 +2049,12 @@ export fn void diag_lit_overflow(Sema* s, u32 src_pos, u64 value, types::Type* e
 // Emitted when synth is called on a StructLit or ArrayLit with no expected type.
 export fn void diag_needs_context(Sema* s, ast::AstNode* e) {
     u8[] msg = "literal requires an expected type";
-    diag::report(&s.m.diag, s.m.arena, e.h.src_pos, msg);
+    sema_report(s, e.h.src_pos, msg);
 }
 
 // "cannot use `<type>` in condition; expected bool, integer, pointer, or slice".
 export fn void diag_not_bool_convertible(Sema* s, u32 src_pos, types::Type* got) {
-    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot use %.*s in condition; expected bool, integer, pointer, or slice", (i32)got_str.len, (i8*)got_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2051,8 +2062,8 @@ export fn void diag_not_bool_convertible(Sema* s, u32 src_pos, types::Type* got)
 
 // "operator is not defined for `<lhs>` and `<rhs>`".
 export fn void diag_binop_mismatch(Sema* s, u32 src_pos, token::TokenKind op, types::Type* lt, types::Type* rt) {
-    u8[] lt_str = types_print::print_to_arena(lt, s.m.arena);
-    u8[] rt_str = types_print::print_to_arena(rt, s.m.arena);
+    u8[] lt_str = types_print::print_to_arena(lt, balloc(s));
+    u8[] rt_str = types_print::print_to_arena(rt, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "operator is not defined for %.*s and %.*s", (i32)lt_str.len, (i8*)lt_str.ptr, (i32)rt_str.len, (i8*)rt_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2061,7 +2072,7 @@ export fn void diag_binop_mismatch(Sema* s, u32 src_pos, token::TokenKind op, ty
 // "operator `<op>` is not defined for `<type>`". Used by synth_unary.
 export fn void diag_unary_mismatch(Sema* s, u32 src_pos, token::TokenKind op, types::Type* operand) {
     u8[] op_str = token::kind_name(op);
-    u8[] operand_str = types_print::print_to_arena(operand, s.m.arena);
+    u8[] operand_str = types_print::print_to_arena(operand, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "operator %.*s is not defined for %.*s", (i32)op_str.len, (i8*)op_str.ptr, (i32)operand_str.len, (i8*)operand_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2070,12 +2081,12 @@ export fn void diag_unary_mismatch(Sema* s, u32 src_pos, token::TokenKind op, ty
 // "cannot take the address of a non-lvalue". Used by synth_unary for `&x`.
 export fn void diag_not_lvalue(Sema* s, u32 src_pos) {
     u8[] msg = "cannot take the address of a non-lvalue";
-    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+    sema_report(s, src_pos, msg);
 }
 
 // "type `<T>` has no field `<name>`". Used by synth_member_access.
 export fn void diag_unknown_field(Sema* s, u32 src_pos, symbol::Symbol* field, types::Type* container) {
-    u8[] container_str = types_print::print_to_arena(container, s.m.arena);
+    u8[] container_str = types_print::print_to_arena(container, balloc(s));
     u8[] field_str = interner::symbol_str(field);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "type %.*s has no field %.*s", (i32)container_str.len, (i8*)container_str.ptr, (i32)field_str.len, (i8*)field_str.ptr);
@@ -2084,7 +2095,7 @@ export fn void diag_unknown_field(Sema* s, u32 src_pos, symbol::Symbol* field, t
 
 // "cannot access field of %T". Used by synth_member_access on a non-aggregate.
 export fn void diag_not_aggregate(Sema* s, u32 src_pos, types::Type* got) {
-    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot access field of %.*s", (i32)got_str.len, (i8*)got_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2092,7 +2103,7 @@ export fn void diag_not_aggregate(Sema* s, u32 src_pos, types::Type* got) {
 
 // "cannot index %T". Used by synth_array_index / synth_slice_range.
 export fn void diag_not_indexable(Sema* s, u32 src_pos, types::Type* got) {
-    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot index %.*s", (i32)got_str.len, (i8*)got_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2100,7 +2111,7 @@ export fn void diag_not_indexable(Sema* s, u32 src_pos, types::Type* got) {
 
 // "cannot call value of type %T". Used by synth_call on a non-function callee.
 export fn void diag_not_callable(Sema* s, u32 src_pos, types::Type* got) {
-    u8[] got_str = types_print::print_to_arena(got, s.m.arena);
+    u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot call value of type %.*s", (i32)got_str.len, (i8*)got_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2148,7 +2159,7 @@ export fn void diag_arity(Sema* s, u32 src_pos, u64 expected, u64 got) {
 // "left of '::' is not a module or enum". Used by synth_ns_access.
 export fn void diag_not_namespace(Sema* s, u32 src_pos) {
     u8[] msg = "left of '::' is not a module or enum";
-    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+    sema_report(s, src_pos, msg);
 }
 
 // "no member named `<name>`". Used by synth_ns_access.
@@ -2161,7 +2172,7 @@ export fn void diag_unknown_member(Sema* s, u32 src_pos, symbol::Symbol* name) {
 
 // "cannot use `<kind>` literal as `<T>`". Used by the literal-check helpers.
 export fn void diag_lit_wrong_target(Sema* s, u32 src_pos, u8[] kind, types::Type* expected) {
-    u8[] expected_str = types_print::print_to_arena(expected, s.m.arena);
+    u8[] expected_str = types_print::print_to_arena(expected, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot use %.*s literal as %.*s", (i32)kind.len, (i8*)kind.ptr, (i32)expected_str.len, (i8*)expected_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2178,7 +2189,7 @@ export fn void diag_dup_field(Sema* s, u32 src_pos, symbol::Symbol* name) {
 // "too many initializers". Used by check_struct_lit / check_slice_lit.
 export fn void diag_extra_initializer(Sema* s, u32 src_pos) {
     u8[] msg = "too many initializers";
-    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+    sema_report(s, src_pos, msg);
 }
 
 // "array literal has M elements but N expected". Used by check_array_lit.
@@ -2191,13 +2202,13 @@ export fn void diag_array_len_mismatch(Sema* s, u32 src_pos, u64 expected, u64 g
 // "cannot assign to a non-lvalue". Used by stmt_assignment.
 export fn void diag_not_assignable(Sema* s, u32 src_pos) {
     u8[] msg = "cannot assign to a non-lvalue";
-    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+    sema_report(s, src_pos, msg);
 }
 
 // "cannot assign to a constant". Used by stmt_assignment.
 export fn void diag_assign_to_const(Sema* s, u32 src_pos) {
     u8[] msg = "cannot assign to a constant";
-    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+    sema_report(s, src_pos, msg);
 }
 
 // "string literal has M bytes (incl. NUL) but N expected". Used by check_string_lit.
@@ -2210,24 +2221,24 @@ export fn void diag_string_len_mismatch(Sema* s, u32 src_pos, u64 expected, u64 
 // "break outside loop or switch". Used by stmt.
 export fn void diag_break_outside(Sema* s, u32 src_pos) {
     u8[] msg = "break outside loop or switch";
-    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+    sema_report(s, src_pos, msg);
 }
 
 // "continue outside loop". Used by stmt.
 export fn void diag_continue_outside(Sema* s, u32 src_pos) {
     u8[] msg = "continue outside loop";
-    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+    sema_report(s, src_pos, msg);
 }
 
 // "cannot return a value from a void function". Used by stmt_return.
 export fn void diag_return_value_in_void(Sema* s, u32 src_pos) {
     u8[] msg = "cannot return a value from a void function";
-    diag::report(&s.m.diag, s.m.arena, src_pos, msg);
+    sema_report(s, src_pos, msg);
 }
 
 // "missing return value; function returns `<T>`". Used by stmt_return.
 export fn void diag_return_missing_value(Sema* s, u32 src_pos, types::Type* expected) {
-    u8[] expected_str = types_print::print_to_arena(expected, s.m.arena);
+    u8[] expected_str = types_print::print_to_arena(expected, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "missing return value; function returns %.*s", (i32)expected_str.len, (i8*)expected_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
@@ -2235,8 +2246,8 @@ export fn void diag_return_missing_value(Sema* s, u32 src_pos, types::Type* expe
 
 // "cannot cast `<src>` to `<target>`". Used by synth_cast on is_castable fail.
 export fn void diag_cast_invalid(Sema* s, u32 src_pos, types::Type* src, types::Type* target) {
-    u8[] src_str = types_print::print_to_arena(src, s.m.arena);
-    u8[] target_str = types_print::print_to_arena(target, s.m.arena);
+    u8[] src_str = types_print::print_to_arena(src, balloc(s));
+    u8[] target_str = types_print::print_to_arena(target, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot cast %.*s to %.*s", (i32)src_str.len, (i8*)src_str.ptr, (i32)target_str.len, (i8*)target_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);

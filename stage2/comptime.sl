@@ -744,7 +744,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
             return value::val_error();
         }
         func = callee_val.data.fn_ref;
-        sema::ensure_body_checked(ip.m, func, ip.m.arena);              // v0: fn-pointer targets are checked in the current module
+        sema::ensure_body_checked(ip.m, func, ip.m);              // v0: fn-pointer targets are checked in the current module
     }
     if(!ensure_comptime_safe(ip, func)) {
         u8[] msg = "cannot call a non-comptime-safe function at comptime";
@@ -780,7 +780,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
         ast::FnDeclNode* mono = monomorphize(ip, func, cargs);
         return invoke(ip, mono, args, n.h.src_pos);
     }
-    if(d != null && d.home != null) { sema::ensure_body_checked(d.home, func, ip.m.arena); }     // same- or cross-module: check the callee in its own module
+    if(d != null && d.home != null) { sema::ensure_body_checked(d.home, func, ip.m); }     // same- or cross-module: check the callee in its own module
     return invoke(ip, func, args, n.h.src_pos);
 }
 
