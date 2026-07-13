@@ -13,10 +13,17 @@ fn u8[] cstr_slice(u8* cstr) {
 }
 
 fn i32 main(i32 argc, u8** argv) {
+    arena::Arena symbol_arena;
+    arena::Arena type_arena;
     arena::Arena arena;
+    sys::memset(&symbol_arena, 0, sizeof(arena::Arena));
+    sys::memset(&type_arena, 0, sizeof(arena::Arena));
     sys::memset(&arena, 0, sizeof(arena::Arena));
-    interner::init(&arena, 1024);
-    types::typer_init(&arena, 1024);
+    symbol_arena.default_page_size = 1048576;
+    type_arena.default_page_size = 1048576;
+    arena.default_page_size = 1048576;
+    interner::init(&symbol_arena, 1024);
+    types::typer_init(&type_arena, 1024);
     token::load_keywords();
 
     compiler::Compiler* c = compiler::new(&arena);

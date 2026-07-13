@@ -10,16 +10,23 @@ import io;
 import arena;
 import sys;
 
+fn arena::Arena* sub_arena(arena::Arena* a) {
+    arena::Arena* sub = (arena::Arena*)arena::alloc(a, sizeof(arena::Arena));
+    sys::memset(sub, 0, sizeof(arena::Arena));
+    sub.default_page_size = 1048576;
+    return sub;
+}
+
 fn void boot(arena::Arena* a) {
-    interner::init(a, 64);
-    types::typer_init(a, 64);
+    interner::init(sub_arena(a), 64);
+    types::typer_init(sub_arena(a), 64);
     token::load_keywords();
 }
 
 fn module::Module* mk_source_module(arena::Arena* a, u8[] name, u8[] src) {
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
-    m.arena = a;
+    m.arena = sub_arena(a);
     m.source = src;
     m.name = interner::intern(name);
     return m;

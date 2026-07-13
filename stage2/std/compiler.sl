@@ -165,7 +165,10 @@ fn void add_entry_module(Compiler* c, u8[] path) {
 fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, u8[] src) {
     module::Module* m = (module::Module*)arena::alloc(c.arena, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
-    m.arena = c.arena;
+    arena::Arena* module_arena = (arena::Arena*)arena::alloc(c.arena, sizeof(arena::Arena));
+    sys::memset(module_arena, 0, sizeof(arena::Arena));
+    module_arena.default_page_size = 1048576;
+    m.arena = module_arena;
     m.name = name;
     m.source = src;
     return m;
@@ -327,6 +330,13 @@ fn void run_phase(Compiler* c, fn* void(void*) job) {
     }
 }
 
+// Single-threaded: comptime body-checks reach other modules' fns on demand, which isn't thread-safe.
+fn void run_phase_seq(Compiler* c, fn* void(void*) job) {
+    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
+        job((void*)c.modules[module_index]);
+    }
+}
+
 fn void run_parse(Compiler* c) {
     run_phase(c, &parse_job);
     drain_diagnostics(c);
@@ -340,7 +350,7 @@ fn void run_sema(Compiler* c) {
     run_phase(c, &resolve_signatures_job);
     drain_diagnostics(c);
     if(bail_on_errors(c)) { return; }
-    run_phase(c, &check_bodies_job);
+    run_phase_seq(c, &check_bodies_job);
     drain_diagnostics(c);
 }
 
