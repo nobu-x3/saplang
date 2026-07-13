@@ -10,6 +10,9 @@ import op;
 import sys;
 import interner;
 import value;
+import mutex;
+import condvar;
+import threads;
 
 export struct Sema {
     module::Module*     m;
@@ -528,11 +531,34 @@ export fn void ensure_var_init_checked(module::Module* m, ast::VarDeclNode* vd) 
     if(declared != null) { check(s, vd.init, declared); } else { synth(s, vd.init); }
 }
 
-// Idempotent per FnDeclNode.body_state; InProgress tolerates a comptime call cycling back into the fn being checked.
+mutex::Mutex     g_body_lock;
+condvar::Condvar g_body_cv;
+bool             g_body_sync_ready;
+
+// Called once, single-threaded, before parallel body checking.
+export fn void init_body_sync() {
+    if(g_body_sync_ready) { return; }
+    mutex::create(&g_body_lock);
+    condvar::create(&g_body_cv);
+    g_body_sync_ready = true;
+}
+
+// Exactly one thread checks a given fn; others wait for Checked. body_owner lets a comptime call recursing into the
+// fn being checked (same thread) proceed instead of self-waiting. check_fn_body runs unlocked, so N fns check at once.
 export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func) {
-    if(func.body_state == ast::BodyState::Checked) { return; }
-    if(func.body_state == ast::BodyState::InProgress) { return; }
+    if(!g_body_sync_ready) { init_body_sync(); }
+    u64 me = threads::self();
+    mutex::lock(&g_body_lock);
+    while(func.body_state == ast::BodyState::InProgress && func.body_owner != me) {
+        condvar::wait(&g_body_cv, &g_body_lock);
+    }
+    if(func.body_state == ast::BodyState::Checked || func.body_state == ast::BodyState::InProgress) {
+        mutex::unlock(&g_body_lock);
+        return;
+    }
     func.body_state = ast::BodyState::InProgress;
+    func.body_owner = me;
+    mutex::unlock(&g_body_lock);
     Sema sema;
     sys::memset(&sema, 0, sizeof(Sema));
     sema.m = m;
@@ -540,7 +566,10 @@ export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func) {
     s.scope = (Scope*)m.global_scope;
     s.resolution_stack.arena = m.arena;
     check_fn_body(s, func);
+    mutex::lock(&g_body_lock);
     func.body_state = ast::BodyState::Checked;
+    condvar::broadcast(&g_body_cv);
+    mutex::unlock(&g_body_lock);
 }
 
 fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {

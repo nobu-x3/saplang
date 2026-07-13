@@ -7,6 +7,11 @@ extern {
     fn i32 pthread_create(Thread* th, void* attr, fn* void*(void*) start, void* arg);
     fn i32 pthread_join(u64 th, void** retval);
     fn i32 pthread_detach(u64 th);
+    fn u64 pthread_self();
+}
+
+export fn u64 self() {
+    return pthread_self();
 }
 
 export fn i32 spawn(Thread* out, fn* void*(void*) proc, void* arg) {

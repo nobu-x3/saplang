@@ -294,6 +294,7 @@ export fn i32 run(Compiler* c) {
 // Runs the frontend phases (parse -> barriered sema); 0 on success, 1 on any error.
 export fn i32 run_frontend(Compiler* c) {
     comptime::install_hooks();
+    sema::init_body_sync();
     if(c.is_multithreaded) { c.pool = pool::new(c.arena, sys::cpu_count()); }
     run_parse(c);
     i32 rc = 0;
@@ -330,13 +331,6 @@ fn void run_phase(Compiler* c, fn* void(void*) job) {
     }
 }
 
-// Single-threaded: comptime body-checks reach other modules' fns on demand, which isn't thread-safe.
-fn void run_phase_seq(Compiler* c, fn* void(void*) job) {
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        job((void*)c.modules[module_index]);
-    }
-}
-
 fn void run_parse(Compiler* c) {
     run_phase(c, &parse_job);
     drain_diagnostics(c);
@@ -350,7 +344,7 @@ fn void run_sema(Compiler* c) {
     run_phase(c, &resolve_signatures_job);
     drain_diagnostics(c);
     if(bail_on_errors(c)) { return; }
-    run_phase_seq(c, &check_bodies_job);
+    run_phase(c, &check_bodies_job);
     drain_diagnostics(c);
 }
 

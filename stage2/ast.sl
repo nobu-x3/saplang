@@ -89,6 +89,7 @@ export struct FnDeclNode {
     void*     cfg;                      // cfg::Cfg* — null until CFG construction runs (void* breaks the cycle)
     CompSafe  comptime_safe;            // set lazily by comptime
     BodyState body_state;               // Unchecked until sema checks the body (in the pass or on-demand from comptime)
+    u64       body_owner;                // thread checking the body while InProgress; distinguishes reentrancy from contention
     bool      is_exported;
     void*     decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
 }
