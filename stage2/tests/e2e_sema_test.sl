@@ -537,6 +537,28 @@ fn i32 err_compinsert_rejects_export(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_comptime_typeinfo_size(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; } export fn i32 f() { comprun { if(type_info(P).size == (u64)8) { comperror(\"sz8\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "sz8", m)) { return -2; }
+    return 0;
+}
+
+// type_info(T).fields is a FieldInfo[]; each carries name / ty / offset.
+fn i32 err_comptime_typeinfo_fields(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 a; i32 b; } export fn i32 f() { comprun { if(type_info(P).fields[1].offset == (u64)4) { comperror(\"off4\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "off4", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_typeinfo_field_name(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 xx; i32 yy; } export fn i32 f() { comprun { u8[] n0 = type_info(P).fields[0].name; if(n0[0] == (u8)120) { comperror(\"nx\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "nx", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comptime_bytes_len(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { u8[] s = \"abc\"; if(s.len == (u64)3) { comperror(\"len3\"); } } return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -853,6 +875,9 @@ fn i32 main() {
     testing::add(suite, "err_compinsert_position_registry", &err_compinsert_position_registry);
     testing::add(suite, "err_compinsert_string_literal", &err_compinsert_string_literal);
     testing::add(suite, "err_compinsert_rejects_export", &err_compinsert_rejects_export);
+    testing::add(suite, "err_comptime_typeinfo_size", &err_comptime_typeinfo_size);
+    testing::add(suite, "err_comptime_typeinfo_fields", &err_comptime_typeinfo_fields);
+    testing::add(suite, "err_comptime_typeinfo_field_name", &err_comptime_typeinfo_field_name);
     testing::add(suite, "err_comptime_bytes_len",     &err_comptime_bytes_len);
     testing::add(suite, "err_comptime_bytes_index",   &err_comptime_bytes_index);
     testing::add(suite, "err_comptime_undefined",     &err_comptime_undefined);

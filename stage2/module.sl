@@ -25,6 +25,8 @@ export struct Module {
     u32                     next_inserted_base;   // first virtual src_pos for compinsert-generated code; set to source.len at scan
     InsertedSource[]        inserted_sources;
     u64                     inserted_sources_cap;
+    void*                   reflect_typeinfo;     // types::Type* — synthesized TypeInfo/FieldInfo, built lazily per module
+    void*                   reflect_fieldinfo;
     // cfg/codegen fields added by later phases
 }
 

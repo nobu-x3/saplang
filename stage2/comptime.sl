@@ -147,6 +147,7 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::Sizeof:    { return eval_sizeof(ip, (ast::SizeofNode*)e); }
     case ast::AstKind::Alignof:   { return eval_alignof(ip, (ast::AlignofNode*)e); }
     case ast::AstKind::Typeof:    { return eval_typeof(ip, (ast::TypeofNode*)e); }
+    case ast::AstKind::Type_info: { return eval_type_info(ip, (ast::TypeInfoNode*)e); }
     case ast::AstKind::PrimitiveType:
     case ast::AstKind::NamedType:
     case ast::AstKind::PointerType:
@@ -504,6 +505,66 @@ fn u64 struct_field_index(ast::StructDeclNode* sd, symbol::Symbol* name) {
         if(sd.fields[field_index].name == name) { return field_index; }
     }
     return sd.fields.len;
+}
+
+fn value::Value build_field_info_array(Interp* ip, types::Type* t) {
+    types::Type* fi_ty = sema::reflection_fieldinfo_type(ip.m);
+    ast::FieldDecl[] flds;
+    if(t.kind == types::TypeKind::Struct) { flds = ((ast::StructDeclNode*)t.data.struct_decl).fields; }
+    else { flds = ((ast::UnionDeclNode*)t.data.union_decl).fields; }
+    types::size_of(&ip.m.diag, t);
+    types::Type* u8slice = types::intern_slice(types::prim_u8());
+    value::Value[] elems;
+    elems.ptr = (value::Value*)arena::alloc(ip.m.arena, flds.len * sizeof(value::Value));
+    elems.len = flds.len;
+    for(u64 i = 0; i < flds.len; i += 1) {
+        value::Value[] finfo;
+        finfo.ptr = (value::Value*)arena::alloc(ip.m.arena, 3 * sizeof(value::Value));
+        finfo.len = 3;
+        finfo[0] = value::val_bytes(interner::symbol_str(flds[i].name), u8slice);
+        finfo[1] = value::val_type((types::Type*)flds[i].resolved_type);
+        u64 offset = 0;
+        if(t.layout != null && i < t.layout.offsets.len) { offset = (u64)t.layout.offsets[i]; }
+        finfo[2] = value::val_int((i64)offset, types::prim_u64());
+        elems[i] = value::val_struct(fi_ty, finfo);
+    }
+    return value::val_array(types::intern_slice(fi_ty), elems);
+}
+
+fn value::Value build_type_info_value(Interp* ip, types::Type* t) {
+    types::Type* ti_ty = sema::reflection_typeinfo_type(ip.m);
+    value::Value[] fields;
+    fields.ptr = (value::Value*)arena::alloc(ip.m.arena, 8 * sizeof(value::Value));
+    fields.len = 8;
+    fields[0] = value::val_int((i64)t.kind, types::prim_i32());
+    fields[1] = value::val_bytes(types_print::print_to_arena(t, ip.m.arena), types::intern_slice(types::prim_u8()));
+    fields[2] = value::val_int((i64)types::size_of(&ip.m.diag, t), types::prim_u64());
+    fields[3] = value::val_int((i64)types::align_of(&ip.m.diag, t), types::prim_u64());
+    if(t.kind == types::TypeKind::Struct || t.kind == types::TypeKind::Union) {
+        fields[4] = build_field_info_array(ip, t);
+    } else {
+        value::Value[] empty;
+        empty.ptr = null;
+        empty.len = 0;
+        fields[4] = value::val_array(types::intern_slice(sema::reflection_fieldinfo_type(ip.m)), empty);
+    }
+    types::Type* none = null;
+    fields[5] = value::val_type(none);
+    fields[6] = value::val_type(none);
+    fields[7] = value::val_int(0, types::prim_u64());
+    if(t.kind == types::TypeKind::Pointer) { fields[5] = value::val_type(t.data.pointee); }
+    if(t.kind == types::TypeKind::Array) { fields[6] = value::val_type(t.data.array.elem); fields[7] = value::val_int((i64)t.data.array.count, types::prim_u64()); }
+    if(t.kind == types::TypeKind::Slice) { fields[6] = value::val_type(t.data.slice_elem); }
+    return value::val_struct(ti_ty, fields);
+}
+
+fn value::Value eval_type_info(Interp* ip, ast::TypeInfoNode* n) {
+    types::Type* t = (types::Type*)n.arg.h.ty;
+    if(t == null) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "type_info argument is unresolved at comptime");
+        return value::val_error();
+    }
+    return build_type_info_value(ip, t);
 }
 
 fn value::Value eval_array_lit(Interp* ip, ast::ArrayLitNode* n) {

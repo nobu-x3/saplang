@@ -49,6 +49,7 @@ export fn* void(module::Module*, ast::CompRunNode*) run_comprun_hook;
 // Evaluates an in-function compinsert and returns the generated statements for the block walk to splice in.
 export fn* ast::AstNode*[](module::Module*, ast::CompInsertNode*) run_compinsert_stmts_hook;
 
+
 export union DeclData {
     ast::AstNode*       node;
     ast::Param*         param;
@@ -1564,8 +1565,57 @@ fn types::Type* synth_typeof(Sema* s, ast::TypeofNode* n) {
     return types::prim_type();
 }
 
+fn void reflect_set_field(ast::FieldDecl* f, u8[] name, types::Type* ty) {
+    sys::memset(f, 0, sizeof(ast::FieldDecl));
+    f.name = interner::intern(name);
+    f.resolved_type = (void*)ty;
+}
+
+export fn types::Type* reflection_fieldinfo_type(module::Module* m) {
+    if(m.reflect_fieldinfo != null) { return (types::Type*)m.reflect_fieldinfo; }
+    ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(m.arena, sizeof(ast::StructDeclNode));
+    sys::memset(sd, 0, sizeof(ast::StructDeclNode));
+    sd.h.kind = ast::AstKind::StructDecl;
+    sd.name = interner::intern("FieldInfo");
+    sd.qualified_name = sd.name;
+    ast::FieldDecl* flds = (ast::FieldDecl*)arena::alloc(m.arena, 3 * sizeof(ast::FieldDecl));
+    reflect_set_field(&flds[0], "name", types::intern_slice(types::prim_u8()));
+    reflect_set_field(&flds[1], "ty", types::prim_type());
+    reflect_set_field(&flds[2], "offset", types::prim_u64());
+    sd.fields = {flds, 3};
+    m.reflect_fieldinfo = (void*)types::intern_struct((void*)sd);
+    return (types::Type*)m.reflect_fieldinfo;
+}
+
+export fn types::Type* reflection_typeinfo_type(module::Module* m) {
+    if(m.reflect_typeinfo != null) { return (types::Type*)m.reflect_typeinfo; }
+    types::Type* fi = reflection_fieldinfo_type(m);
+    ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(m.arena, sizeof(ast::StructDeclNode));
+    sys::memset(sd, 0, sizeof(ast::StructDeclNode));
+    sd.h.kind = ast::AstKind::StructDecl;
+    sd.name = interner::intern("TypeInfo");
+    sd.qualified_name = sd.name;
+    ast::FieldDecl* flds = (ast::FieldDecl*)arena::alloc(m.arena, 8 * sizeof(ast::FieldDecl));
+    reflect_set_field(&flds[0], "kind", types::prim_i32());
+    reflect_set_field(&flds[1], "name", types::intern_slice(types::prim_u8()));
+    reflect_set_field(&flds[2], "size", types::prim_u64());
+    reflect_set_field(&flds[3], "align", types::prim_u64());
+    reflect_set_field(&flds[4], "fields", types::intern_slice(fi));
+    reflect_set_field(&flds[5], "pointee", types::prim_type());
+    reflect_set_field(&flds[6], "elem", types::prim_type());
+    reflect_set_field(&flds[7], "array_count", types::prim_u64());
+    sd.fields = {flds, 8};
+    m.reflect_typeinfo = (void*)types::intern_struct((void*)sd);
+    return (types::Type*)m.reflect_typeinfo;
+}
+
 fn types::Type* synth_type_info(Sema* s, ast::TypeInfoNode* n) {
-    return null; // TODO
+    types::Type* arg = resolve_type(s, n.arg);
+    if(arg == null) { mark_error((ast::AstNode*)n); return null; }
+    n.arg.h.ty = (void*)arg;
+    types::Type* ti = reflection_typeinfo_type(s.m);
+    set_expr((ast::AstNode*)n, ti, (u16)ast::AstFlags::ConstExpr);
+    return ti;
 }
 
 fn types::Type* synth_compcode(Sema* s, ast::CompCodeNode* n) {
