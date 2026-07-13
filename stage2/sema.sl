@@ -285,6 +285,25 @@ export fn void resolve_signatures(module::Module* m) {
     s.m.sema_phase |= SemaPhase::Signatures;
 }
 
+// An enum value expression may reference sibling members by name; bind those idents to their member decls so comptime folds them.
+fn void resolve_enum_value_refs(ast::EnumDeclNode* ed, ast::AstNode* expr) {
+    if(expr == null) { return; }
+    if(expr.h.kind == ast::AstKind::Ident) {
+        ast::EnumMember* mem = find_enum_member(ed, ((ast::IdentNode*)expr).name);
+        if(mem != null) { ((ast::IdentNode*)expr).resolved = mem.decl; }
+        return;
+    }
+    if(expr.h.kind == ast::AstKind::BinaryOp) {
+        resolve_enum_value_refs(ed, ((ast::BinaryOpNode*)expr).lhs);
+        resolve_enum_value_refs(ed, ((ast::BinaryOpNode*)expr).rhs);
+        return;
+    }
+    if(expr.h.kind == ast::AstKind::UnaryOp) {
+        resolve_enum_value_refs(ed, ((ast::UnaryOpNode*)expr).operand);
+        return;
+    }
+}
+
 fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
     switch(decl_node.h.kind) {
     case ast::AstKind::VarDecl: {
@@ -313,6 +332,9 @@ fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
             Decl* member_decl = new_decl(s, (u16)DeclKind::EnumMember, enum_decl.members[member_index].name, enum_ty);
             member_decl.data.member = &enum_decl.members[member_index];
             enum_decl.members[member_index].decl = (void*)member_decl;
+        }
+        for(u64 member_index = 0; member_index < enum_decl.members.len; member_index += 1) {
+            resolve_enum_value_refs(enum_decl, enum_decl.members[member_index].value_expr);
         }
     }
     case ast::AstKind::AliasDecl: {

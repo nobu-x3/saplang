@@ -120,6 +120,12 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::NullLit:   { return value::val_null((types::Type*)e.h.ty); }
     case ast::AstKind::BinaryOp:  { return eval_binary(ip, (ast::BinaryOpNode*)e); }
     case ast::AstKind::UnaryOp:   { return eval_unary(ip, (ast::UnaryOpNode*)e); }
+    case ast::AstKind::Cast:      { return eval_cast(ip, (ast::CastNode*)e); }
+    case ast::AstKind::ArrayLit:     { return eval_array_lit(ip, (ast::ArrayLitNode*)e); }
+    case ast::AstKind::StructLit:    { return eval_struct_lit(ip, (ast::StructLitNode*)e); }
+    case ast::AstKind::MemberAccess: { return eval_member_access(ip, (ast::MemberAccessNode*)e); }
+    case ast::AstKind::ArrayIndex:   { return eval_array_index(ip, (ast::ArrayIndexNode*)e); }
+    case ast::AstKind::SliceRange:   { return eval_slice_range(ip, (ast::SliceRangeNode*)e); }
     case ast::AstKind::Ident:     { return eval_ident(ip, (ast::IdentNode*)e); }
     case ast::AstKind::NamespaceAccess: { return eval_namespace_access(ip, (ast::NamespaceAccessNode*)e); }
     case ast::AstKind::Call:      { return eval_call(ip, (ast::CallNode*)e); }
@@ -181,8 +187,28 @@ fn value::Value eval_decl_value(Interp* ip, sema::Decl* d, u32 pos) {
             return eval(ip, vd.init);
         }
     }
+    if(d.kind == (u16)sema::DeclKind::EnumMember && d.ty != null && d.ty.kind == types::TypeKind::Enum) {
+        return eval_enum_member(ip, d);
+    }
     u8[] msg = "identifier is not a comptime value";
     diag::report(&ip.m.diag, ip.m.arena, pos, msg);
+    return value::val_error();
+}
+
+fn value::Value eval_enum_member(Interp* ip, sema::Decl* d) {
+    ast::EnumDeclNode* edecl = (ast::EnumDeclNode*)d.ty.data.enum_decl;
+    ast::EnumMember* target = d.data.member;
+    i64 running = 0;
+    for(u64 member_index = 0; member_index < edecl.members.len; member_index += 1) {
+        i64 member_value = running;
+        if(edecl.members[member_index].value_expr != null) {
+            value::Value ev = eval(ip, edecl.members[member_index].value_expr);
+            if(ev.kind == (u16)value::ValueKind::Error) { return ev; }
+            member_value = ev.data.i;
+        }
+        running = member_value + 1;
+        if(edecl.members[member_index].name == target.name) { return value::val_int(member_value, d.ty); }
+    }
     return value::val_error();
 }
 
@@ -199,10 +225,30 @@ fn value::Value eval_block(Interp* ip, ast::BlockNode* n) {
     Env* saved = ip.env;
     ip.env = env_push(saved, ip.m.arena, 8);
     value::Value result = value::val_void();
+    ast::AstNode*[] defers;
+    defers.ptr = null;
+    defers.len = 0;
+    u64 defer_count = 0;
     for(u64 stmt_index = 0; stmt_index < n.stmts.len; stmt_index += 1) {
-        value::Value v = eval(ip, n.stmts[stmt_index]);
+        ast::AstNode* st = n.stmts[stmt_index];
+        if(st.h.kind == ast::AstKind::DeferStmt) {
+            if(defers.ptr == null) { defers.ptr = (ast::AstNode**)arena::alloc(ip.m.arena, n.stmts.len * sizeof(ast::AstNode*)); }
+            defers.ptr[defer_count] = ((ast::DeferNode*)st).body;
+            defer_count += 1;
+            continue;
+        }
+        value::Value v = eval(ip, st);
         if(v.kind == (u16)value::ValueKind::Error) { result = v; break; }
         if(ip.flow != Flow::None) { break; }
+    }
+    while(defer_count > 0) {                     // LIFO; a defer body must not clobber the in-progress return/break
+        defer_count -= 1;
+        Flow saved_flow = ip.flow;
+        value::Value saved_rv = ip.return_value;
+        ip.flow = Flow::None;
+        eval(ip, defers.ptr[defer_count]);
+        ip.flow = saved_flow;
+        ip.return_value = saved_rv;
     }
     env_pop(ip.env);
     ip.env = saved;
@@ -372,23 +418,41 @@ fn token::TokenKind compound_base(token::TokenKind op) {
     return token::TokenKind::Caret;
 }
 
+// The storage slot for an assignable comptime location: a local, or an element/field reached through one. Null if not assignable.
+fn value::Value* eval_lvalue(Interp* ip, ast::AstNode* node) {
+    if(node.h.kind == ast::AstKind::Ident) {
+        sema::Decl* d = (sema::Decl*)((ast::IdentNode*)node).resolved;
+        if(d == null) { return null; }
+        return env_lookup(ip.env, d);
+    }
+    if(node.h.kind == ast::AstKind::ArrayIndex) {
+        ast::ArrayIndexNode* ai = (ast::ArrayIndexNode*)node;
+        value::Value* base = eval_lvalue(ip, ai.base);
+        if(base == null || base.kind != (u16)value::ValueKind::Array) { return null; }
+        value::Value idx = eval(ip, ai.index);
+        if(idx.kind != (u16)value::ValueKind::Int || idx.data.i < 0 || (u64)idx.data.i >= base.data.elems.len) { return null; }
+        return &base.data.elems[(u64)idx.data.i];
+    }
+    if(node.h.kind == ast::AstKind::MemberAccess) {
+        ast::MemberAccessNode* ma = (ast::MemberAccessNode*)node;
+        value::Value* base = eval_lvalue(ip, ma.base);
+        if(base == null || base.kind != (u16)value::ValueKind::Struct || base.ty == null || base.ty.kind != types::TypeKind::Struct) { return null; }
+        u64 field_index = struct_field_index((ast::StructDeclNode*)base.ty.data.struct_decl, ma.field);
+        if(field_index >= base.data.elems.len) { return null; }
+        return &base.data.elems[field_index];
+    }
+    return null;
+}
+
 fn value::Value eval_assignment(Interp* ip, ast::AssignmentNode* n) {
-    if(n.lhs.h.kind != ast::AstKind::Ident) {
-        u8[] msg = "comptime assignment target must be a local variable";
+    value::Value* slot = eval_lvalue(ip, n.lhs);
+    if(slot == null) {
+        u8[] msg = "comptime assignment target is not an assignable comptime location";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
-    ast::IdentNode* target = (ast::IdentNode*)n.lhs;
-    sema::Decl* d = (sema::Decl*)target.resolved;
     value::Value rhs = eval(ip, n.rhs);
     if(rhs.kind == (u16)value::ValueKind::Error) { return rhs; }
-    value::Value* slot = null;
-    if(d != null) { slot = env_lookup(ip.env, d); }
-    if(slot == null) {
-        u8[] msg = "comptime assignment target is not a comptime local";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
-        return value::val_error();
-    }
     value::Value newval = rhs;
     if(n.op != token::TokenKind::Eq) {
         value::Value combined = op::binop_eval(compound_base(n.op), *slot, rhs);
@@ -411,6 +475,120 @@ fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
     value::Value v = eval(ip, n.operand);
     if(v.kind == (u16)value::ValueKind::Error) { return v; }
     return op::unaryop_eval(n.op, v);
+}
+
+// Narrowing does not wrap to the target width; comptime rarely relies on it.
+fn value::Value eval_cast(Interp* ip, ast::CastNode* n) {
+    value::Value v = eval(ip, n.expr);
+    if(v.kind == (u16)value::ValueKind::Error) { return v; }
+    types::Type* target = (types::Type*)n.h.ty;
+    if(target == null) { return v; }
+    bool v_is_float = v.kind == (u16)value::ValueKind::Float;
+    if(types::is_float(target)) {
+        if(v_is_float) { return value::val_float(v.data.f, target); }
+        return value::val_float((f64)v.data.i, target);
+    }
+    if(types::is_int(target)) {
+        if(v_is_float) { return value::val_int((i64)v.data.f, target); }
+        return value::val_int(v.data.i, target);
+    }
+    return v;
+}
+
+fn u64 struct_field_index(ast::StructDeclNode* sd, symbol::Symbol* name) {
+    for(u64 field_index = 0; field_index < sd.fields.len; field_index += 1) {
+        if(sd.fields[field_index].name == name) { return field_index; }
+    }
+    return sd.fields.len;
+}
+
+fn value::Value eval_array_lit(Interp* ip, ast::ArrayLitNode* n) {
+    value::Value[] elems;
+    elems.ptr = (value::Value*)arena::alloc(ip.m.arena, n.elems.len * sizeof(value::Value));
+    elems.len = n.elems.len;
+    for(u64 elem_index = 0; elem_index < n.elems.len; elem_index += 1) {
+        elems[elem_index] = eval(ip, n.elems[elem_index]);
+        if(elems[elem_index].kind == (u16)value::ValueKind::Error) { return elems[elem_index]; }
+    }
+    return value::val_array((types::Type*)n.h.ty, elems);
+}
+
+// Fields the literal omits default to 0.
+fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
+    types::Type* ty = (types::Type*)n.h.ty;
+    if(ty == null || ty.kind != types::TypeKind::Struct) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "struct literal is not a comptime struct value");
+        return value::val_error();
+    }
+    ast::StructDeclNode* sd = (ast::StructDeclNode*)ty.data.struct_decl;
+    u64 field_count = sd.fields.len;
+    value::Value[] fields;
+    fields.ptr = (value::Value*)arena::alloc(ip.m.arena, field_count * sizeof(value::Value));
+    fields.len = field_count;
+    for(u64 field_index = 0; field_index < field_count; field_index += 1) { fields[field_index] = value::val_int(0, null); }
+    for(u64 init_index = 0; init_index < n.inits.len; init_index += 1) {
+        u64 target = init_index;
+        if(n.inits[init_index].name != null) { target = struct_field_index(sd, n.inits[init_index].name); }
+        value::Value fv = eval(ip, n.inits[init_index].value);
+        if(fv.kind == (u16)value::ValueKind::Error) { return fv; }
+        if(target < field_count) { fields[target] = fv; }
+    }
+    return value::val_struct(ty, fields);
+}
+
+fn value::Value eval_member_access(Interp* ip, ast::MemberAccessNode* n) {
+    value::Value base = eval(ip, n.base);
+    if(base.kind == (u16)value::ValueKind::Error) { return base; }
+    if(base.kind != (u16)value::ValueKind::Struct || base.ty == null || base.ty.kind != types::TypeKind::Struct) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "member access on a non-struct comptime value");
+        return value::val_error();
+    }
+    ast::StructDeclNode* sd = (ast::StructDeclNode*)base.ty.data.struct_decl;
+    u64 field_index = struct_field_index(sd, n.field);
+    if(field_index >= base.data.elems.len) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "unknown field in comptime struct value");
+        return value::val_error();
+    }
+    return base.data.elems[field_index];
+}
+
+fn value::Value eval_array_index(Interp* ip, ast::ArrayIndexNode* n) {
+    value::Value base = eval(ip, n.base);
+    if(base.kind == (u16)value::ValueKind::Error) { return base; }
+    value::Value idx = eval(ip, n.index);
+    if(idx.kind == (u16)value::ValueKind::Error) { return idx; }
+    if(base.kind != (u16)value::ValueKind::Array) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "index on a non-array comptime value");
+        return value::val_error();
+    }
+    if(idx.data.i < 0 || (u64)idx.data.i >= base.data.elems.len) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "comptime array index out of bounds");
+        return value::val_error();
+    }
+    return base.data.elems[(u64)idx.data.i];
+}
+
+fn value::Value eval_slice_range(Interp* ip, ast::SliceRangeNode* n) {
+    value::Value base = eval(ip, n.base);
+    if(base.kind == (u16)value::ValueKind::Error) { return base; }
+    if(base.kind != (u16)value::ValueKind::Array) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "range on a non-array comptime value");
+        return value::val_error();
+    }
+    i64 lo = 0;
+    i64 hi = (i64)base.data.elems.len;
+    if(n.lo != null) { value::Value lv = eval(ip, n.lo); if(lv.kind == (u16)value::ValueKind::Error) { return lv; } lo = lv.data.i; }
+    if(n.hi != null) { value::Value hv = eval(ip, n.hi); if(hv.kind == (u16)value::ValueKind::Error) { return hv; } hi = hv.data.i; }
+    if(lo < 0 || hi > (i64)base.data.elems.len || lo > hi) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "comptime slice range out of bounds");
+        return value::val_error();
+    }
+    u64 count = (u64)(hi - lo);
+    value::Value[] sub;
+    sub.ptr = (value::Value*)arena::alloc(ip.m.arena, count * sizeof(value::Value));
+    sub.len = count;
+    for(u64 sub_index = 0; sub_index < count; sub_index += 1) { sub[sub_index] = base.data.elems[(u64)lo + sub_index]; }
+    return value::val_array(base.ty, sub);
 }
 
 fn value::Value eval_sizeof(Interp* ip, ast::SizeofNode* n) {

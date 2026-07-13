@@ -537,6 +537,70 @@ fn i32 err_compinsert_rejects_export(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_comptime_array_mutate(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32[3] a = [1, 2, 3]; a[0] = 9; if(a[0] == 9) { comperror(\"a0is9\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "a0is9", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_struct_mutate(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; } export fn i32 f() { comprun { P p = { .x = 1, .y = 2 }; p.x = 7; if(p.x == 7) { comperror(\"x7\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "x7", m)) { return -2; }
+    return 0;
+}
+
+// An enum value expression referencing a sibling member folds at comptime.
+fn i32 err_comptime_enum_chain(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum E : i32 { A = 5, B = A + 1 } export fn i32 f() { comprun { if((i32)E::B == 6) { comperror(\"b6\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "b6", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_cast(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { if((i32)3.9 == 3) { comperror(\"trunc3\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "trunc3", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_enum_member(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum E : i32 { A, B, C } export fn i32 f() { comprun { if((i32)E::C == 2) { comperror(\"c2\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "c2", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_enum_switch(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum Color : i32 { Red, Green, Blue } export fn i32 f() { comprun { Color c = Color::Green; switch(c) { case Color::Green: { comperror(\"green\"); } else { comperror(\"other\"); } } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "green", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_struct_member(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; } export fn i32 f() { comprun { P p = { .x = 3, .y = 7 }; if(p.y == 7) { comperror(\"y7\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "y7", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_array_index(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32[3] a = [10, 20, 30]; u64 i = 2; if(a[i] == 30) { comperror(\"idx30\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "idx30", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_comptime_defer(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 x = 0; defer { x = 9; } if(x == 0) { comperror(\"beforedefr\"); } } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "beforedefr", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comptime_break(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { i32 i = 0; while(i < 10) { if(i == 2) { break; } i = i + 1; } if(i == 2) { comperror(\"broke2\"); } } return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -760,6 +824,15 @@ fn i32 main() {
     testing::add(suite, "err_compinsert_position_registry", &err_compinsert_position_registry);
     testing::add(suite, "err_compinsert_string_literal", &err_compinsert_string_literal);
     testing::add(suite, "err_compinsert_rejects_export", &err_compinsert_rejects_export);
+    testing::add(suite, "err_comptime_array_mutate",  &err_comptime_array_mutate);
+    testing::add(suite, "err_comptime_struct_mutate", &err_comptime_struct_mutate);
+    testing::add(suite, "err_comptime_enum_chain",    &err_comptime_enum_chain);
+    testing::add(suite, "err_comptime_cast",         &err_comptime_cast);
+    testing::add(suite, "err_comptime_enum_member",  &err_comptime_enum_member);
+    testing::add(suite, "err_comptime_enum_switch",  &err_comptime_enum_switch);
+    testing::add(suite, "err_comptime_struct_member", &err_comptime_struct_member);
+    testing::add(suite, "err_comptime_array_index",  &err_comptime_array_index);
+    testing::add(suite, "err_comptime_defer",        &err_comptime_defer);
     testing::add(suite, "err_comptime_break",        &err_comptime_break);
     testing::add(suite, "err_comptime_continue",     &err_comptime_continue);
     testing::add(suite, "err_comptime_switch_case",  &err_comptime_switch_case);

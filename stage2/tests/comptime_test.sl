@@ -817,10 +817,10 @@ fn i32 eval_assign_errors(arena::Arena* a, u8[] m) {
     sema::Decl* unbound = mk_decl(a);
     value::Value v1 = comptime::eval(&ip, mk_assign(a, token::TokenKind::Eq, mk_ident_resolved(a, unbound, types::prim_i32()), mk_int(a, 1, types::prim_i32())));
     if(!testing::expect_eq((u64)v1.kind, (u64)value::ValueKind::Error, m)) { return -1; }
-    if(!testing::expect_substr(mm.diag.entries[0].msg, "not a comptime local", m)) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "not an assignable comptime location", m)) { return -2; }
     value::Value v2 = comptime::eval(&ip, mk_assign(a, token::TokenKind::Eq, mk_int(a, 3, types::prim_i32()), mk_int(a, 1, types::prim_i32())));
     if(!testing::expect_eq((u64)v2.kind, (u64)value::ValueKind::Error, m)) { return -3; }
-    if(!testing::expect_substr(mm.diag.entries[1].msg, "must be a local variable", m)) { return -4; }
+    if(!testing::expect_substr(mm.diag.entries[1].msg, "not an assignable comptime location", m)) { return -4; }
     return 0;
 }
 
