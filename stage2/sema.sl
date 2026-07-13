@@ -24,6 +24,13 @@ export struct Sema {
     ResolutionStack     resolution_stack;   // alias / named-type cycle detection
     symbol::Symbol*[]   comptime_type_names; // comptime Type params of the generic whose signature is resolving
     bool                in_comprun;         // inside a comprun body: compinsert there is comptime-evaluated, not stmt-spliced
+    arena::Arena*       body_arena;         // where body-check allocates; a cross-module on-demand check uses the requester's, keeping each module arena single-writer
+}
+
+// Body-check allocations go here so an on-demand foreign check writes the requester's arena, not the foreign module's.
+fn arena::Arena* balloc(Sema* s) {
+    if(s.body_arena != null) { return s.body_arena; }
+    return s.m.arena;
 }
 
 export enum DeclKind : u16 {
@@ -107,7 +114,7 @@ export fn void collect_names(module::Module* m) {
         s.scope = (Scope*)s.m.global_scope;     // re-entry: reattach the existing module scope
         return;
     }
-    Scope* module_scope = scope_new(s.m.arena, null, 16);
+    Scope* module_scope = scope_new(balloc(s), null, 16);
     s.m.global_scope = (void*)module_scope;
     s.scope = module_scope;
     if(s.m.root_node == null) {
@@ -215,7 +222,7 @@ fn Decl* register_sym(Sema* s, Scope* scope, symbol::Symbol* name, bool is_expor
         }
         return null;
     }
-    Decl* decl = arena::alloc(s.m.arena, sizeof(Decl));
+    Decl* decl = arena::alloc(balloc(s), sizeof(Decl));
     sys::memset(decl, 0, sizeof(Decl));
     decl.kind = decl_kind;
     decl.name = name;
@@ -372,7 +379,7 @@ fn symbol::Symbol*[] collect_comptime_type_names(Sema* s, ast::FnDeclNode* fn_de
         symbol::Symbol*[] empty = {null, 0};
         return empty;
     }
-    symbol::Symbol** names_mem = (symbol::Symbol**)arena::alloc(s.m.arena, count * sizeof(symbol::Symbol*));
+    symbol::Symbol** names_mem = (symbol::Symbol**)arena::alloc(balloc(s), count * sizeof(symbol::Symbol*));
     symbol::Symbol*[] names = {names_mem, 0};
     for(u64 i = 0; i < fn_decl.params.len; i += 1) {
         if(fn_decl.params[i].is_comptime && is_type_kw(fn_decl.params[i].type_expr)) {
@@ -393,7 +400,7 @@ fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
     }
     types::Type*[] param_types = {null, 0};
     if(fn_decl.params.len > 0) {
-        types::Type** param_type_mem = (types::Type**)arena::alloc(s.m.arena, fn_decl.params.len * sizeof(types::Type*));
+        types::Type** param_type_mem = (types::Type**)arena::alloc(balloc(s), fn_decl.params.len * sizeof(types::Type*));
         for(u64 param_index = 0; param_index < fn_decl.params.len; param_index += 1) {
             types::Type* param_type = resolve_type(s, fn_decl.params[param_index].type_expr);
             fn_decl.params[param_index].resolved_type = (void*)param_type;
@@ -429,7 +436,7 @@ export fn void check_bodies(module::Module* m) {
         for(u64 i = 0; i < global_block.stmts.len; i += 1) {
             ast::AstNode* node = global_block.stmts[i];
             if(node.h.kind == ast::AstKind::FnDecl && !is_generic_fn((ast::FnDeclNode*)node)) {
-                ensure_body_checked(s.m, (ast::FnDeclNode*)node);
+                ensure_body_checked(s.m, (ast::FnDeclNode*)node, s.m.arena);
             }
             else if(node.h.kind == ast::AstKind::VarDecl) {
                 ensure_var_init_checked(s.m, (ast::VarDeclNode*)node);
@@ -490,7 +497,7 @@ export fn void splice_top_decl(module::Module* m, ast::AstNode* node, u32 genera
     s.resolution_stack.arena = m.arena;
     collect_name_for_decl(s, node);
     resolve_decl_signature(s, node);
-    if(node.h.kind == ast::AstKind::FnDecl) { ensure_body_checked(m, (ast::FnDeclNode*)node); }
+    if(node.h.kind == ast::AstKind::FnDecl) { ensure_body_checked(m, (ast::FnDeclNode*)node, m.arena); }
     else if(node.h.kind == ast::AstKind::VarDecl) { ensure_var_init_checked(m, (ast::VarDeclNode*)node); }
     append_top_decl(m, node);
 }
@@ -545,7 +552,7 @@ export fn void init_body_sync() {
 
 // Exactly one thread checks a given fn; others wait for Checked. body_owner lets a comptime call recursing into the
 // fn being checked (same thread) proceed instead of self-waiting. check_fn_body runs unlocked, so N fns check at once.
-export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func) {
+export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, arena::Arena* alloc_arena) {
     if(!g_body_sync_ready) { init_body_sync(); }
     u64 me = threads::self();
     mutex::lock(&g_body_lock);
@@ -564,7 +571,8 @@ export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func) {
     sema.m = m;
     Sema* s = &sema;
     s.scope = (Scope*)m.global_scope;
-    s.resolution_stack.arena = m.arena;
+    s.body_arena = alloc_arena;
+    s.resolution_stack.arena = alloc_arena;
     check_fn_body(s, func);
     mutex::lock(&g_body_lock);
     func.body_state = ast::BodyState::Checked;
@@ -574,7 +582,7 @@ export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func) {
 
 fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
     if(func.body == null) { return; }
-    Scope* fn_scope = scope_new(s.m.arena, (Scope*)s.m.global_scope, 16);
+    Scope* fn_scope = scope_new(balloc(s), (Scope*)s.m.global_scope, 16);
     for(u64 i = 0; i < func.params.len; i += 1) {
         Decl* param_decl = register_sym(s, fn_scope, func.params[i].name, false, (u16)DeclKind::Param, func.h.src_pos);
         if(param_decl != null) {
@@ -824,7 +832,7 @@ export fn types::Type*[] resolve_type_list(Sema* s, ast::AstNode*[] type_exprs) 
         types::Type*[] empty = {null, 0};
         return empty;
     }
-    types::Type** resolved_types = (types::Type**)arena::alloc(s.m.arena, type_exprs.len * sizeof(types::Type*));
+    types::Type** resolved_types = (types::Type**)arena::alloc(balloc(s), type_exprs.len * sizeof(types::Type*));
     for(u64 type_index = 0; type_index < type_exprs.len; type_index += 1) {
         resolved_types[type_index] = resolve_type(s, type_exprs[type_index]);
     }
@@ -858,7 +866,7 @@ fn types::Type* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
 }
 
 fn ast::StructDeclNode* synth_anon_struct_decl(Sema* s, ast::TypeStructNode* n) {
-    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(s.m.arena, sizeof(ast::StructDeclNode));
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)arena::alloc(balloc(s), sizeof(ast::StructDeclNode));
     sys::memset(decl, 0, sizeof(ast::StructDeclNode));
     decl.h.kind = ast::AstKind::StructDecl;
     decl.h.src_pos = n.h.src_pos;
@@ -868,7 +876,7 @@ fn ast::StructDeclNode* synth_anon_struct_decl(Sema* s, ast::TypeStructNode* n) 
 }
 
 fn ast::UnionDeclNode* synth_anon_union_decl(Sema* s, ast::TypeUnionNode* n) {
-    ast::UnionDeclNode* decl = (ast::UnionDeclNode*)arena::alloc(s.m.arena, sizeof(ast::UnionDeclNode));
+    ast::UnionDeclNode* decl = (ast::UnionDeclNode*)arena::alloc(balloc(s), sizeof(ast::UnionDeclNode));
     sys::memset(decl, 0, sizeof(ast::UnionDeclNode));
     decl.h.kind = ast::AstKind::UnionDecl;
     decl.h.src_pos = n.h.src_pos;
@@ -1265,7 +1273,7 @@ fn void set_callee_resolved(ast::AstNode* callee, Decl* chosen) {
 }
 
 fn types::Type* synth_overloaded_call(Sema* s, ast::CallNode* n, Decl* head) {
-    types::Type** arg_type_mem = (types::Type**)arena::alloc(s.m.arena, n.args.len * sizeof(types::Type*));
+    types::Type** arg_type_mem = (types::Type**)arena::alloc(balloc(s), n.args.len * sizeof(types::Type*));
     types::Type*[] arg_types = {arg_type_mem, n.args.len};
     bool args_ok = true;
     for(u64 i = 0; i < n.args.len; i += 1) {
@@ -1333,7 +1341,7 @@ fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* g
         mark_error((ast::AstNode*)n);
         return null;
     }
-    types::Type** arg_type_mem = (types::Type**)arena::alloc(s.m.arena, n.args.len * sizeof(types::Type*));
+    types::Type** arg_type_mem = (types::Type**)arena::alloc(balloc(s), n.args.len * sizeof(types::Type*));
     types::Type*[] arg_types = {arg_type_mem, n.args.len};
     bool args_ok = true;
     for(u64 i = 0; i < n.args.len; i += 1) {
@@ -1409,7 +1417,7 @@ fn types::Type* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDe
     for(u64 i = 0; i < generic.params.len; i += 1) {
         if(generic.params[i].is_comptime) { n_comptime += 1; }
     }
-    value::Value* carg_mem = (value::Value*)arena::alloc(s.m.arena, n_comptime * sizeof(value::Value));
+    value::Value* carg_mem = (value::Value*)arena::alloc(balloc(s), n_comptime * sizeof(value::Value));
     value::Value[] cargs = {carg_mem, 0};
     for(u64 i = 0; i < generic.params.len; i += 1) {
         if(!generic.params[i].is_comptime) { continue; }
@@ -1694,7 +1702,7 @@ fn bool check_struct_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) 
         return false;
     }
     ast::FieldDecl[] fields = decl_fields(container_decl(expected));
-    bool* seen = (bool*)arena::alloc(s.m.arena, fields.len + 1);
+    bool* seen = (bool*)arena::alloc(balloc(s), fields.len + 1);
     sys::memset(seen, 0, fields.len + 1);
     bool ok = true;
     u64 positional = 0;
@@ -1818,7 +1826,7 @@ fn void stmt(Sema* s, ast::AstNode* st) {
     switch(st.h.kind) {
     case ast::AstKind::BlockStmt: {
         ast::BlockNode* block = (ast::BlockNode*)st;
-        Scope* block_scope = scope_new(s.m.arena, s.scope, 8);
+        Scope* block_scope = scope_new(balloc(s), s.scope, 8);
         Scope* saved = s.scope;
         s.scope = block_scope;
         for(u64 i = 0; i < block.stmts.len; i += 1) {
@@ -1851,7 +1859,7 @@ fn void stmt(Sema* s, ast::AstNode* st) {
     }
     case ast::AstKind::ForStmt: {
         ast::ForNode* for_node = (ast::ForNode*)st;
-        Scope* for_scope = scope_new(s.m.arena, s.scope, 8);
+        Scope* for_scope = scope_new(balloc(s), s.scope, 8);
         Scope* saved = s.scope;
         s.scope = for_scope;
         stmt_or_expr(s, for_node.init);
@@ -2355,7 +2363,7 @@ export fn ast::EnumMember* find_enum_member(ast::EnumDeclNode* decl, symbol::Sym
 }
 
 export fn Decl* new_decl(Sema* s, u16 kind, symbol::Symbol* name, types::Type* ty) {
-    Decl* decl = (Decl*)arena::alloc(s.m.arena, sizeof(Decl));
+    Decl* decl = (Decl*)arena::alloc(balloc(s), sizeof(Decl));
     sys::memset(decl, 0, sizeof(Decl));
     decl.kind = kind;
     decl.name = name;
