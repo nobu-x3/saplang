@@ -498,6 +498,8 @@ fn ast::AstNode* compile_fragment(module::Module* m, u8[] bytes, bool as_stmts, 
     frag.literal_pool = m.literal_pool;
     frag.literal_pool_cap = m.literal_pool_cap;
     scanner::scan(frag);
+    u32 base = module::register_inserted_source(m, bytes, generator_pos);
+    for(u64 token_index = 0; token_index < frag.tokens.len; token_index += 1) { frag.tokens[token_index].src_pos += base; }
     ast::AstNode* root;
     if(as_stmts) { root = parser::parse_stmt_fragment(frag); } else { root = parser::parse(frag); }
     m.literal_pool = frag.literal_pool;

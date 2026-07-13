@@ -511,6 +511,17 @@ fn i32 err_compinsert_rejects_import(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A sema error in generated code gets a virtual src_pos (past real source) that maps back to the compinsert call.
+fn i32 err_compinsert_position_registry(arena::Arena* a, u8[] m) {
+    u8[] src = "comprun { compinsert(\"fn i32 g() { return nope; }\"); }\nexport fn i32 f() { return 0; }";
+    module::Module* mod = test_util::frontend(a, src);
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    u32 pos = mod.diag.entries[0].src_pos;
+    if(!testing::expect_true(pos >= (u32)src.len, m)) { return -2; }
+    if(!testing::expect_true(module::find_inserted_source(mod, pos) != null, m)) { return -3; }
+    return 0;
+}
+
 // A string literal inside generated code must resolve against the module pool (offsets remapped on splice).
 fn i32 err_compinsert_string_literal(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "comprun { compinsert(\"fn u8[] msg() { return \\\"hello\\\"; }\"); }\nexport fn i32 f() { comprun { comperror(msg()); } return 0; }");
@@ -718,6 +729,7 @@ fn i32 main() {
     testing::add(suite, "err_compinsert_generates_const", &err_compinsert_generates_const);
     testing::add(suite, "ok_compinsert_generates_struct", &ok_compinsert_generates_struct);
     testing::add(suite, "err_compinsert_rejects_import", &err_compinsert_rejects_import);
+    testing::add(suite, "err_compinsert_position_registry", &err_compinsert_position_registry);
     testing::add(suite, "err_compinsert_string_literal", &err_compinsert_string_literal);
     testing::add(suite, "err_compinsert_rejects_export", &err_compinsert_rejects_export);
     testing::add(suite, "err_comprun_toplevel",      &err_comprun_toplevel);

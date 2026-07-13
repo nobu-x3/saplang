@@ -12,6 +12,7 @@ export fn void scan(module::Module* m) {
         build_char_class_table();
     }
     compute_line_starts(m);
+    m.next_inserted_base = (u32)m.source.len;
     u32 pos = 0;
     u32 end = (u32)m.source.len;
     while(pos < end) {
