@@ -112,83 +112,88 @@ export fn void collect_names(module::Module* m) {
     }
     ast::BlockNode* global_block = (ast::BlockNode*)s.m.root_node;
     for(u64 stmt_index = 0; stmt_index < global_block.stmts.len; stmt_index += 1) {
-        ast::AstNode* top_level_node = global_block.stmts[stmt_index];
-        switch(top_level_node.h.kind) {
-        case ast::AstKind::ImportDecl: {
-            ast::ImportNode* import_node = (ast::ImportNode*)top_level_node;
-            Decl* decl = register_sym(s, module_scope, import_node.module_name, import_node.is_reexport, (u16)DeclKind::Import, import_node.h.src_pos);
-            if(decl != null) { decl.data.module = find_import_module(s, import_node.module_name); }
-        }
-        case ast::AstKind::VarDecl: {
-            ast::VarDeclNode* var_decl = (ast::VarDeclNode*)top_level_node;
-            var_decl.qualified_name = qualify_decl_name(s, var_decl.name);
-            Decl* decl = register_sym(s, module_scope, var_decl.name, var_decl.is_exported, (u16)DeclKind::Node, var_decl.h.src_pos);
-            if(decl != null) { decl.data.node = top_level_node; var_decl.decl = (void*)decl; }
-        }
-        case ast::AstKind::FnDecl: {
-            ast::FnDeclNode* fn_decl = (ast::FnDeclNode*)top_level_node;
-            fn_decl.qualified_name = qualify_decl_name(s, fn_decl.name);
-            Decl* decl = register_fn(s, module_scope, fn_decl, fn_decl.is_exported);
-            if(decl != null) { decl.data.node = top_level_node; fn_decl.decl = (void*)decl; }
-        }
-        case ast::AstKind::StructDecl: {
-            ast::StructDeclNode* struct_decl = (ast::StructDeclNode*)top_level_node;
-            struct_decl.qualified_name = qualify_decl_name(s, struct_decl.name);
-            Decl* decl = register_sym(s, module_scope, struct_decl.name, struct_decl.is_exported, (u16)DeclKind::Node, struct_decl.h.src_pos);
-            if(decl != null) { decl.data.node = top_level_node; }
-        }
-        case ast::AstKind::UnionDecl: {
-            ast::UnionDeclNode* union_decl = (ast::UnionDeclNode*)top_level_node;
-            union_decl.qualified_name = qualify_decl_name(s, union_decl.name);
-            Decl* decl = register_sym(s, module_scope, union_decl.name, union_decl.is_exported, (u16)DeclKind::Node, union_decl.h.src_pos);
-            if(decl != null) { decl.data.node = top_level_node; }
-        }
-        case ast::AstKind::EnumDecl: {
-            ast::EnumDeclNode* enum_decl = (ast::EnumDeclNode*)top_level_node;
-            enum_decl.qualified_name = qualify_decl_name(s, enum_decl.name);
-            Decl* decl = register_sym(s, module_scope, enum_decl.name, enum_decl.is_exported, (u16)DeclKind::Node, enum_decl.h.src_pos);
-            if(decl != null) { decl.data.node = top_level_node; }
-        }
-        case ast::AstKind::AliasDecl: {
-            ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)top_level_node;
-            alias_decl.qualified_name = qualify_decl_name(s, alias_decl.name);
-            Decl* decl = register_sym(s, module_scope, alias_decl.name, alias_decl.is_exported, (u16)DeclKind::Node, alias_decl.h.src_pos);
-            if(decl != null) { decl.data.node = top_level_node; }
-        }
-        case ast::AstKind::ExternBlock: {
-            ast::ExternBlockNode* extern_block = (ast::ExternBlockNode*)top_level_node;
-            for(u64 item_index = 0; item_index < extern_block.items.len; item_index += 1) {
-                ast::AstNode* extern_item = extern_block.items[item_index];
-                switch(extern_item.h.kind) {
-                case ast::AstKind::ExternFnDecl: {
-                    ast::ExternFnDeclNode* extern_fn = (ast::ExternFnDeclNode*)extern_item;
-                    Decl* decl = register_sym(s, module_scope, extern_fn.name, extern_fn.is_exported, (u16)DeclKind::Node, extern_fn.h.src_pos);
-                    if(decl != null) { decl.data.node = extern_item; }
-                }
-                case ast::AstKind::ExternStructDecl: {
-                    ast::ExternStructDeclNode* extern_struct = (ast::ExternStructDeclNode*)extern_item;
-                    Decl* decl = register_sym(s, module_scope, extern_struct.name, extern_struct.is_exported, (u16)DeclKind::Node, extern_struct.h.src_pos);
-                    if(decl != null) { decl.data.node = extern_item; }
-                }
-                case ast::AstKind::ExternUnionDecl: {
-                    ast::ExternUnionDeclNode* extern_union = (ast::ExternUnionDeclNode*)extern_item;
-                    Decl* decl = register_sym(s, module_scope, extern_union.name, extern_union.is_exported, (u16)DeclKind::Node, extern_union.h.src_pos);
-                    if(decl != null) { decl.data.node = extern_item; }
-                }
-                case ast::AstKind::VarDecl: {
-                    ast::VarDeclNode* extern_var = (ast::VarDeclNode*)extern_item;
-                    extern_var.qualified_name = qualify_decl_name(s, extern_var.name);
-                    Decl* decl = register_sym(s, module_scope, extern_var.name, extern_var.is_exported, (u16)DeclKind::Node, extern_var.h.src_pos);
-                    if(decl != null) { decl.data.node = extern_item; extern_var.decl = (void*)decl; }
-                }
-                else { }
-                }
-            }
-        }
-        else { }
-        }
+        collect_name_for_decl(s, global_block.stmts[stmt_index]);
     }
     s.m.sema_phase |= SemaPhase::Names;
+}
+
+// Shared by the name pass and compinsert splicing.
+fn void collect_name_for_decl(Sema* s, ast::AstNode* top_level_node) {
+    Scope* module_scope = s.scope;
+    switch(top_level_node.h.kind) {
+    case ast::AstKind::ImportDecl: {
+        ast::ImportNode* import_node = (ast::ImportNode*)top_level_node;
+        Decl* decl = register_sym(s, module_scope, import_node.module_name, import_node.is_reexport, (u16)DeclKind::Import, import_node.h.src_pos);
+        if(decl != null) { decl.data.module = find_import_module(s, import_node.module_name); }
+    }
+    case ast::AstKind::VarDecl: {
+        ast::VarDeclNode* var_decl = (ast::VarDeclNode*)top_level_node;
+        var_decl.qualified_name = qualify_decl_name(s, var_decl.name);
+        Decl* decl = register_sym(s, module_scope, var_decl.name, var_decl.is_exported, (u16)DeclKind::Node, var_decl.h.src_pos);
+        if(decl != null) { decl.data.node = top_level_node; var_decl.decl = (void*)decl; }
+    }
+    case ast::AstKind::FnDecl: {
+        ast::FnDeclNode* fn_decl = (ast::FnDeclNode*)top_level_node;
+        fn_decl.qualified_name = qualify_decl_name(s, fn_decl.name);
+        Decl* decl = register_fn(s, module_scope, fn_decl, fn_decl.is_exported);
+        if(decl != null) { decl.data.node = top_level_node; fn_decl.decl = (void*)decl; }
+    }
+    case ast::AstKind::StructDecl: {
+        ast::StructDeclNode* struct_decl = (ast::StructDeclNode*)top_level_node;
+        struct_decl.qualified_name = qualify_decl_name(s, struct_decl.name);
+        Decl* decl = register_sym(s, module_scope, struct_decl.name, struct_decl.is_exported, (u16)DeclKind::Node, struct_decl.h.src_pos);
+        if(decl != null) { decl.data.node = top_level_node; }
+    }
+    case ast::AstKind::UnionDecl: {
+        ast::UnionDeclNode* union_decl = (ast::UnionDeclNode*)top_level_node;
+        union_decl.qualified_name = qualify_decl_name(s, union_decl.name);
+        Decl* decl = register_sym(s, module_scope, union_decl.name, union_decl.is_exported, (u16)DeclKind::Node, union_decl.h.src_pos);
+        if(decl != null) { decl.data.node = top_level_node; }
+    }
+    case ast::AstKind::EnumDecl: {
+        ast::EnumDeclNode* enum_decl = (ast::EnumDeclNode*)top_level_node;
+        enum_decl.qualified_name = qualify_decl_name(s, enum_decl.name);
+        Decl* decl = register_sym(s, module_scope, enum_decl.name, enum_decl.is_exported, (u16)DeclKind::Node, enum_decl.h.src_pos);
+        if(decl != null) { decl.data.node = top_level_node; }
+    }
+    case ast::AstKind::AliasDecl: {
+        ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)top_level_node;
+        alias_decl.qualified_name = qualify_decl_name(s, alias_decl.name);
+        Decl* decl = register_sym(s, module_scope, alias_decl.name, alias_decl.is_exported, (u16)DeclKind::Node, alias_decl.h.src_pos);
+        if(decl != null) { decl.data.node = top_level_node; }
+    }
+    case ast::AstKind::ExternBlock: {
+        ast::ExternBlockNode* extern_block = (ast::ExternBlockNode*)top_level_node;
+        for(u64 item_index = 0; item_index < extern_block.items.len; item_index += 1) {
+            ast::AstNode* extern_item = extern_block.items[item_index];
+            switch(extern_item.h.kind) {
+            case ast::AstKind::ExternFnDecl: {
+                ast::ExternFnDeclNode* extern_fn = (ast::ExternFnDeclNode*)extern_item;
+                Decl* decl = register_sym(s, module_scope, extern_fn.name, extern_fn.is_exported, (u16)DeclKind::Node, extern_fn.h.src_pos);
+                if(decl != null) { decl.data.node = extern_item; }
+            }
+            case ast::AstKind::ExternStructDecl: {
+                ast::ExternStructDeclNode* extern_struct = (ast::ExternStructDeclNode*)extern_item;
+                Decl* decl = register_sym(s, module_scope, extern_struct.name, extern_struct.is_exported, (u16)DeclKind::Node, extern_struct.h.src_pos);
+                if(decl != null) { decl.data.node = extern_item; }
+            }
+            case ast::AstKind::ExternUnionDecl: {
+                ast::ExternUnionDeclNode* extern_union = (ast::ExternUnionDeclNode*)extern_item;
+                Decl* decl = register_sym(s, module_scope, extern_union.name, extern_union.is_exported, (u16)DeclKind::Node, extern_union.h.src_pos);
+                if(decl != null) { decl.data.node = extern_item; }
+            }
+            case ast::AstKind::VarDecl: {
+                ast::VarDeclNode* extern_var = (ast::VarDeclNode*)extern_item;
+                extern_var.qualified_name = qualify_decl_name(s, extern_var.name);
+                Decl* decl = register_sym(s, module_scope, extern_var.name, extern_var.is_exported, (u16)DeclKind::Node, extern_var.h.src_pos);
+                if(decl != null) { decl.data.node = extern_item; extern_var.decl = (void*)decl; }
+            }
+            else { }
+            }
+        }
+    }
+    else { }
+    }
 }
 
 // Register `name` in `scope`; on a duplicate, diagnose and return null. Caller fills data.*.
@@ -423,14 +428,31 @@ export fn bool is_generic_fn(ast::FnDeclNode* func) {
     return false;
 }
 
+fn bool is_spliceable_decl(ast::AstNode* node) {
+    u16 kind = (u16)node.h.kind;
+    return kind == (u16)ast::AstKind::FnDecl || kind == (u16)ast::AstKind::StructDecl || kind == (u16)ast::AstKind::UnionDecl || kind == (u16)ast::AstKind::EnumDecl || kind == (u16)ast::AstKind::VarDecl || kind == (u16)ast::AstKind::AliasDecl;
+}
+
+fn bool decl_is_exported(ast::AstNode* node) {
+    switch(node.h.kind) {
+    case ast::AstKind::FnDecl:     { return ((ast::FnDeclNode*)node).is_exported; }
+    case ast::AstKind::StructDecl: { return ((ast::StructDeclNode*)node).is_exported; }
+    case ast::AstKind::UnionDecl:  { return ((ast::UnionDeclNode*)node).is_exported; }
+    case ast::AstKind::EnumDecl:   { return ((ast::EnumDeclNode*)node).is_exported; }
+    case ast::AstKind::VarDecl:    { return ((ast::VarDeclNode*)node).is_exported; }
+    case ast::AstKind::AliasDecl:  { return ((ast::AliasDeclNode*)node).is_exported; }
+    else { return false; }
+    }
+    return false;
+}
+
 // Generated decls may not be `export`: an importer's exported surface is fixed when name collection runs.
 export fn void splice_top_decl(module::Module* m, ast::AstNode* node, u32 generator_pos) {
-    if(node.h.kind != ast::AstKind::FnDecl) {
-        diag::report(&m.diag, m.arena, generator_pos, "compinsert currently supports only function declarations");
+    if(!is_spliceable_decl(node)) {
+        diag::report(&m.diag, m.arena, generator_pos, "compinsert can only generate fn / struct / union / enum / const / alias declarations");
         return;
     }
-    ast::FnDeclNode* fn_decl = (ast::FnDeclNode*)node;
-    if(fn_decl.is_exported) {
+    if(decl_is_exported(node)) {
         diag::report(&m.diag, m.arena, generator_pos, "compinsert-generated declarations may not be `export`");
         return;
     }
@@ -440,11 +462,10 @@ export fn void splice_top_decl(module::Module* m, ast::AstNode* node, u32 genera
     Sema* s = &sema;
     s.scope = (Scope*)m.global_scope;
     s.resolution_stack.arena = m.arena;
-    fn_decl.qualified_name = qualify_decl_name(s, fn_decl.name);
-    Decl* decl = register_fn(s, (Scope*)m.global_scope, fn_decl, false);
-    if(decl != null) { decl.data.node = node; fn_decl.decl = (void*)decl; }
+    collect_name_for_decl(s, node);
     resolve_decl_signature(s, node);
-    ensure_body_checked(m, fn_decl);
+    if(node.h.kind == ast::AstKind::FnDecl) { ensure_body_checked(m, (ast::FnDeclNode*)node); }
+    else if(node.h.kind == ast::AstKind::VarDecl) { ensure_var_init_checked(m, (ast::VarDeclNode*)node); }
     append_top_decl(m, node);
 }
 
