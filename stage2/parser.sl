@@ -1931,10 +1931,6 @@ fn void report_expected(Parser* p, token::Token tok, token::TokenKind kind_expec
     diag::report(&p.m.diag, p.m.arena, tok.src_pos, msg);
 }
 
-fn u32 save_pos(Parser* p) { return p.idx; }
-
-fn void restore_pos(Parser* p, u32 saved) { p.idx = saved; }
-
 fn token::Token mk_error_token(u32 pos) {
     token::TokenData data;
     data.none = 4;
