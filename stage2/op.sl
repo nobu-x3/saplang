@@ -193,6 +193,10 @@ fn bool order_cmp_f(token::TokenKind op, f64 a, f64 b) {
     return a >= b;
 }
 
+export fn i64 wrap_to_type(i64 v, types::Type* t) {
+    return wrap_int(v, int_bits(t), types::is_signed_int(t));
+}
+
 // Two's-complement wrap of a computed result into the operand type's bit width.
 fn i64 wrap_int(i64 v, u32 bits, bool is_signed) {
     if(bits >= 64) { return v; }

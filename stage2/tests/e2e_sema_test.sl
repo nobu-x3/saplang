@@ -505,6 +505,12 @@ fn i32 ok_comptime_struct_lit_mixed(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_comptime_cast_wraps(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { i32 big = 300; u8 a = (u8)big; if((i64)a != 44) { comperror(\"wrap\"); } i32 n = 0 - 1; u8 b = (u8)n; if((i64)b != 255) { comperror(\"neg\"); } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 err_comprun_comperror(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { comperror(\"boom\"); } return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1027,6 +1033,7 @@ fn i32 main() {
     testing::add(suite, "err_comptime_div_by_zero",     &err_comptime_div_by_zero);
     testing::add(suite, "err_comptime_shift_range",     &err_comptime_shift_range);
     testing::add(suite, "ok_comptime_struct_lit_mixed", &ok_comptime_struct_lit_mixed);
+    testing::add(suite, "ok_comptime_cast_wraps",       &ok_comptime_cast_wraps);
     testing::add(suite, "err_comprun_comperror",     &err_comprun_comperror);
     testing::add(suite, "warn_comprun_compwarning",  &warn_comprun_compwarning);
     testing::add(suite, "err_comprun_var_driven",    &err_comprun_var_driven);

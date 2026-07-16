@@ -507,7 +507,6 @@ fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
     return result;
 }
 
-// Narrowing does not wrap to the target width; comptime rarely relies on it.
 fn value::Value eval_cast(Interp* ip, ast::CastNode* n) {
     value::Value v = eval(ip, n.expr);
     if(v.kind == (u16)value::ValueKind::Error) { return v; }
@@ -519,8 +518,9 @@ fn value::Value eval_cast(Interp* ip, ast::CastNode* n) {
         return value::val_float((f64)v.data.i, target);
     }
     if(types::is_int(target)) {
-        if(v_is_float) { return value::val_int((i64)v.data.f, target); }
-        return value::val_int(v.data.i, target);
+        i64 raw = v.data.i;
+        if(v_is_float) { raw = (i64)v.data.f; }
+        return value::val_int(op::wrap_to_type(raw, target), target);
     }
     return v;
 }
