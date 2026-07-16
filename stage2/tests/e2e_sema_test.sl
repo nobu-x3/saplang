@@ -247,6 +247,14 @@ fn i32 ok_sizeof_value(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_compcode_unsupported(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = compcode { i32 y = 1; }; return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "compcode is not yet supported", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)28, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_alignof(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn u64 f() { return alignof(i32); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1028,6 +1036,7 @@ fn i32 main() {
     testing::add(suite, "err_anon_struct_local",    &err_anon_struct_local);
     testing::add(suite, "ok_sizeof",                &ok_sizeof);
     testing::add(suite, "ok_sizeof_value",          &ok_sizeof_value);
+    testing::add(suite, "err_compcode_unsupported", &err_compcode_unsupported);
     testing::add(suite, "ok_alignof",               &ok_alignof);
     testing::add(suite, "ok_char_lit",              &ok_char_lit);
     testing::add(suite, "ok_array_index",           &ok_array_index);

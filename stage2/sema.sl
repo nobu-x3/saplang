@@ -1823,7 +1823,10 @@ fn types::Type* synth_type_info(Sema* s, ast::TypeInfoNode* n) {
 }
 
 fn types::Type* synth_compcode(Sema* s, ast::CompCodeNode* n) {
-    return null; // TODO
+    u8[] msg = "compcode is not yet supported";
+    sema_report(s, n.h.src_pos, msg);
+    mark_error((ast::AstNode*)n);
+    return null;
 }
 
 
