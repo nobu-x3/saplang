@@ -17,6 +17,32 @@ fn i32 ok_struct_field(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_int_literal_adapts(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn u64 f(u8[] s) { u64 total = 0; for(u64 i = 0; i < s.len; i += 1) { if((i & 1) == 0) { total += 3; } } return total; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_small_int_literal_adapts(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i16 f(i16 a) { i16 b = a + 1; b -= 2; return b + -3; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_float_literal_adapts(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn f32 f(f32 p) { f32 q = p * 2.0; return q + -1.5; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_binop_mixed_sign(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(u64 a, i32 b) { return (i32)(a + b); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "operator is not defined for u64 and i32", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)47, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_fn_call(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 g(i32 a) { return a; }\nexport fn i32 f() { return g(3); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -810,6 +836,10 @@ fn i32 main() {
     testing::add(suite, "err_undefined_ident",      &err_undefined_ident);
     testing::add(suite, "err_unknown_type",         &err_unknown_type);
     testing::add(suite, "err_return_type_mismatch", &err_return_type_mismatch);
+    testing::add(suite, "ok_int_literal_adapts",    &ok_int_literal_adapts);
+    testing::add(suite, "ok_small_int_literal_adapts", &ok_small_int_literal_adapts);
+    testing::add(suite, "ok_float_literal_adapts",  &ok_float_literal_adapts);
+    testing::add(suite, "err_binop_mixed_sign",     &err_binop_mixed_sign);
     testing::add(suite, "ok_enum",                  &ok_enum);
     testing::add(suite, "ok_enum_default_base",     &ok_enum_default_base);
     testing::add(suite, "ok_union",                 &ok_union);

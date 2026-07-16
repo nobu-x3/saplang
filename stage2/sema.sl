@@ -1564,11 +1564,54 @@ fn types::Type* synth_unary(Sema* s, ast::UnaryOpNode* n) {
     return result;
 }
 
+fn bool is_numeric_literal_operand(ast::AstNode* e) {
+    if(e == null) { return false; }
+    if(e.h.kind == ast::AstKind::IntLit || e.h.kind == ast::AstKind::FloatLit) { return true; }
+    if(e.h.kind == ast::AstKind::UnaryOp) {
+        ast::UnaryOpNode* u = (ast::UnaryOpNode*)e;
+        if(u.op != token::TokenKind::Minus || u.operand == null) { return false; }
+        return u.operand.h.kind == ast::AstKind::IntLit || u.operand.h.kind == ast::AstKind::FloatLit;
+    }
+    return false;
+}
+
+fn bool retype_numeric_literal(ast::AstNode* e, types::Type* target) {
+    if(target == null) { return false; }
+    if(e.h.kind == ast::AstKind::IntLit) {
+        if(types::is_int(target) && types::int_lit_fits(((ast::IntLitNode*)e).value, false, target)) { e.h.ty = (void*)target; return true; }
+        return false;
+    }
+    if(e.h.kind == ast::AstKind::FloatLit) {
+        if(types::is_float(target)) { e.h.ty = (void*)target; return true; }
+        return false;
+    }
+    ast::UnaryOpNode* u = (ast::UnaryOpNode*)e;
+    if(u.operand.h.kind == ast::AstKind::IntLit) {
+        if(types::is_int(target) && types::int_lit_fits(((ast::IntLitNode*)u.operand).value, true, target)) { u.operand.h.ty = (void*)target; e.h.ty = (void*)target; return true; }
+        return false;
+    }
+    if(types::is_float(target)) { u.operand.h.ty = (void*)target; e.h.ty = (void*)target; return true; }
+    return false;
+}
+
+// A lone literal operand takes the other operand's concrete numeric type; both-or-neither literal is left alone.
+fn void adapt_binop_operands(ast::AstNode* lhs, types::Type** lt, ast::AstNode* rhs, types::Type** rt) {
+    bool lhs_lit = is_numeric_literal_operand(lhs);
+    bool rhs_lit = is_numeric_literal_operand(rhs);
+    if(lhs_lit == rhs_lit) { return; }
+    if(rhs_lit) {
+        if(retype_numeric_literal(rhs, *lt)) { *rt = *lt; }
+    } else {
+        if(retype_numeric_literal(lhs, *rt)) { *lt = *rt; }
+    }
+}
+
 fn types::Type* synth_binary(Sema* s, ast::BinaryOpNode* n) {
     types::Type* lt = synth(s, n.lhs);
     if(lt == null) { return null; }
     types::Type* rt = synth(s, n.rhs);
     if(rt == null) { return null; }
+    adapt_binop_operands(n.lhs, &lt, n.rhs, &rt);
     types::Type* result = op::binop_result_type(n.op, lt, rt);
     if(result == null) {
         diag_binop_mismatch(s, n.h.src_pos, n.op, lt, rt);
@@ -1986,6 +2029,7 @@ fn void stmt_assignment(Sema* s, ast::AssignmentNode* assign) {
     }
     types::Type* rt = synth(s, assign.rhs);
     if(rt == null) { return; }
+    adapt_binop_operands(assign.lhs, &lt, assign.rhs, &rt);
     if(op::binop_result_type(compound_binop(assign.op), lt, rt) == null) {
         diag_binop_mismatch(s, assign.h.src_pos, assign.op, lt, rt);
     }
