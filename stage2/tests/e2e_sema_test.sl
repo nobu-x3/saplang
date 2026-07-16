@@ -69,6 +69,17 @@ fn i32 ok_generic_template(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// CFG runs over both the monomorphized clone (from instantiated_fns) and the generic template itself.
+fn i32 ok_cfg_covers_generic(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { return id(5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_not_null(mod.instantiated_fns[0].cfg, m)) { return -3; }
+    ast::BlockNode* root = (ast::BlockNode*)mod.root_node;
+    if(!testing::expect_not_null(((ast::FnDeclNode*)root.stmts[0]).cfg, m)) { return -4; }
+    return 0;
+}
+
 fn i32 err_undefined_ident(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { return zzz; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1012,6 +1023,7 @@ fn i32 main() {
     testing::add(suite, "ok_fn_call",               &ok_fn_call);
     testing::add(suite, "ok_control_flow",          &ok_control_flow);
     testing::add(suite, "ok_generic_template",      &ok_generic_template);
+    testing::add(suite, "ok_cfg_covers_generic",    &ok_cfg_covers_generic);
     testing::add(suite, "err_undefined_ident",      &err_undefined_ident);
     testing::add(suite, "err_unknown_type",         &err_unknown_type);
     testing::add(suite, "err_return_type_mismatch", &err_return_type_mismatch);

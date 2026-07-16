@@ -607,16 +607,22 @@ export fn void check_unreachable(module::Module* m, ast::FnDeclNode* func) {
     }
 }
 
+fn void analyze_function(module::Module* m, ast::FnDeclNode* func) {
+    if(func.body == null) { return; }
+    func.cfg = (void*)build_cfg(m, func);
+    check_return_paths(m, func);
+    check_unreachable(m, func);
+}
+
 export fn void build_all_functions(module::Module* m) {
-    if(m.root_node == null) { return; }
-    ast::BlockNode* global_block = (ast::BlockNode*)m.root_node;
-    for(u64 stmt_index = 0; stmt_index < global_block.stmts.len; stmt_index += 1) {
-        ast::AstNode* node = global_block.stmts[stmt_index];
-        if(node.h.kind != ast::AstKind::FnDecl) { continue; }
-        ast::FnDeclNode* func = (ast::FnDeclNode*)node;
-        if(func.body == null) { continue; }
-        func.cfg = (void*)build_cfg(m, func);
-        check_return_paths(m, func);
-        check_unreachable(m, func);
+    if(m.root_node != null) {
+        ast::BlockNode* global_block = (ast::BlockNode*)m.root_node;
+        for(u64 stmt_index = 0; stmt_index < global_block.stmts.len; stmt_index += 1) {
+            ast::AstNode* node = global_block.stmts[stmt_index];
+            if(node.h.kind == ast::AstKind::FnDecl) { analyze_function(m, (ast::FnDeclNode*)node); }
+        }
+    }
+    for(u64 clone_index = 0; clone_index < m.instantiated_fns.len; clone_index += 1) {
+        analyze_function(m, m.instantiated_fns[clone_index]);
     }
 }
