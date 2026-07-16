@@ -460,12 +460,29 @@ fn value::Value eval_assignment(Interp* ip, ast::AssignmentNode* n) {
     if(rhs.kind == (u16)value::ValueKind::Error) { return rhs; }
     value::Value newval = rhs;
     if(n.op != token::TokenKind::Eq) {
-        value::Value combined = op::binop_eval(compound_base(n.op), *slot, rhs);
+        value::Value combined = eval_binop_checked(ip, compound_base(n.op), *slot, rhs, n.h.src_pos);
         if(combined.kind == (u16)value::ValueKind::Error) { return combined; }
         newval = combined;
     }
     *slot = newval;
     return value::val_void();
+}
+
+// op.sl can only signal an operator failure as val_error; translate it to a specific comptime diagnostic here.
+fn value::Value eval_binop_checked(Interp* ip, token::TokenKind op, value::Value l, value::Value r, u32 pos) {
+    if((op == token::TokenKind::Slash || op == token::TokenKind::Percent) && r.kind == (u16)value::ValueKind::Int && r.data.i == 0) {
+        diag::report(&ip.m.diag, ip.m.arena, pos, "division by zero at comptime");
+        return value::val_error();
+    }
+    if((op == token::TokenKind::LShift || op == token::TokenKind::RShift) && r.kind == (u16)value::ValueKind::Int && (r.data.i < 0 || r.data.i >= 64)) {
+        diag::report(&ip.m.diag, ip.m.arena, pos, "shift amount out of range at comptime");
+        return value::val_error();
+    }
+    value::Value result = op::binop_eval(op, l, r);
+    if(result.kind == (u16)value::ValueKind::Error) {
+        diag::report(&ip.m.diag, ip.m.arena, pos, "operator cannot be evaluated at comptime");
+    }
+    return result;
 }
 
 fn value::Value eval_binary(Interp* ip, ast::BinaryOpNode* n) {
@@ -477,13 +494,17 @@ fn value::Value eval_binary(Interp* ip, ast::BinaryOpNode* n) {
     }
     value::Value r = eval(ip, n.rhs);
     if(r.kind == (u16)value::ValueKind::Error) { return r; }
-    return op::binop_eval(n.op, l, r);
+    return eval_binop_checked(ip, n.op, l, r, n.h.src_pos);
 }
 
 fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
     value::Value v = eval(ip, n.operand);
     if(v.kind == (u16)value::ValueKind::Error) { return v; }
-    return op::unaryop_eval(n.op, v);
+    value::Value result = op::unaryop_eval(n.op, v);
+    if(result.kind == (u16)value::ValueKind::Error) {
+        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "operator cannot be evaluated at comptime");
+    }
+    return result;
 }
 
 // Narrowing does not wrap to the target width; comptime rarely relies on it.

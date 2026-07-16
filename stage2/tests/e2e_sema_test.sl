@@ -483,6 +483,21 @@ fn i32 err_comptime_and_evaluates_rhs(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_comptime_div_by_zero(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { i32 z = 0; i32 y = 1 / z; }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "division by zero at comptime", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)31, m)) { return -3; }
+    return 0;
+}
+
+fn i32 err_comptime_shift_range(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { i32 s = 99; i32 y = 1 << s; }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "shift amount out of range at comptime", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comprun_comperror(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { comperror(\"boom\"); } return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1002,6 +1017,8 @@ fn i32 main() {
     testing::add(suite, "ok_comptime_and_shortcircuit", &ok_comptime_and_shortcircuit);
     testing::add(suite, "ok_comptime_or_shortcircuit",  &ok_comptime_or_shortcircuit);
     testing::add(suite, "err_comptime_and_evaluates_rhs", &err_comptime_and_evaluates_rhs);
+    testing::add(suite, "err_comptime_div_by_zero",     &err_comptime_div_by_zero);
+    testing::add(suite, "err_comptime_shift_range",     &err_comptime_shift_range);
     testing::add(suite, "err_comprun_comperror",     &err_comprun_comperror);
     testing::add(suite, "warn_comprun_compwarning",  &warn_comprun_compwarning);
     testing::add(suite, "err_comprun_var_driven",    &err_comprun_var_driven);
