@@ -148,7 +148,7 @@ export fn void discover(Compiler* c) {
     }
 }
 
-// Unreadable is an error; an empty file is valid (imports get their check in resolve_import).
+// Unreadable is an error; an empty file is valid (imports get their check in resolve_import_source).
 fn void add_entry_module(Compiler* c, u8[] path) {
     u8[] empty = {null, 0};
     module::Module* m = new_source_module(c, interner::intern(path_stem(path)), empty);
@@ -191,13 +191,14 @@ fn void discover_imports(Compiler* c, module::Module* m) {
             symbol::Symbol* import_name = toks[token_index + 1].data.sym;
             module::Module* dep = find_module(c, import_name);
             if(dep == null) {
-                u8[] path = resolve_import(c, import_name);
-                if(path.len == 0) {
+                bool found = false;
+                u8[] src = resolve_import_source(c, import_name, &found);
+                if(!found) {
                     diag::report(&m.diag, m.arena, toks[token_index].src_pos, "module not found");
                     token_index += 3;
                     continue;
                 }
-                dep = new_source_module(c, import_name, read_file(c, path));
+                dep = new_source_module(c, import_name, src);
                 add_module(c, dep);
             }
             import_list[filled] = dep;
@@ -221,20 +222,23 @@ fn module::Module* find_module(Compiler* c, symbol::Symbol* name) {
     return null;
 }
 
-// Search import paths for <name>.<target>.sl (if a target is set), then <name>.sl.
-fn u8[] resolve_import(Compiler* c, symbol::Symbol* name) {
+// Search import paths for <name>.<target>.sl (if a target is set), then <name>.sl; read the first that opens.
+// Reading at resolution time (one open per candidate) means a module is only created from source we actually read.
+fn u8[] resolve_import_source(Compiler* c, symbol::Symbol* name, bool* found) {
     u8[] name_bytes = interner::symbol_str(name);
+    u8[] empty = {null, 0};
     for(u64 path_index = 0; path_index < c.import_paths.len; path_index += 1) {
         if(c.target.len > 0) {
             u8[] platform = join_filename(c, c.import_paths[path_index], name_bytes, c.target);
-            if(exists(platform)) { return platform; }
+            u8[] bytes = open_and_read(c, platform, found);
+            if(*found) { return bytes; }
         }
-        u8[] empty = {null, 0};
         u8[] candidate = join_filename(c, c.import_paths[path_index], name_bytes, empty);
-        if(exists(candidate)) { return candidate; }
+        u8[] bytes = open_and_read(c, candidate, found);
+        if(*found) { return bytes; }
     }
-    u8[] none = {null, 0};
-    return none;
+    *found = false;
+    return empty;
 }
 
 fn u8[] join_filename(Compiler* c, u8[] dir, u8[] name, u8[] target) {
@@ -254,19 +258,14 @@ fn u8[] join_filename(Compiler* c, u8[] dir, u8[] name, u8[] target) {
     return result;
 }
 
-fn bool exists(u8[] path) {
-    io::File f = io::open(path, "r");
-    if(f.fp == null) { return false; }
-    io::close(&f);
-    return true;
-}
-
-fn u8[] read_file(Compiler* c, u8[] path) {
+// *found is whether the file could be opened; the io API can't distinguish absent from unreadable, so both are "not found".
+fn u8[] open_and_read(Compiler* c, u8[] path, bool* found) {
     io::File f = io::open(path, "r");
     u8[] empty = {null, 0};
-    if(f.fp == null) { return empty; }
+    if(f.fp == null) { *found = false; return empty; }
     u8[] bytes = io::read_all(&f, c.arena);
     io::close(&f);
+    *found = true;
     return bytes;
 }
 
