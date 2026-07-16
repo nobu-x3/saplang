@@ -69,6 +69,9 @@ export fn* void(module::Module*, ast::CompRunNode*) run_comprun_hook;
 // Evaluates an in-function compinsert and returns the generated statements for the block walk to splice in.
 export fn* ast::AstNode*[](module::Module*, ast::CompInsertNode*) run_compinsert_stmts_hook;
 
+// Folds a const-expression array size to u64 through the interpreter; false + a diagnostic if it isn't a comptime integer.
+export fn* bool(module::Module*, ast::AstNode*, u64*) eval_const_u64_hook;
+
 
 export union DeclData {
     ast::AstNode*       node;
@@ -968,12 +971,21 @@ fn ast::UnionDeclNode* materialize_extern_union(Sema* s, ast::ExternUnionDeclNod
     return ud;
 }
 
-// Only int literals until the comptime interpreter lands.
+// An int literal folds directly; any other size expression is synthesized and, if constant, folded through the interpreter.
 export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
     if(expr == null) { return 0; }
     if(expr.h.kind == ast::AstKind::IntLit) {
         return ((ast::IntLitNode*)expr).value;
     }
+    if(eval_const_u64_hook == null) { return 0; }
+    types::Type* t = synth(s, expr);
+    if(t == null) { return 0; }
+    if(!expr_has_flag(expr, ast::AstFlags::ConstExpr)) {
+        diag_array_size_not_const(s, expr.h.src_pos);
+        return 0;
+    }
+    u64 out = 0;
+    if(eval_const_u64_hook(s.m, expr, &out)) { return out; }
     return 0;
 }
 
@@ -2246,6 +2258,12 @@ export fn void diag_index_not_int(Sema* s, u32 src_pos, types::Type* got) {
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "index must be an integer type, found %.*s", (i32)got_str.len, (i8*)got_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "array size must be a compile-time constant". Used by eval_const_u64.
+export fn void diag_array_size_not_const(Sema* s, u32 src_pos) {
+    u8[] msg = "array size must be a compile-time constant";
+    sema_report(s, src_pos, msg);
 }
 
 // "cannot call value of type %T". Used by synth_call on a non-function callee.

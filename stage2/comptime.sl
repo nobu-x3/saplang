@@ -1851,9 +1851,22 @@ fn void run_comprun(module::Module* m, ast::CompRunNode* n) {
     eval_comprun(&ip, n);
 }
 
+fn bool const_eval_u64(module::Module* m, ast::AstNode* expr, u64* out) {
+    Interp ip = new_interp(m);
+    value::Value v = eval(&ip, expr);
+    if(v.kind == (u16)value::ValueKind::Int) {
+        if(v.data.i < 0) { diag::report(&m.diag, m.arena, expr.h.src_pos, "array size cannot be negative"); return false; }
+        *out = (u64)v.data.i;
+        return true;
+    }
+    if(v.kind != (u16)value::ValueKind::Error) { diag::report(&m.diag, m.arena, expr.h.src_pos, "array size must be a comptime integer"); }
+    return false;
+}
+
 export fn void install_hooks() {
     sema::resolve_generic_call_hook = &resolve_generic_call;
     sema::resolve_generic_explicit_hook = &resolve_generic_explicit;
     sema::run_comprun_hook = &run_comprun;
     sema::run_compinsert_stmts_hook = &run_compinsert_stmts;
+    sema::eval_const_u64_hook = &const_eval_u64;
 }

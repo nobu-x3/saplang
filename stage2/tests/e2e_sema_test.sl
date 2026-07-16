@@ -516,6 +516,20 @@ fn i32 ok_const_global_array_dim(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_const_array_size_folds(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "const u64 N = 3;\ncomprun { if(sizeof(u8[N * 2]) != (u64)6) { comperror(\"wrong array size\"); } }\nexport fn i32 f() { u8[N] buf; buf[0] = 1; return (i32)buf[0]; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_array_size_not_const(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32 n) { i32[n] arr; return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "array size must be a compile-time constant", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)29, m)) { return -3; }
+    return 0;
+}
+
 // A const global's initializer is folded at comptime and drives a comprun condition.
 fn i32 err_const_global_in_comprun(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "const i32 G = 7; export fn i32 f() { comprun { if(G == 7) { comperror(\"seven\"); } } return 0; }");
@@ -973,6 +987,8 @@ fn i32 main() {
     testing::add(suite, "err_comprun_while",         &err_comprun_while);
     testing::add(suite, "err_comprun_calls_fn",      &err_comprun_calls_fn);
     testing::add(suite, "ok_const_global_array_dim", &ok_const_global_array_dim);
+    testing::add(suite, "ok_const_array_size_folds", &ok_const_array_size_folds);
+    testing::add(suite, "err_array_size_not_const", &err_array_size_not_const);
     testing::add(suite, "err_const_global_in_comprun", &err_const_global_in_comprun);
     testing::add(suite, "err_const_chain_in_comprun", &err_const_chain_in_comprun);
     testing::add(suite, "err_bad_const_init",        &err_bad_const_init);
