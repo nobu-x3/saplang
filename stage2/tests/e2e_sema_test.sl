@@ -229,6 +229,20 @@ fn i32 ok_array_index(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_index_any_int(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32[8] arr, i32 lo, u8 j) { i32[] s = arr[lo..lo + 4]; return arr[j] + s[j]; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_index_not_int(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32[4] arr, bool b) { return arr[b]; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "index must be an integer type, found bool", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)49, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_while(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 i = 0; while(i < 3) { i = i + 1; } return i; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -895,6 +909,8 @@ fn i32 main() {
     testing::add(suite, "ok_alignof",               &ok_alignof);
     testing::add(suite, "ok_char_lit",              &ok_char_lit);
     testing::add(suite, "ok_array_index",           &ok_array_index);
+    testing::add(suite, "ok_index_any_int",         &ok_index_any_int);
+    testing::add(suite, "err_index_not_int",        &err_index_not_int);
     testing::add(suite, "ok_while",                 &ok_while);
     testing::add(suite, "ok_const_global",          &ok_const_global);
     testing::add(suite, "ok_nested_field",          &ok_nested_field);

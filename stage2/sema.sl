@@ -1262,6 +1262,14 @@ fn types::Type* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
     return field_ty;
 }
 
+fn bool check_index(Sema* s, ast::AstNode* index) {
+    types::Type* index_type = synth(s, index);
+    if(index_type == null) { return false; }
+    if(types::is_int(index_type)) { return true; }
+    diag_index_not_int(s, index.h.src_pos, index_type);
+    return false;
+}
+
 fn types::Type* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
     types::Type* base = synth(s, n.base);
     if(base == null) { return null; }
@@ -1275,7 +1283,7 @@ fn types::Type* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
         mark_error((ast::AstNode*)n);
         return null;
     }
-    if(!check(s, n.index, types::prim_u64())) {
+    if(!check_index(s, n.index)) {
         mark_error((ast::AstNode*)n);
         return null;
     }
@@ -1301,8 +1309,8 @@ fn types::Type* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
         mark_error((ast::AstNode*)n);
         return null;
     }
-    if(n.lo != null && !check(s, n.lo, types::prim_u64())) { mark_error((ast::AstNode*)n); return null; }
-    if(n.hi != null && !check(s, n.hi, types::prim_u64())) { mark_error((ast::AstNode*)n); return null; }
+    if(n.lo != null && !check_index(s, n.lo)) { mark_error((ast::AstNode*)n); return null; }
+    if(n.hi != null && !check_index(s, n.hi)) { mark_error((ast::AstNode*)n); return null; }
     types::Type* result = types::intern_slice(elem);
     set_expr((ast::AstNode*)n, result, 0);
     return result;
@@ -2222,6 +2230,14 @@ export fn void diag_not_indexable(Sema* s, u32 src_pos, types::Type* got) {
     u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot index %.*s", (i32)got_str.len, (i8*)got_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "index must be an integer type, found %T". Used by check_index.
+export fn void diag_index_not_int(Sema* s, u32 src_pos, types::Type* got) {
+    u8[] got_str = types_print::print_to_arena(got, balloc(s));
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "index must be an integer type, found %.*s", (i32)got_str.len, (i8*)got_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 

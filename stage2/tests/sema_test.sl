@@ -3444,7 +3444,7 @@ fn i32 index_bad_index_type(arena::Arena* a, u8[] m) {
     ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_bool_lit(a, true, 5), 0);
     types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
-    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected u64, found bool", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "index must be an integer type, found bool", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
     return 0;
 }
@@ -3546,7 +3546,7 @@ fn i32 slice_range_bad_bound(arena::Arena* a, u8[] m) {
     ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_bool_lit(a, true, 5), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
     types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
-    if(!testing::expect_eq(mm.diag.entries[0].msg, "expected u64, found bool", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "index must be an integer type, found bool", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
     return 0;
 }
