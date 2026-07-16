@@ -471,6 +471,10 @@ fn value::Value eval_assignment(Interp* ip, ast::AssignmentNode* n) {
 fn value::Value eval_binary(Interp* ip, ast::BinaryOpNode* n) {
     value::Value l = eval(ip, n.lhs);
     if(l.kind == (u16)value::ValueKind::Error) { return l; }
+    if(l.kind == (u16)value::ValueKind::Bool) {
+        if(n.op == token::TokenKind::AmpAmp && !l.data.b) { return value::val_bool(false); }
+        if(n.op == token::TokenKind::PipePipe && l.data.b) { return value::val_bool(true); }
+    }
     value::Value r = eval(ip, n.rhs);
     if(r.kind == (u16)value::ValueKind::Error) { return r; }
     return op::binop_eval(n.op, l, r);

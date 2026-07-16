@@ -464,6 +464,25 @@ fn i32 ok_comprun_local(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_comptime_and_shortcircuit(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn bool boom() { comperror(\"rhs ran\"); return true; }\ncomprun { if(false && boom()) { } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_comptime_or_shortcircuit(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn bool boom() { comperror(\"rhs ran\"); return true; }\ncomprun { if(true || boom()) { } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_comptime_and_evaluates_rhs(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn bool boom() { comperror(\"rhs ran\"); return true; }\ncomprun { if(true && boom()) { } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "rhs ran", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comprun_comperror(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { comperror(\"boom\"); } return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -980,6 +999,9 @@ fn i32 main() {
     testing::add(suite, "ok_typeof_var_type",       &ok_typeof_var_type);
     testing::add(suite, "err_typeof_resolves_operand_type", &err_typeof_resolves_operand_type);
     testing::add(suite, "ok_comprun_local",          &ok_comprun_local);
+    testing::add(suite, "ok_comptime_and_shortcircuit", &ok_comptime_and_shortcircuit);
+    testing::add(suite, "ok_comptime_or_shortcircuit",  &ok_comptime_or_shortcircuit);
+    testing::add(suite, "err_comptime_and_evaluates_rhs", &err_comptime_and_evaluates_rhs);
     testing::add(suite, "err_comprun_comperror",     &err_comprun_comperror);
     testing::add(suite, "warn_comprun_compwarning",  &warn_comprun_compwarning);
     testing::add(suite, "err_comprun_var_driven",    &err_comprun_var_driven);
