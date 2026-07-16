@@ -1623,6 +1623,13 @@ fn types::Type* synth_cast(Sema* s, ast::CastNode* n) {
 fn types::Type* synth_unary(Sema* s, ast::UnaryOpNode* n) {
     types::Type* operand = synth(s, n.operand);
     if(operand == null) { return null; }
+    // A function name is not an l-value, but `&fn` is the function pointer itself, like bare `fn`.
+    if(n.op == token::TokenKind::Amp && operand.kind == types::TypeKind::FnPtr && !expr_has_flag(n.operand, ast::AstFlags::LValue)) {
+        u16 fn_flags = 0;
+        if(expr_has_flag(n.operand, ast::AstFlags::ConstExpr)) { fn_flags = (u16)ast::AstFlags::ConstExpr; }
+        set_expr((ast::AstNode*)n, operand, fn_flags);
+        return operand;
+    }
     if(n.op == token::TokenKind::Amp && !expr_has_flag(n.operand, ast::AstFlags::LValue)) {
         diag_not_lvalue(s, n.operand.h.src_pos);
         mark_error((ast::AstNode*)n);

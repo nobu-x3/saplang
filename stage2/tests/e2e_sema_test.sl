@@ -267,6 +267,26 @@ fn i32 ok_fn_ptr(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_addr_of_fn(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 a) { return a; }\nexport fn i32 f() { fn* i32(i32) p = &g; return p(5); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_addr_of_fn_arg(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn void job() { } fn void run(fn* void() cb) { cb(); }\nexport fn i32 f() { run(&job); return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_addr_of_non_lvalue(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { return &5; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot take the address of a non-lvalue", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)28, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_extern_block(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "extern \"c\" { fn i32 puts(u8* s); }\nexport fn i32 f() { return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -915,6 +935,9 @@ fn i32 main() {
     testing::add(suite, "ok_const_global",          &ok_const_global);
     testing::add(suite, "ok_nested_field",          &ok_nested_field);
     testing::add(suite, "ok_fn_ptr",                &ok_fn_ptr);
+    testing::add(suite, "ok_addr_of_fn",            &ok_addr_of_fn);
+    testing::add(suite, "ok_addr_of_fn_arg",        &ok_addr_of_fn_arg);
+    testing::add(suite, "err_addr_of_non_lvalue",   &err_addr_of_non_lvalue);
     testing::add(suite, "ok_extern_block",          &ok_extern_block);
     testing::add(suite, "ok_extern_fn_call",        &ok_extern_fn_call);
     testing::add(suite, "ok_extern_struct_ptr",     &ok_extern_struct_ptr);
