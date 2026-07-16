@@ -227,6 +227,12 @@ fn i32 ok_sizeof(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_sizeof_value(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { i32 x; if(sizeof(x) != (u64)4) { comperror(\"bad\"); } }\nexport fn u64 f(i64 v) { return sizeof(v); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 ok_alignof(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn u64 f() { return alignof(i32); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1005,6 +1011,7 @@ fn i32 main() {
     testing::add(suite, "ok_anon_struct",           &ok_anon_struct);
     testing::add(suite, "err_anon_struct_local",    &err_anon_struct_local);
     testing::add(suite, "ok_sizeof",                &ok_sizeof);
+    testing::add(suite, "ok_sizeof_value",          &ok_sizeof_value);
     testing::add(suite, "ok_alignof",               &ok_alignof);
     testing::add(suite, "ok_char_lit",              &ok_char_lit);
     testing::add(suite, "ok_array_index",           &ok_array_index);

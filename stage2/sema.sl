@@ -1744,6 +1744,15 @@ fn types::Type* synth_alignof(Sema* s, ast::AlignofNode* n) {
 // The argument is either a type expression or a value expression to take the type of.
 fn types::Type* sizeof_operand_type(Sema* s, ast::AstNode* arg) {
     if(arg == null) { return null; }
+    // The parser speculatively types a bare name as a NamedType; sizeof(value) resolves it as an expression instead.
+    // A pre-bound h.ty means comptime substitution already fixed the type (e.g. sizeof(T) in a generic) — leave it.
+    if(arg.h.kind == ast::AstKind::NamedType && arg.h.ty == null && ((ast::TypeNamedNode*)arg).namespace == null) {
+        Decl* d = scope_lookup(s.scope, ((ast::TypeNamedNode*)arg).name);
+        if(d != null && (decl_is_lvalue(d) || decl_is_const_expr(d))) {
+            arg.h.ty = (void*)d.ty;
+            return d.ty;
+        }
+    }
     if(ast::is_type((u16)arg.h.kind) || arg.h.kind == ast::AstKind::Typeof) { return resolve_type(s, arg); }
     return synth(s, arg);
 }
