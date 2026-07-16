@@ -43,6 +43,14 @@ fn i32 err_binop_mixed_sign(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_compound_assign_narrows(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i16 x, i32 big) { x += big; return (i32)x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expected i16, found i32", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)39, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_fn_call(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 g(i32 a) { return a; }\nexport fn i32 f() { return g(3); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -967,6 +975,7 @@ fn i32 main() {
     testing::add(suite, "ok_small_int_literal_adapts", &ok_small_int_literal_adapts);
     testing::add(suite, "ok_float_literal_adapts",  &ok_float_literal_adapts);
     testing::add(suite, "err_binop_mixed_sign",     &err_binop_mixed_sign);
+    testing::add(suite, "err_compound_assign_narrows", &err_compound_assign_narrows);
     testing::add(suite, "ok_enum",                  &ok_enum);
     testing::add(suite, "ok_enum_default_base",     &ok_enum_default_base);
     testing::add(suite, "ok_union",                 &ok_union);

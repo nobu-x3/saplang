@@ -2129,8 +2129,13 @@ fn void stmt_assignment(Sema* s, ast::AssignmentNode* assign) {
     types::Type* rt = synth(s, assign.rhs);
     if(rt == null) { return; }
     adapt_binop_operands(assign.lhs, &lt, assign.rhs, &rt);
-    if(op::binop_result_type(compound_binop(assign.op), lt, rt) == null) {
+    types::Type* result = op::binop_result_type(compound_binop(assign.op), lt, rt);
+    if(result == null) {
         diag_binop_mismatch(s, assign.h.src_pos, assign.op, lt, rt);
+        return;
+    }
+    if(!types::is_convertible(result, lt)) {
+        diag_type_mismatch(s, assign.rhs.h.src_pos, result, lt);
     }
 }
 
