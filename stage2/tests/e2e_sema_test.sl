@@ -96,6 +96,14 @@ fn i32 err_unknown_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_duplicate_param(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 x, i32 x) { return x; }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "duplicate declaration of x", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)16, m)) { return -3; }
+    return 0;
+}
+
 fn i32 err_return_type_mismatch(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { return true; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1033,6 +1041,7 @@ fn i32 main() {
     testing::add(suite, "ok_cfg_covers_generic",    &ok_cfg_covers_generic);
     testing::add(suite, "err_undefined_ident",      &err_undefined_ident);
     testing::add(suite, "err_unknown_type",         &err_unknown_type);
+    testing::add(suite, "err_duplicate_param",      &err_duplicate_param);
     testing::add(suite, "err_return_type_mismatch", &err_return_type_mismatch);
     testing::add(suite, "ok_int_literal_adapts",    &ok_int_literal_adapts);
     testing::add(suite, "ok_small_int_literal_adapts", &ok_small_int_literal_adapts);

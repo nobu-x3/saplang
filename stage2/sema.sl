@@ -645,7 +645,7 @@ fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
     if(func.body == null) { return; }
     Scope* fn_scope = scope_new(balloc(s), (Scope*)s.m.global_scope, 16);
     for(u64 i = 0; i < func.params.len; i += 1) {
-        Decl* param_decl = register_sym(s, fn_scope, func.params[i].name, false, (u16)DeclKind::Param, func.h.src_pos);
+        Decl* param_decl = register_sym(s, fn_scope, func.params[i].name, false, (u16)DeclKind::Param, func.params[i].src_pos);
         if(param_decl != null) {
             param_decl.ty = (types::Type*)func.params[i].resolved_type;
             param_decl.data.param = &func.params[i];
