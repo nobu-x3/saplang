@@ -498,6 +498,13 @@ fn i32 err_comptime_shift_range(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// {1, .c = 3, 2}: the trailing positional fills b (the next positional slot), not c.
+fn i32 ok_comptime_struct_lit_mixed(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 a; i32 b; i32 c; }\ncomprun { P p = {1, .c = 3, 2}; if(p.a != 1) { comperror(\"a\"); } if(p.b != 2) { comperror(\"b\"); } if(p.c != 3) { comperror(\"c\"); } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 err_comprun_comperror(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { comprun { comperror(\"boom\"); } return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1019,6 +1026,7 @@ fn i32 main() {
     testing::add(suite, "err_comptime_and_evaluates_rhs", &err_comptime_and_evaluates_rhs);
     testing::add(suite, "err_comptime_div_by_zero",     &err_comptime_div_by_zero);
     testing::add(suite, "err_comptime_shift_range",     &err_comptime_shift_range);
+    testing::add(suite, "ok_comptime_struct_lit_mixed", &ok_comptime_struct_lit_mixed);
     testing::add(suite, "err_comprun_comperror",     &err_comprun_comperror);
     testing::add(suite, "warn_comprun_compwarning",  &warn_comprun_compwarning);
     testing::add(suite, "err_comprun_var_driven",    &err_comprun_var_driven);

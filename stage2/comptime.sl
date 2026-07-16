@@ -616,9 +616,11 @@ fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
     fields.ptr = (value::Value*)arena::alloc(ip.m.arena, field_count * sizeof(value::Value));
     fields.len = field_count;
     for(u64 field_index = 0; field_index < field_count; field_index += 1) { fields[field_index] = value::val_int(0, null); }
+    u64 positional = 0;
     for(u64 init_index = 0; init_index < n.inits.len; init_index += 1) {
-        u64 target = init_index;
+        u64 target = positional;
         if(n.inits[init_index].name != null) { target = struct_field_index(sd, n.inits[init_index].name); }
+        else { positional += 1; }
         value::Value fv = eval(ip, n.inits[init_index].value);
         if(fv.kind == (u16)value::ValueKind::Error) { return fv; }
         if(target < field_count) { fields[target] = fv; }
