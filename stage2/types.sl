@@ -609,7 +609,8 @@ export fn bool is_comptime_type(Type* t) {
 export fn Type* enum_base_type(Type* type) {
     if(type.kind != TypeKind::Enum) { return null; }
     ast::EnumDeclNode* decl = (ast::EnumDeclNode*)type.data.enum_decl;
-    if(decl == null || decl.base_type == null) { return null; }
+    if(decl == null) { return null; }
+    if(decl.base_type == null) { return prim_i32(); }   // §2.7: an omitted base type defaults to i32
     return (Type*)decl.base_type.h.ty;
 }
 

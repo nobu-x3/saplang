@@ -71,6 +71,12 @@ fn i32 ok_union(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_enum_default_base(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum E { A, B }\ncomprun { if(sizeof(E) != (u64)4) { comperror(\"enum default base is not i32-sized\"); } }\nexport fn i32 f() { i32 c = E::B; return c + (i32)E::A; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 ok_slice(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn u64 f() { i32[3] arr; i32[] s = arr[0..2]; return s.len; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -805,6 +811,7 @@ fn i32 main() {
     testing::add(suite, "err_unknown_type",         &err_unknown_type);
     testing::add(suite, "err_return_type_mismatch", &err_return_type_mismatch);
     testing::add(suite, "ok_enum",                  &ok_enum);
+    testing::add(suite, "ok_enum_default_base",     &ok_enum_default_base);
     testing::add(suite, "ok_union",                 &ok_union);
     testing::add(suite, "ok_slice",                 &ok_slice);
     testing::add(suite, "ok_switch",                &ok_switch);

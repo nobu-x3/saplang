@@ -910,10 +910,10 @@ fn i32 enum_base_type_distinct_decls_distinct_bases(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 enum_base_type_null_base_returns_null(arena::Arena* a, u8[] m) {
+fn i32 enum_base_type_null_base_defaults_i32(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     types::Type* e = types::intern_enum((void*)fake_enum_decl_null_base(a));
-    if(!testing::expect_eq((void*)types::enum_base_type(e), null, m)) { return -1; }
+    if(!testing::expect_eq((void*)types::enum_base_type(e), (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
 
@@ -2177,11 +2177,11 @@ fn i32 layout_enum_u64_base(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 layout_enum_null_base_zero(arena::Arena* a, u8[] m) {
+fn i32 layout_enum_null_base_defaults_i32(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     types::Type* e = types::intern_enum((void*)fake_enum_decl_null_base(a));
-    if(!testing::expect_eq(types::size_of(null, e), (u32)0, m)) { return -1; }
-    if(!testing::expect_eq(types::align_of(null, e), (u32)1, m)) { return -2; }
+    if(!testing::expect_eq(types::size_of(null, e), (u32)4, m)) { return -1; }
+    if(!testing::expect_eq(types::align_of(null, e), (u32)4, m)) { return -2; }
     return 0;
 }
 
@@ -3385,7 +3385,7 @@ fn i32 main() {
     testing::add(helpers, "enum_base_type_returns_set_base_u8",       &enum_base_type_returns_set_base_u8);
     testing::add(helpers, "enum_base_type_stable_across_calls",       &enum_base_type_stable_across_calls);
     testing::add(helpers, "enum_base_type_distinct_decls_distinct_bases", &enum_base_type_distinct_decls_distinct_bases);
-    testing::add(helpers, "enum_base_type_null_base_returns_null",    &enum_base_type_null_base_returns_null);
+    testing::add(helpers, "enum_base_type_null_base_defaults_i32",    &enum_base_type_null_base_defaults_i32);
 
     testing::add(helpers, "int_max_per_signed_primitive",     &int_max_per_signed_primitive);
     testing::add(helpers, "int_max_per_unsigned_primitive",   &int_max_per_unsigned_primitive);
@@ -3567,7 +3567,7 @@ fn i32 main() {
     testing::add(layout, "layout_enum_i32_base",         &layout_enum_i32_base);
     testing::add(layout, "layout_enum_i8_base",          &layout_enum_i8_base);
     testing::add(layout, "layout_enum_u64_base",         &layout_enum_u64_base);
-    testing::add(layout, "layout_enum_null_base_zero",   &layout_enum_null_base_zero);
+    testing::add(layout, "layout_enum_null_base_defaults_i32",   &layout_enum_null_base_defaults_i32);
     testing::add(layout, "layout_enum_caches_after_first", &layout_enum_caches_after_first);
 
     testing::add(layout, "layout_comptime_zero", &layout_comptime_zero);
