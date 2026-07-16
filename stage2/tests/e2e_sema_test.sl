@@ -197,6 +197,14 @@ fn i32 err_lit_overflow(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_lit_wrong_target(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32* p) { p = 5; return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expected i32*, found i32", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)30, m)) { return -3; }
+    return 0;
+}
+
 fn i32 err_missing_return(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1028,6 +1036,7 @@ fn i32 main() {
     testing::add(suite, "ok_neg_float_lit",         &ok_neg_float_lit);
     testing::add(suite, "ok_pointer",               &ok_pointer);
     testing::add(suite, "err_lit_overflow",         &err_lit_overflow);
+    testing::add(suite, "err_lit_wrong_target",     &err_lit_wrong_target);
     testing::add(suite, "err_missing_return",       &err_missing_return);
     testing::add(suite, "err_break_outside_loop",   &err_break_outside_loop);
     testing::add(suite, "err_unknown_field",        &err_unknown_field);

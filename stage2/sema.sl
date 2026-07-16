@@ -1839,12 +1839,24 @@ export fn bool check_int_lit(Sema* s, ast::IntLitNode* n, types::Type* expected)
     return check_int_lit_signed(s, n, expected, false);
 }
 
+fn types::Type* int_lit_natural_type(u64 value, bool negative) {
+    types::Type* t = types::prim_i32();
+    if(!types::int_lit_fits(value, negative, t)) { t = types::prim_i64(); }
+    if(!negative && !types::int_lit_fits(value, false, t)) { t = types::prim_u64(); }
+    return t;
+}
+
 fn bool check_int_lit_signed(Sema* s, ast::IntLitNode* n, types::Type* expected, bool negative) {
-    if(types::is_int(expected) && types::int_lit_fits(n.value, negative, expected)) {
-        n.h.ty = (void*)expected;
-        return true;
+    if(types::is_int(expected)) {
+        if(types::int_lit_fits(n.value, negative, expected)) {
+            n.h.ty = (void*)expected;
+            return true;
+        }
+        diag_lit_overflow(s, n.h.src_pos, n.value, expected);
+        mark_error((ast::AstNode*)n);
+        return false;
     }
-    diag_lit_overflow(s, n.h.src_pos, n.value, expected);
+    diag_type_mismatch(s, n.h.src_pos, int_lit_natural_type(n.value, negative), expected);
     mark_error((ast::AstNode*)n);
     return false;
 }
