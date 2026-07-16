@@ -1908,7 +1908,9 @@ fn i32 cn_extern_block_items_registered(arena::Arena* a, u8[] m) {
     if(!testing::expect_eq(dm.kind, (u16)sema::DeclKind::Node, m)) { return -2; }
     if(!testing::expect_eq((void*)dm.data.node, (void*)efn, m)) { return -3; }
     if(!testing::expect_not_null((void*)df, m)) { return -4; }
-    if(!testing::expect_eq((void*)df.data.node, (void*)estruct, m)) { return -5; }
+    if(!testing::expect_not_null((void*)df.data.node, m)) { return -5; }
+    if(!testing::expect_eq((u16)df.data.node.h.kind, (u16)ast::AstKind::StructDecl, m)) { return -6; }
+    if(!testing::expect_eq((void*)((ast::StructDeclNode*)df.data.node).name, (void*)file_s, m)) { return -7; }
     return 0;
 }
 

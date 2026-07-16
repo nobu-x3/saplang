@@ -196,12 +196,12 @@ fn void collect_name_for_decl(Sema* s, ast::AstNode* top_level_node) {
             case ast::AstKind::ExternStructDecl: {
                 ast::ExternStructDeclNode* extern_struct = (ast::ExternStructDeclNode*)extern_item;
                 Decl* decl = register_sym(s, module_scope, extern_struct.name, extern_struct.is_exported, (u16)DeclKind::Node, extern_struct.h.src_pos);
-                if(decl != null) { decl.data.node = extern_item; }
+                if(decl != null) { decl.data.node = (ast::AstNode*)materialize_extern_struct(s, extern_struct); }
             }
             case ast::AstKind::ExternUnionDecl: {
                 ast::ExternUnionDeclNode* extern_union = (ast::ExternUnionDeclNode*)extern_item;
                 Decl* decl = register_sym(s, module_scope, extern_union.name, extern_union.is_exported, (u16)DeclKind::Node, extern_union.h.src_pos);
-                if(decl != null) { decl.data.node = extern_item; }
+                if(decl != null) { decl.data.node = (ast::AstNode*)materialize_extern_union(s, extern_union); }
             }
             case ast::AstKind::VarDecl: {
                 ast::VarDeclNode* extern_var = (ast::VarDeclNode*)extern_item;
@@ -361,6 +361,53 @@ fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
     case ast::AstKind::AliasDecl: {
         ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)decl_node;
         set_decl_ty(s, alias_decl.name, resolve_type(s, alias_decl.target));
+    }
+    case ast::AstKind::ExternBlock: {
+        ast::ExternBlockNode* extern_block = (ast::ExternBlockNode*)decl_node;
+        for(u64 item_index = 0; item_index < extern_block.items.len; item_index += 1) {
+            resolve_extern_item_signature(s, extern_block.items[item_index]);
+        }
+    }
+    else { }
+    }
+}
+
+fn void resolve_extern_item_signature(Sema* s, ast::AstNode* item) {
+    switch(item.h.kind) {
+    case ast::AstKind::ExternFnDecl: {
+        ast::ExternFnDeclNode* extern_fn = (ast::ExternFnDeclNode*)item;
+        types::Type* return_type = types::prim_void();
+        if(extern_fn.return_type != null) {
+            types::Type* resolved_return = resolve_type(s, extern_fn.return_type);
+            if(resolved_return != null) { return_type = resolved_return; }
+        }
+        types::Type*[] param_types = {null, 0};
+        if(extern_fn.params.len > 0) {
+            types::Type** param_type_mem = (types::Type**)arena::alloc(balloc(s), extern_fn.params.len * sizeof(types::Type*));
+            for(u64 param_index = 0; param_index < extern_fn.params.len; param_index += 1) {
+                types::Type* param_type = resolve_type(s, extern_fn.params[param_index].type_expr);
+                extern_fn.params[param_index].resolved_type = (void*)param_type;
+                param_type_mem[param_index] = param_type;
+            }
+            param_types = {param_type_mem, extern_fn.params.len};
+        }
+        set_decl_ty(s, extern_fn.name, types::intern_fn_ptr(return_type, param_types, extern_fn.is_variadic));
+    }
+    case ast::AstKind::ExternStructDecl: {
+        ast::ExternStructDeclNode* extern_struct = (ast::ExternStructDeclNode*)item;
+        Decl* decl = scope_lookup_local(s.scope, extern_struct.name);
+        if(decl == null || decl.data.node == null) { return; }
+        ast::StructDeclNode* materialized = (ast::StructDeclNode*)decl.data.node;
+        resolve_fields(s, materialized.fields);
+        decl.ty = types::intern_struct((void*)materialized);
+    }
+    case ast::AstKind::ExternUnionDecl: {
+        ast::ExternUnionDeclNode* extern_union = (ast::ExternUnionDeclNode*)item;
+        Decl* decl = scope_lookup_local(s.scope, extern_union.name);
+        if(decl == null || decl.data.node == null) { return; }
+        ast::UnionDeclNode* materialized = (ast::UnionDeclNode*)decl.data.node;
+        resolve_fields(s, materialized.fields);
+        decl.ty = types::intern_union((void*)materialized);
     }
     else { }
     }
@@ -894,6 +941,31 @@ fn ast::UnionDeclNode* synth_anon_union_decl(Sema* s, ast::TypeUnionNode* n) {
     decl.fields = n.fields;
     resolve_fields(s, decl.fields);
     return decl;
+}
+
+// Extern struct/union AST nodes lack the qualified_name slot, so they can't be interned as-is; mirror into a real decl node.
+fn ast::StructDeclNode* materialize_extern_struct(Sema* s, ast::ExternStructDeclNode* es) {
+    ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(balloc(s), sizeof(ast::StructDeclNode));
+    sys::memset(sd, 0, sizeof(ast::StructDeclNode));
+    sd.h.kind = ast::AstKind::StructDecl;
+    sd.h.src_pos = es.h.src_pos;
+    sd.name = es.name;
+    sd.qualified_name = qualify_decl_name(s, es.name);
+    sd.fields = es.fields;
+    sd.is_exported = es.is_exported;
+    return sd;
+}
+
+fn ast::UnionDeclNode* materialize_extern_union(Sema* s, ast::ExternUnionDeclNode* eu) {
+    ast::UnionDeclNode* ud = (ast::UnionDeclNode*)arena::alloc(balloc(s), sizeof(ast::UnionDeclNode));
+    sys::memset(ud, 0, sizeof(ast::UnionDeclNode));
+    ud.h.kind = ast::AstKind::UnionDecl;
+    ud.h.src_pos = eu.h.src_pos;
+    ud.name = eu.name;
+    ud.qualified_name = qualify_decl_name(s, eu.name);
+    ud.fields = eu.fields;
+    ud.is_exported = eu.is_exported;
+    return ud;
 }
 
 // Only int literals until the comptime interpreter lands.

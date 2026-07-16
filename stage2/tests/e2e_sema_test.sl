@@ -259,6 +259,38 @@ fn i32 ok_extern_block(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_extern_fn_call(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern \"c\" { fn i32 puts(const i8* s); }\nexport fn i32 f() { return puts(\"hi\"); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_extern_struct_ptr(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern \"c\" { struct FILE { i8 _; }; fn FILE* fopen(const i8* p, const i8* mode); fn i32 fclose(FILE* s); }\nexport fn i32 f() { FILE* h = fopen(\"a\", \"r\"); return fclose(h); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_extern_union(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern \"c\" { union U { i32 i; f32 fl; }; }\nexport fn i32 f(U* u) { return u.i; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_extern_variadic(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern \"c\" { fn i32 printf(const i8* fmt, ...); }\nexport fn i32 f() { return printf(\"%d\", 42); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_extern_call_arity(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern \"c\" { fn i32 puts(const i8* s); }\nexport fn i32 f() { return puts(); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "call expects 1 arguments but got 0", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)72, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_enum_explicit(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "enum E : i32 { A = 1, B = 5 }\nexport fn i32 f() { return (i32)E::B; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -868,6 +900,11 @@ fn i32 main() {
     testing::add(suite, "ok_nested_field",          &ok_nested_field);
     testing::add(suite, "ok_fn_ptr",                &ok_fn_ptr);
     testing::add(suite, "ok_extern_block",          &ok_extern_block);
+    testing::add(suite, "ok_extern_fn_call",        &ok_extern_fn_call);
+    testing::add(suite, "ok_extern_struct_ptr",     &ok_extern_struct_ptr);
+    testing::add(suite, "ok_extern_union",          &ok_extern_union);
+    testing::add(suite, "ok_extern_variadic",       &ok_extern_variadic);
+    testing::add(suite, "err_extern_call_arity",    &err_extern_call_arity);
     testing::add(suite, "ok_enum_explicit",         &ok_enum_explicit);
     testing::add(suite, "ok_multi_case",            &ok_multi_case);
     testing::add(suite, "ok_string_lit",            &ok_string_lit);
