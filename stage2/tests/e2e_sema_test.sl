@@ -117,6 +117,20 @@ fn i32 ok_slice(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 ok_ptr_slice_bounded(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn u64 f(i32* p) { i32[] s = p[0..4]; return s.len; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_ptr_slice_open_hi(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn u64 f(i32* p) { i32[] s = p[0..]; return s.len; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "slicing a pointer requires an upper bound", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)37, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_switch(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = 1; switch(x) { case 1: { return 1; } else { return 0; } } }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -994,6 +1008,8 @@ fn i32 main() {
     testing::add(suite, "ok_enum_default_base",     &ok_enum_default_base);
     testing::add(suite, "ok_union",                 &ok_union);
     testing::add(suite, "ok_slice",                 &ok_slice);
+    testing::add(suite, "ok_ptr_slice_bounded",     &ok_ptr_slice_bounded);
+    testing::add(suite, "err_ptr_slice_open_hi",    &err_ptr_slice_open_hi);
     testing::add(suite, "ok_switch",                &ok_switch);
     testing::add(suite, "err_switch_disc_not_scalar", &err_switch_disc_not_scalar);
     testing::add(suite, "ok_defer",                 &ok_defer);

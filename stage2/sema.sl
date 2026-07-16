@@ -1321,6 +1321,11 @@ fn types::Type* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
         mark_error((ast::AstNode*)n);
         return null;
     }
+    if(base.kind == types::TypeKind::Pointer && n.hi == null) {
+        diag_ptr_slice_needs_hi(s, n.h.src_pos);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
     if(n.lo != null && !check_index(s, n.lo)) { mark_error((ast::AstNode*)n); return null; }
     if(n.hi != null && !check_index(s, n.hi)) { mark_error((ast::AstNode*)n); return null; }
     types::Type* result = types::intern_slice(elem);
@@ -2267,6 +2272,12 @@ export fn void diag_not_indexable(Sema* s, u32 src_pos, types::Type* got) {
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot index %.*s", (i32)got_str.len, (i8*)got_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// "slicing a pointer requires an upper bound". Used by synth_slice_range.
+export fn void diag_ptr_slice_needs_hi(Sema* s, u32 src_pos) {
+    u8[] msg = "slicing a pointer requires an upper bound";
+    sema_report(s, src_pos, msg);
 }
 
 // "index must be an integer type, found %T". Used by check_index.
