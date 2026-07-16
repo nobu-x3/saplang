@@ -11173,6 +11173,19 @@ fn i32 extern_struct_full(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 extern_struct_body_no_trailing_semi(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct FILE { i8 _; } fn i32 fclose(FILE* s); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 2, msg);
+    if(!b) { return -1; }
+    ast::ExternStructDeclNode* s = compiler_testing::expect_extern_struct(b.items[0], compiler_testing::sym(m, "FILE"), 1, false, false, msg);
+    if(!s) { return -2; }
+    if(!testing::expect_eq((u16)b.items[1].h.kind, (u16)ast::AstKind::ExternFnDecl, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
 fn i32 extern_struct_full_empty_body(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -13426,6 +13439,7 @@ fn i32 main() {
     testing::add(s_ext, "extern_struct_opaque", &extern_struct_opaque);
     testing::add(s_ext, "extern_struct_opaque_exported", &extern_struct_opaque_exported);
     testing::add(s_ext, "extern_struct_full", &extern_struct_full);
+    testing::add(s_ext, "extern_struct_body_no_trailing_semi", &extern_struct_body_no_trailing_semi);
     testing::add(s_ext, "extern_struct_full_empty_body", &extern_struct_full_empty_body);
     testing::add(s_ext, "extern_struct_full_exported", &extern_struct_full_exported);
     testing::add(s_ext, "extern_struct_no_body_no_opaque_errors", &extern_struct_no_body_no_opaque_errors);

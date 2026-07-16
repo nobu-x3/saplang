@@ -542,8 +542,7 @@ fn ast::AstNode* parse_extern_struct_decl(Parser* p, bool is_exported, u32 start
             fields = parse_fields(p, &had_err);
             token::Token rb = expect(p, token::TokenKind::RBrace);
             if(rb.kind == token::TokenKind::ERROR) { had_err = true; }
-            token::Token sc = expect(p, token::TokenKind::Semi);
-            if(sc.kind == token::TokenKind::ERROR) { had_err = true; }
+            if(peek(p, 0).kind == token::TokenKind::Semi) { consume(p); }   // a braced body self-terminates; a trailing ; is optional
         }
     }
     ast::ExternStructDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternStructDeclNode));
@@ -606,8 +605,7 @@ fn ast::AstNode* parse_extern_union_decl(Parser* p, bool is_exported, u32 start,
             fields = parse_fields(p, &had_err);
             token::Token rb = expect(p, token::TokenKind::RBrace);
             if(rb.kind == token::TokenKind::ERROR) { had_err = true; }
-            token::Token sc = expect(p, token::TokenKind::Semi);
-            if(sc.kind == token::TokenKind::ERROR) { had_err = true; }
+            if(peek(p, 0).kind == token::TokenKind::Semi) { consume(p); }   // a braced body self-terminates; a trailing ; is optional
         }
     }
     ast::ExternUnionDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternUnionDeclNode));
