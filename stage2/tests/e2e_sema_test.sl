@@ -123,6 +123,14 @@ fn i32 ok_switch(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_switch_disc_not_scalar(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; }\nexport fn i32 f(P p) { switch(p) { else { return 0; } } return 1; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "switch value must be an integer or enum, found main::P", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)50, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_defer(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = 0; defer { x = 1; } return x; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -981,6 +989,7 @@ fn i32 main() {
     testing::add(suite, "ok_union",                 &ok_union);
     testing::add(suite, "ok_slice",                 &ok_slice);
     testing::add(suite, "ok_switch",                &ok_switch);
+    testing::add(suite, "err_switch_disc_not_scalar", &err_switch_disc_not_scalar);
     testing::add(suite, "ok_defer",                 &ok_defer);
     testing::add(suite, "ok_overload",              &ok_overload);
     testing::add(suite, "err_no_matching_overload", &err_no_matching_overload);

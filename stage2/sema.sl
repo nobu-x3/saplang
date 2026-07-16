@@ -2026,6 +2026,9 @@ fn void stmt(Sema* s, ast::AstNode* st) {
     case ast::AstKind::SwitchStmt: {
         ast::SwitchNode* switch_node = (ast::SwitchNode*)st;
         types::Type* disc = synth(s, switch_node.discriminant);
+        if(disc != null && !types::is_int(disc) && disc.kind != types::TypeKind::Enum) {
+            diag_switch_discriminant(s, switch_node.discriminant.h.src_pos, disc);
+        }
         s.switch_depth += 1;
         for(u64 arm_index = 0; arm_index < switch_node.arms.len; arm_index += 1) {
             ast::SwitchArm* arm = &switch_node.arms[arm_index];
@@ -2384,6 +2387,14 @@ export fn void diag_string_len_mismatch(Sema* s, u32 src_pos, u64 expected, u64 
 export fn void diag_break_outside(Sema* s, u32 src_pos) {
     u8[] msg = "break outside loop or switch";
     sema_report(s, src_pos, msg);
+}
+
+// "switch value must be an integer or enum, found %T". Used by the switch statement.
+export fn void diag_switch_discriminant(Sema* s, u32 src_pos, types::Type* got) {
+    u8[] got_str = types_print::print_to_arena(got, balloc(s));
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "switch value must be an integer or enum, found %.*s", (i32)got_str.len, (i8*)got_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
 // "continue outside loop". Used by stmt.
