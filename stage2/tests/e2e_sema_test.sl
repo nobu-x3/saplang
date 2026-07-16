@@ -672,6 +672,13 @@ fn i32 err_mutable_global_at_comptime(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// compinsert's argument may be a comprun local; sema resolves it so eval_compinsert can read the bytes.
+fn i32 ok_compinsert_from_local(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { u8[] code = \"fn i32 gen() { return 7; }\"; compinsert(code); }\nexport fn i32 f() { return gen(); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 // compinsert generates a top-level fn; a later comprun resolves and calls it, proving it was registered + body-checked.
 fn i32 err_compinsert_generated_fn_callable(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "comprun { compinsert(\"fn i32 gen() { return 42; }\"); }\nexport fn i32 f() { comprun { if(gen() == 42) { comperror(\"ok42\"); } } return 0; }");
@@ -1118,6 +1125,7 @@ fn i32 main() {
     testing::add(suite, "err_const_chain_in_comprun", &err_const_chain_in_comprun);
     testing::add(suite, "err_bad_const_init",        &err_bad_const_init);
     testing::add(suite, "err_mutable_global_at_comptime", &err_mutable_global_at_comptime);
+    testing::add(suite, "ok_compinsert_from_local",   &ok_compinsert_from_local);
     testing::add(suite, "err_compinsert_generated_fn_callable", &err_compinsert_generated_fn_callable);
     testing::add(suite, "err_compinsert_conditional", &err_compinsert_conditional);
     testing::add(suite, "ok_compinsert_in_function",  &ok_compinsert_in_function);

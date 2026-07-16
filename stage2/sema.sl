@@ -2102,6 +2102,9 @@ fn void stmt(Sema* s, ast::AstNode* st) {
     case ast::AstKind::CompwarningStmt: {
         synth(s, ((ast::CompWarningNode*)st).msg_expr);
     }
+    case ast::AstKind::CompinsertStmt: {
+        synth(s, ((ast::CompInsertNode*)st).source_expr);   // in a comprun; resolve the arg so eval_compinsert can read it
+    }
     else { }
     }
 }
