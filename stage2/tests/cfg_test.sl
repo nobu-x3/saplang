@@ -661,6 +661,29 @@ fn i32 nested_block_defers(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A defer body with control flow builds real blocks (a CondBranch), not the if appended as a leaf statement.
+fn i32 defer_with_control_flow(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] then_s;
+    then_s[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::AstNode*[1] dbody;
+    dbody[0] = mk_if(a, mk_int_lit(a), mk_block(a, &then_s[0], 1), null);
+    ast::AstNode*[1] body;
+    body[0] = mk_defer(a, mk_block(a, &dbody[0], 1));
+    cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
+    bool has_cond = false;
+    bool if_is_leaf = false;
+    for(u64 bi = 0; bi < g.blocks.len; bi += 1) {
+        if((u32)g.blocks[bi].term.kind == (u32)cfg::TermKind::CondBranch) { has_cond = true; }
+        for(u64 si = 0; si < g.blocks[bi].stmts.len; si += 1) {
+            if((u16)g.blocks[bi].stmts[si].h.kind == (u16)ast::AstKind::IfStmt) { if_is_leaf = true; }
+        }
+    }
+    if(!testing::expect_true(has_cond, m)) { return -1; }
+    if(!testing::expect_eq(if_is_leaf, false, m)) { return -2; }
+    return 0;
+}
+
 fn i32 if_then_returns_else_falls(arena::Arena* a, u8[] m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
@@ -1028,6 +1051,7 @@ fn i32 main() {
     testing::add(suite, "for_break",                       &for_break);
     testing::add(suite, "defer_on_continue",               &defer_on_continue);
     testing::add(suite, "nested_block_defers",             &nested_block_defers);
+    testing::add(suite, "defer_with_control_flow",         &defer_with_control_flow);
     testing::add(suite, "if_then_returns_else_falls",      &if_then_returns_else_falls);
     testing::add(suite, "comp_stmt_emits_nothing",         &comp_stmt_emits_nothing);
     testing::add(suite, "non_void_missing_return_errors",  &non_void_missing_return_errors);

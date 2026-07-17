@@ -136,7 +136,7 @@ fn void build_block(CfgBuilder* b, ast::BlockNode* blk) {
         }
     }
     if(!block_terminated(b, b.current)) {
-        emit_pending_defers(b, current_scope(b));
+        run_top_scope_defers(b);
     }
     pop_scope(b);
 }
@@ -172,7 +172,7 @@ fn void build_while(CfgBuilder* b, ast::WhileNode* n) {
     b.current = body;
     build_stmt(b, n.body);
     if(!block_terminated(b, b.current)) {
-        emit_pending_defers(b, current_scope(b));
+        run_top_scope_defers(b);
         terminate_goto(b, b.current, header, n.h.src_pos);
     }
     pop_scope(b);
@@ -201,7 +201,7 @@ fn void build_for(CfgBuilder* b, ast::ForNode* n) {
     b.current = body;
     build_stmt(b, n.body);
     if(!block_terminated(b, b.current)) {
-        emit_pending_defers(b, current_scope(b));
+        run_top_scope_defers(b);
         terminate_goto(b, b.current, post, n.h.src_pos);
     }
     pop_scope(b);
@@ -234,7 +234,7 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
             b.current = arm_blk;
             build_stmt(b, arm.body);
             if(!block_terminated(b, b.current)) {
-                emit_pending_defers(b, current_scope(b));
+                run_top_scope_defers(b);
                 terminate_goto(b, b.current, after, n.h.src_pos);
             }
             pop_scope(b);
@@ -265,7 +265,7 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
         b.current = def_blk;
         build_stmt(b, n.else_block);
         if(!block_terminated(b, b.current)) {
-            emit_pending_defers(b, current_scope(b));
+            run_top_scope_defers(b);
             terminate_goto(b, b.current, after, n.h.src_pos);
         }
         pop_scope(b);
@@ -308,34 +308,39 @@ fn void register_defer(CfgBuilder* b, ast::DeferNode* n) {
     push_defer(current_scope(b), b.arena, n.body, n.h.src_pos);
 }
 
-fn void inline_defer_body(CfgBuilder* b, ast::AstNode* body) {
-    if(body == null) { return; }
-    if(body.h.kind == ast::AstKind::BlockStmt) {
-        ast::BlockNode* blk = (ast::BlockNode*)body;
-        for(u64 stmt_index = 0; stmt_index < blk.stmts.len; stmt_index += 1) {
-            inline_defer_body(b, blk.stmts[stmt_index]);
+// Snapshot the pending defer bodies (LIFO) before building them: build_stmt pushes scopes and may realloc the
+// scope stack, which would dangle a live pointer into it.
+fn void run_pending_defers(CfgBuilder* b, i64 from_scope, i64 to_scope) {
+    if(from_scope < to_scope) { return; }
+    u64 total = 0;
+    for(i64 scope_index = from_scope; scope_index >= to_scope; scope_index -= 1) { total += b.scope_stack[(u64)scope_index].defers.len; }
+    if(total == 0) { return; }
+    ast::AstNode** bodies = (ast::AstNode**)arena::alloc(b.arena, total * sizeof(ast::AstNode*));
+    u64 count = 0;
+    for(i64 scope_index = from_scope; scope_index >= to_scope; scope_index -= 1) {
+        ScopeFrame* sc = &b.scope_stack[(u64)scope_index];
+        for(i64 defer_index = (i64)sc.defers.len - 1; defer_index >= 0; defer_index -= 1) {
+            bodies[count] = sc.defers[(u64)defer_index].body;
+            count += 1;
         }
-    } else {
-        append_stmt(b, body);
+    }
+    for(u64 i = 0; i < count; i += 1) {
+        if(block_terminated(b, b.current)) { break; }
+        build_stmt(b, bodies[i]);
     }
 }
 
-fn void emit_pending_defers(CfgBuilder* b, ScopeFrame* sc) {
-    for(i64 defer_index = (i64)sc.defers.len - 1; defer_index >= 0; defer_index -= 1) {
-        inline_defer_body(b, sc.defers[(u64)defer_index].body);
-    }
+fn void run_top_scope_defers(CfgBuilder* b) {
+    i64 top = (i64)b.scope_stack.len - 1;
+    run_pending_defers(b, top, top);
 }
 
 fn void emit_pending_defers_for_exit(CfgBuilder* b) {
-    for(i64 scope_index = (i64)b.scope_stack.len - 1; scope_index >= 0; scope_index -= 1) {
-        emit_pending_defers(b, &b.scope_stack[(u64)scope_index]);
-    }
+    run_pending_defers(b, (i64)b.scope_stack.len - 1, 0);
 }
 
 fn void emit_pending_defers_through_loop(CfgBuilder* b, u64 scope_base) {
-    for(i64 scope_index = (i64)b.scope_stack.len - 1; scope_index >= (i64)scope_base; scope_index -= 1) {
-        emit_pending_defers(b, &b.scope_stack[(u64)scope_index]);
-    }
+    run_pending_defers(b, (i64)b.scope_stack.len - 1, (i64)scope_base);
 }
 
 // HELPERS
