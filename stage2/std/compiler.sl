@@ -344,6 +344,8 @@ export fn i32 run_frontend(Compiler* c) {
             if(c.cfg_dump) { dump_cfgs(c); }
             if(rc == 0) {
                 run_lower(c);
+                drain_diagnostics(c);
+                if(bail_on_errors(c)) { rc = 1; }
                 if(c.sapir_dump) { dump_sapir(c); }
             }
         }

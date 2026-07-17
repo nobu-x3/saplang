@@ -7,6 +7,7 @@ import token;
 import symbol;
 import interner;
 import sapir;
+import diag;
 import io;
 import arena;
 import sys;
@@ -40,6 +41,8 @@ struct Lower {
     u64                 states_cap;
     u32                 current;
     u32                 cfg_block_count;
+    void*[]             local_decls;    // params + locals of the current fn; anything else is a global/fn ref
+    u64                 local_decls_cap;
 }
 
 export fn sapir::SapirModule* lower_module(module::Module* m) {
@@ -88,6 +91,9 @@ fn void lower_fn(Lower* lo, ast::FnDeclNode* fn_node) {
     lo.g = g;
     func.entry = g.entry;
     lo.cfg_block_count = (u32)g.blocks.len;
+    lo.local_decls.ptr = null;
+    lo.local_decls.len = 0;
+    lo.local_decls_cap = 0;
 
     lo.states.ptr = null;
     lo.states.len = 0;
@@ -155,6 +161,7 @@ fn void emit_params(Lower* lo, ast::FnDeclNode* fn_node) {
         inst.a = (u32)param_index;
         u32 value = sapir::add_inst(lo.arena, lo.func, inst);
         write_var(lo, lo.current, param.decl, value);
+        add_local_decl(lo, param.decl);
     }
 }
 
@@ -170,6 +177,7 @@ fn void lower_stmt(Lower* lo, ast::AstNode* s) {
 }
 
 fn void lower_var_decl(Lower* lo, ast::VarDeclNode* v) {
+    add_local_decl(lo, v.decl);
     if(v.init == null || v.init.h.kind == ast::AstKind::UndefinedLit) {
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Undef, (types::Type*)v.h.ty, v.h.src_pos);
         write_var(lo, lo.current, v.decl, sapir::add_inst(lo.arena, lo.func, inst));
@@ -181,6 +189,10 @@ fn void lower_var_decl(Lower* lo, ast::VarDeclNode* v) {
 fn void lower_assignment(Lower* lo, ast::AssignmentNode* a) {
     if(a.lhs.h.kind != ast::AstKind::Ident) { return; }     // TODO: member / index / deref lvalues
     void* target = ((ast::IdentNode*)a.lhs).resolved;
+    if(!is_local_decl(lo, target)) {
+        diag::report(&lo.m.diag, lo.m.arena, a.h.src_pos, "assignment to a non-local declaration is not yet supported in lowering");
+        return;
+    }
     u32 rhs = lower_expr(lo, a.rhs);
     sapir::Opcode combine = compound_opcode(a.op);
     if(combine != sapir::Opcode::INVALID) {
@@ -223,7 +235,12 @@ fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     case ast::AstKind::Ident: {
-        return read_var(lo, lo.current, ((ast::IdentNode*)e).resolved);
+        void* resolved = ((ast::IdentNode*)e).resolved;
+        if(!is_local_decl(lo, resolved)) {
+            diag::report(&lo.m.diag, lo.m.arena, e.h.src_pos, "reference to a non-local declaration is not yet supported in lowering");
+            return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));
+        }
+        return read_var(lo, lo.current, resolved);
     }
     case ast::AstKind::BinaryOp: {
         ast::BinaryOpNode* n = (ast::BinaryOpNode*)e;
@@ -558,8 +575,12 @@ fn void remove_trivial_phis(Lower* lo) {
                         else if(value != unique) { trivial = false; break; }
                     }
                 } else { trivial = false; }
-                if(trivial && has_other) {
-                    redirect[phi] = unique;
+                if(trivial) {
+                    u32 replacement = unique;
+                    if(!has_other) {                    // all operands are the phi itself — an unreachable value
+                        replacement = sapir::add_inst(lo.arena, func, sapir::new_inst(sapir::Opcode::Undef, inst.ty, func.src_pos));
+                    }
+                    redirect[phi] = replacement;
                     changed = true;
                 } else {
                     block.phis[write_index] = phi;
@@ -573,7 +594,7 @@ fn void remove_trivial_phis(Lower* lo) {
 }
 
 fn u32 resolve(u32[] redirect, u32 value) {
-    while(value != sapir::INVALID_ID && redirect[value] != sapir::INVALID_ID) { value = redirect[value]; }
+    while(value != sapir::INVALID_ID && value < (u32)redirect.len && redirect[value] != sapir::INVALID_ID) { value = redirect[value]; }
     return value;
 }
 
@@ -636,6 +657,24 @@ fn bool op_b_is_value(sapir::Opcode op) {
     case sapir::Opcode::SliceMake:
     case sapir::Opcode::DbgValue: { return true; }
     else { return false; }
+    }
+    return false;
+}
+
+fn void add_local_decl(Lower* lo, void* decl) {
+    if(lo.local_decls.len == lo.local_decls_cap) {
+        u64 new_cap = 8;
+        if(lo.local_decls_cap > 0) { new_cap = lo.local_decls_cap * 2; }
+        lo.local_decls.ptr = (void**)arena::realloc_grow(lo.arena, (void*)lo.local_decls.ptr, lo.local_decls.len * sizeof(void*), new_cap * sizeof(void*));
+        lo.local_decls_cap = new_cap;
+    }
+    lo.local_decls[lo.local_decls.len] = decl;
+    lo.local_decls.len += 1;
+}
+
+fn bool is_local_decl(Lower* lo, void* decl) {
+    for(u64 i = 0; i < lo.local_decls.len; i += 1) {
+        if(lo.local_decls[i] == decl) { return true; }
     }
     return false;
 }
