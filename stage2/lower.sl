@@ -125,8 +125,10 @@ fn void lower_fn(Lower* lo, ast::FnDeclNode* fn_node) {
         switch_to_block(lo, (u32)block_index);
         if((u32)block_index == g.entry) { emit_mem_var_allocas(lo); emit_params(lo, fn_node); }
         cfg::BasicBlock* cfg_block = &g.blocks[block_index];
-        for(u64 s = 0; s < cfg_block.stmts.len; s += 1) { lower_stmt(lo, cfg_block.stmts[s]); }
-        lower_terminator(lo, &cfg_block.term);
+        u64 stmt_cut = cfg_block.stmts.len;
+        if(cfg_block.term.kind == cfg::TermKind::Return && (u64)cfg_block.term.defer_start < stmt_cut) { stmt_cut = (u64)cfg_block.term.defer_start; }
+        for(u64 s = 0; s < stmt_cut; s += 1) { lower_stmt(lo, cfg_block.stmts[s]); }
+        lower_terminator(lo, cfg_block);
         seal_cfg_successors(lo, &cfg_block.term);
     }
     func.blocks[lo.current].body_end = (u32)func.insts.len;
@@ -416,7 +418,8 @@ fn u32 emit_cmp_ne(Lower* lo, u32 lhs, u32 rhs) {
 
 // TERMINATORS ////////////////////////////////////////////////////////////////////
 
-fn void lower_terminator(Lower* lo, cfg::Terminator* term) {
+fn void lower_terminator(Lower* lo, cfg::BasicBlock* cfg_block) {
+    cfg::Terminator* term = &cfg_block.term;
     switch(term.kind) {
     case cfg::TermKind::Goto: {
         emit_br(lo, term.goto_target);
@@ -451,6 +454,7 @@ fn void lower_terminator(Lower* lo, cfg::Terminator* term) {
     case cfg::TermKind::Return: {
         u32 value = sapir::INVALID_ID;
         if(term.return_value != null) { value = lower_expr(lo, term.return_value); }
+        for(u64 s = (u64)term.defer_start; s < cfg_block.stmts.len; s += 1) { lower_stmt(lo, cfg_block.stmts[s]); }
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Ret, types::prim_void(), term.src_pos);
         inst.a = value;
         sapir::add_inst(lo.arena, lo.func, inst);

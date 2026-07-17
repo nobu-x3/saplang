@@ -868,6 +868,43 @@ fn i32 slice_noop_cast(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32[] f(i32[] s) { return (i32[])s; }", &w, msg);
 }
 
+// defer runs at scope exit but the return value is captured first (Zig semantics): returns n, not 0.
+fn i32 defer_capture(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    %1 = const.i32 0");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 f(i32 n) { i32 x = n; defer { x = 0; } return x; }", &w, msg);
+}
+
+// Deferred blocks run in reverse (LIFO) order, after the return value is captured.
+fn i32 defer_lifo(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = const.i32 1");
+    wl(&w, "    %1 = const.i32 3");
+    wl(&w, "    %2 = const.i32 2");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 f() { i32 x = 1; defer { x = 2; } defer { x = 3; } return x; }", &w, msg);
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Lower Tests";
@@ -908,5 +945,7 @@ fn i32 main() {
     testing::add(suite, "ptr_to_int_cast",    &ptr_to_int_cast);
     testing::add(suite, "array_to_slice_cast", &array_to_slice_cast);
     testing::add(suite, "slice_noop_cast",    &slice_noop_cast);
+    testing::add(suite, "defer_capture",      &defer_capture);
+    testing::add(suite, "defer_lifo",         &defer_lifo);
     return testing::run();
 }

@@ -31,6 +31,7 @@ export struct Terminator {
     SwitchTarget[]  switch_arms;
     u32             switch_default;
     ast::AstNode*   return_value;
+    u32             defer_start;    // Return only: stmts[defer_start..] run after return_value is captured
 }
 
 export struct BasicBlock {
@@ -276,8 +277,10 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
 }
 
 fn void build_return(CfgBuilder* b, ast::ReturnNode* n) {
+    u32 defer_start = (u32)b.cfg.blocks[b.current].stmts.len;
     emit_pending_defers_for_exit(b);
     terminate_return(b, b.current, n.expr, n.h.src_pos);
+    b.cfg.blocks[b.current].term.defer_start = defer_start;
     b.current = new_block(b.cfg, b.arena);
     terminate_unreachable(b, b.current);
 }
@@ -409,6 +412,7 @@ fn void terminate_return(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 src_po
     block.term.kind = TermKind::Return;
     block.term.src_pos = src_pos;
     block.term.return_value = value;
+    block.term.defer_start = (u32)block.stmts.len;
     block.terminated = true;
 }
 
