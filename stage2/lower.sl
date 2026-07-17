@@ -22,6 +22,12 @@ struct IncompletePhi {
     u32     phi;
 }
 
+// A local/param that lives in memory (address-taken or aggregate): read/written via Load/Store.
+struct MemVar {
+    void*   decl;       // sema::Decl*
+    u32     alloca;     // entry-block alloca inst id; INVALID_ID until emitted
+}
+
 struct BlockState {
     VarDef[]        defs;
     u64             defs_cap;
@@ -43,6 +49,8 @@ struct Lower {
     u32                 cfg_block_count;
     void*[]             local_decls;    // params + locals of the current fn; anything else is a global/fn ref
     u64                 local_decls_cap;
+    MemVar[]            mem_vars;
+    u64                 mem_vars_cap;
 }
 
 export fn sapir::SapirModule* lower_module(module::Module* m) {
@@ -94,6 +102,10 @@ fn void lower_fn(Lower* lo, ast::FnDeclNode* fn_node) {
     lo.local_decls.ptr = null;
     lo.local_decls.len = 0;
     lo.local_decls_cap = 0;
+    lo.mem_vars.ptr = null;
+    lo.mem_vars.len = 0;
+    lo.mem_vars_cap = 0;
+    collect_mem_vars(lo, fn_node, g);
 
     lo.states.ptr = null;
     lo.states.len = 0;
@@ -111,7 +123,7 @@ fn void lower_fn(Lower* lo, ast::FnDeclNode* fn_node) {
     lo.current = sapir::INVALID_ID;
     for(u64 block_index = 0; block_index < lo.cfg_block_count; block_index += 1) {
         switch_to_block(lo, (u32)block_index);
-        if((u32)block_index == g.entry) { emit_params(lo, fn_node); }
+        if((u32)block_index == g.entry) { emit_mem_var_allocas(lo); emit_params(lo, fn_node); }
         cfg::BasicBlock* cfg_block = &g.blocks[block_index];
         for(u64 s = 0; s < cfg_block.stmts.len; s += 1) { lower_stmt(lo, cfg_block.stmts[s]); }
         lower_terminator(lo, &cfg_block.term);
@@ -160,8 +172,9 @@ fn void emit_params(Lower* lo, ast::FnDeclNode* fn_node) {
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Param, (types::Type*)param.resolved_type, param.src_pos);
         inst.a = (u32)param_index;
         u32 value = sapir::add_inst(lo.arena, lo.func, inst);
-        write_var(lo, lo.current, param.decl, value);
-        add_local_decl(lo, param.decl);
+        u32 slot = mem_alloca(lo, param.decl);
+        if(slot != sapir::INVALID_ID) { emit_store(lo, slot, value); }
+        else { write_var(lo, lo.current, param.decl, value); }
     }
 }
 
@@ -177,9 +190,15 @@ fn void lower_stmt(Lower* lo, ast::AstNode* s) {
 }
 
 fn void lower_var_decl(Lower* lo, ast::VarDeclNode* v) {
-    add_local_decl(lo, v.decl);
+    u32 slot = mem_alloca(lo, v.decl);
+    if(slot != sapir::INVALID_ID) {
+        if(v.init == null) { emit_zero(lo, slot, decl_type(v.decl)); return; }
+        if(v.init.h.kind == ast::AstKind::UndefinedLit) { return; }
+        lower_init_into(lo, slot, decl_type(v.decl), v.init);
+        return;
+    }
     if(v.init == null || v.init.h.kind == ast::AstKind::UndefinedLit) {
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::Undef, (types::Type*)v.h.ty, v.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::Undef, decl_type(v.decl), v.h.src_pos);
         write_var(lo, lo.current, v.decl, sapir::add_inst(lo.arena, lo.func, inst));
         return;
     }
@@ -187,22 +206,36 @@ fn void lower_var_decl(Lower* lo, ast::VarDeclNode* v) {
 }
 
 fn void lower_assignment(Lower* lo, ast::AssignmentNode* a) {
-    if(a.lhs.h.kind != ast::AstKind::Ident) { return; }     // TODO: member / index / deref lvalues
-    void* target = ((ast::IdentNode*)a.lhs).resolved;
-    if(!is_local_decl(lo, target)) {
-        diag::report(&lo.m.diag, lo.m.arena, a.h.src_pos, "assignment to a non-local declaration is not yet supported in lowering");
+    types::Type* lhs_ty = (types::Type*)a.lhs.h.ty;
+    if(a.lhs.h.kind == ast::AstKind::Ident) {
+        void* target = ((ast::IdentNode*)a.lhs).resolved;
+        if(!is_local_decl(lo, target)) {
+            diag::report(&lo.m.diag, lo.m.arena, a.h.src_pos, "assignment to a non-local declaration is not yet supported in lowering");
+            return;
+        }
+        u32 slot = mem_alloca(lo, target);
+        if(slot != sapir::INVALID_ID) { store_to_addr(lo, slot, lhs_ty, a.op, a.rhs); return; }
+        u32 rhs = lower_expr(lo, a.rhs);
+        sapir::Opcode combine = compound_opcode(a.op);
+        if(combine != sapir::Opcode::INVALID) {
+            u32 current_value = read_var(lo, lo.current, target);
+            sapir::Inst inst = sapir::new_inst(combine, lhs_ty, a.h.src_pos);
+            inst.a = current_value;
+            inst.b = rhs;
+            rhs = sapir::add_inst(lo.arena, lo.func, inst);
+        }
+        write_var(lo, lo.current, target, rhs);
         return;
     }
-    u32 rhs = lower_expr(lo, a.rhs);
-    sapir::Opcode combine = compound_opcode(a.op);
-    if(combine != sapir::Opcode::INVALID) {
-        u32 current_value = read_var(lo, lo.current, target);
-        sapir::Inst inst = sapir::new_inst(combine, (types::Type*)a.lhs.h.ty, a.h.src_pos);
-        inst.a = current_value;
-        inst.b = rhs;
-        rhs = sapir::add_inst(lo.arena, lo.func, inst);
+    if(is_lvalue_kind(a.lhs)) {
+        store_to_addr(lo, lower_addr(lo, a.lhs), lhs_ty, a.op, a.rhs);
     }
-    write_var(lo, lo.current, target, rhs);
+}
+
+fn bool is_lvalue_kind(ast::AstNode* e) {
+    if(e.h.kind == ast::AstKind::MemberAccess || e.h.kind == ast::AstKind::ArrayIndex) { return true; }
+    if(e.h.kind == ast::AstKind::UnaryOp && ((ast::UnaryOpNode*)e).op == token::TokenKind::Star) { return true; }
+    return false;
 }
 
 // EXPRESSIONS ////////////////////////////////////////////////////////////////////
@@ -240,7 +273,33 @@ fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
             diag::report(&lo.m.diag, lo.m.arena, e.h.src_pos, "reference to a non-local declaration is not yet supported in lowering");
             return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));
         }
+        u32 slot = mem_alloca(lo, resolved);
+        if(slot != sapir::INVALID_ID) { return emit_load(lo, slot, (types::Type*)e.h.ty); }
         return read_var(lo, lo.current, resolved);
+    }
+    case ast::AstKind::MemberAccess: {
+        ast::MemberAccessNode* n = (ast::MemberAccessNode*)e;
+        types::Type* container = (types::Type*)n.base.h.ty;
+        if(types::is_ptr(container)) { container = container.data.pointee; }
+        if(types::is_slice(container)) { return lower_slice_field(lo, n, (types::Type*)e.h.ty); }
+        return emit_load(lo, lower_addr(lo, e), (types::Type*)e.h.ty);
+    }
+    case ast::AstKind::ArrayIndex: {
+        ast::ArrayIndexNode* n = (ast::ArrayIndexNode*)e;
+        if(types::is_slice((types::Type*)n.base.h.ty)) {
+            return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));  // TODO: slice indexing
+        }
+        return emit_load(lo, lower_addr(lo, e), (types::Type*)e.h.ty);
+    }
+    case ast::AstKind::StructLit: {
+        u32 temp = emit_temp_alloca(lo, (types::Type*)e.h.ty);
+        build_struct_lit(lo, temp, (types::Type*)e.h.ty, (ast::StructLitNode*)e);
+        return emit_load(lo, temp, (types::Type*)e.h.ty);
+    }
+    case ast::AstKind::ArrayLit: {
+        u32 temp = emit_temp_alloca(lo, (types::Type*)e.h.ty);
+        build_array_lit(lo, temp, (types::Type*)e.h.ty, (ast::ArrayLitNode*)e);
+        return emit_load(lo, temp, (types::Type*)e.h.ty);
     }
     case ast::AstKind::BinaryOp: {
         ast::BinaryOpNode* n = (ast::BinaryOpNode*)e;
@@ -267,6 +326,8 @@ fn u32 lower_binary(Lower* lo, ast::BinaryOpNode* n) {
 }
 
 fn u32 lower_unary(Lower* lo, ast::UnaryOpNode* n) {
+    if(n.op == token::TokenKind::Amp) { return lower_addr(lo, n.operand); }
+    if(n.op == token::TokenKind::Star) { return emit_load(lo, lower_expr(lo, n.operand), (types::Type*)n.h.ty); }
     if(n.op == token::TokenKind::Bang) {
         u32 operand = to_bool(lo, (types::Type*)n.operand.h.ty, lower_expr(lo, n.operand));
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Not, types::prim_bool(), n.h.src_pos);
@@ -277,7 +338,6 @@ fn u32 lower_unary(Lower* lo, ast::UnaryOpNode* n) {
     if(n.op == token::TokenKind::Minus) { op = sapir::Opcode::Neg; }
     else if(n.op == token::TokenKind::Tilde) { op = sapir::Opcode::BitNot; }
     if(op == sapir::Opcode::INVALID) {
-        // TODO: & / * (address-of, deref) need memory lowering.
         return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)n.h.ty, n.h.src_pos));
     }
     u32 operand = lower_expr(lo, n.operand);
@@ -681,6 +741,295 @@ fn bool is_local_decl(Lower* lo, void* decl) {
 
 fn types::Type* decl_type(void* decl) {
     return ((sema::Decl*)decl).ty;
+}
+
+// MEMORY VARIABLES + AGGREGATES ////////////////////////////////////////////////////
+
+fn bool is_aggregate(types::Type* t) {
+    return t.kind == types::TypeKind::Struct || t.kind == types::TypeKind::Union || t.kind == types::TypeKind::Array;
+}
+
+fn void mark_mem_var(Lower* lo, void* decl) {
+    if(decl == null) { return; }
+    for(u64 i = 0; i < lo.mem_vars.len; i += 1) {
+        if(lo.mem_vars[i].decl == decl) { return; }
+    }
+    if(lo.mem_vars.len == lo.mem_vars_cap) {
+        u64 new_cap = 8;
+        if(lo.mem_vars_cap > 0) { new_cap = lo.mem_vars_cap * 2; }
+        lo.mem_vars.ptr = (MemVar*)arena::realloc_grow(lo.arena, (void*)lo.mem_vars.ptr, lo.mem_vars.len * sizeof(MemVar), new_cap * sizeof(MemVar));
+        lo.mem_vars_cap = new_cap;
+    }
+    lo.mem_vars[lo.mem_vars.len].decl = decl;
+    lo.mem_vars[lo.mem_vars.len].alloca = sapir::INVALID_ID;
+    lo.mem_vars.len += 1;
+}
+
+fn u32 mem_alloca(Lower* lo, void* decl) {
+    for(u64 i = 0; i < lo.mem_vars.len; i += 1) {
+        if(lo.mem_vars[i].decl == decl) { return lo.mem_vars[i].alloca; }
+    }
+    return sapir::INVALID_ID;
+}
+
+fn void collect_mem_vars(Lower* lo, ast::FnDeclNode* fn_node, cfg::Cfg* g) {
+    for(u64 i = 0; i < fn_node.params.len; i += 1) { add_local_decl(lo, fn_node.params[i].decl); }
+    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
+        cfg::BasicBlock* block = &g.blocks[block_index];
+        for(u64 s = 0; s < block.stmts.len; s += 1) {
+            if(block.stmts[s].h.kind == ast::AstKind::VarDecl) { add_local_decl(lo, ((ast::VarDeclNode*)block.stmts[s]).decl); }
+        }
+    }
+    for(u64 i = 0; i < fn_node.params.len; i += 1) {
+        if(is_aggregate((types::Type*)fn_node.params[i].resolved_type)) { mark_mem_var(lo, fn_node.params[i].decl); }
+    }
+    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
+        cfg::BasicBlock* block = &g.blocks[block_index];
+        for(u64 s = 0; s < block.stmts.len; s += 1) { scan_stmt_mem(lo, block.stmts[s]); }
+        scan_addr_taken(lo, block.term.cond);
+        scan_addr_taken(lo, block.term.return_value);
+        scan_addr_taken(lo, block.term.switch_value);
+    }
+}
+
+fn void scan_stmt_mem(Lower* lo, ast::AstNode* s) {
+    switch(s.h.kind) {
+    case ast::AstKind::VarDecl: {
+        ast::VarDeclNode* v = (ast::VarDeclNode*)s;
+        if(is_aggregate(decl_type(v.decl))) { mark_mem_var(lo, v.decl); }
+        scan_addr_taken(lo, v.init);
+    }
+    case ast::AstKind::AssignmentStmt: {
+        ast::AssignmentNode* a = (ast::AssignmentNode*)s;
+        scan_addr_taken(lo, a.lhs);
+        scan_addr_taken(lo, a.rhs);
+    }
+    case ast::AstKind::ExprStmt: { scan_addr_taken(lo, ((ast::ExprStmtNode*)s).expr); }
+    else { }
+    }
+}
+
+// Marks the root decl of any &lvalue as memory-resident (and recurses into children).
+fn void scan_addr_taken(Lower* lo, ast::AstNode* e) {
+    if(e == null) { return; }
+    switch(e.h.kind) {
+    case ast::AstKind::UnaryOp: {
+        ast::UnaryOpNode* n = (ast::UnaryOpNode*)e;
+        if(n.op == token::TokenKind::Amp) {
+            void* root = lvalue_root_decl(n.operand);
+            if(root != null && is_local_decl(lo, root)) { mark_mem_var(lo, root); }
+        }
+        scan_addr_taken(lo, n.operand);
+    }
+    case ast::AstKind::BinaryOp: {
+        ast::BinaryOpNode* n = (ast::BinaryOpNode*)e;
+        scan_addr_taken(lo, n.lhs);
+        scan_addr_taken(lo, n.rhs);
+    }
+    case ast::AstKind::MemberAccess: { scan_addr_taken(lo, ((ast::MemberAccessNode*)e).base); }
+    case ast::AstKind::ArrayIndex: {
+        ast::ArrayIndexNode* n = (ast::ArrayIndexNode*)e;
+        scan_addr_taken(lo, n.base);
+        scan_addr_taken(lo, n.index);
+    }
+    case ast::AstKind::Cast: { scan_addr_taken(lo, ((ast::CastNode*)e).expr); }
+    case ast::AstKind::Call: {
+        ast::CallNode* n = (ast::CallNode*)e;
+        for(u64 i = 0; i < n.args.len; i += 1) { scan_addr_taken(lo, n.args[i]); }
+    }
+    case ast::AstKind::StructLit: {
+        ast::StructLitNode* n = (ast::StructLitNode*)e;
+        for(u64 i = 0; i < n.inits.len; i += 1) { scan_addr_taken(lo, n.inits[i].value); }
+    }
+    case ast::AstKind::ArrayLit: {
+        ast::ArrayLitNode* n = (ast::ArrayLitNode*)e;
+        for(u64 i = 0; i < n.elems.len; i += 1) { scan_addr_taken(lo, n.elems[i]); }
+    }
+    else { }
+    }
+}
+
+// The decl an lvalue is rooted at, or null if it goes through a pointer (which doesn't pin the base to memory).
+fn void* lvalue_root_decl(ast::AstNode* e) {
+    switch(e.h.kind) {
+    case ast::AstKind::Ident: { return ((ast::IdentNode*)e).resolved; }
+    case ast::AstKind::MemberAccess: {
+        ast::MemberAccessNode* n = (ast::MemberAccessNode*)e;
+        if(types::is_ptr((types::Type*)n.base.h.ty)) { return null; }
+        return lvalue_root_decl(n.base);
+    }
+    case ast::AstKind::ArrayIndex: {
+        ast::ArrayIndexNode* n = (ast::ArrayIndexNode*)e;
+        if(types::is_ptr((types::Type*)n.base.h.ty)) { return null; }
+        return lvalue_root_decl(n.base);
+    }
+    else { return null; }
+    }
+    return null;
+}
+
+fn void emit_mem_var_allocas(Lower* lo) {
+    for(u64 i = 0; i < lo.mem_vars.len; i += 1) {
+        types::Type* slot_ty = ((sema::Decl*)lo.mem_vars[i].decl).ty;
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::Alloca, types::intern_pointer(slot_ty, false), lo.func.src_pos);
+        lo.mem_vars[i].alloca = sapir::add_inst(lo.arena, lo.func, inst);
+    }
+}
+
+fn u32 emit_load(Lower* lo, u32 addr, types::Type* ty) {
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::Load, ty, lo.func.src_pos);
+    inst.a = addr;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+fn void emit_store(Lower* lo, u32 addr, u32 value) {
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::Store, types::prim_void(), lo.func.src_pos);
+    inst.a = addr;
+    inst.b = value;
+    sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+fn void emit_zero(Lower* lo, u32 addr, types::Type* ty) {
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::Zero, types::prim_void(), lo.func.src_pos);
+    inst.a = addr;
+    inst.imm = (u64)types::size_of(&lo.m.diag, ty);
+    sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+fn void emit_memcpy(Lower* lo, u32 dst, u32 src, types::Type* ty) {
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::Memcpy, types::prim_void(), lo.func.src_pos);
+    inst.a = dst;
+    inst.b = src;
+    inst.imm = (u64)types::size_of(&lo.m.diag, ty);
+    sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+fn u32 emit_temp_alloca(Lower* lo, types::Type* ty) {
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::Alloca, types::intern_pointer(ty, false), lo.func.src_pos);
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+fn u32 lower_slice_field(Lower* lo, ast::MemberAccessNode* n, types::Type* result_ty) {
+    u32 slice_value = lower_expr(lo, n.base);
+    sapir::Opcode op = sapir::Opcode::SliceLen;
+    if(n.field == interner::intern("ptr")) { op = sapir::Opcode::SlicePtr; }
+    sapir::Inst inst = sapir::new_inst(op, result_ty, n.h.src_pos);
+    inst.a = slice_value;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+// Address (a pointer value) of an lvalue expression.
+fn u32 lower_addr(Lower* lo, ast::AstNode* e) {
+    switch(e.h.kind) {
+    case ast::AstKind::Ident: {
+        void* resolved = ((ast::IdentNode*)e).resolved;
+        if(!is_local_decl(lo, resolved)) {
+            diag::report(&lo.m.diag, lo.m.arena, e.h.src_pos, "address of a non-local declaration is not yet supported in lowering");
+            return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));
+        }
+        u32 slot = mem_alloca(lo, resolved);
+        if(slot != sapir::INVALID_ID) { return slot; }
+        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));
+    }
+    case ast::AstKind::MemberAccess: {
+        ast::MemberAccessNode* n = (ast::MemberAccessNode*)e;
+        types::Type* base_ty = (types::Type*)n.base.h.ty;
+        u32 base_addr;
+        types::Type* container;
+        if(types::is_ptr(base_ty)) { base_addr = lower_expr(lo, n.base); container = base_ty.data.pointee; }
+        else { base_addr = lower_addr(lo, n.base); container = base_ty; }
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::FieldAddr, types::intern_pointer((types::Type*)e.h.ty, false), e.h.src_pos);
+        inst.a = base_addr;
+        inst.b = field_index_of(container, n.field);
+        return sapir::add_inst(lo.arena, lo.func, inst);
+    }
+    case ast::AstKind::ArrayIndex: {
+        ast::ArrayIndexNode* n = (ast::ArrayIndexNode*)e;
+        types::Type* base_ty = (types::Type*)n.base.h.ty;
+        u32 index = lower_expr(lo, n.index);
+        u32 base_addr;
+        if(types::is_ptr(base_ty)) { base_addr = lower_expr(lo, n.base); }
+        else { base_addr = lower_addr(lo, n.base); }
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::IndexAddr, types::intern_pointer((types::Type*)e.h.ty, false), e.h.src_pos);
+        inst.a = base_addr;
+        inst.b = index;
+        return sapir::add_inst(lo.arena, lo.func, inst);
+    }
+    case ast::AstKind::UnaryOp: {
+        ast::UnaryOpNode* n = (ast::UnaryOpNode*)e;
+        if(n.op == token::TokenKind::Star) { return lower_expr(lo, n.operand); }
+        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));
+    }
+    else {
+        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));
+    }
+    }
+    return sapir::INVALID_ID;
+}
+
+fn u32 field_index_of(types::Type* container, symbol::Symbol* field) {
+    ast::AstNode* decl = sema::container_decl(container);
+    if(decl == null) { return 0; }
+    return (u32)sema::find_field_index((ast::StructDeclNode*)decl, field);
+}
+
+// Builds an initializer into an existing address: a literal in place, an aggregate copy, or a scalar store.
+fn void lower_init_into(Lower* lo, u32 addr, types::Type* ty, ast::AstNode* init) {
+    if(is_aggregate(ty)) {
+        if(init.h.kind == ast::AstKind::StructLit) { build_struct_lit(lo, addr, ty, (ast::StructLitNode*)init); return; }
+        if(init.h.kind == ast::AstKind::ArrayLit) { build_array_lit(lo, addr, ty, (ast::ArrayLitNode*)init); return; }
+        if(init.h.kind == ast::AstKind::Call) {
+            diag::report(&lo.m.diag, lo.m.arena, init.h.src_pos, "an aggregate value returned from a call is not yet supported in lowering");
+            return;
+        }
+        emit_memcpy(lo, addr, lower_addr(lo, init), ty);
+        return;
+    }
+    emit_store(lo, addr, lower_expr(lo, init));
+}
+
+fn void build_struct_lit(Lower* lo, u32 addr, types::Type* ty, ast::StructLitNode* lit) {
+    emit_zero(lo, addr, ty);
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)sema::container_decl(ty);
+    for(u64 i = 0; i < lit.inits.len; i += 1) {
+        ast::FieldInitializer* fi = &lit.inits[i];
+        u32 field_index = (u32)i;
+        if(fi.name != null) { field_index = field_index_of(ty, fi.name); }
+        types::Type* field_ty = (types::Type*)decl.fields[field_index].resolved_type;
+        sapir::Inst addr_inst = sapir::new_inst(sapir::Opcode::FieldAddr, types::intern_pointer(field_ty, false), fi.src_pos);
+        addr_inst.a = addr;
+        addr_inst.b = field_index;
+        u32 field_addr = sapir::add_inst(lo.arena, lo.func, addr_inst);
+        lower_init_into(lo, field_addr, field_ty, fi.value);
+    }
+}
+
+fn void build_array_lit(Lower* lo, u32 addr, types::Type* ty, ast::ArrayLitNode* lit) {
+    types::Type* elem_ty = ty.data.array.elem;
+    for(u64 i = 0; i < lit.elems.len; i += 1) {
+        sapir::Inst index_inst = sapir::new_inst(sapir::Opcode::ConstInt, types::prim_u64(), lit.elems[i].h.src_pos);
+        index_inst.imm = i;
+        u32 index = sapir::add_inst(lo.arena, lo.func, index_inst);
+        sapir::Inst addr_inst = sapir::new_inst(sapir::Opcode::IndexAddr, types::intern_pointer(elem_ty, false), lit.elems[i].h.src_pos);
+        addr_inst.a = addr;
+        addr_inst.b = index;
+        u32 elem_addr = sapir::add_inst(lo.arena, lo.func, addr_inst);
+        lower_init_into(lo, elem_addr, elem_ty, lit.elems[i]);
+    }
+}
+
+// Stores rhs into an address, honoring compound ops and aggregate copies.
+fn void store_to_addr(Lower* lo, u32 addr, types::Type* ty, token::TokenKind op, ast::AstNode* rhs) {
+    sapir::Opcode combine = compound_opcode(op);
+    if(combine == sapir::Opcode::INVALID) {
+        lower_init_into(lo, addr, ty, rhs);
+        return;
+    }
+    u32 current_value = emit_load(lo, addr, ty);
+    sapir::Inst inst = sapir::new_inst(combine, ty, rhs.h.src_pos);
+    inst.a = current_value;
+    inst.b = lower_expr(lo, rhs);
+    emit_store(lo, addr, sapir::add_inst(lo.arena, lo.func, inst));
 }
 
 // MANGLING + OPCODE MAPS ///////////////////////////////////////////////////////////
