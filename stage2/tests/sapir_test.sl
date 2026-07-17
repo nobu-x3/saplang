@@ -44,18 +44,18 @@ fn i32 inst_encoding(arena::Arena* a, u8[] msg) {
     sapir::SapirFn func;
     sys::memset(&func, 0, sizeof(sapir::SapirFn));
 
-    sapir::Inst blank = sapir::new_inst((u16)sapir::Opcode::ConstInt, types::prim_i32(), 7);
+    sapir::Inst blank = sapir::new_inst(sapir::Opcode::ConstInt, types::prim_i32(), 7);
     if(!testing::expect_eq(blank.a, sapir::INVALID_ID, msg)) { return -1; }
     if(!testing::expect_eq(blank.b, sapir::INVALID_ID, msg)) { return -2; }
-    if(!testing::expect_eq(blank.op, (u16)sapir::Opcode::ConstInt, msg)) { return -3; }
+    if(!testing::expect_eq((u16)blank.op, (u16)sapir::Opcode::ConstInt, msg)) { return -3; }
     if(!testing::expect_eq((void*)blank.ty, (void*)types::prim_i32(), msg)) { return -4; }
     if(!testing::expect_eq(blank.src_pos, (u32)7, msg)) { return -5; }
 
     blank.imm = 42;
     u32 first_value = sapir::add_inst(a, &func, blank);
-    sapir::Inst second = sapir::new_inst((u16)sapir::Opcode::ConstInt, types::prim_i32(), 8);
+    sapir::Inst second = sapir::new_inst(sapir::Opcode::ConstInt, types::prim_i32(), 8);
     u32 second_value = sapir::add_inst(a, &func, second);
-    sapir::Inst add = sapir::new_inst((u16)sapir::Opcode::Add, types::prim_i32(), 9);
+    sapir::Inst add = sapir::new_inst(sapir::Opcode::Add, types::prim_i32(), 9);
     add.a = first_value;
     add.b = second_value;
     u32 third_value = sapir::add_inst(a, &func, add);
@@ -107,14 +107,14 @@ fn i32 block_and_extra(arena::Arena* a, u8[] msg) {
 }
 
 fn i32 terminator_classification(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_eq(sapir::is_terminator((u16)sapir::Opcode::Br), true, msg)) { return -1; }
-    if(!testing::expect_eq(sapir::is_terminator((u16)sapir::Opcode::CondBr), true, msg)) { return -2; }
-    if(!testing::expect_eq(sapir::is_terminator((u16)sapir::Opcode::SwitchBr), true, msg)) { return -3; }
-    if(!testing::expect_eq(sapir::is_terminator((u16)sapir::Opcode::Ret), true, msg)) { return -4; }
-    if(!testing::expect_eq(sapir::is_terminator((u16)sapir::Opcode::Unreachable), true, msg)) { return -5; }
-    if(!testing::expect_eq(sapir::is_terminator((u16)sapir::Opcode::Add), false, msg)) { return -6; }
-    if(!testing::expect_eq(sapir::is_terminator((u16)sapir::Opcode::Call), false, msg)) { return -7; }
-    if(!testing::expect_eq(sapir::is_terminator((u16)sapir::Opcode::Phi), false, msg)) { return -8; }
+    if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::Br), true, msg)) { return -1; }
+    if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::CondBr), true, msg)) { return -2; }
+    if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::SwitchBr), true, msg)) { return -3; }
+    if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::Ret), true, msg)) { return -4; }
+    if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::Unreachable), true, msg)) { return -5; }
+    if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::Add), false, msg)) { return -6; }
+    if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::Call), false, msg)) { return -7; }
+    if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::Phi), false, msg)) { return -8; }
     return 0;
 }
 
@@ -150,7 +150,7 @@ fn i32 inst_and_extra_growth(arena::Arena* a, u8[] msg) {
     sys::memset(&func, 0, sizeof(sapir::SapirFn));
     const u32 count = 50;
     for(u32 step = 0; step < count; step += 1) {
-        sapir::Inst inst = sapir::new_inst((u16)sapir::Opcode::ConstInt, types::prim_u64(), step);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, types::prim_u64(), step);
         inst.imm = (u64)step;
         u32 value_id = sapir::add_inst(a, &func, inst);
         if(!testing::expect_eq(value_id, step, msg)) { return -1; }

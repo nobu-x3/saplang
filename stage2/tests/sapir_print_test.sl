@@ -7,7 +7,7 @@ import io;
 import arena;
 import sys;
 
-fn u32 emit(arena::Arena* a, sapir::SapirFn* func, u16 op, types::Type* ty, u32 operand_a, u32 operand_b) {
+fn u32 emit(arena::Arena* a, sapir::SapirFn* func, sapir::Opcode op, types::Type* ty, u32 operand_a, u32 operand_b) {
     sapir::Inst inst = sapir::new_inst(op, ty, 0);
     inst.a = operand_a;
     inst.b = operand_b;
@@ -67,21 +67,21 @@ fn i32 golden_pick(arena::Arena* a, u8[] msg) {
     u32 b2 = sapir::new_block(a, func);
     u32 b3 = sapir::new_block(a, func);
 
-    emit(a, func, (u16)sapir::Opcode::Param, types::prim_bool(), 0, sapir::INVALID_ID);
-    emit(a, func, (u16)sapir::Opcode::Param, types::prim_u64(), 1, sapir::INVALID_ID);
-    emit(a, func, (u16)sapir::Opcode::Param, types::prim_u64(), 2, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Param, types::prim_bool(), 0, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Param, types::prim_u64(), 1, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Param, types::prim_u64(), 2, sapir::INVALID_ID);
     u32 cond_extra = sapir::add_extra(a, func, b1);
     sapir::add_extra(a, func, b2);
-    emit(a, func, (u16)sapir::Opcode::CondBr, types::prim_void(), 0, cond_extra);
+    emit(a, func, sapir::Opcode::CondBr, types::prim_void(), 0, cond_extra);
     func.blocks[b0].body_start = 0;
     func.blocks[b0].body_end = 4;
 
-    emit(a, func, (u16)sapir::Opcode::Br, types::prim_void(), b3, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Br, types::prim_void(), b3, sapir::INVALID_ID);
     func.blocks[b1].body_start = 4;
     func.blocks[b1].body_end = 5;
     sapir::add_pred(a, func, b1, b0);
 
-    emit(a, func, (u16)sapir::Opcode::Br, types::prim_void(), b3, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Br, types::prim_void(), b3, sapir::INVALID_ID);
     func.blocks[b2].body_start = 5;
     func.blocks[b2].body_end = 6;
     sapir::add_pred(a, func, b2, b0);
@@ -91,9 +91,9 @@ fn i32 golden_pick(arena::Arena* a, u8[] msg) {
     sapir::add_extra(a, func, 1);
     sapir::add_extra(a, func, b2);
     sapir::add_extra(a, func, 2);
-    u32 phi_id = emit(a, func, (u16)sapir::Opcode::Phi, types::prim_u64(), sapir::INVALID_ID, phi_extra);
+    u32 phi_id = emit(a, func, sapir::Opcode::Phi, types::prim_u64(), sapir::INVALID_ID, phi_extra);
     sapir::add_phi_to_block(a, func, b3, phi_id);
-    emit(a, func, (u16)sapir::Opcode::Ret, types::prim_void(), phi_id, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Ret, types::prim_void(), phi_id, sapir::INVALID_ID);
     func.blocks[b3].body_start = 6;
     func.blocks[b3].body_end = 8;
     sapir::add_pred(a, func, b3, b1);
@@ -173,21 +173,21 @@ fn i32 golden_ops(arena::Arena* a, u8[] msg) {
     func.param_count = 2;
     u32 b0 = sapir::new_block(a, func);
 
-    emit(a, func, (u16)sapir::Opcode::Param, types::prim_i32(), 0, sapir::INVALID_ID);
-    emit(a, func, (u16)sapir::Opcode::Param, types::prim_i32(), 1, sapir::INVALID_ID);
-    emit(a, func, (u16)sapir::Opcode::Add, types::prim_i32(), 0, 1);
-    emit(a, func, (u16)sapir::Opcode::Sub, types::prim_i32(), 2, 1);
-    emit(a, func, (u16)sapir::Opcode::Mul, types::prim_i32(), 3, 0);
-    emit(a, func, (u16)sapir::Opcode::Div, types::prim_i32(), 4, 1);
-    emit(a, func, (u16)sapir::Opcode::CmpLt, types::prim_bool(), 5, 0);
+    emit(a, func, sapir::Opcode::Param, types::prim_i32(), 0, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Param, types::prim_i32(), 1, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Add, types::prim_i32(), 0, 1);
+    emit(a, func, sapir::Opcode::Sub, types::prim_i32(), 2, 1);
+    emit(a, func, sapir::Opcode::Mul, types::prim_i32(), 3, 0);
+    emit(a, func, sapir::Opcode::Div, types::prim_i32(), 4, 1);
+    emit(a, func, sapir::Opcode::CmpLt, types::prim_bool(), 5, 0);
     u32 call_extra = sapir::add_extra(a, func, 1);
     sapir::add_extra(a, func, 0);
-    emit(a, func, (u16)sapir::Opcode::Call, types::prim_i32(), helper_index, call_extra);
-    emit(a, func, (u16)sapir::Opcode::Cast, types::prim_i64(), 5, sapir::INVALID_ID);
-    emit(a, func, (u16)sapir::Opcode::Alloca, i64_ptr, sapir::INVALID_ID, sapir::INVALID_ID);
-    emit(a, func, (u16)sapir::Opcode::Store, types::prim_void(), 9, 8);
-    emit(a, func, (u16)sapir::Opcode::Load, types::prim_i64(), 9, sapir::INVALID_ID);
-    emit(a, func, (u16)sapir::Opcode::Ret, types::prim_void(), 11, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Call, types::prim_i32(), helper_index, call_extra);
+    emit(a, func, sapir::Opcode::Cast, types::prim_i64(), 5, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Alloca, i64_ptr, sapir::INVALID_ID, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Store, types::prim_void(), 9, 8);
+    emit(a, func, sapir::Opcode::Load, types::prim_i64(), 9, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Ret, types::prim_void(), 11, sapir::INVALID_ID);
     func.blocks[b0].body_start = 0;
     func.blocks[b0].body_end = 13;
 
@@ -233,7 +233,7 @@ fn i32 golden_switch(arena::Arena* a, u8[] msg) {
     u32 b1 = sapir::new_block(a, func);
     u32 b2 = sapir::new_block(a, func);
 
-    emit(a, func, (u16)sapir::Opcode::Param, types::prim_i32(), 0, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Param, types::prim_i32(), 0, sapir::INVALID_ID);
     u32 sw_extra = sapir::add_extra(a, func, b2);
     sapir::add_extra(a, func, 2);
     sapir::add_extra(a, func, 10);
@@ -242,16 +242,16 @@ fn i32 golden_switch(arena::Arena* a, u8[] msg) {
     sapir::add_extra(a, func, 20);
     sapir::add_extra(a, func, 0);
     sapir::add_extra(a, func, b1);
-    emit(a, func, (u16)sapir::Opcode::SwitchBr, types::prim_void(), 0, sw_extra);
+    emit(a, func, sapir::Opcode::SwitchBr, types::prim_void(), 0, sw_extra);
     func.blocks[b0].body_start = 0;
     func.blocks[b0].body_end = 2;
 
-    emit(a, func, (u16)sapir::Opcode::Ret, types::prim_void(), sapir::INVALID_ID, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Ret, types::prim_void(), sapir::INVALID_ID, sapir::INVALID_ID);
     func.blocks[b1].body_start = 2;
     func.blocks[b1].body_end = 3;
     sapir::add_pred(a, func, b1, b0);
 
-    emit(a, func, (u16)sapir::Opcode::Ret, types::prim_void(), sapir::INVALID_ID, sapir::INVALID_ID);
+    emit(a, func, sapir::Opcode::Ret, types::prim_void(), sapir::INVALID_ID, sapir::INVALID_ID);
     func.blocks[b2].body_start = 3;
     func.blocks[b2].body_end = 4;
     sapir::add_pred(a, func, b2, b0);

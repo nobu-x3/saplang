@@ -68,7 +68,7 @@ fn void print_fn(sapir::SapirModule* m, sapir::SapirFn* func, io::OutBuf* out) {
         }
         if(block.body_start == sapir::INVALID_ID) { continue; }
         for(u32 inst_id = block.body_start; inst_id < block.body_end; inst_id += 1) {
-            if(func.insts[inst_id].op == (u16)sapir::Opcode::Phi) { continue; }   // a phi here belongs to another block's list
+            if(func.insts[inst_id].op == sapir::Opcode::Phi) { continue; }   // a phi here belongs to another block's list
             print_inst(m, func, inst_id, out);
         }
     }
@@ -85,7 +85,7 @@ fn void print_inst(sapir::SapirModule* m, sapir::SapirFn* func, u32 inst_id, io:
     }
     io::outbuf_write(out, opcode_name(inst.op));
 
-    switch((sapir::Opcode)inst.op) {
+    switch(inst.op) {
     case sapir::Opcode::ConstInt: {
         write_ty_suffix(inst.ty, out);
         io::outbuf_write(out, " ");
@@ -320,8 +320,8 @@ fn void write_sym(io::OutBuf* out, symbol::Symbol* s) {
     io::outbuf_write(out, interner::symbol_str(s));
 }
 
-fn u8[] opcode_name(u16 op) {
-    switch((sapir::Opcode)op) {
+fn u8[] opcode_name(sapir::Opcode op) {
+    switch(op) {
     case sapir::Opcode::ConstInt:    { return "const"; }
     case sapir::Opcode::ConstFloat:  { return "const"; }
     case sapir::Opcode::ConstBool:   { return "const.bool"; }

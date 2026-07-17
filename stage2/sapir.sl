@@ -115,8 +115,8 @@ export enum InstFlags : u16 {
 }
 
 export struct Inst {
-    u16             op;
-    u16             flags;
+    Opcode          op;
+    u16             flags;          // InstFlags bitmask
     u32             src_pos;
     types::Type*    ty;             // result type; void-typed ops carry types::prim_void()
     u32             a;              // operand slot — meaning is per-opcode
@@ -191,8 +191,8 @@ TERM_FIRST = Br,
 TERM_LAST = Unreachable,
 }
 
-export fn bool is_terminator(u16 op) {
-    return op >= (u16)Opcode::TERM_FIRST && op <= (u16)Opcode::TERM_LAST;
+export fn bool is_terminator(Opcode op) {
+    return op >= Opcode::TERM_FIRST && op <= Opcode::TERM_LAST;
 }
 
 // CAST DERIVATION ////////////////////////////////////////////////////////////////
@@ -432,7 +432,7 @@ export fn void add_phi_to_block(arena::Arena* a, SapirFn* func, u32 block, u32 p
 }
 
 // Seeds a/b to INVALID_ID so callers only set the operand slots their opcode uses.
-export fn Inst new_inst(u16 op, types::Type* ty, u32 src_pos) {
+export fn Inst new_inst(Opcode op, types::Type* ty, u32 src_pos) {
     Inst inst;
     sys::memset(&inst, 0, sizeof(Inst));
     inst.op = op;
