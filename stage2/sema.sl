@@ -808,7 +808,7 @@ fn symbol::Symbol* qualify_decl_name(Sema* s, symbol::Symbol* bare_name) {
 
 
 // ============================================================================
-// §7 — Signature resolution
+// Signature resolution
 // ============================================================================
 
 // Aliases are dissolved here; the returned Type* is never an alias wrapper.
@@ -1022,7 +1022,7 @@ fn types::Type* decl_to_type(Sema* s, module::Module* target, Decl* d) {
 
 
 // ============================================================================
-// §8 — Body checking: bidirectional type checking
+// Body checking: bidirectional type checking
 // ============================================================================
 
 // StructLit / ArrayLit / UndefinedLit are not synth-able — they need check-mode.
@@ -1948,7 +1948,7 @@ fn bool is_byte(types::Type* t) {
     return t.prim == types::PrimitiveKind::U8 || t.prim == types::PrimitiveKind::I8;
 }
 
-// A string literal targets a `u8`/`i8` pointer, slice, or array (spec §2.13).
+// A string literal targets a `u8`/`i8` pointer, slice, or array.
 fn bool check_string_lit(Sema* s, ast::StringLitNode* n, types::Type* expected) {
     types::Type* elem = null;
     if(expected.kind == types::TypeKind::Pointer)   { elem = expected.data.pointee; }
@@ -2007,7 +2007,7 @@ fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
 
 
 // ============================================================================
-// §9 — Statement checking
+// Statement checking
 // ============================================================================
 
 // Folds a constant case label and flags it if a prior label shared the value; non-constant labels are skipped.
@@ -2226,7 +2226,7 @@ fn bool check_cond(Sema* s, ast::AstNode* e) {
 
 
 // ============================================================================
-// §13 — Diagnostic helpers
+// Diagnostic helpers
 // ============================================================================
 
 // Report a snprintf result (a stack buffer + its return code) as an error.
