@@ -15,6 +15,16 @@ fn u8[] lower_and_print(arena::Arena* a, u8[] src) {
     return sapir_print::print_module_to_arena(sm, a);
 }
 
+fn void wl(io::OutBuf* b, u8[] line) {
+    io::outbuf_write(b, line);
+    io::outbuf_write(b, "\n");
+}
+
+fn i32 golden(arena::Arena* a, u8[] src, io::OutBuf* want, u8[] msg) {
+    if(!testing::expect_eq(lower_and_print(a, src), io::outbuf_bytes(want), msg)) { return -1; }
+    return 0;
+}
+
 fn i32 straight_line_add(arena::Arena* a, u8[] msg) {
     u8[] got = lower_and_print(a, "fn i32 add(i32 x, i32 y) { i32 z = x + y; return z * 2; }");
     io::OutBuf want;
@@ -320,6 +330,174 @@ fn i32 short_circuit_and(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 for_loop(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    %1 = const.i32 0");
+    wl(&w, "    %2 = const.i32 0");
+    wl(&w, "    br b2");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds: b0, b4");
+    wl(&w, "    %5 = phi.i32 [b0: %2, b4: %13]");
+    wl(&w, "    %9 = phi.i32 [b0: %1, b4: %10]");
+    wl(&w, "    %7 = cmplt.i32 %5, %0");
+    wl(&w, "    condbr %7, b3, b5");
+    wl(&w, "b3:  ; preds: b2");
+    wl(&w, "    %10 = add.i32 %9, %5");
+    wl(&w, "    br b4");
+    wl(&w, "b4:  ; preds: b3");
+    wl(&w, "    %12 = const.i32 1");
+    wl(&w, "    %13 = add.i32 %5, %12");
+    wl(&w, "    br b2");
+    wl(&w, "b5:  ; preds: b2");
+    wl(&w, "    ret %9");
+    wl(&w, "b6:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 f(i32 n) { i32 s = 0; for(i32 i = 0; i < n; i = i + 1) { s = s + i; } return s; }", &w, msg);
+}
+
+fn i32 or_short_circuit(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(bool, bool) -> bool {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.bool 0");
+    wl(&w, "    %1 = param.bool 1");
+    wl(&w, "    %2 = const.bool 1");
+    wl(&w, "    condbr %0, b4, b3");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b3:  ; preds: b0");
+    wl(&w, "    br b4");
+    wl(&w, "b4:  ; preds: b0, b3");
+    wl(&w, "    %5 = phi.bool [b0: %2, b3: %1]");
+    wl(&w, "    ret %5");
+    wl(&w, "}");
+    return golden(a, "fn bool f(bool a, bool b) { return a || b; }", &w, msg);
+}
+
+fn i32 partial_assign(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(bool) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.bool 0");
+    wl(&w, "    %1 = const.i32 0");
+    wl(&w, "    condbr %0, b2, b3");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds: b0");
+    wl(&w, "    %4 = const.i32 5");
+    wl(&w, "    br b4");
+    wl(&w, "b3:  ; preds: b0");
+    wl(&w, "    br b4");
+    wl(&w, "b4:  ; preds: b2, b3");
+    wl(&w, "    %7 = phi.i32 [b2: %4, b3: %1]");
+    wl(&w, "    ret %7");
+    wl(&w, "b5:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 f(bool c) { i32 x = 0; if(c) { x = 5; } return x; }", &w, msg);
+}
+
+fn i32 nested_if_in_while(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 768);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    %1 = const.i32 0");
+    wl(&w, "    %2 = const.i32 0");
+    wl(&w, "    br b2");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds: b0, b7");
+    wl(&w, "    %5 = phi.i32 [b0: %2, b7: %19]");
+    wl(&w, "    %12 = phi.i32 [b0: %1, b7: %22]");
+    wl(&w, "    %7 = cmplt.i32 %5, %0");
+    wl(&w, "    condbr %7, b3, b4");
+    wl(&w, "b3:  ; preds: b2");
+    wl(&w, "    %9 = const.i32 2");
+    wl(&w, "    %10 = cmpgt.i32 %5, %9");
+    wl(&w, "    condbr %10, b5, b6");
+    wl(&w, "b4:  ; preds: b2");
+    wl(&w, "    ret %12");
+    wl(&w, "b5:  ; preds: b3");
+    wl(&w, "    %14 = add.i32 %12, %5");
+    wl(&w, "    br b7");
+    wl(&w, "b6:  ; preds: b3");
+    wl(&w, "    br b7");
+    wl(&w, "b7:  ; preds: b5, b6");
+    wl(&w, "    %22 = phi.i32 [b5: %14, b6: %12]");
+    wl(&w, "    %18 = const.i32 1");
+    wl(&w, "    %19 = add.i32 %5, %18");
+    wl(&w, "    br b2");
+    wl(&w, "b8:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 f(i32 n) { i32 s = 0; i32 i = 0; while(i < n) { if(i > 2) { s = s + i; } i = i + 1; } return s; }", &w, msg);
+}
+
+fn i32 enum_switch(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 640);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(main::E) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.main::E 0");
+    wl(&w, "    %1 = const.i32 0");
+    wl(&w, "    switchbr %0, default b3 [0: b4, 1: b5]");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds: b3, b4, b5");
+    wl(&w, "    %4 = phi.i32 [b3: %6, b4: %8, b5: %10]");
+    wl(&w, "    ret %4");
+    wl(&w, "b3:  ; preds: b0");
+    wl(&w, "    %6 = const.i32 9");
+    wl(&w, "    br b2");
+    wl(&w, "b4:  ; preds: b0");
+    wl(&w, "    %8 = const.i32 1");
+    wl(&w, "    br b2");
+    wl(&w, "b5:  ; preds: b0");
+    wl(&w, "    %10 = const.i32 2");
+    wl(&w, "    br b2");
+    wl(&w, "b6:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "enum E : i32 { A, B, C } fn i32 f(E e) { i32 r = 0; switch(e) { case E::A: { r = 1; } case E::B: { r = 2; } else { r = 9; } } return r; }", &w, msg);
+}
+
+fn i32 global_read_diag(arena::Arena* a, u8[] msg) {
+    module::Module* m = test_util::frontend(a, "const i32 LIMIT = 10; fn i32 f() { return LIMIT; }");
+    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
+    lower::lower_module(m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "reference to a non-local declaration is not yet supported in lowering", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)42, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 global_write_diag(arena::Arena* a, u8[] msg) {
+    module::Module* m = test_util::frontend(a, "i32 g = 0; fn void f() { g = 5; }");
+    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
+    lower::lower_module(m);
+    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "assignment to a non-local declaration is not yet supported in lowering", msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)25, msg)) { return -4; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Lower Tests";
@@ -336,5 +514,12 @@ fn i32 main() {
     testing::add(suite, "while_loop_phi",     &while_loop_phi);
     testing::add(suite, "switch_phi",         &switch_phi);
     testing::add(suite, "short_circuit_and",  &short_circuit_and);
+    testing::add(suite, "for_loop",           &for_loop);
+    testing::add(suite, "or_short_circuit",   &or_short_circuit);
+    testing::add(suite, "partial_assign",     &partial_assign);
+    testing::add(suite, "nested_if_in_while", &nested_if_in_while);
+    testing::add(suite, "enum_switch",        &enum_switch);
+    testing::add(suite, "global_read_diag",   &global_read_diag);
+    testing::add(suite, "global_write_diag",  &global_write_diag);
     return testing::run();
 }

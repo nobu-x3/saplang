@@ -658,6 +658,66 @@ fn i32 e2e_generic_template_skipped(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// E2E: control flow lowered through the real driver produces the expected phi'd sapir.
+fn i32 e2e_lower_control_flow(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* m = mk_source_module(a, "prog", "fn i32 f(bool c) { i32 x = 0; if(c) { x = 1; } else { x = 2; } return x; }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    if(!testing::expect_ne((void*)m.sapir, null, msg)) { return -2; }
+
+    u8[] got = sapir_print::print_module_to_arena((sapir::SapirModule*)m.sapir, a);
+    io::OutBuf want;
+    io::outbuf_init(&want, a, 512);
+    io::outbuf_write(&want, "module prog\n\n");
+    io::outbuf_write(&want, "fn __prog_f(bool) -> i32 {\n");
+    io::outbuf_write(&want, "b0:  ; preds:\n");
+    io::outbuf_write(&want, "    %0 = param.bool 0\n");
+    io::outbuf_write(&want, "    %1 = const.i32 0\n");
+    io::outbuf_write(&want, "    condbr %0, b2, b3\n");
+    io::outbuf_write(&want, "b1:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "b2:  ; preds: b0\n");
+    io::outbuf_write(&want, "    %4 = const.i32 1\n");
+    io::outbuf_write(&want, "    br b4\n");
+    io::outbuf_write(&want, "b3:  ; preds: b0\n");
+    io::outbuf_write(&want, "    %6 = const.i32 2\n");
+    io::outbuf_write(&want, "    br b4\n");
+    io::outbuf_write(&want, "b4:  ; preds: b2, b3\n");
+    io::outbuf_write(&want, "    %8 = phi.i32 [b2: %4, b3: %6]\n");
+    io::outbuf_write(&want, "    ret %8\n");
+    io::outbuf_write(&want, "b5:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "}\n");
+    if(!testing::expect_eq(got, io::outbuf_bytes(&want), msg)) { return -3; }
+    return 0;
+}
+
+// A while loop lowered through the driver leaves a well-formed sapir module.
+fn i32 e2e_lower_loop(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* m = mk_source_module(a, "prog", "fn i32 f(i32 n) { i32 i = 0; while(i < n) { i = i + 1; } return i; }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    if(!testing::expect_ne((void*)m.sapir, null, msg)) { return -2; }
+    sapir::SapirModule* sm = (sapir::SapirModule*)m.sapir;
+    if(!testing::expect_eq(sm.fns.len, (u64)1, msg)) { return -3; }
+    return 0;
+}
+
+// The driver fails (rc != 0, error counted) on a not-yet-supported global reference.
+fn i32 e2e_lower_global_ref_fails(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* m = mk_source_module(a, "prog", "const i32 LIMIT = 10; fn i32 f() { return LIMIT; }");
+    compiler::add_module(c, m);
+    if(!testing::expect_ne(compiler::run_frontend(c), 0, msg)) { return -1; }
+    if(!testing::expect_gt(c.error_count, (i64)0, msg)) { return -2; }
+    return 0;
+}
+
 fn i32 argv_sapir_dump(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -722,6 +782,9 @@ fn i32 main() {
     testing::add(e2e, "e2e_lower_single_fn",         &e2e_lower_single_fn);
     testing::add(e2e, "e2e_lower_multi_module",      &e2e_lower_multi_module);
     testing::add(e2e, "e2e_generic_template_skipped", &e2e_generic_template_skipped);
+    testing::add(e2e, "e2e_lower_control_flow",      &e2e_lower_control_flow);
+    testing::add(e2e, "e2e_lower_loop",              &e2e_lower_loop);
+    testing::add(e2e, "e2e_lower_global_ref_fails",  &e2e_lower_global_ref_fails);
 
     return testing::run();
 }
