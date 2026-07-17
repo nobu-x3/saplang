@@ -191,6 +191,7 @@ fn i32 cast_structural(arena::Arena* a, u8[] msg) {
     if(!testing::expect_eq((u32)sapir::cast_op(int_array, int_slice), (u32)sapir::CastOp::ArrayToSlice, msg)) { return -2; }
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_null_ptr(), int_slice), (u32)sapir::CastOp::NullToSlice, msg)) { return -3; }
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_null_ptr(), int_ptr), (u32)sapir::CastOp::Nop, msg)) { return -4; }
+    if(!testing::expect_eq((u32)sapir::cast_op(int_slice, int_slice), (u32)sapir::CastOp::Nop, msg)) { return -5; }
     return 0;
 }
 

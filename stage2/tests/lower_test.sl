@@ -850,6 +850,24 @@ fn i32 array_to_slice_cast(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32[] f() { i32[3] arr = [1,2,3]; return (i32[])arr; }", &w, msg);
 }
 
+// A redundant slice-to-slice cast forwards the slice (must not become a null slice).
+fn i32 slice_noop_cast(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32[]) -> i32[] {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32[] 0");
+    wl(&w, "    %1 = cast.i32[] %0");
+    wl(&w, "    ret %1");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32[] f(i32[] s) { return (i32[])s; }", &w, msg);
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Lower Tests";
@@ -889,5 +907,6 @@ fn i32 main() {
     testing::add(suite, "float_cast",         &float_cast);
     testing::add(suite, "ptr_to_int_cast",    &ptr_to_int_cast);
     testing::add(suite, "array_to_slice_cast", &array_to_slice_cast);
+    testing::add(suite, "slice_noop_cast",    &slice_noop_cast);
     return testing::run();
 }

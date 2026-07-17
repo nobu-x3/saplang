@@ -222,6 +222,7 @@ export fn CastOp cast_op(types::Type* src, types::Type* dst) {
 
     if(types::is_slice(dest)) {
         if(types::is_array(source)) { return CastOp::ArrayToSlice; }
+        if(types::is_slice(source)) { return CastOp::Nop; }
         return CastOp::NullToSlice;
     }
     if(types::is_array(source) && types::is_ptr(dest)) { return CastOp::ArrayToElemPtr; }
