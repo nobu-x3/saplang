@@ -151,7 +151,7 @@ export fn void discover(Compiler* c) {
 // Unreadable is an error; an empty file is valid (imports get their check in resolve_import_source).
 fn void add_entry_module(Compiler* c, u8[] path) {
     u8[] empty = {null, 0};
-    module::Module* m = new_source_module(c, interner::intern(path_stem(path)), empty);
+    module::Module* m = new_source_module(c, interner::intern(path_stem(path)), path, empty);
     add_module(c, m);
     io::File f = io::open(path, "r");
     if(f.fp == null) {
@@ -162,7 +162,7 @@ fn void add_entry_module(Compiler* c, u8[] path) {
     io::close(&f);
 }
 
-fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, u8[] src) {
+fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, u8[] path, u8[] src) {
     module::Module* m = (module::Module*)arena::alloc(c.arena, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
     arena::Arena* module_arena = (arena::Arena*)arena::alloc(c.arena, sizeof(arena::Arena));
@@ -170,6 +170,7 @@ fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, u8[] src
     module_arena.default_page_size = 1048576;
     m.arena = module_arena;
     m.name = name;
+    m.path = path;
     m.source = src;
     return m;
 }
@@ -191,14 +192,13 @@ fn void discover_imports(Compiler* c, module::Module* m) {
             symbol::Symbol* import_name = toks[token_index + 1].data.sym;
             module::Module* dep = find_module(c, import_name);
             if(dep == null) {
-                bool found = false;
-                u8[] src = resolve_import_source(c, import_name, &found);
-                if(!found) {
+                ResolvedSource resolved = resolve_import_source(c, import_name);
+                if(!resolved.found) {
                     diag::report(&m.diag, m.arena, toks[token_index].src_pos, "module not found");
                     token_index += 3;
                     continue;
                 }
-                dep = new_source_module(c, import_name, src);
+                dep = new_source_module(c, import_name, resolved.path, resolved.src);
                 add_module(c, dep);
             }
             import_list[filled] = dep;
@@ -222,23 +222,31 @@ fn module::Module* find_module(Compiler* c, symbol::Symbol* name) {
     return null;
 }
 
+struct ResolvedSource {
+    bool  found;
+    u8[]  path;
+    u8[]  src;
+}
+
 // Search import paths for <name>.<target>.sl (if a target is set), then <name>.sl; read the first that opens.
 // Reading at resolution time (one open per candidate) means a module is only created from source we actually read.
-fn u8[] resolve_import_source(Compiler* c, symbol::Symbol* name, bool* found) {
+fn ResolvedSource resolve_import_source(Compiler* c, symbol::Symbol* name) {
     u8[] name_bytes = interner::symbol_str(name);
     u8[] empty = {null, 0};
+    ResolvedSource result;
+    sys::memset(&result, 0, sizeof(ResolvedSource));
     for(u64 path_index = 0; path_index < c.import_paths.len; path_index += 1) {
+        bool found = false;
         if(c.target.len > 0) {
             u8[] platform = join_filename(c, c.import_paths[path_index], name_bytes, c.target);
-            u8[] bytes = open_and_read(c, platform, found);
-            if(*found) { return bytes; }
+            u8[] bytes = open_and_read(c, platform, &found);
+            if(found) { result.found = true; result.path = platform; result.src = bytes; return result; }
         }
         u8[] candidate = join_filename(c, c.import_paths[path_index], name_bytes, empty);
-        u8[] bytes = open_and_read(c, candidate, found);
-        if(*found) { return bytes; }
+        u8[] bytes = open_and_read(c, candidate, &found);
+        if(found) { result.found = true; result.path = candidate; result.src = bytes; return result; }
     }
-    *found = false;
-    return empty;
+    return result;
 }
 
 fn u8[] join_filename(Compiler* c, u8[] dir, u8[] name, u8[] target) {
@@ -382,10 +390,28 @@ export fn void drain_diagnostics(Compiler* c) {
         for(u64 entry_index = 0; entry_index < m.diag.entries.len; entry_index += 1) {
             diag::DiagEntry* entry = &m.diag.entries[entry_index];
             if(!entry.is_warning) { c.error_count += 1; }
-            sys::dprintf(2, "%.*s\n", (i32)entry.msg.len, (i8*)entry.msg.ptr);
+            print_diagnostic(m, entry);
         }
         diag::reset(&m.diag);
     }
+}
+
+// "<path>:<line>:<col>: <msg>"; a compinsert-generated position resolves back to its (possibly nested) generator site.
+fn void print_diagnostic(module::Module* m, diag::DiagEntry* entry) {
+    u32 pos = entry.src_pos;
+    bool generated = false;
+    while(pos >= (u32)m.source.len) {
+        module::InsertedSource* src = module::find_inserted_source(m, pos);
+        if(src == null) { break; }
+        pos = src.generator_pos;
+        generated = true;
+    }
+    u32 line = 0;
+    u32 col = 0;
+    module::line_col(m, pos, &line, &col);
+    u8[] tag = "";
+    if(generated) { tag = " (in generated code)"; }
+    sys::dprintf(2, "%.*s:%u:%u: %.*s%.*s\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr, (i32)tag.len, (i8*)tag.ptr);
 }
 
 export fn bool bail_on_errors(Compiler* c) {

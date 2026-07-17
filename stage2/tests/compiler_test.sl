@@ -305,6 +305,27 @@ fn i32 discover_dedups_shared_import(arena::Arena* a, u8[] msg) {
     return result;
 }
 
+fn i32 discover_sets_path_and_line_col(arena::Arena* a, u8[] msg) {
+    boot(a);
+    write_file("/tmp/sdpos.sl", "export fn i32 f() {\n    return 0;\n}");
+    compiler::Compiler* c = compiler::new(a);
+    compiler::add_source(c, "/tmp/sdpos.sl");
+    compiler::discover(c);
+    module::Module* m = c.modules[0];
+    i32 result = 0;
+    if(!testing::expect_eq(m.path, "/tmp/sdpos.sl", msg)) { result = -1; }
+    u32 line = 0;
+    u32 col = 0;
+    module::line_col(m, 0, &line, &col);
+    if(result == 0 && !testing::expect_eq(line, (u32)1, msg)) { result = -2; }
+    if(result == 0 && !testing::expect_eq(col, (u32)1, msg)) { result = -3; }
+    module::line_col(m, 24, &line, &col);
+    if(result == 0 && !testing::expect_eq(line, (u32)2, msg)) { result = -4; }
+    if(result == 0 && !testing::expect_eq(col, (u32)5, msg)) { result = -5; }
+    io::unlink("/tmp/sdpos.sl");
+    return result;
+}
+
 fn i32 discover_missing_reports(arena::Arena* a, u8[] msg) {
     boot(a);
     write_file("/tmp/sdmain5.sl", "import sdnope;\nexport fn i32 main() { return 0; }");
@@ -561,6 +582,7 @@ fn i32 main() {
     testing::add(dv, "discover_transitive",         &discover_transitive);
     testing::add(dv, "discover_dedups_shared_import", &discover_dedups_shared_import);
     testing::add(dv, "discover_missing_reports",    &discover_missing_reports);
+    testing::add(dv, "discover_sets_path_and_line_col", &discover_sets_path_and_line_col);
     testing::add(dv, "discover_single_no_imports",  &discover_single_no_imports);
     testing::add(dv, "discover_missing_entry_reports", &discover_missing_entry_reports);
     testing::add(dv, "discover_conditional_compilation", &discover_conditional_compilation);

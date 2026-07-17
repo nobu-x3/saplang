@@ -6,6 +6,7 @@ import ast;
 
 export struct Module {
     symbol::Symbol*         name;
+    u8[]                    path;            // source file path, for diagnostics
     u8[]                    source;          // owned; loaded by driver
     u32[]                   line_starts;     // byte offset of every line start
     token::Token[]          tokens;          // scanner output
@@ -62,4 +63,15 @@ export fn InsertedSource* find_inserted_source(Module* m, u32 pos) {
         if(pos >= src.base && pos < src.base + (u32)src.bytes.len) { return src; }
     }
     return null;
+}
+
+// 1-based line and column for a real source position; falls back to line 1 when line starts aren't computed.
+export fn void line_col(Module* m, u32 pos, u32* line, u32* col) {
+    u64 found = 0;
+    for(u64 k = 0; k < m.line_starts.len; k += 1) {
+        if(m.line_starts[k] <= pos) { found = k; } else { break; }
+    }
+    *line = (u32)found + 1;
+    if(m.line_starts.len == 0) { *col = pos + 1; return; }
+    *col = pos - m.line_starts[found] + 1;
 }
