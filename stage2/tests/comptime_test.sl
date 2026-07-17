@@ -1931,10 +1931,13 @@ fn i32 subst_respects_local_shadow(arena::Arena* a, u8[] m) {
     local.name = sym_n;
     local.type_expr = mk_type_arg(a, types::prim_i32());
     local.init = mk_int(a, 7, types::prim_i32());
-    ast::AstNode*[2] body_s;
-    body_s[0] = (ast::AstNode*)local;
-    body_s[1] = mk_return(a, mk_ident_named(a, sym_n));
-    g.body = mk_block(a, &body_s[0], 2);
+    // Nested block: a local may shadow the comptime param here (a top-level local can't; params share the body scope).
+    ast::AstNode*[2] inner_s;
+    inner_s[0] = (ast::AstNode*)local;
+    inner_s[1] = mk_return(a, mk_ident_named(a, sym_n));
+    ast::AstNode*[1] body_s;
+    body_s[0] = mk_block(a, &inner_s[0], 2);
+    g.body = mk_block(a, &body_s[0], 1);
 
     ast::AstNode*[1] call1;
     call1[0] = mk_int(a, 5, types::prim_i32());

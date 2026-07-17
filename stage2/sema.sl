@@ -658,7 +658,7 @@ fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
     s.scope = fn_scope;
     s.current_fn = (ast::AstNode*)func;
     s.current_return = fn_return_type(s, func);
-    stmt(s, func.body);
+    check_block_stmts(s, (ast::BlockNode*)func.body);
     s.scope = saved_scope;
     s.current_fn = saved_fn;
     s.current_return = saved_return;
@@ -693,7 +693,7 @@ export fn void sema_check_clone(module::Module* caller, module::Module* defining
         s.scope = fn_scope;
         s.current_fn = (ast::AstNode*)clone;
         s.current_return = return_type;
-        stmt(s, clone.body);
+        check_block_stmts(s, (ast::BlockNode*)clone.body);
     }
     clone.body_state = ast::BodyState::Checked;
 }
@@ -2010,6 +2010,20 @@ fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
 // Statement checking
 // ============================================================================
 
+// Owns no scope, so the fn body reuses the param scope (a top-level local can't shadow a parameter).
+fn void check_block_stmts(Sema* s, ast::BlockNode* block) {
+    for(u64 i = 0; i < block.stmts.len; i += 1) {
+        ast::AstNode* inner = block.stmts[i];
+        if(inner.h.kind == ast::AstKind::CompinsertStmt && !s.in_comprun && run_compinsert_stmts_hook != null) {
+            ast::AstNode*[] generated = run_compinsert_stmts_hook(s.m, (ast::CompInsertNode*)inner);
+            block_splice(s.m, block, i, generated);
+            i -= 1;                     // re-walk from the first spliced stmt (or the next stmt if none)
+        } else {
+            stmt(s, inner);
+        }
+    }
+}
+
 // Folds a constant case label and flags it if a prior label shared the value; non-constant labels are skipped.
 fn void check_duplicate_case(Sema* s, ast::AstNode* label, i64* seen, u64* seen_count) {
     if(eval_const_i64_hook == null || !expr_has_flag(label, ast::AstFlags::ConstExpr)) { return; }
@@ -2030,16 +2044,7 @@ fn void stmt(Sema* s, ast::AstNode* st) {
         Scope* block_scope = scope_new(balloc(s), s.scope, 8);
         Scope* saved = s.scope;
         s.scope = block_scope;
-        for(u64 i = 0; i < block.stmts.len; i += 1) {
-            ast::AstNode* inner = block.stmts[i];
-            if(inner.h.kind == ast::AstKind::CompinsertStmt && !s.in_comprun && run_compinsert_stmts_hook != null) {
-                ast::AstNode*[] generated = run_compinsert_stmts_hook(s.m, (ast::CompInsertNode*)inner);
-                block_splice(s.m, block, i, generated);
-                i -= 1;                     // re-walk from the first spliced stmt (or the next stmt if none)
-            } else {
-                stmt(s, inner);
-            }
-        }
+        check_block_stmts(s, block);
         s.scope = saved;
     }
     case ast::AstKind::VarDecl: {

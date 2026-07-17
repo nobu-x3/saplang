@@ -104,6 +104,21 @@ fn i32 err_duplicate_param(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_local_shadows_param(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32 a) { i32 a = 2; return a; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "duplicate declaration of a", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)25, m)) { return -3; }
+    return 0;
+}
+
+// A nested block still gets its own scope, so it may legally shadow a parameter.
+fn i32 ok_nested_block_shadows_param(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32 a) { { i32 a = 2; return a; } }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 err_return_type_mismatch(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { return true; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1064,6 +1079,8 @@ fn i32 main() {
     testing::add(suite, "err_undefined_ident",      &err_undefined_ident);
     testing::add(suite, "err_unknown_type",         &err_unknown_type);
     testing::add(suite, "err_duplicate_param",      &err_duplicate_param);
+    testing::add(suite, "err_local_shadows_param",  &err_local_shadows_param);
+    testing::add(suite, "ok_nested_block_shadows_param", &ok_nested_block_shadows_param);
     testing::add(suite, "err_return_type_mismatch", &err_return_type_mismatch);
     testing::add(suite, "ok_int_literal_adapts",    &ok_int_literal_adapts);
     testing::add(suite, "ok_small_int_literal_adapts", &ok_small_int_literal_adapts);
