@@ -69,8 +69,8 @@ export fn* void(module::Module*, ast::CompRunNode*) run_comprun_hook;
 // Evaluates an in-function compinsert and returns the generated statements for the block walk to splice in.
 export fn* ast::AstNode*[](module::Module*, ast::CompInsertNode*) run_compinsert_stmts_hook;
 
-// Folds a const-expression array size to u64 through the interpreter; false + a diagnostic if it isn't a comptime integer.
-export fn* bool(module::Module*, ast::AstNode*, u64*) eval_const_u64_hook;
+// Quiet fold to i64 (no diagnostics); each caller decides what a failed fold means.
+export fn* bool(module::Module*, ast::AstNode*, i64*) eval_const_i64_hook;
 
 
 export union DeclData {
@@ -977,16 +977,23 @@ export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
     if(expr.h.kind == ast::AstKind::IntLit) {
         return ((ast::IntLitNode*)expr).value;
     }
-    if(eval_const_u64_hook == null) { return 0; }
+    if(eval_const_i64_hook == null) { return 0; }
     types::Type* t = synth(s, expr);
     if(t == null) { return 0; }
     if(!expr_has_flag(expr, ast::AstFlags::ConstExpr)) {
         diag_array_size_not_const(s, expr.h.src_pos);
         return 0;
     }
-    u64 out = 0;
-    if(eval_const_u64_hook(s.m, expr, &out)) { return out; }
-    return 0;
+    i64 out = 0;
+    if(!eval_const_i64_hook(s.m, expr, &out)) {
+        diag_array_size_not_int(s, expr.h.src_pos);
+        return 0;
+    }
+    if(out < 0) {
+        diag_array_size_negative(s, expr.h.src_pos);
+        return 0;
+    }
+    return (u64)out;
 }
 
 fn types::Type* decl_to_type(Sema* s, module::Module* target, Decl* d) {
@@ -1849,7 +1856,7 @@ fn types::Type* int_lit_natural_type(u64 value, bool negative) {
 fn bool check_int_lit_signed(Sema* s, ast::IntLitNode* n, types::Type* expected, bool negative) {
     if(types::is_int(expected)) {
         if(types::int_lit_fits(n.value, negative, expected)) {
-            n.h.ty = (void*)expected;
+            set_expr((ast::AstNode*)n, expected, (u16)ast::AstFlags::ConstExpr);
             return true;
         }
         diag_lit_overflow(s, n.h.src_pos, n.value, expected);
@@ -2003,6 +2010,18 @@ fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
 // §9 — Statement checking
 // ============================================================================
 
+// Folds a constant case label and flags it if a prior label shared the value; non-constant labels are skipped.
+fn void check_duplicate_case(Sema* s, ast::AstNode* label, i64* seen, u64* seen_count) {
+    if(eval_const_i64_hook == null || !expr_has_flag(label, ast::AstFlags::ConstExpr)) { return; }
+    i64 value = 0;
+    if(!eval_const_i64_hook(s.m, label, &value)) { return; }
+    for(u64 i = 0; i < *seen_count; i += 1) {
+        if(seen[i] == value) { diag_duplicate_case(s, label.h.src_pos); return; }
+    }
+    seen[*seen_count] = value;
+    *seen_count += 1;
+}
+
 fn void stmt(Sema* s, ast::AstNode* st) {
     if(st == null) { return; }
     switch(st.h.kind) {
@@ -2059,11 +2078,18 @@ fn void stmt(Sema* s, ast::AstNode* st) {
             diag_switch_discriminant(s, switch_node.discriminant.h.src_pos, disc);
         }
         s.switch_depth += 1;
+        u64 label_total = 0;
+        for(u64 arm_index = 0; arm_index < switch_node.arms.len; arm_index += 1) { label_total += switch_node.arms[arm_index].labels.len; }
+        i64* seen = null;
+        u64 seen_count = 0;
+        if(label_total > 0) { seen = (i64*)arena::alloc(balloc(s), label_total * sizeof(i64)); }
         for(u64 arm_index = 0; arm_index < switch_node.arms.len; arm_index += 1) {
             ast::SwitchArm* arm = &switch_node.arms[arm_index];
             for(u64 label_index = 0; label_index < arm.labels.len; label_index += 1) {
-                if(disc != null) { check(s, arm.labels[label_index], disc); }
-                else { synth(s, arm.labels[label_index]); }
+                ast::AstNode* label = arm.labels[label_index];
+                if(disc != null) { check(s, label, disc); }
+                else { synth(s, label); }
+                check_duplicate_case(s, label, seen, &seen_count);
             }
             if(arm.body != null) { stmt(s, arm.body); }
         }
@@ -2312,6 +2338,16 @@ export fn void diag_array_size_not_const(Sema* s, u32 src_pos) {
     sema_report(s, src_pos, msg);
 }
 
+export fn void diag_array_size_not_int(Sema* s, u32 src_pos) {
+    u8[] msg = "array size must be a compile-time integer";
+    sema_report(s, src_pos, msg);
+}
+
+export fn void diag_array_size_negative(Sema* s, u32 src_pos) {
+    u8[] msg = "array size cannot be negative";
+    sema_report(s, src_pos, msg);
+}
+
 // "cannot call value of type %T". Used by synth_call on a non-function callee.
 export fn void diag_not_callable(Sema* s, u32 src_pos, types::Type* got) {
     u8[] got_str = types_print::print_to_arena(got, balloc(s));
@@ -2433,6 +2469,11 @@ export fn void diag_switch_discriminant(Sema* s, u32 src_pos, types::Type* got) 
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "switch value must be an integer or enum, found %.*s", (i32)got_str.len, (i8*)got_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
+}
+
+export fn void diag_duplicate_case(Sema* s, u32 src_pos) {
+    u8[] msg = "duplicate case label";
+    sema_report(s, src_pos, msg);
 }
 
 // "continue outside loop". Used by stmt.

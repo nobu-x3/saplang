@@ -164,6 +164,28 @@ fn i32 err_switch_disc_not_scalar(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_duplicate_case_label(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32 x) { switch(x) { case 1: { return 1; } case 1: { return 2; } else { return 0; } } }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "duplicate case label", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)64, m)) { return -3; }
+    return 0;
+}
+
+// Duplicate detection spans multi-label arms (`case 2:` here repeats a value from the first arm) but not distinct values.
+fn i32 err_duplicate_case_across_arms(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32 x) { switch(x) { case 1: case 2: { return 1; } case 2: { return 2; } else { return 0; } } }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "duplicate case label", m)) { return -2; }
+    return 0;
+}
+
+fn i32 ok_switch_distinct_multilabel(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32 x) { switch(x) { case 1: case 2: { return 1; } case 3: { return 3; } else { return 0; } } }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 ok_defer(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = 0; defer { x = 1; } return x; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1056,6 +1078,9 @@ fn i32 main() {
     testing::add(suite, "err_ptr_slice_open_hi",    &err_ptr_slice_open_hi);
     testing::add(suite, "ok_switch",                &ok_switch);
     testing::add(suite, "err_switch_disc_not_scalar", &err_switch_disc_not_scalar);
+    testing::add(suite, "err_duplicate_case_label",  &err_duplicate_case_label);
+    testing::add(suite, "err_duplicate_case_across_arms", &err_duplicate_case_across_arms);
+    testing::add(suite, "ok_switch_distinct_multilabel", &ok_switch_distinct_multilabel);
     testing::add(suite, "ok_defer",                 &ok_defer);
     testing::add(suite, "ok_overload",              &ok_overload);
     testing::add(suite, "err_no_matching_overload", &err_no_matching_overload);
