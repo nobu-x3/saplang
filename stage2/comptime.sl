@@ -184,17 +184,17 @@ fn value::Value eval_ident(Interp* ip, ast::IdentNode* n) {
 
 // A const global folds to its initializer, checked on demand in its home module so cross-module reads work.
 fn value::Value eval_decl_value(Interp* ip, sema::Decl* d, u32 pos) {
-    if(d.kind == (u16)sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl) {
+    if(d.kind == sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl) {
         ast::VarDeclNode* vd = (ast::VarDeclNode*)d.data.node;
         if(vd.is_const && vd.init != null) {
             if(d.home != null) { sema::ensure_var_init_checked(d.home, vd); }
             return eval(ip, vd.init);
         }
     }
-    if(d.kind == (u16)sema::DeclKind::EnumMember && d.ty != null && d.ty.kind == types::TypeKind::Enum) {
+    if(d.kind == sema::DeclKind::EnumMember && d.ty != null && d.ty.kind == types::TypeKind::Enum) {
         return eval_enum_member(ip, d);
     }
-    if(d.kind == (u16)sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl) {
+    if(d.kind == sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl) {
         return value::val_fn((ast::FnDeclNode*)d.data.node, d.ty);
     }
     u8[] msg = "identifier is not a comptime value";
@@ -210,7 +210,7 @@ fn value::Value eval_enum_member(Interp* ip, sema::Decl* d) {
         i64 member_value = running;
         if(edecl.members[member_index].value_expr != null) {
             value::Value ev = eval(ip, edecl.members[member_index].value_expr);
-            if(ev.kind == (u16)value::ValueKind::Error) { return ev; }
+            if(ev.kind == value::ValueKind::Error) { return ev; }
             member_value = ev.data.i;
         }
         running = member_value + 1;
@@ -245,7 +245,7 @@ fn value::Value eval_block(Interp* ip, ast::BlockNode* n) {
             continue;
         }
         value::Value v = eval(ip, st);
-        if(v.kind == (u16)value::ValueKind::Error) { result = v; break; }
+        if(v.kind == value::ValueKind::Error) { result = v; break; }
         if(ip.flow != Flow::None) { break; }
     }
     while(defer_count > 0) {                     // LIFO; a defer body must not clobber the in-progress return/break
@@ -271,7 +271,7 @@ fn value::Value eval_local_var_decl(Interp* ip, ast::VarDeclNode* n) {
     value::Value v = value::val_void();
     if(n.init != null) {
         v = eval(ip, n.init);
-        if(v.kind == (u16)value::ValueKind::Error) { return v; }
+        if(v.kind == value::ValueKind::Error) { return v; }
     }
     env_bind(ip.env, ip.m.arena, d, v);
     return value::val_void();
@@ -280,11 +280,11 @@ fn value::Value eval_local_var_decl(Interp* ip, ast::VarDeclNode* n) {
 // Saplang conditions accept bool, integer (zero/non-zero), and pointer/slice (null/non-null).
 fn value::Value eval_cond(Interp* ip, ast::AstNode* cond) {
     value::Value v = eval(ip, cond);
-    if(v.kind == (u16)value::ValueKind::Error) { return v; }
-    if(v.kind == (u16)value::ValueKind::Bool) { return v; }
-    if(v.kind == (u16)value::ValueKind::Int) { return value::val_bool(v.data.i != 0); }
-    if(v.kind == (u16)value::ValueKind::Null) { return value::val_bool(false); }
-    if(v.kind == (u16)value::ValueKind::Bytes) { return value::val_bool(v.data.bytes.ptr != null); }
+    if(v.kind == value::ValueKind::Error) { return v; }
+    if(v.kind == value::ValueKind::Bool) { return v; }
+    if(v.kind == value::ValueKind::Int) { return value::val_bool(v.data.i != 0); }
+    if(v.kind == value::ValueKind::Null) { return value::val_bool(false); }
+    if(v.kind == value::ValueKind::Bytes) { return value::val_bool(v.data.bytes.ptr != null); }
     u8[] msg = "comptime condition is not convertible to bool";
     diag::report(&ip.m.diag, ip.m.arena, cond.h.src_pos, msg);
     return value::val_error();
@@ -300,7 +300,7 @@ fn value::Value eval_return(Interp* ip, ast::ReturnNode* n) {
     value::Value v = value::val_void();
     if(n.expr != null) {
         v = eval(ip, n.expr);
-        if(v.kind == (u16)value::ValueKind::Error) { return v; }
+        if(v.kind == value::ValueKind::Error) { return v; }
     }
     ip.return_value = v;
     ip.flow = Flow::Return;
@@ -309,8 +309,8 @@ fn value::Value eval_return(Interp* ip, ast::ReturnNode* n) {
 
 fn bool values_equal(value::Value a, value::Value b) {
     if(a.kind != b.kind) { return false; }
-    if(a.kind == (u16)value::ValueKind::Int || a.kind == (u16)value::ValueKind::Char) { return a.data.i == b.data.i; }
-    if(a.kind == (u16)value::ValueKind::Bool) { return a.data.b == b.data.b; }
+    if(a.kind == value::ValueKind::Int || a.kind == value::ValueKind::Char) { return a.data.i == b.data.i; }
+    if(a.kind == value::ValueKind::Bool) { return a.data.b == b.data.b; }
     return false;
 }
 
@@ -319,7 +319,7 @@ fn value::Value eval_switch_body(Interp* ip, ast::SwitchNode* n, u64 start) {
     for(u64 arm_index = start; arm_index < n.arms.len; arm_index += 1) {
         if(n.arms[arm_index].body != null) {
             value::Value r = eval(ip, n.arms[arm_index].body);
-            if(r.kind == (u16)value::ValueKind::Error) { return r; }
+            if(r.kind == value::ValueKind::Error) { return r; }
             if(ip.flow == Flow::Break) { ip.flow = Flow::None; }
             return value::val_void();
         }
@@ -329,17 +329,17 @@ fn value::Value eval_switch_body(Interp* ip, ast::SwitchNode* n, u64 start) {
 
 fn value::Value eval_switch(Interp* ip, ast::SwitchNode* n) {
     value::Value disc = eval(ip, n.discriminant);
-    if(disc.kind == (u16)value::ValueKind::Error) { return disc; }
+    if(disc.kind == value::ValueKind::Error) { return disc; }
     for(u64 arm_index = 0; arm_index < n.arms.len; arm_index += 1) {
         for(u64 label_index = 0; label_index < n.arms[arm_index].labels.len; label_index += 1) {
             value::Value label = eval(ip, n.arms[arm_index].labels[label_index]);
-            if(label.kind == (u16)value::ValueKind::Error) { return label; }
+            if(label.kind == value::ValueKind::Error) { return label; }
             if(values_equal(label, disc)) { return eval_switch_body(ip, n, arm_index); }
         }
     }
     if(n.else_block != null) {
         value::Value r = eval(ip, n.else_block);
-        if(r.kind == (u16)value::ValueKind::Error) { return r; }
+        if(r.kind == value::ValueKind::Error) { return r; }
         if(ip.flow == Flow::Break) { ip.flow = Flow::None; }
     }
     return value::val_void();
@@ -357,7 +357,7 @@ fn value::Value eval_continue(Interp* ip) {
 
 fn value::Value eval_if(Interp* ip, ast::IfNode* n) {
     value::Value cond = eval_cond(ip, n.cond);
-    if(cond.kind == (u16)value::ValueKind::Error) { return cond; }
+    if(cond.kind == value::ValueKind::Error) { return cond; }
     if(cond.data.b) { return eval(ip, n.then_block); }
     if(n.else_block != null) { return eval(ip, n.else_block); }
     return value::val_void();
@@ -367,10 +367,10 @@ fn value::Value eval_while(Interp* ip, ast::WhileNode* n) {
     u64 iterations = 0;
     while(true) {
         value::Value cond = eval_cond(ip, n.cond);
-        if(cond.kind == (u16)value::ValueKind::Error) { return cond; }
+        if(cond.kind == value::ValueKind::Error) { return cond; }
         if(!cond.data.b) { break; }
         value::Value body = eval(ip, n.body);
-        if(body.kind == (u16)value::ValueKind::Error) { return body; }
+        if(body.kind == value::ValueKind::Error) { return body; }
         if(ip.flow == Flow::Break) { ip.flow = Flow::None; break; }
         if(ip.flow == Flow::Return) { break; }
         if(ip.flow == Flow::Continue) { ip.flow = Flow::None; }
@@ -386,24 +386,24 @@ fn value::Value eval_for(Interp* ip, ast::ForNode* n) {
     value::Value result = value::val_void();
     if(n.init != null) {
         value::Value iv = eval(ip, n.init);
-        if(iv.kind == (u16)value::ValueKind::Error) { result = iv; }
+        if(iv.kind == value::ValueKind::Error) { result = iv; }
     }
-    if(result.kind != (u16)value::ValueKind::Error) {
+    if(result.kind != value::ValueKind::Error) {
         u64 iterations = 0;
         while(true) {
             if(n.cond != null) {
                 value::Value c = eval_cond(ip, n.cond);
-                if(c.kind == (u16)value::ValueKind::Error) { result = c; break; }
+                if(c.kind == value::ValueKind::Error) { result = c; break; }
                 if(!c.data.b) { break; }
             }
             value::Value b = eval(ip, n.body);
-            if(b.kind == (u16)value::ValueKind::Error) { result = b; break; }
+            if(b.kind == value::ValueKind::Error) { result = b; break; }
             if(ip.flow == Flow::Break) { ip.flow = Flow::None; break; }
             if(ip.flow == Flow::Return) { break; }
             if(ip.flow == Flow::Continue) { ip.flow = Flow::None; }
             if(n.post != null) {
                 value::Value p = eval(ip, n.post);
-                if(p.kind == (u16)value::ValueKind::Error) { result = p; break; }
+                if(p.kind == value::ValueKind::Error) { result = p; break; }
             }
             iterations += 1;
             if(iterations > ip.max_iterations) { result = iteration_limit_error(ip, n.h.src_pos); break; }
@@ -435,15 +435,15 @@ fn value::Value* eval_lvalue(Interp* ip, ast::AstNode* node) {
     if(node.h.kind == ast::AstKind::ArrayIndex) {
         ast::ArrayIndexNode* ai = (ast::ArrayIndexNode*)node;
         value::Value* base = eval_lvalue(ip, ai.base);
-        if(base == null || base.kind != (u16)value::ValueKind::Array) { return null; }
+        if(base == null || base.kind != value::ValueKind::Array) { return null; }
         value::Value idx = eval(ip, ai.index);
-        if(idx.kind != (u16)value::ValueKind::Int || idx.data.i < 0 || (u64)idx.data.i >= base.data.elems.len) { return null; }
+        if(idx.kind != value::ValueKind::Int || idx.data.i < 0 || (u64)idx.data.i >= base.data.elems.len) { return null; }
         return &base.data.elems[(u64)idx.data.i];
     }
     if(node.h.kind == ast::AstKind::MemberAccess) {
         ast::MemberAccessNode* ma = (ast::MemberAccessNode*)node;
         value::Value* base = eval_lvalue(ip, ma.base);
-        if(base == null || base.kind != (u16)value::ValueKind::Struct || base.ty == null || base.ty.kind != types::TypeKind::Struct) { return null; }
+        if(base == null || base.kind != value::ValueKind::Struct || base.ty == null || base.ty.kind != types::TypeKind::Struct) { return null; }
         u64 field_index = struct_field_index((ast::StructDeclNode*)base.ty.data.struct_decl, ma.field);
         if(field_index >= base.data.elems.len) { return null; }
         return &base.data.elems[field_index];
@@ -459,11 +459,11 @@ fn value::Value eval_assignment(Interp* ip, ast::AssignmentNode* n) {
         return value::val_error();
     }
     value::Value rhs = eval(ip, n.rhs);
-    if(rhs.kind == (u16)value::ValueKind::Error) { return rhs; }
+    if(rhs.kind == value::ValueKind::Error) { return rhs; }
     value::Value newval = rhs;
     if(n.op != token::TokenKind::Eq) {
         value::Value combined = eval_binop_checked(ip, compound_base(n.op), *slot, rhs, n.h.src_pos);
-        if(combined.kind == (u16)value::ValueKind::Error) { return combined; }
+        if(combined.kind == value::ValueKind::Error) { return combined; }
         newval = combined;
     }
     *slot = newval;
@@ -472,16 +472,16 @@ fn value::Value eval_assignment(Interp* ip, ast::AssignmentNode* n) {
 
 // op.sl can only signal an operator failure as val_error; translate it to a specific comptime diagnostic here.
 fn value::Value eval_binop_checked(Interp* ip, token::TokenKind op, value::Value l, value::Value r, u32 pos) {
-    if((op == token::TokenKind::Slash || op == token::TokenKind::Percent) && r.kind == (u16)value::ValueKind::Int && r.data.i == 0) {
+    if((op == token::TokenKind::Slash || op == token::TokenKind::Percent) && r.kind == value::ValueKind::Int && r.data.i == 0) {
         diag::report(&ip.m.diag, ip.m.arena, pos, "division by zero at comptime");
         return value::val_error();
     }
-    if((op == token::TokenKind::LShift || op == token::TokenKind::RShift) && r.kind == (u16)value::ValueKind::Int && (r.data.i < 0 || r.data.i >= 64)) {
+    if((op == token::TokenKind::LShift || op == token::TokenKind::RShift) && r.kind == value::ValueKind::Int && (r.data.i < 0 || r.data.i >= 64)) {
         diag::report(&ip.m.diag, ip.m.arena, pos, "shift amount out of range at comptime");
         return value::val_error();
     }
     value::Value result = op::binop_eval(op, l, r);
-    if(result.kind == (u16)value::ValueKind::Error) {
+    if(result.kind == value::ValueKind::Error) {
         diag::report(&ip.m.diag, ip.m.arena, pos, "operator cannot be evaluated at comptime");
     }
     return result;
@@ -489,21 +489,21 @@ fn value::Value eval_binop_checked(Interp* ip, token::TokenKind op, value::Value
 
 fn value::Value eval_binary(Interp* ip, ast::BinaryOpNode* n) {
     value::Value l = eval(ip, n.lhs);
-    if(l.kind == (u16)value::ValueKind::Error) { return l; }
-    if(l.kind == (u16)value::ValueKind::Bool) {
+    if(l.kind == value::ValueKind::Error) { return l; }
+    if(l.kind == value::ValueKind::Bool) {
         if(n.op == token::TokenKind::AmpAmp && !l.data.b) { return value::val_bool(false); }
         if(n.op == token::TokenKind::PipePipe && l.data.b) { return value::val_bool(true); }
     }
     value::Value r = eval(ip, n.rhs);
-    if(r.kind == (u16)value::ValueKind::Error) { return r; }
+    if(r.kind == value::ValueKind::Error) { return r; }
     return eval_binop_checked(ip, n.op, l, r, n.h.src_pos);
 }
 
 fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
     value::Value v = eval(ip, n.operand);
-    if(v.kind == (u16)value::ValueKind::Error) { return v; }
+    if(v.kind == value::ValueKind::Error) { return v; }
     value::Value result = op::unaryop_eval(n.op, v);
-    if(result.kind == (u16)value::ValueKind::Error) {
+    if(result.kind == value::ValueKind::Error) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "operator cannot be evaluated at comptime");
     }
     return result;
@@ -511,10 +511,10 @@ fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
 
 fn value::Value eval_cast(Interp* ip, ast::CastNode* n) {
     value::Value v = eval(ip, n.expr);
-    if(v.kind == (u16)value::ValueKind::Error) { return v; }
+    if(v.kind == value::ValueKind::Error) { return v; }
     types::Type* target = (types::Type*)n.h.ty;
     if(target == null) { return v; }
-    bool v_is_float = v.kind == (u16)value::ValueKind::Float;
+    bool v_is_float = v.kind == value::ValueKind::Float;
     if(types::is_float(target)) {
         if(v_is_float) { return value::val_float(v.data.f, target); }
         return value::val_float((f64)v.data.i, target);
@@ -600,7 +600,7 @@ fn value::Value eval_array_lit(Interp* ip, ast::ArrayLitNode* n) {
     elems.len = n.elems.len;
     for(u64 elem_index = 0; elem_index < n.elems.len; elem_index += 1) {
         elems[elem_index] = eval(ip, n.elems[elem_index]);
-        if(elems[elem_index].kind == (u16)value::ValueKind::Error) { return elems[elem_index]; }
+        if(elems[elem_index].kind == value::ValueKind::Error) { return elems[elem_index]; }
     }
     return value::val_array((types::Type*)n.h.ty, elems);
 }
@@ -624,7 +624,7 @@ fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
         if(n.inits[init_index].name != null) { target = struct_field_index(sd, n.inits[init_index].name); }
         else { positional += 1; }
         value::Value fv = eval(ip, n.inits[init_index].value);
-        if(fv.kind == (u16)value::ValueKind::Error) { return fv; }
+        if(fv.kind == value::ValueKind::Error) { return fv; }
         if(target < field_count) { fields[target] = fv; }
     }
     return value::val_struct(ty, fields);
@@ -632,14 +632,14 @@ fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
 
 fn value::Value eval_member_access(Interp* ip, ast::MemberAccessNode* n) {
     value::Value base = eval(ip, n.base);
-    if(base.kind == (u16)value::ValueKind::Error) { return base; }
-    if(base.kind == (u16)value::ValueKind::Bytes && n.field == interner::intern("len")) {
+    if(base.kind == value::ValueKind::Error) { return base; }
+    if(base.kind == value::ValueKind::Bytes && n.field == interner::intern("len")) {
         return value::val_int((i64)base.data.bytes.len, types::prim_u64());
     }
-    if(base.kind == (u16)value::ValueKind::Array && n.field == interner::intern("len")) {
+    if(base.kind == value::ValueKind::Array && n.field == interner::intern("len")) {
         return value::val_int((i64)base.data.elems.len, types::prim_u64());
     }
-    if(base.kind != (u16)value::ValueKind::Struct || base.ty == null || base.ty.kind != types::TypeKind::Struct) {
+    if(base.kind != value::ValueKind::Struct || base.ty == null || base.ty.kind != types::TypeKind::Struct) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "member access on a non-struct comptime value");
         return value::val_error();
     }
@@ -654,17 +654,17 @@ fn value::Value eval_member_access(Interp* ip, ast::MemberAccessNode* n) {
 
 fn value::Value eval_array_index(Interp* ip, ast::ArrayIndexNode* n) {
     value::Value base = eval(ip, n.base);
-    if(base.kind == (u16)value::ValueKind::Error) { return base; }
+    if(base.kind == value::ValueKind::Error) { return base; }
     value::Value idx = eval(ip, n.index);
-    if(idx.kind == (u16)value::ValueKind::Error) { return idx; }
-    if(base.kind == (u16)value::ValueKind::Bytes) {
+    if(idx.kind == value::ValueKind::Error) { return idx; }
+    if(base.kind == value::ValueKind::Bytes) {
         if(idx.data.i < 0 || (u64)idx.data.i >= base.data.bytes.len) {
             diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "comptime byte slice index out of bounds");
             return value::val_error();
         }
         return value::val_int((i64)base.data.bytes[(u64)idx.data.i], types::prim_u8());
     }
-    if(base.kind != (u16)value::ValueKind::Array) {
+    if(base.kind != value::ValueKind::Array) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "index on a non-array comptime value");
         return value::val_error();
     }
@@ -677,15 +677,15 @@ fn value::Value eval_array_index(Interp* ip, ast::ArrayIndexNode* n) {
 
 fn value::Value eval_slice_range(Interp* ip, ast::SliceRangeNode* n) {
     value::Value base = eval(ip, n.base);
-    if(base.kind == (u16)value::ValueKind::Error) { return base; }
-    if(base.kind != (u16)value::ValueKind::Array) {
+    if(base.kind == value::ValueKind::Error) { return base; }
+    if(base.kind != value::ValueKind::Array) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "range on a non-array comptime value");
         return value::val_error();
     }
     i64 lo = 0;
     i64 hi = (i64)base.data.elems.len;
-    if(n.lo != null) { value::Value lv = eval(ip, n.lo); if(lv.kind == (u16)value::ValueKind::Error) { return lv; } lo = lv.data.i; }
-    if(n.hi != null) { value::Value hv = eval(ip, n.hi); if(hv.kind == (u16)value::ValueKind::Error) { return hv; } hi = hv.data.i; }
+    if(n.lo != null) { value::Value lv = eval(ip, n.lo); if(lv.kind == value::ValueKind::Error) { return lv; } lo = lv.data.i; }
+    if(n.hi != null) { value::Value hv = eval(ip, n.hi); if(hv.kind == value::ValueKind::Error) { return hv; } hi = hv.data.i; }
     if(lo < 0 || hi > (i64)base.data.elems.len || lo > hi) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "comptime slice range out of bounds");
         return value::val_error();
@@ -745,7 +745,7 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
     ip.flow = Flow::None;
     value::Value body_result = eval(ip, func.body);
     value::Value result = value::val_void();
-    if(body_result.kind == (u16)value::ValueKind::Error) { result = body_result; } else if(ip.flow == Flow::Return) { result = ip.return_value; }
+    if(body_result.kind == value::ValueKind::Error) { result = body_result; } else if(ip.flow == Flow::Return) { result = ip.return_value; }
     ip.flow = saved_flow;
     ip.return_value = saved_return_value;
     env_pop(ip.env);
@@ -756,18 +756,18 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
 
 fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
     sema::Decl* d = resolved_decl(n.callee);
-    if(d != null && d.kind == (u16)sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::ExternFnDecl) {
+    if(d != null && d.kind == sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::ExternFnDecl) {
         u8[] msg = "cannot call an extern function at comptime";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
     ast::FnDeclNode* func;
-    if(d != null && d.kind == (u16)sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl) {
+    if(d != null && d.kind == sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl) {
         func = (ast::FnDeclNode*)d.data.node;
     } else {
         value::Value callee_val = eval(ip, n.callee);       // fn-pointer / indirect call: the callee evaluates to a fn value
-        if(callee_val.kind == (u16)value::ValueKind::Error) { return callee_val; }
-        if(callee_val.kind != (u16)value::ValueKind::FnRef || callee_val.data.fn_ref == null) {
+        if(callee_val.kind == value::ValueKind::Error) { return callee_val; }
+        if(callee_val.kind != value::ValueKind::FnRef || callee_val.data.fn_ref == null) {
             u8[] msg = "comptime call target is not a function";
             diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
             return value::val_error();
@@ -790,7 +790,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
         args.len = n.args.len;
         for(u64 arg_index = 0; arg_index < n.args.len; arg_index += 1) {
             args[arg_index] = eval(ip, n.args[arg_index]);
-            if(args[arg_index].kind == (u16)value::ValueKind::Error) { return args[arg_index]; }
+            if(args[arg_index].kind == value::ValueKind::Error) { return args[arg_index]; }
         }
     }
     if(has_comptime_params(func)) {
@@ -817,8 +817,8 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
 
 fn value::Value eval_comperror(Interp* ip, ast::CompErrorNode* n) {
     value::Value msg = eval(ip, n.msg_expr);
-    if(msg.kind == (u16)value::ValueKind::Error) { return msg; }
-    if(msg.kind != (u16)value::ValueKind::Bytes) {
+    if(msg.kind == value::ValueKind::Error) { return msg; }
+    if(msg.kind != value::ValueKind::Bytes) {
         u8[] bad = "comperror message must be a string";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, bad);
         return value::val_error();
@@ -829,8 +829,8 @@ fn value::Value eval_comperror(Interp* ip, ast::CompErrorNode* n) {
 
 fn value::Value eval_compwarning(Interp* ip, ast::CompWarningNode* n) {
     value::Value msg = eval(ip, n.msg_expr);
-    if(msg.kind == (u16)value::ValueKind::Error) { return msg; }
-    if(msg.kind != (u16)value::ValueKind::Bytes) {
+    if(msg.kind == value::ValueKind::Error) { return msg; }
+    if(msg.kind != value::ValueKind::Bytes) {
         u8[] bad = "compwarning message must be a string";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, bad);
         return value::val_error();
@@ -864,8 +864,8 @@ fn ast::AstNode* compile_fragment(module::Module* m, u8[] bytes, bool as_stmts, 
 
 fn value::Value eval_compinsert(Interp* ip, ast::CompInsertNode* n) {
     value::Value src = eval(ip, n.source_expr);
-    if(src.kind == (u16)value::ValueKind::Error) { return src; }
-    if(src.kind != (u16)value::ValueKind::Bytes) {
+    if(src.kind == value::ValueKind::Error) { return src; }
+    if(src.kind != value::ValueKind::Bytes) {
         u8[] msg = "compinsert argument must be a string";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
@@ -884,8 +884,8 @@ fn ast::AstNode*[] run_compinsert_stmts(module::Module* m, ast::CompInsertNode* 
     ast::AstNode*[] empty = {null, 0};
     Interp ip = new_interp(m);
     value::Value src = eval(&ip, n.source_expr);
-    if(src.kind != (u16)value::ValueKind::Bytes) {
-        if(src.kind != (u16)value::ValueKind::Error) { diag::report(&m.diag, m.arena, n.h.src_pos, "compinsert argument must be a string"); }
+    if(src.kind != value::ValueKind::Bytes) {
+        if(src.kind != value::ValueKind::Error) { diag::report(&m.diag, m.arena, n.h.src_pos, "compinsert argument must be a string"); }
         return empty;
     }
     ast::AstNode* frag_root = compile_fragment(m, src.data.bytes, true, n.h.src_pos);
@@ -934,7 +934,7 @@ fn sema::Decl* resolved_decl(ast::AstNode* n) {
 }
 
 fn bool decl_is_mutable_global(sema::Decl* d) {
-    if(d == null || d.kind != (u16)sema::DeclKind::Node || d.data.node == null) { return false; }
+    if(d == null || d.kind != sema::DeclKind::Node || d.data.node == null) { return false; }
     if(d.data.node.h.kind != ast::AstKind::VarDecl) { return false; }
     ast::VarDeclNode* vd = (ast::VarDeclNode*)d.data.node;
     return vd.qualified_name != null && !vd.is_const;
@@ -995,7 +995,7 @@ fn bool walk_safe(Interp* ip, ast::AstNode* n) {
     case ast::AstKind::Call: {
         ast::CallNode* c = (ast::CallNode*)n;
         sema::Decl* callee_d = resolved_decl(c.callee);
-        if(callee_d != null && callee_d.kind == (u16)sema::DeclKind::Node && callee_d.data.node != null) {
+        if(callee_d != null && callee_d.kind == sema::DeclKind::Node && callee_d.data.node != null) {
             ast::AstNode* fnode = callee_d.data.node;
             if(fnode.h.kind == ast::AstKind::ExternFnDecl) { return false; }
             if(fnode.h.kind == ast::AstKind::FnDecl) {
@@ -1102,22 +1102,22 @@ fn u64 float_bits(f64 f) {
 }
 
 fn u64 hash_value(value::Value v) {
-    u32 kind = (u32)v.kind;
+    value::ValueKind kind = v.kind;
     u64 h = hash_combine(FNV_BASIS, (u64)kind);
-    if(kind == (u32)value::ValueKind::Int || kind == (u32)value::ValueKind::Char) { return hash_combine(h, (u64)v.data.i); }
-    if(kind == (u32)value::ValueKind::Float) { return hash_combine(h, float_bits(v.data.f)); }
-    if(kind == (u32)value::ValueKind::Bool) {
+    if(kind == value::ValueKind::Int || kind == value::ValueKind::Char) { return hash_combine(h, (u64)v.data.i); }
+    if(kind == value::ValueKind::Float) { return hash_combine(h, float_bits(v.data.f)); }
+    if(kind == value::ValueKind::Bool) {
         u64 b = 0;
         if(v.data.b) { b = 1; }
         return hash_combine(h, b);
     }
-    if(kind == (u32)value::ValueKind::Bytes) {
+    if(kind == value::ValueKind::Bytes) {
         for(u64 byte_index = 0; byte_index < v.data.bytes.len; byte_index += 1) { h = hash_combine(h, (u64)v.data.bytes[byte_index]); }
         return h;
     }
-    if(kind == (u32)value::ValueKind::Type) { return hash_combine(h, (u64)v.data.type_ref); }
-    if(kind == (u32)value::ValueKind::FnRef) { return hash_combine(h, (u64)v.data.fn_ref); }
-    if(kind == (u32)value::ValueKind::Struct || kind == (u32)value::ValueKind::Array) {
+    if(kind == value::ValueKind::Type) { return hash_combine(h, (u64)v.data.type_ref); }
+    if(kind == value::ValueKind::FnRef) { return hash_combine(h, (u64)v.data.fn_ref); }
+    if(kind == value::ValueKind::Struct || kind == value::ValueKind::Array) {
         for(u64 elem_index = 0; elem_index < v.data.elems.len; elem_index += 1) { h = hash_combine(h, hash_value(v.data.elems[elem_index])); }
         return h;
     }
@@ -1126,18 +1126,18 @@ fn u64 hash_value(value::Value v) {
 
 fn bool value_equal(value::Value a, value::Value b) {
     if(a.kind != b.kind) { return false; }
-    u32 kind = (u32)a.kind;
-    if(kind == (u32)value::ValueKind::Int || kind == (u32)value::ValueKind::Char) { return a.data.i == b.data.i; }
-    if(kind == (u32)value::ValueKind::Float) { return a.data.f == b.data.f; }
-    if(kind == (u32)value::ValueKind::Bool) { return a.data.b == b.data.b; }
-    if(kind == (u32)value::ValueKind::Bytes) {
+    value::ValueKind kind = a.kind;
+    if(kind == value::ValueKind::Int || kind == value::ValueKind::Char) { return a.data.i == b.data.i; }
+    if(kind == value::ValueKind::Float) { return a.data.f == b.data.f; }
+    if(kind == value::ValueKind::Bool) { return a.data.b == b.data.b; }
+    if(kind == value::ValueKind::Bytes) {
         if(a.data.bytes.len != b.data.bytes.len) { return false; }
         for(u64 byte_index = 0; byte_index < a.data.bytes.len; byte_index += 1) { if(a.data.bytes[byte_index] != b.data.bytes[byte_index]) { return false; } }
         return true;
     }
-    if(kind == (u32)value::ValueKind::Type) { return a.data.type_ref == b.data.type_ref; }
-    if(kind == (u32)value::ValueKind::FnRef) { return a.data.fn_ref == b.data.fn_ref; }
-    if(kind == (u32)value::ValueKind::Struct || kind == (u32)value::ValueKind::Array) {
+    if(kind == value::ValueKind::Type) { return a.data.type_ref == b.data.type_ref; }
+    if(kind == value::ValueKind::FnRef) { return a.data.fn_ref == b.data.fn_ref; }
+    if(kind == value::ValueKind::Struct || kind == value::ValueKind::Array) {
         if(a.data.elems.len != b.data.elems.len) { return false; }
         for(u64 elem_index = 0; elem_index < a.data.elems.len; elem_index += 1) { if(!value_equal(a.data.elems[elem_index], b.data.elems[elem_index])) { return false; } }
         return true;
@@ -1539,10 +1539,10 @@ fn void rename_mangled(module::Module* m, ast::FnDeclNode* clone, value::Value[]
     i32 off = sys::snprintf((i8*)&scratch[0], 256, "%.*s", (i32)base_str.len, (i8*)base_str.ptr);
     for(u64 k = 0; k < cargs.len; k += 1) {
         if(off < 0 || off >= 240) { break; }
-        if(cargs[k].kind == (u16)value::ValueKind::Type) {
+        if(cargs[k].kind == value::ValueKind::Type) {
             u8[] ts = types_print::print_to_arena(cargs[k].data.type_ref, m.arena);
             off += sys::snprintf((i8*)&scratch[off], (u64)(256 - off), "__%.*s", (i32)ts.len, (i8*)ts.ptr);
-        } else if(cargs[k].kind == (u16)value::ValueKind::Int) {
+        } else if(cargs[k].kind == value::ValueKind::Int) {
             off += sys::snprintf((i8*)&scratch[off], (u64)(256 - off), "__%ld", cargs[k].data.i);
         }
     }
@@ -1763,8 +1763,8 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
     u64 carg_index = 0;
     for(u64 i = 0; i < clone.params.len; i += 1) {
         if(clone.params[i].is_comptime) {
-            if(cargs[carg_index].kind == (u16)value::ValueKind::Type) { n_type += 1; }
-            else if(cargs[carg_index].kind == (u16)value::ValueKind::Int) { n_val += 1; }
+            if(cargs[carg_index].kind == value::ValueKind::Type) { n_type += 1; }
+            else if(cargs[carg_index].kind == value::ValueKind::Int) { n_val += 1; }
             carg_index += 1;
         }
     }
@@ -1779,12 +1779,12 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
     carg_index = 0;
     for(u64 i = 0; i < clone.params.len; i += 1) {
         if(clone.params[i].is_comptime) {
-            if(cargs[carg_index].kind == (u16)value::ValueKind::Type) {
+            if(cargs[carg_index].kind == value::ValueKind::Type) {
                 c.tnames[c.tnames.len] = clone.params[i].name;
                 c.tnames.len += 1;
                 c.ttys[c.ttys.len] = cargs[carg_index].data.type_ref;
                 c.ttys.len += 1;
-            } else if(cargs[carg_index].kind == (u16)value::ValueKind::Int) {
+            } else if(cargs[carg_index].kind == value::ValueKind::Int) {
                 c.vnames[c.vnames.len] = clone.params[i].name;
                 c.vnames.len += 1;
                 c.vvals[c.vvals.len] = (u64)cargs[carg_index].data.i;
@@ -1810,7 +1810,7 @@ fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* 
         if(tn.namespace == null) {
             for(u64 k = 0; k < names.len; k += 1) {
                 if(tn.name == names[k]) {
-                    if(binds[k].kind == (u16)value::ValueKind::Void) { binds[k] = value::val_type(concrete); return true; }
+                    if(binds[k].kind == value::ValueKind::Void) { binds[k] = value::val_type(concrete); return true; }
                     return binds[k].data.type_ref == concrete;
                 }
             }
@@ -1868,7 +1868,7 @@ export fn ast::FnDeclNode* resolve_generic_call(module::Module* m, ast::FnDeclNo
         runtime_index += 1;
     }
     for(u64 k = 0; k < n_comptime; k += 1) {
-        if(binds[k].kind == (u16)value::ValueKind::Void) { return null; }
+        if(binds[k].kind == value::ValueKind::Void) { return null; }
     }
     Interp ip = new_interp(m);
     return monomorphize(&ip, callee, binds);
@@ -1888,7 +1888,7 @@ fn void run_comprun(module::Module* m, ast::CompRunNode* n) {
 fn bool const_eval_i64(module::Module* m, ast::AstNode* expr, i64* out) {
     Interp ip = new_interp(m);
     value::Value v = eval(&ip, expr);
-    if(v.kind == (u16)value::ValueKind::Int) { *out = v.data.i; return true; }
+    if(v.kind == value::ValueKind::Int) { *out = v.data.i; return true; }
     return false;
 }
 

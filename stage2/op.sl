@@ -73,8 +73,8 @@ export fn types::Type* unaryop_result_type(token::TokenKind op, types::Type* ope
 }
 
 export fn value::Value binop_eval(token::TokenKind op, value::Value l, value::Value r) {
-    if(l.kind == (u16)value::ValueKind::Error) { return l; }
-    if(r.kind == (u16)value::ValueKind::Error) { return r; }
+    if(l.kind == value::ValueKind::Error) { return l; }
+    if(r.kind == value::ValueKind::Error) { return r; }
     types::Type* rt = binop_result_type(op, l.ty, r.ty);
 
     if(op == token::TokenKind::EqEq)  { return val_eq(l, r, false); }
@@ -83,35 +83,35 @@ export fn value::Value binop_eval(token::TokenKind op, value::Value l, value::Va
         return val_order(op, l, r);
     }
     if(op == token::TokenKind::AmpAmp) {
-        if(l.kind == (u16)value::ValueKind::Bool && r.kind == (u16)value::ValueKind::Bool) { return value::val_bool(l.data.b && r.data.b); }
+        if(l.kind == value::ValueKind::Bool && r.kind == value::ValueKind::Bool) { return value::val_bool(l.data.b && r.data.b); }
         return value::val_error();
     }
     if(op == token::TokenKind::PipePipe) {
-        if(l.kind == (u16)value::ValueKind::Bool && r.kind == (u16)value::ValueKind::Bool) { return value::val_bool(l.data.b || r.data.b); }
+        if(l.kind == value::ValueKind::Bool && r.kind == value::ValueKind::Bool) { return value::val_bool(l.data.b || r.data.b); }
         return value::val_error();
     }
-    if(l.kind == (u16)value::ValueKind::Float && r.kind == (u16)value::ValueKind::Float) {
+    if(l.kind == value::ValueKind::Float && r.kind == value::ValueKind::Float) {
         return float_arith(op, l.data.f, r.data.f, rt);
     }
-    if(l.kind == (u16)value::ValueKind::Int && r.kind == (u16)value::ValueKind::Int) {
+    if(l.kind == value::ValueKind::Int && r.kind == value::ValueKind::Int) {
         return int_arith(op, l.data.i, r.data.i, rt);
     }
     return value::val_error();
 }
 
 export fn value::Value unaryop_eval(token::TokenKind op, value::Value v) {
-    if(v.kind == (u16)value::ValueKind::Error) { return v; }
+    if(v.kind == value::ValueKind::Error) { return v; }
     if(op == token::TokenKind::Minus) {
-        if(v.kind == (u16)value::ValueKind::Int) { return value::val_int(-v.data.i, v.ty); }
-        if(v.kind == (u16)value::ValueKind::Float) { return value::val_float(-v.data.f, v.ty); }
+        if(v.kind == value::ValueKind::Int) { return value::val_int(-v.data.i, v.ty); }
+        if(v.kind == value::ValueKind::Float) { return value::val_float(-v.data.f, v.ty); }
         return value::val_error();
     }
     if(op == token::TokenKind::Bang) {
-        if(v.kind == (u16)value::ValueKind::Bool) { return value::val_bool(!v.data.b); }
+        if(v.kind == value::ValueKind::Bool) { return value::val_bool(!v.data.b); }
         return value::val_error();
     }
     if(op == token::TokenKind::Tilde) {
-        if(v.kind == (u16)value::ValueKind::Int) { return value::val_int(~v.data.i, v.ty); }
+        if(v.kind == value::ValueKind::Int) { return value::val_int(~v.data.i, v.ty); }
         return value::val_error();
     }
     return value::val_error();
@@ -148,11 +148,11 @@ fn bool comparable_order(types::Type* lt, types::Type* rt) {
 
 fn value::Value val_eq(value::Value l, value::Value r, bool negate) {
     bool eq = false;
-    if(l.kind == (u16)value::ValueKind::Int && r.kind == (u16)value::ValueKind::Int) { eq = l.data.i == r.data.i; }
-    else if(l.kind == (u16)value::ValueKind::Float && r.kind == (u16)value::ValueKind::Float) { eq = l.data.f == r.data.f; }
-    else if(l.kind == (u16)value::ValueKind::Bool && r.kind == (u16)value::ValueKind::Bool) { eq = l.data.b == r.data.b; }
-    else if(l.kind == (u16)value::ValueKind::Type && r.kind == (u16)value::ValueKind::Type) { eq = l.data.type_ref == r.data.type_ref; }
-    else if(l.kind == (u16)value::ValueKind::Null && r.kind == (u16)value::ValueKind::Null) { eq = true; }
+    if(l.kind == value::ValueKind::Int && r.kind == value::ValueKind::Int) { eq = l.data.i == r.data.i; }
+    else if(l.kind == value::ValueKind::Float && r.kind == value::ValueKind::Float) { eq = l.data.f == r.data.f; }
+    else if(l.kind == value::ValueKind::Bool && r.kind == value::ValueKind::Bool) { eq = l.data.b == r.data.b; }
+    else if(l.kind == value::ValueKind::Type && r.kind == value::ValueKind::Type) { eq = l.data.type_ref == r.data.type_ref; }
+    else if(l.kind == value::ValueKind::Null && r.kind == value::ValueKind::Null) { eq = true; }
     else { return value::val_error(); }
     if(negate) { eq = !eq; }
     return value::val_bool(eq);
@@ -160,11 +160,11 @@ fn value::Value val_eq(value::Value l, value::Value r, bool negate) {
 
 fn value::Value val_order(token::TokenKind op, value::Value l, value::Value r) {
     bool result = false;
-    if(l.kind == (u16)value::ValueKind::Int && r.kind == (u16)value::ValueKind::Int) {
+    if(l.kind == value::ValueKind::Int && r.kind == value::ValueKind::Int) {
         bool is_signed = true;
         if(l.ty != null) { is_signed = types::is_signed_int(l.ty); }
         if(is_signed) { result = order_cmp_i(op, l.data.i, r.data.i); } else { result = order_cmp_u(op, (u64)l.data.i, (u64)r.data.i); }
-    } else if(l.kind == (u16)value::ValueKind::Float && r.kind == (u16)value::ValueKind::Float) {
+    } else if(l.kind == value::ValueKind::Float && r.kind == value::ValueKind::Float) {
         result = order_cmp_f(op, l.data.f, r.data.f);
     } else {
         return value::val_error();

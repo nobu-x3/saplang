@@ -224,106 +224,106 @@ fn i32 list_freeze_indices_match(arena::Arena* a, u8[] msg) {
 // ----- kind range helpers -----
 
 fn i32 is_decl_first(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::ImportDecl), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_decl(ast::AstKind::ImportDecl), msg)) { return -1; }
     return 0;
 }
 
 fn i32 is_decl_last(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::ExternUnionDecl), msg)) { return -1; }
-    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::ExternFnDecl), msg)) { return -2; }
-    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::ExternStructDecl), msg)) { return -3; }
+    if(!testing::expect_true(ast::is_decl(ast::AstKind::ExternUnionDecl), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_decl(ast::AstKind::ExternFnDecl), msg)) { return -2; }
+    if(!testing::expect_true(ast::is_decl(ast::AstKind::ExternStructDecl), msg)) { return -3; }
     return 0;
 }
 
 fn i32 is_decl_middle(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::FnDecl), msg)) { return -1; }
-    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::StructDecl), msg)) { return -2; }
-    if(!testing::expect_true(ast::is_decl((u16)ast::AstKind::EnumDecl), msg)) { return -3; }
+    if(!testing::expect_true(ast::is_decl(ast::AstKind::FnDecl), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_decl(ast::AstKind::StructDecl), msg)) { return -2; }
+    if(!testing::expect_true(ast::is_decl(ast::AstKind::EnumDecl), msg)) { return -3; }
     return 0;
 }
 
 fn i32 is_decl_rejects_sentinels(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_false(ast::is_decl((u16)ast::AstKind::INVALID), msg)) { return -1; }
-    if(!testing::expect_false(ast::is_decl((u16)ast::AstKind::ERROR), msg)) { return -2; }
+    if(!testing::expect_false(ast::is_decl(ast::AstKind::INVALID), msg)) { return -1; }
+    if(!testing::expect_false(ast::is_decl(ast::AstKind::ERROR), msg)) { return -2; }
     return 0;
 }
 
 fn i32 is_decl_rejects_other_ranges(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_false(ast::is_decl((u16)ast::AstKind::BlockStmt), msg)) { return -1; }
-    if(!testing::expect_false(ast::is_decl((u16)ast::AstKind::IntLit), msg)) { return -2; }
-    if(!testing::expect_false(ast::is_decl((u16)ast::AstKind::PrimitiveType), msg)) { return -3; }
+    if(!testing::expect_false(ast::is_decl(ast::AstKind::BlockStmt), msg)) { return -1; }
+    if(!testing::expect_false(ast::is_decl(ast::AstKind::IntLit), msg)) { return -2; }
+    if(!testing::expect_false(ast::is_decl(ast::AstKind::PrimitiveType), msg)) { return -3; }
     return 0;
 }
 
 fn i32 is_stmt_first(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_stmt((u16)ast::AstKind::BlockStmt), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_stmt(ast::AstKind::BlockStmt), msg)) { return -1; }
     return 0;
 }
 
 fn i32 is_stmt_last(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_stmt((u16)ast::AstKind::CompwarningStmt), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_stmt(ast::AstKind::CompwarningStmt), msg)) { return -1; }
     return 0;
 }
 
 fn i32 is_stmt_middle(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_stmt((u16)ast::AstKind::IfStmt), msg)) { return -1; }
-    if(!testing::expect_true(ast::is_stmt((u16)ast::AstKind::WhileStmt), msg)) { return -2; }
-    if(!testing::expect_true(ast::is_stmt((u16)ast::AstKind::ReturnStmt), msg)) { return -3; }
+    if(!testing::expect_true(ast::is_stmt(ast::AstKind::IfStmt), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_stmt(ast::AstKind::WhileStmt), msg)) { return -2; }
+    if(!testing::expect_true(ast::is_stmt(ast::AstKind::ReturnStmt), msg)) { return -3; }
     return 0;
 }
 
 fn i32 is_stmt_rejects_other_ranges(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_false(ast::is_stmt((u16)ast::AstKind::ExternFnDecl), msg)) { return -1; }
-    if(!testing::expect_false(ast::is_stmt((u16)ast::AstKind::IntLit), msg)) { return -2; }
-    if(!testing::expect_false(ast::is_stmt((u16)ast::AstKind::PrimitiveType), msg)) { return -3; }
+    if(!testing::expect_false(ast::is_stmt(ast::AstKind::ExternFnDecl), msg)) { return -1; }
+    if(!testing::expect_false(ast::is_stmt(ast::AstKind::IntLit), msg)) { return -2; }
+    if(!testing::expect_false(ast::is_stmt(ast::AstKind::PrimitiveType), msg)) { return -3; }
     return 0;
 }
 
 fn i32 is_expr_first(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_expr((u16)ast::AstKind::IntLit), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_expr(ast::AstKind::IntLit), msg)) { return -1; }
     return 0;
 }
 
 fn i32 is_expr_last(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_expr((u16)ast::AstKind::Compcode), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_expr(ast::AstKind::Compcode), msg)) { return -1; }
     return 0;
 }
 
 fn i32 is_expr_middle(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_expr((u16)ast::AstKind::Ident), msg)) { return -1; }
-    if(!testing::expect_true(ast::is_expr((u16)ast::AstKind::Call), msg)) { return -2; }
-    if(!testing::expect_true(ast::is_expr((u16)ast::AstKind::BinaryOp), msg)) { return -3; }
+    if(!testing::expect_true(ast::is_expr(ast::AstKind::Ident), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_expr(ast::AstKind::Call), msg)) { return -2; }
+    if(!testing::expect_true(ast::is_expr(ast::AstKind::BinaryOp), msg)) { return -3; }
     return 0;
 }
 
 fn i32 is_expr_rejects_other_ranges(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_false(ast::is_expr((u16)ast::AstKind::CompwarningStmt), msg)) { return -1; }
-    if(!testing::expect_false(ast::is_expr((u16)ast::AstKind::PrimitiveType), msg)) { return -2; }
-    if(!testing::expect_false(ast::is_expr((u16)ast::AstKind::ImportDecl), msg)) { return -3; }
+    if(!testing::expect_false(ast::is_expr(ast::AstKind::CompwarningStmt), msg)) { return -1; }
+    if(!testing::expect_false(ast::is_expr(ast::AstKind::PrimitiveType), msg)) { return -2; }
+    if(!testing::expect_false(ast::is_expr(ast::AstKind::ImportDecl), msg)) { return -3; }
     return 0;
 }
 
 fn i32 is_type_first(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_type((u16)ast::AstKind::PrimitiveType), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_type(ast::AstKind::PrimitiveType), msg)) { return -1; }
     return 0;
 }
 
 fn i32 is_type_last(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_type((u16)ast::AstKind::UnionType), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_type(ast::AstKind::UnionType), msg)) { return -1; }
     return 0;
 }
 
 fn i32 is_type_middle(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_true(ast::is_type((u16)ast::AstKind::PointerType), msg)) { return -1; }
-    if(!testing::expect_true(ast::is_type((u16)ast::AstKind::SliceType), msg)) { return -2; }
-    if(!testing::expect_true(ast::is_type((u16)ast::AstKind::FnPtrType), msg)) { return -3; }
+    if(!testing::expect_true(ast::is_type(ast::AstKind::PointerType), msg)) { return -1; }
+    if(!testing::expect_true(ast::is_type(ast::AstKind::SliceType), msg)) { return -2; }
+    if(!testing::expect_true(ast::is_type(ast::AstKind::FnPtrType), msg)) { return -3; }
     return 0;
 }
 
 fn i32 is_type_rejects_other_ranges(arena::Arena* a, u8[] msg) {
-    if(!testing::expect_false(ast::is_type((u16)ast::AstKind::Compcode), msg)) { return -1; }
-    if(!testing::expect_false(ast::is_type((u16)ast::AstKind::BlockStmt), msg)) { return -2; }
-    if(!testing::expect_false(ast::is_type((u16)ast::AstKind::ExternFnDecl), msg)) { return -3; }
+    if(!testing::expect_false(ast::is_type(ast::AstKind::Compcode), msg)) { return -1; }
+    if(!testing::expect_false(ast::is_type(ast::AstKind::BlockStmt), msg)) { return -2; }
+    if(!testing::expect_false(ast::is_type(ast::AstKind::ExternFnDecl), msg)) { return -3; }
     return 0;
 }
 
@@ -331,13 +331,13 @@ fn i32 ranges_partition(arena::Arena* a, u8[] msg) {
     // For every kind whose value is in [INVALID..UnionType], at most one
     // of is_{decl,stmt,expr,type} returns true. INVALID and ERROR sit
     // outside every range — false from all four.
-    u16 zero_n = (u16)ast::AstKind::INVALID;
+    ast::AstKind zero_n = ast::AstKind::INVALID;
     if(!testing::expect_false(ast::is_decl(zero_n), msg)) { return -1; }
     if(!testing::expect_false(ast::is_stmt(zero_n), msg)) { return -2; }
     if(!testing::expect_false(ast::is_expr(zero_n), msg)) { return -3; }
     if(!testing::expect_false(ast::is_type(zero_n), msg)) { return -4; }
 
-    u16 ident_n = (u16)ast::AstKind::Ident;
+    ast::AstKind ident_n = ast::AstKind::Ident;
     if(!testing::expect_false(ast::is_decl(ident_n), msg)) { return -5; }
     if(!testing::expect_false(ast::is_stmt(ident_n), msg)) { return -6; }
     if(!testing::expect_true(ast::is_expr(ident_n), msg))  { return -7; }

@@ -83,7 +83,7 @@ export union DeclData {
 }
 
 export struct Decl {
-    u16                 kind;
+    DeclKind            kind;
     bool                is_exported;    // top-level decl marked `export`; used by cross-module lookup to filter
     symbol::Symbol*     name;           // mirrors the key under which the Decl is registered
     types::Type*        ty;             // resolved type; for fns the fn-pointer type; for type-decls the canonical Type*
@@ -148,13 +148,13 @@ fn void collect_name_for_decl(Sema* s, ast::AstNode* top_level_node) {
     switch(top_level_node.h.kind) {
     case ast::AstKind::ImportDecl: {
         ast::ImportNode* import_node = (ast::ImportNode*)top_level_node;
-        Decl* decl = register_sym(s, module_scope, import_node.module_name, import_node.is_reexport, (u16)DeclKind::Import, import_node.h.src_pos);
+        Decl* decl = register_sym(s, module_scope, import_node.module_name, import_node.is_reexport, DeclKind::Import, import_node.h.src_pos);
         if(decl != null) { decl.data.module = find_import_module(s, import_node.module_name); }
     }
     case ast::AstKind::VarDecl: {
         ast::VarDeclNode* var_decl = (ast::VarDeclNode*)top_level_node;
         var_decl.qualified_name = qualify_decl_name(s, var_decl.name);
-        Decl* decl = register_sym(s, module_scope, var_decl.name, var_decl.is_exported, (u16)DeclKind::Node, var_decl.h.src_pos);
+        Decl* decl = register_sym(s, module_scope, var_decl.name, var_decl.is_exported, DeclKind::Node, var_decl.h.src_pos);
         if(decl != null) { decl.data.node = top_level_node; var_decl.decl = (void*)decl; }
     }
     case ast::AstKind::FnDecl: {
@@ -166,25 +166,25 @@ fn void collect_name_for_decl(Sema* s, ast::AstNode* top_level_node) {
     case ast::AstKind::StructDecl: {
         ast::StructDeclNode* struct_decl = (ast::StructDeclNode*)top_level_node;
         struct_decl.qualified_name = qualify_decl_name(s, struct_decl.name);
-        Decl* decl = register_sym(s, module_scope, struct_decl.name, struct_decl.is_exported, (u16)DeclKind::Node, struct_decl.h.src_pos);
+        Decl* decl = register_sym(s, module_scope, struct_decl.name, struct_decl.is_exported, DeclKind::Node, struct_decl.h.src_pos);
         if(decl != null) { decl.data.node = top_level_node; }
     }
     case ast::AstKind::UnionDecl: {
         ast::UnionDeclNode* union_decl = (ast::UnionDeclNode*)top_level_node;
         union_decl.qualified_name = qualify_decl_name(s, union_decl.name);
-        Decl* decl = register_sym(s, module_scope, union_decl.name, union_decl.is_exported, (u16)DeclKind::Node, union_decl.h.src_pos);
+        Decl* decl = register_sym(s, module_scope, union_decl.name, union_decl.is_exported, DeclKind::Node, union_decl.h.src_pos);
         if(decl != null) { decl.data.node = top_level_node; }
     }
     case ast::AstKind::EnumDecl: {
         ast::EnumDeclNode* enum_decl = (ast::EnumDeclNode*)top_level_node;
         enum_decl.qualified_name = qualify_decl_name(s, enum_decl.name);
-        Decl* decl = register_sym(s, module_scope, enum_decl.name, enum_decl.is_exported, (u16)DeclKind::Node, enum_decl.h.src_pos);
+        Decl* decl = register_sym(s, module_scope, enum_decl.name, enum_decl.is_exported, DeclKind::Node, enum_decl.h.src_pos);
         if(decl != null) { decl.data.node = top_level_node; }
     }
     case ast::AstKind::AliasDecl: {
         ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)top_level_node;
         alias_decl.qualified_name = qualify_decl_name(s, alias_decl.name);
-        Decl* decl = register_sym(s, module_scope, alias_decl.name, alias_decl.is_exported, (u16)DeclKind::Node, alias_decl.h.src_pos);
+        Decl* decl = register_sym(s, module_scope, alias_decl.name, alias_decl.is_exported, DeclKind::Node, alias_decl.h.src_pos);
         if(decl != null) { decl.data.node = top_level_node; }
     }
     case ast::AstKind::ExternBlock: {
@@ -194,23 +194,23 @@ fn void collect_name_for_decl(Sema* s, ast::AstNode* top_level_node) {
             switch(extern_item.h.kind) {
             case ast::AstKind::ExternFnDecl: {
                 ast::ExternFnDeclNode* extern_fn = (ast::ExternFnDeclNode*)extern_item;
-                Decl* decl = register_sym(s, module_scope, extern_fn.name, extern_fn.is_exported, (u16)DeclKind::Node, extern_fn.h.src_pos);
+                Decl* decl = register_sym(s, module_scope, extern_fn.name, extern_fn.is_exported, DeclKind::Node, extern_fn.h.src_pos);
                 if(decl != null) { decl.data.node = extern_item; }
             }
             case ast::AstKind::ExternStructDecl: {
                 ast::ExternStructDeclNode* extern_struct = (ast::ExternStructDeclNode*)extern_item;
-                Decl* decl = register_sym(s, module_scope, extern_struct.name, extern_struct.is_exported, (u16)DeclKind::Node, extern_struct.h.src_pos);
+                Decl* decl = register_sym(s, module_scope, extern_struct.name, extern_struct.is_exported, DeclKind::Node, extern_struct.h.src_pos);
                 if(decl != null) { decl.data.node = (ast::AstNode*)materialize_extern_struct(s, extern_struct); }
             }
             case ast::AstKind::ExternUnionDecl: {
                 ast::ExternUnionDeclNode* extern_union = (ast::ExternUnionDeclNode*)extern_item;
-                Decl* decl = register_sym(s, module_scope, extern_union.name, extern_union.is_exported, (u16)DeclKind::Node, extern_union.h.src_pos);
+                Decl* decl = register_sym(s, module_scope, extern_union.name, extern_union.is_exported, DeclKind::Node, extern_union.h.src_pos);
                 if(decl != null) { decl.data.node = (ast::AstNode*)materialize_extern_union(s, extern_union); }
             }
             case ast::AstKind::VarDecl: {
                 ast::VarDeclNode* extern_var = (ast::VarDeclNode*)extern_item;
                 extern_var.qualified_name = qualify_decl_name(s, extern_var.name);
-                Decl* decl = register_sym(s, module_scope, extern_var.name, extern_var.is_exported, (u16)DeclKind::Node, extern_var.h.src_pos);
+                Decl* decl = register_sym(s, module_scope, extern_var.name, extern_var.is_exported, DeclKind::Node, extern_var.h.src_pos);
                 if(decl != null) { decl.data.node = extern_item; extern_var.decl = (void*)decl; }
             }
             else { }
@@ -222,7 +222,7 @@ fn void collect_name_for_decl(Sema* s, ast::AstNode* top_level_node) {
 }
 
 // Register `name` in `scope`; on a duplicate, diagnose and return null. Caller fills data.*.
-fn Decl* register_sym(Sema* s, Scope* scope, symbol::Symbol* name, bool is_exported, u16 decl_kind, u32 src_pos) {
+fn Decl* register_sym(Sema* s, Scope* scope, symbol::Symbol* name, bool is_exported, DeclKind decl_kind, u32 src_pos) {
     if(name == null) { return null; }
     if(scope_lookup_local(scope, name) != null) {
         u8[] name_bytes = interner::symbol_str(name);
@@ -247,7 +247,7 @@ fn Decl* register_sym(Sema* s, Scope* scope, symbol::Symbol* name, bool is_expor
 }
 
 fn bool decl_is_fn(Decl* d) {
-    if(d.kind != (u16)DeclKind::Node || d.data.node == null) { return false; }
+    if(d.kind != DeclKind::Node || d.data.node == null) { return false; }
     return d.data.node.h.kind == ast::AstKind::FnDecl || d.data.node.h.kind == ast::AstKind::ExternFnDecl;
 }
 
@@ -255,7 +255,7 @@ fn bool decl_is_fn(Decl* d) {
 fn bool chain_has_generic(Decl* head) {
     Decl* d = head;
     while(d != null) {
-        if(d.kind == (u16)DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl && is_generic_fn((ast::FnDeclNode*)d.data.node)) { return true; }
+        if(d.kind == DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl && is_generic_fn((ast::FnDeclNode*)d.data.node)) { return true; }
         d = d.next_overload;
     }
     return false;
@@ -265,14 +265,14 @@ fn Decl* register_fn(Sema* s, Scope* scope, ast::FnDeclNode* fn_decl, bool is_ex
     symbol::Symbol* name = fn_decl.name;
     Decl* existing = scope_lookup_local(scope, name);
     if(existing == null || !decl_is_fn(existing)) {
-        return register_sym(s, scope, name, is_exported, (u16)DeclKind::Node, fn_decl.h.src_pos);
+        return register_sym(s, scope, name, is_exported, DeclKind::Node, fn_decl.h.src_pos);
     }
     if(is_generic_fn(fn_decl) || chain_has_generic(existing)) {
         u8[] msg = "generic functions cannot be overloaded";
         sema_report(s, fn_decl.h.src_pos, msg);
         return null;
     }
-    Decl* overload = new_decl(s, (u16)DeclKind::Node, name, null);
+    Decl* overload = new_decl(s, DeclKind::Node, name, null);
     overload.is_exported = is_exported;
     Decl* tail = existing;
     while(tail.next_overload != null) { tail = tail.next_overload; }
@@ -354,7 +354,7 @@ fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
         types::Type* enum_ty = types::intern_enum((void*)enum_decl);
         set_decl_ty(s, enum_decl.name, enum_ty);
         for(u64 member_index = 0; member_index < enum_decl.members.len; member_index += 1) {
-            Decl* member_decl = new_decl(s, (u16)DeclKind::EnumMember, enum_decl.members[member_index].name, enum_ty);
+            Decl* member_decl = new_decl(s, DeclKind::EnumMember, enum_decl.members[member_index].name, enum_ty);
             member_decl.data.member = &enum_decl.members[member_index];
             enum_decl.members[member_index].decl = (void*)member_decl;
         }
@@ -421,7 +421,7 @@ fn void resolve_fields(Sema* s, ast::FieldDecl[] fields) {
     for(u64 field_index = 0; field_index < fields.len; field_index += 1) {
         types::Type* field_ty = resolve_type(s, fields[field_index].type_expr);
         fields[field_index].resolved_type = (void*)field_ty;
-        Decl* field_decl = new_decl(s, (u16)DeclKind::Field, fields[field_index].name, field_ty);
+        Decl* field_decl = new_decl(s, DeclKind::Field, fields[field_index].name, field_ty);
         field_decl.data.field = &fields[field_index];
         fields[field_index].decl = (void*)field_decl;
     }
@@ -523,8 +523,8 @@ export fn bool is_generic_fn(ast::FnDeclNode* func) {
 }
 
 fn bool is_spliceable_decl(ast::AstNode* node) {
-    u16 kind = (u16)node.h.kind;
-    return kind == (u16)ast::AstKind::FnDecl || kind == (u16)ast::AstKind::StructDecl || kind == (u16)ast::AstKind::UnionDecl || kind == (u16)ast::AstKind::EnumDecl || kind == (u16)ast::AstKind::VarDecl || kind == (u16)ast::AstKind::AliasDecl;
+    ast::AstKind kind = node.h.kind;
+    return kind == ast::AstKind::FnDecl || kind == ast::AstKind::StructDecl || kind == ast::AstKind::UnionDecl || kind == ast::AstKind::EnumDecl || kind == ast::AstKind::VarDecl || kind == ast::AstKind::AliasDecl;
 }
 
 fn bool decl_is_exported(ast::AstNode* node) {
@@ -646,7 +646,7 @@ fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
     if(func.body == null) { return; }
     Scope* fn_scope = scope_new(balloc(s), (Scope*)s.m.global_scope, 16);
     for(u64 i = 0; i < func.params.len; i += 1) {
-        Decl* param_decl = register_sym(s, fn_scope, func.params[i].name, false, (u16)DeclKind::Param, func.params[i].src_pos);
+        Decl* param_decl = register_sym(s, fn_scope, func.params[i].name, false, DeclKind::Param, func.params[i].src_pos);
         if(param_decl != null) {
             param_decl.ty = (types::Type*)func.params[i].resolved_type;
             param_decl.data.param = &func.params[i];
@@ -684,7 +684,7 @@ export fn void sema_check_clone(module::Module* caller, module::Module* defining
     for(u64 i = 0; i < clone.params.len; i += 1) {
         types::Type* param_type = resolve_type(s, clone.params[i].type_expr);
         clone.params[i].resolved_type = (void*)param_type;
-        Decl* param_decl = register_sym(s, fn_scope, clone.params[i].name, false, (u16)DeclKind::Param, clone.params[i].src_pos);
+        Decl* param_decl = register_sym(s, fn_scope, clone.params[i].name, false, DeclKind::Param, clone.params[i].src_pos);
         if(param_decl != null) {
             param_decl.ty = param_type;
             param_decl.data.param = &clone.params[i];
@@ -921,7 +921,7 @@ fn types::Type* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
         return decl_to_type(s, home, decl);
     }
     Decl* namespace_decl = scope_lookup(s.scope, n.namespace);
-    if(namespace_decl == null || namespace_decl.kind != (u16)DeclKind::Import || namespace_decl.data.module == null) {
+    if(namespace_decl == null || namespace_decl.kind != DeclKind::Import || namespace_decl.data.module == null) {
         diag_unknown_type(s, n.h.src_pos, n.name);
         return null;
     }
@@ -1199,7 +1199,7 @@ fn Decl* resolve_namespace_decl(Sema* s, ast::AstNode* base) {
     if(base.h.kind == ast::AstKind::NamespaceAccess) {
         ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)base;
         Decl* outer = resolve_namespace_decl(s, na.base);
-        if(outer == null || outer.kind != (u16)DeclKind::Import || outer.data.module == null) { return null; }
+        if(outer == null || outer.kind != DeclKind::Import || outer.data.module == null) { return null; }
         return scope_lookup_local((Scope*)outer.data.module.global_scope, na.name);
     }
     return null;
@@ -1212,7 +1212,7 @@ fn types::Type* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
         mark_error((ast::AstNode*)n);
         return null;
     }
-    if(ns.kind == (u16)DeclKind::Import) {
+    if(ns.kind == DeclKind::Import) {
         module::Module* target = ns.data.module;
         Decl* found = scope_lookup_local((Scope*)target.global_scope, n.name);
         if(found == null || !found.is_exported) {
@@ -1227,7 +1227,7 @@ fn types::Type* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
         set_expr((ast::AstNode*)n, found.ty, flags);
         return found.ty;
     }
-    if(ns.kind == (u16)DeclKind::Node && ns.data.node != null && ns.data.node.h.kind == ast::AstKind::EnumDecl) {
+    if(ns.kind == DeclKind::Node && ns.data.node != null && ns.data.node.h.kind == ast::AstKind::EnumDecl) {
         ast::EnumDeclNode* edecl = (ast::EnumDeclNode*)ns.data.node;
         ast::EnumMember* mem = find_enum_member(edecl, n.name);
         if(mem == null) {
@@ -1358,7 +1358,7 @@ fn Decl* callee_overload_head(Sema* s, ast::AstNode* callee) {
     if(callee.h.kind == ast::AstKind::NamespaceAccess) {
         ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)callee;
         Decl* ns = resolve_namespace_decl(s, na.base);
-        if(ns != null && ns.kind == (u16)DeclKind::Import && ns.data.module != null) {
+        if(ns != null && ns.kind == DeclKind::Import && ns.data.module != null) {
             Decl* d = scope_lookup_local((Scope*)ns.data.module.global_scope, na.name);
             if(d != null && decl_is_fn(d) && d.is_exported) { return d; }
         }
@@ -1434,7 +1434,7 @@ fn types::Type* synth_overloaded_call(Sema* s, ast::CallNode* n, Decl* head) {
 }
 
 fn ast::FnDeclNode* as_generic_fn(Decl* d) {
-    if(d.kind != (u16)DeclKind::Node || d.data.node == null) { return null; }
+    if(d.kind != DeclKind::Node || d.data.node == null) { return null; }
     if(d.data.node.h.kind != ast::AstKind::FnDecl) { return null; }
     ast::FnDeclNode* fnd = (ast::FnDeclNode*)d.data.node;
     if(!is_generic_fn(fnd)) { return null; }
@@ -1468,7 +1468,7 @@ fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* g
     types::Type*[] arg_types = {arg_type_mem, n.args.len};
     bool args_ok = true;
     for(u64 i = 0; i < n.args.len; i += 1) {
-        if(ast::is_type((u16)n.args[i].h.kind)) {
+        if(ast::is_type(n.args[i].h.kind)) {
             u8[] msg = "type argument passed to a runtime parameter";
             sema_report(s, n.args[i].h.src_pos, msg);
             mark_error((ast::AstNode*)n);
@@ -1506,7 +1506,7 @@ fn bool has_comptime_type_param(ast::FnDeclNode* generic) {
 
 // An explicit type argument is a type expression, or a bare name / mod::name that resolves to a nominal type.
 fn types::Type* resolve_type_arg(Sema* s, ast::AstNode* arg) {
-    if(ast::is_type((u16)arg.h.kind)) { return resolve_type(s, arg); }
+    if(ast::is_type(arg.h.kind)) { return resolve_type(s, arg); }
     if(arg.h.kind == ast::AstKind::Ident) {
         symbol::Symbol* name = ((ast::IdentNode*)arg).name;
         Decl* decl = scope_lookup_local((Scope*)s.m.global_scope, name);
@@ -1516,7 +1516,7 @@ fn types::Type* resolve_type_arg(Sema* s, ast::AstNode* arg) {
     if(arg.h.kind == ast::AstKind::NamespaceAccess) {
         ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)arg;
         Decl* ns = resolve_namespace_decl(s, na.base);
-        if(ns != null && ns.kind == (u16)DeclKind::Import && ns.data.module != null) {
+        if(ns != null && ns.kind == DeclKind::Import && ns.data.module != null) {
             Decl* decl = scope_lookup_local((Scope*)ns.data.module.global_scope, na.name);
             if(decl != null && decl.is_exported) { return decl_to_type(s, ns.data.module, decl); }
         }
@@ -1773,7 +1773,7 @@ fn types::Type* sizeof_operand_type(Sema* s, ast::AstNode* arg) {
             return d.ty;
         }
     }
-    if(ast::is_type((u16)arg.h.kind) || arg.h.kind == ast::AstKind::Typeof) { return resolve_type(s, arg); }
+    if(ast::is_type(arg.h.kind) || arg.h.kind == ast::AstKind::Typeof) { return resolve_type(s, arg); }
     return synth(s, arg);
 }
 
@@ -2160,7 +2160,7 @@ fn void stmt_var_decl(Sema* s, ast::VarDeclNode* var) {
         if(declared != null) { check(s, var.init, declared); }
         else { synth(s, var.init); }
     }
-    Decl* decl = register_sym(s, s.scope, var.name, false, (u16)DeclKind::Node, var.h.src_pos);
+    Decl* decl = register_sym(s, s.scope, var.name, false, DeclKind::Node, var.h.src_pos);
     if(decl != null) {
         decl.ty = declared;
         decl.data.node = (ast::AstNode*)var;
@@ -2584,15 +2584,15 @@ export fn bool stack_contains(ResolutionStack* st, ResolutionKey key) {
 // Vars, params, and fields are lvalues; fns, types, enum members are not.
 export fn bool decl_is_lvalue(Decl* d) {
     if(d == null) { return false; }
-    if(d.kind == (u16)DeclKind::Field || d.kind == (u16)DeclKind::Param) { return true; }
-    return d.kind == (u16)DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl;
+    if(d.kind == DeclKind::Field || d.kind == DeclKind::Param) { return true; }
+    return d.kind == DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl;
 }
 
 // const vars, enum members, and fns are compile-time-known.
 export fn bool decl_is_const_expr(Decl* d) {
     if(d == null) { return false; }
-    if(d.kind == (u16)DeclKind::EnumMember) { return true; }
-    if(d.kind != (u16)DeclKind::Node || d.data.node == null) { return false; }
+    if(d.kind == DeclKind::EnumMember) { return true; }
+    if(d.kind != DeclKind::Node || d.data.node == null) { return false; }
     ast::AstNode* node = d.data.node;
     if(node.h.kind == ast::AstKind::FnDecl) { return true; }
     return node.h.kind == ast::AstKind::VarDecl && ((ast::VarDeclNode*)node).is_const;
@@ -2638,7 +2638,7 @@ export fn ast::EnumMember* find_enum_member(ast::EnumDeclNode* decl, symbol::Sym
     return null;
 }
 
-export fn Decl* new_decl(Sema* s, u16 kind, symbol::Symbol* name, types::Type* ty) {
+export fn Decl* new_decl(Sema* s, DeclKind kind, symbol::Symbol* name, types::Type* ty) {
     Decl* decl = (Decl*)arena::alloc(balloc(s), sizeof(Decl));
     sys::memset(decl, 0, sizeof(Decl));
     decl.kind = kind;

@@ -532,7 +532,7 @@ TYPE_FIRST = PrimitiveType,
 TYPE_LAST = UnionType,
 }
 
-export fn bool is_decl(u16 k) { return k >= AstKind::DECL_FIRST && k <= AstKind::DECL_LAST; }
-export fn bool is_stmt(u16 k) { return k >= AstKind::STMT_FIRST && k <= AstKind::STMT_LAST; }
-export fn bool is_expr(u16 k) { return k >= AstKind::EXPR_FIRST && k <= AstKind::EXPR_LAST; }
-export fn bool is_type(u16 k) { return k >= AstKind::TYPE_FIRST && k <= AstKind::TYPE_LAST; }
+export fn bool is_decl(AstKind k) { return k >= AstKind::DECL_FIRST && k <= AstKind::DECL_LAST; }
+export fn bool is_stmt(AstKind k) { return k >= AstKind::STMT_FIRST && k <= AstKind::STMT_LAST; }
+export fn bool is_expr(AstKind k) { return k >= AstKind::EXPR_FIRST && k <= AstKind::EXPR_LAST; }
+export fn bool is_type(AstKind k) { return k >= AstKind::TYPE_FIRST && k <= AstKind::TYPE_LAST; }

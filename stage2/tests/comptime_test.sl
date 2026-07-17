@@ -143,7 +143,7 @@ fn sema::Decl* mk_global_var(arena::Arena* a, i64 value, bool is_const) {
     vd.is_const = is_const;
     vd.init = mk_int(a, (u64)value, types::prim_i32());
     sema::Decl* d = mk_decl(a);
-    d.kind = (u16)sema::DeclKind::Node;
+    d.kind = sema::DeclKind::Node;
     d.data.node = (ast::AstNode*)vd;
     return d;
 }
@@ -341,13 +341,13 @@ fn ast::AstNode* mk_call_args(arena::Arena* a, ast::AstNode* callee, ast::AstNod
 
 fn sema::Decl* mk_param_decl(arena::Arena* a) {
     sema::Decl* d = mk_decl(a);
-    d.kind = (u16)sema::DeclKind::Param;
+    d.kind = sema::DeclKind::Param;
     return d;
 }
 
 fn sema::Decl* mk_fn_decl_for(arena::Arena* a, ast::FnDeclNode* func) {
     sema::Decl* d = mk_decl(a);
-    d.kind = (u16)sema::DeclKind::Node;
+    d.kind = sema::DeclKind::Node;
     d.data.node = (ast::AstNode*)func;
     return d;
 }
@@ -358,7 +358,7 @@ fn sema::Decl* mk_extern_decl(arena::Arena* a) {
     e.h.kind = ast::AstKind::ExternFnDecl;
     e.comptime_safe = ast::CompSafe::Unsafe;
     sema::Decl* d = mk_decl(a);
-    d.kind = (u16)sema::DeclKind::Node;
+    d.kind = sema::DeclKind::Node;
     d.data.node = (ast::AstNode*)e;
     return d;
 }
@@ -370,7 +370,7 @@ fn sema::Decl* mk_global_decl(arena::Arena* a, bool is_const) {
     vd.is_const = is_const;
     vd.qualified_name = (symbol::Symbol*)arena::alloc(a, 8);
     sema::Decl* d = mk_decl(a);
-    d.kind = (u16)sema::DeclKind::Node;
+    d.kind = sema::DeclKind::Node;
     d.data.node = (ast::AstNode*)vd;
     return d;
 }

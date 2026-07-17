@@ -330,14 +330,14 @@ fn u32 scan_punct(module::Module* m, u32 start) {
                 }
             }
         }
-        case '+': { kind = (token::TokenKind)peek_eq(m, &pos, (u16)token::TokenKind::Plus, (u16)token::TokenKind::PlusEq); }
-        case '-': { kind = (token::TokenKind)peek_eq(m, &pos, (u16)token::TokenKind::Minus, (u16)token::TokenKind::MinusEq); }
-        case '*': { kind = (token::TokenKind)peek_eq(m, &pos, (u16)token::TokenKind::Star, (u16)token::TokenKind::StarEq); }
-        case '/': { kind = (token::TokenKind)peek_eq(m, &pos, (u16)token::TokenKind::Slash, (u16)token::TokenKind::SlashEq); }
-        case '%': { kind = (token::TokenKind)peek_eq(m, &pos, (u16)token::TokenKind::Percent, (u16)token::TokenKind::PercentEq); }
-        case '^': { kind = (token::TokenKind)peek_eq(m, &pos, (u16)token::TokenKind::Caret, (u16)token::TokenKind::CaretEq); }
-        case '=': { kind = (token::TokenKind)peek_eq(m, &pos, (u16)token::TokenKind::Eq, (u16)token::TokenKind::EqEq); }
-        case '!': { kind = (token::TokenKind)peek_eq(m, &pos, (u16)token::TokenKind::Bang, (u16)token::TokenKind::BangEq); }
+        case '+': { kind = peek_eq(m, &pos, token::TokenKind::Plus, token::TokenKind::PlusEq); }
+        case '-': { kind = peek_eq(m, &pos, token::TokenKind::Minus, token::TokenKind::MinusEq); }
+        case '*': { kind = peek_eq(m, &pos, token::TokenKind::Star, token::TokenKind::StarEq); }
+        case '/': { kind = peek_eq(m, &pos, token::TokenKind::Slash, token::TokenKind::SlashEq); }
+        case '%': { kind = peek_eq(m, &pos, token::TokenKind::Percent, token::TokenKind::PercentEq); }
+        case '^': { kind = peek_eq(m, &pos, token::TokenKind::Caret, token::TokenKind::CaretEq); }
+        case '=': { kind = peek_eq(m, &pos, token::TokenKind::Eq, token::TokenKind::EqEq); }
+        case '!': { kind = peek_eq(m, &pos, token::TokenKind::Bang, token::TokenKind::BangEq); }
         case '&': {
             kind = token::TokenKind::Amp;
             if(pos < (u32)m.source.len && m.source[pos] == '&') { kind = token::TokenKind::AmpAmp; pos += 1; }
@@ -364,7 +364,7 @@ fn u32 scan_punct(module::Module* m, u32 start) {
     return pos;
 }
 
-fn u16 peek_eq(module::Module* m, u32* pos_inout, u16 plain, u16 with_eq) {
+fn token::TokenKind peek_eq(module::Module* m, u32* pos_inout, token::TokenKind plain, token::TokenKind with_eq) {
     if(*pos_inout < (u32)m.source.len && m.source[*pos_inout] == '=') {
         *pos_inout += 1;
         return with_eq;

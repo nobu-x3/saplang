@@ -44,7 +44,7 @@ fn symbol::Symbol* fake_sym_interned(module::Module* m, u8[] bytes) {
     return interner::intern(bytes);
 }
 
-fn sema::Decl* fake_decl(arena::Arena* a, u16 kind, symbol::Symbol* name, types::Type* ty) {
+fn sema::Decl* fake_decl(arena::Arena* a, sema::DeclKind kind, symbol::Symbol* name, types::Type* ty) {
     sema::Decl* d = (sema::Decl*)arena::alloc(a, sizeof(sema::Decl));
     sys::memset(d, 0, sizeof(sema::Decl));
     d.kind = kind;
@@ -54,28 +54,28 @@ fn sema::Decl* fake_decl(arena::Arena* a, u16 kind, symbol::Symbol* name, types:
 }
 
 fn sema::Decl* fake_node_decl(arena::Arena* a, symbol::Symbol* name, types::Type* ty, ast::AstNode* node) {
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Node, name, ty);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Node, name, ty);
     d.data.node = node;
     return d;
 }
 
 fn sema::Decl* fake_param_decl(arena::Arena* a, symbol::Symbol* name, types::Type* ty) {
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Param, name, ty);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Param, name, ty);
     return d;
 }
 
 fn sema::Decl* fake_field_decl_value(arena::Arena* a, symbol::Symbol* name, types::Type* ty) {
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Field, name, ty);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Field, name, ty);
     return d;
 }
 
 fn sema::Decl* fake_enum_member_decl_value(arena::Arena* a, symbol::Symbol* name, types::Type* ty) {
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::EnumMember, name, ty);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::EnumMember, name, ty);
     return d;
 }
 
 fn sema::Decl* fake_import_decl(arena::Arena* a, symbol::Symbol* name, module::Module* target) {
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Import, name, null);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Import, name, null);
     d.data.module = target;
     return d;
 }
@@ -700,7 +700,7 @@ fn i32 scope_add_first_returns_true(arena::Arena* a, u8[] m) {
     sema::Scope* s = sema::scope_new(a, null, 16);
     if(!testing::expect_not_null((void*)s, m)) { return -1; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Node, k, null);
     if(!testing::expect_eq(sema::scope_add(s, k, d), true, m)) { return -2; }
     return 0;
 }
@@ -709,7 +709,7 @@ fn i32 scope_add_increments_count(arena::Arena* a, u8[] m) {
     sema::Scope* s = sema::scope_new(a, null, 16);
     if(!testing::expect_not_null((void*)s, m)) { return -1; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(s, k, d);
     if(!testing::expect_eq(s.count, 1, m)) { return -2; }
     return 0;
@@ -719,8 +719,8 @@ fn i32 scope_add_duplicate_returns_false(arena::Arena* a, u8[] m) {
     sema::Scope* s = sema::scope_new(a, null, 16);
     if(!testing::expect_not_null((void*)s, m)) { return -1; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* d1 = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
-    sema::Decl* d2 = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* d1 = fake_decl(a, sema::DeclKind::Node, k, null);
+    sema::Decl* d2 = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(s, k, d1);
     if(!testing::expect_eq(sema::scope_add(s, k, d2), false, m)) { return -2; }
     return 0;
@@ -730,8 +730,8 @@ fn i32 scope_add_duplicate_does_not_change_count(arena::Arena* a, u8[] m) {
     sema::Scope* s = sema::scope_new(a, null, 16);
     if(!testing::expect_not_null((void*)s, m)) { return -1; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* d1 = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
-    sema::Decl* d2 = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* d1 = fake_decl(a, sema::DeclKind::Node, k, null);
+    sema::Decl* d2 = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(s, k, d1);
     sema::scope_add(s, k, d2);
     if(!testing::expect_eq(s.count, 1, m)) { return -2; }
@@ -743,8 +743,8 @@ fn i32 scope_add_two_different_keys(arena::Arena* a, u8[] m) {
     if(!testing::expect_not_null((void*)s, m)) { return -1; }
     symbol::Symbol* k1 = fake_sym(a);
     symbol::Symbol* k2 = fake_sym(a);
-    sema::Decl* d1 = fake_decl(a, (u16)sema::DeclKind::Node, k1, null);
-    sema::Decl* d2 = fake_decl(a, (u16)sema::DeclKind::Node, k2, null);
+    sema::Decl* d1 = fake_decl(a, sema::DeclKind::Node, k1, null);
+    sema::Decl* d2 = fake_decl(a, sema::DeclKind::Node, k2, null);
     if(!testing::expect_eq(sema::scope_add(s, k1, d1), true, m)) { return -2; }
     if(!testing::expect_eq(sema::scope_add(s, k2, d2), true, m)) { return -3; }
     if(!testing::expect_eq(s.count, 2, m)) { return -4; }
@@ -760,7 +760,7 @@ fn i32 lookup_local_finds_inserted(arena::Arena* a, u8[] m) {
     sema::Scope* s = sema::scope_new(a, null, 16);
     if(!testing::expect_not_null((void*)s, m)) { return -1; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(s, k, d);
     if(!testing::expect_eq((void*)sema::scope_lookup_local(s, k), (void*)d, m)) { return -2; }
     return 0;
@@ -780,7 +780,7 @@ fn i32 lookup_local_does_not_walk_parent(arena::Arena* a, u8[] m) {
     if(!testing::expect_not_null((void*)parent, m)) { return -1; }
     if(!testing::expect_not_null((void*)child,  m)) { return -2; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(parent, k, d);
     if(!testing::expect_eq((void*)sema::scope_lookup_local(child, k), (void*)null, m)) { return -3; }
     return 0;
@@ -795,7 +795,7 @@ fn i32 lookup_finds_in_self(arena::Arena* a, u8[] m) {
     sema::Scope* s = sema::scope_new(a, null, 16);
     if(!testing::expect_not_null((void*)s, m)) { return -1; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(s, k, d);
     if(!testing::expect_eq((void*)sema::scope_lookup(s, k), (void*)d, m)) { return -2; }
     return 0;
@@ -807,7 +807,7 @@ fn i32 lookup_walks_to_parent(arena::Arena* a, u8[] m) {
     if(!testing::expect_not_null((void*)parent, m)) { return -1; }
     if(!testing::expect_not_null((void*)child,  m)) { return -2; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(parent, k, d);
     if(!testing::expect_eq((void*)sema::scope_lookup(child, k), (void*)d, m)) { return -3; }
     return 0;
@@ -819,8 +819,8 @@ fn i32 lookup_self_shadows_parent(arena::Arena* a, u8[] m) {
     if(!testing::expect_not_null((void*)parent, m)) { return -1; }
     if(!testing::expect_not_null((void*)child,  m)) { return -2; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* outer = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
-    sema::Decl* inner = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* outer = fake_decl(a, sema::DeclKind::Node, k, null);
+    sema::Decl* inner = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(parent, k, outer);
     sema::scope_add(child,  k, inner);
     if(!testing::expect_eq((void*)sema::scope_lookup(child, k), (void*)inner, m)) { return -3; }
@@ -835,7 +835,7 @@ fn i32 lookup_walks_two_levels(arena::Arena* a, u8[] m) {
     if(!testing::expect_not_null((void*)mid,  m)) { return -2; }
     if(!testing::expect_not_null((void*)leaf, m)) { return -3; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* d = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(g, k, d);
     if(!testing::expect_eq((void*)sema::scope_lookup(leaf, k), (void*)d, m)) { return -4; }
     return 0;
@@ -863,7 +863,7 @@ fn i32 scope_grow_preserves_entries(arena::Arena* a, u8[] m) {
     sema::Decl*[10] decls;
     for(u64 i = 0; i < 10; i += 1) {
         keys[i]  = fake_sym(a);
-        decls[i] = fake_decl(a, (u16)sema::DeclKind::Node, keys[i], null);
+        decls[i] = fake_decl(a, sema::DeclKind::Node, keys[i], null);
         sema::scope_add(s, keys[i], decls[i]);
     }
     if(!testing::expect_eq(s.count, 10, m)) { return -2; }
@@ -879,7 +879,7 @@ fn i32 scope_grow_cap_is_power_of_two(arena::Arena* a, u8[] m) {
     if(!testing::expect_not_null((void*)s, m)) { return -1; }
     for(u64 i = 0; i < 32; i += 1) {
         symbol::Symbol* k = fake_sym(a);
-        sema::Decl* d = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+        sema::Decl* d = fake_decl(a, sema::DeclKind::Node, k, null);
         sema::scope_add(s, k, d);
     }
     u64 c = s.cap;
@@ -1235,7 +1235,7 @@ fn i32 field_backlink_kind(arena::Arena* a, u8[] m) {
     sema::resolve_type(&s, fake_anon_struct(a, &fields[0], 1, 0));
     sema::Decl* d = (sema::Decl*)fields[0].decl;
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Field, m)) { return -2; }
+    if(!testing::expect_eq((u16)d.kind, (u16)sema::DeclKind::Field, m)) { return -2; }
     return 0;
 }
 
@@ -1286,7 +1286,7 @@ fn i32 enum_member_backlink_kind(arena::Arena* a, u8[] m) {
     sema_run(mm);
     sema::Decl* d = (sema::Decl*)ed.members[0].decl;
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::EnumMember, m)) { return -2; }
+    if(!testing::expect_eq((u16)d.kind, (u16)sema::DeclKind::EnumMember, m)) { return -2; }
     return 0;
 }
 
@@ -1560,8 +1560,8 @@ fn i32 scope_add_duplicate_keeps_first(arena::Arena* a, u8[] m) {
     sema::Scope* s = sema::scope_new(a, null, 16);
     if(!testing::expect_not_null((void*)s, m)) { return -1; }
     symbol::Symbol* k = fake_sym(a);
-    sema::Decl* first  = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
-    sema::Decl* second = fake_decl(a, (u16)sema::DeclKind::Node, k, null);
+    sema::Decl* first  = fake_decl(a, sema::DeclKind::Node, k, null);
+    sema::Decl* second = fake_decl(a, sema::DeclKind::Node, k, null);
     sema::scope_add(s, k, first);
     sema::scope_add(s, k, second);
     if(!testing::expect_eq((void*)sema::scope_lookup_local(s, k), (void*)first, m)) { return -2; }
@@ -1719,7 +1719,7 @@ fn i32 cn_registers_single_fn(arena::Arena* a, u8[] m) {
     if(!testing::expect_not_null(mm.global_scope, m)) { return -1; }
     sema::Decl* d = registered(mm, foo);
     if(!testing::expect_not_null((void*)d, m)) { return -2; }
-    if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Node, m)) { return -3; }
+    if(!testing::expect_eq((u16)d.kind, (u16)sema::DeclKind::Node, m)) { return -3; }
     if(!testing::expect_eq(d.is_exported, true, m)) { return -4; }
     if(!testing::expect_eq((void*)d.data.node, (void*)func, m)) { return -5; }
     return 0;
@@ -1790,7 +1790,7 @@ fn i32 cn_var_qualified_and_exported(arena::Arena* a, u8[] m) {
     sema_run(mm);
     sema::Decl* d = registered(mm, g);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Node, m)) { return -2; }
+    if(!testing::expect_eq((u16)d.kind, (u16)sema::DeclKind::Node, m)) { return -2; }
     if(!testing::expect_eq(d.is_exported, true, m)) { return -3; }
     u8[] q = interner::symbol_str(v.qualified_name);
     if(!testing::expect_eq(q, "testmod::g", m)) { return -4; }
@@ -1867,7 +1867,7 @@ fn i32 cn_import_resolves_module(arena::Arena* a, u8[] m) {
     sema_run(mm);
     sema::Decl* d = registered(mm, io);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Import, m)) { return -2; }
+    if(!testing::expect_eq((u16)d.kind, (u16)sema::DeclKind::Import, m)) { return -2; }
     if(!testing::expect_eq((void*)d.data.module, (void*)target, m)) { return -3; }
     return 0;
 }
@@ -1882,7 +1882,7 @@ fn i32 cn_import_reexport_no_match(arena::Arena* a, u8[] m) {
     sema_run(mm);
     sema::Decl* d = registered(mm, io);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
-    if(!testing::expect_eq(d.kind, (u16)sema::DeclKind::Import, m)) { return -2; }
+    if(!testing::expect_eq((u16)d.kind, (u16)sema::DeclKind::Import, m)) { return -2; }
     if(!testing::expect_eq(d.is_exported, true, m)) { return -3; }
     if(!testing::expect_eq((void*)d.data.module, (void*)null, m)) { return -4; }
     return 0;
@@ -1905,7 +1905,7 @@ fn i32 cn_extern_block_items_registered(arena::Arena* a, u8[] m) {
     sema::Decl* dm = registered(mm, malloc_s);
     sema::Decl* df = registered(mm, file_s);
     if(!testing::expect_not_null((void*)dm, m)) { return -1; }
-    if(!testing::expect_eq(dm.kind, (u16)sema::DeclKind::Node, m)) { return -2; }
+    if(!testing::expect_eq((u16)dm.kind, (u16)sema::DeclKind::Node, m)) { return -2; }
     if(!testing::expect_eq((void*)dm.data.node, (void*)efn, m)) { return -3; }
     if(!testing::expect_not_null((void*)df, m)) { return -4; }
     if(!testing::expect_not_null((void*)df.data.node, m)) { return -5; }

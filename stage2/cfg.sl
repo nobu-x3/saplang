@@ -21,7 +21,7 @@ export struct SwitchTarget {
 }
 
 export struct Terminator {
-    u16             kind;
+    TermKind        kind;
     u32             src_pos;
     u32             goto_target;
     ast::AstNode*   cond;
@@ -378,7 +378,7 @@ fn bool block_terminated(CfgBuilder* b, u32 blk) {
 
 fn void terminate_goto(CfgBuilder* b, u32 blk, u32 target, u32 src_pos) {
     BasicBlock* block = &b.cfg.blocks[blk];
-    block.term.kind = (u16)TermKind::Goto;
+    block.term.kind = TermKind::Goto;
     block.term.src_pos = src_pos;
     block.term.goto_target = target;
     block.terminated = true;
@@ -386,7 +386,7 @@ fn void terminate_goto(CfgBuilder* b, u32 blk, u32 target, u32 src_pos) {
 
 fn void terminate_cond(CfgBuilder* b, u32 blk, ast::AstNode* cond, u32 then_t, u32 else_t, u32 src_pos) {
     BasicBlock* block = &b.cfg.blocks[blk];
-    block.term.kind = (u16)TermKind::CondBranch;
+    block.term.kind = TermKind::CondBranch;
     block.term.src_pos = src_pos;
     block.term.cond = cond;
     block.term.then_target = then_t;
@@ -396,7 +396,7 @@ fn void terminate_cond(CfgBuilder* b, u32 blk, ast::AstNode* cond, u32 then_t, u
 
 fn void terminate_switch(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 default_t, SwitchTarget[] arms, u32 src_pos) {
     BasicBlock* block = &b.cfg.blocks[blk];
-    block.term.kind = (u16)TermKind::Switch;
+    block.term.kind = TermKind::Switch;
     block.term.src_pos = src_pos;
     block.term.switch_value = value;
     block.term.switch_default = default_t;
@@ -406,7 +406,7 @@ fn void terminate_switch(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 defaul
 
 fn void terminate_return(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 src_pos) {
     BasicBlock* block = &b.cfg.blocks[blk];
-    block.term.kind = (u16)TermKind::Return;
+    block.term.kind = TermKind::Return;
     block.term.src_pos = src_pos;
     block.term.return_value = value;
     block.terminated = true;
@@ -414,7 +414,7 @@ fn void terminate_return(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 src_po
 
 fn void terminate_unreachable(CfgBuilder* b, u32 blk) {
     BasicBlock* block = &b.cfg.blocks[blk];
-    block.term.kind = (u16)TermKind::Unreachable;
+    block.term.kind = TermKind::Unreachable;
     block.terminated = true;
 }
 
@@ -514,13 +514,13 @@ export fn void compute_predecessors(Cfg* g, arena::Arena* a) {
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
         BasicBlock* block = &g.blocks[block_index];
         if(!block.terminated) { continue; }      // kind 0 == Goto; never trust an unterminated block
-        u32 kind = (u32)block.term.kind;
-        if(kind == (u32)TermKind::Goto) {
+        TermKind kind = block.term.kind;
+        if(kind == TermKind::Goto) {
             add_predecessor(g, a, block.term.goto_target, (u32)block_index);
-        } else if(kind == (u32)TermKind::CondBranch) {
+        } else if(kind == TermKind::CondBranch) {
             add_predecessor(g, a, block.term.then_target, (u32)block_index);
             add_predecessor(g, a, block.term.else_target, (u32)block_index);
-        } else if(kind == (u32)TermKind::Switch) {
+        } else if(kind == TermKind::Switch) {
             add_predecessor(g, a, block.term.switch_default, (u32)block_index);
             for(u64 arm_index = 0; arm_index < block.term.switch_arms.len; arm_index += 1) {
                 u32 target = block.term.switch_arms[arm_index].target;
@@ -568,13 +568,13 @@ fn bool[] bfs_reachable_from(Cfg* g, arena::Arena* a, u32 entry) {
         sp -= 1;
         u32 blk = stack[sp];
         Terminator* t = &g.blocks[blk].term;
-        u32 kind = (u32)t.kind;
-        if(kind == (u32)TermKind::Goto) {
+        TermKind kind = t.kind;
+        if(kind == TermKind::Goto) {
             sp = mark_successor(reachable, stack, sp, t.goto_target);
-        } else if(kind == (u32)TermKind::CondBranch) {
+        } else if(kind == TermKind::CondBranch) {
             sp = mark_successor(reachable, stack, sp, t.then_target);
             sp = mark_successor(reachable, stack, sp, t.else_target);
-        } else if(kind == (u32)TermKind::Switch) {
+        } else if(kind == TermKind::Switch) {
             sp = mark_successor(reachable, stack, sp, t.switch_default);
             for(u64 arm_index = 0; arm_index < t.switch_arms.len; arm_index += 1) {
                 sp = mark_successor(reachable, stack, sp, t.switch_arms[arm_index].target);
@@ -590,7 +590,7 @@ export fn bool check_return_paths(module::Module* m, ast::FnDeclNode* func) {
     bool[] reachable = bfs_reachable_from(g, m.arena, g.entry);
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
         if(!reachable[block_index]) { continue; }
-        if((u32)g.blocks[block_index].term.kind == (u32)TermKind::Unreachable) {
+        if(g.blocks[block_index].term.kind == TermKind::Unreachable) {
             u8[] msg = "function may exit without a return statement";
             diag::report(&m.diag, m.arena, func.h.src_pos, msg);
             return false;
