@@ -16,6 +16,7 @@ import threads;
 
 export struct Sema {
     module::Module*     m;
+    module::Module*     lookup_module;      // module whose scope bare named types resolve against; null = m (differs for a clone body)
     Scope*              scope;              // current scope; module-scope at the top, pushed/popped through blocks
     ast::AstNode*       current_fn;         // FnDeclNode being analyzed during body checking; null at module scope
     types::Type*        current_return;     // return type of current_fn; null at module scope
@@ -670,6 +671,7 @@ export fn void sema_check_clone(module::Module* caller, module::Module* defining
     sys::memset(&sema, 0, sizeof(Sema));
     sema.m = caller;
     Sema* s = &sema;
+    s.lookup_module = defining;
     s.scope = (Scope*)defining.global_scope;
     s.resolution_stack.arena = caller.arena;
 
@@ -908,18 +910,24 @@ fn types::Type* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
         for(u64 i = 0; i < s.comptime_type_names.len; i += 1) {
             if(n.name == s.comptime_type_names[i]) { return types::prim_type(); }
         }
-    }
-    module::Module* target = s.m;
-    if(n.namespace != null) {
-        Decl* namespace_decl = scope_lookup(s.scope, n.namespace);
-        if(namespace_decl == null || namespace_decl.kind != (u16)DeclKind::Import || namespace_decl.data.module == null) {
+        // Bare name resolves in the lookup module's own scope (the defining module for a clone body), no export filter.
+        module::Module* home = s.m;
+        if(s.lookup_module != null) { home = s.lookup_module; }
+        Decl* decl = scope_lookup_local((Scope*)home.global_scope, n.name);
+        if(decl == null) {
             diag_unknown_type(s, n.h.src_pos, n.name);
             return null;
         }
-        target = namespace_decl.data.module;
+        return decl_to_type(s, home, decl);
     }
+    Decl* namespace_decl = scope_lookup(s.scope, n.namespace);
+    if(namespace_decl == null || namespace_decl.kind != (u16)DeclKind::Import || namespace_decl.data.module == null) {
+        diag_unknown_type(s, n.h.src_pos, n.name);
+        return null;
+    }
+    module::Module* target = namespace_decl.data.module;
     Decl* decl = scope_lookup_local((Scope*)target.global_scope, n.name);
-    if(decl == null || (target != s.m && !decl.is_exported)) {
+    if(decl == null || !decl.is_exported) {
         diag_unknown_type(s, n.h.src_pos, n.name);
         return null;
     }

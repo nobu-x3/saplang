@@ -1570,7 +1570,9 @@ export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, val
     // Cache before re-checking, so a recursive generic call in the body hits the cache, not endless monomorphization.
     mono_cache_insert(cache, ip.m.arena, key, clone);
     instantiated_fns_push(ip.m, clone);
-    sema::sema_check_clone(ip.m, ip.m, clone);
+    module::Module* defining = ip.m;
+    if(callee.decl != null) { defining = ((sema::Decl*)callee.decl).home; }
+    sema::sema_check_clone(ip.m, defining, clone);
     return clone;
 }
 
