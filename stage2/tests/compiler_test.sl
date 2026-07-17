@@ -718,6 +718,33 @@ fn i32 e2e_lower_global_ref_fails(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// E2E: a struct-through-pointer store lowers to alloca-free FieldAddr/Store through the driver.
+fn i32 e2e_lower_struct(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* m = mk_source_module(a, "prog", "struct P { i32 x; } fn void f(P* p) { p.x = 8; }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    if(!testing::expect_ne((void*)m.sapir, null, msg)) { return -2; }
+
+    u8[] got = sapir_print::print_module_to_arena((sapir::SapirModule*)m.sapir, a);
+    io::OutBuf want;
+    io::outbuf_init(&want, a, 512);
+    io::outbuf_write(&want, "module prog\n\n");
+    io::outbuf_write(&want, "fn __prog_f(prog::P*) -> void {\n");
+    io::outbuf_write(&want, "b0:  ; preds:\n");
+    io::outbuf_write(&want, "    %0 = param.prog::P* 0\n");
+    io::outbuf_write(&want, "    %1 = fieldaddr %0, 0\n");
+    io::outbuf_write(&want, "    %2 = const.i32 8\n");
+    io::outbuf_write(&want, "    store %1, %2\n");
+    io::outbuf_write(&want, "    ret\n");
+    io::outbuf_write(&want, "b1:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "}\n");
+    if(!testing::expect_eq(got, io::outbuf_bytes(&want), msg)) { return -3; }
+    return 0;
+}
+
 fn i32 argv_sapir_dump(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -785,6 +812,7 @@ fn i32 main() {
     testing::add(e2e, "e2e_lower_control_flow",      &e2e_lower_control_flow);
     testing::add(e2e, "e2e_lower_loop",              &e2e_lower_loop);
     testing::add(e2e, "e2e_lower_global_ref_fails",  &e2e_lower_global_ref_fails);
+    testing::add(e2e, "e2e_lower_struct",            &e2e_lower_struct);
 
     return testing::run();
 }
