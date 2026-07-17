@@ -558,15 +558,18 @@ LLVMValueRef codegen_assignment(CodegenLLVM *cg, ASTNode *node, Symbol *table, P
 }
 
 LLVMTypeRef codegen_struct_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
-	LLVMTypeRef element_types[256];
 	assert(node->data.struct_decl.field_count < 257 && "can only have 256 fields max.");
+	LLVMTypeRef struct_type = LLVMGetTypeByName2(cg->llvm_context, node->data.struct_decl.resolved_name);
+	// Idempotent: the body-fill pre-pass and the main pass both reach this.
+	if (struct_type && !LLVMIsOpaqueStruct(struct_type))
+		return struct_type;
 	// Pre-register the named LLVM type before resolving fields so a
 	// self-referential field (`Self*`) finds the opaque named type via
 	// LLVMGetTypeByName2 in map_to_llvm instead of wrapping NULL.
-	LLVMTypeRef struct_type = LLVMGetTypeByName2(cg->llvm_context, node->data.struct_decl.resolved_name);
 	if (!struct_type)
 		struct_type = LLVMStructCreateNamed(cg->llvm_context, node->data.struct_decl.resolved_name);
 	assert(struct_type);
+	LLVMTypeRef element_types[256];
 	for (int i = 0; i < node->data.struct_decl.field_count; ++i) {
 		ASTNode *current_field = node->data.struct_decl.fields[i];
 		LLVMTypeRef ft = map_to_llvm(cg, current_field->data.field_decl.type, table);
@@ -582,6 +585,8 @@ LLVMTypeRef codegen_union_decl(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 	char union_name[512] = "";
 	sprintf(union_name, "union.%s", node->data.union_decl.resolved_name);
 	LLVMTypeRef struct_type = LLVMGetTypeByName2(cg->llvm_context, union_name);
+	if (struct_type && !LLVMIsOpaqueStruct(struct_type))
+		return struct_type;
 	if (!struct_type)
 		struct_type = LLVMStructCreateNamed(cg->llvm_context, union_name);
 	assert(struct_type);
@@ -1849,6 +1854,14 @@ void codegen_run(CodegenLLVM *cg, ASTNode *root, Symbol *table) {
 				if (!LLVMGetTypeByName2(cg->llvm_context, union_name))
 					LLVMStructCreateNamed(cg->llvm_context, union_name);
 			}
+		}
+	}
+	// Fill every top-level struct/union body before any function, so a function may reference a struct declared later.
+	for (ASTNode *current = root; current; current = current->next) {
+		if (current->type == AST_STRUCT_DECL) {
+			codegen_struct_decl(cg, current, table);
+		} else if (current->type == AST_UNION_DECL) {
+			codegen_union_decl(cg, current, table);
 		}
 	}
 	for (ASTNode *current = root; current; current = current->next) {
