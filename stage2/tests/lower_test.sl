@@ -764,6 +764,92 @@ fn i32 aggregate_call_diag(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 int_cast(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32) -> i64 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    %1 = cast.i8 %0");
+    wl(&w, "    %2 = cast.i64 %0");
+    wl(&w, "    ret %2");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i64 f(i32 x) { i8 a = (i8)x; i64 b = (i64)x; return b; }", &w, msg);
+}
+
+fn i32 float_cast(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32) -> f64 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    %1 = cast.f64 %0");
+    wl(&w, "    %2 = cast.f32 %1");
+    wl(&w, "    %3 = cast.f64 %2");
+    wl(&w, "    ret %3");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn f64 f(i32 x) { f64 d = (f64)x; return (f64)(f32)d; }", &w, msg);
+}
+
+fn i32 ptr_to_int_cast(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32*) -> u64 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32* 0");
+    wl(&w, "    %1 = cast.u64 %0");
+    wl(&w, "    ret %1");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn u64 f(i32* p) { return (u64)p; }", &w, msg);
+}
+
+fn i32 array_to_slice_cast(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 768);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f() -> i32[] {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = alloca.i32[3]*");
+    wl(&w, "    %1 = const.u64 0");
+    wl(&w, "    %2 = indexaddr %0, %1");
+    wl(&w, "    %3 = const.i32 1");
+    wl(&w, "    store %2, %3");
+    wl(&w, "    %5 = const.u64 1");
+    wl(&w, "    %6 = indexaddr %0, %5");
+    wl(&w, "    %7 = const.i32 2");
+    wl(&w, "    store %6, %7");
+    wl(&w, "    %9 = const.u64 2");
+    wl(&w, "    %10 = indexaddr %0, %9");
+    wl(&w, "    %11 = const.i32 3");
+    wl(&w, "    store %10, %11");
+    wl(&w, "    %13 = const.u64 0");
+    wl(&w, "    %14 = indexaddr %0, %13");
+    wl(&w, "    %15 = const.u64 3");
+    wl(&w, "    %16 = slicemake %14, %15");
+    wl(&w, "    ret %16");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32[] f() { i32[3] arr = [1,2,3]; return (i32[])arr; }", &w, msg);
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Lower Tests";
@@ -799,5 +885,9 @@ fn i32 main() {
     testing::add(suite, "union_field",        &union_field);
     testing::add(suite, "addr_global_diag",   &addr_global_diag);
     testing::add(suite, "aggregate_call_diag", &aggregate_call_diag);
+    testing::add(suite, "int_cast",           &int_cast);
+    testing::add(suite, "float_cast",         &float_cast);
+    testing::add(suite, "ptr_to_int_cast",    &ptr_to_int_cast);
+    testing::add(suite, "array_to_slice_cast", &array_to_slice_cast);
     return testing::run();
 }
