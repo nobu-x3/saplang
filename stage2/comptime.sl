@@ -773,7 +773,9 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
             return value::val_error();
         }
         func = callee_val.data.fn_ref;
-        sema::ensure_body_checked(ip.m, func, ip.m);              // v0: fn-pointer targets are checked in the current module
+        module::Module* fn_home = ip.m;
+        if(func.decl != null) { fn_home = ((sema::Decl*)func.decl).home; }
+        sema::ensure_body_checked(fn_home, func, ip.m);          // body-check the target in its own module, like the direct path
     }
     if(!ensure_comptime_safe(ip, func)) {
         u8[] msg = "cannot call a non-comptime-safe function at comptime";
