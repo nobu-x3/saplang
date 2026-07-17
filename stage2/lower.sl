@@ -301,6 +301,7 @@ fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
         build_array_lit(lo, temp, (types::Type*)e.h.ty, (ast::ArrayLitNode*)e);
         return emit_load(lo, temp, (types::Type*)e.h.ty);
     }
+    case ast::AstKind::Cast: { return lower_cast(lo, (ast::CastNode*)e, (types::Type*)e.h.ty); }
     case ast::AstKind::BinaryOp: {
         ast::BinaryOpNode* n = (ast::BinaryOpNode*)e;
         if(n.op == token::TokenKind::AmpAmp) { return lower_short_circuit(lo, n, true); }
@@ -382,8 +383,7 @@ fn u32 lower_short_circuit(Lower* lo, ast::BinaryOpNode* n, bool is_and) {
     return phi;
 }
 
-// Reduces any condition-legal value to an i1 (§4.5 cond_test). A pointer is compared
-// against null, never truncated to its low bit.
+// A pointer condition compares against null, never truncated to its low bit.
 fn u32 to_bool(Lower* lo, types::Type* ty, u32 value) {
     switch(sapir::cond_test(ty)) {
     case sapir::CondTest::AsBool: { return value; }
@@ -849,7 +849,7 @@ fn void scan_addr_taken(Lower* lo, ast::AstNode* e) {
     }
 }
 
-// The decl an lvalue is rooted at, or null if it goes through a pointer (which doesn't pin the base to memory).
+// The decl an lvalue roots at, or null if it goes through a pointer (separate storage).
 fn void* lvalue_root_decl(ast::AstNode* e) {
     switch(e.h.kind) {
     case ast::AstKind::Ident: { return ((ast::IdentNode*)e).resolved; }
@@ -902,6 +902,44 @@ fn void emit_memcpy(Lower* lo, u32 dst, u32 src, types::Type* ty) {
     inst.b = src;
     inst.imm = (u64)types::size_of(&lo.m.diag, ty);
     sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+fn u32 emit_const_u64(Lower* lo, u64 value, u32 src_pos) {
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, types::prim_u64(), src_pos);
+    inst.imm = value;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+fn u32 emit_index0(Lower* lo, u32 base, types::Type* result_ty, u32 src_pos) {
+    u32 zero = emit_const_u64(lo, 0, src_pos);
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::IndexAddr, result_ty, src_pos);
+    inst.a = base;
+    inst.b = zero;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+// Array-decay and null-to-slice casts build a short sequence here; scalar casts are one Cast.
+fn u32 lower_cast(Lower* lo, ast::CastNode* n, types::Type* dst) {
+    types::Type* src = (types::Type*)n.expr.h.ty;
+    switch(sapir::cast_op(src, dst)) {
+    case sapir::CastOp::ArrayToElemPtr: { return emit_index0(lo, lower_addr(lo, n.expr), dst, n.h.src_pos); }
+    case sapir::CastOp::ArrayToSlice: {
+        u32 ptr = emit_index0(lo, lower_addr(lo, n.expr), types::intern_pointer(src.data.array.elem, false), n.h.src_pos);
+        u32 len = emit_const_u64(lo, src.data.array.count, n.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::SliceMake, dst, n.h.src_pos);
+        inst.a = ptr;
+        inst.b = len;
+        return sapir::add_inst(lo.arena, lo.func, inst);
+    }
+    case sapir::CastOp::NullToSlice: { return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::ConstNull, dst, n.h.src_pos)); }
+    else {
+        u32 value = lower_expr(lo, n.expr);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::Cast, dst, n.h.src_pos);
+        inst.a = value;
+        return sapir::add_inst(lo.arena, lo.func, inst);
+    }
+    }
+    return sapir::INVALID_ID;
 }
 
 fn u32 emit_temp_alloca(Lower* lo, types::Type* ty) {
@@ -973,7 +1011,7 @@ fn u32 field_index_of(types::Type* container, symbol::Symbol* field) {
     return (u32)sema::find_field_index((ast::StructDeclNode*)decl, field);
 }
 
-// Builds an initializer into an existing address: a literal in place, an aggregate copy, or a scalar store.
+// Builds an initializer at addr: literal in place, aggregate copy, or scalar store.
 fn void lower_init_into(Lower* lo, u32 addr, types::Type* ty, ast::AstNode* init) {
     if(is_aggregate(ty)) {
         if(init.h.kind == ast::AstKind::StructLit) { build_struct_lit(lo, addr, ty, (ast::StructLitNode*)init); return; }
