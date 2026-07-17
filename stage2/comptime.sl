@@ -91,7 +91,9 @@ export fn Interp new_interp(module::Module* m) {
     sys::memset(&ip, 0, sizeof(Interp));
     ip.m = m;
     ip.max_depth = 1024;
+    if(m.comptime_max_depth > 0) { ip.max_depth = m.comptime_max_depth; }
     ip.max_iterations = 10000000;
+    if(m.comptime_max_iterations > 0) { ip.max_iterations = m.comptime_max_iterations; }
     ip.env = env_push(null, m.arena, 16);
     return ip;
 }

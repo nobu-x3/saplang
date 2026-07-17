@@ -1489,6 +1489,20 @@ fn i32 eval_call_recursion_limit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 new_interp_uses_module_limits(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    mm.comptime_max_depth = 7;
+    mm.comptime_max_iterations = 99;
+    comptime::Interp ip = comptime::new_interp(mm);
+    if(!testing::expect_eq((u64)ip.max_depth, (u64)7, m)) { return -1; }
+    if(!testing::expect_eq(ip.max_iterations, (u64)99, m)) { return -2; }
+    module::Module* mm2 = mk_module(a);
+    comptime::Interp ip2 = comptime::new_interp(mm2);
+    if(!testing::expect_eq((u64)ip2.max_depth, (u64)1024, m)) { return -3; }
+    if(!testing::expect_eq(ip2.max_iterations, (u64)10000000, m)) { return -4; }
+    return 0;
+}
+
 fn i32 eval_call_extern_rejected(arena::Arena* a, u8[] m) {
     module::Module* mm = mk_module(a);
     comptime::Interp ip = comptime::new_interp(mm);
@@ -2100,6 +2114,7 @@ fn i32 main() {
     testing::add(suite, "eval_call_simple",            &eval_call_simple);
     testing::add(suite, "eval_call_recursive_factorial", &eval_call_recursive_factorial);
     testing::add(suite, "eval_call_recursion_limit",   &eval_call_recursion_limit);
+    testing::add(suite, "new_interp_uses_module_limits", &new_interp_uses_module_limits);
     testing::add(suite, "eval_call_extern_rejected",   &eval_call_extern_rejected);
     testing::add(suite, "eval_call_generic_needs_inference", &eval_call_generic_needs_inference);
     testing::add(suite, "eval_call_multi_param",        &eval_call_multi_param);

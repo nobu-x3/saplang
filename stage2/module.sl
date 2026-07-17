@@ -28,6 +28,8 @@ export struct Module {
     u64                     inserted_sources_cap;
     void*                   reflect_typeinfo;     // types::Type* — synthesized TypeInfo/FieldInfo, built lazily per module
     void*                   reflect_fieldinfo;
+    i32                     comptime_max_depth;      // interpreter recursion cap; 0 = built-in default
+    u64                     comptime_max_iterations; // interpreter per-loop cap; 0 = built-in default
     // cfg/codegen fields added by later phases
 }
 

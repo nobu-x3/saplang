@@ -25,6 +25,8 @@ export struct Compiler {
     u8[]                 target;          // conditional-compilation infix; empty = none
     bool                 is_multithreaded; // run phases on a thread pool sized to cpu_count
     bool                 cfg_dump;         // -cfg-dump: print each function's CFG to stdout
+    i32                  comptime_depth;      // -comptime-depth: interpreter recursion cap; 0 = default
+    u64                  comptime_iterations; // -comptime-iterations: interpreter per-loop cap; 0 = default
     pool::ThreadPool*    pool;            // non-null only while multithreaded
     i64                  error_count;
 }
@@ -93,6 +95,12 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
             c.is_multithreaded = true;
         } else if(slice_eq(arg, "-cfg-dump")) {
             c.cfg_dump = true;
+        } else if(slice_eq(arg, "-comptime-depth")) {
+            arg_index += 1;
+            if(arg_index < args.len) { c.comptime_depth = (i32)parse_u64(args[arg_index]); } else { ok = false; }
+        } else if(slice_eq(arg, "-comptime-iterations")) {
+            arg_index += 1;
+            if(arg_index < args.len) { c.comptime_iterations = parse_u64(args[arg_index]); } else { ok = false; }
         } else if(ends_with(arg, ".sl")) {
             add_source(c, arg);
         } else {
@@ -123,6 +131,15 @@ fn bool slice_eq(u8[] a, u8[] b) {
         if(a[char_index] != b[char_index]) { return false; }
     }
     return true;
+}
+
+fn u64 parse_u64(u8[] s) {
+    u64 value = 0;
+    for(u64 i = 0; i < s.len; i += 1) {
+        if(s[i] < '0' || s[i] > '9') { break; }
+        value = value * 10 + (u64)(s[i] - '0');
+    }
+    return value;
 }
 
 fn bool ends_with(u8[] s, u8[] suffix) {
@@ -302,6 +319,10 @@ export fn i32 run(Compiler* c) {
 export fn i32 run_frontend(Compiler* c) {
     comptime::install_hooks();
     sema::init_body_sync();
+    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
+        c.modules[module_index].comptime_max_depth = c.comptime_depth;
+        c.modules[module_index].comptime_max_iterations = c.comptime_iterations;
+    }
     if(c.is_multithreaded) { c.pool = pool::new(c.arena, sys::cpu_count()); }
     run_parse(c);
     i32 rc = 0;

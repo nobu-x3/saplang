@@ -535,6 +535,21 @@ fn i32 argv_full(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 argv_comptime_limits(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 5);
+    args[0] = "main.sl";
+    args[1] = "-comptime-depth";
+    args[2] = "64";
+    args[3] = "-comptime-iterations";
+    args[4] = "5000";
+    if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
+    if(!testing::expect_eq((u64)c.comptime_depth, (u64)64, msg)) { return -2; }
+    if(!testing::expect_eq(c.comptime_iterations, (u64)5000, msg)) { return -3; }
+    return 0;
+}
+
 fn i32 argv_unknown_fails(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -596,6 +611,7 @@ fn i32 main() {
 
     u8[] av = "Compiler Argv Tests";
     testing::add(av, "argv_full",               &argv_full);
+    testing::add(av, "argv_comptime_limits",    &argv_comptime_limits);
     testing::add(av, "argv_unknown_fails",      &argv_unknown_fails);
     testing::add(av, "argv_dangling_flag_fails", &argv_dangling_flag_fails);
 
