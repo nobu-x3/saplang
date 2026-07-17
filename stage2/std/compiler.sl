@@ -5,6 +5,9 @@ import sema;
 import comptime;
 import cfg;
 import cfg_print;
+import lower;
+import sapir;
+import sapir_print;
 import diag;
 import arena;
 import sys;
@@ -25,6 +28,7 @@ export struct Compiler {
     u8[]                 target;          // conditional-compilation infix; empty = none
     bool                 is_multithreaded; // run phases on a thread pool sized to cpu_count
     bool                 cfg_dump;         // -cfg-dump: print each function's CFG to stdout
+    bool                 sapir_dump;       // -sapir-dump: print each module's lowered sapir to stdout
     i32                  comptime_depth;      // -comptime-depth: interpreter recursion cap; 0 = default
     u64                  comptime_iterations; // -comptime-iterations: interpreter per-loop cap; 0 = default
     pool::ThreadPool*    pool;            // non-null only while multithreaded
@@ -95,6 +99,8 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
             c.is_multithreaded = true;
         } else if(slice_eq(arg, "-cfg-dump")) {
             c.cfg_dump = true;
+        } else if(slice_eq(arg, "-sapir-dump")) {
+            c.sapir_dump = true;
         } else if(slice_eq(arg, "-comptime-depth")) {
             arg_index += 1;
             if(arg_index < args.len) { c.comptime_depth = (i32)parse_u64(args[arg_index]); } else { ok = false; }
@@ -336,6 +342,10 @@ export fn i32 run_frontend(Compiler* c) {
             run_cfg(c);
             if(bail_on_errors(c)) { rc = 1; }
             if(c.cfg_dump) { dump_cfgs(c); }
+            if(rc == 0) {
+                run_lower(c);
+                if(c.sapir_dump) { dump_sapir(c); }
+            }
         }
     }
     if(c.pool != null) {
@@ -393,6 +403,28 @@ fn void run_cfg(Compiler* c) {
 }
 
 fn void build_cfg_job(void* arg) { cfg::build_all_functions((module::Module*)arg); }
+
+// Per-module lowering of the typed AST + CFG into sapir; result stored on m.sapir.
+fn void run_lower(Compiler* c) {
+    run_phase(c, &lower_job);
+}
+
+fn void lower_job(void* arg) {
+    module::Module* m = (module::Module*)arg;
+    m.sapir = (void*)lower::lower_module(m);
+}
+
+fn void dump_sapir(Compiler* c) {
+    io::OutBuf out;
+    io::outbuf_init(&out, c.arena, 4096);
+    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
+        module::Module* m = c.modules[module_index];
+        if(m.sapir == null) { continue; }
+        sapir_print::print_module((sapir::SapirModule*)m.sapir, &out);
+    }
+    u8[] bytes = io::outbuf_bytes(&out);
+    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+}
 
 fn void dump_cfgs(Compiler* c) {
     io::OutBuf out;

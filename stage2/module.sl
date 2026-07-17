@@ -30,7 +30,8 @@ export struct Module {
     void*                   reflect_fieldinfo;
     i32                     comptime_max_depth;      // interpreter recursion cap; 0 = built-in default
     u64                     comptime_max_iterations; // interpreter per-loop cap; 0 = built-in default
-    // cfg/codegen fields added by later phases
+    void*                   sapir;                   // sapir::SapirModule* — set by lower, consumed by codegen
+    // codegen fields added by later phases
 }
 
 // Positions in [base, base+bytes.len) belong to this fragment and render via generator_pos.

@@ -6,6 +6,8 @@ import types;
 import symbol;
 import token;
 import diag;
+import sapir;
+import sapir_print;
 import io;
 import arena;
 import sys;
@@ -585,6 +587,88 @@ fn i32 argv_dangling_flag_fails(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// E2E: run the real driver pipeline (discover-less, in-memory) through lowering and pin the sapir.
+fn i32 e2e_lower_single_fn(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* m = mk_source_module(a, "prog", "fn i32 add(i32 x, i32 y) { return x + y; }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    if(!testing::expect_ne((void*)m.sapir, null, msg)) { return -2; }
+
+    u8[] got = sapir_print::print_module_to_arena((sapir::SapirModule*)m.sapir, a);
+    io::OutBuf want;
+    io::outbuf_init(&want, a, 512);
+    io::outbuf_write(&want, "module prog\n\n");
+    io::outbuf_write(&want, "fn __prog_add(i32, i32) -> i32 {\n");
+    io::outbuf_write(&want, "b0:  ; preds:\n");
+    io::outbuf_write(&want, "    %0 = param.i32 0\n");
+    io::outbuf_write(&want, "    %1 = param.i32 1\n");
+    io::outbuf_write(&want, "    %2 = add.i32 %0, %1\n");
+    io::outbuf_write(&want, "    ret %2\n");
+    io::outbuf_write(&want, "b1:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "b2:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "}\n");
+    if(!testing::expect_eq(got, io::outbuf_bytes(&want), msg)) { return -3; }
+    return 0;
+}
+
+// Each module lowers independently and mangles with its own module name.
+fn i32 e2e_lower_multi_module(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* dep = mk_source_module(a, "b", "export fn i32 helper() { return 7; }");
+    module::Module* app = mk_source_module(a, "a", "import b;\nexport fn i32 use() { return 0; }");
+    wire_imports(a, app, dep);
+    compiler::add_module(c, app);
+    compiler::add_module(c, dep);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    if(!testing::expect_ne((void*)app.sapir, null, msg)) { return -2; }
+    if(!testing::expect_ne((void*)dep.sapir, null, msg)) { return -3; }
+
+    u8[] got = sapir_print::print_module_to_arena((sapir::SapirModule*)dep.sapir, a);
+    io::OutBuf want;
+    io::outbuf_init(&want, a, 512);
+    io::outbuf_write(&want, "module b\n\n");
+    io::outbuf_write(&want, "fn __b_helper() -> i32 {\n");
+    io::outbuf_write(&want, "b0:  ; preds:\n");
+    io::outbuf_write(&want, "    %0 = const.i32 7\n");
+    io::outbuf_write(&want, "    ret %0\n");
+    io::outbuf_write(&want, "b1:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "b2:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "}\n");
+    if(!testing::expect_eq(got, io::outbuf_bytes(&want), msg)) { return -4; }
+    return 0;
+}
+
+// A generic template is skipped by lowering (only monomorphized clones are emitted).
+fn i32 e2e_generic_template_skipped(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* m = mk_source_module(a, "g", "export fn T id(comptime Type T, T x) { return x; }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    if(!testing::expect_ne((void*)m.sapir, null, msg)) { return -2; }
+    sapir::SapirModule* sm = (sapir::SapirModule*)m.sapir;
+    if(!testing::expect_eq(sm.fns.len, (u64)0, msg)) { return -3; }
+    return 0;
+}
+
+fn i32 argv_sapir_dump(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 2);
+    args[0] = "main.sl";
+    args[1] = "-sapir-dump";
+    if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
+    if(!testing::expect_true(c.sapir_dump, msg)) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -632,6 +716,12 @@ fn i32 main() {
     testing::add(av, "argv_comptime_limits",    &argv_comptime_limits);
     testing::add(av, "argv_unknown_fails",      &argv_unknown_fails);
     testing::add(av, "argv_dangling_flag_fails", &argv_dangling_flag_fails);
+    testing::add(av, "argv_sapir_dump",         &argv_sapir_dump);
+
+    u8[] e2e = "Compiler E2E Lower Tests";
+    testing::add(e2e, "e2e_lower_single_fn",         &e2e_lower_single_fn);
+    testing::add(e2e, "e2e_lower_multi_module",      &e2e_lower_multi_module);
+    testing::add(e2e, "e2e_generic_template_skipped", &e2e_generic_template_skipped);
 
     return testing::run();
 }
