@@ -1057,18 +1057,16 @@ LLVMValueRef codegen_function(CodegenLLVM *cg, ASTNode *node, Symbol *table) {
 LLVMValueRef codegen_unary(CodegenLLVM *cg, ASTNode *node, Symbol *table, PassContext ctx) {
 	switch (node->data.unary_op.op) {
 	case '*': {
-		ctx.intention = PI_LOAD_PTR;
-		LLVMValueRef ptr = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
 		Type *type = get_type(table, node->data.unary_op.operand, ctx.current_scope, "");
 		assert(type);
 		assert(type->type_kind == TYPE_POINTER);
+		// The operand evaluates to the pointer value itself (a var loads its stored pointer; an rvalue like &x or a cast already is the pointer), so a single load dereferences it — loading twice mis-reads a pointer rvalue's target as an address.
+		ctx.intention = PI_LOAD_VAL;
+		ctx.expected_type = type;
+		LLVMValueRef ptr = codegen_ast(cg, node->data.unary_op.operand, table, ctx);
 		LLVMTypeRef val_type = map_to_llvm(cg, type->pointee, table);
 		assert(val_type);
-		LLVMTypeRef ptr_type = LLVMTypeOf(ptr);
-		assert(ptr_type);
-		LLVMValueRef ptr_load = LLVMBuildLoad2(cg->builder, ptr_type, ptr, "");
-		assert(ptr_load);
-		return LLVMBuildLoad2(cg->builder, val_type, ptr_load, "deref");
+		return LLVMBuildLoad2(cg->builder, val_type, ptr, "deref");
 	} break;
 	case '&':
 		ctx.intention = PI_LOAD_PTR;
