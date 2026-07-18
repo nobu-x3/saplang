@@ -8,6 +8,7 @@ typedef struct {
 	char *input_string;
 	char *target;
 	StringList library_paths;
+	StringList extern_libs;
 	StringList extra_flags;
 	StringList import_paths;
 	int threads;

@@ -64,7 +64,8 @@ void driver_print_help() {
 		   "\t-h                            display this message.\n"
 		   "\t-j NUM                        use NUM threads for compilation. If NUM is more than available, will use all available instead.\n"
 		   "\t-i \"IMP1;IMP2;...\"          import paths.\n"
-		   "\t-L \"PATH1;PATH2\"            library directories.\n"
+		   "\t-L \"PATH1;PATH2\"            library search directories, passed to the linker as -L.\n"
+		   "\t-l \"LIB1;LIB2\"              libraries to link, passed to the linker as -l (e.g. -l \"LLVM-19\").\n"
 		   "\t-string <input_string>        use <input_string> instead of "
 		   "<source_file>.\n"
 		   "\t-o <file>                     write executable to <file>.\n"
@@ -154,6 +155,8 @@ CompilerResult compile_options_get(int argc, const char **argv, CompileOptions *
 			options->import_paths = split(argv[++idx], ';');
 		else if (strcmp(arg, "-L") == 0)
 			options->library_paths = split(argv[++idx], ';');
+		else if (strcmp(arg, "-l") == 0)
+			options->extern_libs = split(argv[++idx], ';');
 		else if (strcmp(arg, "-extra") == 0)
 			options->extra_flags = split(argv[++idx], ';');
 		else if (strcmp(arg, "-target") == 0) {
@@ -190,6 +193,11 @@ void compile_options_deinit(CompileOptions *opt) {
 		free(opt->library_paths.data[i]);
 	}
 	da_deinit(opt->library_paths);
+
+	for (int i = 0; i < opt->extern_libs.count; ++i) {
+		free(opt->extern_libs.data[i]);
+	}
+	da_deinit(opt->extern_libs);
 
 	for (int i = 0; i < opt->extra_flags.count; ++i) {
 		free(opt->extra_flags.data[i]);
@@ -951,6 +959,18 @@ CompilerResult driver_run() {
 			return RESULT_MEMORY_ERROR;
 	}
 	combine_object_paths(&cmd, OBJ_DIRECTORY);
+	for (int i = 0; i < driver.options.library_paths.count; ++i) {
+		char lflag[512] = "";
+		snprintf(lflag, sizeof(lflag), "-L%s", driver.options.library_paths.data[i]);
+		if (!da_push(cmd, strdup(lflag)))
+			return RESULT_MEMORY_ERROR;
+	}
+	for (int i = 0; i < driver.options.extern_libs.count; ++i) {
+		char lflag[512] = "";
+		snprintf(lflag, sizeof(lflag), "-l%s", driver.options.extern_libs.data[i]);
+		if (!da_push(cmd, strdup(lflag)))
+			return RESULT_MEMORY_ERROR;
+	}
 	if (!da_push(cmd, strdup("-o")))
 		return RESULT_MEMORY_ERROR;
 	if (!da_push(cmd, strdup(output_file_path_full)))
