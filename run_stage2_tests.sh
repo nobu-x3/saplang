@@ -6,7 +6,7 @@ SAPLANGC="$ROOT/build/bin/saplangc"
 SRC_DIR="$ROOT/stage2/tests"
 OUT_DIR="$ROOT/build/bin/stage2_tests"
 
-rm -rf "$OUT_DIR/*"
+rm -rf "$OUT_DIR"
 
 if [ ! -x "$SAPLANGC" ]; then
 	echo "error: $SAPLANGC not found or not executable" >&2
@@ -23,8 +23,8 @@ for src in "$SRC_DIR"/*_test.sl; do
 	out="$OUT_DIR/$name"
 	echo "==> building $name"
 	extra=""
-	# codegen links the LLVM C API; libLLVM-19 lives in the default lib dir.
-	if [ "$name" = "codegen_test" ]; then extra="-l LLVM-19 -L /usr/lib"; fi
+	# codegen (and the compiler library that drives it) link the LLVM C API.
+	case "$name" in codegen_test|compiler_test) extra="-l LLVM-19 -L /usr/lib" ;; esac
 	if timeout 20 "$SAPLANGC" "$src" -o "$out" -i "stage2/std;stage2;stage2/tests" -dbg $extra; then
 		build_ok=$((build_ok + 1))
 	else
@@ -39,7 +39,8 @@ echo
 
 run_fail=0
 run_ok=0
-for exe in "$OUT_DIR"/*; do
+# Only the built test binaries end in _test; skip executables that a test itself produced (e.g. the e2e link test's output).
+for exe in "$OUT_DIR"/*_test; do
 	[ -f "$exe" ] && [ -x "$exe" ] || continue
 	name="$(basename "$exe")"
 	echo "==> running $name"

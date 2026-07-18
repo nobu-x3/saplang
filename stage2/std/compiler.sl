@@ -6,6 +6,8 @@ import comptime;
 import cfg;
 import cfg_print;
 import lower;
+import codegen;
+import link_paths;
 import sapir;
 import sapir_print;
 import diag;
@@ -33,6 +35,9 @@ export struct Compiler {
     u64                  comptime_iterations; // -comptime-iterations: interpreter per-loop cap; 0 = default
     pool::ThreadPool*    pool;            // non-null only while multithreaded
     i64                  error_count;
+    u8[]                 output_path;     // -o; empty defaults to "a.out"
+    u8[][]               extern_libs;     // -l names, passed to the linker as -l<name>
+    u64                  extern_libs_cap;
 }
 
 export fn Compiler* new(arena::Arena* a) {
@@ -62,6 +67,17 @@ export fn void add_source(Compiler* c, u8[] path) {
     }
     c.entry_sources[c.entry_sources.len] = path;
     c.entry_sources.len += 1;
+}
+
+export fn void add_extern_lib(Compiler* c, u8[] name) {
+    if(c.extern_libs.len == c.extern_libs_cap) {
+        u64 new_cap = 4;
+        if(c.extern_libs_cap > 0) { new_cap = c.extern_libs_cap * 2; }
+        c.extern_libs.ptr = arena::realloc_grow(c.arena, (void*)c.extern_libs.ptr, c.extern_libs.len * sizeof(u8[]), new_cap * sizeof(u8[]));
+        c.extern_libs_cap = new_cap;
+    }
+    c.extern_libs[c.extern_libs.len] = name;
+    c.extern_libs.len += 1;
 }
 
 export fn void add_import_path(Compiler* c, u8[] path) {
@@ -95,6 +111,12 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
         } else if(slice_eq(arg, "-target")) {
             arg_index += 1;
             if(arg_index < args.len) { c.target = args[arg_index]; } else { ok = false; }
+        } else if(slice_eq(arg, "-o")) {
+            arg_index += 1;
+            if(arg_index < args.len) { c.output_path = args[arg_index]; } else { ok = false; }
+        } else if(slice_eq(arg, "-l")) {
+            arg_index += 1;
+            if(arg_index < args.len) { add_extern_lib(c, args[arg_index]); } else { ok = false; }
         } else if(slice_eq(arg, "-mt")) {
             c.is_multithreaded = true;
         } else if(slice_eq(arg, "-cfg-dump")) {
@@ -313,12 +335,118 @@ fn u8[] path_stem(u8[] path) {
     return out;
 }
 
-// Discover + frontend; CFG/codegen/link land later. Returns 0 on success.
+// Discover -> frontend -> codegen -> link. Returns 0 on success.
 export fn i32 run(Compiler* c) {
     discover(c);
     drain_diagnostics(c);
     if(bail_on_errors(c)) { return 1; }
-    return run_frontend(c);
+    i32 rc = run_frontend(c);
+    if(rc != 0) { return rc; }
+    if(c.cfg_dump || c.sapir_dump) { return 0; }    // dump modes stop before the backend
+    return run_backend(c);
+}
+
+// sapir -> object files -> linked executable. Assumes the frontend already ran.
+export fn i32 run_backend(Compiler* c) {
+    sys::mkdir(cstr(c.arena, ".tmp"), 493);
+    u8[][] object_paths = run_codegen(c);
+    if(bail_on_errors(c)) { return 1; }
+    return run_link(c, object_paths);
+}
+
+// Runs a produced executable and returns its exit code (or -1 on spawn failure).
+export fn i32 run_executable(arena::Arena* a, u8[] path) {
+    i8** argv = (i8**)arena::alloc(a, 2 * sizeof(i8*));
+    argv[0] = cstr(a, path);
+    argv[1] = null;
+    return spawn_and_wait(argv);
+}
+
+fn u8[][] run_codegen(Compiler* c) {
+    u8[][] paths;
+    paths.ptr = arena::alloc(c.arena, (c.modules.len + 1) * sizeof(u8[]));
+    paths.len = 0;
+    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
+        module::Module* m = c.modules[module_index];
+        if(m.sapir == null) { continue; }
+        u8[] obj_path = tmp_object_path(c, m);
+        if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.arena, cstr(c.arena, obj_path)) != 0) { c.error_count += 1; }
+        paths[paths.len] = obj_path;
+        paths.len += 1;
+    }
+    return paths;
+}
+
+fn i32 run_link(Compiler* c, u8[][] object_paths) {
+    i8** argv = build_link_argv(c, object_paths);
+    if(spawn_and_wait(argv) != 0) {
+        sys::dprintf(2, "error: link step failed\n");
+        return 1;
+    }
+    return 0;
+}
+
+// ld.lld -o <out> -dynamic-linker <ld.so> Scrt1.o crti.o -L<dirs> <objects> -l<libs> -lc crtn.o
+fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
+    u64 cap = 12 + object_paths.len + c.extern_libs.len;
+    i8** argv = (i8**)arena::alloc(c.arena, (cap + 1) * sizeof(i8*));
+    u64 n = 0;
+    argv[n] = cstr(c.arena, "ld.lld"); n += 1;
+    argv[n] = cstr(c.arena, "-o"); n += 1;
+    argv[n] = output_cstr(c); n += 1;
+    argv[n] = cstr(c.arena, "-dynamic-linker"); n += 1;
+    argv[n] = link_paths::dynamic_linker(); n += 1;
+    argv[n] = link_paths::crt_start(); n += 1;
+    argv[n] = link_paths::crt_init(); n += 1;
+    argv[n] = link_paths::lib_search_dir(); n += 1;
+    for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.arena, object_paths[i]); n += 1; }
+    for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs[i]); n += 1; }
+    argv[n] = cstr(c.arena, "-lc"); n += 1;
+    argv[n] = link_paths::crt_fini(); n += 1;
+    argv[n] = null; n += 1;
+    return argv;
+}
+
+fn i32 spawn_and_wait(i8** argv) {
+    i32 pid = sys::fork();
+    if(pid < 0) { return -1; }
+    if(pid == 0) {
+        sys::execvp(argv[0], argv);
+        sys::_exit(127);
+        return 127;
+    }
+    i32 status = 0;
+    sys::waitpid(pid, &status, 0);
+    return (status >> 8) & 255;
+}
+
+fn u8[] tmp_object_path(Compiler* c, module::Module* m) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, c.arena, 64);
+    io::outbuf_write(&buf, ".tmp/");
+    io::outbuf_write(&buf, interner::symbol_str(m.name));
+    io::outbuf_write(&buf, ".o");
+    return io::outbuf_bytes(&buf);
+}
+
+fn i8* output_cstr(Compiler* c) {
+    if(c.output_path.len == 0) { return cstr(c.arena, "a.out"); }
+    return cstr(c.arena, c.output_path);
+}
+
+fn i8* lib_flag(Compiler* c, u8[] name) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, c.arena, 16);
+    io::outbuf_write(&buf, "-l");
+    io::outbuf_write(&buf, name);
+    return cstr(c.arena, io::outbuf_bytes(&buf));
+}
+
+fn i8* cstr(arena::Arena* a, u8[] bytes) {
+    i8* out = (i8*)arena::alloc(a, bytes.len + 1);
+    for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
+    out[bytes.len] = 0;
+    return out;
 }
 
 // Runs the frontend phases (parse -> barriered sema); 0 on success, 1 on any error.

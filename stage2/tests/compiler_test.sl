@@ -674,6 +674,50 @@ fn i32 e2e_lower_cross_module_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// E2E: source -> codegen -> ld.lld link -> run the produced executable, checking its exit code.
+fn i32 e2e_compile_link_run(arena::Arena* a, u8[] msg) {
+    boot(a);
+    arena::Arena* ca = sub_arena(a);
+    compiler::Compiler* c = compiler::new(ca);
+    module::Module* m = mk_source_module(ca, "e2eprog", "fn i32 triple(i32 x) { return x * 3; } fn i32 main() { return triple(14); }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    c.output_path = "e2e_out_prog";
+    if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
+    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_out_prog"), (u64)42, msg)) { return -3; }
+    return 0;
+}
+
+// E2E: two modules with a cross-module call -> two object files -> ld.lld -> run.
+fn i32 e2e_link_multi_module(arena::Arena* a, u8[] msg) {
+    boot(a);
+    arena::Arena* ca = sub_arena(a);
+    compiler::Compiler* c = compiler::new(ca);
+    module::Module* dep = mk_source_module(ca, "dep", "export fn i32 tripled(i32 x) { return x * 3; }");
+    module::Module* app = mk_source_module(ca, "appmod", "import dep;\nfn i32 main() { return dep::tripled(14); }");
+    wire_imports(ca, app, dep);
+    compiler::add_module(c, app);
+    compiler::add_module(c, dep);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    c.output_path = "e2e_multi_prog";
+    if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
+    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_multi_prog"), (u64)42, msg)) { return -3; }
+    return 0;
+}
+
+// E2E: an unresolved extern makes ld.lld fail; the backend surfaces a non-zero result rather than a bad binary.
+fn i32 e2e_link_failure_reported(arena::Arena* a, u8[] msg) {
+    boot(a);
+    arena::Arena* ca = sub_arena(a);
+    compiler::Compiler* c = compiler::new(ca);
+    module::Module* m = mk_source_module(ca, "badprog", "extern { fn i32 undefined_ext_symbol_xyz(); } fn i32 main() { return undefined_ext_symbol_xyz(); }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    c.output_path = "e2e_bad_prog";
+    if(!testing::expect_ne(compiler::run_backend(c), 0, msg)) { return -2; }
+    return 0;
+}
+
 // A generic template is skipped by lowering (only monomorphized clones are emitted).
 fn i32 e2e_generic_template_skipped(arena::Arena* a, u8[] msg) {
     boot(a);
@@ -856,6 +900,9 @@ fn i32 main() {
     testing::add(e2e, "e2e_lower_single_fn",         &e2e_lower_single_fn);
     testing::add(e2e, "e2e_lower_multi_module",      &e2e_lower_multi_module);
     testing::add(e2e, "e2e_lower_cross_module_call", &e2e_lower_cross_module_call);
+    testing::add(e2e, "e2e_compile_link_run",        &e2e_compile_link_run);
+    testing::add(e2e, "e2e_link_multi_module",       &e2e_link_multi_module);
+    testing::add(e2e, "e2e_link_failure_reported",   &e2e_link_failure_reported);
     testing::add(e2e, "e2e_generic_template_skipped", &e2e_generic_template_skipped);
     testing::add(e2e, "e2e_lower_control_flow",      &e2e_lower_control_flow);
     testing::add(e2e, "e2e_lower_loop",              &e2e_lower_loop);

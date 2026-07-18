@@ -13,6 +13,11 @@ extern {
     export fn void exit(i32 code);
     export fn void abort();
     export fn i64  sysconf(i32 name);
+    export fn i32  fork();
+    export fn i32  execvp(const i8* file, i8** argv);
+    export fn i32  waitpid(i32 pid, i32* status, i32 options);
+    export fn void _exit(i32 code);
+    export fn i32  mkdir(const i8* path, u32 mode);
 
     // stdio
     export struct FILE { i8 _opaque; }
