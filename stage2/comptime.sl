@@ -502,6 +502,8 @@ fn value::Value eval_binary(Interp* ip, ast::BinaryOpNode* n) {
 fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
     value::Value v = eval(ip, n.operand);
     if(v.kind == value::ValueKind::Error) { return v; }
+    // &fn is the function pointer itself, same value as the bare function.
+    if(n.op == token::TokenKind::Amp && v.kind == value::ValueKind::FnRef) { return v; }
     value::Value result = op::unaryop_eval(n.op, v);
     if(result.kind == value::ValueKind::Error) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "operator cannot be evaluated at comptime");
@@ -1890,6 +1892,12 @@ fn bool const_eval_i64(module::Module* m, ast::AstNode* expr, i64* out) {
     value::Value v = eval(&ip, expr);
     if(v.kind == value::ValueKind::Int) { *out = v.data.i; return true; }
     return false;
+}
+
+// Folds a constant expression to its full value; lowering uses this to build global initializers.
+export fn value::Value eval_const_value(module::Module* m, ast::AstNode* expr) {
+    Interp ip = new_interp(m);
+    return eval(&ip, expr);
 }
 
 export fn void install_hooks() {

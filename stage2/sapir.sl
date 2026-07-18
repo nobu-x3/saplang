@@ -40,7 +40,7 @@ export struct SapirModule {
     u64             fns_cap;
     SapirGlobal[]   globals;
     u64             globals_cap;
-    u8[]            literal_pool;   // ConstStr offsets index into this
+    u8[]            literal_pool;   // ConstStr offsets index into this; aliases the source module's decoded pool
 }
 
 // CONSTANT INITIALIZERS //////////////////////////////////////////////////////////

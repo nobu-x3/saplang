@@ -645,6 +645,35 @@ fn i32 e2e_lower_multi_module(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// E2E: a call into an imported module resolves to a Foreign decl mangled off the callee's home module.
+fn i32 e2e_lower_cross_module_call(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* dep = mk_source_module(a, "b", "export fn i32 helper() { return 7; }");
+    module::Module* app = mk_source_module(a, "a", "import b;\nexport fn i32 use() { return b::helper(); }");
+    wire_imports(a, app, dep);
+    compiler::add_module(c, app);
+    compiler::add_module(c, dep);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    if(!testing::expect_ne((void*)app.sapir, null, msg)) { return -2; }
+
+    u8[] got = sapir_print::print_module_to_arena((sapir::SapirModule*)app.sapir, a);
+    io::OutBuf want;
+    io::outbuf_init(&want, a, 512);
+    io::outbuf_write(&want, "module a\n\n");
+    io::outbuf_write(&want, "fn __a_use() -> i32 {\n");
+    io::outbuf_write(&want, "b0:  ; preds:\n");
+    io::outbuf_write(&want, "    %0 = call.i32 __b_helper()\n");
+    io::outbuf_write(&want, "    ret %0\n");
+    io::outbuf_write(&want, "b1:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "b2:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "}\n");
+    if(!testing::expect_eq(got, io::outbuf_bytes(&want), msg)) { return -3; }
+    return 0;
+}
+
 // A generic template is skipped by lowering (only monomorphized clones are emitted).
 fn i32 e2e_generic_template_skipped(arena::Arena* a, u8[] msg) {
     boot(a);
@@ -708,13 +737,31 @@ fn i32 e2e_lower_loop(arena::Arena* a, u8[] msg) {
 }
 
 // The driver fails (rc != 0, error counted) on a not-yet-supported global reference.
-fn i32 e2e_lower_global_ref_fails(arena::Arena* a, u8[] msg) {
+// E2E: a const global reads back through a GlobalAddr/Load, and the global itself is emitted, via the driver.
+fn i32 e2e_lower_global_ref(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* m = mk_source_module(a, "prog", "const i32 LIMIT = 10; fn i32 f() { return LIMIT; }");
     compiler::add_module(c, m);
-    if(!testing::expect_ne(compiler::run_frontend(c), 0, msg)) { return -1; }
-    if(!testing::expect_gt(c.error_count, (i64)0, msg)) { return -2; }
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    if(!testing::expect_ne((void*)m.sapir, null, msg)) { return -2; }
+
+    u8[] got = sapir_print::print_module_to_arena((sapir::SapirModule*)m.sapir, a);
+    io::OutBuf want;
+    io::outbuf_init(&want, a, 512);
+    io::outbuf_write(&want, "module prog\n\n");
+    io::outbuf_write(&want, "global __prog_LIMIT: i32 const = 10\n\n");
+    io::outbuf_write(&want, "fn __prog_f() -> i32 {\n");
+    io::outbuf_write(&want, "b0:  ; preds:\n");
+    io::outbuf_write(&want, "    %0 = globaladdr.__prog_LIMIT\n");
+    io::outbuf_write(&want, "    %1 = load.i32 %0\n");
+    io::outbuf_write(&want, "    ret %1\n");
+    io::outbuf_write(&want, "b1:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "b2:  ; preds:\n");
+    io::outbuf_write(&want, "    unreachable\n");
+    io::outbuf_write(&want, "}\n");
+    if(!testing::expect_eq(got, io::outbuf_bytes(&want), msg)) { return -3; }
     return 0;
 }
 
@@ -808,10 +855,11 @@ fn i32 main() {
     u8[] e2e = "Compiler E2E Lower Tests";
     testing::add(e2e, "e2e_lower_single_fn",         &e2e_lower_single_fn);
     testing::add(e2e, "e2e_lower_multi_module",      &e2e_lower_multi_module);
+    testing::add(e2e, "e2e_lower_cross_module_call", &e2e_lower_cross_module_call);
     testing::add(e2e, "e2e_generic_template_skipped", &e2e_generic_template_skipped);
     testing::add(e2e, "e2e_lower_control_flow",      &e2e_lower_control_flow);
     testing::add(e2e, "e2e_lower_loop",              &e2e_lower_loop);
-    testing::add(e2e, "e2e_lower_global_ref_fails",  &e2e_lower_global_ref_fails);
+    testing::add(e2e, "e2e_lower_global_ref",       &e2e_lower_global_ref);
     testing::add(e2e, "e2e_lower_struct",            &e2e_lower_struct);
 
     return testing::run();

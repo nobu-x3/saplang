@@ -478,24 +478,39 @@ fn i32 enum_switch(arena::Arena* a, u8[] msg) {
     return golden(a, "enum E : i32 { A, B, C } fn i32 f(E e) { i32 r = 0; switch(e) { case E::A: { r = 1; } case E::B: { r = 2; } else { r = 9; } } return r; }", &w, msg);
 }
 
-fn i32 global_read_diag(arena::Arena* a, u8[] msg) {
-    module::Module* m = test_util::frontend(a, "const i32 LIMIT = 10; fn i32 f() { return LIMIT; }");
-    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
-    lower::lower_module(m);
-    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
-    if(!testing::expect_eq(m.diag.entries[0].msg, "reference to a non-local declaration is not yet supported in lowering", msg)) { return -3; }
-    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)42, msg)) { return -4; }
-    return 0;
+fn i32 global_read(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_LIMIT: i32 const = 10"); wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = globaladdr.__main_LIMIT");
+    wl(&w, "    %1 = load.i32 %0");
+    wl(&w, "    ret %1");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "const i32 LIMIT = 10; fn i32 f() { return LIMIT; }", &w, msg);
 }
 
-fn i32 global_write_diag(arena::Arena* a, u8[] msg) {
-    module::Module* m = test_util::frontend(a, "i32 g = 0; fn void f() { g = 5; }");
-    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
-    lower::lower_module(m);
-    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
-    if(!testing::expect_eq(m.diag.entries[0].msg, "assignment to a non-local declaration is not yet supported in lowering", msg)) { return -3; }
-    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)25, msg)) { return -4; }
-    return 0;
+fn i32 global_write(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_g: i32 = 0"); wl(&w, "");
+    wl(&w, "fn __main_f() -> void {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = globaladdr.__main_g");
+    wl(&w, "    %1 = const.i32 5");
+    wl(&w, "    store %0, %1");
+    wl(&w, "    ret");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "i32 g = 0; fn void f() { g = 5; }", &w, msg);
 }
 
 fn i32 addr_of(arena::Arena* a, u8[] msg) {
@@ -744,24 +759,56 @@ fn i32 union_field(arena::Arena* a, u8[] msg) {
     return golden(a, "union U { i32 i; f32 f; } fn i32 f() { U u; u.i = 5; return u.i; }", &w, msg);
 }
 
-fn i32 addr_global_diag(arena::Arena* a, u8[] msg) {
-    module::Module* m = test_util::frontend(a, "i32 g = 0; fn i32* f() { return &g; }");
-    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
-    lower::lower_module(m);
-    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
-    if(!testing::expect_eq(m.diag.entries[0].msg, "address of a non-local declaration is not yet supported in lowering", msg)) { return -3; }
-    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)33, msg)) { return -4; }
-    return 0;
+fn i32 addr_global(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_g: i32 = 0"); wl(&w, "");
+    wl(&w, "fn __main_f() -> i32* {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = globaladdr.__main_g");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "i32 g = 0; fn i32* f() { return &g; }", &w, msg);
 }
 
-fn i32 aggregate_call_diag(arena::Arena* a, u8[] msg) {
-    module::Module* m = test_util::frontend(a, "struct P { i32 x; } fn P make() { P p = {.x = 1}; return p; } fn i32 f() { P q = make(); return q.x; }");
-    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
-    lower::lower_module(m);
-    if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
-    if(!testing::expect_eq(m.diag.entries[0].msg, "an aggregate value returned from a call is not yet supported in lowering", msg)) { return -3; }
-    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)85, msg)) { return -4; }
-    return 0;
+fn i32 aggregate_call(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 768);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_make() -> main::P {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = alloca.main::P*");
+    wl(&w, "    zero %0, 4");
+    wl(&w, "    %2 = fieldaddr %0, 0");
+    wl(&w, "    %3 = const.i32 1");
+    wl(&w, "    store %2, %3");
+    wl(&w, "    %5 = load.main::P %0");
+    wl(&w, "    ret %5");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = alloca.main::P*");
+    wl(&w, "    %1 = call.main::P __main_make()");
+    wl(&w, "    store %0, %1");
+    wl(&w, "    %3 = fieldaddr %0, 0");
+    wl(&w, "    %4 = load.i32 %3");
+    wl(&w, "    ret %4");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "struct P { i32 x; } fn P make() { P p = {.x = 1}; return p; } fn i32 f() { P q = make(); return q.x; }", &w, msg);
 }
 
 fn i32 int_cast(arena::Arena* a, u8[] msg) {
@@ -850,7 +897,7 @@ fn i32 array_to_slice_cast(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32[] f() { i32[3] arr = [1,2,3]; return (i32[])arr; }", &w, msg);
 }
 
-// A redundant slice-to-slice cast forwards the slice (must not become a null slice).
+// A redundant slice-to-slice cast forwards the slice unchanged: no instruction, not a null slice.
 fn i32 slice_noop_cast(arena::Arena* a, u8[] msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
@@ -858,8 +905,7 @@ fn i32 slice_noop_cast(arena::Arena* a, u8[] msg) {
     wl(&w, "fn __main_f(i32[]) -> i32[] {");
     wl(&w, "b0:  ; preds:");
     wl(&w, "    %0 = param.i32[] 0");
-    wl(&w, "    %1 = cast.i32[] %0");
-    wl(&w, "    ret %1");
+    wl(&w, "    ret %0");
     wl(&w, "b1:  ; preds:");
     wl(&w, "    unreachable");
     wl(&w, "b2:  ; preds:");
@@ -905,6 +951,485 @@ fn i32 defer_lifo(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32 f() { i32 x = 1; defer { x = 2; } defer { x = 3; } return x; }", &w, msg);
 }
 
+fn i32 direct_call(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 640);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_g(i32) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = const.i32 3");
+    wl(&w, "    %1 = call.i32 __main_g(%0)");
+    wl(&w, "    ret %1");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 g(i32 x) { return x; } fn i32 f() { return g(3); }", &w, msg);
+}
+
+// Extern C variadic: fixed args pass through, an i32 tail needs no default-argument promotion.
+fn i32 extern_variadic_call(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f() -> void {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = conststr @0+2");
+    wl(&w, "    %1 = const.i32 42");
+    wl(&w, "    %2 = call.i32 printf(%0, %1)");
+    wl(&w, "    ret");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "extern { fn i32 printf(u8* fmt, ...); } fn void f() { printf(\"%d\", 42); }", &w, msg);
+}
+
+// A variadic-tail f32 widens to f64 per the C default argument promotions.
+fn i32 vararg_promote_f32(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(f32) -> void {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.f32 0");
+    wl(&w, "    %1 = conststr @0+2");
+    wl(&w, "    %2 = cast.f64 %0");
+    wl(&w, "    %3 = call.i32 printf(%1, %2)");
+    wl(&w, "    ret");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "extern { fn i32 printf(u8* fmt, ...); } fn void f(f32 x) { printf(\"%f\", x); }", &w, msg);
+}
+
+// A variadic-tail u8 promotes to i32 (integer promotion).
+fn i32 vararg_promote_int(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(u8) -> void {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.u8 0");
+    wl(&w, "    %1 = conststr @0+2");
+    wl(&w, "    %2 = cast.i32 %0");
+    wl(&w, "    %3 = call.i32 printf(%1, %2)");
+    wl(&w, "    ret");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "extern { fn i32 printf(u8* fmt, ...); } fn void f(u8 x) { printf(\"%d\", x); }", &w, msg);
+}
+
+// A call through a fn-pointer value is Indirect: the callee slot holds a value id, printed with %.
+fn i32 indirect_call(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 640);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_g(i32) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = fnaddr.__main_g");
+    wl(&w, "    %1 = const.i32 4");
+    wl(&w, "    %2 = call.i32 %0(%1)");
+    wl(&w, "    ret %2");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 g(i32 x) { return x; } fn i32 f() { fn* i32(i32) p = &g; return p(4); }", &w, msg);
+}
+
+// A generic call resolves to a monomorphized clone, mangled off its qualified name and lowered after the module functions.
+fn i32 generic_call(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 640);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = const.i32 5");
+    wl(&w, "    %1 = call.i32 __main_id__i32(%0)");
+    wl(&w, "    ret %1");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_id__i32(i32) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn T id(comptime Type T, T x) { return x; } fn i32 f() { return id(5); }", &w, msg);
+}
+
+fn i32 string_literal(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f() -> u8* {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = conststr @0+2");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn u8* f() { return \"hi\"; }", &w, msg);
+}
+
+fn i32 slice_index(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32[]) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32[] 0");
+    wl(&w, "    %1 = const.i32 1");
+    wl(&w, "    %2 = sliceptr.i32* %0");
+    wl(&w, "    %3 = indexaddr %2, %1");
+    wl(&w, "    %4 = load.i32 %3");
+    wl(&w, "    ret %4");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 f(i32[] s) { return s[1]; }", &w, msg);
+}
+
+fn i32 sub_slice(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32[]) -> i32[] {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32[] 0");
+    wl(&w, "    %1 = sliceptr.i32* %0");
+    wl(&w, "    %2 = const.i32 1");
+    wl(&w, "    %3 = const.i32 3");
+    wl(&w, "    %4 = indexaddr %1, %2");
+    wl(&w, "    %5 = sub.u64 %3, %2");
+    wl(&w, "    %6 = slicemake %4, %5");
+    wl(&w, "    ret %6");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32[] f(i32[] s) { return s[1..3]; }", &w, msg);
+}
+
+// An omitted upper bound defaults to the base length, materialized as a slicelen.
+fn i32 range_from(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32[]) -> i32[] {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32[] 0");
+    wl(&w, "    %1 = sliceptr.i32* %0");
+    wl(&w, "    %2 = const.i32 2");
+    wl(&w, "    %3 = slicelen.u64 %0");
+    wl(&w, "    %4 = indexaddr %1, %2");
+    wl(&w, "    %5 = sub.u64 %3, %2");
+    wl(&w, "    %6 = slicemake %4, %5");
+    wl(&w, "    ret %6");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32[] f(i32[] s) { return s[2..]; }", &w, msg);
+}
+
+fn i32 global_scalar_init(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_counter: i32 = 42"); wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = globaladdr.__main_counter");
+    wl(&w, "    %1 = load.i32 %0");
+    wl(&w, "    ret %1");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "export i32 counter = 42; fn i32 f() { return counter; }", &w, msg);
+}
+
+// A function-pointer global initializer folds to a FnRef pointing at the mangled function decl.
+fn i32 global_fn_ptr_init(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_gp: fn* i32() = &__main_g"); wl(&w, "");
+    wl(&w, "fn __main_g() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = const.i32 1");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 g() { return 1; } fn* i32() gp = &g;", &w, msg);
+}
+
+fn i32 global_struct_init(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 384);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_origin: main::P const = { 0, 0 }");
+    return golden(a, "struct P { i32 x; i32 y; } const P origin = {.x = 0, .y = 0};", &w, msg);
+}
+
+// A struct global with out-of-order named initializers folds to declaration order.
+fn i32 global_struct_reordered(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 384);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_pt: main::P const = { 1, 2 }");
+    return golden(a, "struct P { i32 x; i32 y; } const P pt = {.y = 2, .x = 1};", &w, msg);
+}
+
+fn i32 global_array_init(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 384);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_table: i32[3] = [ 10, 20, 30 ]");
+    return golden(a, "i32[3] table = [10, 20, 30];", &w, msg);
+}
+
+// A global compound assignment reads through GlobalAddr, combines, and stores back.
+fn i32 global_compound_assign(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_acc: i32 = 0"); wl(&w, "");
+    wl(&w, "fn __main_f() -> void {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = globaladdr.__main_acc");
+    wl(&w, "    %1 = load.i32 %0");
+    wl(&w, "    %2 = const.i32 5");
+    wl(&w, "    %3 = add.i32 %1, %2");
+    wl(&w, "    store %0, %3");
+    wl(&w, "    ret");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "i32 acc = 0; fn void f() { acc += 5; }", &w, msg);
+}
+
+// A nested call lowers the inner call first; each Call gets a contiguous extra block.
+fn i32 nested_call(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 640);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_g(i32) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = const.i32 1");
+    wl(&w, "    %1 = call.i32 __main_g(%0)");
+    wl(&w, "    %2 = call.i32 __main_g(%1)");
+    wl(&w, "    ret %2");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 g(i32 x) { return x; } fn i32 f() { return g(g(1)); }", &w, msg);
+}
+
+// A call argument narrower than its parameter widens via an implicit conversion at the call site.
+fn i32 call_arg_widening(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 640);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_g(i64) -> i64 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i64 0");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_f(i32) -> i64 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    %1 = cast.i64 %0");
+    wl(&w, "    %2 = call.i64 __main_g(%1)");
+    wl(&w, "    ret %2");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i64 g(i64 x) { return x; } fn i64 f(i32 y) { return g(y); }", &w, msg);
+}
+
+// A qualified enum member used as a value folds to its integer constant, typed as the enum.
+fn i32 enum_member_value(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f() -> main::Color {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = const.main::Color 1");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "enum Color { Red, Green, Blue } fn Color f() { return Color::Green; }", &w, msg);
+}
+
+// A store to a slice element addresses through the slice data pointer.
+fn i32 slice_store(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f(i32[]) -> void {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32[] 0");
+    wl(&w, "    %1 = const.i32 0");
+    wl(&w, "    %2 = sliceptr.i32* %0");
+    wl(&w, "    %3 = indexaddr %2, %1");
+    wl(&w, "    %4 = const.i32 9");
+    wl(&w, "    store %3, %4");
+    wl(&w, "    ret");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn void f(i32[] s) { s[0] = 9; }", &w, msg);
+}
+
+// Overloaded functions get a "__<paramtypes>" suffix so each has a distinct symbol, and each call targets the right one.
+fn i32 overload_dispatch(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 896);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f__i32(i32) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32 0");
+    wl(&w, "    ret %0");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_f__bool(bool) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.bool 0");
+    wl(&w, "    %1 = const.i32 9");
+    wl(&w, "    ret %1");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_g() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = const.i32 1");
+    wl(&w, "    %1 = call.i32 __main_f__i32(%0)");
+    wl(&w, "    %2 = const.bool 1");
+    wl(&w, "    %3 = call.i32 __main_f__bool(%2)");
+    wl(&w, "    %4 = add.i32 %1, %3");
+    wl(&w, "    ret %4");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 f(i32 x) { return x; } fn i32 f(bool b) { return 9; } fn i32 g() { return f(1) + f(true); }", &w, msg);
+}
+
+// The overload suffix encodes pointers as "Xp" and slices as "sl_X".
+fn i32 overload_ptr_slice(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 896);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f__u8p(u8*) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.u8* 0");
+    wl(&w, "    %1 = const.i32 0");
+    wl(&w, "    ret %1");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_f__sl_i32(i32[]) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.i32[] 0");
+    wl(&w, "    %1 = const.i32 1");
+    wl(&w, "    ret %1");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    wl(&w, "");
+    wl(&w, "fn __main_g(u8*, i32[]) -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = param.u8* 0");
+    wl(&w, "    %1 = param.i32[] 1");
+    wl(&w, "    %2 = call.i32 __main_f__u8p(%0)");
+    wl(&w, "    %3 = call.i32 __main_f__sl_i32(%1)");
+    wl(&w, "    %4 = add.i32 %2, %3");
+    wl(&w, "    ret %4");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "fn i32 f(u8* p) { return 0; } fn i32 f(i32[] s) { return 1; } fn i32 g(u8* p, i32[] s) { return f(p) + f(s); }", &w, msg);
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Lower Tests";
@@ -926,8 +1451,8 @@ fn i32 main() {
     testing::add(suite, "partial_assign",     &partial_assign);
     testing::add(suite, "nested_if_in_while", &nested_if_in_while);
     testing::add(suite, "enum_switch",        &enum_switch);
-    testing::add(suite, "global_read_diag",   &global_read_diag);
-    testing::add(suite, "global_write_diag",  &global_write_diag);
+    testing::add(suite, "global_read",        &global_read);
+    testing::add(suite, "global_write",       &global_write);
     testing::add(suite, "addr_of",            &addr_of);
     testing::add(suite, "struct_field",       &struct_field);
     testing::add(suite, "array_index",        &array_index);
@@ -938,8 +1463,8 @@ fn i32 main() {
     testing::add(suite, "compound_member",    &compound_member);
     testing::add(suite, "return_struct",      &return_struct);
     testing::add(suite, "union_field",        &union_field);
-    testing::add(suite, "addr_global_diag",   &addr_global_diag);
-    testing::add(suite, "aggregate_call_diag", &aggregate_call_diag);
+    testing::add(suite, "addr_global",        &addr_global);
+    testing::add(suite, "aggregate_call",     &aggregate_call);
     testing::add(suite, "int_cast",           &int_cast);
     testing::add(suite, "float_cast",         &float_cast);
     testing::add(suite, "ptr_to_int_cast",    &ptr_to_int_cast);
@@ -947,5 +1472,27 @@ fn i32 main() {
     testing::add(suite, "slice_noop_cast",    &slice_noop_cast);
     testing::add(suite, "defer_capture",      &defer_capture);
     testing::add(suite, "defer_lifo",         &defer_lifo);
+    testing::add(suite, "direct_call",        &direct_call);
+    testing::add(suite, "extern_variadic_call", &extern_variadic_call);
+    testing::add(suite, "vararg_promote_f32", &vararg_promote_f32);
+    testing::add(suite, "vararg_promote_int", &vararg_promote_int);
+    testing::add(suite, "indirect_call",      &indirect_call);
+    testing::add(suite, "generic_call",       &generic_call);
+    testing::add(suite, "string_literal",     &string_literal);
+    testing::add(suite, "slice_index",        &slice_index);
+    testing::add(suite, "sub_slice",          &sub_slice);
+    testing::add(suite, "range_from",         &range_from);
+    testing::add(suite, "global_scalar_init", &global_scalar_init);
+    testing::add(suite, "global_fn_ptr_init", &global_fn_ptr_init);
+    testing::add(suite, "global_struct_init", &global_struct_init);
+    testing::add(suite, "global_struct_reordered", &global_struct_reordered);
+    testing::add(suite, "global_array_init",  &global_array_init);
+    testing::add(suite, "global_compound_assign", &global_compound_assign);
+    testing::add(suite, "nested_call",        &nested_call);
+    testing::add(suite, "call_arg_widening",  &call_arg_widening);
+    testing::add(suite, "enum_member_value",  &enum_member_value);
+    testing::add(suite, "slice_store",        &slice_store);
+    testing::add(suite, "overload_dispatch",  &overload_dispatch);
+    testing::add(suite, "overload_ptr_slice", &overload_ptr_slice);
     return testing::run();
 }

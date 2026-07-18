@@ -62,7 +62,7 @@ export fn u8[] print_to_arena(types::Type* t, arena::Arena* a) {
     return io::outbuf_bytes(&b);
 }
 
-fn u8[] prim_name(types::PrimitiveKind p) {
+export fn u8[] prim_name(types::PrimitiveKind p) {
     switch(p) {
         case types::PrimitiveKind::I8:   { return "i8"; }
         case types::PrimitiveKind::I16:  { return "i16"; }

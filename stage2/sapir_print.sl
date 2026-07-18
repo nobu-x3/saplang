@@ -267,7 +267,7 @@ fn void print_const_init(sapir::SapirModule* m, sapir::ConstInit* init, io::OutB
         if(types::is_signed_int(init.ty)) { io::outbuf_write_i64(out, init.i); }
         else { io::outbuf_write_u64(out, (u64)init.i); }
     }
-    case sapir::ConstInitKind::Float: { io::outbuf_write(out, "0f"); io::outbuf_write_u64(out, (u64)init.i); }
+    case sapir::ConstInitKind::Float: { io::outbuf_write(out, "0f"); io::outbuf_write_u64(out, *(u64*)&init.f); }
     case sapir::ConstInitKind::Bool:  { io::outbuf_write_u64(out, (u64)init.i); }
     case sapir::ConstInitKind::Null:  { io::outbuf_write(out, "null"); }
     case sapir::ConstInitKind::Bytes: {
