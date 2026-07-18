@@ -38,6 +38,12 @@ struct CG {
     TypeMapEntry[]      type_map;       // Type* -> LLVMTypeRef
     u64                 type_map_cap;
 
+    // Debug info; di_builder is null unless the config wants DWARF.
+    void*               di_builder;
+    void*               di_file;
+    void*               di_compile_unit;
+    void*               di_subprogram;  // the current function's DISubprogram
+
     // Per-function, reset by emit_fn.
     sapir::SapirFn*     f;
     void*               current_fn;
@@ -174,9 +180,14 @@ fn void cg_init(CG* cg, sapir::SapirModule* sm, arena::Arena* a, BuildConfig con
 }
 
 fn bool build_module(CG* cg) {
+    if(wants_debug_info(cg.config)) { debug_info_init(cg); }
     for(u64 i = 0; i < cg.sm.decls.len; i += 1) { declare_decl(cg, (u32)i); }
     for(u64 i = 0; i < cg.sm.globals.len; i += 1) { init_global(cg, &cg.sm.globals[i]); }
     for(u64 i = 0; i < cg.sm.fns.len; i += 1) { emit_fn(cg, &cg.sm.fns[i]); }
+    if(cg.di_builder != null) {
+        add_debug_module_flags(cg);
+        llvm::LLVMDIBuilderFinalize(cg.di_builder);
+    }
     if(cg.failed) { return false; }
     i8* err = null;
     if(llvm::LLVMVerifyModule(cg.llvm_module, llvm::ReturnStatusAction, &err) != 0) {
@@ -185,6 +196,119 @@ fn bool build_module(CG* cg) {
         return false;
     }
     return true;
+}
+
+fn bool wants_debug_info(BuildConfig config) {
+    if(config == BuildConfig::Release) { return false; }
+    return true;
+}
+
+// DEBUG INFO (DWARF) //////////////////////////////////////////////////////////////
+
+fn void debug_info_init(CG* cg) {
+    cg.di_builder = llvm::LLVMCreateDIBuilder(cg.llvm_module);
+    u8[] path = cg.sm.src_path;
+    if(path.len == 0) { path = interner::symbol_str(cg.sm.name); }
+    cg.di_file = llvm::LLVMDIBuilderCreateFile(cg.di_builder, cstr(cg.arena, path), path.len, cstr(cg.arena, "."), 1);
+    bool optimized = cg.config != BuildConfig::Debug;
+    i32 opt = 0;
+    if(optimized) { opt = 1; }
+    cg.di_compile_unit = llvm::LLVMDIBuilderCreateCompileUnit(cg.di_builder, llvm::DWARFSourceLanguageC, cg.di_file, cstr(cg.arena, "saplangc"), 8, opt, cstr(cg.arena, ""), 0, 0, cstr(cg.arena, ""), 0, llvm::DWARFEmissionFull, 0, 0, 0, cstr(cg.arena, ""), 0, cstr(cg.arena, ""), 0);
+}
+
+fn void add_debug_module_flags(CG* cg) {
+    void* three = llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(cg.ctx), 3, 0);
+    llvm::LLVMAddModuleFlag(cg.llvm_module, llvm::ModuleFlagBehaviorWarning, cstr(cg.arena, "Debug Info Version"), 18, llvm::LLVMValueAsMetadata(three));
+}
+
+fn void emit_di_subprogram(CG* cg, sapir::SapirFn* f) {
+    types::Type* fnty = cg.sm.decls[f.decl_index].ty;
+    types::Type*[] params = fnty.data.fn_ptr.params;
+    void** di_params = (void**)arena::alloc(cg.arena, (params.len + 2) * sizeof(void*));
+    di_params[0] = build_di_type(cg, fnty.data.fn_ptr.ret);
+    for(u64 i = 0; i < params.len; i += 1) { di_params[i + 1] = build_di_type(cg, params[i]); }
+    void* sub_ty = llvm::LLVMDIBuilderCreateSubroutineType(cg.di_builder, cg.di_file, di_params, (u32)params.len + 1, 0);
+    u32 line = 0;
+    u32 col = 0;
+    src_pos_to_line_col(cg.sm, f.src_pos, &line, &col);
+    u8[] name = interner::symbol_str(f.name);
+    u8[] link_name = cg.sm.decls[f.decl_index].link_name;
+    i32 opt = 0;
+    if(cg.config != BuildConfig::Debug) { opt = 1; }
+    void* sp = llvm::LLVMDIBuilderCreateFunction(cg.di_builder, cg.di_file, name.ptr, name.len, link_name.ptr, link_name.len, cg.di_file, line, sub_ty, 0, 1, line, 0, opt);
+    llvm::LLVMSetSubprogram(cg.current_fn, sp);
+    cg.di_subprogram = sp;
+}
+
+// A DIType for the function-signature subroutine type. Scalars are exact; aggregates are left unspecified (locals are not emitted in v0).
+fn void* build_di_type(CG* cg, types::Type* t) {
+    if(t == null) { return null; }
+    switch(t.kind) {
+    case types::TypeKind::Primitive: { return di_basic_type(cg, t.prim); }
+    case types::TypeKind::Pointer:
+    case types::TypeKind::FnPtr:     { return llvm::LLVMDIBuilderCreatePointerType(cg.di_builder, null, 64, 0, 0, cg.empty, 0); }
+    case types::TypeKind::Enum:      { return build_di_type(cg, types::enum_base_type(t)); }
+    else { return null; }
+    }
+    return null;
+}
+
+fn void* di_basic_type(CG* cg, types::PrimitiveKind p) {
+    if(p == types::PrimitiveKind::VOID) { return null; }
+    u64 bits = 32;
+    u32 enc = llvm::DW_ATE_signed;
+    switch(p) {
+    case types::PrimitiveKind::I8:   { bits = 8; enc = llvm::DW_ATE_signed; }
+    case types::PrimitiveKind::U8:   { bits = 8; enc = llvm::DW_ATE_unsigned; }
+    case types::PrimitiveKind::I16:  { bits = 16; enc = llvm::DW_ATE_signed; }
+    case types::PrimitiveKind::U16:  { bits = 16; enc = llvm::DW_ATE_unsigned; }
+    case types::PrimitiveKind::I32:  { bits = 32; enc = llvm::DW_ATE_signed; }
+    case types::PrimitiveKind::U32:  { bits = 32; enc = llvm::DW_ATE_unsigned; }
+    case types::PrimitiveKind::I64:  { bits = 64; enc = llvm::DW_ATE_signed; }
+    case types::PrimitiveKind::U64:  { bits = 64; enc = llvm::DW_ATE_unsigned; }
+    case types::PrimitiveKind::F32:  { bits = 32; enc = llvm::DW_ATE_float; }
+    case types::PrimitiveKind::F64:  { bits = 64; enc = llvm::DW_ATE_float; }
+    case types::PrimitiveKind::BOOL: { bits = 8; enc = llvm::DW_ATE_boolean; }
+    else { bits = 32; enc = llvm::DW_ATE_signed; }
+    }
+    u8[] name = prim_name(p);
+    return llvm::LLVMDIBuilderCreateBasicType(cg.di_builder, name.ptr, name.len, bits, enc, 0);
+}
+
+fn u8[] prim_name(types::PrimitiveKind p) {
+    switch(p) {
+    case types::PrimitiveKind::I8:   { return "i8"; }
+    case types::PrimitiveKind::U8:   { return "u8"; }
+    case types::PrimitiveKind::I16:  { return "i16"; }
+    case types::PrimitiveKind::U16:  { return "u16"; }
+    case types::PrimitiveKind::I32:  { return "i32"; }
+    case types::PrimitiveKind::U32:  { return "u32"; }
+    case types::PrimitiveKind::I64:  { return "i64"; }
+    case types::PrimitiveKind::U64:  { return "u64"; }
+    case types::PrimitiveKind::F32:  { return "f32"; }
+    case types::PrimitiveKind::F64:  { return "f64"; }
+    case types::PrimitiveKind::BOOL: { return "bool"; }
+    else { return "int"; }
+    }
+    return "int";
+}
+
+fn void set_debug_loc(CG* cg, u32 src_pos) {
+    if(cg.di_builder == null) { return; }
+    u32 line = 0;
+    u32 col = 0;
+    src_pos_to_line_col(cg.sm, src_pos, &line, &col);
+    void* loc = llvm::LLVMDIBuilderCreateDebugLocation(cg.ctx, line, col, cg.di_subprogram, null);
+    llvm::LLVMSetCurrentDebugLocation2(cg.builder, loc);
+}
+
+fn void src_pos_to_line_col(sapir::SapirModule* sm, u32 src_pos, u32* line, u32* col) {
+    u32 found = 0;
+    for(u64 i = 0; i < sm.line_starts.len; i += 1) {
+        if(sm.line_starts[i] <= src_pos) { found = (u32)i; } else { break; }
+    }
+    *line = found + 1;
+    *col = src_pos - sm.line_starts[found] + 1;
 }
 
 // TYPES ///////////////////////////////////////////////////////////////////////////
@@ -361,6 +485,8 @@ fn void* const_value(CG* cg, sapir::ConstInit* ci) {
 fn void emit_fn(CG* cg, sapir::SapirFn* f) {
     cg.f = f;
     cg.current_fn = cg.decl_map[f.decl_index];
+    cg.di_subprogram = null;
+    if(cg.di_builder != null) { emit_di_subprogram(cg, f); }
     cg.value_map = (void**)arena::alloc(cg.arena, (f.insts.len + 1) * sizeof(void*));
     cg.block_map = (void**)arena::alloc(cg.arena, (f.blocks.len + 1) * sizeof(void*));
     for(u64 i = 0; i < f.blocks.len; i += 1) {
@@ -400,6 +526,7 @@ fn void fill_phi(CG* cg, u32 phi_id) {
 
 fn void emit_inst(CG* cg, u32 id) {
     sapir::Inst* inst = &cg.f.insts[id];
+    set_debug_loc(cg, inst.src_pos);
     switch(inst.op) {
     case sapir::Opcode::ConstInt:   { cg.value_map[id] = llvm::LLVMConstInt(map_type(cg, inst.ty), inst.imm, 0); }
     case sapir::Opcode::ConstFloat: { cg.value_map[id] = llvm::LLVMConstReal(map_type(cg, inst.ty), *(f64*)&inst.imm); }

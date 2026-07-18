@@ -145,7 +145,31 @@ extern {
     export fn void  LLVMPositionBuilder(void* b, void* bb, void* instr);
     export fn void* LLVMConstNamedStruct(void* struct_ty, void** vals, u32 count);
     export fn void* LLVMConstArray2(void* elem_ty, void** vals, u64 length);
+
+    // debug info (DWARF via DIBuilder)
+    export fn void* LLVMCreateDIBuilder(void* m);
+    export fn void  LLVMDIBuilderFinalize(void* builder);
+    export fn void* LLVMDIBuilderCreateFile(void* builder, const i8* filename, u64 filename_len, const i8* dir, u64 dir_len);
+    export fn void* LLVMDIBuilderCreateCompileUnit(void* builder, i32 lang, void* file, const i8* producer, u64 producer_len, i32 is_optimized, const i8* flags, u64 flags_len, u32 runtime_ver, const i8* split_name, u64 split_name_len, i32 kind, u32 dwo_id, i32 split_debug_inlining, i32 debug_info_for_profiling, const i8* sysroot, u64 sysroot_len, const i8* sdk, u64 sdk_len);
+    export fn void* LLVMDIBuilderCreateFunction(void* builder, void* scope, const i8* name, u64 name_len, const i8* linkage, u64 linkage_len, void* file, u32 line, void* ty, i32 is_local, i32 is_definition, u32 scope_line, i32 flags, i32 is_optimized);
+    export fn void* LLVMDIBuilderCreateSubroutineType(void* builder, void* file, void** param_types, u32 num_params, i32 flags);
+    export fn void* LLVMDIBuilderCreateBasicType(void* builder, const i8* name, u64 name_len, u64 size_bits, u32 encoding, i32 flags);
+    export fn void* LLVMDIBuilderCreatePointerType(void* builder, void* pointee, u64 size_bits, u32 align_bits, u32 address_space, const i8* name, u64 name_len);
+    export fn void* LLVMDIBuilderCreateDebugLocation(void* ctx, u32 line, u32 col, void* scope, void* inlined_at);
+    export fn void  LLVMSetSubprogram(void* fn_val, void* sp);
+    export fn void  LLVMSetCurrentDebugLocation2(void* builder, void* loc);
+    export fn void  LLVMAddModuleFlag(void* m, i32 behavior, const i8* key, u64 key_len, void* val);
+    export fn void* LLVMValueAsMetadata(void* val);
 }
+
+// DWARF constants
+export const i32 DWARFSourceLanguageC = 1;
+export const i32 DWARFEmissionFull = 1;
+export const i32 ModuleFlagBehaviorWarning = 1;
+export const u32 DW_ATE_boolean = 2;
+export const u32 DW_ATE_float = 4;
+export const u32 DW_ATE_signed = 5;
+export const u32 DW_ATE_unsigned = 7;
 
 // LLVMIntPredicate
 export const i32 IntEQ = 32;

@@ -172,6 +172,21 @@ fn bool contains(u8[] hay, u8[] needle) {
     return false;
 }
 
+// Debug/ReleaseDebug configs emit DWARF (a DISubprogram per function); Release omits it. The
+// void return and struct/pointer params exercise the unspecified-DIType path in the subroutine type.
+fn i32 opt_debug_info(arena::Arena* a, u8[] msg) {
+    arena::Arena* ja = fresh_arena(a);
+    module::Module* m = test_util::frontend(ja, "struct P { i32 x; } fn void noop() {} fn i32 g(P p, i32* q) { return p.x + *q; } fn i32 main() { noop(); P p = {.x = 40}; i32 y = 2; return g(p, &y); }");
+    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
+    sapir::SapirModule* sm = lower::lower_module(m);
+    u8[] debug_ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
+    u8[] release_ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Release);
+    if(!contains(debug_ir, "DISubprogram")) { return -2; }        // fails if the module didn't verify (returns "<codegen failed>")
+    if(!contains(debug_ir, "DILocation")) { return -3; }
+    if(contains(release_ir, "DISubprogram")) { return -4; }
+    return 0;
+}
+
 // -O2 (Release) promotes an address-taken scalar out of memory; the Debug IR keeps the alloca.
 fn i32 opt_release_mem2reg(arena::Arena* a, u8[] msg) {
     arena::Arena* ja = fresh_arena(a);
@@ -222,5 +237,6 @@ fn i32 main() {
     testing::add(suite, "jit_alignof",          &jit_alignof);
     testing::add(suite, "jit_ptr_cast_index",   &jit_ptr_cast_index);
     testing::add(suite, "opt_release_mem2reg",  &opt_release_mem2reg);
+    testing::add(suite, "opt_debug_info",       &opt_debug_info);
     return testing::run();
 }
