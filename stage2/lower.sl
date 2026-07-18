@@ -355,6 +355,8 @@ fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
         return lower_binary(lo, n);
     }
     case ast::AstKind::UnaryOp:  { return lower_unary(lo, (ast::UnaryOpNode*)e); }
+    case ast::AstKind::Sizeof:
+    case ast::AstKind::Alignof:  { return fold_const_int(lo, e); }
     else {
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos);
         return sapir::add_inst(lo.arena, lo.func, inst);
@@ -1225,13 +1227,7 @@ fn u32 emit_vararg_promote(Lower* lo, u32 value, types::Type* ty, u32 src_pos) {
 // Value of a non-local reference: enum members fold to a constant, functions yield their address, globals load.
 fn u32 lower_decl_ref(Lower* lo, ast::AstNode* e, sema::Decl* decl, types::Type* ty) {
     if(decl == null) { return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, ty, e.h.src_pos)); }
-    if(decl.kind == sema::DeclKind::EnumMember) {
-        i64 folded = 0;
-        if(sema::eval_const_i64_hook != null) { sema::eval_const_i64_hook(lo.m, e, &folded); }
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, ty, e.h.src_pos);
-        inst.imm = (u64)folded;
-        return sapir::add_inst(lo.arena, lo.func, inst);
-    }
+    if(decl.kind == sema::DeclKind::EnumMember) { return fold_const_int(lo, e); }
     if(decl_is_fn(decl)) { return emit_fn_addr(lo, decl, ty, e.h.src_pos); }
     return emit_load(lo, global_addr(lo, decl, e.h.src_pos), ty);
 }
@@ -1267,6 +1263,22 @@ fn u32 emit_slice_len(Lower* lo, u32 slice_value, u32 src_pos) {
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 
+fn u32 coerce_to_u64(Lower* lo, u32 value, types::Type* from_ty, u32 src_pos) {
+    if(from_ty == types::prim_u64()) { return value; }
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::Cast, types::prim_u64(), src_pos);
+    inst.a = value;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+// A compile-time-constant integer expression (enum member, sizeof, alignof) folded through comptime into a ConstInt.
+fn u32 fold_const_int(Lower* lo, ast::AstNode* e) {
+    i64 folded = 0;
+    if(sema::eval_const_i64_hook != null) { sema::eval_const_i64_hook(lo.m, e, &folded); }
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, (types::Type*)e.h.ty, e.h.src_pos);
+    inst.imm = (u64)folded;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
 // s[lo..hi] over a slice or array base: adjust the data pointer by lo, set the length to hi-lo. An omitted hi defaults to the base length, which is only materialized when needed.
 fn u32 lower_slice_range(Lower* lo, ast::SliceRangeNode* n) {
     types::Type* base_ty = (types::Type*)n.base.h.ty;
@@ -1282,11 +1294,12 @@ fn u32 lower_slice_range(Lower* lo, ast::SliceRangeNode* n) {
     } else {
         base_ptr = lower_expr(lo, n.base);
     }
+    // Bounds are u64: the length is hi-lo and feeds the slice's u64 length field, so a narrower bound expression is widened first.
     u32 lo_index;
-    if(n.lo != null) { lo_index = lower_expr(lo, n.lo); }
+    if(n.lo != null) { lo_index = coerce_to_u64(lo, lower_expr(lo, n.lo), (types::Type*)n.lo.h.ty, n.h.src_pos); }
     else { lo_index = emit_const_u64(lo, 0, n.h.src_pos); }
     u32 hi_index;
-    if(n.hi != null) { hi_index = lower_expr(lo, n.hi); }
+    if(n.hi != null) { hi_index = coerce_to_u64(lo, lower_expr(lo, n.hi), (types::Type*)n.hi.h.ty, n.h.src_pos); }
     else if(types::is_array(base_ty)) { hi_index = emit_const_u64(lo, base_ty.data.array.count, n.h.src_pos); }
     else { hi_index = emit_slice_len(lo, base_value, n.h.src_pos); }
     sapir::Inst ptr_inst = sapir::new_inst(sapir::Opcode::IndexAddr, elem_ptr, n.h.src_pos);

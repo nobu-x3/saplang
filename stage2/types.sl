@@ -614,6 +614,15 @@ export fn Type* enum_base_type(Type* type) {
     return (Type*)decl.base_type.h.ty;
 }
 
+// A struct's field types in declaration order; lets a backend build the LLVM struct body without importing ast.
+export fn Type*[] struct_field_types(Type* type, arena::Arena* a) {
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)type.data.struct_decl;
+    Type** out = (Type**)arena::alloc(a, (decl.fields.len + 1) * sizeof(Type*));
+    for(u64 i = 0; i < decl.fields.len; i += 1) { out[i] = (Type*)decl.fields[i].resolved_type; }
+    Type*[] result = {out, decl.fields.len};
+    return result;
+}
+
 PrimitiveTable PRIM;
 bool prim_table_inited = false;
 

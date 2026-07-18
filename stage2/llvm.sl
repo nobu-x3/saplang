@@ -69,7 +69,95 @@ extern {
     export fn void  LLVMDisposeExecutionEngine(void* ee);
     export fn u64   LLVMGetFunctionAddress(void* ee, const i8* name);
     export fn void  LLVMInitializeX86AsmParser();
+
+    // arithmetic / bitwise
+    export fn void* LLVMBuildAdd(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildSub(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildMul(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildSDiv(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildUDiv(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildSRem(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildURem(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildFAdd(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildFSub(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildFMul(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildFDiv(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildFRem(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildAnd(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildOr(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildXor(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildShl(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildLShr(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildAShr(void* b, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildNeg(void* b, void* v, const i8* name);
+    export fn void* LLVMBuildFNeg(void* b, void* v, const i8* name);
+    export fn void* LLVMBuildNot(void* b, void* v, const i8* name);
+    export fn void* LLVMBuildICmp(void* b, i32 predicate, void* l, void* r, const i8* name);
+    export fn void* LLVMBuildFCmp(void* b, i32 predicate, void* l, void* r, const i8* name);
+
+    // memory
+    export fn void* LLVMBuildAlloca(void* b, void* ty, const i8* name);
+    export fn void* LLVMBuildLoad2(void* b, void* ty, void* ptr, const i8* name);
+    export fn void* LLVMBuildStore(void* b, void* val, void* ptr);
+    export fn void* LLVMBuildMemCpy(void* b, void* dst, u32 dst_align, void* src, u32 src_align, void* size);
+    export fn void* LLVMBuildMemSet(void* b, void* ptr, void* val, void* len, u32 align);
+    export fn void* LLVMBuildGEP2(void* b, void* ty, void* ptr, void** indices, u32 num_indices, const i8* name);
+    export fn void* LLVMBuildStructGEP2(void* b, void* ty, void* ptr, u32 idx, const i8* name);
+    export fn void* LLVMBuildExtractValue(void* b, void* agg, u32 index, const i8* name);
+    export fn void* LLVMBuildInsertValue(void* b, void* agg, void* elt, u32 index, const i8* name);
+
+    // conversions
+    export fn void* LLVMBuildTrunc(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildZExt(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildSExt(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildFPToUI(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildFPToSI(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildUIToFP(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildSIToFP(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildFPTrunc(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildFPExt(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildPtrToInt(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildIntToPtr(void* b, void* v, void* dst_ty, const i8* name);
+    export fn void* LLVMBuildBitCast(void* b, void* v, void* dst_ty, const i8* name);
+
+    // calls / phis / branches / string constants
+    export fn void* LLVMBuildCall2(void* b, void* fn_ty, void* fn_val, void** args, u32 num_args, const i8* name);
+    export fn void* LLVMBuildPhi(void* b, void* ty, const i8* name);
+    export fn void  LLVMAddIncoming(void* phi, void** values, void** blocks, u32 count);
+    export fn void* LLVMBuildCondBr(void* b, void* cond, void* then_bb, void* else_bb);
+    export fn void* LLVMBuildSwitch(void* b, void* v, void* else_bb, u32 num_cases);
+    export fn void  LLVMAddCase(void* switch_inst, void* on_val, void* dest);
+    export fn void* LLVMConstStringInContext2(void* ctx, const i8* str, u64 length, i32 dont_null_terminate);
+    export fn void  LLVMSetUnnamedAddress(void* global, i32 unnamed_addr);
+    export fn void* LLVMTypeOf(void* val);
+    export fn void* LLVMGetFirstInstruction(void* bb);
+    export fn void  LLVMPositionBuilder(void* b, void* bb, void* instr);
+    export fn void* LLVMConstNamedStruct(void* struct_ty, void** vals, u32 count);
+    export fn void* LLVMConstArray2(void* elem_ty, void** vals, u64 length);
 }
+
+// LLVMIntPredicate
+export const i32 IntEQ = 32;
+export const i32 IntNE = 33;
+export const i32 IntUGT = 34;
+export const i32 IntUGE = 35;
+export const i32 IntULT = 36;
+export const i32 IntULE = 37;
+export const i32 IntSGT = 38;
+export const i32 IntSGE = 39;
+export const i32 IntSLT = 40;
+export const i32 IntSLE = 41;
+
+// LLVMRealPredicate (ordered)
+export const i32 RealOEQ = 1;
+export const i32 RealOGT = 2;
+export const i32 RealOGE = 3;
+export const i32 RealOLT = 4;
+export const i32 RealOLE = 5;
+export const i32 RealONE = 6;
+
+// LLVMUnnamedAddr
+export const i32 GlobalUnnamedAddr = 2;
 
 // LLVMLinkage
 export const i32 ExternalLinkage    = 0;
