@@ -22,7 +22,10 @@ for src in "$SRC_DIR"/*_test.sl; do
 	name="$(basename "$src" .sl)"
 	out="$OUT_DIR/$name"
 	echo "==> building $name"
-	if timeout 10 "$SAPLANGC" "$src" -o "$out" -i "stage2/std;stage2;stage2/tests" -dbg; then
+	extra=""
+	# codegen links the LLVM C API; libLLVM-19 lives in the default lib dir.
+	if [ "$name" = "codegen_test" ]; then extra="-l LLVM-19 -L /usr/lib"; fi
+	if timeout 20 "$SAPLANGC" "$src" -o "$out" -i "stage2/std;stage2;stage2/tests" -dbg $extra; then
 		build_ok=$((build_ok + 1))
 	else
 		echo "    BUILD FAILED ($name)"
