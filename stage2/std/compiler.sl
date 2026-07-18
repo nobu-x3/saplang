@@ -38,6 +38,7 @@ export struct Compiler {
     u8[]                 output_path;     // -o; empty defaults to "a.out"
     u8[][]               extern_libs;     // -l names, passed to the linker as -l<name>
     u64                  extern_libs_cap;
+    codegen::BuildConfig config;          // -config: optimization / instrumentation pipeline; default Debug
 }
 
 export fn Compiler* new(arena::Arena* a) {
@@ -67,6 +68,15 @@ export fn void add_source(Compiler* c, u8[] path) {
     }
     c.entry_sources[c.entry_sources.len] = path;
     c.entry_sources.len += 1;
+}
+
+fn bool parse_config(Compiler* c, u8[] name) {
+    if(slice_eq(name, "Debug"))            { c.config = codegen::BuildConfig::Debug; return true; }
+    if(slice_eq(name, "Release"))          { c.config = codegen::BuildConfig::Release; return true; }
+    if(slice_eq(name, "ReleaseDebug"))     { c.config = codegen::BuildConfig::ReleaseDebug; return true; }
+    if(slice_eq(name, "AddressSanitizer")) { c.config = codegen::BuildConfig::AddressSanitizer; return true; }
+    sys::dprintf(2, "unknown -config value: %.*s (expected Debug|Release|ReleaseDebug|AddressSanitizer)\n", (i32)name.len, (i8*)name.ptr);
+    return false;
 }
 
 export fn void add_extern_lib(Compiler* c, u8[] name) {
@@ -117,6 +127,11 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
         } else if(slice_eq(arg, "-l")) {
             arg_index += 1;
             if(arg_index < args.len) { add_extern_lib(c, args[arg_index]); } else { ok = false; }
+        } else if(slice_eq(arg, "-config")) {
+            arg_index += 1;
+            if(arg_index < args.len) {
+                if(!parse_config(c, args[arg_index])) { ok = false; }
+            } else { ok = false; }
         } else if(slice_eq(arg, "-mt")) {
             c.is_multithreaded = true;
         } else if(slice_eq(arg, "-cfg-dump")) {
@@ -370,7 +385,7 @@ fn u8[][] run_codegen(Compiler* c) {
         module::Module* m = c.modules[module_index];
         if(m.sapir == null) { continue; }
         u8[] obj_path = tmp_object_path(c, m);
-        if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.arena, cstr(c.arena, obj_path)) != 0) { c.error_count += 1; }
+        if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.arena, cstr(c.arena, obj_path), c.config) != 0) { c.error_count += 1; }
         paths[paths.len] = obj_path;
         paths.len += 1;
     }
@@ -388,7 +403,7 @@ fn i32 run_link(Compiler* c, u8[][] object_paths) {
 
 // ld.lld -o <out> -dynamic-linker <ld.so> Scrt1.o crti.o -L<dirs> <objects> -l<libs> -lc crtn.o
 fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
-    u64 cap = 12 + object_paths.len + c.extern_libs.len;
+    u64 cap = 16 + object_paths.len + c.extern_libs.len;
     i8** argv = (i8**)arena::alloc(c.arena, (cap + 1) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(c.arena, "ld.lld"); n += 1;
@@ -401,6 +416,8 @@ fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
     argv[n] = link_paths::lib_search_dir(); n += 1;
     for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.arena, object_paths[i]); n += 1; }
     for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs[i]); n += 1; }
+    // AddressSanitizer needs its runtime; the shared lib carries its own dependencies.
+    if(c.config == codegen::BuildConfig::AddressSanitizer) { argv[n] = cstr(c.arena, "-lasan"); n += 1; }
     argv[n] = cstr(c.arena, "-lc"); n += 1;
     argv[n] = link_paths::crt_fini(); n += 1;
     argv[n] = null; n += 1;

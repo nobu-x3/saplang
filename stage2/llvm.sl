@@ -63,6 +63,17 @@ extern {
     export fn i32   LLVMVerifyModule(void* m, i32 action, i8** err);
     export fn void  LLVMDisposeMessage(i8* msg);
 
+    // optimization (new pass manager)
+    export fn void* LLVMCreatePassBuilderOptions();
+    export fn void  LLVMDisposePassBuilderOptions(void* options);
+    export fn void* LLVMRunPasses(void* m, const i8* passes, void* tm, void* options);
+    export fn void  LLVMConsumeError(void* err);
+
+    // attributes (for sanitize_address instrumentation)
+    export fn u32   LLVMGetEnumAttributeKindForName(const i8* name, u64 len);
+    export fn void* LLVMCreateEnumAttribute(void* ctx, u32 kind_id, u64 val);
+    export fn void  LLVMAddAttributeAtIndex(void* fn_val, u32 idx, void* attr);
+
     // in-process execution (MCJIT) — runs a module without an external linker
     export fn void  LLVMLinkInMCJIT();
     export fn i32   LLVMCreateExecutionEngineForModule(void** ee_out, void* m, i8** err);
@@ -158,6 +169,9 @@ export const i32 RealONE = 6;
 
 // LLVMUnnamedAddr
 export const i32 GlobalUnnamedAddr = 2;
+
+// LLVMAttributeFunctionIndex (-1 as u32)
+export const u32 AttributeFunctionIndex = 4294967295;
 
 // LLVMLinkage
 export const i32 ExternalLinkage    = 0;

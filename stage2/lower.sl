@@ -977,7 +977,6 @@ fn u32 emit_conversion(Lower* lo, ast::AstNode* expr, types::Type* dst) {
     types::Type* src = (types::Type*)expr.h.ty;
     if(src == dst) { return lower_expr(lo, expr); }
     switch(sapir::cast_op(src, dst)) {
-    case sapir::CastOp::Nop: { return lower_expr(lo, expr); }
     case sapir::CastOp::ArrayToElemPtr: { return emit_index0(lo, addr_of(lo, expr), dst, expr.h.src_pos); }
     case sapir::CastOp::ArrayToSlice: {
         u32 ptr = emit_index0(lo, addr_of(lo, expr), types::intern_pointer(src.data.array.elem, false), expr.h.src_pos);

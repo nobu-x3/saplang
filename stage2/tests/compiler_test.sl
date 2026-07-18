@@ -6,6 +6,7 @@ import types;
 import symbol;
 import token;
 import diag;
+import codegen;
 import sapir;
 import sapir_print;
 import io;
@@ -688,6 +689,36 @@ fn i32 e2e_compile_link_run(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// E2E: a -config Release build runs the -O2 pipeline and still produces a correct executable.
+fn i32 e2e_release_build(arena::Arena* a, u8[] msg) {
+    boot(a);
+    arena::Arena* ca = sub_arena(a);
+    compiler::Compiler* c = compiler::new(ca);
+    module::Module* m = mk_source_module(ca, "relprog", "fn i32 sq(i32 x) { return x * x; } fn i32 main() { i32 s = 0; for(i32 i = 0; i < 7; i = i + 1) { s = s + i; } return s + sq(3) + 12; }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    c.config = codegen::BuildConfig::Release;
+    c.output_path = "e2e_release_prog";
+    if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
+    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_release_prog"), (u64)42, msg)) { return -3; }
+    return 0;
+}
+
+// E2E: a -config AddressSanitizer build instruments, links the asan runtime, and a clean program still runs.
+fn i32 e2e_asan_build(arena::Arena* a, u8[] msg) {
+    boot(a);
+    arena::Arena* ca = sub_arena(a);
+    compiler::Compiler* c = compiler::new(ca);
+    module::Module* m = mk_source_module(ca, "asanprog", "fn i32 main() { i32 x = 40; i32* p = &x; *p = 42; return x; }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    c.config = codegen::BuildConfig::AddressSanitizer;
+    c.output_path = "e2e_asan_prog";
+    if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
+    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_asan_prog"), (u64)42, msg)) { return -3; }
+    return 0;
+}
+
 // E2E: two modules with a cross-module call -> two object files -> ld.lld -> run.
 fn i32 e2e_link_multi_module(arena::Arena* a, u8[] msg) {
     boot(a);
@@ -901,6 +932,8 @@ fn i32 main() {
     testing::add(e2e, "e2e_lower_multi_module",      &e2e_lower_multi_module);
     testing::add(e2e, "e2e_lower_cross_module_call", &e2e_lower_cross_module_call);
     testing::add(e2e, "e2e_compile_link_run",        &e2e_compile_link_run);
+    testing::add(e2e, "e2e_release_build",           &e2e_release_build);
+    testing::add(e2e, "e2e_asan_build",              &e2e_asan_build);
     testing::add(e2e, "e2e_link_multi_module",       &e2e_link_multi_module);
     testing::add(e2e, "e2e_link_failure_reported",   &e2e_link_failure_reported);
     testing::add(e2e, "e2e_generic_template_skipped", &e2e_generic_template_skipped);

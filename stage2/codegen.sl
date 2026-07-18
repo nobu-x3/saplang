@@ -11,6 +11,14 @@ import llvm;
 import arena;
 import sys;
 
+// Build configuration selecting the optimization/instrumentation pipeline.
+export enum BuildConfig : u8 {
+    Debug,              // -O0, no passes
+    Release,            // -O2
+    ReleaseDebug,       // -O2 with debug info (DWARF lands with the debug-info milestone)
+    AddressSanitizer,   // -O1 + AddressSanitizer instrumentation, linked against the asan runtime
+}
+
 struct TypeMapEntry {
     types::Type* ty;
     void*        llvm;
@@ -19,6 +27,7 @@ struct TypeMapEntry {
 struct CG {
     sapir::SapirModule* sm;
     arena::Arena*       arena;
+    BuildConfig         config;
     void*               ctx;
     void*               llvm_module;
     void*               builder;
@@ -37,27 +46,16 @@ struct CG {
     void**              block_map;      // sapir block id -> LLVMBasicBlockRef
 }
 
-// Builds the LLVM module and emits it to obj_path as an object file. Returns 0 on success.
-export fn i32 emit_object(sapir::SapirModule* sm, arena::Arena* a, i8* obj_path) {
+// Builds the LLVM module, runs the config's pass pipeline, and emits obj_path. Returns 0 on success.
+export fn i32 emit_object(sapir::SapirModule* sm, arena::Arena* a, i8* obj_path, BuildConfig config) {
     CG cg;
-    cg_init(&cg, sm, a);
+    cg_init(&cg, sm, a, config);
     if(!build_module(&cg)) { return 1; }
-
-    llvm::LLVMInitializeX86TargetInfo();
-    llvm::LLVMInitializeX86Target();
-    llvm::LLVMInitializeX86TargetMC();
-    llvm::LLVMInitializeX86AsmPrinter();
-
-    i8* triple = llvm::LLVMGetDefaultTargetTriple();
-    void* target = null;
-    i8* err = null;
-    if(llvm::LLVMGetTargetFromTriple(triple, &target, &err) != 0) {
-        sys::dprintf(2, "codegen: no target for triple: %s\n", err);
-        llvm::LLVMDisposeMessage(err);
-        return 1;
-    }
-    void* tm = llvm::LLVMCreateTargetMachine(target, triple, "generic", "", llvm::CodeGenLevelDefault, llvm::RelocPIC, llvm::CodeModelDefault);
+    void* tm = make_target_machine();
+    if(tm == null) { return 1; }
+    if(!run_passes(&cg, tm)) { llvm::LLVMDisposeTargetMachine(tm); return 1; }
     i32 rc = 0;
+    i8* err = null;
     if(llvm::LLVMTargetMachineEmitToFile(tm, cg.llvm_module, obj_path, llvm::ObjectFile, &err) != 0) {
         sys::dprintf(2, "codegen: object emission failed: %s\n", err);
         llvm::LLVMDisposeMessage(err);
@@ -67,10 +65,73 @@ export fn i32 emit_object(sapir::SapirModule* sm, arena::Arena* a, i8* obj_path)
     return rc;
 }
 
+fn void* make_target_machine() {
+    llvm::LLVMInitializeX86TargetInfo();
+    llvm::LLVMInitializeX86Target();
+    llvm::LLVMInitializeX86TargetMC();
+    llvm::LLVMInitializeX86AsmPrinter();
+    i8* triple = llvm::LLVMGetDefaultTargetTriple();
+    void* target = null;
+    i8* err = null;
+    if(llvm::LLVMGetTargetFromTriple(triple, &target, &err) != 0) {
+        sys::dprintf(2, "codegen: no target for triple: %s\n", err);
+        llvm::LLVMDisposeMessage(err);
+        return null;
+    }
+    return llvm::LLVMCreateTargetMachine(target, triple, "generic", "", llvm::CodeGenLevelDefault, llvm::RelocPIC, llvm::CodeModelDefault);
+}
+
+fn bool run_passes(CG* cg, void* tm) {
+    u8[] pipeline = pipeline_for(cg.config);
+    if(pipeline.len == 0) { return true; }
+    void* opts = llvm::LLVMCreatePassBuilderOptions();
+    void* err = llvm::LLVMRunPasses(cg.llvm_module, cstr(cg.arena, pipeline), tm, opts);
+    llvm::LLVMDisposePassBuilderOptions(opts);
+    if(err != null) {
+        sys::dprintf(2, "codegen: optimization pipeline failed\n");
+        llvm::LLVMConsumeError(err);
+        return false;
+    }
+    return true;
+}
+
+fn u8[] pipeline_for(BuildConfig config) {
+    switch(config) {
+    case BuildConfig::Debug:            { return ""; }
+    case BuildConfig::Release:          { return "default<O2>"; }
+    case BuildConfig::ReleaseDebug:     { return "default<O2>"; }
+    case BuildConfig::AddressSanitizer: { return "default<O1>,asan"; }
+    else { return ""; }
+    }
+    return "";
+}
+
+// Builds the module, runs the config's pipeline, and returns its LLVM IR as text; used by tests.
+export fn u8[] codegen_ir_string(sapir::SapirModule* sm, arena::Arena* a, BuildConfig config) {
+    CG cg;
+    cg_init(&cg, sm, a, config);
+    if(!build_module(&cg)) { return "<codegen failed>"; }
+    void* tm = make_target_machine();
+    if(tm != null) { run_passes(&cg, tm); llvm::LLVMDisposeTargetMachine(tm); }
+    i8* s = llvm::LLVMPrintModuleToString(cg.llvm_module);
+    u8[] out = copy_cstr(a, s);
+    llvm::LLVMDisposeMessage(s);
+    return out;
+}
+
+fn u8[] copy_cstr(arena::Arena* a, i8* s) {
+    u64 len = 0;
+    while(s[len] != 0) { len += 1; }
+    u8* out = (u8*)arena::alloc(a, len + 1);
+    for(u64 i = 0; i < len; i += 1) { out[i] = (u8)s[i]; }
+    u8[] result = {out, len};
+    return result;
+}
+
 // Builds the module and JIT-runs main() in-process (no external linker). Returns main's exit code, or -1 on failure.
 export fn i32 jit_run_main(sapir::SapirModule* sm, arena::Arena* a) {
     CG cg;
-    cg_init(&cg, sm, a);
+    cg_init(&cg, sm, a, BuildConfig::Debug);
     if(!build_module(&cg)) { return -1; }
 
     llvm::LLVMLinkInMCJIT();
@@ -100,10 +161,11 @@ export fn i32 jit_run_main(sapir::SapirModule* sm, arena::Arena* a) {
     return result;
 }
 
-fn void cg_init(CG* cg, sapir::SapirModule* sm, arena::Arena* a) {
+fn void cg_init(CG* cg, sapir::SapirModule* sm, arena::Arena* a, BuildConfig config) {
     sys::memset(cg, 0, sizeof(CG));
     cg.sm = sm;
     cg.arena = a;
+    cg.config = config;
     cg.ctx = llvm::LLVMContextCreate();
     cg.llvm_module = llvm::LLVMModuleCreateWithNameInContext(cstr(a, interner::symbol_str(sm.name)), cg.ctx);
     cg.builder = llvm::LLVMCreateBuilderInContext(cg.ctx);
@@ -232,6 +294,7 @@ fn void declare_decl(CG* cg, u32 index) {
         void* fn_ty = map_fn_type(cg, d.ty);
         void* val = llvm::LLVMAddFunction(cg.llvm_module, cstr(cg.arena, d.link_name), fn_ty);
         llvm::LLVMSetLinkage(val, decl_linkage(d));
+        if(cg.config == BuildConfig::AddressSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_address(cg, val); }
         cg.decl_map[index] = val;
     } else {
         void* ty = map_type(cg, d.ty);
@@ -239,6 +302,12 @@ fn void declare_decl(CG* cg, u32 index) {
         llvm::LLVMSetLinkage(val, decl_linkage(d));
         cg.decl_map[index] = val;
     }
+}
+
+fn void add_sanitize_address(CG* cg, void* fn_val) {
+    u32 kind = llvm::LLVMGetEnumAttributeKindForName(cstr(cg.arena, "sanitize_address"), 16);
+    void* attr = llvm::LLVMCreateEnumAttribute(cg.ctx, kind, 0);
+    llvm::LLVMAddAttributeAtIndex(fn_val, llvm::AttributeFunctionIndex, attr);
 }
 
 // main is the program entry: it must be externally visible regardless of its Saplang linkage.

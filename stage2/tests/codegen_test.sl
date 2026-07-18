@@ -157,6 +157,34 @@ fn i32 jit_alignof(arena::Arena* a, u8[] msg) {
     return jit_return(a, "fn i32 main() { return (i32)alignof(i64) * 5 + 2; }", 42, msg);
 }
 
+// A no-op pointer cast must carry its destination type so a later index GEPs the right element (not void).
+fn i32 jit_ptr_cast_index(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { i32* p = (i32*)malloc(16); p[0] = 40; p[1] = 2; return p[0] + p[1]; }", 42, msg);
+}
+
+fn bool contains(u8[] hay, u8[] needle) {
+    if(needle.len > hay.len) { return false; }
+    for(u64 i = 0; i + needle.len <= hay.len; i += 1) {
+        bool match = true;
+        for(u64 j = 0; j < needle.len; j += 1) { if(hay[i + j] != needle[j]) { match = false; } }
+        if(match) { return true; }
+    }
+    return false;
+}
+
+// -O2 (Release) promotes an address-taken scalar out of memory; the Debug IR keeps the alloca.
+fn i32 opt_release_mem2reg(arena::Arena* a, u8[] msg) {
+    arena::Arena* ja = fresh_arena(a);
+    module::Module* m = test_util::frontend(ja, "fn i32 main() { i32 x = 5; i32* p = &x; *p = 42; return x; }");
+    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
+    sapir::SapirModule* sm = lower::lower_module(m);
+    u8[] debug_ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
+    u8[] release_ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Release);
+    if(!contains(debug_ir, "alloca")) { return -2; }
+    if(contains(release_ir, "alloca")) { return -3; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Codegen Tests";
@@ -192,5 +220,7 @@ fn i32 main() {
     testing::add(suite, "jit_string_array",     &jit_string_array);
     testing::add(suite, "jit_sizeof",           &jit_sizeof);
     testing::add(suite, "jit_alignof",          &jit_alignof);
+    testing::add(suite, "jit_ptr_cast_index",   &jit_ptr_cast_index);
+    testing::add(suite, "opt_release_mem2reg",  &opt_release_mem2reg);
     return testing::run();
 }
