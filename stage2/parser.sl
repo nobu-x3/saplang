@@ -636,28 +636,31 @@ fn ast::AstNode* parse_extern_item(Parser* p) {
         is_opaque = true;
     }
     token::TokenKind k = peek(p, 0).kind;
-    if(k == token::TokenKind::FN) {
-        if(is_opaque) {
-            u8[128] sb;
-            i32 sl = sys::snprintf((i8*)&sb[0], 128, "'opaque' is only valid on struct or union");
-            if(sl > 0 && !p.is_speculating) {
-                u64 ml = (u64)sl; if(ml > 127) { ml = 127; }
-                u8[] mb = {&sb[0], ml};
-                diag::report(&p.m.diag, p.m.arena, opaque_pos, mb);
-            }
-        }
-        ast::AstNode* fnode = parse_extern_fn_decl(p, is_exported, start);
-        if(is_opaque) { fnode.h.flags = ast::AstFlags::HadError; }
-        return fnode;
-    }
     if(k == token::TokenKind::STRUCT) {
         return parse_extern_struct_decl(p, is_exported, start, is_opaque, opaque_pos);
     }
     if(k == token::TokenKind::UNION) {
         return parse_extern_union_decl(p, is_exported, start, is_opaque, opaque_pos);
     }
-    report_expected(p, peek(p, 0), token::TokenKind::FN);
-    return mk_error_node_and_consume(p, start);
+    if(is_opaque && !p.is_speculating) {
+        u8[128] sb;
+        i32 sl = sys::snprintf((i8*)&sb[0], 128, "'opaque' is only valid on struct or union");
+        if(sl > 0) {
+            u64 ml = (u64)sl; if(ml > 127) { ml = 127; }
+            u8[] mb = {&sb[0], ml};
+            diag::report(&p.m.diag, p.m.arena, opaque_pos, mb);
+        }
+    }
+    ast::AstNode* node = null;
+    if(k == token::TokenKind::FN) { node = parse_extern_fn_decl(p, is_exported, start); }
+    else if(k == token::TokenKind::ENUM) { node = parse_enum_decl(p, is_exported); }
+    else if(k == token::TokenKind::CONST || looks_like_type_start(k)) { node = parse_var_decl(p, is_exported); }
+    else {
+        report_expected(p, peek(p, 0), token::TokenKind::FN);
+        return mk_error_node_and_consume(p, start);
+    }
+    if(is_opaque && node != null) { node.h.flags = ast::AstFlags::HadError; }
+    return node;
 }
 
 fn ast::AstNode* parse_extern_block(Parser* p) {

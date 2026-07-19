@@ -11367,16 +11367,17 @@ fn i32 extern_block_after_import(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_unknown_item_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_bare_var_decl(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { i32 x; }", &m);
-    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
-    if(!testing::expect_not_null((void*)n0, msg)) { return -1; }
-    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return -2; }
-    ast::ExternBlockNode* b = (ast::ExternBlockNode*)n0;
-    if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
-    if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq((u16)b.items[0].h.kind, (u16)ast::AstKind::VarDecl, msg)) { return -2; }
+    ast::VarDeclNode* v = (ast::VarDeclNode*)b.items[0];
+    if(!testing::expect_eq((void*)v.name, (void*)compiler_testing::sym(m, "x"), msg)) { return -3; }
+    if(!testing::expect_true(!v.is_const, msg)) { return -4; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -5; }
     return 0;
 }
 
@@ -11641,6 +11642,44 @@ fn i32 extern_opaque_on_var_decl_errors(arena::Arena* a, u8[] msg) {
     ast::ExternBlockNode* b = (ast::ExternBlockNode*)n0;
     if(!testing::expect_true(((u16)b.h.flags & (u16)ast::AstFlags::HadError) != 0, msg)) { return -3; }
     if(!testing::expect_true(m.diag.entries.len >= 1, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_const_global(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export const i32 EOF = -1; }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 1, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq((u16)b.items[0].h.kind, (u16)ast::AstKind::VarDecl, msg)) { return -2; }
+    ast::VarDeclNode* v = (ast::VarDeclNode*)b.items[0];
+    if(!testing::expect_eq((void*)v.name, (void*)compiler_testing::sym(m, "EOF"), msg)) { return -3; }
+    if(!testing::expect_true(v.is_const, msg)) { return -4; }
+    if(!testing::expect_true(v.is_exported, msg)) { return -5; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -6; }
+    return 0;
+}
+
+fn i32 extern_enum_and_fn(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { enum Color : i32 { Red, Green } fn void use(Color c); }", &m);
+    ast::ExternBlockNode* b = compiler_testing::expect_extern_block(compiler_testing::nth_stmt(root, 0), null, 2, msg);
+    if(!b) { return -1; }
+    if(!testing::expect_eq((u16)b.items[0].h.kind, (u16)ast::AstKind::EnumDecl, msg)) { return -2; }
+    if(!testing::expect_eq((u16)b.items[1].h.kind, (u16)ast::AstKind::ExternFnDecl, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -4; }
+    return 0;
+}
+
+fn i32 extern_junk_item_rejected(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "extern { 42 }", &m);
+    ast::AstNode* n0 = compiler_testing::nth_stmt(root, 0);
+    if(!testing::expect_eq((u16)n0.h.kind, (u16)ast::AstKind::ExternBlock, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "expected 'fn', got integer literal", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)9, msg)) { return -3; }
     return 0;
 }
 
@@ -13454,7 +13493,7 @@ fn i32 main() {
     testing::add(s_ext, "extern_block_multi_item", &extern_block_multi_item);
     testing::add(s_ext, "extern_block_mixed_export", &extern_block_mixed_export);
     testing::add(s_ext, "extern_block_after_import", &extern_block_after_import);
-    testing::add(s_ext, "extern_unknown_item_errors", &extern_unknown_item_errors);
+    testing::add(s_ext, "extern_bare_var_decl", &extern_bare_var_decl);
     testing::add(s_ext, "extern_missing_rbrace_at_eof", &extern_missing_rbrace_at_eof);
     testing::add(s_ext, "extern_named_lib_with_items", &extern_named_lib_with_items);
     testing::add(s_ext, "extern_struct_full_with_pointer_field", &extern_struct_full_with_pointer_field);
@@ -13477,6 +13516,9 @@ fn i32 main() {
     testing::add(s_ext, "extern_double_export_errors", &extern_double_export_errors);
     testing::add(s_ext, "opaque_at_top_level_errors", &opaque_at_top_level_errors);
     testing::add(s_ext, "extern_opaque_on_var_decl_errors", &extern_opaque_on_var_decl_errors);
+    testing::add(s_ext, "extern_const_global", &extern_const_global);
+    testing::add(s_ext, "extern_enum_and_fn", &extern_enum_and_fn);
+    testing::add(s_ext, "extern_junk_item_rejected", &extern_junk_item_rejected);
     testing::add(s_ext, "extern_fn_with_body_errors", &extern_fn_with_body_errors);
 
     u8[] s_en = "Parser Enum";
