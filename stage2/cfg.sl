@@ -219,8 +219,9 @@ fn void build_for(CfgBuilder* b, ast::ForNode* n) {
 fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
     u32 origin = b.current;
     u32 after = new_block(b.cfg, b.arena);
-    u32 def_blk = new_block(b.cfg, b.arena);
-    if(n.else_block == null) { terminate_unreachable(b, def_blk); }
+    // No else: an unmatched discriminant falls through to the code after the switch.
+    u32 def_blk = after;
+    if(n.else_block != null) { def_blk = new_block(b.cfg, b.arena); }
 
     u32* arm_blocks = arena::alloc(b.arena, n.arms.len * sizeof(u32));
     for(u64 arm_index = 0; arm_index < n.arms.len; arm_index += 1) {

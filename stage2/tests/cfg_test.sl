@@ -403,7 +403,7 @@ fn i32 switch_arms_dispatch(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 switch_no_else_default_unreachable(arena::Arena* a, u8[] m) {
+fn i32 switch_no_else_default_falls_through(arena::Arena* a, u8[] m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] a0;
     a0[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -416,9 +416,11 @@ fn i32 switch_no_else_default_unreachable(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = sw;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_default, (u64)3, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -2; }
+    // No else: the default edge targets the after-switch block, which continues (here, to the function exit), not a dead-end.
+    if(!testing::expect_eq((u64)g.blocks[0].term.switch_default, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks[2].term.kind, (u64)cfg::TermKind::Return, m)) { return -2; }
     if(!testing::expect_eq(g.blocks[0].term.switch_arms.len, (u64)1, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[0].target, (u64)3, m)) { return -4; }
     return 0;
 }
 
@@ -435,8 +437,9 @@ fn i32 switch_break_fresh_continuation(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = sw;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[4].term.goto_target, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq(g.blocks.len, (u64)6, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks[4].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -2; }
+    if(!testing::expect_eq(g.blocks.len, (u64)5, m)) { return -3; }
     return 0;
 }
 
@@ -561,8 +564,8 @@ fn i32 continue_through_switch(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = wh;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[7].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[7].term.goto_target, (u64)2, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks[6].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks[6].term.goto_target, (u64)2, m)) { return -2; }
     return 0;
 }
 
@@ -583,10 +586,10 @@ fn i32 switch_fallthrough(arena::Arena* a, u8[] m) {
     body[0] = sw;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
     if(!testing::expect_eq(g.blocks[0].term.switch_arms.len, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[0].target, (u64)4, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[1].target, (u64)4, m)) { return -3; }
-    if(!testing::expect_eq(g.blocks[4].predecessors.len, (u64)1, m)) { return -4; }
-    if(!testing::expect_eq((u64)g.blocks[4].term.goto_target, (u64)2, m)) { return -5; }
+    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[0].target, (u64)3, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[1].target, (u64)3, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks[3].predecessors.len, (u64)1, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)2, m)) { return -5; }
     return 0;
 }
 
@@ -739,6 +742,29 @@ fn i32 non_void_all_paths_return_ok(arena::Arena* a, u8[] m) {
     body[0] = iff;
     ast::AstNode* ret_ty = mk_prim_type(a, types::prim_i32());
     ast::FnDeclNode* func = mk_fn(a, ret_ty, mk_block(a, &body[0], 1));
+    func.cfg = (void*)cfg::build_cfg(mm, func);
+    bool ok = cfg::check_return_paths(mm, func);
+    if(!ok) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries.len, (u64)0, m)) { return -2; }
+    return 0;
+}
+
+// An else-less switch's unmatched path falls through to the following return, so all paths return.
+fn i32 switch_no_else_then_return_ok(arena::Arena* a, u8[] m) {
+    module::Module* mm = mk_module(a);
+    ast::AstNode*[1] arm_body;
+    arm_body[0] = mk_expr_stmt(a, mk_int_lit(a));
+    ast::AstNode*[1] l0;
+    l0[0] = mk_int_lit(a);
+    ast::SwitchArm[1] arms;
+    set_arm(&arms[0], &l0[0], 1, mk_block(a, &arm_body[0], 1));
+    ast::SwitchArm[] arms_slice = {&arms[0], 1};
+    ast::AstNode* sw = mk_switch(a, mk_int_lit(a), arms_slice, null);
+    ast::AstNode*[2] body;
+    body[0] = sw;
+    body[1] = mk_return(a, mk_int_lit(a));
+    ast::AstNode* ret_ty = mk_prim_type(a, types::prim_i32());
+    ast::FnDeclNode* func = mk_fn(a, ret_ty, mk_block(a, &body[0], 2));
     func.cfg = (void*)cfg::build_cfg(mm, func);
     bool ok = cfg::check_return_paths(mm, func);
     if(!ok) { return -1; }
@@ -1036,7 +1062,7 @@ fn i32 main() {
     testing::add(suite, "for_no_cond",                     &for_no_cond);
     testing::add(suite, "for_continue_targets_post",       &for_continue_targets_post);
     testing::add(suite, "switch_arms_dispatch",            &switch_arms_dispatch);
-    testing::add(suite, "switch_no_else_default_unreachable", &switch_no_else_default_unreachable);
+    testing::add(suite, "switch_no_else_default_falls_through", &switch_no_else_default_falls_through);
     testing::add(suite, "switch_break_fresh_continuation", &switch_break_fresh_continuation);
     testing::add(suite, "return_fresh_unreachable",        &return_fresh_unreachable);
     testing::add(suite, "return_value_recorded",           &return_value_recorded);
@@ -1056,6 +1082,7 @@ fn i32 main() {
     testing::add(suite, "comp_stmt_emits_nothing",         &comp_stmt_emits_nothing);
     testing::add(suite, "non_void_missing_return_errors",  &non_void_missing_return_errors);
     testing::add(suite, "non_void_all_paths_return_ok",    &non_void_all_paths_return_ok);
+    testing::add(suite, "switch_no_else_then_return_ok",   &switch_no_else_then_return_ok);
     testing::add(suite, "void_skips_return_check",         &void_skips_return_check);
     testing::add(suite, "unreachable_after_both_return_warns", &unreachable_after_both_return_warns);
     testing::add(suite, "no_unreachable_clean",            &no_unreachable_clean);
