@@ -361,6 +361,7 @@ fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     case ast::AstKind::StructLit: {
+        if(types::is_slice((types::Type*)e.h.ty)) { return build_slice_lit(lo, (types::Type*)e.h.ty, (ast::StructLitNode*)e); }
         u32 temp = emit_temp_alloca(lo, (types::Type*)e.h.ty);
         build_struct_lit(lo, temp, (types::Type*)e.h.ty, (ast::StructLitNode*)e);
         return emit_load(lo, temp, (types::Type*)e.h.ty);
@@ -1125,6 +1126,28 @@ fn void build_struct_lit(Lower* lo, u32 addr, types::Type* ty, ast::StructLitNod
         u32 field_addr = sapir::add_inst(lo.arena, lo.func, addr_inst);
         lower_init_into(lo, field_addr, field_ty, fi.value);
     }
+}
+
+// A `{ptr, len}` brace literal targeting a slice: build the two-field slice value directly, since a slice has no struct decl to walk. Fields map by name or position, matching check_slice_lit.
+fn u32 build_slice_lit(Lower* lo, types::Type* ty, ast::StructLitNode* lit) {
+    types::Type* elem_ptr = types::intern_pointer(ty.data.slice_elem, false);
+    ast::AstNode* ptr_expr = null;
+    ast::AstNode* len_expr = null;
+    u64 positional = 0;
+    for(u64 i = 0; i < lit.inits.len; i += 1) {
+        ast::FieldInitializer* fi = &lit.inits[i];
+        bool is_ptr = true;
+        if(fi.name == null) { is_ptr = positional == 0; positional += 1; }
+        else if(fi.name == interner::intern("ptr")) { is_ptr = true; }
+        else { is_ptr = false; }
+        if(is_ptr) { ptr_expr = fi.value; } else { len_expr = fi.value; }
+    }
+    u32 ptr_val = emit_conversion(lo, ptr_expr, elem_ptr);
+    u32 len_val = coerce_to_u64(lo, lower_expr(lo, len_expr), (types::Type*)len_expr.h.ty, lit.h.src_pos);
+    sapir::Inst make = sapir::new_inst(sapir::Opcode::SliceMake, ty, lit.h.src_pos);
+    make.a = ptr_val;
+    make.b = len_val;
+    return sapir::add_inst(lo.arena, lo.func, make);
 }
 
 fn void build_array_lit(Lower* lo, u32 addr, types::Type* ty, ast::ArrayLitNode* lit) {

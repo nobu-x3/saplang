@@ -1348,6 +1348,60 @@ fn i32 slice_store(arena::Arena* a, u8[] msg) {
     return golden(a, "fn void f(i32[] s) { s[0] = 9; }", &w, msg);
 }
 
+// A `{ptr, len}` brace literal targeting a slice field lowers to a SliceMake stored through the field address.
+fn i32 slice_literal_store(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 640);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = alloca.main::C*");
+    wl(&w, "    %1 = constnull.i32*");
+    wl(&w, "    zero %0, 16");
+    wl(&w, "    %3 = fieldaddr %0, 0");
+    wl(&w, "    %4 = const.u64 0");
+    wl(&w, "    %5 = slicemake %1, %4");
+    wl(&w, "    store %3, %5");
+    wl(&w, "    %7 = fieldaddr %0, 0");
+    wl(&w, "    %8 = load.i32[] %7");
+    wl(&w, "    %9 = slicelen.u64 %8");
+    wl(&w, "    %10 = cast.i32 %9");
+    wl(&w, "    ret %10");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "struct C { i32[] items; } fn i32 f() { i32* p = null; C c; c.items = {p, 0}; return (i32)c.items.len; }", &w, msg);
+}
+
+// Named, reordered slice fields map by name, not position: `.ptr` still feeds SliceMake's pointer slot even when written second.
+fn i32 slice_literal_named(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 640);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "fn __main_f() -> i32 {");
+    wl(&w, "b0:  ; preds:");
+    wl(&w, "    %0 = alloca.main::C*");
+    wl(&w, "    zero %0, 16");
+    wl(&w, "    %2 = fieldaddr %0, 0");
+    wl(&w, "    %3 = constnull.i32*");
+    wl(&w, "    %4 = const.u64 3");
+    wl(&w, "    %5 = slicemake %3, %4");
+    wl(&w, "    store %2, %5");
+    wl(&w, "    %7 = fieldaddr %0, 0");
+    wl(&w, "    %8 = load.i32[] %7");
+    wl(&w, "    %9 = slicelen.u64 %8");
+    wl(&w, "    %10 = cast.i32 %9");
+    wl(&w, "    ret %10");
+    wl(&w, "b1:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "b2:  ; preds:");
+    wl(&w, "    unreachable");
+    wl(&w, "}");
+    return golden(a, "struct C { i32[] items; } fn i32 f() { C c; c.items = {.len = 3, .ptr = null}; return (i32)c.items.len; }", &w, msg);
+}
+
 // Overloaded functions get a "__<paramtypes>" suffix so each has a distinct symbol, and each call targets the right one.
 fn i32 overload_dispatch(arena::Arena* a, u8[] msg) {
     io::OutBuf w;
@@ -1495,6 +1549,8 @@ fn i32 main() {
     testing::add(suite, "call_arg_widening",  &call_arg_widening);
     testing::add(suite, "enum_member_value",  &enum_member_value);
     testing::add(suite, "slice_store",        &slice_store);
+    testing::add(suite, "slice_literal_store", &slice_literal_store);
+    testing::add(suite, "slice_literal_named", &slice_literal_named);
     testing::add(suite, "overload_dispatch",  &overload_dispatch);
     testing::add(suite, "overload_ptr_slice", &overload_ptr_slice);
     return testing::run();
