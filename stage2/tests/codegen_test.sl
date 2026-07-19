@@ -183,7 +183,8 @@ fn i32 opt_debug_info(arena::Arena* a, u8[] msg) {
     u8[] release_ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Release);
     if(!contains(debug_ir, "DISubprogram")) { return -2; }        // fails if the module didn't verify (returns "<codegen failed>")
     if(!contains(debug_ir, "DILocation")) { return -3; }
-    if(contains(release_ir, "DISubprogram")) { return -4; }
+    if(!contains(debug_ir, "DILocalVariable")) { return -4; }     // the i32* param gets a variable
+    if(contains(release_ir, "DISubprogram")) { return -5; }
     return 0;
 }
 

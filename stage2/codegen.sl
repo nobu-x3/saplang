@@ -509,6 +509,37 @@ fn void emit_fn(CG* cg, sapir::SapirFn* f) {
         sapir::SapirBlock* b = &f.blocks[i];
         for(u64 p = 0; p < b.phis.len; p += 1) { fill_phi(cg, b.phis[p]); }
     }
+    if(cg.di_builder != null) { emit_di_variables(cg, f); }
+}
+
+// Params and memory-var locals get DWARF variables; scalar SSA locals (no recoverable storage) are left out for now.
+fn void emit_di_variables(CG* cg, sapir::SapirFn* f) {
+    void* entry_bb = cg.block_map[f.entry];
+    void* entry_term = llvm::LLVMGetBasicBlockTerminator(entry_bb);
+    if(entry_term == null) { return; }
+    void* empty_expr = llvm::LLVMDIBuilderCreateExpression(cg.di_builder, null, 0);
+    for(u64 i = 0; i < f.vars.len; i += 1) {
+        sapir::SapirVar* v = &f.vars[i];
+        void* di_ty = build_di_type(cg, v.ty);
+        if(di_ty == null) { continue; }
+        u32 line = 0;
+        u32 col = 0;
+        src_pos_to_line_col(cg.sm, v.src_pos, &line, &col);
+        u8[] name = interner::symbol_str(v.name);
+        void* loc = llvm::LLVMDIBuilderCreateDebugLocation(cg.ctx, line, col, cg.di_subprogram, null);
+        bool is_param = i < (u64)f.param_count;
+        void* di_var;
+        if(is_param) {
+            di_var = llvm::LLVMDIBuilderCreateParameterVariable(cg.di_builder, cg.di_subprogram, name.ptr, name.len, (u32)i + 1, cg.di_file, line, di_ty, 1, 0);
+        } else {
+            di_var = llvm::LLVMDIBuilderCreateAutoVariable(cg.di_builder, cg.di_subprogram, name.ptr, name.len, cg.di_file, line, di_ty, 1, 0, 0);
+        }
+        if(v.alloca_id != sapir::INVALID_ID) {
+            llvm::LLVMDIBuilderInsertDeclareRecordBefore(cg.di_builder, cg.value_map[v.alloca_id], di_var, empty_expr, loc, entry_term);
+        } else if(is_param) {
+            llvm::LLVMDIBuilderInsertDbgValueRecordBefore(cg.di_builder, llvm::LLVMGetParam(cg.current_fn, (u32)i), di_var, empty_expr, loc, entry_term);
+        }
+    }
 }
 
 fn void fill_phi(CG* cg, u32 phi_id) {

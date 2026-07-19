@@ -60,6 +60,8 @@ struct Lower {
     u64                 local_decls_cap;
     MemVar[]            mem_vars;
     u64                 mem_vars_cap;
+    sapir::SapirVar[]   vars;           // params + locals of the current fn, for debug info; reset per fn
+    u64                 vars_cap;
     DeclMapEntry[]      decl_map;       // module-scoped; not reset per function
     u64                 decl_map_cap;
     types::Type*        ret_ty;         // return type of the fn being lowered; return values coerce to it
@@ -122,6 +124,9 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
     lo.mem_vars.ptr = null;
     lo.mem_vars.len = 0;
     lo.mem_vars_cap = 0;
+    lo.vars.ptr = null;
+    lo.vars.len = 0;
+    lo.vars_cap = 0;
     collect_mem_vars(lo, fn_node, g);
 
     lo.states.ptr = null;
@@ -149,6 +154,7 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
         seal_cfg_successors(lo, &cfg_block.term);
     }
     func.blocks[lo.current].body_end = (u32)func.insts.len;
+    func.vars = lo.vars;
 
     remove_trivial_phis(lo);
 }
@@ -204,9 +210,25 @@ fn void emit_params(Lower* lo, ast::FnDeclNode* fn_node) {
         runtime_index += 1;
         u32 value = sapir::add_inst(lo.arena, lo.func, inst);
         u32 slot = mem_alloca(lo, param.decl);
+        push_var(lo, param.name, (types::Type*)param.resolved_type, param.src_pos, slot);
         if(slot != sapir::INVALID_ID) { emit_store(lo, slot, value); }
         else { write_var(lo, lo.current, param.decl, value); }
     }
+}
+
+// Records a param/local for debug info; alloca_id is its slot (memory var) or INVALID_ID (SSA).
+fn void push_var(Lower* lo, symbol::Symbol* name, types::Type* ty, u32 src_pos, u32 alloca_id) {
+    if(lo.vars.len == lo.vars_cap) {
+        u64 new_cap = 8;
+        if(lo.vars_cap > 0) { new_cap = lo.vars_cap * 2; }
+        lo.vars.ptr = (sapir::SapirVar*)arena::realloc_grow(lo.arena, (void*)lo.vars.ptr, lo.vars.len * sizeof(sapir::SapirVar), new_cap * sizeof(sapir::SapirVar));
+        lo.vars_cap = new_cap;
+    }
+    lo.vars[lo.vars.len].name = name;
+    lo.vars[lo.vars.len].ty = ty;
+    lo.vars[lo.vars.len].src_pos = src_pos;
+    lo.vars[lo.vars.len].alloca_id = alloca_id;
+    lo.vars.len += 1;
 }
 
 // STATEMENTS /////////////////////////////////////////////////////////////////////
@@ -222,6 +244,7 @@ fn void lower_stmt(Lower* lo, ast::AstNode* s) {
 
 fn void lower_var_decl(Lower* lo, ast::VarDeclNode* v) {
     u32 slot = mem_alloca(lo, v.decl);
+    push_var(lo, v.name, decl_type(v.decl), v.h.src_pos, slot);
     if(slot != sapir::INVALID_ID) {
         if(v.init == null) { emit_zero(lo, slot, decl_type(v.decl)); return; }
         if(v.init.h.kind == ast::AstKind::UndefinedLit) { return; }

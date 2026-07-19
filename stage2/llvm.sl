@@ -160,6 +160,12 @@ extern {
     export fn void  LLVMSetCurrentDebugLocation2(void* builder, void* loc);
     export fn void  LLVMAddModuleFlag(void* m, i32 behavior, const i8* key, u64 key_len, void* val);
     export fn void* LLVMValueAsMetadata(void* val);
+    export fn void* LLVMDIBuilderCreateParameterVariable(void* builder, void* scope, const i8* name, u64 name_len, u32 arg_no, void* file, u32 line, void* ty, i32 always_preserve, i32 flags);
+    export fn void* LLVMDIBuilderCreateAutoVariable(void* builder, void* scope, const i8* name, u64 name_len, void* file, u32 line, void* ty, i32 always_preserve, i32 flags, u32 align_bits);
+    export fn void* LLVMDIBuilderCreateExpression(void* builder, u64* addr, u64 length);
+    export fn void* LLVMGetBasicBlockTerminator(void* bb);
+    export fn void* LLVMDIBuilderInsertDeclareRecordBefore(void* builder, void* storage, void* var_info, void* expr, void* debug_loc, void* instr);
+    export fn void* LLVMDIBuilderInsertDbgValueRecordBefore(void* builder, void* val, void* var_info, void* expr, void* debug_loc, void* instr);
 }
 
 // DWARF constants
