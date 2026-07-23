@@ -22,7 +22,7 @@ fn i32 scalar_values(arena::Arena* a, u8[] m) {
 
 fn i32 ref_values(arena::Arena* a, u8[] m) {
     value::Value t = value::val_type(types::prim_u32());
-    if(!testing::expect_eq((u64)t.kind, (u64)value::ValueKind::Type, m)) { return -1; }
+    if(!testing::expect_eq((u64)t.kind, (u64)value::ValueKind::TYPE, m)) { return -1; }
     if(!testing::expect_eq((void*)t.data.type_ref, (void*)types::prim_u32(), m)) { return -2; }
 
     u8[] hi = "hi";

@@ -5,7 +5,7 @@ import token;
 import arena;
 
 fn i32 arith_add_i32_i32(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i32(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i32(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
@@ -13,307 +13,307 @@ fn i32 arith_add_i32_i32(arena::Arena* a, u8[] m) {
 fn i32 arith_all_ops_i32(arena::Arena* a, u8[] m) {
     token::TokenKind[4] ops; ops[0] = token::TokenKind::Minus; ops[1] = token::TokenKind::Star; ops[2] = token::TokenKind::Slash; ops[3] = token::TokenKind::Percent;
     for(u64 i = 0; i < 4; i += 1) {
-        types::Type* r = op::binop_result_type(ops[i], types::prim_i32(), types::prim_i32());
+        types::Ty* r = op::binop_result_type(ops[i], types::prim_i32(), types::prim_i32());
         if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     }
     return 0;
 }
 
 fn i32 arith_widen_i16_i32(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i16(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i16(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 arith_widen_i32_i16(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i32(), types::prim_i16());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i32(), types::prim_i16());
     if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 arith_u8_u8(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Star, types::prim_u8(), types::prim_u8());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Star, types::prim_u8(), types::prim_u8());
     if(!testing::expect_eq((void*)r, (void*)types::prim_u8(), m)) { return -1; }
     return 0;
 }
 
 fn i32 arith_mixed_sign_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i32(), types::prim_u32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i32(), types::prim_u32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 arith_f32_f32(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, types::prim_f32(), types::prim_f32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, types::prim_f32(), types::prim_f32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_f32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 arith_f32_f64_widens(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, types::prim_f32(), types::prim_f64());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, types::prim_f32(), types::prim_f64());
     if(!testing::expect_eq((void*)r, (void*)types::prim_f64(), m)) { return -1; }
     return 0;
 }
 
 fn i32 arith_f64_f32_widens(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, types::prim_f64(), types::prim_f32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, types::prim_f64(), types::prim_f32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_f64(), m)) { return -1; }
     return 0;
 }
 
 fn i32 arith_int_float_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i32(), types::prim_f32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, types::prim_i32(), types::prim_f32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 arith_bool_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, types::prim_bool(), types::prim_bool());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, types::prim_bool(), types::prim_bool());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 arith_null_operand(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Plus, null, types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Plus, null, types::prim_i32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 bit_and_i32(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Amp, types::prim_i32(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Amp, types::prim_i32(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 bit_widen_i8_i32(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Pipe, types::prim_i8(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Pipe, types::prim_i8(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 bit_mixed_sign_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Amp, types::prim_i32(), types::prim_u32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Amp, types::prim_i32(), types::prim_u32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 bit_float_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::Caret, types::prim_i32(), types::prim_f32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::Caret, types::prim_i32(), types::prim_f32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 shift_result_is_lhs(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::LShift, types::prim_u8(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::LShift, types::prim_u8(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_u8(), m)) { return -1; }
     return 0;
 }
 
 fn i32 shift_i32(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::RShift, types::prim_i32(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::RShift, types::prim_i32(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 shift_float_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::LShift, types::prim_f32(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::LShift, types::prim_f32(), types::prim_i32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 eq_i32_is_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_i32(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_i32(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 eq_widen_is_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::BangEq, types::prim_i16(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::BangEq, types::prim_i16(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 eq_ptr_is_bool(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
-    types::Type* p = types::intern_pointer(types::prim_i32(), false);
-    types::Type* r = op::binop_result_type(token::TokenKind::EqEq, p, p);
+    types::Ty* p = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* r = op::binop_result_type(token::TokenKind::EqEq, p, p);
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 eq_null_ptr_is_bool(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
-    types::Type* p = types::intern_pointer(types::prim_i32(), false);
-    types::Type* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_null_ptr(), p);
+    types::Ty* p = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_null_ptr(), p);
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 eq_bool_is_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_bool(), types::prim_bool());
+    types::Ty* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_bool(), types::prim_bool());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 eq_int_float_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_i32(), types::prim_f32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_i32(), types::prim_f32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 eq_mixed_sign_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_i32(), types::prim_u32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_i32(), types::prim_u32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 ord_i32_is_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::LT, types::prim_i32(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::LT, types::prim_i32(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 ord_float_widen_is_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::GT, types::prim_f32(), types::prim_f64());
+    types::Ty* r = op::binop_result_type(token::TokenKind::GT, types::prim_f32(), types::prim_f64());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 ord_ptr_is_bool(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
-    types::Type* p = types::intern_pointer(types::prim_i32(), false);
-    types::Type* r = op::binop_result_type(token::TokenKind::LTEQ, p, p);
+    types::Ty* p = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* r = op::binop_result_type(token::TokenKind::LTEQ, p, p);
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 ord_geeq_is_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::GTEQ, types::prim_i32(), types::prim_i32());
+    types::Ty* r = op::binop_result_type(token::TokenKind::GTEQ, types::prim_i32(), types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 ord_bool_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::LT, types::prim_bool(), types::prim_bool());
+    types::Ty* r = op::binop_result_type(token::TokenKind::LT, types::prim_bool(), types::prim_bool());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 logic_and_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::AmpAmp, types::prim_bool(), types::prim_bool());
+    types::Ty* r = op::binop_result_type(token::TokenKind::AmpAmp, types::prim_bool(), types::prim_bool());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 logic_or_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::PipePipe, types::prim_bool(), types::prim_bool());
+    types::Ty* r = op::binop_result_type(token::TokenKind::PipePipe, types::prim_bool(), types::prim_bool());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 // Logical operands are truthy (bool/int/ptr/slice), consistent with `if` / `!`.
 fn i32 logic_int_truthy(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::AmpAmp, types::prim_i32(), types::prim_bool());
+    types::Ty* r = op::binop_result_type(token::TokenKind::AmpAmp, types::prim_i32(), types::prim_bool());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 logic_ptr_truthy(arena::Arena* a, u8[] m) {
-    types::Type* p = types::intern_pointer(types::prim_i32(), false);
-    types::Type* r = op::binop_result_type(token::TokenKind::AmpAmp, p, p);
+    types::Ty* p = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* r = op::binop_result_type(token::TokenKind::AmpAmp, p, p);
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
-    types::Type* r2 = op::binop_result_type(token::TokenKind::PipePipe, types::intern_slice(types::prim_u8()), types::prim_bool());
+    types::Ty* r2 = op::binop_result_type(token::TokenKind::PipePipe, types::intern_slice(types::prim_u8()), types::prim_bool());
     if(!testing::expect_eq((void*)r2, (void*)types::prim_bool(), m)) { return -2; }
     return 0;
 }
 
 // A logical operand that isn't truthy-convertible (e.g. a struct) is still rejected.
 fn i32 logic_non_cond_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::binop_result_type(token::TokenKind::AmpAmp, types::prim_f32(), types::prim_bool());
+    types::Ty* r = op::binop_result_type(token::TokenKind::AmpAmp, types::prim_f32(), types::prim_bool());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 neg_i32(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Minus, types::prim_i32());
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Minus, types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 neg_f32(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Minus, types::prim_f32());
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Minus, types::prim_f32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_f32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 neg_bool_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Minus, types::prim_bool());
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Minus, types::prim_bool());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 not_bool_is_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Bang, types::prim_bool());
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Bang, types::prim_bool());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 not_int_is_bool(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Bang, types::prim_i32());
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Bang, types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 not_ptr_is_bool(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
-    types::Type* p = types::intern_pointer(types::prim_i32(), false);
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Bang, p);
+    types::Ty* p = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Bang, p);
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
 
 fn i32 not_float_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Bang, types::prim_f32());
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Bang, types::prim_f32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 complement_i32(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Tilde, types::prim_i32());
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Tilde, types::prim_i32());
     if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 complement_float_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Tilde, types::prim_f32());
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Tilde, types::prim_f32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 addr_of_i32(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Amp, types::prim_i32());
-    types::Type* want = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Amp, types::prim_i32());
+    types::Ty* want = types::intern_pointer(types::prim_i32(), false);
     if(!testing::expect_eq((void*)r, (void*)want, m)) { return -1; }
     return 0;
 }
 
 fn i32 deref_ptr(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
-    types::Type* p = types::intern_pointer(types::prim_i32(), false);
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Star, p);
+    types::Ty* p = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Star, p);
     if(!testing::expect_eq((void*)r, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
 
 fn i32 deref_non_ptr_null(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Star, types::prim_i32());
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Star, types::prim_i32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
 
 fn i32 unary_null_operand(arena::Arena* a, u8[] m) {
-    types::Type* r = op::unaryop_result_type(token::TokenKind::Minus, null);
+    types::Ty* r = op::unaryop_result_type(token::TokenKind::Minus, null);
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }

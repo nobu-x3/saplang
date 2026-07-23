@@ -2,7 +2,7 @@ import ast;
 import cfg;
 import module;
 import sema;
-import comptime;
+import comptime_interp;
 import value;
 import types;
 import types_print;
@@ -66,7 +66,7 @@ struct Lower {
     u64                 dbg_values_cap;
     DeclMapEntry[]      decl_map;       // module-scoped; not reset per function
     u64                 decl_map_cap;
-    types::Type*        ret_ty;         // return type of the fn being lowered; return values coerce to it
+    types::Ty*        ret_ty;         // return type of the fn being lowered; return values coerce to it
 }
 
 export fn sapir::SapirModule* lower_module(module::Module* m) {
@@ -113,7 +113,7 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
     func.src_pos = fn_node.h.src_pos;
     func.param_count = runtime_param_count(fn_node);
     lo.ret_ty = types::prim_void();
-    if(fn_node.return_type != null) { lo.ret_ty = (types::Type*)fn_node.return_type.h.ty; }
+    if(fn_node.return_type != null) { lo.ret_ty = (types::Ty*)fn_node.return_type.h.ty; }
 
     cfg::Cfg* g = (cfg::Cfg*)fn_node.cfg;
     lo.func = func;
@@ -211,19 +211,19 @@ fn void emit_params(Lower* lo, ast::FnDeclNode* fn_node) {
     for(u64 param_index = 0; param_index < fn_node.params.len; param_index += 1) {
         ast::Param* param = &fn_node.params[param_index];
         if(param.is_comptime) { continue; }
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::Param, (types::Type*)param.resolved_type, param.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::Param, (types::Ty*)param.resolved_type, param.src_pos);
         inst.a = runtime_index;
         runtime_index += 1;
         u32 value = sapir::add_inst(lo.arena, lo.func, inst);
         u32 slot = mem_alloca(lo, param.decl);
-        push_var(lo, param.name, (types::Type*)param.resolved_type, param.src_pos, slot, param.decl);
+        push_var(lo, param.name, (types::Ty*)param.resolved_type, param.src_pos, slot, param.decl);
         if(slot != sapir::INVALID_ID) { emit_store(lo, slot, value); }
         else { write_var(lo, lo.current, param.decl, value); }
     }
 }
 
 // Records a param/local for debug info; alloca_id is its slot (memory var) or INVALID_ID (SSA).
-fn void push_var(Lower* lo, symbol::Symbol* name, types::Type* ty, u32 src_pos, u32 alloca_id, void* decl) {
+fn void push_var(Lower* lo, symbol::Symbol* name, types::Ty* ty, u32 src_pos, u32 alloca_id, void* decl) {
     if(lo.vars.len == lo.vars_cap) {
         u64 new_cap = 8;
         if(lo.vars_cap > 0) { new_cap = lo.vars_cap * 2; }
@@ -300,7 +300,7 @@ fn void lower_var_decl(Lower* lo, ast::VarDeclNode* v) {
 }
 
 fn void lower_assignment(Lower* lo, ast::AssignmentNode* a) {
-    types::Type* lhs_ty = (types::Type*)a.lhs.h.ty;
+    types::Ty* lhs_ty = (types::Ty*)a.lhs.h.ty;
     if(a.lhs.h.kind == ast::AstKind::NamespaceAccess) {
         store_to_addr(lo, global_addr(lo, (sema::Decl*)((ast::NamespaceAccessNode*)a.lhs).resolved, a.lhs.h.src_pos), lhs_ty, a.op, a.rhs);
         return;
@@ -348,12 +348,12 @@ fn bool is_addressable_kind(ast::AstNode* e) {
 fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
     switch(e.h.kind) {
     case ast::AstKind::IntLit: {
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, (types::Type*)e.h.ty, e.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, (types::Ty*)e.h.ty, e.h.src_pos);
         inst.imm = ((ast::IntLitNode*)e).value;
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     case ast::AstKind::FloatLit: {
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstFloat, (types::Type*)e.h.ty, e.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstFloat, (types::Ty*)e.h.ty, e.h.src_pos);
         f64 value = ((ast::FloatLitNode*)e).value;
         inst.imm = *(u64*)&value;
         return sapir::add_inst(lo.arena, lo.func, inst);
@@ -364,55 +364,55 @@ fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     case ast::AstKind::CharLit: {
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, (types::Type*)e.h.ty, e.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, (types::Ty*)e.h.ty, e.h.src_pos);
         inst.imm = (u64)((ast::CharLitNode*)e).value;
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     case ast::AstKind::NullLit: {
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstNull, (types::Type*)e.h.ty, e.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstNull, (types::Ty*)e.h.ty, e.h.src_pos);
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     case ast::AstKind::Ident: {
         void* resolved = ((ast::IdentNode*)e).resolved;
-        if(!is_local_decl(lo, resolved)) { return lower_decl_ref(lo, e, (sema::Decl*)resolved, (types::Type*)e.h.ty); }
+        if(!is_local_decl(lo, resolved)) { return lower_decl_ref(lo, e, (sema::Decl*)resolved, (types::Ty*)e.h.ty); }
         u32 slot = mem_alloca(lo, resolved);
-        if(slot != sapir::INVALID_ID) { return emit_load(lo, slot, (types::Type*)e.h.ty); }
+        if(slot != sapir::INVALID_ID) { return emit_load(lo, slot, (types::Ty*)e.h.ty); }
         return read_var(lo, lo.current, resolved);
     }
     case ast::AstKind::NamespaceAccess: {
-        return lower_decl_ref(lo, e, (sema::Decl*)((ast::NamespaceAccessNode*)e).resolved, (types::Type*)e.h.ty);
+        return lower_decl_ref(lo, e, (sema::Decl*)((ast::NamespaceAccessNode*)e).resolved, (types::Ty*)e.h.ty);
     }
     case ast::AstKind::MemberAccess: {
         ast::MemberAccessNode* n = (ast::MemberAccessNode*)e;
-        types::Type* container = (types::Type*)n.base.h.ty;
+        types::Ty* container = (types::Ty*)n.base.h.ty;
         if(types::is_ptr(container)) { container = container.data.pointee; }
-        if(types::is_slice(container)) { return lower_slice_field(lo, n, (types::Type*)e.h.ty); }
-        return emit_load(lo, lower_addr(lo, e), (types::Type*)e.h.ty);
+        if(types::is_slice(container)) { return lower_slice_field(lo, n, (types::Ty*)e.h.ty); }
+        return emit_load(lo, lower_addr(lo, e), (types::Ty*)e.h.ty);
     }
     case ast::AstKind::ArrayIndex: {
-        return emit_load(lo, lower_addr(lo, e), (types::Type*)e.h.ty);
+        return emit_load(lo, lower_addr(lo, e), (types::Ty*)e.h.ty);
     }
     case ast::AstKind::SliceRange: { return lower_slice_range(lo, (ast::SliceRangeNode*)e); }
     case ast::AstKind::Call: { return lower_call(lo, (ast::CallNode*)e); }
     case ast::AstKind::StringLit: {
         ast::StringLitNode* s = (ast::StringLitNode*)e;
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstStr, (types::Type*)e.h.ty, e.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstStr, (types::Ty*)e.h.ty, e.h.src_pos);
         inst.a = s.pool_off;
         inst.b = s.pool_len;
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     case ast::AstKind::StructLit: {
-        if(types::is_slice((types::Type*)e.h.ty)) { return build_slice_lit(lo, (types::Type*)e.h.ty, (ast::StructLitNode*)e); }
-        u32 temp = emit_temp_alloca(lo, (types::Type*)e.h.ty);
-        build_struct_lit(lo, temp, (types::Type*)e.h.ty, (ast::StructLitNode*)e);
-        return emit_load(lo, temp, (types::Type*)e.h.ty);
+        if(types::is_slice((types::Ty*)e.h.ty)) { return build_slice_lit(lo, (types::Ty*)e.h.ty, (ast::StructLitNode*)e); }
+        u32 temp = emit_temp_alloca(lo, (types::Ty*)e.h.ty);
+        build_struct_lit(lo, temp, (types::Ty*)e.h.ty, (ast::StructLitNode*)e);
+        return emit_load(lo, temp, (types::Ty*)e.h.ty);
     }
     case ast::AstKind::ArrayLit: {
-        u32 temp = emit_temp_alloca(lo, (types::Type*)e.h.ty);
-        build_array_lit(lo, temp, (types::Type*)e.h.ty, (ast::ArrayLitNode*)e);
-        return emit_load(lo, temp, (types::Type*)e.h.ty);
+        u32 temp = emit_temp_alloca(lo, (types::Ty*)e.h.ty);
+        build_array_lit(lo, temp, (types::Ty*)e.h.ty, (ast::ArrayLitNode*)e);
+        return emit_load(lo, temp, (types::Ty*)e.h.ty);
     }
-    case ast::AstKind::Cast: { return lower_cast(lo, (ast::CastNode*)e, (types::Type*)e.h.ty); }
+    case ast::AstKind::Cast: { return lower_cast(lo, (ast::CastNode*)e, (types::Ty*)e.h.ty); }
     case ast::AstKind::BinaryOp: {
         ast::BinaryOpNode* n = (ast::BinaryOpNode*)e;
         if(n.op == token::TokenKind::AmpAmp) { return lower_short_circuit(lo, n, true); }
@@ -423,7 +423,7 @@ fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
     case ast::AstKind::Sizeof:
     case ast::AstKind::Alignof:  { return fold_const_int(lo, e); }
     else {
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::Undef, (types::Ty*)e.h.ty, e.h.src_pos);
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     }
@@ -433,7 +433,7 @@ fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
 fn u32 lower_binary(Lower* lo, ast::BinaryOpNode* n) {
     u32 lhs = lower_expr(lo, n.lhs);
     u32 rhs = lower_expr(lo, n.rhs);
-    sapir::Inst inst = sapir::new_inst(binary_opcode(n.op), (types::Type*)n.h.ty, n.h.src_pos);
+    sapir::Inst inst = sapir::new_inst(binary_opcode(n.op), (types::Ty*)n.h.ty, n.h.src_pos);
     inst.a = lhs;
     inst.b = rhs;
     return sapir::add_inst(lo.arena, lo.func, inst);
@@ -441,9 +441,9 @@ fn u32 lower_binary(Lower* lo, ast::BinaryOpNode* n) {
 
 fn u32 lower_unary(Lower* lo, ast::UnaryOpNode* n) {
     if(n.op == token::TokenKind::Amp) { return lower_addr(lo, n.operand); }
-    if(n.op == token::TokenKind::Star) { return emit_load(lo, lower_expr(lo, n.operand), (types::Type*)n.h.ty); }
+    if(n.op == token::TokenKind::Star) { return emit_load(lo, lower_expr(lo, n.operand), (types::Ty*)n.h.ty); }
     if(n.op == token::TokenKind::Bang) {
-        u32 operand = to_bool(lo, (types::Type*)n.operand.h.ty, lower_expr(lo, n.operand));
+        u32 operand = to_bool(lo, (types::Ty*)n.operand.h.ty, lower_expr(lo, n.operand));
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Not, types::prim_bool(), n.h.src_pos);
         inst.a = operand;
         return sapir::add_inst(lo.arena, lo.func, inst);
@@ -452,17 +452,17 @@ fn u32 lower_unary(Lower* lo, ast::UnaryOpNode* n) {
     if(n.op == token::TokenKind::Minus) { op = sapir::Opcode::Neg; }
     else if(n.op == token::TokenKind::Tilde) { op = sapir::Opcode::BitNot; }
     if(op == sapir::Opcode::INVALID) {
-        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)n.h.ty, n.h.src_pos));
+        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Ty*)n.h.ty, n.h.src_pos));
     }
     u32 operand = lower_expr(lo, n.operand);
-    sapir::Inst inst = sapir::new_inst(op, (types::Type*)n.h.ty, n.h.src_pos);
+    sapir::Inst inst = sapir::new_inst(op, (types::Ty*)n.h.ty, n.h.src_pos);
     inst.a = operand;
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 
 // Lowers a && b / a || b to an i1 value via a short-circuit diamond.
 fn u32 lower_short_circuit(Lower* lo, ast::BinaryOpNode* n, bool is_and) {
-    u32 lhs = to_bool(lo, (types::Type*)n.lhs.h.ty, lower_expr(lo, n.lhs));
+    u32 lhs = to_bool(lo, (types::Ty*)n.lhs.h.ty, lower_expr(lo, n.lhs));
     u32 lhs_block = lo.current;
     sapir::Inst short_inst = sapir::new_inst(sapir::Opcode::ConstBool, types::prim_bool(), n.h.src_pos);
     if(!is_and) { short_inst.imm = 1; }
@@ -479,7 +479,7 @@ fn u32 lower_short_circuit(Lower* lo, ast::BinaryOpNode* n, bool is_and) {
     seal_block(lo, rhs_block);
 
     switch_to_block(lo, rhs_block);
-    u32 rhs = to_bool(lo, (types::Type*)n.rhs.h.ty, lower_expr(lo, n.rhs));
+    u32 rhs = to_bool(lo, (types::Ty*)n.rhs.h.ty, lower_expr(lo, n.rhs));
     u32 rhs_end = lo.current;
     emit_br(lo, join_block);
     link_pred(lo, join_block, rhs_end);
@@ -497,7 +497,7 @@ fn u32 lower_short_circuit(Lower* lo, ast::BinaryOpNode* n, bool is_and) {
 }
 
 // A pointer condition compares against null, never truncated to its low bit.
-fn u32 to_bool(Lower* lo, types::Type* ty, u32 value) {
+fn u32 to_bool(Lower* lo, types::Ty* ty, u32 value) {
     switch(sapir::cond_test(ty)) {
     case sapir::CondTest::AsBool: { return value; }
     case sapir::CondTest::IntNonZero: {
@@ -537,7 +537,7 @@ fn void lower_terminator(Lower* lo, cfg::BasicBlock* cfg_block) {
         link_pred(lo, term.goto_target, lo.current);
     }
     case cfg::TermKind::CondBranch: {
-        u32 cond = to_bool(lo, (types::Type*)term.cond.h.ty, lower_expr(lo, term.cond));
+        u32 cond = to_bool(lo, (types::Ty*)term.cond.h.ty, lower_expr(lo, term.cond));
         emit_cond_br(lo, cond, term.then_target, term.else_target);
         link_pred(lo, term.then_target, lo.current);
         link_pred(lo, term.else_target, lo.current);
@@ -654,7 +654,7 @@ fn u32 read_var_recursive(Lower* lo, u32 block, void* decl) {
     return value;
 }
 
-fn u32 emit_phi_inst(Lower* lo, u32 block, types::Type* ty) {
+fn u32 emit_phi_inst(Lower* lo, u32 block, types::Ty* ty) {
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::Phi, ty, lo.func.src_pos);
     u32 phi = sapir::add_inst(lo.arena, lo.func, inst);
     sapir::add_phi_to_block(lo.arena, lo.func, block, phi);
@@ -856,13 +856,13 @@ fn bool is_local_decl(Lower* lo, void* decl) {
     return false;
 }
 
-fn types::Type* decl_type(void* decl) {
+fn types::Ty* decl_type(void* decl) {
     return ((sema::Decl*)decl).ty;
 }
 
 // MEMORY VARIABLES + AGGREGATES ////////////////////////////////////////////////////
 
-fn bool is_aggregate(types::Type* t) {
+fn bool is_aggregate(types::Ty* t) {
     return t.kind == types::TypeKind::Struct || t.kind == types::TypeKind::Union || t.kind == types::TypeKind::Array;
 }
 
@@ -898,7 +898,7 @@ fn void collect_mem_vars(Lower* lo, ast::FnDeclNode* fn_node, cfg::Cfg* g) {
         }
     }
     for(u64 i = 0; i < fn_node.params.len; i += 1) {
-        if(is_aggregate((types::Type*)fn_node.params[i].resolved_type)) { mark_mem_var(lo, fn_node.params[i].decl); }
+        if(is_aggregate((types::Ty*)fn_node.params[i].resolved_type)) { mark_mem_var(lo, fn_node.params[i].decl); }
     }
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
         cfg::BasicBlock* block = &g.blocks[block_index];
@@ -972,12 +972,12 @@ fn void* lvalue_root_decl(ast::AstNode* e) {
     case ast::AstKind::Ident: { return ((ast::IdentNode*)e).resolved; }
     case ast::AstKind::MemberAccess: {
         ast::MemberAccessNode* n = (ast::MemberAccessNode*)e;
-        if(types::is_ptr((types::Type*)n.base.h.ty)) { return null; }
+        if(types::is_ptr((types::Ty*)n.base.h.ty)) { return null; }
         return lvalue_root_decl(n.base);
     }
     case ast::AstKind::ArrayIndex: {
         ast::ArrayIndexNode* n = (ast::ArrayIndexNode*)e;
-        if(types::is_ptr((types::Type*)n.base.h.ty)) { return null; }
+        if(types::is_ptr((types::Ty*)n.base.h.ty)) { return null; }
         return lvalue_root_decl(n.base);
     }
     else { return null; }
@@ -987,13 +987,13 @@ fn void* lvalue_root_decl(ast::AstNode* e) {
 
 fn void emit_mem_var_allocas(Lower* lo) {
     for(u64 i = 0; i < lo.mem_vars.len; i += 1) {
-        types::Type* slot_ty = ((sema::Decl*)lo.mem_vars[i].decl).ty;
+        types::Ty* slot_ty = ((sema::Decl*)lo.mem_vars[i].decl).ty;
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Alloca, types::intern_pointer(slot_ty, false), lo.func.src_pos);
         lo.mem_vars[i].alloca = sapir::add_inst(lo.arena, lo.func, inst);
     }
 }
 
-fn u32 emit_load(Lower* lo, u32 addr, types::Type* ty) {
+fn u32 emit_load(Lower* lo, u32 addr, types::Ty* ty) {
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::Load, ty, lo.func.src_pos);
     inst.a = addr;
     return sapir::add_inst(lo.arena, lo.func, inst);
@@ -1006,14 +1006,14 @@ fn void emit_store(Lower* lo, u32 addr, u32 value) {
     sapir::add_inst(lo.arena, lo.func, inst);
 }
 
-fn void emit_zero(Lower* lo, u32 addr, types::Type* ty) {
+fn void emit_zero(Lower* lo, u32 addr, types::Ty* ty) {
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::Zero, types::prim_void(), lo.func.src_pos);
     inst.a = addr;
     inst.imm = (u64)types::size_of(&lo.m.diag, ty);
     sapir::add_inst(lo.arena, lo.func, inst);
 }
 
-fn void emit_memcpy(Lower* lo, u32 dst, u32 src, types::Type* ty) {
+fn void emit_memcpy(Lower* lo, u32 dst, u32 src, types::Ty* ty) {
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::Memcpy, types::prim_void(), lo.func.src_pos);
     inst.a = dst;
     inst.b = src;
@@ -1027,7 +1027,7 @@ fn u32 emit_const_u64(Lower* lo, u64 value, u32 src_pos) {
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 
-fn u32 emit_index0(Lower* lo, u32 base, types::Type* result_ty, u32 src_pos) {
+fn u32 emit_index0(Lower* lo, u32 base, types::Ty* result_ty, u32 src_pos) {
     u32 zero = emit_const_u64(lo, 0, src_pos);
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::IndexAddr, result_ty, src_pos);
     inst.a = base;
@@ -1035,13 +1035,13 @@ fn u32 emit_index0(Lower* lo, u32 base, types::Type* result_ty, u32 src_pos) {
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 
-fn u32 lower_cast(Lower* lo, ast::CastNode* n, types::Type* dst) {
+fn u32 lower_cast(Lower* lo, ast::CastNode* n, types::Ty* dst) {
     return emit_conversion(lo, n.expr, dst);
 }
 
 // Lowers expr and coerces the result to dst, whether the coercion is an explicit cast or an implicit conversion (widening, array decay, null-to-slice). Scalar casts are one Cast; array/null cases build a short sequence.
-fn u32 emit_conversion(Lower* lo, ast::AstNode* expr, types::Type* dst) {
-    types::Type* src = (types::Type*)expr.h.ty;
+fn u32 emit_conversion(Lower* lo, ast::AstNode* expr, types::Ty* dst) {
+    types::Ty* src = (types::Ty*)expr.h.ty;
     if(src == dst) { return lower_expr(lo, expr); }
     switch(sapir::cast_op(src, dst)) {
     case sapir::CastOp::ArrayToElemPtr: { return emit_index0(lo, addr_of(lo, expr), dst, expr.h.src_pos); }
@@ -1067,17 +1067,17 @@ fn u32 emit_conversion(Lower* lo, ast::AstNode* expr, types::Type* dst) {
 // Address of expr: its lvalue address if it has one, else the value spilled to a fresh temp.
 fn u32 addr_of(Lower* lo, ast::AstNode* expr) {
     if(is_addressable_kind(expr)) { return lower_addr(lo, expr); }
-    u32 temp = emit_temp_alloca(lo, (types::Type*)expr.h.ty);
-    lower_init_into(lo, temp, (types::Type*)expr.h.ty, expr);
+    u32 temp = emit_temp_alloca(lo, (types::Ty*)expr.h.ty);
+    lower_init_into(lo, temp, (types::Ty*)expr.h.ty, expr);
     return temp;
 }
 
-fn u32 emit_temp_alloca(Lower* lo, types::Type* ty) {
+fn u32 emit_temp_alloca(Lower* lo, types::Ty* ty) {
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::Alloca, types::intern_pointer(ty, false), lo.func.src_pos);
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 
-fn u32 lower_slice_field(Lower* lo, ast::MemberAccessNode* n, types::Type* result_ty) {
+fn u32 lower_slice_field(Lower* lo, ast::MemberAccessNode* n, types::Ty* result_ty) {
     u32 slice_value = lower_expr(lo, n.base);
     sapir::Opcode op = sapir::Opcode::SliceLen;
     if(n.field == interner::intern("ptr")) { op = sapir::Opcode::SlicePtr; }
@@ -1091,35 +1091,35 @@ fn u32 lower_addr(Lower* lo, ast::AstNode* e) {
     switch(e.h.kind) {
     case ast::AstKind::Ident: {
         void* resolved = ((ast::IdentNode*)e).resolved;
-        if(!is_local_decl(lo, resolved)) { return nonlocal_addr(lo, (sema::Decl*)resolved, (types::Type*)e.h.ty, e.h.src_pos); }
+        if(!is_local_decl(lo, resolved)) { return nonlocal_addr(lo, (sema::Decl*)resolved, (types::Ty*)e.h.ty, e.h.src_pos); }
         u32 slot = mem_alloca(lo, resolved);
         if(slot != sapir::INVALID_ID) { return slot; }
-        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));
+        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Ty*)e.h.ty, e.h.src_pos));
     }
     case ast::AstKind::NamespaceAccess: {
-        return nonlocal_addr(lo, (sema::Decl*)((ast::NamespaceAccessNode*)e).resolved, (types::Type*)e.h.ty, e.h.src_pos);
+        return nonlocal_addr(lo, (sema::Decl*)((ast::NamespaceAccessNode*)e).resolved, (types::Ty*)e.h.ty, e.h.src_pos);
     }
     case ast::AstKind::MemberAccess: {
         ast::MemberAccessNode* n = (ast::MemberAccessNode*)e;
-        types::Type* base_ty = (types::Type*)n.base.h.ty;
+        types::Ty* base_ty = (types::Ty*)n.base.h.ty;
         u32 base_addr;
-        types::Type* container;
+        types::Ty* container;
         if(types::is_ptr(base_ty)) { base_addr = lower_expr(lo, n.base); container = base_ty.data.pointee; }
         else { base_addr = lower_addr(lo, n.base); container = base_ty; }
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::FieldAddr, types::intern_pointer((types::Type*)e.h.ty, false), e.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::FieldAddr, types::intern_pointer((types::Ty*)e.h.ty, false), e.h.src_pos);
         inst.a = base_addr;
         inst.b = field_index_of(container, n.field);
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     case ast::AstKind::ArrayIndex: {
         ast::ArrayIndexNode* n = (ast::ArrayIndexNode*)e;
-        types::Type* base_ty = (types::Type*)n.base.h.ty;
+        types::Ty* base_ty = (types::Ty*)n.base.h.ty;
         u32 index = lower_expr(lo, n.index);
         u32 base_addr;
         if(types::is_slice(base_ty)) { base_addr = emit_slice_ptr(lo, lower_expr(lo, n.base), types::intern_pointer(base_ty.data.slice_elem, false), e.h.src_pos); }
         else if(types::is_ptr(base_ty)) { base_addr = lower_expr(lo, n.base); }
         else { base_addr = lower_addr(lo, n.base); }
-        sapir::Inst inst = sapir::new_inst(sapir::Opcode::IndexAddr, types::intern_pointer((types::Type*)e.h.ty, false), e.h.src_pos);
+        sapir::Inst inst = sapir::new_inst(sapir::Opcode::IndexAddr, types::intern_pointer((types::Ty*)e.h.ty, false), e.h.src_pos);
         inst.a = base_addr;
         inst.b = index;
         return sapir::add_inst(lo.arena, lo.func, inst);
@@ -1127,23 +1127,23 @@ fn u32 lower_addr(Lower* lo, ast::AstNode* e) {
     case ast::AstKind::UnaryOp: {
         ast::UnaryOpNode* n = (ast::UnaryOpNode*)e;
         if(n.op == token::TokenKind::Star) { return lower_expr(lo, n.operand); }
-        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));
+        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Ty*)e.h.ty, e.h.src_pos));
     }
     else {
-        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Type*)e.h.ty, e.h.src_pos));
+        return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, (types::Ty*)e.h.ty, e.h.src_pos));
     }
     }
     return sapir::INVALID_ID;
 }
 
-fn u32 field_index_of(types::Type* container, symbol::Symbol* field) {
+fn u32 field_index_of(types::Ty* container, symbol::Symbol* field) {
     ast::AstNode* decl = sema::container_decl(container);
     if(decl == null) { return 0; }
     return (u32)sema::find_field_index((ast::StructDeclNode*)decl, field);
 }
 
 // Builds an initializer at addr: literal in place, aggregate copy, aggregate rvalue store, or scalar store.
-fn void lower_init_into(Lower* lo, u32 addr, types::Type* ty, ast::AstNode* init) {
+fn void lower_init_into(Lower* lo, u32 addr, types::Ty* ty, ast::AstNode* init) {
     if(init.h.kind == ast::AstKind::StringLit) { emit_store(lo, addr, lower_expr(lo, init)); return; }
     if(is_aggregate(ty)) {
         if(init.h.kind == ast::AstKind::StructLit) { build_struct_lit(lo, addr, ty, (ast::StructLitNode*)init); return; }
@@ -1155,14 +1155,14 @@ fn void lower_init_into(Lower* lo, u32 addr, types::Type* ty, ast::AstNode* init
     emit_store(lo, addr, emit_conversion(lo, init, ty));
 }
 
-fn void build_struct_lit(Lower* lo, u32 addr, types::Type* ty, ast::StructLitNode* lit) {
+fn void build_struct_lit(Lower* lo, u32 addr, types::Ty* ty, ast::StructLitNode* lit) {
     emit_zero(lo, addr, ty);
     ast::StructDeclNode* decl = (ast::StructDeclNode*)sema::container_decl(ty);
     for(u64 i = 0; i < lit.inits.len; i += 1) {
         ast::FieldInitializer* fi = &lit.inits[i];
         u32 field_index = (u32)i;
         if(fi.name != null) { field_index = field_index_of(ty, fi.name); }
-        types::Type* field_ty = (types::Type*)decl.fields[field_index].resolved_type;
+        types::Ty* field_ty = (types::Ty*)decl.fields[field_index].resolved_type;
         sapir::Inst addr_inst = sapir::new_inst(sapir::Opcode::FieldAddr, types::intern_pointer(field_ty, false), fi.src_pos);
         addr_inst.a = addr;
         addr_inst.b = field_index;
@@ -1172,8 +1172,8 @@ fn void build_struct_lit(Lower* lo, u32 addr, types::Type* ty, ast::StructLitNod
 }
 
 // A `{ptr, len}` brace literal targeting a slice: build the two-field slice value directly, since a slice has no struct decl to walk. Fields map by name or position, matching check_slice_lit.
-fn u32 build_slice_lit(Lower* lo, types::Type* ty, ast::StructLitNode* lit) {
-    types::Type* elem_ptr = types::intern_pointer(ty.data.slice_elem, false);
+fn u32 build_slice_lit(Lower* lo, types::Ty* ty, ast::StructLitNode* lit) {
+    types::Ty* elem_ptr = types::intern_pointer(ty.data.slice_elem, false);
     ast::AstNode* ptr_expr = null;
     ast::AstNode* len_expr = null;
     u64 positional = 0;
@@ -1186,15 +1186,15 @@ fn u32 build_slice_lit(Lower* lo, types::Type* ty, ast::StructLitNode* lit) {
         if(is_ptr) { ptr_expr = fi.value; } else { len_expr = fi.value; }
     }
     u32 ptr_val = emit_conversion(lo, ptr_expr, elem_ptr);
-    u32 len_val = coerce_to_u64(lo, lower_expr(lo, len_expr), (types::Type*)len_expr.h.ty, lit.h.src_pos);
+    u32 len_val = coerce_to_u64(lo, lower_expr(lo, len_expr), (types::Ty*)len_expr.h.ty, lit.h.src_pos);
     sapir::Inst make = sapir::new_inst(sapir::Opcode::SliceMake, ty, lit.h.src_pos);
     make.a = ptr_val;
     make.b = len_val;
     return sapir::add_inst(lo.arena, lo.func, make);
 }
 
-fn void build_array_lit(Lower* lo, u32 addr, types::Type* ty, ast::ArrayLitNode* lit) {
-    types::Type* elem_ty = ty.data.array.elem;
+fn void build_array_lit(Lower* lo, u32 addr, types::Ty* ty, ast::ArrayLitNode* lit) {
+    types::Ty* elem_ty = ty.data.array.elem;
     for(u64 i = 0; i < lit.elems.len; i += 1) {
         sapir::Inst index_inst = sapir::new_inst(sapir::Opcode::ConstInt, types::prim_u64(), lit.elems[i].h.src_pos);
         index_inst.imm = i;
@@ -1208,7 +1208,7 @@ fn void build_array_lit(Lower* lo, u32 addr, types::Type* ty, ast::ArrayLitNode*
 }
 
 // Stores rhs into an address, honoring compound ops and aggregate copies.
-fn void store_to_addr(Lower* lo, u32 addr, types::Type* ty, token::TokenKind op, ast::AstNode* rhs) {
+fn void store_to_addr(Lower* lo, u32 addr, types::Ty* ty, token::TokenKind op, ast::AstNode* rhs) {
     sapir::Opcode combine = compound_opcode(op);
     if(combine == sapir::Opcode::INVALID) {
         lower_init_into(lo, addr, ty, rhs);
@@ -1241,16 +1241,16 @@ fn u32 lower_call(Lower* lo, ast::CallNode* n) {
     if(callee != null && decl_is_fn(callee)) {
         return emit_call(lo, n, get_or_create_fn_decl(lo, (void*)callee), sapir::INVALID_ID, callee.ty);
     }
-    return emit_call(lo, n, sapir::INVALID_ID, lower_expr(lo, n.callee), (types::Type*)n.callee.h.ty);
+    return emit_call(lo, n, sapir::INVALID_ID, lower_expr(lo, n.callee), (types::Ty*)n.callee.h.ty);
 }
 
 // Direct (decl_index set, fnval INVALID) or indirect (fnval a fn-pointer value, decl_index INVALID) call.
-fn u32 emit_call(Lower* lo, ast::CallNode* n, u32 decl_index, u32 fnval, types::Type* fnty) {
-    types::Type*[] params = fnty.data.fn_ptr.params;
+fn u32 emit_call(Lower* lo, ast::CallNode* n, u32 decl_index, u32 fnval, types::Ty* fnty) {
+    types::Ty*[] params = fnty.data.fn_ptr.params;
     u32[] argvals = {(u32*)arena::alloc(lo.arena, (n.args.len + 1) * sizeof(u32)), n.args.len};
     for(u64 i = 0; i < n.args.len; i += 1) {
         if(i < params.len) { argvals[i] = emit_conversion(lo, n.args[i], params[i]); }
-        else { argvals[i] = emit_vararg_promote(lo, lower_expr(lo, n.args[i]), (types::Type*)n.args[i].h.ty, n.args[i].h.src_pos); }
+        else { argvals[i] = emit_vararg_promote(lo, lower_expr(lo, n.args[i]), (types::Ty*)n.args[i].h.ty, n.args[i].h.src_pos); }
     }
     u32 base = sapir::add_extra(lo.arena, lo.func, (u32)n.args.len);
     for(u64 i = 0; i < n.args.len; i += 1) { sapir::add_extra(lo.arena, lo.func, argvals[i]); }
@@ -1276,21 +1276,21 @@ fn u32 emit_clone_call(Lower* lo, ast::CallNode* n, ast::FnDeclNode* clone) {
         u64 param_index = 0;
         for(u64 arg_index = 0; arg_index < n.args.len; arg_index += 1) {
             while(clone.params[param_index].is_comptime) { param_index += 1; }
-            argvals[argvals.len] = emit_conversion(lo, n.args[arg_index], (types::Type*)clone.params[param_index].resolved_type);
+            argvals[argvals.len] = emit_conversion(lo, n.args[arg_index], (types::Ty*)clone.params[param_index].resolved_type);
             argvals.len += 1;
             param_index += 1;
         }
     } else {
         for(u64 param_index = 0; param_index < clone.params.len; param_index += 1) {
             if(clone.params[param_index].is_comptime) { continue; }
-            argvals[argvals.len] = emit_conversion(lo, n.args[param_index], (types::Type*)clone.params[param_index].resolved_type);
+            argvals[argvals.len] = emit_conversion(lo, n.args[param_index], (types::Ty*)clone.params[param_index].resolved_type);
             argvals.len += 1;
         }
     }
     u32 base = sapir::add_extra(lo.arena, lo.func, (u32)argvals.len);
     for(u64 i = 0; i < argvals.len; i += 1) { sapir::add_extra(lo.arena, lo.func, argvals[i]); }
-    types::Type* ret = types::prim_void();
-    if(clone.return_type != null) { ret = (types::Type*)clone.return_type.h.ty; }
+    types::Ty* ret = types::prim_void();
+    if(clone.return_type != null) { ret = (types::Ty*)clone.return_type.h.ty; }
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::Call, ret, n.h.src_pos);
     inst.a = decl_index;
     inst.b = base;
@@ -1298,7 +1298,7 @@ fn u32 emit_clone_call(Lower* lo, ast::CallNode* n, ast::FnDeclNode* clone) {
 }
 
 // C default argument promotions for a variadic tail arg: f32 widens to f64; integers narrower than int promote to i32.
-fn u32 emit_vararg_promote(Lower* lo, u32 value, types::Type* ty, u32 src_pos) {
+fn u32 emit_vararg_promote(Lower* lo, u32 value, types::Ty* ty, u32 src_pos) {
     if(types::is_float(ty) && ty.prim == types::PrimitiveKind::F32) {
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Cast, types::prim_f64(), src_pos);
         inst.a = value;
@@ -1313,7 +1313,7 @@ fn u32 emit_vararg_promote(Lower* lo, u32 value, types::Type* ty, u32 src_pos) {
 }
 
 // Value of a non-local reference: enum members fold to a constant, functions yield their address, globals load.
-fn u32 lower_decl_ref(Lower* lo, ast::AstNode* e, sema::Decl* decl, types::Type* ty) {
+fn u32 lower_decl_ref(Lower* lo, ast::AstNode* e, sema::Decl* decl, types::Ty* ty) {
     if(decl == null) { return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, ty, e.h.src_pos)); }
     if(decl.kind == sema::DeclKind::EnumMember) { return fold_const_int(lo, e); }
     if(decl_is_fn(decl)) { return emit_fn_addr(lo, decl, ty, e.h.src_pos); }
@@ -1321,13 +1321,13 @@ fn u32 lower_decl_ref(Lower* lo, ast::AstNode* e, sema::Decl* decl, types::Type*
 }
 
 // Address of a non-local reference: a function pointer or a global's address.
-fn u32 nonlocal_addr(Lower* lo, sema::Decl* decl, types::Type* ty, u32 src_pos) {
+fn u32 nonlocal_addr(Lower* lo, sema::Decl* decl, types::Ty* ty, u32 src_pos) {
     if(decl == null) { return sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::Undef, ty, src_pos)); }
     if(decl_is_fn(decl)) { return emit_fn_addr(lo, decl, ty, src_pos); }
     return global_addr(lo, decl, src_pos);
 }
 
-fn u32 emit_fn_addr(Lower* lo, sema::Decl* decl, types::Type* ty, u32 src_pos) {
+fn u32 emit_fn_addr(Lower* lo, sema::Decl* decl, types::Ty* ty, u32 src_pos) {
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::FnAddr, ty, src_pos);
     inst.a = get_or_create_fn_decl(lo, (void*)decl);
     return sapir::add_inst(lo.arena, lo.func, inst);
@@ -1339,7 +1339,7 @@ fn u32 global_addr(Lower* lo, sema::Decl* decl, u32 src_pos) {
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 
-fn u32 emit_slice_ptr(Lower* lo, u32 slice_value, types::Type* ptr_ty, u32 src_pos) {
+fn u32 emit_slice_ptr(Lower* lo, u32 slice_value, types::Ty* ptr_ty, u32 src_pos) {
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::SlicePtr, ptr_ty, src_pos);
     inst.a = slice_value;
     return sapir::add_inst(lo.arena, lo.func, inst);
@@ -1351,7 +1351,7 @@ fn u32 emit_slice_len(Lower* lo, u32 slice_value, u32 src_pos) {
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 
-fn u32 coerce_to_u64(Lower* lo, u32 value, types::Type* from_ty, u32 src_pos) {
+fn u32 coerce_to_u64(Lower* lo, u32 value, types::Ty* from_ty, u32 src_pos) {
     if(from_ty == types::prim_u64()) { return value; }
     sapir::Inst inst = sapir::new_inst(sapir::Opcode::Cast, types::prim_u64(), src_pos);
     inst.a = value;
@@ -1362,16 +1362,16 @@ fn u32 coerce_to_u64(Lower* lo, u32 value, types::Type* from_ty, u32 src_pos) {
 fn u32 fold_const_int(Lower* lo, ast::AstNode* e) {
     i64 folded = 0;
     if(sema::eval_const_i64_hook != null) { sema::eval_const_i64_hook(lo.m, e, &folded); }
-    sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, (types::Type*)e.h.ty, e.h.src_pos);
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::ConstInt, (types::Ty*)e.h.ty, e.h.src_pos);
     inst.imm = (u64)folded;
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 
 // s[lo..hi] over a slice or array base: adjust the data pointer by lo, set the length to hi-lo. An omitted hi defaults to the base length, which is only materialized when needed.
 fn u32 lower_slice_range(Lower* lo, ast::SliceRangeNode* n) {
-    types::Type* base_ty = (types::Type*)n.base.h.ty;
-    types::Type* result_ty = (types::Type*)n.h.ty;
-    types::Type* elem_ptr = types::intern_pointer(result_ty.data.slice_elem, false);
+    types::Ty* base_ty = (types::Ty*)n.base.h.ty;
+    types::Ty* result_ty = (types::Ty*)n.h.ty;
+    types::Ty* elem_ptr = types::intern_pointer(result_ty.data.slice_elem, false);
     u32 base_value = sapir::INVALID_ID;
     u32 base_ptr = sapir::INVALID_ID;
     if(types::is_slice(base_ty)) {
@@ -1384,10 +1384,10 @@ fn u32 lower_slice_range(Lower* lo, ast::SliceRangeNode* n) {
     }
     // Bounds are u64: the length is hi-lo and feeds the slice's u64 length field, so a narrower bound expression is widened first.
     u32 lo_index;
-    if(n.lo != null) { lo_index = coerce_to_u64(lo, lower_expr(lo, n.lo), (types::Type*)n.lo.h.ty, n.h.src_pos); }
+    if(n.lo != null) { lo_index = coerce_to_u64(lo, lower_expr(lo, n.lo), (types::Ty*)n.lo.h.ty, n.h.src_pos); }
     else { lo_index = emit_const_u64(lo, 0, n.h.src_pos); }
     u32 hi_index;
-    if(n.hi != null) { hi_index = coerce_to_u64(lo, lower_expr(lo, n.hi), (types::Type*)n.hi.h.ty, n.h.src_pos); }
+    if(n.hi != null) { hi_index = coerce_to_u64(lo, lower_expr(lo, n.hi), (types::Ty*)n.hi.h.ty, n.h.src_pos); }
     else if(types::is_array(base_ty)) { hi_index = emit_const_u64(lo, base_ty.data.array.count, n.h.src_pos); }
     else { hi_index = emit_slice_len(lo, base_value, n.h.src_pos); }
     sapir::Inst ptr_inst = sapir::new_inst(sapir::Opcode::IndexAddr, elem_ptr, n.h.src_pos);
@@ -1416,7 +1416,7 @@ fn void lower_global(Lower* lo, ast::VarDeclNode* var) {
     if(var.init == null || var.init.h.kind == ast::AstKind::UndefinedLit) {
         g.init.kind = sapir::ConstInitKind::Zero;
     } else {
-        value::Value v = comptime::eval_const_value(lo.m, var.init);
+        value::Value v = comptime_interp::eval_const_value(lo.m, var.init);
         if(v.kind == value::ValueKind::Error) {
             diag::report(&lo.m.diag, lo.m.arena, var.h.src_pos, "global initializer is not a constant expression");
             g.init.kind = sapir::ConstInitKind::Zero;
@@ -1428,7 +1428,7 @@ fn void lower_global(Lower* lo, ast::VarDeclNode* var) {
     lo.out.decls[decl_index].global_index = global_index;
 }
 
-fn sapir::ConstInit const_init_from_value(Lower* lo, value::Value* v, types::Type* ty) {
+fn sapir::ConstInit const_init_from_value(Lower* lo, value::Value* v, types::Ty* ty) {
     sapir::ConstInit ci;
     sys::memset(&ci, 0, sizeof(sapir::ConstInit));
     ci.ty = ty;
@@ -1547,17 +1547,17 @@ fn u32 get_or_create_global_decl(Lower* lo, void* sema_decl) {
     return index;
 }
 
-fn types::Type* fn_ptr_type_of(Lower* lo, ast::FnDeclNode* fn_node) {
-    types::Type** params = (types::Type**)arena::alloc(lo.arena, (fn_node.params.len + 1) * sizeof(types::Type*));
+fn types::Ty* fn_ptr_type_of(Lower* lo, ast::FnDeclNode* fn_node) {
+    types::Ty** params = (types::Ty**)arena::alloc(lo.arena, (fn_node.params.len + 1) * sizeof(types::Ty*));
     u64 n = 0;
     for(u64 i = 0; i < fn_node.params.len; i += 1) {
         if(fn_node.params[i].is_comptime) { continue; }
-        params[n] = (types::Type*)fn_node.params[i].resolved_type;
+        params[n] = (types::Ty*)fn_node.params[i].resolved_type;
         n += 1;
     }
-    types::Type* ret = types::prim_void();
-    if(fn_node.return_type != null) { ret = (types::Type*)fn_node.return_type.h.ty; }
-    types::Type*[] param_slice = {params, n};
+    types::Ty* ret = types::prim_void();
+    if(fn_node.return_type != null) { ret = (types::Ty*)fn_node.return_type.h.ty; }
+    types::Ty*[] param_slice = {params, n};
     return types::intern_fn_ptr(ret, param_slice, false);
 }
 
@@ -1586,7 +1586,7 @@ fn u8[] mangle_fn_named(Lower* lo, sema::Decl* decl, ast::FnDeclNode* fn_node) {
         for(u64 i = 0; i < fn_node.params.len; i += 1) {
             if(fn_node.params[i].is_comptime) { continue; }
             if(emitted > 0) { io::outbuf_write_byte(&buf, '_'); }
-            mangle_type_into(&buf, (types::Type*)fn_node.params[i].resolved_type);
+            mangle_type_into(&buf, (types::Ty*)fn_node.params[i].resolved_type);
             emitted += 1;
         }
     }
@@ -1602,7 +1602,7 @@ fn bool fn_is_overloaded(sema::Decl* decl) {
 }
 
 // Stable, symbol-safe encoding of a type for the overload suffix: pointers "Xp", slices "sl_X", arrays "arrN_X", named types by their mangled name.
-fn void mangle_type_into(io::OutBuf* buf, types::Type* t) {
+fn void mangle_type_into(io::OutBuf* buf, types::Ty* t) {
     switch(t.kind) {
     case types::TypeKind::Pointer: { mangle_type_into(buf, t.data.pointee); io::outbuf_write_byte(buf, 'p'); }
     case types::TypeKind::Slice:   { io::outbuf_write(buf, "sl_"); mangle_type_into(buf, t.data.slice_elem); }

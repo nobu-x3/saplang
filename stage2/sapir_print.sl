@@ -39,7 +39,7 @@ fn void print_global(sapir::SapirModule* m, sapir::SapirGlobal* global, io::OutB
 }
 
 fn void print_fn(sapir::SapirModule* m, sapir::SapirFn* func, io::OutBuf* out) {
-    types::Type* fn_ty = m.decls[func.decl_index].ty;
+    types::Ty* fn_ty = m.decls[func.decl_index].ty;
     io::outbuf_write(out, "fn ");
     io::outbuf_write(out, m.decls[func.decl_index].link_name);
     io::outbuf_write(out, "(");
@@ -318,7 +318,7 @@ fn void write_operand(io::OutBuf* out, u32 value_id) {
     io::outbuf_write_u64(out, (u64)value_id);
 }
 
-fn void write_ty_suffix(types::Type* ty, io::OutBuf* out) {
+fn void write_ty_suffix(types::Ty* ty, io::OutBuf* out) {
     io::outbuf_write(out, ".");
     types_print::print(ty, out);
 }

@@ -174,7 +174,7 @@ fn i32 cast_enum_reduce(arena::Arena* a, u8[] msg) {
     ast::EnumDeclNode enum_decl;
     sys::memset(&enum_decl, 0, sizeof(ast::EnumDeclNode));
     enum_decl.base_type = &base_node;
-    types::Type* enum_ty = types::intern_enum(&enum_decl);
+    types::Ty* enum_ty = types::intern_enum(&enum_decl);
 
     if(!testing::expect_eq((u32)sapir::cast_op(enum_ty, types::prim_i32()), (u32)sapir::CastOp::ZExt, msg)) { return -1; }
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_i32(), enum_ty), (u32)sapir::CastOp::Trunc, msg)) { return -2; }
@@ -183,9 +183,9 @@ fn i32 cast_enum_reduce(arena::Arena* a, u8[] msg) {
 }
 
 fn i32 cast_structural(arena::Arena* a, u8[] msg) {
-    types::Type* int_array = types::intern_array(types::prim_i32(), 4);
-    types::Type* int_slice = types::intern_slice(types::prim_i32());
-    types::Type* int_ptr = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* int_array = types::intern_array(types::prim_i32(), 4);
+    types::Ty* int_slice = types::intern_slice(types::prim_i32());
+    types::Ty* int_ptr = types::intern_pointer(types::prim_i32(), false);
 
     if(!testing::expect_eq((u32)sapir::cast_op(int_array, int_ptr), (u32)sapir::CastOp::ArrayToElemPtr, msg)) { return -1; }
     if(!testing::expect_eq((u32)sapir::cast_op(int_array, int_slice), (u32)sapir::CastOp::ArrayToSlice, msg)) { return -2; }
@@ -196,10 +196,10 @@ fn i32 cast_structural(arena::Arena* a, u8[] msg) {
 }
 
 fn i32 cond_classification(arena::Arena* a, u8[] msg) {
-    types::Type* int_ptr = types::intern_pointer(types::prim_i32(), false);
-    types::Type* int_slice = types::intern_slice(types::prim_i32());
-    types::Type*[] no_params = {null, 0};
-    types::Type* fn_ptr = types::intern_fn_ptr(types::prim_void(), no_params, false);
+    types::Ty* int_ptr = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* int_slice = types::intern_slice(types::prim_i32());
+    types::Ty*[] no_params = {null, 0};
+    types::Ty* fn_ptr = types::intern_fn_ptr(types::prim_void(), no_params, false);
 
     if(!testing::expect_eq((u32)sapir::cond_test(types::prim_bool()), (u32)sapir::CondTest::AsBool, msg)) { return -1; }
     if(!testing::expect_eq((u32)sapir::cond_test(types::prim_i32()), (u32)sapir::CondTest::IntNonZero, msg)) { return -2; }
@@ -217,8 +217,8 @@ fn i32 cast_float_and_ptr(arena::Arena* a, u8[] msg) {
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_f32(), types::prim_f64()), (u32)sapir::CastOp::FPExt, msg)) { return -5; }
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_f64(), types::prim_f32()), (u32)sapir::CastOp::FPTrunc, msg)) { return -6; }
 
-    types::Type* int_ptr = types::intern_pointer(types::prim_i32(), false);
-    types::Type* byte_ptr = types::intern_pointer(types::prim_u8(), false);
+    types::Ty* int_ptr = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* byte_ptr = types::intern_pointer(types::prim_u8(), false);
     if(!testing::expect_eq((u32)sapir::cast_op(int_ptr, byte_ptr), (u32)sapir::CastOp::Nop, msg)) { return -7; }
     if(!testing::expect_eq((u32)sapir::cast_op(int_ptr, types::prim_u64()), (u32)sapir::CastOp::PtrToInt, msg)) { return -8; }
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_u64(), int_ptr), (u32)sapir::CastOp::IntToPtr, msg)) { return -9; }

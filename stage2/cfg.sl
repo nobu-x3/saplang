@@ -540,9 +540,9 @@ export fn void compute_predecessors(Cfg* g, arena::Arena* a) {
     }
 }
 
-export fn types::Type* fn_return_type(ast::FnDeclNode* func) {
+export fn types::Ty* fn_return_type(ast::FnDeclNode* func) {
     if(func.return_type == null) { return types::prim_void(); }
-    types::Type* t = (types::Type*)func.return_type.h.ty;
+    types::Ty* t = (types::Ty*)func.return_type.h.ty;
     if(t == null) { return types::prim_void(); }
     return t;
 }

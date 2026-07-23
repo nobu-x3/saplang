@@ -28,20 +28,20 @@ export enum PrimitiveKind : u8 {
 }
 
 export struct ArrayInfo {
-    Type* elem;
+    Ty* elem;
     u64   count;
 }
 
 export struct FnPtrInfo {
-    Type*   ret;
-    Type*[] params;
+    Ty*   ret;
+    Ty*[] params;
     bool    is_variadic;
 }
 
 export union TypeData {
-    Type*       pointee;        // TypeKind::Pointer
+    Ty*       pointee;        // TypeKind::Pointer
     ArrayInfo   array;          // TypeKind::Array
-    Type*       slice_elem;     // TypeKind::Slice
+    Ty*       slice_elem;     // TypeKind::Slice
     FnPtrInfo   fn_ptr;         // TypeKind::FnPtr
     void*       struct_decl;    // ast::StructDeclNode*; void* breaks the types<->ast cycle
     void*       union_decl;     // ast::UnionDeclNode*
@@ -56,7 +56,7 @@ export enum LayoutFlags : u8 {
          Opaque = 8,                 // extern { opaque struct X; } — layout unknown
 }
 
-export struct Type {
+export struct Ty {
     TypeKind        kind;
     PrimitiveKind   prim;       // NONE if not primitive
     LayoutFlags     flags;
@@ -71,18 +71,18 @@ export struct Layout {
 }
 
 export struct PrimitiveTable {
-    Type i8_;  Type i16_; Type i32_; Type i64_;
-    Type u8_;  Type u16_; Type u32_; Type u64_;
-    Type f32_; Type f64_;
-    Type bool_;
-    Type void_;
-    Type type_;
-    Type null_ptr;
+    Ty i8_;  Ty i16_; Ty i32_; Ty i64_;
+    Ty u8_;  Ty u16_; Ty u32_; Ty u64_;
+    Ty f32_; Ty f64_;
+    Ty bool_;
+    Ty void_;
+    Ty type_;
+    Ty null_ptr;
 }
 
 export struct TypeBucket {
     u32   hash;                 // 0 = empty slot
-    Type* type;
+    Ty* type;
 }
 
 export struct TypeInterner {
@@ -115,19 +115,19 @@ export fn void release() {
     mutex::unlock(&GLOBAL_TYPER.lock);
 }
 
-export fn Type* intern_pointer(Type* pointee, bool is_const) {
+export fn Ty* intern_pointer(Ty* pointee, bool is_const) {
     TypeInterner* it = types::acquire();
-    Type* t = _intern_pointer(it, pointee, is_const);
+    Ty* t = _intern_pointer(it, pointee, is_const);
     types::release();
     return t;
 }
 
-fn Type* _intern_pointer(TypeInterner* it, Type* pointee, bool is_const) {
+fn Ty* _intern_pointer(TypeInterner* it, Ty* pointee, bool is_const) {
     u32 hash = hash_pointer(pointee, is_const);
     u64 mask = it.cap - 1;
     u64 idx = (u64)hash & mask;
     while(it.buckets[idx].hash != 0) {
-        Type* cur = it.buckets[idx].type;
+        Ty* cur = it.buckets[idx].type;
         bool cur_const = ((u8)cur.flags & (u8)LayoutFlags::Const) != 0;
         bool const_match = is_const == cur_const;
         if(it.buckets[idx].hash == hash
@@ -138,8 +138,8 @@ fn Type* _intern_pointer(TypeInterner* it, Type* pointee, bool is_const) {
         }
         idx = (idx + 1) & mask;
     }
-    Type* type = (Type*)arena::alloc(it.arena, sizeof(Type));
-    sys::memset(type, 0, sizeof(Type));
+    Ty* type = (Ty*)arena::alloc(it.arena, sizeof(Ty));
+    sys::memset(type, 0, sizeof(Ty));
     type.kind = TypeKind::Pointer;
     type.size = 8;
     type.align = 8;
@@ -151,19 +151,19 @@ fn Type* _intern_pointer(TypeInterner* it, Type* pointee, bool is_const) {
     return install(it, hash, type);
 }
 
-export fn Type* intern_array(Type* elem, u64 count) {
+export fn Ty* intern_array(Ty* elem, u64 count) {
     TypeInterner* it = types::acquire();
-    Type* t = _intern_array(it, elem, count);
+    Ty* t = _intern_array(it, elem, count);
     types::release();
     return t;
 }
 
-fn Type* _intern_array(TypeInterner* it, Type* elem, u64 count) {
+fn Ty* _intern_array(TypeInterner* it, Ty* elem, u64 count) {
     u32 hash = hash_array(elem, count);
     u64 mask = it.cap - 1;
     u64 idx = (u64)hash & mask;
     while(it.buckets[idx].hash != 0) {
-        Type* cur = it.buckets[idx].type;
+        Ty* cur = it.buckets[idx].type;
         if(it.buckets[idx].hash == hash
                 && cur.kind == TypeKind::Array
                 && cur.data.array.count == count
@@ -172,27 +172,27 @@ fn Type* _intern_array(TypeInterner* it, Type* elem, u64 count) {
         }
         idx = (idx + 1) & mask;
     }
-    Type* type = (Type*)arena::alloc(it.arena, sizeof(Type));
-    sys::memset(type, 0, sizeof(Type));
+    Ty* type = (Ty*)arena::alloc(it.arena, sizeof(Ty));
+    sys::memset(type, 0, sizeof(Ty));
     type.kind = TypeKind::Array;
     type.data.array.elem = elem;
     type.data.array.count = count;
     return install(it, hash, type);
 }
 
-export fn Type* intern_slice(Type* elem) {
+export fn Ty* intern_slice(Ty* elem) {
     TypeInterner* it = types::acquire();
-    Type* t = _intern_slice(it, elem);
+    Ty* t = _intern_slice(it, elem);
     types::release();
     return t;
 }
 
-fn Type* _intern_slice(TypeInterner* it, Type* elem) {
+fn Ty* _intern_slice(TypeInterner* it, Ty* elem) {
     u32 hash = hash_slice(elem);
     u64 mask = it.cap - 1;
     u64 idx = (u64)hash & mask;
     while(it.buckets[idx].hash != 0) {
-        Type* cur = it.buckets[idx].type;
+        Ty* cur = it.buckets[idx].type;
         if(it.buckets[idx].hash == hash
                 && cur.kind == TypeKind::Slice
                 && cur.data.slice_elem == elem) {
@@ -200,8 +200,8 @@ fn Type* _intern_slice(TypeInterner* it, Type* elem) {
         }
         idx = (idx + 1) & mask;
     }
-    Type* type = (Type*)arena::alloc(it.arena, sizeof(Type));
-    sys::memset(type, 0, sizeof(Type));
+    Ty* type = (Ty*)arena::alloc(it.arena, sizeof(Ty));
+    sys::memset(type, 0, sizeof(Ty));
     type.kind = TypeKind::Slice;
     type.size = 16;
     type.align = 8;
@@ -210,19 +210,19 @@ fn Type* _intern_slice(TypeInterner* it, Type* elem) {
     return install(it, hash, type);
 }
 
-export fn Type* intern_fn_ptr(Type* ret, Type*[] params, bool variadic) {
+export fn Ty* intern_fn_ptr(Ty* ret, Ty*[] params, bool variadic) {
     TypeInterner* it = types::acquire();
-    Type* t = _intern_fn_ptr(it, ret, params, variadic);
+    Ty* t = _intern_fn_ptr(it, ret, params, variadic);
     types::release();
     return t;
 }
 
-fn Type* _intern_fn_ptr(TypeInterner* it, Type* ret, Type*[] params, bool variadic) {
+fn Ty* _intern_fn_ptr(TypeInterner* it, Ty* ret, Ty*[] params, bool variadic) {
     u32 hash = hash_fn_ptr(ret, params, variadic);
     u64 mask = it.cap - 1;
     u64 idx = (u64)hash & mask;
     while(it.buckets[idx].hash != 0) {
-        Type* cur = it.buckets[idx].type;
+        Ty* cur = it.buckets[idx].type;
         if(it.buckets[idx].hash == hash
                 && cur.kind == TypeKind::FnPtr
                 && cur.data.fn_ptr.ret == ret
@@ -232,8 +232,8 @@ fn Type* _intern_fn_ptr(TypeInterner* it, Type* ret, Type*[] params, bool variad
         }
         idx = (idx + 1) & mask;
     }
-    Type* type = (Type*)arena::alloc(it.arena, sizeof(Type));
-    sys::memset(type, 0, sizeof(Type));
+    Ty* type = (Ty*)arena::alloc(it.arena, sizeof(Ty));
+    sys::memset(type, 0, sizeof(Ty));
     type.kind = TypeKind::FnPtr;
     type.size = 8;
     type.align = 8;
@@ -244,19 +244,19 @@ fn Type* _intern_fn_ptr(TypeInterner* it, Type* ret, Type*[] params, bool variad
     return install(it, hash, type);
 }
 
-export fn Type* intern_struct(void* decl) {    // ast::StructDeclNode*
+export fn Ty* intern_struct(void* decl) {    // ast::StructDeclNode*
     TypeInterner* it = types::acquire();
-    Type* t = _intern_struct(it, decl);
+    Ty* t = _intern_struct(it, decl);
     types::release();
     return t;
 }
 
-fn Type* _intern_struct(TypeInterner* it, void* decl) {
+fn Ty* _intern_struct(TypeInterner* it, void* decl) {
     u32 hash = hash_decl(decl, 0x10000005);
     u64 mask = it.cap - 1;
     u64 idx  = (u64)hash & mask;
     while (it.buckets[idx].hash != 0) {
-        Type* cur = it.buckets[idx].type;
+        Ty* cur = it.buckets[idx].type;
         if (it.buckets[idx].hash == hash
                 && cur.kind == TypeKind::Struct
                 && cur.data.struct_decl == decl) {
@@ -264,26 +264,26 @@ fn Type* _intern_struct(TypeInterner* it, void* decl) {
         }
         idx = (idx + 1) & mask;
     }
-    Type* t = (Type*)arena::alloc(it.arena, sizeof(Type));
-    sys::memset(t, 0, sizeof(Type));
+    Ty* t = (Ty*)arena::alloc(it.arena, sizeof(Ty));
+    sys::memset(t, 0, sizeof(Ty));
     t.kind = TypeKind::Struct;
     t.data.struct_decl = decl;
     return install(it, hash, t);
 }
 
-export fn Type* intern_union(void* decl) {    // ast::UnionDeclNode*
+export fn Ty* intern_union(void* decl) {    // ast::UnionDeclNode*
     TypeInterner* it = types::acquire();
-    Type* t = _intern_union(it, decl);
+    Ty* t = _intern_union(it, decl);
     types::release();
     return t;
 }
 
-fn Type* _intern_union(TypeInterner* it, void* decl) {
+fn Ty* _intern_union(TypeInterner* it, void* decl) {
     u32 hash = hash_decl(decl, 0x10000006);
     u64 mask = it.cap - 1;
     u64 idx  = (u64)hash & mask;
     while (it.buckets[idx].hash != 0) {
-        Type* cur = it.buckets[idx].type;
+        Ty* cur = it.buckets[idx].type;
         if (it.buckets[idx].hash == hash
                 && cur.kind == TypeKind::Union
                 && cur.data.union_decl == decl) {
@@ -291,27 +291,27 @@ fn Type* _intern_union(TypeInterner* it, void* decl) {
         }
         idx = (idx + 1) & mask;
     }
-    Type* t = (Type*)arena::alloc(it.arena, sizeof(Type));
-    sys::memset(t, 0, sizeof(Type));
+    Ty* t = (Ty*)arena::alloc(it.arena, sizeof(Ty));
+    sys::memset(t, 0, sizeof(Ty));
     t.kind = TypeKind::Union;
     t.data.union_decl = decl;
     return install(it, hash, t);
 }
 
-export fn Type* intern_enum(void* decl) {    // ast::EnumDeclNode*
+export fn Ty* intern_enum(void* decl) {    // ast::EnumDeclNode*
     TypeInterner* it = types::acquire();
-    Type* t = _intern_enum(it, decl);
+    Ty* t = _intern_enum(it, decl);
     types::release();
     return t;
 }
 
-fn Type* _intern_enum(TypeInterner* it, void* decl) {
+fn Ty* _intern_enum(TypeInterner* it, void* decl) {
     u32 hash = hash_decl(decl, 0x10000007);
     if(hash == 0) { hash = 1; }
     u64 mask = it.cap - 1;
     u64 idx  = (u64)hash & mask;
     while (it.buckets[idx].hash != 0) {
-        Type* cur = it.buckets[idx].type;
+        Ty* cur = it.buckets[idx].type;
         if (it.buckets[idx].hash == hash
                 && cur.kind == TypeKind::Enum
                 && cur.data.enum_decl == decl) {
@@ -319,15 +319,15 @@ fn Type* _intern_enum(TypeInterner* it, void* decl) {
         }
         idx = (idx + 1) & mask;
     }
-    Type* t = (Type*)arena::alloc(it.arena, sizeof(Type));
-    sys::memset(t, 0, sizeof(Type));
+    Ty* t = (Ty*)arena::alloc(it.arena, sizeof(Ty));
+    sys::memset(t, 0, sizeof(Ty));
     t.kind = TypeKind::Enum;
     t.data.enum_decl = decl;
     return install(it, hash, t);
 }
 
 // sizeof/alignof — diag is nullable; layout/cycle errors report there when set.
-export fn u32 size_of(diag::DiagBuf* diag, Type* type) {
+export fn u32 size_of(diag::DiagBuf* diag, Ty* type) {
     if(((u8)type.flags & (u8)LayoutFlags::Opaque) != 0) {
         if(diag != null) {
             diag::report(diag, GLOBAL_TYPER.arena, decl_src_pos(type), "cannot take size of opaque type");
@@ -343,7 +343,7 @@ export fn u32 size_of(diag::DiagBuf* diag, Type* type) {
     return type.size;
 }
 
-export fn u32 align_of(diag::DiagBuf* diag, Type* type) {
+export fn u32 align_of(diag::DiagBuf* diag, Ty* type) {
     if(((u8)type.flags & (u8)LayoutFlags::Opaque) != 0) {
         if(diag != null) {
             diag::report(diag, GLOBAL_TYPER.arena, decl_src_pos(type), "cannot take alignment of opaque type");
@@ -359,7 +359,7 @@ export fn u32 align_of(diag::DiagBuf* diag, Type* type) {
     return type.align;
 }
 
-fn void compute_layout(TypeInterner* it, diag::DiagBuf* diag, Type* type) {
+fn void compute_layout(TypeInterner* it, diag::DiagBuf* diag, Ty* type) {
     if(((u8)type.flags & (u8)LayoutFlags::Computed) != 0) { return; }
     if(((u8)type.flags & (u8)LayoutFlags::InProgress) != 0) {
         if(diag != null) {
@@ -381,7 +381,7 @@ fn void compute_layout(TypeInterner* it, diag::DiagBuf* diag, Type* type) {
         case TypeKind::FnPtr:   { size = 8;  align = 8; }
         case TypeKind::Slice:   { size = 16; align = 8; }
         case TypeKind::Array: {
-            Type* elem = type.data.array.elem;
+            Ty* elem = type.data.array.elem;
             if(layout_field(it, diag, elem)) {
                 size  = elem.size * (u32)type.data.array.count;
                 align = elem.align;
@@ -395,7 +395,7 @@ fn void compute_layout(TypeInterner* it, diag::DiagBuf* diag, Type* type) {
             u32 cursor = 0;
             u32 max_align = 1;
             for(u64 i = 0; i < decl.fields.len; i += 1) {
-                Type* field_type = (Type*)decl.fields[i].resolved_type;
+                Ty* field_type = (Ty*)decl.fields[i].resolved_type;
                 if(!layout_field(it, diag, field_type)) {
                     offsets[i] = cursor;
                     continue;
@@ -420,7 +420,7 @@ fn void compute_layout(TypeInterner* it, diag::DiagBuf* diag, Type* type) {
             u32 max_size  = 0;
             u32 max_align = 1;
             for(u64 i = 0; i < decl.fields.len; i += 1) {
-                Type* field_type = (Type*)decl.fields[i].resolved_type;
+                Ty* field_type = (Ty*)decl.fields[i].resolved_type;
                 if(!layout_field(it, diag, field_type)) { continue; }
                 u32 field_align = field_type.align;
                 u32 field_size  = field_type.size;
@@ -432,7 +432,7 @@ fn void compute_layout(TypeInterner* it, diag::DiagBuf* diag, Type* type) {
             type.layout = new_layout;
         }
         case TypeKind::Enum: {
-            Type* base = enum_base_type(type);
+            Ty* base = enum_base_type(type);
             if(layout_field(it, diag, base)) {
                 size  = base.size;
                 align = base.align;
@@ -453,7 +453,7 @@ fn void compute_layout(TypeInterner* it, diag::DiagBuf* diag, Type* type) {
     type.flags = (LayoutFlags)(((u8)type.flags | (u8)LayoutFlags::Computed) & ~(u8)LayoutFlags::InProgress);
 }
 
-fn bool layout_field(TypeInterner* it, diag::DiagBuf* diag, Type* field_type) {
+fn bool layout_field(TypeInterner* it, diag::DiagBuf* diag, Ty* field_type) {
     if(field_type == null) { return false; }
     if(((u8)field_type.flags & (u8)LayoutFlags::Opaque) != 0) {
         if(diag != null) {
@@ -466,7 +466,7 @@ fn bool layout_field(TypeInterner* it, diag::DiagBuf* diag, Type* field_type) {
     return true;
 }
 
-fn u32 decl_src_pos(Type* t) {
+fn u32 decl_src_pos(Ty* t) {
     if(t.kind == TypeKind::Struct) { return ((ast::StructDeclNode*)t.data.struct_decl).h.src_pos; }
     if(t.kind == TypeKind::Union)  { return ((ast::UnionDeclNode*) t.data.union_decl ).h.src_pos; }
     if(t.kind == TypeKind::Enum)   { return ((ast::EnumDeclNode*)  t.data.enum_decl  ).h.src_pos; }
@@ -474,12 +474,12 @@ fn u32 decl_src_pos(Type* t) {
 }
 
 // Conversions
-export fn bool is_convertible(Type* src, Type* dst) {
+export fn bool is_convertible(Ty* src, Ty* dst) {
     if (src == dst) { return true; }
     // array -> pointer (matching depth + element)
     if (is_array(src) && is_ptr(dst)) {
-        Type* a_elem = src.data.array.elem;
-        Type* p_pee  = dst.data.pointee;
+        Ty* a_elem = src.data.array.elem;
+        Ty* p_pee  = dst.data.pointee;
         return a_elem == p_pee;
     }
     // array -> slice
@@ -505,14 +505,14 @@ export fn bool is_convertible(Type* src, Type* dst) {
     return false;
 }
 
-export fn bool is_convertible_in_cond(Type* src) {
+export fn bool is_convertible_in_cond(Ty* src) {
     if (is_bool(src)) { return true; }
     if (is_int(src))  { return true; }       // zero / non-zero
     if (is_ptr(src) || is_slice(src)) { return true; }  // null / non-null
     return false;
 }
 
-export fn bool int_lit_fits(u64 value, bool is_negative, Type* dst) {
+export fn bool int_lit_fits(u64 value, bool is_negative, Ty* dst) {
     if (!is_int(dst)) { return false; }
     if (is_negative && is_unsigned_int(dst)) { return false; }
     u64 dst_max = int_max(dst);
@@ -521,7 +521,7 @@ export fn bool int_lit_fits(u64 value, bool is_negative, Type* dst) {
     return value <= dst_max;
 }
 
-export fn bool is_castable(Type* src, Type* dst) {
+export fn bool is_castable(Ty* src, Ty* dst) {
     if (src == null || dst == null) { return false; }
     if (((u8)src.flags & (u8)LayoutFlags::Opaque) != 0) { return false; }
     if (((u8)dst.flags & (u8)LayoutFlags::Opaque) != 0) { return false; }
@@ -535,12 +535,12 @@ export fn bool is_castable(Type* src, Type* dst) {
     return false;
 }
 
-fn bool is_ptr_sized_int(Type* t) {
+fn bool is_ptr_sized_int(Ty* t) {
     if (!is_int(t)) { return false; }
     return t.prim == PrimitiveKind::I64 || t.prim == PrimitiveKind::U64;
 }
 
-fn i32 int_rank(Type* t) {
+fn i32 int_rank(Ty* t) {
     if(!is_int(t)) { return -1; }
     switch(t.prim) {
         case PrimitiveKind::I8:
@@ -557,96 +557,96 @@ fn i32 int_rank(Type* t) {
 }
 
 // Helpers
-export fn bool is_int(Type* t) {
+export fn bool is_int(Ty* t) {
     return t.kind == TypeKind::Primitive
     && t.prim >= PrimitiveKind::I8 && t.prim <= PrimitiveKind::U64;
 }
 
-export fn bool is_signed_int(Type* t) {
+export fn bool is_signed_int(Ty* t) {
     return t.kind == TypeKind::Primitive
     && t.prim >= PrimitiveKind::I8 && t.prim <= PrimitiveKind::I64;
 }
 
-export fn bool is_unsigned_int(Type* t) {
+export fn bool is_unsigned_int(Ty* t) {
     return t.kind == TypeKind::Primitive
     && t.prim >= PrimitiveKind::U8 && t.prim <= PrimitiveKind::U64;
 }
 
-export fn bool is_float(Type* t) {
+export fn bool is_float(Ty* t) {
     return t.kind == TypeKind::Primitive
     && t.prim >= PrimitiveKind::F32 && t.prim <= PrimitiveKind::F64;
 }
 
-export fn bool is_bool(Type* t) {
+export fn bool is_bool(Ty* t) {
     return t.kind == TypeKind::Primitive
     && t.prim == PrimitiveKind::BOOL;
 }
 
-export fn bool is_void(Type* t) {
+export fn bool is_void(Ty* t) {
     return t.kind == TypeKind::Primitive
     && t.prim == PrimitiveKind::VOID;
 }
 
-export fn bool is_slice(Type* t) {
+export fn bool is_slice(Ty* t) {
     return t.kind == TypeKind::Slice;
 }
 
-export fn bool is_array(Type* t) {
+export fn bool is_array(Ty* t) {
     return t.kind == TypeKind::Array;
 }
 
-export fn bool is_ptr(Type* t) {
+export fn bool is_ptr(Ty* t) {
     return t.kind == TypeKind::Pointer;
 }
 
-export fn bool is_named(Type* t) {
+export fn bool is_named(Ty* t) {
     return t.kind == TypeKind::Struct || t.kind == TypeKind::Union || t.kind == TypeKind::Enum;
 }
 
-export fn bool is_comptime_type(Type* t) {
+export fn bool is_comptime_type(Ty* t) {
     return t.kind == TypeKind::ComptimeType;
 }
 
-export fn Type* enum_base_type(Type* type) {
+export fn Ty* enum_base_type(Ty* type) {
     if(type.kind != TypeKind::Enum) { return null; }
     ast::EnumDeclNode* decl = (ast::EnumDeclNode*)type.data.enum_decl;
     if(decl == null) { return null; }
     if(decl.base_type == null) { return prim_i32(); }   // an omitted base type defaults to i32
-    return (Type*)decl.base_type.h.ty;
+    return (Ty*)decl.base_type.h.ty;
 }
 
 // A struct's field types in declaration order; lets a backend build the LLVM struct body without importing ast.
-export fn Type*[] struct_field_types(Type* type, arena::Arena* a) {
+export fn Ty*[] struct_field_types(Ty* type, arena::Arena* a) {
     ast::StructDeclNode* decl = (ast::StructDeclNode*)type.data.struct_decl;
-    Type** out = (Type**)arena::alloc(a, (decl.fields.len + 1) * sizeof(Type*));
-    for(u64 i = 0; i < decl.fields.len; i += 1) { out[i] = (Type*)decl.fields[i].resolved_type; }
-    Type*[] result = {out, decl.fields.len};
+    Ty** out = (Ty**)arena::alloc(a, (decl.fields.len + 1) * sizeof(Ty*));
+    for(u64 i = 0; i < decl.fields.len; i += 1) { out[i] = (Ty*)decl.fields[i].resolved_type; }
+    Ty*[] result = {out, decl.fields.len};
     return result;
 }
 
 // Field accessors over a struct or union, letting a backend build DWARF composite types without importing ast.
-fn ast::FieldDecl* field_at(Type* type, u64 index) {
+fn ast::FieldDecl* field_at(Ty* type, u64 index) {
     if(type.kind == TypeKind::Struct) { return &((ast::StructDeclNode*)type.data.struct_decl).fields[index]; }
     return &((ast::UnionDeclNode*)type.data.union_decl).fields[index];
 }
 
-export fn u64 field_count(Type* type) {
+export fn u64 field_count(Ty* type) {
     if(type.kind == TypeKind::Struct) { return ((ast::StructDeclNode*)type.data.struct_decl).fields.len; }
     if(type.kind == TypeKind::Union)  { return ((ast::UnionDeclNode*)type.data.union_decl).fields.len; }
     return 0;
 }
 
-export fn Type* field_type(Type* type, u64 index) { return (Type*)field_at(type, index).resolved_type; }
+export fn Ty* field_type(Ty* type, u64 index) { return (Ty*)field_at(type, index).resolved_type; }
 
-export fn symbol::Symbol* field_name_sym(Type* type, u64 index) { return field_at(type, index).name; }
+export fn symbol::Symbol* field_name_sym(Ty* type, u64 index) { return field_at(type, index).name; }
 
-export fn u32 field_offset(Type* type, u64 index) {
+export fn u32 field_offset(Ty* type, u64 index) {
     if(((u8)type.flags & (u8)LayoutFlags::Computed) == 0) { size_of(null, type); }
     if(type.layout == null) { return 0; }
     return type.layout.offsets[index];
 }
 
-export fn symbol::Symbol* type_name_sym(Type* type) {
+export fn symbol::Symbol* type_name_sym(Ty* type) {
     if(type.kind == TypeKind::Struct) { return ((ast::StructDeclNode*)type.data.struct_decl).qualified_name; }
     if(type.kind == TypeKind::Union)  { return ((ast::UnionDeclNode*)type.data.union_decl).qualified_name; }
     return null;
@@ -687,7 +687,7 @@ fn void build_primitive_table() {
     prim_table_inited = true;
 }
 
-fn void init_prim(Type* t, PrimitiveKind p, u32 size, u32 align) {
+fn void init_prim(Ty* t, PrimitiveKind p, u32 size, u32 align) {
     t.kind  = TypeKind::Primitive;
     t.prim  = p;
     t.size  = size;
@@ -695,22 +695,22 @@ fn void init_prim(Type* t, PrimitiveKind p, u32 size, u32 align) {
     t.flags = LayoutFlags::Computed;
 }
 
-export fn Type* prim_i8 ()    { ensure_prim_init(); return &PRIM.i8_;   }
-export fn Type* prim_i16()    { ensure_prim_init(); return &PRIM.i16_;  }
-export fn Type* prim_i32()    { ensure_prim_init(); return &PRIM.i32_;  }
-export fn Type* prim_i64()    { ensure_prim_init(); return &PRIM.i64_;  }
-export fn Type* prim_u8 ()    { ensure_prim_init(); return &PRIM.u8_;   }
-export fn Type* prim_u16()    { ensure_prim_init(); return &PRIM.u16_;  }
-export fn Type* prim_u32()    { ensure_prim_init(); return &PRIM.u32_;  }
-export fn Type* prim_u64()    { ensure_prim_init(); return &PRIM.u64_;  }
-export fn Type* prim_f32()    { ensure_prim_init(); return &PRIM.f32_;  }
-export fn Type* prim_f64()    { ensure_prim_init(); return &PRIM.f64_;  }
-export fn Type* prim_bool()   { ensure_prim_init(); return &PRIM.bool_; }
-export fn Type* prim_void()   { ensure_prim_init(); return &PRIM.void_; }
-export fn Type* prim_type()   { ensure_prim_init(); return &PRIM.type_; }
-export fn Type* prim_null_ptr() { ensure_prim_init(); return &PRIM.null_ptr; }
+export fn Ty* prim_i8 ()    { ensure_prim_init(); return &PRIM.i8_;   }
+export fn Ty* prim_i16()    { ensure_prim_init(); return &PRIM.i16_;  }
+export fn Ty* prim_i32()    { ensure_prim_init(); return &PRIM.i32_;  }
+export fn Ty* prim_i64()    { ensure_prim_init(); return &PRIM.i64_;  }
+export fn Ty* prim_u8 ()    { ensure_prim_init(); return &PRIM.u8_;   }
+export fn Ty* prim_u16()    { ensure_prim_init(); return &PRIM.u16_;  }
+export fn Ty* prim_u32()    { ensure_prim_init(); return &PRIM.u32_;  }
+export fn Ty* prim_u64()    { ensure_prim_init(); return &PRIM.u64_;  }
+export fn Ty* prim_f32()    { ensure_prim_init(); return &PRIM.f32_;  }
+export fn Ty* prim_f64()    { ensure_prim_init(); return &PRIM.f64_;  }
+export fn Ty* prim_bool()   { ensure_prim_init(); return &PRIM.bool_; }
+export fn Ty* prim_void()   { ensure_prim_init(); return &PRIM.void_; }
+export fn Ty* prim_type()   { ensure_prim_init(); return &PRIM.type_; }
+export fn Ty* prim_null_ptr() { ensure_prim_init(); return &PRIM.null_ptr; }
 
-export fn Type* primitive(PrimitiveKind kind) {
+export fn Ty* primitive(PrimitiveKind kind) {
     switch(kind) {
         case PrimitiveKind::I8:   { return prim_i8();  }
         case PrimitiveKind::I16:  { return prim_i16(); }
@@ -748,7 +748,7 @@ export fn PrimitiveKind get_primitive_kind_from_token(token::TokenKind k) {
     return PrimitiveKind::NONE;
 }
 
-export fn u64 int_max(Type* t) {
+export fn u64 int_max(Ty* t) {
     if(!is_int(t)) { return 0; }
     switch(t.prim) {
         case PrimitiveKind::I8:  { return 127; }
@@ -764,7 +764,7 @@ export fn u64 int_max(Type* t) {
     return 0;
 }
 
-export fn u64 int_min_abs(Type* t) {
+export fn u64 int_min_abs(Ty* t) {
     if(!is_signed_int(t)) { return 0; }
     switch(t.prim) {
         case PrimitiveKind::I8:  { return 128; }
@@ -778,7 +778,7 @@ export fn u64 int_min_abs(Type* t) {
 
 // PRIVATE FUNCTIONS
 
-fn Type* install(TypeInterner* it, u32 hash, Type* t) {
+fn Ty* install(TypeInterner* it, u32 hash, Ty* t) {
     if ((it.count + 1) * 10 > it.cap * 7) { typer_grow(it); }
     u64 mask = it.cap - 1;
     u64 idx  = (u64)hash & mask;
@@ -789,7 +789,7 @@ fn Type* install(TypeInterner* it, u32 hash, Type* t) {
     return t;
 }
 
-fn bool fn_params_equal(Type*[] a, Type*[] b) {
+fn bool fn_params_equal(Ty*[] a, Ty*[] b) {
     if (a.len != b.len) { return false; }
     for (u64 i = 0; i < a.len; i += 1) {
         if (a[i] != b[i]) { return false; }
@@ -797,9 +797,9 @@ fn bool fn_params_equal(Type*[] a, Type*[] b) {
     return true;
 }
 
-fn Type*[] copy_type_slice(arena::Arena* a, Type*[] src) {
-    u64 bytes = src.len * sizeof(Type*);
-    Type** mem = (Type**)arena::alloc(a, bytes);
+fn Ty*[] copy_type_slice(arena::Arena* a, Ty*[] src) {
+    u64 bytes = src.len * sizeof(Ty*);
+    Ty** mem = (Ty**)arena::alloc(a, bytes);
     sys::memcpy(mem, src.ptr, bytes);
     return {mem, src.len};
 }
@@ -827,20 +827,20 @@ fn u32 hash_ptr(void* p) {
     return (u32)(m >> 32);
 }
 
-fn u32 hash_array(Type* elem, u64 count) {
+fn u32 hash_array(Ty* elem, u64 count) {
     u32 h = hash_ptr(elem) ^ 0x10000002;
     h ^= (u32)((count * 0x9E3779B97F4A7C15) >> 32);
     if (h == 0) { h = 1; }
     return h;
 }
 
-fn u32 hash_slice(Type* elem) {
+fn u32 hash_slice(Ty* elem) {
     u32 h = hash_ptr(elem) ^ 0x10000003;
     if (h == 0) { h = 1; }
     return h;
 }
 
-fn u32 hash_fn_ptr(Type* ret, Type*[] params, bool is_variadic) {
+fn u32 hash_fn_ptr(Ty* ret, Ty*[] params, bool is_variadic) {
     u32 h = hash_ptr(ret) ^ 0x10000004;
     for (u64 i = 0; i < params.len; i += 1) {
         h = h * 31 + hash_ptr(params[i]);
@@ -851,7 +851,7 @@ fn u32 hash_fn_ptr(Type* ret, Type*[] params, bool is_variadic) {
     return h;
 }
 
-fn u32 hash_pointer(Type* pointee, bool is_const) {
+fn u32 hash_pointer(Ty* pointee, bool is_const) {
     u32 h = hash_ptr(pointee) ^ 0x10000001;
     if (is_const) { h ^= 0xC0000000; }
     if (h == 0) { h = 1; }

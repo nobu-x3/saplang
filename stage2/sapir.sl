@@ -25,7 +25,7 @@ export struct SapirDecl {
     SapirLinkage    linkage;
     bool            is_variadic;    // meaningful only for extern C fns
     u8[]            link_name;      // final symbol bytes; mangling already applied
-    types::Type*    ty;             // fn-pointer type for fns; value type for globals
+    types::Ty*    ty;             // fn-pointer type for fns; value type for globals
     u32             fn_index;       // into SapirModule.fns for a local fn, else INVALID_ID
     u32             global_index;   // into SapirModule.globals for a local global, else INVALID_ID
 }
@@ -60,7 +60,7 @@ export enum ConstInitKind : u8 {
 
 export struct ConstInit {
     ConstInitKind   kind;
-    types::Type*    ty;
+    types::Ty*    ty;
     i64             i;              // Int / Bool
     f64             f;              // Float
     u8[]            bytes;          // Bytes
@@ -80,7 +80,7 @@ export struct SapirGlobal {
 // params first (vars[i] is param i), then locals in encounter order; drives DWARF only.
 export struct SapirVar {
     symbol::Symbol* name;
-    types::Type*    ty;
+    types::Ty*    ty;
     u32             src_pos;
     u32             alloca_id;      // slot inst id for a memory var; INVALID_ID for an SSA var
     void*           decl;           // sema::Decl*; lets lower map an assignment target back to its var index
@@ -129,7 +129,7 @@ export struct Inst {
     Opcode          op;
     u16             flags;          // InstFlags bitmask
     u32             src_pos;
-    types::Type*    ty;             // result type; void-typed ops carry types::prim_void()
+    types::Ty*    ty;             // result type; void-typed ops carry types::prim_void()
     u32             a;              // operand slot — meaning is per-opcode
     u32             b;              // operand slot / extra index — meaning is per-opcode
     u64             imm;            // const bits or byte count, per-opcode
@@ -227,9 +227,9 @@ export enum CastOp : u8 {
 }
 
 // Only ever called on an is_castable pair; a -> bool never is one (truthiness is cond_test).
-export fn CastOp cast_op(types::Type* src, types::Type* dst) {
-    types::Type* source = cast_reduce(src);
-    types::Type* dest = cast_reduce(dst);
+export fn CastOp cast_op(types::Ty* src, types::Ty* dst) {
+    types::Ty* source = cast_reduce(src);
+    types::Ty* dest = cast_reduce(dst);
 
     if(types::is_slice(dest)) {
         if(types::is_array(source)) { return CastOp::ArrayToSlice; }
@@ -281,20 +281,20 @@ export enum CondTest : u8 {
     SliceNonEmpty,
 }
 
-export fn CondTest cond_test(types::Type* t) {
-    types::Type* reduced = cast_reduce(t);
+export fn CondTest cond_test(types::Ty* t) {
+    types::Ty* reduced = cast_reduce(t);
     if(types::is_bool(reduced)) { return CondTest::AsBool; }
     if(types::is_slice(reduced)) { return CondTest::SliceNonEmpty; }
     if(types::is_ptr(reduced) || reduced.kind == types::TypeKind::FnPtr) { return CondTest::PtrNonNull; }
     return CondTest::IntNonZero;
 }
 
-fn types::Type* cast_reduce(types::Type* t) {
+fn types::Ty* cast_reduce(types::Ty* t) {
     if(t.kind == types::TypeKind::Enum) { return types::enum_base_type(t); }
     return t;
 }
 
-fn u32 int_width(types::Type* t) {
+fn u32 int_width(types::Ty* t) {
     if(types::is_bool(t)) { return 1; }
     switch(t.prim) {
     case types::PrimitiveKind::I8:
@@ -310,7 +310,7 @@ fn u32 int_width(types::Type* t) {
     return 0;
 }
 
-fn u32 float_width(types::Type* t) {
+fn u32 float_width(types::Ty* t) {
     if(t.prim == types::PrimitiveKind::F32) { return 32; }
     return 64;
 }
@@ -444,7 +444,7 @@ export fn void add_phi_to_block(arena::Arena* a, SapirFn* func, u32 block, u32 p
 }
 
 // Seeds a/b to INVALID_ID so callers only set the operand slots their opcode uses.
-export fn Inst new_inst(Opcode op, types::Type* ty, u32 src_pos) {
+export fn Inst new_inst(Opcode op, types::Ty* ty, u32 src_pos) {
     Inst inst;
     sys::memset(&inst, 0, sizeof(Inst));
     inst.op = op;

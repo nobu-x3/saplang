@@ -44,7 +44,7 @@ fn symbol::Symbol* fake_sym_interned(module::Module* m, u8[] bytes) {
     return interner::intern(bytes);
 }
 
-fn sema::Decl* fake_decl(arena::Arena* a, sema::DeclKind kind, symbol::Symbol* name, types::Type* ty) {
+fn sema::Decl* fake_decl(arena::Arena* a, sema::DeclKind kind, symbol::Symbol* name, types::Ty* ty) {
     sema::Decl* d = (sema::Decl*)arena::alloc(a, sizeof(sema::Decl));
     sys::memset(d, 0, sizeof(sema::Decl));
     d.kind = kind;
@@ -53,23 +53,23 @@ fn sema::Decl* fake_decl(arena::Arena* a, sema::DeclKind kind, symbol::Symbol* n
     return d;
 }
 
-fn sema::Decl* fake_node_decl(arena::Arena* a, symbol::Symbol* name, types::Type* ty, ast::AstNode* node) {
+fn sema::Decl* fake_node_decl(arena::Arena* a, symbol::Symbol* name, types::Ty* ty, ast::AstNode* node) {
     sema::Decl* d = fake_decl(a, sema::DeclKind::Node, name, ty);
     d.data.node = node;
     return d;
 }
 
-fn sema::Decl* fake_param_decl(arena::Arena* a, symbol::Symbol* name, types::Type* ty) {
+fn sema::Decl* fake_param_decl(arena::Arena* a, symbol::Symbol* name, types::Ty* ty) {
     sema::Decl* d = fake_decl(a, sema::DeclKind::Param, name, ty);
     return d;
 }
 
-fn sema::Decl* fake_field_decl_value(arena::Arena* a, symbol::Symbol* name, types::Type* ty) {
+fn sema::Decl* fake_field_decl_value(arena::Arena* a, symbol::Symbol* name, types::Ty* ty) {
     sema::Decl* d = fake_decl(a, sema::DeclKind::Field, name, ty);
     return d;
 }
 
-fn sema::Decl* fake_enum_member_decl_value(arena::Arena* a, symbol::Symbol* name, types::Type* ty) {
+fn sema::Decl* fake_enum_member_decl_value(arena::Arena* a, symbol::Symbol* name, types::Ty* ty) {
     sema::Decl* d = fake_decl(a, sema::DeclKind::EnumMember, name, ty);
     return d;
 }
@@ -209,7 +209,7 @@ fn ast::UnaryOpNode* fake_unary(arena::Arena* a, token::TokenKind op, ast::AstNo
     return n;
 }
 
-fn sema::Decl* register_var(arena::Arena* a, sema::Scope* sc, symbol::Symbol* name, types::Type* ty, bool is_const) {
+fn sema::Decl* register_var(arena::Arena* a, sema::Scope* sc, symbol::Symbol* name, types::Ty* ty, bool is_const) {
     sema::Decl* d = fake_node_decl(a, name, ty, (ast::AstNode*)fake_var_decl(a, name, is_const));
     sema::scope_add(sc, name, d);
     return d;
@@ -266,7 +266,7 @@ fn ast::CastNode* fake_cast(arena::Arena* a, ast::AstNode* target_type, ast::Ast
     return n;
 }
 
-fn sema::Decl* register_fn(arena::Arena* a, sema::Scope* sc, symbol::Symbol* name, types::Type* fnty) {
+fn sema::Decl* register_fn(arena::Arena* a, sema::Scope* sc, symbol::Symbol* name, types::Ty* fnty) {
     sema::Decl* d = fake_node_decl(a, name, fnty, (ast::AstNode*)fake_fn_decl(a, name));
     sema::scope_add(sc, name, d);
     return d;
@@ -436,7 +436,7 @@ fn ast::AstNode* fake_switch(arena::Arena* a, ast::AstNode* disc, ast::SwitchArm
     return (ast::AstNode*)n;
 }
 
-fn types::Type* register_color_enum(arena::Arena* a, sema::Scope* sc) {
+fn types::Ty* register_color_enum(arena::Arena* a, sema::Scope* sc) {
     symbol::Symbol*[2] names; names[0] = interner::intern("Red"); names[1] = interner::intern("Green");
     symbol::Symbol*[] nslice = {&names[0], 2};
     ast::EnumDeclNode* d = fake_enum_decl_with_members(a, nslice);
@@ -444,7 +444,7 @@ fn types::Type* register_color_enum(arena::Arena* a, sema::Scope* sc) {
     ast::AstNode* base = mk_ty_prim(a, token::TokenKind::I32);
     base.h.ty = (void*)types::prim_i32();
     d.base_type = base;
-    types::Type* ety = types::intern_enum((void*)d);
+    types::Ty* ety = types::intern_enum((void*)d);
     for(u64 i = 0; i < d.members.len; i += 1) {
         sema::Decl* md = fake_enum_member_decl_value(a, d.members[i].name, ety);
         md.data.member = &d.members[i];
@@ -501,30 +501,30 @@ fn ast::AstNode* fake_anon_union(arena::Arena* a, ast::FieldDecl* fields, u64 co
     return (ast::AstNode*)n;
 }
 
-fn types::Type* mk_opaque_type(arena::Arena* a, u32 decl_pos) {
+fn types::Ty* mk_opaque_type(arena::Arena* a, u32 decl_pos) {
     symbol::Symbol*[1] fnames; fnames[0] = interner::intern("x");
-    types::Type*[1] ftys; ftys[0] = types::prim_i32();
+    types::Ty*[1] ftys; ftys[0] = types::prim_i32();
     symbol::Symbol*[] fs = {&fnames[0], 1};
-    types::Type*[] ft = {&ftys[0], 1};
+    types::Ty*[] ft = {&ftys[0], 1};
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, fs, ft);
     d.h.src_pos = decl_pos;
     d.qualified_name = interner::intern("Opaque");
-    types::Type* t = types::intern_struct((void*)d);
+    types::Ty* t = types::intern_struct((void*)d);
     t.flags = (types::LayoutFlags)((u8)t.flags | (u8)types::LayoutFlags::Opaque);
     return t;
 }
 
-fn types::Type* mk_point_type(arena::Arena* a) {
+fn types::Ty* mk_point_type(arena::Arena* a) {
     symbol::Symbol*[2] fnames; fnames[0] = interner::intern("x"); fnames[1] = interner::intern("y");
-    types::Type*[2] ftys; ftys[0] = types::prim_i32(); ftys[1] = types::prim_i32();
+    types::Ty*[2] ftys; ftys[0] = types::prim_i32(); ftys[1] = types::prim_i32();
     symbol::Symbol*[] fn_slice = {&fnames[0], 2};
-    types::Type*[] ft_slice = {&ftys[0], 2};
+    types::Ty*[] ft_slice = {&ftys[0], 2};
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, fn_slice, ft_slice);
     d.qualified_name = interner::intern("Point");
     return types::intern_struct((void*)d);
 }
 
-fn ast::StructDeclNode* fake_struct_decl_with_fields(arena::Arena* a, symbol::Symbol*[] names, types::Type*[] tys) {
+fn ast::StructDeclNode* fake_struct_decl_with_fields(arena::Arena* a, symbol::Symbol*[] names, types::Ty*[] tys) {
     ast::StructDeclNode* d = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
     sys::memset(d, 0, sizeof(ast::StructDeclNode));
     d.h.kind = ast::AstKind::StructDecl;
@@ -545,7 +545,7 @@ fn ast::StructDeclNode* fake_struct_decl_with_fields(arena::Arena* a, symbol::Sy
     return d;
 }
 
-fn ast::UnionDeclNode* fake_union_decl_with_fields(arena::Arena* a, symbol::Symbol*[] names, types::Type*[] tys) {
+fn ast::UnionDeclNode* fake_union_decl_with_fields(arena::Arena* a, symbol::Symbol*[] names, types::Ty*[] tys) {
     ast::UnionDeclNode* d = (ast::UnionDeclNode*)arena::alloc(a, sizeof(ast::UnionDeclNode));
     sys::memset(d, 0, sizeof(ast::UnionDeclNode));
     d.h.kind = ast::AstKind::UnionDecl;
@@ -583,12 +583,12 @@ fn ast::EnumDeclNode* fake_enum_decl_with_members(arena::Arena* a, symbol::Symbo
     return d;
 }
 
-fn types::Type* mk_struct_type(arena::Arena* a, symbol::Symbol*[] names, types::Type*[] tys) {
+fn types::Ty* mk_struct_type(arena::Arena* a, symbol::Symbol*[] names, types::Ty*[] tys) {
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
     return types::intern_struct((void*)d);
 }
 
-fn types::Type* mk_union_type(arena::Arena* a, symbol::Symbol*[] names, types::Type*[] tys) {
+fn types::Ty* mk_union_type(arena::Arena* a, symbol::Symbol*[] names, types::Ty*[] tys) {
     ast::UnionDeclNode* d = fake_union_decl_with_fields(a, names, tys);
     return types::intern_union((void*)d);
 }
@@ -605,16 +605,16 @@ fn symbol::Symbol*[] mk_syms3(arena::Arena* a, symbol::Symbol* s0, symbol::Symbo
     symbol::Symbol*[] r; r.ptr = mem; r.len = 3; return r;
 }
 
-fn types::Type*[] mk_tys2(arena::Arena* a, types::Type* t0, types::Type* t1) {
-    types::Type** mem = (types::Type**)arena::alloc(a, 2 * sizeof(types::Type*));
+fn types::Ty*[] mk_tys2(arena::Arena* a, types::Ty* t0, types::Ty* t1) {
+    types::Ty** mem = (types::Ty**)arena::alloc(a, 2 * sizeof(types::Ty*));
     mem[0] = t0; mem[1] = t1;
-    types::Type*[] r; r.ptr = mem; r.len = 2; return r;
+    types::Ty*[] r; r.ptr = mem; r.len = 2; return r;
 }
 
-fn types::Type*[] mk_tys3(arena::Arena* a, types::Type* t0, types::Type* t1, types::Type* t2) {
-    types::Type** mem = (types::Type**)arena::alloc(a, 3 * sizeof(types::Type*));
+fn types::Ty*[] mk_tys3(arena::Arena* a, types::Ty* t0, types::Ty* t1, types::Ty* t2) {
+    types::Ty** mem = (types::Ty**)arena::alloc(a, 3 * sizeof(types::Ty*));
     mem[0] = t0; mem[1] = t1; mem[2] = t2;
-    types::Type*[] r; r.ptr = mem; r.len = 3; return r;
+    types::Ty*[] r; r.ptr = mem; r.len = 3; return r;
 }
 
 fn void fresh_typer(arena::Arena* a) {
@@ -1083,9 +1083,9 @@ fn i32 constexpr_import_false(arena::Arena* a, u8[] m) {
 fn i32 container_decl_for_struct(arena::Arena* a, u8[] m) {
     fresh_typer(a);
     symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
-    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    types::Ty*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
-    types::Type* t = types::intern_struct((void*)d);
+    types::Ty* t = types::intern_struct((void*)d);
     if(!testing::expect_eq((void*)sema::container_decl(t), (void*)d, m)) { return -1; }
     return 0;
 }
@@ -1093,9 +1093,9 @@ fn i32 container_decl_for_struct(arena::Arena* a, u8[] m) {
 fn i32 container_decl_for_union(arena::Arena* a, u8[] m) {
     fresh_typer(a);
     symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
-    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    types::Ty*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
     ast::UnionDeclNode* d = fake_union_decl_with_fields(a, names, tys);
-    types::Type* t = types::intern_union((void*)d);
+    types::Ty* t = types::intern_union((void*)d);
     if(!testing::expect_eq((void*)sema::container_decl(t), (void*)d, m)) { return -1; }
     return 0;
 }
@@ -1107,14 +1107,14 @@ fn i32 container_decl_for_primitive_null(arena::Arena* a, u8[] m) {
 
 fn i32 container_decl_for_pointer_null(arena::Arena* a, u8[] m) {
     fresh_typer(a);
-    types::Type* p = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* p = types::intern_pointer(types::prim_i32(), false);
     if(!testing::expect_eq((void*)sema::container_decl(p), (void*)null, m)) { return -1; }
     return 0;
 }
 
 fn i32 container_decl_for_slice_null(arena::Arena* a, u8[] m) {
     fresh_typer(a);
-    types::Type* sl = types::intern_slice(types::prim_i32());
+    types::Ty* sl = types::intern_slice(types::prim_i32());
     if(!testing::expect_eq((void*)sema::container_decl(sl), (void*)null, m)) { return -1; }
     return 0;
 }
@@ -1128,7 +1128,7 @@ fn i32 find_field_returns_existing(arena::Arena* a, u8[] m) {
     symbol::Symbol* n0 = fake_sym(a);
     symbol::Symbol* n1 = fake_sym(a);
     symbol::Symbol*[] names = mk_syms2(a, n0, n1);
-    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    types::Ty*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
     ast::FieldDecl* found = sema::find_field((ast::AstNode*)d, n1);
     if(!testing::expect_not_null((void*)found, m)) { return -1; }
@@ -1138,7 +1138,7 @@ fn i32 find_field_returns_existing(arena::Arena* a, u8[] m) {
 
 fn i32 find_field_returns_null_for_missing(arena::Arena* a, u8[] m) {
     symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
-    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    types::Ty*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
     symbol::Symbol* missing = fake_sym(a);
     if(!testing::expect_eq((void*)sema::find_field((ast::AstNode*)d, missing), (void*)null, m)) { return -1; }
@@ -1147,7 +1147,7 @@ fn i32 find_field_returns_null_for_missing(arena::Arena* a, u8[] m) {
 
 fn i32 find_field_empty_returns_null(arena::Arena* a, u8[] m) {
     symbol::Symbol*[] names = {null, 0};
-    types::Type*[] tys = {null, 0};
+    types::Ty*[] tys = {null, 0};
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
     if(!testing::expect_eq((void*)sema::find_field((ast::AstNode*)d, fake_sym(a)), (void*)null, m)) { return -1; }
     return 0;
@@ -1157,7 +1157,7 @@ fn i32 find_field_works_on_union(arena::Arena* a, u8[] m) {
     symbol::Symbol* n0 = fake_sym(a);
     symbol::Symbol* n1 = fake_sym(a);
     symbol::Symbol*[] names = mk_syms2(a, n0, n1);
-    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    types::Ty*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
     ast::UnionDeclNode* d = fake_union_decl_with_fields(a, names, tys);
     ast::FieldDecl* found = sema::find_field((ast::AstNode*)d, n0);
     if(!testing::expect_not_null((void*)found, m)) { return -1; }
@@ -1168,7 +1168,7 @@ fn i32 find_field_works_on_union(arena::Arena* a, u8[] m) {
 fn i32 find_field_index_first(arena::Arena* a, u8[] m) {
     symbol::Symbol* n0 = fake_sym(a);
     symbol::Symbol*[] names = mk_syms3(a, n0, fake_sym(a), fake_sym(a));
-    types::Type*[] tys = mk_tys3(a, types::prim_i32(), types::prim_u8(), types::prim_bool());
+    types::Ty*[] tys = mk_tys3(a, types::prim_i32(), types::prim_u8(), types::prim_bool());
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
     if(!testing::expect_eq(sema::find_field_index(d, n0), 0, m)) { return -1; }
     return 0;
@@ -1177,7 +1177,7 @@ fn i32 find_field_index_first(arena::Arena* a, u8[] m) {
 fn i32 find_field_index_last(arena::Arena* a, u8[] m) {
     symbol::Symbol* n2 = fake_sym(a);
     symbol::Symbol*[] names = mk_syms3(a, fake_sym(a), fake_sym(a), n2);
-    types::Type*[] tys = mk_tys3(a, types::prim_i32(), types::prim_u8(), types::prim_bool());
+    types::Ty*[] tys = mk_tys3(a, types::prim_i32(), types::prim_u8(), types::prim_bool());
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
     if(!testing::expect_eq(sema::find_field_index(d, n2), 2, m)) { return -1; }
     return 0;
@@ -1185,7 +1185,7 @@ fn i32 find_field_index_last(arena::Arena* a, u8[] m) {
 
 fn i32 find_field_index_missing_is_max(arena::Arena* a, u8[] m) {
     symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
-    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    types::Ty*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
     ast::StructDeclNode* d = fake_struct_decl_with_fields(a, names, tys);
     u64 idx = sema::find_field_index(d, fake_sym(a));
     if(!testing::expect_eq(idx, (u64)-1, m)) { return -1; }
@@ -1440,8 +1440,8 @@ fn i32 diag_not_bool_convertible_mentions_type(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     fresh_typer(a);
     symbol::Symbol*[] names = mk_syms2(a, fake_sym(a), fake_sym(a));
-    types::Type*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
-    types::Type* st = mk_struct_type(a, names, tys);
+    types::Ty*[] tys = mk_tys2(a, types::prim_i32(), types::prim_u8());
+    types::Ty* st = mk_struct_type(a, names, tys);
     sema::diag_not_bool_convertible(&s, 0, st);
     if(!testing::expect_eq(mm.diag.entries.len, 1, m)) { return -1; }
     return 0;
@@ -2388,7 +2388,7 @@ fn i32 rnt_named_as_field(arena::Arena* a, u8[] m) {
     set_root(mm, a, &stmts[0], 2);
     sema_run(mm);
     ast::StructDeclNode* bar_node = (ast::StructDeclNode*)bar_decl;
-    types::Type* field_type = (types::Type*)bar_node.fields[0].resolved_type;
+    types::Ty* field_type = (types::Ty*)bar_node.fields[0].resolved_type;
     if(!testing::expect_eq((u64)field_type.kind, (u64)types::TypeKind::Struct, m)) { return -1; }
     if(!testing::expect_eq((void*)sema::container_decl(field_type), (void*)foo_decl, m)) { return -2; }
     return 0;
@@ -2667,7 +2667,7 @@ fn i32 rnt_fn_named_param_return(arena::Arena* a, u8[] m) {
     if(!testing::expect_eq((u64)d.ty.data.fn_ptr.ret.kind, (u64)types::TypeKind::Struct, m)) { return -1; }
     if(!testing::expect_eq((u64)d.ty.data.fn_ptr.params[0].kind, (u64)types::TypeKind::Struct, m)) { return -2; }
     ast::FnDeclNode* fn_node = (ast::FnDeclNode*)fn_decl;
-    if(!testing::expect_eq((void*)sema::container_decl((types::Type*)fn_node.params[0].resolved_type), (void*)struct_decl, m)) { return -3; }
+    if(!testing::expect_eq((void*)sema::container_decl((types::Ty*)fn_node.params[0].resolved_type), (void*)struct_decl, m)) { return -3; }
     return 0;
 }
 
@@ -2675,7 +2675,7 @@ fn i32 synth_int_lit_i32(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::IntLitNode* lit = fake_int_lit(a, 42, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_eq((void*)lit.h.ty, (void*)types::prim_i32(), m)) { return -2; }
     if(!testing::expect_true(has_flag((ast::AstNode*)lit, ast::AstFlags::ConstExpr), m)) { return -3; }
@@ -2686,7 +2686,7 @@ fn i32 synth_int_lit_i64(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::IntLitNode* lit = fake_int_lit(a, 3000000000, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i64(), m)) { return -1; }
     return 0;
 }
@@ -2695,7 +2695,7 @@ fn i32 synth_int_lit_u64(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::IntLitNode* lit = fake_int_lit(a, 18446744073709551615, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
     return 0;
 }
@@ -2704,7 +2704,7 @@ fn i32 synth_float_lit(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::FloatLitNode* lit = fake_float_lit(a, 1.5, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, (void*)types::prim_f64(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)lit, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -2714,7 +2714,7 @@ fn i32 synth_bool_lit(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::BoolLitNode* lit = fake_bool_lit(a, true, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, (void*)types::prim_bool(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)lit, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -2724,7 +2724,7 @@ fn i32 synth_char_lit(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::CharLitNode* lit = fake_char_lit(a, 65, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, (void*)types::prim_u8(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)lit, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -2734,8 +2734,8 @@ fn i32 synth_string_lit(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::StringLitNode* lit = fake_string_lit_node(a, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
-    types::Type* want = types::intern_pointer(types::prim_u8(), false);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* want = types::intern_pointer(types::prim_u8(), false);
     if(!testing::expect_eq((void*)t, (void*)want, m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)lit, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -2745,7 +2745,7 @@ fn i32 synth_null_lit(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::NullLitNode* lit = fake_null_lit(a, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, (void*)types::prim_null_ptr(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)lit, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -2755,7 +2755,7 @@ fn i32 synth_struct_lit_needs_context(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::StructLitNode* lit = fake_struct_lit(a, 12);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "literal requires an expected type", m)) { return -3; }
@@ -2767,7 +2767,7 @@ fn i32 synth_array_lit_needs_context(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::ArrayLitNode* lit = fake_array_lit(a, 7);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "literal requires an expected type", m)) { return -3; }
@@ -2779,7 +2779,7 @@ fn i32 synth_undefined_needs_context(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::UndefinedLitNode* lit = fake_undefined_lit(a, 3);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)lit);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
@@ -2795,7 +2795,7 @@ fn i32 synth_ident_var(arena::Arena* a, u8[] m) {
     sema::Decl* d = fake_node_decl(a, x, types::prim_i32(), (ast::AstNode*)fake_var_decl(a, x, false));
     sema::scope_add(sc, x, d);
     ast::IdentNode* id = fake_ident(a, x, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)id);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)id);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_eq((void*)id.resolved, (void*)d, m)) { return -2; }
     if(!testing::expect_true(has_flag((ast::AstNode*)id, ast::AstFlags::LValue), m)) { return -3; }
@@ -2812,7 +2812,7 @@ fn i32 synth_ident_param(arena::Arena* a, u8[] m) {
     sema::Decl* d = fake_param_decl(a, p, types::prim_f32());
     sema::scope_add(sc, p, d);
     ast::IdentNode* id = fake_ident(a, p, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)id);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)id);
     if(!testing::expect_eq((void*)t, (void*)types::prim_f32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)id, ast::AstFlags::LValue), m)) { return -2; }
     return 0;
@@ -2870,7 +2870,7 @@ fn i32 synth_ident_undefined(arena::Arena* a, u8[] m) {
     s.scope = sc;
     symbol::Symbol* missing = interner::intern("nope");
     ast::IdentNode* id = fake_ident(a, missing, 9);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)id);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)id);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "undefined identifier nope", m)) { return -3; }
@@ -2904,7 +2904,7 @@ fn i32 check_int_lit_overflow_u8(arena::Arena* a, u8[] m) {
 fn i32 check_null_to_ptr(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* ptr = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* ptr = types::intern_pointer(types::prim_i32(), false);
     ast::NullLitNode* lit = fake_null_lit(a, 0);
     bool ok = sema::check(&s, (ast::AstNode*)lit, ptr);
     if(!testing::expect_true(ok, m)) { return -1; }
@@ -2916,7 +2916,7 @@ fn i32 check_null_to_ptr(arena::Arena* a, u8[] m) {
 fn i32 check_null_to_slice(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     ast::NullLitNode* lit = fake_null_lit(a, 0);
     bool ok = sema::check(&s, (ast::AstNode*)lit, slice);
     if(!testing::expect_true(ok, m)) { return -1; }
@@ -3011,7 +3011,7 @@ fn i32 check_char_to_u8(arena::Arena* a, u8[] m) {
 fn i32 check_string_to_u8_ptr(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* u8ptr = types::intern_pointer(types::prim_u8(), false);
+    types::Ty* u8ptr = types::intern_pointer(types::prim_u8(), false);
     ast::StringLitNode* lit = fake_string_lit_node(a, 0);
     bool ok = sema::check(&s, (ast::AstNode*)lit, u8ptr);
     if(!testing::expect_true(ok, m)) { return -1; }
@@ -3024,7 +3024,7 @@ fn i32 bin_add_two_lits(arena::Arena* a, u8[] m) {
     ast::AstNode* lhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
     ast::AstNode* rhs = (ast::AstNode*)fake_int_lit(a, 2, 0);
     ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::Plus, lhs, rhs, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)bin);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)bin, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -3036,7 +3036,7 @@ fn i32 bin_comparison_is_bool(arena::Arena* a, u8[] m) {
     ast::AstNode* lhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
     ast::AstNode* rhs = (ast::AstNode*)fake_int_lit(a, 2, 0);
     ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::LT, lhs, rhs, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)bin);
     if(!testing::expect_eq((void*)t, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
@@ -3047,7 +3047,7 @@ fn i32 bin_logical_is_bool(arena::Arena* a, u8[] m) {
     ast::AstNode* lhs = (ast::AstNode*)fake_bool_lit(a, true, 0);
     ast::AstNode* rhs = (ast::AstNode*)fake_bool_lit(a, false, 0);
     ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::AmpAmp, lhs, rhs, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)bin);
     if(!testing::expect_eq((void*)t, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
@@ -3057,7 +3057,7 @@ fn i32 bin_nested_const(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     ast::AstNode* inner = (ast::AstNode*)fake_binop(a, token::TokenKind::Plus, (ast::AstNode*)fake_int_lit(a, 1, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
     ast::BinaryOpNode* outer = fake_binop(a, token::TokenKind::Star, inner, (ast::AstNode*)fake_int_lit(a, 3, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)outer);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)outer);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)outer, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -3073,7 +3073,7 @@ fn i32 bin_non_const_operand(arena::Arena* a, u8[] m) {
     ast::AstNode* lhs = (ast::AstNode*)fake_ident(a, x, 0);
     ast::AstNode* rhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
     ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::Plus, lhs, rhs, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)bin);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_true(!has_flag((ast::AstNode*)bin, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -3085,7 +3085,7 @@ fn i32 bin_mismatch_reports(arena::Arena* a, u8[] m) {
     ast::AstNode* lhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
     ast::AstNode* rhs = (ast::AstNode*)fake_float_lit(a, 2.0, 0);
     ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::Plus, lhs, rhs, 6);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)bin);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "operator is not defined for i32 and f64", m)) { return -3; }
@@ -3102,7 +3102,7 @@ fn i32 bin_operand_error_propagates(arena::Arena* a, u8[] m) {
     ast::AstNode* lhs = (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0);
     ast::AstNode* rhs = (ast::AstNode*)fake_int_lit(a, 1, 0);
     ast::BinaryOpNode* bin = fake_binop(a, token::TokenKind::Plus, lhs, rhs, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)bin);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)bin);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     return 0;
 }
@@ -3112,7 +3112,7 @@ fn i32 un_neg_int(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     ast::AstNode* operand = (ast::AstNode*)fake_int_lit(a, 5, 0);
     ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Minus, operand, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)un);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)un, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -3123,7 +3123,7 @@ fn i32 un_not_bool(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     ast::AstNode* operand = (ast::AstNode*)fake_bool_lit(a, true, 0);
     ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Bang, operand, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)un);
     if(!testing::expect_eq((void*)t, (void*)types::prim_bool(), m)) { return -1; }
     return 0;
 }
@@ -3133,7 +3133,7 @@ fn i32 un_complement_int(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     ast::AstNode* operand = (ast::AstNode*)fake_int_lit(a, 5, 0);
     ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Tilde, operand, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)un);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
@@ -3143,7 +3143,7 @@ fn i32 un_complement_float_fails(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     ast::AstNode* operand = (ast::AstNode*)fake_float_lit(a, 2.0, 0);
     ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Tilde, operand, 4);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)un);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "operator '~' is not defined for f64", m)) { return -3; }
@@ -3157,11 +3157,11 @@ fn i32 un_deref_ptr(arena::Arena* a, u8[] m) {
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
     symbol::Symbol* p = interner::intern("p");
-    types::Type* ptr = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* ptr = types::intern_pointer(types::prim_i32(), false);
     register_var(a, sc, p, ptr, false);
     ast::AstNode* operand = (ast::AstNode*)fake_ident(a, p, 0);
     ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Star, operand, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)un);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)un, ast::AstFlags::LValue), m)) { return -2; }
     return 0;
@@ -3172,7 +3172,7 @@ fn i32 un_deref_non_ptr_fails(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     ast::AstNode* operand = (ast::AstNode*)fake_int_lit(a, 5, 0);
     ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Star, operand, 8);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)un);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "operator '*' is not defined for i32", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 8, m)) { return -3; }
@@ -3188,8 +3188,8 @@ fn i32 un_addr_of_lvalue(arena::Arena* a, u8[] m) {
     register_var(a, sc, x, types::prim_i32(), false);
     ast::AstNode* operand = (ast::AstNode*)fake_ident(a, x, 0);
     ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Amp, operand, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
-    types::Type* want = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Ty* want = types::intern_pointer(types::prim_i32(), false);
     if(!testing::expect_eq((void*)t, (void*)want, m)) { return -1; }
     return 0;
 }
@@ -3199,7 +3199,7 @@ fn i32 un_addr_of_non_lvalue_fails(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     ast::AstNode* operand = (ast::AstNode*)fake_int_lit(a, 5, 3);
     ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Amp, operand, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)un);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot take the address of a non-lvalue", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
@@ -3213,7 +3213,7 @@ fn i32 un_operand_error_propagates(arena::Arena* a, u8[] m) {
     s.scope = sc;
     ast::AstNode* operand = (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0);
     ast::UnaryOpNode* un = fake_unary(a, token::TokenKind::Minus, operand, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)un);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)un);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     return 0;
 }
@@ -3259,11 +3259,11 @@ fn i32 member_struct_field(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* point = mk_point_type(a);
+    types::Ty* point = mk_point_type(a);
     symbol::Symbol* p = interner::intern("p");
     register_var(a, sc, p, point, false);
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, p, 0), interner::intern("x"), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)acc, ast::AstFlags::LValue), m)) { return -2; }
     if(!testing::expect_not_null((void*)acc.resolved, m)) { return -3; }
@@ -3275,11 +3275,11 @@ fn i32 member_pointer_autoderef(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* point_ptr = types::intern_pointer(mk_point_type(a), false);
+    types::Ty* point_ptr = types::intern_pointer(mk_point_type(a), false);
     symbol::Symbol* p = interner::intern("p");
     register_var(a, sc, p, point_ptr, false);
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, p, 0), interner::intern("y"), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)acc, ast::AstFlags::LValue), m)) { return -2; }
     return 0;
@@ -3290,12 +3290,12 @@ fn i32 member_slice_ptr(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     symbol::Symbol* sl = interner::intern("sl");
     register_var(a, sc, sl, slice, false);
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, sl, 0), interner::intern("ptr"), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
-    types::Type* want = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* want = types::intern_pointer(types::prim_i32(), false);
     if(!testing::expect_eq((void*)t, (void*)want, m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)acc, ast::AstFlags::LValue), m)) { return -2; }
     return 0;
@@ -3306,11 +3306,11 @@ fn i32 member_slice_len(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     symbol::Symbol* sl = interner::intern("sl");
     register_var(a, sc, sl, slice, false);
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, sl, 0), interner::intern("len"), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
     if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
     return 0;
 }
@@ -3320,11 +3320,11 @@ fn i32 member_slice_unknown_field(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     symbol::Symbol* sl = interner::intern("sl");
     register_var(a, sc, sl, slice, false);
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, sl, 0), interner::intern("foo"), 4);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "type i32[] has no field foo", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -3; }
@@ -3336,11 +3336,11 @@ fn i32 member_unknown_struct_field(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* point = mk_point_type(a);
+    types::Ty* point = mk_point_type(a);
     symbol::Symbol* p = interner::intern("p");
     register_var(a, sc, p, point, false);
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, p, 0), interner::intern("z"), 8);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "type Point has no field z", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 8, m)) { return -3; }
@@ -3355,7 +3355,7 @@ fn i32 member_on_non_aggregate(arena::Arena* a, u8[] m) {
     symbol::Symbol* x = interner::intern("x");
     register_var(a, sc, x, types::prim_i32(), false);
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, x, 0), interner::intern("foo"), 2);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot access field of i32", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 2, m)) { return -3; }
@@ -3368,7 +3368,7 @@ fn i32 member_base_error(arena::Arena* a, u8[] m) {
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0), interner::intern("x"), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     return 0;
 }
@@ -3378,11 +3378,11 @@ fn i32 index_array(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    types::Ty* arr = types::intern_array(types::prim_i32(), 4);
     symbol::Symbol* av = interner::intern("av");
     register_var(a, sc, av, arr, false);
     ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_int_lit(a, 0, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)idx);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)idx, ast::AstFlags::LValue), m)) { return -2; }
     return 0;
@@ -3393,11 +3393,11 @@ fn i32 index_slice(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* slice = types::intern_slice(types::prim_f32());
+    types::Ty* slice = types::intern_slice(types::prim_f32());
     symbol::Symbol* sl = interner::intern("sl");
     register_var(a, sc, sl, slice, false);
     ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, sl, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)idx);
     if(!testing::expect_eq((void*)t, (void*)types::prim_f32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)idx, ast::AstFlags::LValue), m)) { return -2; }
     return 0;
@@ -3408,11 +3408,11 @@ fn i32 index_pointer(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* ptr = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* ptr = types::intern_pointer(types::prim_i32(), false);
     symbol::Symbol* p = interner::intern("p");
     register_var(a, sc, p, ptr, false);
     ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, p, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)idx);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)idx, ast::AstFlags::LValue), m)) { return -2; }
     return 0;
@@ -3426,7 +3426,7 @@ fn i32 index_non_indexable(arena::Arena* a, u8[] m) {
     symbol::Symbol* x = interner::intern("x");
     register_var(a, sc, x, types::prim_i32(), false);
     ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, x, 0), (ast::AstNode*)fake_int_lit(a, 0, 0), 3);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)idx);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot index i32", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
@@ -3438,11 +3438,11 @@ fn i32 index_bad_index_type(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    types::Ty* arr = types::intern_array(types::prim_i32(), 4);
     symbol::Symbol* av = interner::intern("av");
     register_var(a, sc, av, arr, false);
     ast::ArrayIndexNode* idx = fake_index(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_bool_lit(a, true, 5), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)idx);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)idx);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "index must be an integer type, found bool", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
@@ -3454,11 +3454,11 @@ fn i32 slice_range_of_array(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    types::Ty* arr = types::intern_array(types::prim_i32(), 4);
     symbol::Symbol* av = interner::intern("av");
     register_var(a, sc, av, arr, false);
     ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), (ast::AstNode*)fake_int_lit(a, 3, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)sr);
     if(!testing::expect_eq((void*)t, (void*)types::intern_slice(types::prim_i32()), m)) { return -1; }
     if(!testing::expect_true(!has_flag((ast::AstNode*)sr, ast::AstFlags::LValue), m)) { return -2; }
     return 0;
@@ -3469,11 +3469,11 @@ fn i32 slice_range_of_slice(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     symbol::Symbol* sl = interner::intern("sl");
     register_var(a, sc, sl, slice, false);
     ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, sl, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)sr);
     if(!testing::expect_eq((void*)t, (void*)slice, m)) { return -1; }
     return 0;
 }
@@ -3483,11 +3483,11 @@ fn i32 slice_range_of_pointer(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* ptr = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* ptr = types::intern_pointer(types::prim_i32(), false);
     symbol::Symbol* p = interner::intern("p");
     register_var(a, sc, p, ptr, false);
     ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, p, 0), (ast::AstNode*)fake_int_lit(a, 0, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)sr);
     if(!testing::expect_eq((void*)t, (void*)types::intern_slice(types::prim_i32()), m)) { return -1; }
     return 0;
 }
@@ -3497,11 +3497,11 @@ fn i32 slice_range_omit_lo(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    types::Ty* arr = types::intern_array(types::prim_i32(), 4);
     symbol::Symbol* av = interner::intern("av");
     register_var(a, sc, av, arr, false);
     ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, av, 0), null, (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)sr);
     if(!testing::expect_eq((void*)t, (void*)types::intern_slice(types::prim_i32()), m)) { return -1; }
     return 0;
 }
@@ -3511,11 +3511,11 @@ fn i32 slice_range_omit_hi(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    types::Ty* arr = types::intern_array(types::prim_i32(), 4);
     symbol::Symbol* av = interner::intern("av");
     register_var(a, sc, av, arr, false);
     ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), null, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)sr);
     if(!testing::expect_eq((void*)t, (void*)types::intern_slice(types::prim_i32()), m)) { return -1; }
     return 0;
 }
@@ -3528,7 +3528,7 @@ fn i32 slice_range_non_indexable(arena::Arena* a, u8[] m) {
     symbol::Symbol* x = interner::intern("x");
     register_var(a, sc, x, types::prim_i32(), false);
     ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, x, 0), (ast::AstNode*)fake_int_lit(a, 1, 0), (ast::AstNode*)fake_int_lit(a, 2, 0), 6);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)sr);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot index i32", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 6, m)) { return -3; }
@@ -3540,11 +3540,11 @@ fn i32 slice_range_bad_bound(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* arr = types::intern_array(types::prim_i32(), 4);
+    types::Ty* arr = types::intern_array(types::prim_i32(), 4);
     symbol::Symbol* av = interner::intern("av");
     register_var(a, sc, av, arr, false);
     ast::SliceRangeNode* sr = fake_slice_range(a, (ast::AstNode*)fake_ident(a, av, 0), (ast::AstNode*)fake_bool_lit(a, true, 5), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)sr);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)sr);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "index must be an integer type, found bool", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
@@ -3556,12 +3556,12 @@ fn i32 call_no_args(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type*[] noparams = {null, 0};
-    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), noparams, false);
+    types::Ty*[] noparams = {null, 0};
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_i32(), noparams, false);
     symbol::Symbol* f = interner::intern("f");
     register_fn(a, sc, f, fnty);
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), null, 0, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
@@ -3571,14 +3571,14 @@ fn i32 call_one_arg(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
-    types::Type*[] params = {&pbuf[0], 1};
-    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
+    types::Ty*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Ty*[] params = {&pbuf[0], 1};
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
     symbol::Symbol* f = interner::intern("f");
     register_fn(a, sc, f, fnty);
     ast::AstNode*[1] args; args[0] = (ast::AstNode*)fake_int_lit(a, 5, 0);
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 1, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     if(!testing::expect_eq((void*)args[0].h.ty, (void*)types::prim_i32(), m)) { return -2; }
     return 0;
@@ -3589,16 +3589,16 @@ fn i32 call_arg_widen(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
-    types::Type*[] params = {&pbuf[0], 1};
-    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
+    types::Ty*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Ty*[] params = {&pbuf[0], 1};
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
     symbol::Symbol* f = interner::intern("f");
     register_fn(a, sc, f, fnty);
     symbol::Symbol* v = interner::intern("v");
     register_var(a, sc, v, types::prim_i16(), false);
     ast::AstNode*[1] args; args[0] = (ast::AstNode*)fake_ident(a, v, 0);
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 1, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
@@ -3608,14 +3608,14 @@ fn i32 call_arg_mismatch(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
-    types::Type*[] params = {&pbuf[0], 1};
-    types::Type* fnty = types::intern_fn_ptr(types::prim_void(), params, false);
+    types::Ty*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Ty*[] params = {&pbuf[0], 1};
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_void(), params, false);
     symbol::Symbol* f = interner::intern("f");
     register_fn(a, sc, f, fnty);
     ast::AstNode*[1] args; args[0] = (ast::AstNode*)fake_float_lit(a, 1.0, 11);
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 1, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "expected i32, found f64", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 11, m)) { return -3; }
@@ -3627,14 +3627,14 @@ fn i32 call_arity_too_few(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type*[2] pbuf; pbuf[0] = types::prim_i32(); pbuf[1] = types::prim_i32();
-    types::Type*[] params = {&pbuf[0], 2};
-    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
+    types::Ty*[2] pbuf; pbuf[0] = types::prim_i32(); pbuf[1] = types::prim_i32();
+    types::Ty*[] params = {&pbuf[0], 2};
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
     symbol::Symbol* f = interner::intern("f");
     register_fn(a, sc, f, fnty);
     ast::AstNode*[1] args; args[0] = (ast::AstNode*)fake_int_lit(a, 1, 0);
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 1, 4);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "call expects 2 arguments but got 1", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -3; }
@@ -3646,14 +3646,14 @@ fn i32 call_arity_too_many(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
-    types::Type*[] params = {&pbuf[0], 1};
-    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
+    types::Ty*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Ty*[] params = {&pbuf[0], 1};
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_i32(), params, false);
     symbol::Symbol* f = interner::intern("f");
     register_fn(a, sc, f, fnty);
     ast::AstNode*[2] args; args[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); args[1] = (ast::AstNode*)fake_int_lit(a, 2, 0);
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 2, 6);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "call expects 1 arguments but got 2", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 6, m)) { return -3; }
@@ -3668,7 +3668,7 @@ fn i32 call_non_function(arena::Arena* a, u8[] m) {
     symbol::Symbol* x = interner::intern("x");
     register_var(a, sc, x, types::prim_i32(), false);
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, x, 0), null, 0, 3);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot call value of type i32", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
@@ -3680,14 +3680,14 @@ fn i32 call_variadic(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type*[1] pbuf; pbuf[0] = types::prim_i32();
-    types::Type*[] params = {&pbuf[0], 1};
-    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), params, true);
+    types::Ty*[1] pbuf; pbuf[0] = types::prim_i32();
+    types::Ty*[] params = {&pbuf[0], 1};
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_i32(), params, true);
     symbol::Symbol* f = interner::intern("f");
     register_fn(a, sc, f, fnty);
     ast::AstNode*[3] args; args[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); args[1] = (ast::AstNode*)fake_int_lit(a, 2, 0); args[2] = (ast::AstNode*)fake_int_lit(a, 3, 0);
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), &args[0], 3, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
@@ -3697,12 +3697,12 @@ fn i32 call_returns_void(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type*[] noparams = {null, 0};
-    types::Type* fnty = types::intern_fn_ptr(types::prim_void(), noparams, false);
+    types::Ty*[] noparams = {null, 0};
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_void(), noparams, false);
     symbol::Symbol* f = interner::intern("f");
     register_fn(a, sc, f, fnty);
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, f, 0), null, 0, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, (void*)types::prim_void(), m)) { return -1; }
     return 0;
 }
@@ -3713,7 +3713,7 @@ fn i32 call_callee_error(arena::Arena* a, u8[] m) {
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
     ast::CallNode* call = fake_call(a, (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0), null, 0, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)call);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)call);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     return 0;
 }
@@ -3722,7 +3722,7 @@ fn i32 cast_int_to_int(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::I16), (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)cast);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i16(), m)) { return -1; }
     return 0;
 }
@@ -3731,7 +3731,7 @@ fn i32 cast_int_to_float(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::F32), (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)cast);
     if(!testing::expect_eq((void*)t, (void*)types::prim_f32(), m)) { return -1; }
     return 0;
 }
@@ -3740,7 +3740,7 @@ fn i32 cast_float_to_int(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_float_lit(a, 2.5, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)cast);
     if(!testing::expect_eq((void*)t, (void*)types::prim_i32(), m)) { return -1; }
     return 0;
 }
@@ -3753,7 +3753,7 @@ fn i32 cast_ptr_to_ptr(arena::Arena* a, u8[] m) {
     symbol::Symbol* p = interner::intern("p");
     register_var(a, sc, p, types::intern_pointer(types::prim_i8(), false), false);
     ast::CastNode* cast = fake_cast(a, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false), (ast::AstNode*)fake_ident(a, p, 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)cast);
     if(!testing::expect_eq((void*)t, (void*)types::intern_pointer(types::prim_i32(), false), m)) { return -1; }
     return 0;
 }
@@ -3775,7 +3775,7 @@ fn i32 cast_invalid(arena::Arena* a, u8[] m) {
     symbol::Symbol* p = interner::intern("p");
     register_var(a, sc, p, mk_point_type(a), false);
     ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_ident(a, p, 0), 7);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)cast);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "cannot cast Point to i32", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 7, m)) { return -3; }
@@ -3788,7 +3788,7 @@ fn i32 cast_expr_error(arena::Arena* a, u8[] m) {
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
     ast::CastNode* cast = fake_cast(a, mk_ty_prim(a, token::TokenKind::I32), (ast::AstNode*)fake_ident(a, interner::intern("missing"), 0), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)cast);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)cast);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     return 0;
 }
@@ -3798,10 +3798,10 @@ fn i32 ns_enum_member(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* ety = register_color_enum(a, sc);
+    types::Ty* ety = register_color_enum(a, sc);
     ast::AstNode* base = (ast::AstNode*)fake_ident(a, interner::intern("Color"), 0);
     ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("Red"), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)na);
     if(!testing::expect_eq((void*)t, (void*)ety, m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)na, ast::AstFlags::ConstExpr), m)) { return -2; }
     if(!testing::expect_not_null((void*)na.resolved, m)) { return -3; }
@@ -3816,7 +3816,7 @@ fn i32 ns_enum_unknown_member(arena::Arena* a, u8[] m) {
     register_color_enum(a, sc);
     ast::AstNode* base = (ast::AstNode*)fake_ident(a, interner::intern("Color"), 0);
     ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("Blue"), 5);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)na);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "no member named Blue", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 5, m)) { return -3; }
@@ -3832,7 +3832,7 @@ fn i32 ns_not_namespace(arena::Arena* a, u8[] m) {
     register_var(a, sc, x, types::prim_i32(), false);
     ast::AstNode* base = (ast::AstNode*)fake_ident(a, x, 0);
     ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("y"), 2);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)na);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "left of '::' is not a module or enum", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 2, m)) { return -3; }
@@ -3846,7 +3846,7 @@ fn i32 ns_base_undefined(arena::Arena* a, u8[] m) {
     s.scope = sc;
     ast::AstNode* base = (ast::AstNode*)fake_ident(a, interner::intern("Nope"), 0);
     ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("x"), 3);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)na);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "left of '::' is not a module or enum", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 3, m)) { return -3; }
@@ -3863,15 +3863,15 @@ fn i32 ns_import_member(arena::Arena* a, u8[] m) {
     sema::Scope* other_scope = sema::scope_new(a, null, 16);
     other.global_scope = (void*)other_scope;
     symbol::Symbol* helper = interner::intern("helper");
-    types::Type*[] noparams = {null, 0};
-    types::Type* fnty = types::intern_fn_ptr(types::prim_i32(), noparams, false);
+    types::Ty*[] noparams = {null, 0};
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_i32(), noparams, false);
     sema::Decl* hd = register_fn(a, other_scope, helper, fnty);
     hd.is_exported = true;
     symbol::Symbol* othername = interner::intern("other");
     sema::scope_add(main_scope, othername, fake_import_decl(a, othername, other));
     ast::AstNode* base = (ast::AstNode*)fake_ident(a, othername, 0);
     ast::NamespaceAccessNode* na = fake_ns_access(a, base, helper, 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)na);
     if(!testing::expect_eq((void*)t, (void*)fnty, m)) { return -1; }
     if(!testing::expect_eq((void*)na.resolved, (void*)hd, m)) { return -2; }
     return 0;
@@ -3887,13 +3887,13 @@ fn i32 ns_import_non_exported(arena::Arena* a, u8[] m) {
     sema::Scope* other_scope = sema::scope_new(a, null, 16);
     other.global_scope = (void*)other_scope;
     symbol::Symbol* helper = interner::intern("helper");
-    types::Type*[] noparams = {null, 0};
+    types::Ty*[] noparams = {null, 0};
     register_fn(a, other_scope, helper, types::intern_fn_ptr(types::prim_i32(), noparams, false));
     symbol::Symbol* othername = interner::intern("other");
     sema::scope_add(main_scope, othername, fake_import_decl(a, othername, other));
     ast::AstNode* base = (ast::AstNode*)fake_ident(a, othername, 0);
     ast::NamespaceAccessNode* na = fake_ns_access(a, base, helper, 7);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)na);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "no member named helper", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 7, m)) { return -3; }
@@ -3912,7 +3912,7 @@ fn i32 ns_import_unknown_member(arena::Arena* a, u8[] m) {
     sema::scope_add(main_scope, othername, fake_import_decl(a, othername, other));
     ast::AstNode* base = (ast::AstNode*)fake_ident(a, othername, 0);
     ast::NamespaceAccessNode* na = fake_ns_access(a, base, interner::intern("missing"), 4);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)na);
     if(!testing::expect_eq((void*)t, null, m)) { return -1; }
     if(!testing::expect_eq(mm.diag.entries[0].msg, "no member named missing", m)) { return -2; }
     if(!testing::expect_eq(mm.diag.entries[0].src_pos, 4, m)) { return -3; }
@@ -3928,13 +3928,13 @@ fn i32 ns_nested_mod_enum_member(arena::Arena* a, u8[] m) {
     other.name = interner::intern("other");
     sema::Scope* other_scope = sema::scope_new(a, null, 16);
     other.global_scope = (void*)other_scope;
-    types::Type* ety = register_color_enum(a, other_scope);
+    types::Ty* ety = register_color_enum(a, other_scope);
     symbol::Symbol* othername = interner::intern("other");
     sema::scope_add(main_scope, othername, fake_import_decl(a, othername, other));
     ast::AstNode* base_mod = (ast::AstNode*)fake_ident(a, othername, 0);
     ast::AstNode* base_enum = (ast::AstNode*)fake_ns_access(a, base_mod, interner::intern("Color"), 0);
     ast::NamespaceAccessNode* na = fake_ns_access(a, base_enum, interner::intern("Red"), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)na);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)na);
     if(!testing::expect_eq((void*)t, (void*)ety, m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)na, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -3943,7 +3943,7 @@ fn i32 ns_nested_mod_enum_member(arena::Arena* a, u8[] m) {
 fn i32 slit_positional(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* point = mk_point_type(a);
+    types::Ty* point = mk_point_type(a);
     ast::FieldInitializer[2] inits;
     set_init(&inits[0], null, (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
     set_init(&inits[1], null, (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
@@ -3957,7 +3957,7 @@ fn i32 slit_positional(arena::Arena* a, u8[] m) {
 fn i32 slit_designated(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* point = mk_point_type(a);
+    types::Ty* point = mk_point_type(a);
     ast::FieldInitializer[2] inits;
     set_init(&inits[0], interner::intern("y"), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
     set_init(&inits[1], interner::intern("x"), (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
@@ -3970,7 +3970,7 @@ fn i32 slit_designated(arena::Arena* a, u8[] m) {
 fn i32 slit_mixed(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* point = mk_point_type(a);
+    types::Ty* point = mk_point_type(a);
     ast::FieldInitializer[2] inits;
     set_init(&inits[0], null, (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
     set_init(&inits[1], interner::intern("y"), (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
@@ -3983,7 +3983,7 @@ fn i32 slit_mixed(arena::Arena* a, u8[] m) {
 fn i32 slit_unknown_field(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* point = mk_point_type(a);
+    types::Ty* point = mk_point_type(a);
     ast::FieldInitializer[1] inits;
     set_init(&inits[0], interner::intern("z"), (ast::AstNode*)fake_int_lit(a, 1, 0), 6);
     ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 1, 0);
@@ -3997,7 +3997,7 @@ fn i32 slit_unknown_field(arena::Arena* a, u8[] m) {
 fn i32 slit_duplicate(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* point = mk_point_type(a);
+    types::Ty* point = mk_point_type(a);
     ast::FieldInitializer[2] inits;
     set_init(&inits[0], interner::intern("x"), (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
     set_init(&inits[1], interner::intern("x"), (ast::AstNode*)fake_int_lit(a, 2, 0), 8);
@@ -4012,7 +4012,7 @@ fn i32 slit_duplicate(arena::Arena* a, u8[] m) {
 fn i32 slit_extra_positional(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* point = mk_point_type(a);
+    types::Ty* point = mk_point_type(a);
     ast::FieldInitializer[3] inits;
     set_init(&inits[0], null, (ast::AstNode*)fake_int_lit(a, 1, 0), 0);
     set_init(&inits[1], null, (ast::AstNode*)fake_int_lit(a, 2, 0), 0);
@@ -4028,7 +4028,7 @@ fn i32 slit_extra_positional(arena::Arena* a, u8[] m) {
 fn i32 slit_field_type_mismatch(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* point = mk_point_type(a);
+    types::Ty* point = mk_point_type(a);
     ast::FieldInitializer[1] inits;
     set_init(&inits[0], interner::intern("x"), (ast::AstNode*)fake_float_lit(a, 1.0, 4), 0);
     ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 1, 0);
@@ -4055,7 +4055,7 @@ fn i32 slit_non_struct_target(arena::Arena* a, u8[] m) {
 fn i32 alit_exact(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* arr = types::intern_array(types::prim_i32(), 3);
+    types::Ty* arr = types::intern_array(types::prim_i32(), 3);
     ast::AstNode*[3] elems; elems[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); elems[1] = (ast::AstNode*)fake_int_lit(a, 2, 0); elems[2] = (ast::AstNode*)fake_int_lit(a, 3, 0);
     ast::ArrayLitNode* lit = fake_array_lit_with(a, &elems[0], 3, 0);
     bool ok = sema::check(&s, (ast::AstNode*)lit, arr);
@@ -4067,7 +4067,7 @@ fn i32 alit_exact(arena::Arena* a, u8[] m) {
 fn i32 alit_count_mismatch(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* arr = types::intern_array(types::prim_i32(), 3);
+    types::Ty* arr = types::intern_array(types::prim_i32(), 3);
     ast::AstNode*[2] elems; elems[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); elems[1] = (ast::AstNode*)fake_int_lit(a, 2, 0);
     ast::ArrayLitNode* lit = fake_array_lit_with(a, &elems[0], 2, 3);
     bool ok = sema::check(&s, (ast::AstNode*)lit, arr);
@@ -4080,7 +4080,7 @@ fn i32 alit_count_mismatch(arena::Arena* a, u8[] m) {
 fn i32 alit_slice_target(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     ast::AstNode*[2] elems; elems[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); elems[1] = (ast::AstNode*)fake_int_lit(a, 2, 0);
     ast::ArrayLitNode* lit = fake_array_lit_with(a, &elems[0], 2, 0);
     bool ok = sema::check(&s, (ast::AstNode*)lit, slice);
@@ -4091,7 +4091,7 @@ fn i32 alit_slice_target(arena::Arena* a, u8[] m) {
 fn i32 alit_elem_mismatch(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* arr = types::intern_array(types::prim_i32(), 2);
+    types::Ty* arr = types::intern_array(types::prim_i32(), 2);
     ast::AstNode*[2] elems; elems[0] = (ast::AstNode*)fake_int_lit(a, 1, 0); elems[1] = (ast::AstNode*)fake_float_lit(a, 2.0, 7);
     ast::ArrayLitNode* lit = fake_array_lit_with(a, &elems[0], 2, 0);
     bool ok = sema::check(&s, (ast::AstNode*)lit, arr);
@@ -4118,7 +4118,7 @@ fn i32 sllit_designated(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     symbol::Symbol* p = interner::intern("p");
     register_var(a, sc, p, types::intern_pointer(types::prim_i32(), false), false);
     ast::FieldInitializer[2] inits;
@@ -4136,7 +4136,7 @@ fn i32 sllit_positional(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     symbol::Symbol* p = interner::intern("p");
     register_var(a, sc, p, types::intern_pointer(types::prim_i32(), false), false);
     ast::FieldInitializer[2] inits;
@@ -4151,7 +4151,7 @@ fn i32 sllit_positional(arena::Arena* a, u8[] m) {
 fn i32 sllit_unknown_field(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     ast::FieldInitializer[1] inits;
     set_init(&inits[0], interner::intern("foo"), (ast::AstNode*)fake_int_lit(a, 1, 0), 5);
     ast::StructLitNode* lit = fake_struct_lit_with(a, &inits[0], 1, 0);
@@ -4167,7 +4167,7 @@ fn i32 sllit_ptr_type_mismatch(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
-    types::Type* slice = types::intern_slice(types::prim_i32());
+    types::Ty* slice = types::intern_slice(types::prim_i32());
     symbol::Symbol* v = interner::intern("v");
     register_var(a, sc, v, types::prim_i32(), false);
     ast::FieldInitializer[2] inits;
@@ -4477,7 +4477,7 @@ fn i32 sizeof_type_prim(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::AstNode* so = fake_sizeof(a, mk_ty_prim(a, token::TokenKind::I32), 0);
-    types::Type* t = sema::synth(&s, so);
+    types::Ty* t = sema::synth(&s, so);
     if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
     if(!testing::expect_true(has_flag(so, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -4487,7 +4487,7 @@ fn i32 sizeof_type_ptr(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::AstNode* so = fake_sizeof(a, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false), 0);
-    types::Type* t = sema::synth(&s, so);
+    types::Ty* t = sema::synth(&s, so);
     if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
     return 0;
 }
@@ -4496,7 +4496,7 @@ fn i32 sizeof_expr_lit(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::AstNode* so = fake_sizeof(a, (ast::AstNode*)fake_int_lit(a, 5, 0), 0);
-    types::Type* t = sema::synth(&s, so);
+    types::Ty* t = sema::synth(&s, so);
     if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
     return 0;
 }
@@ -4509,7 +4509,7 @@ fn i32 sizeof_expr_var(arena::Arena* a, u8[] m) {
     symbol::Symbol* x = interner::intern("x");
     register_var(a, sc, x, types::prim_i32(), false);
     ast::AstNode* so = fake_sizeof(a, (ast::AstNode*)fake_ident(a, x, 0), 0);
-    types::Type* t = sema::synth(&s, so);
+    types::Ty* t = sema::synth(&s, so);
     if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
     return 0;
 }
@@ -4518,7 +4518,7 @@ fn i32 alignof_type_prim(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::AstNode* ao = fake_alignof(a, mk_ty_prim(a, token::TokenKind::F64), 0);
-    types::Type* t = sema::synth(&s, ao);
+    types::Ty* t = sema::synth(&s, ao);
     if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
     if(!testing::expect_true(has_flag(ao, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -4532,7 +4532,7 @@ fn i32 alignof_expr_var(arena::Arena* a, u8[] m) {
     symbol::Symbol* x = interner::intern("x");
     register_var(a, sc, x, types::prim_i32(), false);
     ast::AstNode* ao = fake_alignof(a, (ast::AstNode*)fake_ident(a, x, 0), 0);
-    types::Type* t = sema::synth(&s, ao);
+    types::Ty* t = sema::synth(&s, ao);
     if(!testing::expect_eq((void*)t, (void*)types::prim_u64(), m)) { return -1; }
     return 0;
 }
@@ -4574,7 +4574,7 @@ fn i32 anon_struct_resolves(arena::Arena* a, u8[] m) {
     set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
     set_field(&fields[1], interner::intern("y"), mk_ty_prim(a, token::TokenKind::F32), 0);
     ast::AstNode* sn = fake_anon_struct(a, &fields[0], 2, 0);
-    types::Type* t = sema::resolve_type(&s, sn);
+    types::Ty* t = sema::resolve_type(&s, sn);
     if(!testing::expect_not_null((void*)t, m)) { return -1; }
     if(!testing::expect_eq((u64)t.kind, (u64)types::TypeKind::Struct, m)) { return -2; }
     if(!testing::expect_eq((void*)fields[0].resolved_type, (void*)types::prim_i32(), m)) { return -3; }
@@ -4589,7 +4589,7 @@ fn i32 anon_union_resolves(arena::Arena* a, u8[] m) {
     set_field(&fields[0], interner::intern("a"), mk_ty_prim(a, token::TokenKind::I32), 0);
     set_field(&fields[1], interner::intern("b"), mk_ty_prim(a, token::TokenKind::F32), 0);
     ast::AstNode* un = fake_anon_union(a, &fields[0], 2, 0);
-    types::Type* t = sema::resolve_type(&s, un);
+    types::Ty* t = sema::resolve_type(&s, un);
     if(!testing::expect_not_null((void*)t, m)) { return -1; }
     if(!testing::expect_eq((u64)t.kind, (u64)types::TypeKind::Union, m)) { return -2; }
     return 0;
@@ -4601,8 +4601,8 @@ fn i32 anon_struct_idempotent(arena::Arena* a, u8[] m) {
     ast::FieldDecl[1] fields;
     set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
     ast::AstNode* sn = fake_anon_struct(a, &fields[0], 1, 0);
-    types::Type* t1 = sema::resolve_type(&s, sn);
-    types::Type* t2 = sema::resolve_type(&s, sn);
+    types::Ty* t1 = sema::resolve_type(&s, sn);
+    types::Ty* t2 = sema::resolve_type(&s, sn);
     if(!testing::expect_eq((void*)t1, (void*)t2, m)) { return -1; }
     return 0;
 }
@@ -4614,8 +4614,8 @@ fn i32 anon_struct_distinct_nodes(arena::Arena* a, u8[] m) {
     set_field(&f1[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
     ast::FieldDecl[1] f2;
     set_field(&f2[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
-    types::Type* t1 = sema::resolve_type(&s, fake_anon_struct(a, &f1[0], 1, 0));
-    types::Type* t2 = sema::resolve_type(&s, fake_anon_struct(a, &f2[0], 1, 0));
+    types::Ty* t1 = sema::resolve_type(&s, fake_anon_struct(a, &f1[0], 1, 0));
+    types::Ty* t2 = sema::resolve_type(&s, fake_anon_struct(a, &f2[0], 1, 0));
     if(!testing::expect_ne((void*)t1, (void*)t2, m)) { return -1; }
     return 0;
 }
@@ -4628,11 +4628,11 @@ fn i32 anon_struct_member_access(arena::Arena* a, u8[] m) {
     ast::FieldDecl[2] fields;
     set_field(&fields[0], interner::intern("x"), mk_ty_prim(a, token::TokenKind::I32), 0);
     set_field(&fields[1], interner::intern("y"), mk_ty_prim(a, token::TokenKind::F32), 0);
-    types::Type* st = sema::resolve_type(&s, fake_anon_struct(a, &fields[0], 2, 0));
+    types::Ty* st = sema::resolve_type(&s, fake_anon_struct(a, &fields[0], 2, 0));
     symbol::Symbol* v = interner::intern("v");
     register_var(a, sc, v, st, false);
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, v, 0), interner::intern("y"), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
     if(!testing::expect_eq((void*)t, (void*)types::prim_f32(), m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)acc, ast::AstFlags::LValue), m)) { return -2; }
     return 0;
@@ -4646,9 +4646,9 @@ fn i32 anon_struct_nested_field(arena::Arena* a, u8[] m) {
     ast::AstNode* inner = fake_anon_struct(a, &inner_fields[0], 1, 0);
     ast::FieldDecl[1] outer_fields;
     set_field(&outer_fields[0], interner::intern("p"), inner, 0);
-    types::Type* t = sema::resolve_type(&s, fake_anon_struct(a, &outer_fields[0], 1, 0));
+    types::Ty* t = sema::resolve_type(&s, fake_anon_struct(a, &outer_fields[0], 1, 0));
     if(!testing::expect_not_null((void*)t, m)) { return -1; }
-    if(!testing::expect_eq((u64)((types::Type*)outer_fields[0].resolved_type).kind, (u64)types::TypeKind::Struct, m)) { return -2; }
+    if(!testing::expect_eq((u64)((types::Ty*)outer_fields[0].resolved_type).kind, (u64)types::TypeKind::Struct, m)) { return -2; }
     return 0;
 }
 
@@ -4744,16 +4744,16 @@ fn i32 member_union_field(arena::Arena* a, u8[] m) {
     sema::Scope* sc = sema::scope_new(a, null, 16);
     s.scope = sc;
     symbol::Symbol*[2] fnames; fnames[0] = interner::intern("a"); fnames[1] = interner::intern("b");
-    types::Type*[2] ftys; ftys[0] = types::prim_i32(); ftys[1] = types::prim_f32();
+    types::Ty*[2] ftys; ftys[0] = types::prim_i32(); ftys[1] = types::prim_f32();
     symbol::Symbol*[] fs = {&fnames[0], 2};
-    types::Type*[] ft = {&ftys[0], 2};
+    types::Ty*[] ft = {&ftys[0], 2};
     ast::UnionDeclNode* d = fake_union_decl_with_fields(a, fs, ft);
     d.qualified_name = interner::intern("U");
-    types::Type* ut = types::intern_union((void*)d);
+    types::Ty* ut = types::intern_union((void*)d);
     symbol::Symbol* u = interner::intern("u");
     register_var(a, sc, u, ut, false);
     ast::MemberAccessNode* acc = fake_member(a, (ast::AstNode*)fake_ident(a, u, 0), interner::intern("b"), 0);
-    types::Type* t = sema::synth(&s, (ast::AstNode*)acc);
+    types::Ty* t = sema::synth(&s, (ast::AstNode*)acc);
     if(!testing::expect_eq((void*)t, (void*)types::prim_f32(), m)) { return -1; }
     return 0;
 }

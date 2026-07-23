@@ -8,7 +8,7 @@ export enum ValueKind : u16 {
     Bool,
     Char,
     Bytes,
-    Type,
+    TYPE,
     Struct,
     Array,
     FnRef,
@@ -22,18 +22,18 @@ export union ValueData {
     f64               f;
     bool              b;
     u8[]              bytes;
-    types::Type*      type_ref;
+    types::Ty*      type_ref;
     Value[]           elems;
     ast::FnDeclNode*  fn_ref;
 }
 
 export struct Value {
     ValueKind    kind;
-    types::Type* ty;          // canonical type of this value; null for type/error values
+    types::Ty* ty;          // canonical type of this value; null for type/error values
     ValueData    data;
 }
 
-export fn Value val_int(i64 v, types::Type* ty) {
+export fn Value val_int(i64 v, types::Ty* ty) {
     Value r;
     sys::memset(&r, 0, sizeof(Value));
     r.kind = ValueKind::Int;
@@ -42,7 +42,7 @@ export fn Value val_int(i64 v, types::Type* ty) {
     return r;
 }
 
-export fn Value val_float(f64 v, types::Type* ty) {
+export fn Value val_float(f64 v, types::Ty* ty) {
     Value r;
     sys::memset(&r, 0, sizeof(Value));
     r.kind = ValueKind::Float;
@@ -60,7 +60,7 @@ export fn Value val_bool(bool b) {
     return r;
 }
 
-export fn Value val_bytes(u8[] bytes, types::Type* ty) {
+export fn Value val_bytes(u8[] bytes, types::Ty* ty) {
     Value r;
     sys::memset(&r, 0, sizeof(Value));
     r.kind = ValueKind::Bytes;
@@ -69,16 +69,16 @@ export fn Value val_bytes(u8[] bytes, types::Type* ty) {
     return r;
 }
 
-export fn Value val_type(types::Type* t) {
+export fn Value val_type(types::Ty* t) {
     Value r;
     sys::memset(&r, 0, sizeof(Value));
-    r.kind = ValueKind::Type;
+    r.kind = ValueKind::TYPE;
     r.ty = null;
     r.data.type_ref = t;
     return r;
 }
 
-export fn Value val_struct(types::Type* ty, Value[] fields) {
+export fn Value val_struct(types::Ty* ty, Value[] fields) {
     Value r;
     sys::memset(&r, 0, sizeof(Value));
     r.kind = ValueKind::Struct;
@@ -87,7 +87,7 @@ export fn Value val_struct(types::Type* ty, Value[] fields) {
     return r;
 }
 
-export fn Value val_array(types::Type* ty, Value[] elems) {
+export fn Value val_array(types::Ty* ty, Value[] elems) {
     Value r;
     sys::memset(&r, 0, sizeof(Value));
     r.kind = ValueKind::Array;
@@ -96,7 +96,7 @@ export fn Value val_array(types::Type* ty, Value[] elems) {
     return r;
 }
 
-export fn Value val_fn(ast::FnDeclNode* func, types::Type* ty) {
+export fn Value val_fn(ast::FnDeclNode* func, types::Ty* ty) {
     Value r;
     sys::memset(&r, 0, sizeof(Value));
     r.kind = ValueKind::FnRef;
@@ -105,7 +105,7 @@ export fn Value val_fn(ast::FnDeclNode* func, types::Type* ty) {
     return r;
 }
 
-export fn Value val_null(types::Type* ty) {
+export fn Value val_null(types::Ty* ty) {
     Value r;
     sys::memset(&r, 0, sizeof(Value));
     r.kind = ValueKind::Null;

@@ -1,7 +1,7 @@
 import ast;
 import arena;
 import cfg;
-import comptime;
+import comptime_interp;
 import interner;
 import module;
 import parser;
@@ -19,7 +19,7 @@ export fn module::Module* frontend(arena::Arena* a, u8[] src) {
     interner::init(a, E2E_BUCKETS);
     token::load_keywords();
     types::typer_init(a, E2E_BUCKETS);
-    comptime::install_hooks();
+    comptime_interp::install_hooks();
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
     m.arena = a;

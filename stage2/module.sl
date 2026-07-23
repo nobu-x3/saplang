@@ -20,13 +20,13 @@ export struct Module {
     Module*[]               imports;         // resolved at discovery; sema reads to map DeclKind::Import
     void*                   global_scope;    // sema::Scope* — every top-level decl; exports filtered by Decl.is_exported
     u16                     sema_phase;      // bitflags from sema::SemaPhase; later phases assert earlier bits
-    void*                   mono_cache;      // comptime::MonoCache* — caller-side monomorphization cache (void* breaks the cycle)
+    void*                   mono_cache;      // comptime_interp::MonoCache* — caller-side monomorphization cache (void* breaks the cycle)
     ast::FnDeclNode*[]      instantiated_fns; // monomorphized clones; CFG + codegen pick these up
     u64                     instantiated_fns_cap;
     u32                     next_inserted_base;   // first virtual src_pos for compinsert-generated code; set to source.len at scan
     InsertedSource[]        inserted_sources;
     u64                     inserted_sources_cap;
-    void*                   reflect_typeinfo;     // types::Type* — synthesized TypeInfo/FieldInfo, built lazily per module
+    void*                   reflect_typeinfo;     // types::Ty* — synthesized TypeInfo/FieldInfo, built lazily per module
     void*                   reflect_fieldinfo;
     i32                     comptime_max_depth;      // interpreter recursion cap; 0 = built-in default
     u64                     comptime_max_iterations; // interpreter per-loop cap; 0 = built-in default

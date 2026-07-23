@@ -2,7 +2,7 @@ import module;
 import scanner;
 import parser;
 import sema;
-import comptime;
+import comptime_interp;
 import cfg;
 import cfg_print;
 import lower;
@@ -494,7 +494,7 @@ fn i8* cstr(arena::Arena* a, u8[] bytes) {
 
 // Runs the frontend phases (parse -> barriered sema); 0 on success, 1 on any error.
 export fn i32 run_frontend(Compiler* c) {
-    comptime::install_hooks();
+    comptime_interp::install_hooks();
     sema::init_body_sync();
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         c.modules[module_index].comptime_max_depth = c.comptime_depth;

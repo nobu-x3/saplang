@@ -38,7 +38,7 @@ fn ast::AstNode* mk_block(arena::Arena* a, ast::AstNode** stmts, u64 count) {
     return (ast::AstNode*)n;
 }
 
-fn ast::AstNode* mk_prim_type(arena::Arena* a, types::Type* ty) {
+fn ast::AstNode* mk_prim_type(arena::Arena* a, types::Ty* ty) {
     ast::TypePrimitiveNode* n = (ast::TypePrimitiveNode*)arena::alloc(a, sizeof(ast::TypePrimitiveNode));
     sys::memset(n, 0, sizeof(ast::TypePrimitiveNode));
     n.h.kind = ast::AstKind::PrimitiveType;

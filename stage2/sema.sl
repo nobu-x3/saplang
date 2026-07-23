@@ -19,12 +19,12 @@ export struct Sema {
     module::Module*     lookup_module;      // module whose scope bare named types resolve against; null = m (differs for a clone body)
     Scope*              scope;              // current scope; module-scope at the top, pushed/popped through blocks
     ast::AstNode*       current_fn;         // FnDeclNode being analyzed during body checking; null at module scope
-    types::Type*        current_return;     // return type of current_fn; null at module scope
+    types::Ty*        current_return;     // return type of current_fn; null at module scope
     i32                 loop_depth;         // for break/continue validity
     i32                 switch_depth;
     ResolutionStack     resolution_stack;   // alias / named-type cycle detection
     symbol::Symbol*[]   comptime_type_names; // comptime Type params of the generic whose signature is resolving
-    bool                in_comprun;         // inside a comprun body: compinsert there is comptime-evaluated, not stmt-spliced
+    bool                in_comprun;         // inside a comprun_node body: compinsert there is comptime-evaluated, not stmt-spliced
     arena::Arena*       body_arena;         // where body-check allocates; a cross-module on-demand check uses the requester's, keeping each module arena single-writer
     diag::DiagBuf*      body_diag;          // where body-check diagnostics go; the requester's, so a foreign check never writes the foreign module's diag buffer
 }
@@ -59,12 +59,12 @@ export enum SemaPhase : u16 {
 }
 
 // Driver-installed (comptime imports sema, not vice versa): infers comptime args from runtime arg types → clone.
-export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, types::Type*[]) resolve_generic_call_hook;
+export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, types::Ty*[]) resolve_generic_call_hook;
 
 // Explicit form: the caller passes the comptime args as values (val_type / val_int); monomorphize on them.
 export fn* ast::FnDeclNode*(module::Module*, ast::FnDeclNode*, value::Value[]) resolve_generic_explicit_hook;
 
-// Evaluates a comprun block through the interpreter; side effects are diagnostics / compinsert mutations.
+// Evaluates a comprun_node block through the interpreter; side effects are diagnostics / compinsert mutations.
 export fn* void(module::Module*, ast::CompRunNode*) run_comprun_hook;
 
 // Evaluates an in-function compinsert and returns the generated statements for the block walk to splice in.
@@ -86,7 +86,7 @@ export struct Decl {
     DeclKind            kind;
     bool                is_exported;    // top-level decl marked `export`; used by cross-module lookup to filter
     symbol::Symbol*     name;           // mirrors the key under which the Decl is registered
-    types::Type*        ty;             // resolved type; for fns the fn-pointer type; for type-decls the canonical Type*
+    types::Ty*        ty;             // resolved type; for fns the fn-pointer type; for type-decls the canonical Type*
     DeclData            data;
     Decl*               next_overload;  // same-name function overloads, chained off the scope-registered head
     module::Module*     home;           // module that registered this decl; lets comptime body-check a cross-module callee
@@ -351,7 +351,7 @@ fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
     case ast::AstKind::EnumDecl: {
         ast::EnumDeclNode* enum_decl = (ast::EnumDeclNode*)decl_node;
         if(enum_decl.base_type != null) { resolve_type(s, enum_decl.base_type); }
-        types::Type* enum_ty = types::intern_enum((void*)enum_decl);
+        types::Ty* enum_ty = types::intern_enum((void*)enum_decl);
         set_decl_ty(s, enum_decl.name, enum_ty);
         for(u64 member_index = 0; member_index < enum_decl.members.len; member_index += 1) {
             Decl* member_decl = new_decl(s, DeclKind::EnumMember, enum_decl.members[member_index].name, enum_ty);
@@ -380,16 +380,16 @@ fn void resolve_extern_item_signature(Sema* s, ast::AstNode* item) {
     switch(item.h.kind) {
     case ast::AstKind::ExternFnDecl: {
         ast::ExternFnDeclNode* extern_fn = (ast::ExternFnDeclNode*)item;
-        types::Type* return_type = types::prim_void();
+        types::Ty* return_type = types::prim_void();
         if(extern_fn.return_type != null) {
-            types::Type* resolved_return = resolve_type(s, extern_fn.return_type);
+            types::Ty* resolved_return = resolve_type(s, extern_fn.return_type);
             if(resolved_return != null) { return_type = resolved_return; }
         }
-        types::Type*[] param_types = {null, 0};
+        types::Ty*[] param_types = {null, 0};
         if(extern_fn.params.len > 0) {
-            types::Type** param_type_mem = (types::Type**)arena::alloc(balloc(s), extern_fn.params.len * sizeof(types::Type*));
+            types::Ty** param_type_mem = (types::Ty**)arena::alloc(balloc(s), extern_fn.params.len * sizeof(types::Ty*));
             for(u64 param_index = 0; param_index < extern_fn.params.len; param_index += 1) {
-                types::Type* param_type = resolve_type(s, extern_fn.params[param_index].type_expr);
+                types::Ty* param_type = resolve_type(s, extern_fn.params[param_index].type_expr);
                 extern_fn.params[param_index].resolved_type = (void*)param_type;
                 param_type_mem[param_index] = param_type;
             }
@@ -419,7 +419,7 @@ fn void resolve_extern_item_signature(Sema* s, ast::AstNode* item) {
 
 fn void resolve_fields(Sema* s, ast::FieldDecl[] fields) {
     for(u64 field_index = 0; field_index < fields.len; field_index += 1) {
-        types::Type* field_ty = resolve_type(s, fields[field_index].type_expr);
+        types::Ty* field_ty = resolve_type(s, fields[field_index].type_expr);
         fields[field_index].resolved_type = (void*)field_ty;
         Decl* field_decl = new_decl(s, DeclKind::Field, fields[field_index].name, field_ty);
         field_decl.data.field = &fields[field_index];
@@ -454,16 +454,16 @@ fn symbol::Symbol*[] collect_comptime_type_names(Sema* s, ast::FnDeclNode* fn_de
 fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
     symbol::Symbol*[] saved_type_names = s.comptime_type_names;
     s.comptime_type_names = collect_comptime_type_names(s, fn_decl);
-    types::Type* return_type = types::prim_void();
+    types::Ty* return_type = types::prim_void();
     if(fn_decl.return_type != null) {
-        types::Type* resolved_return = resolve_type(s, fn_decl.return_type);
+        types::Ty* resolved_return = resolve_type(s, fn_decl.return_type);
         if(resolved_return != null) { return_type = resolved_return; }
     }
-    types::Type*[] param_types = {null, 0};
+    types::Ty*[] param_types = {null, 0};
     if(fn_decl.params.len > 0) {
-        types::Type** param_type_mem = (types::Type**)arena::alloc(balloc(s), fn_decl.params.len * sizeof(types::Type*));
+        types::Ty** param_type_mem = (types::Ty**)arena::alloc(balloc(s), fn_decl.params.len * sizeof(types::Ty*));
         for(u64 param_index = 0; param_index < fn_decl.params.len; param_index += 1) {
-            types::Type* param_type = resolve_type(s, fn_decl.params[param_index].type_expr);
+            types::Ty* param_type = resolve_type(s, fn_decl.params[param_index].type_expr);
             fn_decl.params[param_index].resolved_type = (void*)param_type;
             param_type_mem[param_index] = param_type;
         }
@@ -479,7 +479,7 @@ fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
 }
 
 // Look up a top-level decl by name in the module scope and record its resolved type.
-fn void set_decl_ty(Sema* s, symbol::Symbol* name, types::Type* ty) {
+fn void set_decl_ty(Sema* s, symbol::Symbol* name, types::Ty* ty) {
     Decl* decl = scope_lookup_local(s.scope, name);
     if(decl != null) { decl.ty = ty; }
 }
@@ -503,11 +503,11 @@ export fn void check_bodies(module::Module* m) {
                 ensure_var_init_checked(s.m, (ast::VarDeclNode*)node);
             }
             else if(node.h.kind == ast::AstKind::ComprunStmt) {
-                ast::CompRunNode* comprun = (ast::CompRunNode*)node;
+                ast::CompRunNode* comprun_node = (ast::CompRunNode*)node;
                 s.in_comprun = true;
-                stmt(s, comprun.body);
+                stmt(s, comprun_node.body);
                 s.in_comprun = false;
-                if(run_comprun_hook != null) { run_comprun_hook(s.m, comprun); }
+                if(run_comprun_hook != null) { run_comprun_hook(s.m, comprun_node); }
             }
         }
     }
@@ -595,7 +595,7 @@ export fn void ensure_var_init_checked(module::Module* m, ast::VarDeclNode* vd) 
     Sema* s = &sema;
     s.scope = (Scope*)m.global_scope;
     s.resolution_stack.arena = m.arena;
-    types::Type* declared = resolve_type(s, vd.type_expr);
+    types::Ty* declared = resolve_type(s, vd.type_expr);
     if(declared != null) { check(s, vd.init, declared); } else { synth(s, vd.init); }
 }
 
@@ -648,14 +648,14 @@ fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
     for(u64 i = 0; i < func.params.len; i += 1) {
         Decl* param_decl = register_sym(s, fn_scope, func.params[i].name, false, DeclKind::Param, func.params[i].src_pos);
         if(param_decl != null) {
-            param_decl.ty = (types::Type*)func.params[i].resolved_type;
+            param_decl.ty = (types::Ty*)func.params[i].resolved_type;
             param_decl.data.param = &func.params[i];
             func.params[i].decl = (void*)param_decl;
         }
     }
     Scope* saved_scope = s.scope;
     ast::AstNode* saved_fn = s.current_fn;
-    types::Type* saved_return = s.current_return;
+    types::Ty* saved_return = s.current_return;
     s.scope = fn_scope;
     s.current_fn = (ast::AstNode*)func;
     s.current_return = fn_return_type(s, func);
@@ -675,14 +675,14 @@ export fn void sema_check_clone(module::Module* caller, module::Module* defining
     s.scope = (Scope*)defining.global_scope;
     s.resolution_stack.arena = caller.arena;
 
-    types::Type* return_type = types::prim_void();
+    types::Ty* return_type = types::prim_void();
     if(clone.return_type != null) {
-        types::Type* resolved = resolve_type(s, clone.return_type);
+        types::Ty* resolved = resolve_type(s, clone.return_type);
         if(resolved != null) { return_type = resolved; }
     }
     Scope* fn_scope = scope_new(caller.arena, (Scope*)defining.global_scope, 16);
     for(u64 i = 0; i < clone.params.len; i += 1) {
-        types::Type* param_type = resolve_type(s, clone.params[i].type_expr);
+        types::Ty* param_type = resolve_type(s, clone.params[i].type_expr);
         clone.params[i].resolved_type = (void*)param_type;
         Decl* param_decl = register_sym(s, fn_scope, clone.params[i].name, false, DeclKind::Param, clone.params[i].src_pos);
         if(param_decl != null) {
@@ -700,7 +700,7 @@ export fn void sema_check_clone(module::Module* caller, module::Module* defining
     clone.body_state = ast::BodyState::Checked;
 }
 
-fn types::Type* fn_return_type(Sema* s, ast::FnDeclNode* func) {
+fn types::Ty* fn_return_type(Sema* s, ast::FnDeclNode* func) {
     Decl* fn_decl = scope_lookup_local((Scope*)s.m.global_scope, func.name);
     if(fn_decl != null && fn_decl.ty != null && fn_decl.ty.kind == types::TypeKind::FnPtr) {
         return fn_decl.ty.data.fn_ptr.ret;
@@ -814,74 +814,74 @@ fn symbol::Symbol* qualify_decl_name(Sema* s, symbol::Symbol* bare_name) {
 // ============================================================================
 
 // Aliases are dissolved here; the returned Type* is never an alias wrapper.
-export fn types::Type* resolve_type(Sema* s, ast::AstNode* texpr) {
+export fn types::Ty* resolve_type(Sema* s, ast::AstNode* texpr) {
     if(texpr == null) { return null; }
     switch(texpr.h.kind) {
     case ast::AstKind::PrimitiveType: {
-        if(texpr.h.ty != null) { return (types::Type*)texpr.h.ty; }
+        if(texpr.h.ty != null) { return (types::Ty*)texpr.h.ty; }
         ast::TypePrimitiveNode* primitive_node = (ast::TypePrimitiveNode*)texpr;
-        types::Type* resolved = types::primitive(types::get_primitive_kind_from_token(primitive_node.kind));
+        types::Ty* resolved = types::primitive(types::get_primitive_kind_from_token(primitive_node.kind));
         if(primitive_node.kind == token::TokenKind::TYPE) { resolved = types::prim_type(); }
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
     case ast::AstKind::PointerType: {
         ast::TypePointerNode* pointer_node = (ast::TypePointerNode*)texpr;
-        types::Type* pointee = resolve_type(s, pointer_node.pointee);
+        types::Ty* pointee = resolve_type(s, pointer_node.pointee);
         if(pointee == null) { return null; }
-        types::Type* resolved = types::intern_pointer(pointee, pointer_node.is_const);
+        types::Ty* resolved = types::intern_pointer(pointee, pointer_node.is_const);
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
     case ast::AstKind::ArrayType: {
         ast::TypeArrayNode* array_node = (ast::TypeArrayNode*)texpr;
-        types::Type* element_type = resolve_type(s, array_node.element);
+        types::Ty* element_type = resolve_type(s, array_node.element);
         if(element_type == null) { return null; }
         u64 count = eval_const_u64(s, array_node.size_expr);
-        types::Type* resolved = types::intern_array(element_type, count);
+        types::Ty* resolved = types::intern_array(element_type, count);
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
     case ast::AstKind::SliceType: {
         ast::TypeSliceNode* slice_node = (ast::TypeSliceNode*)texpr;
-        types::Type* element_type = resolve_type(s, slice_node.element);
+        types::Ty* element_type = resolve_type(s, slice_node.element);
         if(element_type == null) { return null; }
-        types::Type* resolved = types::intern_slice(element_type);
+        types::Ty* resolved = types::intern_slice(element_type);
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
     case ast::AstKind::FnPtrType: {
         ast::TypeFnPtrNode* fnptr_node = (ast::TypeFnPtrNode*)texpr;
-        types::Type* return_type = resolve_type(s, fnptr_node.return_type);
+        types::Ty* return_type = resolve_type(s, fnptr_node.return_type);
         if(return_type == null) { return null; }
-        types::Type*[] param_types = resolve_type_list(s, fnptr_node.param_types);
-        types::Type* resolved = types::intern_fn_ptr(return_type, param_types, false);
+        types::Ty*[] param_types = resolve_type_list(s, fnptr_node.param_types);
+        types::Ty* resolved = types::intern_fn_ptr(return_type, param_types, false);
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
     case ast::AstKind::NamedType: {
-        types::Type* resolved = resolve_named_type(s, (ast::TypeNamedNode*)texpr);
+        types::Ty* resolved = resolve_named_type(s, (ast::TypeNamedNode*)texpr);
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
     case ast::AstKind::StructType: {
-        if(texpr.h.ty != null) { return (types::Type*)texpr.h.ty; }
+        if(texpr.h.ty != null) { return (types::Ty*)texpr.h.ty; }
         ast::StructDeclNode* anon_decl = synth_anon_struct_decl(s, (ast::TypeStructNode*)texpr);
         if(anon_decl == null) { return null; }
-        types::Type* resolved = types::intern_struct((void*)anon_decl);
+        types::Ty* resolved = types::intern_struct((void*)anon_decl);
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
     case ast::AstKind::UnionType: {
-        if(texpr.h.ty != null) { return (types::Type*)texpr.h.ty; }
+        if(texpr.h.ty != null) { return (types::Ty*)texpr.h.ty; }
         ast::UnionDeclNode* anon_decl = synth_anon_union_decl(s, (ast::TypeUnionNode*)texpr);
         if(anon_decl == null) { return null; }
-        types::Type* resolved = types::intern_union((void*)anon_decl);
+        types::Ty* resolved = types::intern_union((void*)anon_decl);
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
     case ast::AstKind::Typeof: {
-        types::Type* operand = synth(s, ((ast::TypeofNode*)texpr).expr);
+        types::Ty* operand = synth(s, ((ast::TypeofNode*)texpr).expr);
         texpr.h.ty = (void*)operand;
         return operand;
     }
@@ -890,22 +890,22 @@ export fn types::Type* resolve_type(Sema* s, ast::AstNode* texpr) {
     return null;
 }
 
-export fn types::Type*[] resolve_type_list(Sema* s, ast::AstNode*[] type_exprs) {
+export fn types::Ty*[] resolve_type_list(Sema* s, ast::AstNode*[] type_exprs) {
     if(type_exprs.len == 0) {
-        types::Type*[] empty = {null, 0};
+        types::Ty*[] empty = {null, 0};
         return empty;
     }
-    types::Type** resolved_types = (types::Type**)arena::alloc(balloc(s), type_exprs.len * sizeof(types::Type*));
+    types::Ty** resolved_types = (types::Ty**)arena::alloc(balloc(s), type_exprs.len * sizeof(types::Ty*));
     for(u64 type_index = 0; type_index < type_exprs.len; type_index += 1) {
         resolved_types[type_index] = resolve_type(s, type_exprs[type_index]);
     }
-    types::Type*[] out = {resolved_types, type_exprs.len};
+    types::Ty*[] out = {resolved_types, type_exprs.len};
     return out;
 }
 
 // Crosses a module boundary when n.namespace names an import.
-fn types::Type* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
-    if(n.h.ty != null) { return (types::Type*)n.h.ty; }   // pre-bound by comptime type-param substitution
+fn types::Ty* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
+    if(n.h.ty != null) { return (types::Ty*)n.h.ty; }   // pre-bound by comptime type-param substitution
     if(n.namespace == null) {
         for(u64 i = 0; i < s.comptime_type_names.len; i += 1) {
             if(n.name == s.comptime_type_names[i]) { return types::prim_type(); }
@@ -986,7 +986,7 @@ export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
         return ((ast::IntLitNode*)expr).value;
     }
     if(eval_const_i64_hook == null) { return 0; }
-    types::Type* t = synth(s, expr);
+    types::Ty* t = synth(s, expr);
     if(t == null) { return 0; }
     if(!expr_has_flag(expr, ast::AstFlags::ConstExpr)) {
         diag_array_size_not_const(s, expr.h.src_pos);
@@ -1004,7 +1004,7 @@ export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
     return (u64)out;
 }
 
-fn types::Type* decl_to_type(Sema* s, module::Module* target, Decl* d) {
+fn types::Ty* decl_to_type(Sema* s, module::Module* target, Decl* d) {
     ast::AstNode* node = d.data.node;
     if(node == null) { return null; }
     // Nominal types intern by decl pointer; only aliases need the d.ty cache below.
@@ -1019,7 +1019,7 @@ fn types::Type* decl_to_type(Sema* s, module::Module* target, Decl* d) {
             return null;
         }
         stack_push(&s.resolution_stack, key);
-        types::Type* resolved = resolve_type(s, ((ast::AliasDeclNode*)node).target);
+        types::Ty* resolved = resolve_type(s, ((ast::AliasDeclNode*)node).target);
         stack_pop(&s.resolution_stack);
         d.ty = resolved;
         return resolved;
@@ -1034,12 +1034,12 @@ fn types::Type* decl_to_type(Sema* s, module::Module* target, Decl* d) {
 // ============================================================================
 
 // StructLit / ArrayLit / UndefinedLit are not synth-able — they need check-mode.
-export fn types::Type* synth(Sema* s, ast::AstNode* e) {
+export fn types::Ty* synth(Sema* s, ast::AstNode* e) {
     if(e == null) { return null; }
     switch(e.h.kind) {
     case ast::AstKind::IntLit: {
         ast::IntLitNode* lit = (ast::IntLitNode*)e;
-        types::Type* t = types::prim_i32();
+        types::Ty* t = types::prim_i32();
         if(!types::int_lit_fits(lit.value, false, t)) { t = types::prim_i64(); }
         if(!types::int_lit_fits(lit.value, false, t)) { t = types::prim_u64(); }
         set_expr(e, t, (u16)ast::AstFlags::ConstExpr);
@@ -1058,7 +1058,7 @@ export fn types::Type* synth(Sema* s, ast::AstNode* e) {
         return types::prim_u8();
     }
     case ast::AstKind::StringLit: {
-        types::Type* t = types::intern_pointer(types::prim_u8(), false);
+        types::Ty* t = types::intern_pointer(types::prim_u8(), false);
         set_expr(e, t, (u16)ast::AstFlags::ConstExpr);
         return t;
     }
@@ -1091,7 +1091,7 @@ export fn types::Type* synth(Sema* s, ast::AstNode* e) {
     return null;
 }
 
-fn void set_expr(ast::AstNode* e, types::Type* ty, u16 add_flags) {
+fn void set_expr(ast::AstNode* e, types::Ty* ty, u16 add_flags) {
     e.h.ty = (void*)ty;
     e.h.flags = (ast::AstFlags)((u16)e.h.flags | add_flags);
 }
@@ -1105,7 +1105,7 @@ fn bool expr_has_flag(ast::AstNode* e, ast::AstFlags f) {
 }
 
 // Literal carve-outs, then fall back to synth + is_convertible.
-export fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
+export fn bool check(Sema* s, ast::AstNode* e, types::Ty* expected) {
     if(e == null || expected == null) { return false; }
     if(e.h.kind == ast::AstKind::UnaryOp) {
         ast::UnaryOpNode* unary = (ast::UnaryOpNode*)e;
@@ -1159,7 +1159,7 @@ export fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
         return check_array_lit(s, (ast::ArrayLitNode*)e, expected);
     }
     else {
-        types::Type* got = synth(s, e);
+        types::Ty* got = synth(s, e);
         if(got == null) { return false; }
         if(types::is_convertible(got, expected)) { return true; }
         diag_type_mismatch(s, e.h.src_pos, got, expected);
@@ -1175,7 +1175,7 @@ export fn bool check(Sema* s, ast::AstNode* e, types::Type* expected) {
 // Per-AstKind synth helpers
 // ----------------------------------------------------------------------------
 
-export fn types::Type* synth_ident(Sema* s, ast::IdentNode* n) {
+export fn types::Ty* synth_ident(Sema* s, ast::IdentNode* n) {
     Decl* d = scope_lookup(s.scope, n.name);
     if(d == null) {
         diag_undefined_ident(s, n.h.src_pos, n.name);
@@ -1205,7 +1205,7 @@ fn Decl* resolve_namespace_decl(Sema* s, ast::AstNode* base) {
     return null;
 }
 
-fn types::Type* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
+fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
     Decl* ns = resolve_namespace_decl(s, n.base);
     if(ns == null) {
         diag_not_namespace(s, n.h.src_pos);
@@ -1245,10 +1245,10 @@ fn types::Type* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
 }
 
 // Auto-derefs one pointer level; slices expose the magic .ptr / .len fields.
-fn types::Type* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
-    types::Type* base = synth(s, n.base);
+fn types::Ty* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
+    types::Ty* base = synth(s, n.base);
     if(base == null) { return null; }
-    types::Type* container = base;
+    types::Ty* container = base;
     if(container.kind == types::TypeKind::Pointer) { container = container.data.pointee; }
     u16 field_flags = 0;
     if(expr_has_flag(n.base, ast::AstFlags::LValue) || base.kind == types::TypeKind::Pointer) {
@@ -1260,7 +1260,7 @@ fn types::Type* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
     }
     if(container.kind == types::TypeKind::Slice) {
         if(n.field == interner::intern("ptr")) {
-            types::Type* elem_ptr = types::intern_pointer(container.data.slice_elem, false);
+            types::Ty* elem_ptr = types::intern_pointer(container.data.slice_elem, false);
             set_expr((ast::AstNode*)n, elem_ptr, field_flags);
             return elem_ptr;
         }
@@ -1283,24 +1283,24 @@ fn types::Type* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
         mark_error((ast::AstNode*)n);
         return null;
     }
-    types::Type* field_ty = (types::Type*)field.resolved_type;
+    types::Ty* field_ty = (types::Ty*)field.resolved_type;
     n.resolved = field.decl;
     set_expr((ast::AstNode*)n, field_ty, field_flags);
     return field_ty;
 }
 
 fn bool check_index(Sema* s, ast::AstNode* index) {
-    types::Type* index_type = synth(s, index);
+    types::Ty* index_type = synth(s, index);
     if(index_type == null) { return false; }
     if(types::is_int(index_type)) { return true; }
     diag_index_not_int(s, index.h.src_pos, index_type);
     return false;
 }
 
-fn types::Type* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
-    types::Type* base = synth(s, n.base);
+fn types::Ty* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
+    types::Ty* base = synth(s, n.base);
     if(base == null) { return null; }
-    types::Type* elem = null;
+    types::Ty* elem = null;
     bool base_is_array = false;
     if(base.kind == types::TypeKind::Array)   { elem = base.data.array.elem; base_is_array = true; }
     else if(base.kind == types::TypeKind::Slice)   { elem = base.data.slice_elem; }
@@ -1324,10 +1324,10 @@ fn types::Type* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
     return elem;
 }
 
-fn types::Type* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
-    types::Type* base = synth(s, n.base);
+fn types::Ty* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
+    types::Ty* base = synth(s, n.base);
     if(base == null) { return null; }
-    types::Type* elem = null;
+    types::Ty* elem = null;
     if(base.kind == types::TypeKind::Array)   { elem = base.data.array.elem; }
     else if(base.kind == types::TypeKind::Slice)   { elem = base.data.slice_elem; }
     else if(base.kind == types::TypeKind::Pointer) { elem = base.data.pointee; }
@@ -1343,7 +1343,7 @@ fn types::Type* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
     }
     if(n.lo != null && !check_index(s, n.lo)) { mark_error((ast::AstNode*)n); return null; }
     if(n.hi != null && !check_index(s, n.hi)) { mark_error((ast::AstNode*)n); return null; }
-    types::Type* result = types::intern_slice(elem);
+    types::Ty* result = types::intern_slice(elem);
     set_expr((ast::AstNode*)n, result, 0);
     return result;
 }
@@ -1367,7 +1367,7 @@ fn Decl* callee_overload_head(Sema* s, ast::AstNode* callee) {
     return null;
 }
 
-fn bool arg_compatible(ast::AstNode* arg, types::Type* arg_type, types::Type* param_type) {
+fn bool arg_compatible(ast::AstNode* arg, types::Ty* arg_type, types::Ty* param_type) {
     if(arg_type == param_type) { return true; }
     if(arg.h.kind == ast::AstKind::IntLit) { return types::is_int(param_type); }
     if(arg.h.kind == ast::AstKind::FloatLit) { return types::is_float(param_type); }
@@ -1375,9 +1375,9 @@ fn bool arg_compatible(ast::AstNode* arg, types::Type* arg_type, types::Type* pa
 }
 
 // -1 = not a candidate; otherwise the count of exact-type args, so the closest overload wins.
-fn i32 overload_score(Decl* cand, ast::AstNode*[] args, types::Type*[] arg_types) {
+fn i32 overload_score(Decl* cand, ast::AstNode*[] args, types::Ty*[] arg_types) {
     if(cand.ty == null || cand.ty.kind != types::TypeKind::FnPtr) { return -1; }
-    types::Type*[] params = cand.ty.data.fn_ptr.params;
+    types::Ty*[] params = cand.ty.data.fn_ptr.params;
     bool variadic = cand.ty.data.fn_ptr.is_variadic;
     if(!variadic && args.len != params.len) { return -1; }
     if(variadic && args.len < params.len) { return -1; }
@@ -1395,9 +1395,9 @@ fn void set_callee_resolved(ast::AstNode* callee, Decl* chosen) {
     set_expr(callee, chosen.ty, 0);
 }
 
-fn types::Type* synth_overloaded_call(Sema* s, ast::CallNode* n, Decl* head) {
-    types::Type** arg_type_mem = (types::Type**)arena::alloc(balloc(s), n.args.len * sizeof(types::Type*));
-    types::Type*[] arg_types = {arg_type_mem, n.args.len};
+fn types::Ty* synth_overloaded_call(Sema* s, ast::CallNode* n, Decl* head) {
+    types::Ty** arg_type_mem = (types::Ty**)arena::alloc(balloc(s), n.args.len * sizeof(types::Ty*));
+    types::Ty*[] arg_types = {arg_type_mem, n.args.len};
     bool args_ok = true;
     for(u64 i = 0; i < n.args.len; i += 1) {
         arg_types[i] = synth(s, n.args[i]);
@@ -1424,11 +1424,11 @@ fn types::Type* synth_overloaded_call(Sema* s, ast::CallNode* n, Decl* head) {
         mark_error((ast::AstNode*)n);
         return null;
     }
-    types::Type*[] params = best.ty.data.fn_ptr.params;
+    types::Ty*[] params = best.ty.data.fn_ptr.params;
     for(u64 i = 0; i < params.len; i += 1) { check(s, n.args[i], params[i]); }
     for(u64 j = params.len; j < n.args.len; j += 1) { synth(s, n.args[j]); }
     set_callee_resolved(n.callee, best);
-    types::Type* ret = best.ty.data.fn_ptr.ret;
+    types::Ty* ret = best.ty.data.fn_ptr.ret;
     set_expr((ast::AstNode*)n, ret, 0);
     return ret;
 }
@@ -1441,13 +1441,13 @@ fn ast::FnDeclNode* as_generic_fn(Decl* d) {
     return fnd;
 }
 
-fn types::Type* clone_return_type(ast::FnDeclNode* clone) {
-    if(clone.return_type != null && clone.return_type.h.ty != null) { return (types::Type*)clone.return_type.h.ty; }
+fn types::Ty* clone_return_type(ast::FnDeclNode* clone) {
+    if(clone.return_type != null && clone.return_type.h.ty != null) { return (types::Ty*)clone.return_type.h.ty; }
     return types::prim_void();
 }
 
 // Generic callee: sema synths runtime args, the hook infers comptime args + monomorphizes, then sema checks args vs the clone.
-fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
+fn types::Ty* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
     if(resolve_generic_call_hook == null) {
         u8[] msg = "generic calls require the comptime interpreter";
         sema_report(s, n.h.src_pos, msg);
@@ -1464,8 +1464,8 @@ fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* g
         mark_error((ast::AstNode*)n);
         return null;
     }
-    types::Type** arg_type_mem = (types::Type**)arena::alloc(balloc(s), n.args.len * sizeof(types::Type*));
-    types::Type*[] arg_types = {arg_type_mem, n.args.len};
+    types::Ty** arg_type_mem = (types::Ty**)arena::alloc(balloc(s), n.args.len * sizeof(types::Ty*));
+    types::Ty*[] arg_types = {arg_type_mem, n.args.len};
     bool args_ok = true;
     for(u64 i = 0; i < n.args.len; i += 1) {
         if(ast::is_type(n.args[i].h.kind)) {
@@ -1487,12 +1487,12 @@ fn types::Type* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* g
     u64 runtime_index = 0;
     for(u64 i = 0; i < clone.params.len; i += 1) {
         if(clone.params[i].is_comptime) { continue; }
-        types::Type* param_type = (types::Type*)clone.params[i].resolved_type;
+        types::Ty* param_type = (types::Ty*)clone.params[i].resolved_type;
         if(runtime_index < n.args.len && param_type != null) { check(s, n.args[runtime_index], param_type); }
         runtime_index += 1;
     }
     n.resolved_fn = (void*)clone;
-    types::Type* ret = clone_return_type(clone);
+    types::Ty* ret = clone_return_type(clone);
     set_expr((ast::AstNode*)n, ret, 0);
     return ret;
 }
@@ -1505,7 +1505,7 @@ fn bool has_comptime_type_param(ast::FnDeclNode* generic) {
 }
 
 // An explicit type argument is a type expression, or a bare name / mod::name that resolves to a nominal type.
-fn types::Type* resolve_type_arg(Sema* s, ast::AstNode* arg) {
+fn types::Ty* resolve_type_arg(Sema* s, ast::AstNode* arg) {
     if(ast::is_type(arg.h.kind)) { return resolve_type(s, arg); }
     if(arg.h.kind == ast::AstKind::Ident) {
         symbol::Symbol* name = ((ast::IdentNode*)arg).name;
@@ -1529,7 +1529,7 @@ fn types::Type* resolve_type_arg(Sema* s, ast::AstNode* arg) {
 }
 
 // Explicit form: comptime-Type-param positions hold type-expression args; resolve them and monomorphize.
-fn types::Type* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
+fn types::Ty* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
     if(resolve_generic_explicit_hook == null) {
         u8[] msg = "generic calls require the comptime interpreter";
         sema_report(s, n.h.src_pos, msg);
@@ -1545,7 +1545,7 @@ fn types::Type* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDe
     for(u64 i = 0; i < generic.params.len; i += 1) {
         if(!generic.params[i].is_comptime) { continue; }
         if(is_type_kw(generic.params[i].type_expr)) {
-            types::Type* t = resolve_type_arg(s, n.args[i]);
+            types::Ty* t = resolve_type_arg(s, n.args[i]);
             if(t == null) { mark_error((ast::AstNode*)n); return null; }
             cargs[cargs.len] = value::val_type(t);
         } else {
@@ -1568,7 +1568,7 @@ fn types::Type* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDe
                 mark_error((ast::AstNode*)n);
                 return null;
             }
-            types::Type* pt = resolve_type(s, generic.params[i].type_expr);
+            types::Ty* pt = resolve_type(s, generic.params[i].type_expr);
             cargs[cargs.len] = value::val_int(v, pt);
         }
         cargs.len += 1;
@@ -1577,16 +1577,16 @@ fn types::Type* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDe
     if(clone == null) { diag_infer_failure(s, n.h.src_pos, generic.name); mark_error((ast::AstNode*)n); return null; }
     for(u64 i = 0; i < clone.params.len; i += 1) {
         if(clone.params[i].is_comptime) { continue; }
-        types::Type* param_type = (types::Type*)clone.params[i].resolved_type;
+        types::Ty* param_type = (types::Ty*)clone.params[i].resolved_type;
         if(i < n.args.len && param_type != null) { check(s, n.args[i], param_type); }
     }
     n.resolved_fn = (void*)clone;
-    types::Type* ret = clone_return_type(clone);
+    types::Ty* ret = clone_return_type(clone);
     set_expr((ast::AstNode*)n, ret, 0);
     return ret;
 }
 
-fn types::Type* synth_call(Sema* s, ast::CallNode* n) {
+fn types::Ty* synth_call(Sema* s, ast::CallNode* n) {
     Decl* callee_decl = callee_overload_head(s, n.callee);
     if(callee_decl != null && callee_decl.next_overload == null) {
         ast::FnDeclNode* generic = as_generic_fn(callee_decl);
@@ -1605,14 +1605,14 @@ fn types::Type* synth_call(Sema* s, ast::CallNode* n) {
     if(callee_decl != null && callee_decl.next_overload != null) {
         return synth_overloaded_call(s, n, callee_decl);
     }
-    types::Type* callee = synth(s, n.callee);
+    types::Ty* callee = synth(s, n.callee);
     if(callee == null) { return null; }
     if(callee.kind != types::TypeKind::FnPtr) {
         diag_not_callable(s, n.h.src_pos, callee);
         mark_error((ast::AstNode*)n);
         return null;
     }
-    types::Type*[] params = callee.data.fn_ptr.params;
+    types::Ty*[] params = callee.data.fn_ptr.params;
     bool variadic = callee.data.fn_ptr.is_variadic;
     bool arity_ok = n.args.len == params.len;
     if(variadic && n.args.len >= params.len) { arity_ok = true; }
@@ -1632,14 +1632,14 @@ fn types::Type* synth_call(Sema* s, ast::CallNode* n) {
         mark_error((ast::AstNode*)n);
         return null;
     }
-    types::Type* ret = callee.data.fn_ptr.ret;
+    types::Ty* ret = callee.data.fn_ptr.ret;
     set_expr((ast::AstNode*)n, ret, 0);
     return ret;
 }
 
-fn types::Type* synth_cast(Sema* s, ast::CastNode* n) {
-    types::Type* target = resolve_type(s, n.target_type);
-    types::Type* src = synth(s, n.expr);
+fn types::Ty* synth_cast(Sema* s, ast::CastNode* n) {
+    types::Ty* target = resolve_type(s, n.target_type);
+    types::Ty* src = synth(s, n.expr);
     if(src == null || target == null) { return null; }
     if(!types::is_castable(src, target)) {
         diag_cast_invalid(s, n.h.src_pos, src, target);
@@ -1652,8 +1652,8 @@ fn types::Type* synth_cast(Sema* s, ast::CastNode* n) {
     return target;
 }
 
-fn types::Type* synth_unary(Sema* s, ast::UnaryOpNode* n) {
-    types::Type* operand = synth(s, n.operand);
+fn types::Ty* synth_unary(Sema* s, ast::UnaryOpNode* n) {
+    types::Ty* operand = synth(s, n.operand);
     if(operand == null) { return null; }
     // A function name is not an l-value, but `&fn` is the function pointer itself, like bare `fn`.
     if(n.op == token::TokenKind::Amp && operand.kind == types::TypeKind::FnPtr && !expr_has_flag(n.operand, ast::AstFlags::LValue)) {
@@ -1667,7 +1667,7 @@ fn types::Type* synth_unary(Sema* s, ast::UnaryOpNode* n) {
         mark_error((ast::AstNode*)n);
         return null;
     }
-    types::Type* result = op::unaryop_result_type(n.op, operand);
+    types::Ty* result = op::unaryop_result_type(n.op, operand);
     if(result == null) {
         diag_unary_mismatch(s, n.h.src_pos, n.op, operand);
         mark_error((ast::AstNode*)n);
@@ -1694,7 +1694,7 @@ fn bool is_numeric_literal_operand(ast::AstNode* e) {
     return false;
 }
 
-fn bool retype_numeric_literal(ast::AstNode* e, types::Type* target) {
+fn bool retype_numeric_literal(ast::AstNode* e, types::Ty* target) {
     if(target == null) { return false; }
     if(e.h.kind == ast::AstKind::IntLit) {
         if(types::is_int(target) && types::int_lit_fits(((ast::IntLitNode*)e).value, false, target)) { e.h.ty = (void*)target; return true; }
@@ -1714,29 +1714,29 @@ fn bool retype_numeric_literal(ast::AstNode* e, types::Type* target) {
 }
 
 // A lone literal operand takes the other operand's concrete numeric type; both-or-neither literal is left alone.
-fn void adapt_binop_operands(ast::AstNode* lhs, types::Type** lt, ast::AstNode* rhs, types::Type** rt) {
+fn void adapt_binop_operands(ast::AstNode* lhs, types::Ty** lt, ast::AstNode* rhs, types::Ty** rt) {
     bool lhs_lit = is_numeric_literal_operand(lhs);
     bool rhs_lit = is_numeric_literal_operand(rhs);
     if(lhs_lit == rhs_lit) { return; }
     // A literal paired with an enum adapts to the enum's base int (the enum acts as its base in arithmetic/bitwise).
     if(rhs_lit) {
-        types::Type* target = *lt;
+        types::Ty* target = *lt;
         if(target.kind == types::TypeKind::Enum) { target = types::enum_base_type(target); }
         if(retype_numeric_literal(rhs, target)) { *rt = target; }
     } else {
-        types::Type* target = *rt;
+        types::Ty* target = *rt;
         if(target.kind == types::TypeKind::Enum) { target = types::enum_base_type(target); }
         if(retype_numeric_literal(lhs, target)) { *lt = target; }
     }
 }
 
-fn types::Type* synth_binary(Sema* s, ast::BinaryOpNode* n) {
-    types::Type* lt = synth(s, n.lhs);
+fn types::Ty* synth_binary(Sema* s, ast::BinaryOpNode* n) {
+    types::Ty* lt = synth(s, n.lhs);
     if(lt == null) { return null; }
-    types::Type* rt = synth(s, n.rhs);
+    types::Ty* rt = synth(s, n.rhs);
     if(rt == null) { return null; }
     adapt_binop_operands(n.lhs, &lt, n.rhs, &rt);
-    types::Type* result = op::binop_result_type(n.op, lt, rt);
+    types::Ty* result = op::binop_result_type(n.op, lt, rt);
     if(result == null) {
         diag_binop_mismatch(s, n.h.src_pos, n.op, lt, rt);
         mark_error((ast::AstNode*)n);
@@ -1750,16 +1750,16 @@ fn types::Type* synth_binary(Sema* s, ast::BinaryOpNode* n) {
     return result;
 }
 
-fn types::Type* synth_sizeof(Sema* s, ast::SizeofNode* n) {
-    types::Type* target = sizeof_operand_type(s, n.arg);
+fn types::Ty* synth_sizeof(Sema* s, ast::SizeofNode* n) {
+    types::Ty* target = sizeof_operand_type(s, n.arg);
     if(target == null) { return null; }
     types::size_of(bdiag(s), target);
     set_expr((ast::AstNode*)n, types::prim_u64(), (u16)ast::AstFlags::ConstExpr);
     return types::prim_u64();
 }
 
-fn types::Type* synth_alignof(Sema* s, ast::AlignofNode* n) {
-    types::Type* target = sizeof_operand_type(s, n.arg);
+fn types::Ty* synth_alignof(Sema* s, ast::AlignofNode* n) {
+    types::Ty* target = sizeof_operand_type(s, n.arg);
     if(target == null) { return null; }
     types::align_of(bdiag(s), target);
     set_expr((ast::AstNode*)n, types::prim_u64(), (u16)ast::AstFlags::ConstExpr);
@@ -1767,7 +1767,7 @@ fn types::Type* synth_alignof(Sema* s, ast::AlignofNode* n) {
 }
 
 // The argument is either a type expression or a value expression to take the type of.
-fn types::Type* sizeof_operand_type(Sema* s, ast::AstNode* arg) {
+fn types::Ty* sizeof_operand_type(Sema* s, ast::AstNode* arg) {
     if(arg == null) { return null; }
     // The parser speculatively types a bare name as a NamedType; sizeof(value) resolves it as an expression instead.
     // A pre-bound h.ty means comptime substitution already fixed the type (e.g. sizeof(T) in a generic) — leave it.
@@ -1782,21 +1782,21 @@ fn types::Type* sizeof_operand_type(Sema* s, ast::AstNode* arg) {
     return synth(s, arg);
 }
 
-fn types::Type* synth_typeof(Sema* s, ast::TypeofNode* n) {
-    types::Type* operand = synth(s, n.expr);
+fn types::Ty* synth_typeof(Sema* s, ast::TypeofNode* n) {
+    types::Ty* operand = synth(s, n.expr);
     if(operand == null) { mark_error((ast::AstNode*)n); return null; }
     set_expr((ast::AstNode*)n, types::prim_type(), (u16)ast::AstFlags::ConstExpr);
     return types::prim_type();
 }
 
-fn void reflect_set_field(ast::FieldDecl* f, u8[] name, types::Type* ty) {
+fn void reflect_set_field(ast::FieldDecl* f, u8[] name, types::Ty* ty) {
     sys::memset(f, 0, sizeof(ast::FieldDecl));
     f.name = interner::intern(name);
     f.resolved_type = (void*)ty;
 }
 
-export fn types::Type* reflection_fieldinfo_type(module::Module* m) {
-    if(m.reflect_fieldinfo != null) { return (types::Type*)m.reflect_fieldinfo; }
+export fn types::Ty* reflection_fieldinfo_type(module::Module* m) {
+    if(m.reflect_fieldinfo != null) { return (types::Ty*)m.reflect_fieldinfo; }
     ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(m.arena, sizeof(ast::StructDeclNode));
     sys::memset(sd, 0, sizeof(ast::StructDeclNode));
     sd.h.kind = ast::AstKind::StructDecl;
@@ -1808,12 +1808,12 @@ export fn types::Type* reflection_fieldinfo_type(module::Module* m) {
     reflect_set_field(&flds[2], "offset", types::prim_u64());
     sd.fields = {flds, 3};
     m.reflect_fieldinfo = (void*)types::intern_struct((void*)sd);
-    return (types::Type*)m.reflect_fieldinfo;
+    return (types::Ty*)m.reflect_fieldinfo;
 }
 
-export fn types::Type* reflection_typeinfo_type(module::Module* m) {
-    if(m.reflect_typeinfo != null) { return (types::Type*)m.reflect_typeinfo; }
-    types::Type* fi = reflection_fieldinfo_type(m);
+export fn types::Ty* reflection_typeinfo_type(module::Module* m) {
+    if(m.reflect_typeinfo != null) { return (types::Ty*)m.reflect_typeinfo; }
+    types::Ty* fi = reflection_fieldinfo_type(m);
     ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(m.arena, sizeof(ast::StructDeclNode));
     sys::memset(sd, 0, sizeof(ast::StructDeclNode));
     sd.h.kind = ast::AstKind::StructDecl;
@@ -1830,19 +1830,19 @@ export fn types::Type* reflection_typeinfo_type(module::Module* m) {
     reflect_set_field(&flds[7], "array_count", types::prim_u64());
     sd.fields = {flds, 8};
     m.reflect_typeinfo = (void*)types::intern_struct((void*)sd);
-    return (types::Type*)m.reflect_typeinfo;
+    return (types::Ty*)m.reflect_typeinfo;
 }
 
-fn types::Type* synth_type_info(Sema* s, ast::TypeInfoNode* n) {
-    types::Type* arg = resolve_type(s, n.arg);
+fn types::Ty* synth_type_info(Sema* s, ast::TypeInfoNode* n) {
+    types::Ty* arg = resolve_type(s, n.arg);
     if(arg == null) { mark_error((ast::AstNode*)n); return null; }
     n.arg.h.ty = (void*)arg;
-    types::Type* ti = reflection_typeinfo_type(s.m);
+    types::Ty* ti = reflection_typeinfo_type(s.m);
     set_expr((ast::AstNode*)n, ti, (u16)ast::AstFlags::ConstExpr);
     return ti;
 }
 
-fn types::Type* synth_compcode(Sema* s, ast::CompCodeNode* n) {
+fn types::Ty* synth_compcode(Sema* s, ast::CompCodeNode* n) {
     u8[] msg = "compcode is not yet supported";
     sema_report(s, n.h.src_pos, msg);
     mark_error((ast::AstNode*)n);
@@ -1855,18 +1855,18 @@ fn types::Type* synth_compcode(Sema* s, ast::CompCodeNode* n) {
 // ----------------------------------------------------------------------------
 
 // An int literal fits any int type whose range holds it.
-export fn bool check_int_lit(Sema* s, ast::IntLitNode* n, types::Type* expected) {
+export fn bool check_int_lit(Sema* s, ast::IntLitNode* n, types::Ty* expected) {
     return check_int_lit_signed(s, n, expected, false);
 }
 
-fn types::Type* int_lit_natural_type(u64 value, bool negative) {
-    types::Type* t = types::prim_i32();
+fn types::Ty* int_lit_natural_type(u64 value, bool negative) {
+    types::Ty* t = types::prim_i32();
     if(!types::int_lit_fits(value, negative, t)) { t = types::prim_i64(); }
     if(!negative && !types::int_lit_fits(value, false, t)) { t = types::prim_u64(); }
     return t;
 }
 
-fn bool check_int_lit_signed(Sema* s, ast::IntLitNode* n, types::Type* expected, bool negative) {
+fn bool check_int_lit_signed(Sema* s, ast::IntLitNode* n, types::Ty* expected, bool negative) {
     if(types::is_int(expected)) {
         if(types::int_lit_fits(n.value, negative, expected)) {
             set_expr((ast::AstNode*)n, expected, (u16)ast::AstFlags::ConstExpr);
@@ -1896,7 +1896,7 @@ fn u64 fields_index_of(ast::FieldDecl[] fields, symbol::Symbol* name) {
     return 18446744073709551615;
 }
 
-fn bool check_struct_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
+fn bool check_struct_lit(Sema* s, ast::StructLitNode* n, types::Ty* expected) {
     if(expected.kind == types::TypeKind::Slice) { return check_slice_lit(s, n, expected); }
     if(expected.kind != types::TypeKind::Struct && expected.kind != types::TypeKind::Union) {
         diag_lit_wrong_target(s, n.h.src_pos, "struct", expected);
@@ -1925,15 +1925,15 @@ fn bool check_struct_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) 
             continue;
         }
         seen[field_idx] = true;
-        if(!check(s, fi.value, (types::Type*)fields[field_idx].resolved_type)) { ok = false; }
+        if(!check(s, fi.value, (types::Ty*)fields[field_idx].resolved_type)) { ok = false; }
     }
     set_expr((ast::AstNode*)n, expected, 0);
     if(!ok) { mark_error((ast::AstNode*)n); }
     return ok;
 }
 
-fn bool check_array_lit(Sema* s, ast::ArrayLitNode* n, types::Type* expected) {
-    types::Type* elem = null;
+fn bool check_array_lit(Sema* s, ast::ArrayLitNode* n, types::Ty* expected) {
+    types::Ty* elem = null;
     bool fixed = false;
     u64 want = 0;
     if(expected.kind == types::TypeKind::Array) { elem = expected.data.array.elem; want = expected.data.array.count; fixed = true; }
@@ -1956,14 +1956,14 @@ fn bool check_array_lit(Sema* s, ast::ArrayLitNode* n, types::Type* expected) {
     return ok;
 }
 
-fn bool is_byte(types::Type* t) {
+fn bool is_byte(types::Ty* t) {
     if(t == null || t.kind != types::TypeKind::Primitive) { return false; }
     return t.prim == types::PrimitiveKind::U8 || t.prim == types::PrimitiveKind::I8;
 }
 
 // A string literal targets a `u8`/`i8` pointer, slice, or array.
-fn bool check_string_lit(Sema* s, ast::StringLitNode* n, types::Type* expected) {
-    types::Type* elem = null;
+fn bool check_string_lit(Sema* s, ast::StringLitNode* n, types::Ty* expected) {
+    types::Ty* elem = null;
     if(expected.kind == types::TypeKind::Pointer)   { elem = expected.data.pointee; }
     else if(expected.kind == types::TypeKind::Slice) { elem = expected.data.slice_elem; }
     else if(expected.kind == types::TypeKind::Array) { elem = expected.data.array.elem; }
@@ -1985,8 +1985,8 @@ fn bool check_string_lit(Sema* s, ast::StringLitNode* n, types::Type* expected) 
 }
 
 // `{.ptr = ..., .len = ...}` or positional `{ptr, len}` against a slice target.
-fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Type* expected) {
-    types::Type* ptr_ty = types::intern_pointer(expected.data.slice_elem, false);
+fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Ty* expected) {
+    types::Ty* ptr_ty = types::intern_pointer(expected.data.slice_elem, false);
     bool ok = true;
     bool seen_ptr = false;
     bool seen_len = false;
@@ -2091,7 +2091,7 @@ fn void stmt(Sema* s, ast::AstNode* st) {
     }
     case ast::AstKind::SwitchStmt: {
         ast::SwitchNode* switch_node = (ast::SwitchNode*)st;
-        types::Type* disc = synth(s, switch_node.discriminant);
+        types::Ty* disc = synth(s, switch_node.discriminant);
         if(disc != null && !types::is_int(disc) && disc.kind != types::TypeKind::Enum) {
             diag_switch_discriminant(s, switch_node.discriminant.h.src_pos, disc);
         }
@@ -2133,12 +2133,12 @@ fn void stmt(Sema* s, ast::AstNode* st) {
         synth(s, ((ast::ExprStmtNode*)st).expr);
     }
     case ast::AstKind::ComprunStmt: {
-        ast::CompRunNode* comprun = (ast::CompRunNode*)st;
+        ast::CompRunNode* comprun_node = (ast::CompRunNode*)st;
         bool saved_in_comprun = s.in_comprun;
         s.in_comprun = true;
-        stmt(s, comprun.body);                  // resolve local decls / idents so eval can read them
+        stmt(s, comprun_node.body);                  // resolve local decls / idents so eval can read them
         s.in_comprun = saved_in_comprun;
-        if(run_comprun_hook != null) { run_comprun_hook(s.m, comprun); }
+        if(run_comprun_hook != null) { run_comprun_hook(s.m, comprun_node); }
     }
     case ast::AstKind::ComperrorStmt: {
         synth(s, ((ast::CompErrorNode*)st).msg_expr);
@@ -2147,7 +2147,7 @@ fn void stmt(Sema* s, ast::AstNode* st) {
         synth(s, ((ast::CompWarningNode*)st).msg_expr);
     }
     case ast::AstKind::CompinsertStmt: {
-        synth(s, ((ast::CompInsertNode*)st).source_expr);   // in a comprun; resolve the arg so eval_compinsert can read it
+        synth(s, ((ast::CompInsertNode*)st).source_expr);   // in a comprun_node; resolve the arg so eval_compinsert can read it
     }
     else { }
     }
@@ -2160,7 +2160,7 @@ fn void stmt_or_expr(Sema* s, ast::AstNode* node) {
 }
 
 fn void stmt_var_decl(Sema* s, ast::VarDeclNode* var) {
-    types::Type* declared = resolve_type(s, var.type_expr);
+    types::Ty* declared = resolve_type(s, var.type_expr);
     if(var.init != null) {
         if(declared != null) { check(s, var.init, declared); }
         else { synth(s, var.init); }
@@ -2189,7 +2189,7 @@ fn void stmt_return(Sema* s, ast::ReturnNode* ret) {
 }
 
 fn void stmt_assignment(Sema* s, ast::AssignmentNode* assign) {
-    types::Type* lt = synth(s, assign.lhs);
+    types::Ty* lt = synth(s, assign.lhs);
     if(lt == null) { synth(s, assign.rhs); return; }
     if(!expr_has_flag(assign.lhs, ast::AstFlags::LValue)) {
         diag_not_assignable(s, assign.lhs.h.src_pos);
@@ -2205,10 +2205,10 @@ fn void stmt_assignment(Sema* s, ast::AssignmentNode* assign) {
         check(s, assign.rhs, lt);
         return;
     }
-    types::Type* rt = synth(s, assign.rhs);
+    types::Ty* rt = synth(s, assign.rhs);
     if(rt == null) { return; }
     adapt_binop_operands(assign.lhs, &lt, assign.rhs, &rt);
-    types::Type* result = op::binop_result_type(compound_binop(assign.op), lt, rt);
+    types::Ty* result = op::binop_result_type(compound_binop(assign.op), lt, rt);
     if(result == null) {
         diag_binop_mismatch(s, assign.h.src_pos, assign.op, lt, rt);
         return;
@@ -2234,7 +2234,7 @@ fn token::TokenKind compound_binop(token::TokenKind op) {
 }
 
 fn bool check_cond(Sema* s, ast::AstNode* e) {
-    types::Type* t = synth(s, e);
+    types::Ty* t = synth(s, e);
     if(t == null) { return false; }
     if(types::is_convertible_in_cond(t)) { return true; }
     diag_not_bool_convertible(s, e.h.src_pos, t);
@@ -2257,7 +2257,7 @@ fn void emit_diag(Sema* s, u32 src_pos, u8* buf, i32 written) {
 }
 
 // "expected `<expected>`, found `<got>`" — the canonical conversion-failure diagnostic.
-export fn void diag_type_mismatch(Sema* s, u32 src_pos, types::Type* got, types::Type* expected) {
+export fn void diag_type_mismatch(Sema* s, u32 src_pos, types::Ty* got, types::Ty* expected) {
     u8[] expected_str = types_print::print_to_arena(expected, balloc(s));
     u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
@@ -2266,7 +2266,7 @@ export fn void diag_type_mismatch(Sema* s, u32 src_pos, types::Type* got, types:
 }
 
 // "literal `<value>` does not fit in `<expected>`". Used by check_int_lit.
-export fn void diag_lit_overflow(Sema* s, u32 src_pos, u64 value, types::Type* expected) {
+export fn void diag_lit_overflow(Sema* s, u32 src_pos, u64 value, types::Ty* expected) {
     u8[] expected_str = types_print::print_to_arena(expected, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "literal %lu does not fit in %.*s", value, (i32)expected_str.len, (i8*)expected_str.ptr);
@@ -2280,7 +2280,7 @@ export fn void diag_needs_context(Sema* s, ast::AstNode* e) {
 }
 
 // "cannot use `<type>` in condition; expected bool, integer, pointer, or slice".
-export fn void diag_not_bool_convertible(Sema* s, u32 src_pos, types::Type* got) {
+export fn void diag_not_bool_convertible(Sema* s, u32 src_pos, types::Ty* got) {
     u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot use %.*s in condition; expected bool, integer, pointer, or slice", (i32)got_str.len, (i8*)got_str.ptr);
@@ -2288,7 +2288,7 @@ export fn void diag_not_bool_convertible(Sema* s, u32 src_pos, types::Type* got)
 }
 
 // "operator is not defined for `<lhs>` and `<rhs>`".
-export fn void diag_binop_mismatch(Sema* s, u32 src_pos, token::TokenKind op, types::Type* lt, types::Type* rt) {
+export fn void diag_binop_mismatch(Sema* s, u32 src_pos, token::TokenKind op, types::Ty* lt, types::Ty* rt) {
     u8[] lt_str = types_print::print_to_arena(lt, balloc(s));
     u8[] rt_str = types_print::print_to_arena(rt, balloc(s));
     u8[256] scratch;
@@ -2297,7 +2297,7 @@ export fn void diag_binop_mismatch(Sema* s, u32 src_pos, token::TokenKind op, ty
 }
 
 // "operator `<op>` is not defined for `<type>`". Used by synth_unary.
-export fn void diag_unary_mismatch(Sema* s, u32 src_pos, token::TokenKind op, types::Type* operand) {
+export fn void diag_unary_mismatch(Sema* s, u32 src_pos, token::TokenKind op, types::Ty* operand) {
     u8[] op_str = token::kind_name(op);
     u8[] operand_str = types_print::print_to_arena(operand, balloc(s));
     u8[256] scratch;
@@ -2312,7 +2312,7 @@ export fn void diag_not_lvalue(Sema* s, u32 src_pos) {
 }
 
 // "type `<T>` has no field `<name>`". Used by synth_member_access.
-export fn void diag_unknown_field(Sema* s, u32 src_pos, symbol::Symbol* field, types::Type* container) {
+export fn void diag_unknown_field(Sema* s, u32 src_pos, symbol::Symbol* field, types::Ty* container) {
     u8[] container_str = types_print::print_to_arena(container, balloc(s));
     u8[] field_str = interner::symbol_str(field);
     u8[256] scratch;
@@ -2321,7 +2321,7 @@ export fn void diag_unknown_field(Sema* s, u32 src_pos, symbol::Symbol* field, t
 }
 
 // "cannot access field of %T". Used by synth_member_access on a non-aggregate.
-export fn void diag_not_aggregate(Sema* s, u32 src_pos, types::Type* got) {
+export fn void diag_not_aggregate(Sema* s, u32 src_pos, types::Ty* got) {
     u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot access field of %.*s", (i32)got_str.len, (i8*)got_str.ptr);
@@ -2329,7 +2329,7 @@ export fn void diag_not_aggregate(Sema* s, u32 src_pos, types::Type* got) {
 }
 
 // "cannot index %T". Used by synth_array_index / synth_slice_range.
-export fn void diag_not_indexable(Sema* s, u32 src_pos, types::Type* got) {
+export fn void diag_not_indexable(Sema* s, u32 src_pos, types::Ty* got) {
     u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot index %.*s", (i32)got_str.len, (i8*)got_str.ptr);
@@ -2343,7 +2343,7 @@ export fn void diag_ptr_slice_needs_hi(Sema* s, u32 src_pos) {
 }
 
 // "index must be an integer type, found %T". Used by check_index.
-export fn void diag_index_not_int(Sema* s, u32 src_pos, types::Type* got) {
+export fn void diag_index_not_int(Sema* s, u32 src_pos, types::Ty* got) {
     u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "index must be an integer type, found %.*s", (i32)got_str.len, (i8*)got_str.ptr);
@@ -2367,7 +2367,7 @@ export fn void diag_array_size_negative(Sema* s, u32 src_pos) {
 }
 
 // "cannot call value of type %T". Used by synth_call on a non-function callee.
-export fn void diag_not_callable(Sema* s, u32 src_pos, types::Type* got) {
+export fn void diag_not_callable(Sema* s, u32 src_pos, types::Ty* got) {
     u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot call value of type %.*s", (i32)got_str.len, (i8*)got_str.ptr);
@@ -2428,7 +2428,7 @@ export fn void diag_unknown_member(Sema* s, u32 src_pos, symbol::Symbol* name) {
 }
 
 // "cannot use `<kind>` literal as `<T>`". Used by the literal-check helpers.
-export fn void diag_lit_wrong_target(Sema* s, u32 src_pos, u8[] kind, types::Type* expected) {
+export fn void diag_lit_wrong_target(Sema* s, u32 src_pos, u8[] kind, types::Ty* expected) {
     u8[] expected_str = types_print::print_to_arena(expected, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot use %.*s literal as %.*s", (i32)kind.len, (i8*)kind.ptr, (i32)expected_str.len, (i8*)expected_str.ptr);
@@ -2482,7 +2482,7 @@ export fn void diag_break_outside(Sema* s, u32 src_pos) {
 }
 
 // "switch value must be an integer or enum, found %T". Used by the switch statement.
-export fn void diag_switch_discriminant(Sema* s, u32 src_pos, types::Type* got) {
+export fn void diag_switch_discriminant(Sema* s, u32 src_pos, types::Ty* got) {
     u8[] got_str = types_print::print_to_arena(got, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "switch value must be an integer or enum, found %.*s", (i32)got_str.len, (i8*)got_str.ptr);
@@ -2507,7 +2507,7 @@ export fn void diag_return_value_in_void(Sema* s, u32 src_pos) {
 }
 
 // "missing return value; function returns `<T>`". Used by stmt_return.
-export fn void diag_return_missing_value(Sema* s, u32 src_pos, types::Type* expected) {
+export fn void diag_return_missing_value(Sema* s, u32 src_pos, types::Ty* expected) {
     u8[] expected_str = types_print::print_to_arena(expected, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "missing return value; function returns %.*s", (i32)expected_str.len, (i8*)expected_str.ptr);
@@ -2515,7 +2515,7 @@ export fn void diag_return_missing_value(Sema* s, u32 src_pos, types::Type* expe
 }
 
 // "cannot cast `<src>` to `<target>`". Used by synth_cast on is_castable fail.
-export fn void diag_cast_invalid(Sema* s, u32 src_pos, types::Type* src, types::Type* target) {
+export fn void diag_cast_invalid(Sema* s, u32 src_pos, types::Ty* src, types::Ty* target) {
     u8[] src_str = types_print::print_to_arena(src, balloc(s));
     u8[] target_str = types_print::print_to_arena(target, balloc(s));
     u8[256] scratch;
@@ -2604,7 +2604,7 @@ export fn bool decl_is_const_expr(Decl* d) {
 }
 
 // Recover the decl node the typer keyed a struct/union/enum Type by.
-export fn ast::AstNode* container_decl(types::Type* t) {
+export fn ast::AstNode* container_decl(types::Ty* t) {
     if(t == null) { return null; }
     if(t.kind == types::TypeKind::Struct) { return (ast::AstNode*)t.data.struct_decl; }
     if(t.kind == types::TypeKind::Union)  { return (ast::AstNode*)t.data.union_decl; }
@@ -2643,7 +2643,7 @@ export fn ast::EnumMember* find_enum_member(ast::EnumDeclNode* decl, symbol::Sym
     return null;
 }
 
-export fn Decl* new_decl(Sema* s, DeclKind kind, symbol::Symbol* name, types::Type* ty) {
+export fn Decl* new_decl(Sema* s, DeclKind kind, symbol::Symbol* name, types::Ty* ty) {
     Decl* decl = (Decl*)arena::alloc(balloc(s), sizeof(Decl));
     sys::memset(decl, 0, sizeof(Decl));
     decl.kind = kind;

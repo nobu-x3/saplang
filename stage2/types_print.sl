@@ -4,7 +4,7 @@ import io;
 import symbol;
 import types;
 
-export fn void print(types::Type* t, io::OutBuf* out) {
+export fn void print(types::Ty* t, io::OutBuf* out) {
     if(t == null) { io::outbuf_write(out, "<null>"); return; }
     switch(t.kind) {
         case types::TypeKind::Primitive: {
@@ -55,7 +55,7 @@ export fn void print(types::Type* t, io::OutBuf* out) {
     }
 }
 
-export fn u8[] print_to_arena(types::Type* t, arena::Arena* a) {
+export fn u8[] print_to_arena(types::Ty* t, arena::Arena* a) {
     io::OutBuf b;
     io::outbuf_init(&b, a, 64);
     print(t, &b);

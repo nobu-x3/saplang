@@ -21,7 +21,7 @@ export enum BuildConfig : u8 {
 }
 
 struct TypeMapEntry {
-    types::Type* ty;
+    types::Ty* ty;
     void*        llvm;
 }
 
@@ -223,8 +223,8 @@ fn void add_debug_module_flags(CG* cg) {
 }
 
 fn void emit_di_subprogram(CG* cg, sapir::SapirFn* f) {
-    types::Type* fnty = cg.sm.decls[f.decl_index].ty;
-    types::Type*[] params = fnty.data.fn_ptr.params;
+    types::Ty* fnty = cg.sm.decls[f.decl_index].ty;
+    types::Ty*[] params = fnty.data.fn_ptr.params;
     void** di_params = (void**)arena::alloc(cg.arena, (params.len + 2) * sizeof(void*));
     di_params[0] = build_di_type(cg, fnty.data.fn_ptr.ret);
     for(u64 i = 0; i < params.len; i += 1) { di_params[i + 1] = build_di_type(cg, params[i]); }
@@ -242,7 +242,7 @@ fn void emit_di_subprogram(CG* cg, sapir::SapirFn* f) {
 }
 
 // A DIType for the function-signature subroutine type. Scalars are exact; aggregates are left unspecified (locals are not emitted in v0).
-fn void* build_di_type(CG* cg, types::Type* t) {
+fn void* build_di_type(CG* cg, types::Ty* t) {
     if(t == null) { return null; }
     switch(t.kind) {
     case types::TypeKind::Primitive: { return di_basic_type(cg, t.prim); }
@@ -263,13 +263,13 @@ fn u8[] sym_str_or_empty(symbol::Symbol* s) {
     return interner::symbol_str(s);
 }
 
-fn void* di_member(CG* cg, u8[] name, types::Type* ft, u64 offset_bits) {
+fn void* di_member(CG* cg, u8[] name, types::Ty* ft, u64 offset_bits) {
     u64 fbits = (u64)types::size_of(null, ft) * 8;
     u32 falign = types::align_of(null, ft) * 8;
     return llvm::LLVMDIBuilderCreateMemberType(cg.di_builder, cg.di_file, name.ptr, name.len, cg.di_file, 0, fbits, falign, offset_bits, 0, build_di_type(cg, ft));
 }
 
-fn void* build_di_composite(CG* cg, types::Type* t, bool is_union) {
+fn void* build_di_composite(CG* cg, types::Ty* t, bool is_union) {
     u64 count = types::field_count(t);
     void** members = (void**)arena::alloc(cg.arena, (count + 1) * sizeof(void*));
     for(u64 i = 0; i < count; i += 1) {
@@ -285,7 +285,7 @@ fn void* build_di_composite(CG* cg, types::Type* t, bool is_union) {
     return llvm::LLVMDIBuilderCreateStructType(cg.di_builder, cg.di_file, name.ptr, name.len, cg.di_file, 0, size, align, 0, null, members, (u32)count, 0, null, cg.empty, 0);
 }
 
-fn void* build_di_array(CG* cg, types::Type* t) {
+fn void* build_di_array(CG* cg, types::Ty* t) {
     void* elem_di = build_di_type(cg, t.data.array.elem);
     void* subrange = llvm::LLVMDIBuilderGetOrCreateSubrange(cg.di_builder, 0, (i64)t.data.array.count);
     void*[1] subs;
@@ -296,7 +296,7 @@ fn void* build_di_array(CG* cg, types::Type* t) {
 }
 
 // A slice is a {ptr, len} pair: an elem-pointer at offset 0 and a u64 length at offset 8.
-fn void* build_di_slice(CG* cg, types::Type* t) {
+fn void* build_di_slice(CG* cg, types::Ty* t) {
     void*[2] members;
     members[0] = di_member(cg, "ptr", types::intern_pointer(t.data.slice_elem, false), 0);
     members[1] = di_member(cg, "len", types::prim_u64(), 64);
@@ -363,7 +363,7 @@ fn void src_pos_to_line_col(sapir::SapirModule* sm, u32 src_pos, u32* line, u32*
 
 // TYPES ///////////////////////////////////////////////////////////////////////////
 
-fn void* map_type(CG* cg, types::Type* t) {
+fn void* map_type(CG* cg, types::Ty* t) {
     void* hit = type_map_lookup(cg, t);
     if(hit != null) { return hit; }
     void* out;
@@ -391,15 +391,15 @@ fn void* map_type(CG* cg, types::Type* t) {
     return out;
 }
 
-fn void fill_struct_body(CG* cg, types::Type* t, void* struct_ty) {
-    types::Type*[] fields = types::struct_field_types(t, cg.arena);
+fn void fill_struct_body(CG* cg, types::Ty* t, void* struct_ty) {
+    types::Ty*[] fields = types::struct_field_types(t, cg.arena);
     void** llvm_fields = (void**)arena::alloc(cg.arena, (fields.len + 1) * sizeof(void*));
     for(u64 i = 0; i < fields.len; i += 1) { llvm_fields[i] = map_type(cg, fields[i]); }
     llvm::LLVMStructSetBody(struct_ty, llvm_fields, (u32)fields.len, 0);
 }
 
 // A union lowers to a struct wrapping one [size x i8] payload; members are accessed through the base pointer.
-fn void* union_blob_type(CG* cg, types::Type* t) {
+fn void* union_blob_type(CG* cg, types::Ty* t) {
     void*[1] fields;
     fields[0] = llvm::LLVMArrayType2(llvm::LLVMInt8TypeInContext(cg.ctx), (u64)t.size);
     return llvm::LLVMStructTypeInContext(cg.ctx, &fields[0], 1, 0);
@@ -431,8 +431,8 @@ fn void* slice_struct_type(CG* cg) {
     return llvm::LLVMStructTypeInContext(cg.ctx, &fields[0], 2, 0);
 }
 
-fn void* map_fn_type(CG* cg, types::Type* fnty) {
-    types::Type*[] params = fnty.data.fn_ptr.params;
+fn void* map_fn_type(CG* cg, types::Ty* fnty) {
+    types::Ty*[] params = fnty.data.fn_ptr.params;
     void** llvm_params = (void**)arena::alloc(cg.arena, (params.len + 1) * sizeof(void*));
     for(u64 i = 0; i < params.len; i += 1) { llvm_params[i] = map_type(cg, params[i]); }
     void* ret = map_type(cg, fnty.data.fn_ptr.ret);
@@ -441,14 +441,14 @@ fn void* map_fn_type(CG* cg, types::Type* fnty) {
     return llvm::LLVMFunctionType(ret, llvm_params, (u32)params.len, variadic);
 }
 
-fn void* type_map_lookup(CG* cg, types::Type* t) {
+fn void* type_map_lookup(CG* cg, types::Ty* t) {
     for(u64 i = 0; i < cg.type_map.len; i += 1) {
         if(cg.type_map[i].ty == t) { return cg.type_map[i].llvm; }
     }
     return null;
 }
 
-fn void type_map_insert(CG* cg, types::Type* t, void* llvm_ty) {
+fn void type_map_insert(CG* cg, types::Ty* t, void* llvm_ty) {
     if(cg.type_map.len == cg.type_map_cap) {
         u64 new_cap = 16;
         if(cg.type_map_cap > 0) { new_cap = cg.type_map_cap * 2; }
@@ -684,7 +684,7 @@ fn void emit_inst(CG* cg, u32 id) {
         llvm::LLVMBuildMemCpy(cg.builder, cg.value_map[inst.a], 1, cg.value_map[inst.b], 1, len);
     }
     case sapir::Opcode::FieldAddr: {
-        types::Type* container = cg.f.insts[inst.a].ty.data.pointee;
+        types::Ty* container = cg.f.insts[inst.a].ty.data.pointee;
         if(container.kind == types::TypeKind::Union) { cg.value_map[id] = cg.value_map[inst.a]; }
         else { cg.value_map[id] = llvm::LLVMBuildStructGEP2(cg.builder, map_type(cg, container), cg.value_map[inst.a], inst.b, cg.empty); }
     }
@@ -747,7 +747,7 @@ fn void emit_inst(CG* cg, u32 id) {
 fn void* emit_binop(CG* cg, sapir::Inst* inst) {
     void* l = cg.value_map[inst.a];
     void* r = cg.value_map[inst.b];
-    types::Type* ot = cg.f.insts[inst.a].ty;
+    types::Ty* ot = cg.f.insts[inst.a].ty;
     bool f = types::is_float(ot);
     bool s = types::is_signed_int(ot);
     switch(inst.op) {
@@ -785,7 +785,7 @@ fn void* emit_alloca(CG* cg, sapir::Inst* inst) {
 }
 
 fn void* emit_index_addr(CG* cg, sapir::Inst* inst) {
-    types::Type* base_pointee = cg.f.insts[inst.a].ty.data.pointee;
+    types::Ty* base_pointee = cg.f.insts[inst.a].ty.data.pointee;
     if(base_pointee.kind == types::TypeKind::Array) {
         void*[2] indices;
         indices[0] = llvm::LLVMConstInt(llvm::LLVMInt64TypeInContext(cg.ctx), 0, 0);
@@ -798,7 +798,7 @@ fn void* emit_index_addr(CG* cg, sapir::Inst* inst) {
 }
 
 fn void* emit_cast(CG* cg, sapir::Inst* inst) {
-    types::Type* src = cg.f.insts[inst.a].ty;
+    types::Ty* src = cg.f.insts[inst.a].ty;
     void* v = cg.value_map[inst.a];
     void* dst = map_type(cg, inst.ty);
     switch(sapir::cast_op(src, inst.ty)) {
@@ -840,7 +840,7 @@ fn void emit_switch(CG* cg, sapir::Inst* inst) {
     u32 default_block = cg.f.extra[inst.b];
     u32 arm_count = cg.f.extra[inst.b + 1];
     void* sw = llvm::LLVMBuildSwitch(cg.builder, cg.value_map[inst.a], cg.block_map[default_block], arm_count);
-    types::Type* disc_ty = cg.f.insts[inst.a].ty;
+    types::Ty* disc_ty = cg.f.insts[inst.a].ty;
     void* case_ty = map_type(cg, disc_ty);
     for(u32 k = 0; k < arm_count; k += 1) {
         u32 arm_base = inst.b + 2 + k * 3;

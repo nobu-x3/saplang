@@ -3,15 +3,15 @@ import token;
 import value;
 
 // An enum acts as its base integer type in arithmetic/bitwise/shift; comparisons keep the enum type.
-fn types::Type* enum_base_or_self(types::Type* t) {
+fn types::Ty* enum_base_or_self(types::Ty* t) {
     if(t.kind == types::TypeKind::Enum) { return types::enum_base_type(t); }
     return t;
 }
 
-export fn types::Type* binop_result_type(token::TokenKind op, types::Type* lt, types::Type* rt) {
+export fn types::Ty* binop_result_type(token::TokenKind op, types::Ty* lt, types::Ty* rt) {
     if(lt == null || rt == null) { return null; }
-    types::Type* base_lt = enum_base_or_self(lt);
-    types::Type* base_rt = enum_base_or_self(rt);
+    types::Ty* base_lt = enum_base_or_self(lt);
+    types::Ty* base_rt = enum_base_or_self(rt);
     switch(op) {
     case token::TokenKind::Plus:
     case token::TokenKind::Minus:
@@ -54,9 +54,9 @@ export fn types::Type* binop_result_type(token::TokenKind op, types::Type* lt, t
     return null;
 }
 
-export fn types::Type* unaryop_result_type(token::TokenKind op, types::Type* operand) {
+export fn types::Ty* unaryop_result_type(token::TokenKind op, types::Ty* operand) {
     if(operand == null) { return null; }
-    types::Type* base = enum_base_or_self(operand);
+    types::Ty* base = enum_base_or_self(operand);
     switch(op) {
     case token::TokenKind::Minus: {
         if(types::is_int(base) || types::is_float(base)) { return base; }
@@ -85,7 +85,7 @@ export fn types::Type* unaryop_result_type(token::TokenKind op, types::Type* ope
 export fn value::Value binop_eval(token::TokenKind op, value::Value l, value::Value r) {
     if(l.kind == value::ValueKind::Error) { return l; }
     if(r.kind == value::ValueKind::Error) { return r; }
-    types::Type* rt = binop_result_type(op, l.ty, r.ty);
+    types::Ty* rt = binop_result_type(op, l.ty, r.ty);
 
     if(op == token::TokenKind::EqEq)  { return val_eq(l, r, false); }
     if(op == token::TokenKind::BangEq) { return val_eq(l, r, true); }
@@ -129,7 +129,7 @@ export fn value::Value unaryop_eval(token::TokenKind op, value::Value v) {
 
 // PRIVATE
 
-fn types::Type* arithmetic_result(types::Type* lt, types::Type* rt) {
+fn types::Ty* arithmetic_result(types::Ty* lt, types::Ty* rt) {
     if(types::is_int(lt) && types::is_int(rt)) { return int_common(lt, rt); }
     if(types::is_float(lt) && types::is_float(rt)) {
         if(lt.size >= rt.size) { return lt; }
@@ -138,20 +138,20 @@ fn types::Type* arithmetic_result(types::Type* lt, types::Type* rt) {
     return null;
 }
 
-fn types::Type* int_common(types::Type* lt, types::Type* rt) {
+fn types::Ty* int_common(types::Ty* lt, types::Ty* rt) {
     if(types::is_signed_int(lt) != types::is_signed_int(rt)) { return null; }
     if(lt.size >= rt.size) { return lt; }
     return rt;
 }
 
-fn bool comparable_eq(types::Type* lt, types::Type* rt) {
+fn bool comparable_eq(types::Ty* lt, types::Ty* rt) {
     if(arithmetic_result(lt, rt) != null) { return true; }
     if(types::is_ptr(lt) && types::is_ptr(rt)) { return true; }
     if(types::is_bool(lt) && types::is_bool(rt)) { return true; }
     return lt == rt;
 }
 
-fn bool comparable_order(types::Type* lt, types::Type* rt) {
+fn bool comparable_order(types::Ty* lt, types::Ty* rt) {
     if(arithmetic_result(lt, rt) != null) { return true; }
     return types::is_ptr(lt) && types::is_ptr(rt);
 }
@@ -161,7 +161,7 @@ fn value::Value val_eq(value::Value l, value::Value r, bool negate) {
     if(l.kind == value::ValueKind::Int && r.kind == value::ValueKind::Int) { eq = l.data.i == r.data.i; }
     else if(l.kind == value::ValueKind::Float && r.kind == value::ValueKind::Float) { eq = l.data.f == r.data.f; }
     else if(l.kind == value::ValueKind::Bool && r.kind == value::ValueKind::Bool) { eq = l.data.b == r.data.b; }
-    else if(l.kind == value::ValueKind::Type && r.kind == value::ValueKind::Type) { eq = l.data.type_ref == r.data.type_ref; }
+    else if(l.kind == value::ValueKind::TYPE && r.kind == value::ValueKind::TYPE) { eq = l.data.type_ref == r.data.type_ref; }
     else if(l.kind == value::ValueKind::Null && r.kind == value::ValueKind::Null) { eq = true; }
     else { return value::val_error(); }
     if(negate) { eq = !eq; }
@@ -203,7 +203,7 @@ fn bool order_cmp_f(token::TokenKind op, f64 a, f64 b) {
     return a >= b;
 }
 
-export fn i64 wrap_to_type(i64 v, types::Type* t) {
+export fn i64 wrap_to_type(i64 v, types::Ty* t) {
     return wrap_int(v, int_bits(t), types::is_signed_int(t));
 }
 
@@ -219,14 +219,14 @@ fn i64 wrap_int(i64 v, u32 bits, bool is_signed) {
     return (i64)masked;
 }
 
-fn u32 int_bits(types::Type* t) {
+fn u32 int_bits(types::Ty* t) {
     if(t == null) { return 64; }
     u32 b = t.size * 8;
     if(b == 0 || b > 64) { return 64; }
     return b;
 }
 
-fn value::Value int_arith(token::TokenKind op, i64 a, i64 b, types::Type* rt) {
+fn value::Value int_arith(token::TokenKind op, i64 a, i64 b, types::Ty* rt) {
     bool is_signed = true;
     if(rt != null) { is_signed = types::is_signed_int(rt); }
     u32 bits = int_bits(rt);
@@ -258,7 +258,7 @@ fn value::Value int_arith(token::TokenKind op, i64 a, i64 b, types::Type* rt) {
     return value::val_error();
 }
 
-fn value::Value float_arith(token::TokenKind op, f64 a, f64 b, types::Type* rt) {
+fn value::Value float_arith(token::TokenKind op, f64 a, f64 b, types::Ty* rt) {
     if(op == token::TokenKind::Plus)  { return value::val_float(a + b, rt); }
     if(op == token::TokenKind::Minus) { return value::val_float(a - b, rt); }
     if(op == token::TokenKind::Star)  { return value::val_float(a * b, rt); }

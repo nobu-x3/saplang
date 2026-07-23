@@ -104,11 +104,11 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     switch(e.h.kind) {
     case ast::AstKind::IntLit: {
         ast::IntLitNode* lit = (ast::IntLitNode*)e;
-        return value::val_int((i64)lit.value, (types::Type*)e.h.ty);
+        return value::val_int((i64)lit.value, (types::Ty*)e.h.ty);
     }
     case ast::AstKind::FloatLit: {
         ast::FloatLitNode* lit = (ast::FloatLitNode*)e;
-        return value::val_float(lit.value, (types::Type*)e.h.ty);
+        return value::val_float(lit.value, (types::Ty*)e.h.ty);
     }
     case ast::AstKind::BoolLit: {
         ast::BoolLitNode* lit = (ast::BoolLitNode*)e;
@@ -116,11 +116,11 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     }
     case ast::AstKind::CharLit: {
         ast::CharLitNode* lit = (ast::CharLitNode*)e;
-        return value::val_int((i64)lit.value, (types::Type*)e.h.ty);
+        return value::val_int((i64)lit.value, (types::Ty*)e.h.ty);
     }
     case ast::AstKind::StringLit: { return eval_string_lit(ip, (ast::StringLitNode*)e); }
-    case ast::AstKind::NullLit:   { return value::val_null((types::Type*)e.h.ty); }
-    case ast::AstKind::UndefinedLit: { return value::val_int(0, (types::Type*)e.h.ty); }
+    case ast::AstKind::NullLit:   { return value::val_null((types::Ty*)e.h.ty); }
+    case ast::AstKind::UndefinedLit: { return value::val_int(0, (types::Ty*)e.h.ty); }
     case ast::AstKind::BinaryOp:  { return eval_binary(ip, (ast::BinaryOpNode*)e); }
     case ast::AstKind::UnaryOp:   { return eval_unary(ip, (ast::UnaryOpNode*)e); }
     case ast::AstKind::Cast:      { return eval_cast(ip, (ast::CastNode*)e); }
@@ -514,7 +514,7 @@ fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
 fn value::Value eval_cast(Interp* ip, ast::CastNode* n) {
     value::Value v = eval(ip, n.expr);
     if(v.kind == value::ValueKind::Error) { return v; }
-    types::Type* target = (types::Type*)n.h.ty;
+    types::Ty* target = (types::Ty*)n.h.ty;
     if(target == null) { return v; }
     bool v_is_float = v.kind == value::ValueKind::Float;
     if(types::is_float(target)) {
@@ -536,13 +536,13 @@ fn u64 struct_field_index(ast::StructDeclNode* sd, symbol::Symbol* name) {
     return sd.fields.len;
 }
 
-fn value::Value build_field_info_array(Interp* ip, types::Type* t) {
-    types::Type* fi_ty = sema::reflection_fieldinfo_type(ip.m);
+fn value::Value build_field_info_array(Interp* ip, types::Ty* t) {
+    types::Ty* fi_ty = sema::reflection_fieldinfo_type(ip.m);
     ast::FieldDecl[] flds;
     if(t.kind == types::TypeKind::Struct) { flds = ((ast::StructDeclNode*)t.data.struct_decl).fields; }
     else { flds = ((ast::UnionDeclNode*)t.data.union_decl).fields; }
     types::size_of(&ip.m.diag, t);
-    types::Type* u8slice = types::intern_slice(types::prim_u8());
+    types::Ty* u8slice = types::intern_slice(types::prim_u8());
     value::Value[] elems;
     elems.ptr = (value::Value*)arena::alloc(ip.m.arena, flds.len * sizeof(value::Value));
     elems.len = flds.len;
@@ -551,7 +551,7 @@ fn value::Value build_field_info_array(Interp* ip, types::Type* t) {
         finfo.ptr = (value::Value*)arena::alloc(ip.m.arena, 3 * sizeof(value::Value));
         finfo.len = 3;
         finfo[0] = value::val_bytes(interner::symbol_str(flds[i].name), u8slice);
-        finfo[1] = value::val_type((types::Type*)flds[i].resolved_type);
+        finfo[1] = value::val_type((types::Ty*)flds[i].resolved_type);
         u64 offset = 0;
         if(t.layout != null && i < t.layout.offsets.len) { offset = (u64)t.layout.offsets[i]; }
         finfo[2] = value::val_int((i64)offset, types::prim_u64());
@@ -560,8 +560,8 @@ fn value::Value build_field_info_array(Interp* ip, types::Type* t) {
     return value::val_array(types::intern_slice(fi_ty), elems);
 }
 
-fn value::Value build_type_info_value(Interp* ip, types::Type* t) {
-    types::Type* ti_ty = sema::reflection_typeinfo_type(ip.m);
+fn value::Value build_type_info_value(Interp* ip, types::Ty* t) {
+    types::Ty* ti_ty = sema::reflection_typeinfo_type(ip.m);
     value::Value[] fields;
     fields.ptr = (value::Value*)arena::alloc(ip.m.arena, 8 * sizeof(value::Value));
     fields.len = 8;
@@ -577,7 +577,7 @@ fn value::Value build_type_info_value(Interp* ip, types::Type* t) {
         empty.len = 0;
         fields[4] = value::val_array(types::intern_slice(sema::reflection_fieldinfo_type(ip.m)), empty);
     }
-    types::Type* none = null;
+    types::Ty* none = null;
     fields[5] = value::val_type(none);
     fields[6] = value::val_type(none);
     fields[7] = value::val_int(0, types::prim_u64());
@@ -588,7 +588,7 @@ fn value::Value build_type_info_value(Interp* ip, types::Type* t) {
 }
 
 fn value::Value eval_type_info(Interp* ip, ast::TypeInfoNode* n) {
-    types::Type* t = (types::Type*)n.arg.h.ty;
+    types::Ty* t = (types::Ty*)n.arg.h.ty;
     if(t == null) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "type_info argument is unresolved at comptime");
         return value::val_error();
@@ -604,12 +604,12 @@ fn value::Value eval_array_lit(Interp* ip, ast::ArrayLitNode* n) {
         elems[elem_index] = eval(ip, n.elems[elem_index]);
         if(elems[elem_index].kind == value::ValueKind::Error) { return elems[elem_index]; }
     }
-    return value::val_array((types::Type*)n.h.ty, elems);
+    return value::val_array((types::Ty*)n.h.ty, elems);
 }
 
 // Fields the literal omits default to 0.
 fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
-    types::Type* ty = (types::Type*)n.h.ty;
+    types::Ty* ty = (types::Ty*)n.h.ty;
     if(ty == null || ty.kind != types::TypeKind::Struct) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "struct literal is not a comptime struct value");
         return value::val_error();
@@ -701,8 +701,8 @@ fn value::Value eval_slice_range(Interp* ip, ast::SliceRangeNode* n) {
 }
 
 fn value::Value eval_sizeof(Interp* ip, ast::SizeofNode* n) {
-    types::Type* t = null;
-    if(n.arg != null) { t = (types::Type*)n.arg.h.ty; }
+    types::Ty* t = null;
+    if(n.arg != null) { t = (types::Ty*)n.arg.h.ty; }
     if(t == null) {
         u8[] msg = "sizeof operand type is unresolved";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
@@ -712,8 +712,8 @@ fn value::Value eval_sizeof(Interp* ip, ast::SizeofNode* n) {
 }
 
 fn value::Value eval_alignof(Interp* ip, ast::AlignofNode* n) {
-    types::Type* t = null;
-    if(n.arg != null) { t = (types::Type*)n.arg.h.ty; }
+    types::Ty* t = null;
+    if(n.arg != null) { t = (types::Ty*)n.arg.h.ty; }
     if(t == null) {
         u8[] msg = "alignof operand type is unresolved";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
@@ -914,12 +914,12 @@ fn value::Value eval_type_expr(Interp* ip, ast::AstNode* e) {
         diag::report(&ip.m.diag, ip.m.arena, e.h.src_pos, msg);
         return value::val_error();
     }
-    return value::val_type((types::Type*)e.h.ty);
+    return value::val_type((types::Ty*)e.h.ty);
 }
 
 fn value::Value eval_typeof(Interp* ip, ast::TypeofNode* n) {
-    types::Type* t = null;
-    if(n.expr != null) { t = (types::Type*)n.expr.h.ty; }
+    types::Ty* t = null;
+    if(n.expr != null) { t = (types::Ty*)n.expr.h.ty; }
     if(t == null) {
         u8[] msg = "typeof operand type is unresolved";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
@@ -1063,7 +1063,7 @@ fn value::Value eval_string_lit(Interp* ip, ast::StringLitNode* n) {
     u8[] bytes;
     bytes.ptr = &ip.m.literal_pool[n.pool_off];
     bytes.len = (u64)n.pool_len;
-    return value::val_bytes(bytes, (types::Type*)n.h.ty);
+    return value::val_bytes(bytes, (types::Ty*)n.h.ty);
 }
 
 fn void diag_unsupported(Interp* ip, u32 pos) {
@@ -1117,7 +1117,7 @@ fn u64 hash_value(value::Value v) {
         for(u64 byte_index = 0; byte_index < v.data.bytes.len; byte_index += 1) { h = hash_combine(h, (u64)v.data.bytes[byte_index]); }
         return h;
     }
-    if(kind == value::ValueKind::Type) { return hash_combine(h, (u64)v.data.type_ref); }
+    if(kind == value::ValueKind::TYPE) { return hash_combine(h, (u64)v.data.type_ref); }
     if(kind == value::ValueKind::FnRef) { return hash_combine(h, (u64)v.data.fn_ref); }
     if(kind == value::ValueKind::Struct || kind == value::ValueKind::Array) {
         for(u64 elem_index = 0; elem_index < v.data.elems.len; elem_index += 1) { h = hash_combine(h, hash_value(v.data.elems[elem_index])); }
@@ -1137,7 +1137,7 @@ fn bool value_equal(value::Value a, value::Value b) {
         for(u64 byte_index = 0; byte_index < a.data.bytes.len; byte_index += 1) { if(a.data.bytes[byte_index] != b.data.bytes[byte_index]) { return false; } }
         return true;
     }
-    if(kind == value::ValueKind::Type) { return a.data.type_ref == b.data.type_ref; }
+    if(kind == value::ValueKind::TYPE) { return a.data.type_ref == b.data.type_ref; }
     if(kind == value::ValueKind::FnRef) { return a.data.fn_ref == b.data.fn_ref; }
     if(kind == value::ValueKind::Struct || kind == value::ValueKind::Array) {
         if(a.data.elems.len != b.data.elems.len) { return false; }
@@ -1541,7 +1541,7 @@ fn void rename_mangled(module::Module* m, ast::FnDeclNode* clone, value::Value[]
     i32 off = sys::snprintf((i8*)&scratch[0], 256, "%.*s", (i32)base_str.len, (i8*)base_str.ptr);
     for(u64 k = 0; k < cargs.len; k += 1) {
         if(off < 0 || off >= 240) { break; }
-        if(cargs[k].kind == value::ValueKind::Type) {
+        if(cargs[k].kind == value::ValueKind::TYPE) {
             u8[] ts = types_print::print_to_arena(cargs[k].data.type_ref, m.arena);
             off += sys::snprintf((i8*)&scratch[off], (u64)(256 - off), "__%.*s", (i32)ts.len, (i8*)ts.ptr);
         } else if(cargs[k].kind == value::ValueKind::Int) {
@@ -1581,10 +1581,10 @@ export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, val
 // A value-param ident is rewritten in place to an IntLit (fits an IdentNode) so eval_const_u64 reads N in T[N].
 struct SubstCtx {
     symbol::Symbol*[] tnames;
-    types::Type*[]    ttys;
+    types::Ty*[]    ttys;
     symbol::Symbol*[] vnames;
     u64[]             vvals;
-    types::Type*[]    vtys;
+    types::Ty*[]    vtys;
 }
 
 fn void subst_node(SubstCtx* c, ast::AstNode* n) {
@@ -1765,7 +1765,7 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
     u64 carg_index = 0;
     for(u64 i = 0; i < clone.params.len; i += 1) {
         if(clone.params[i].is_comptime) {
-            if(cargs[carg_index].kind == value::ValueKind::Type) { n_type += 1; }
+            if(cargs[carg_index].kind == value::ValueKind::TYPE) { n_type += 1; }
             else if(cargs[carg_index].kind == value::ValueKind::Int) { n_val += 1; }
             carg_index += 1;
         }
@@ -1774,14 +1774,14 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
     SubstCtx c;
     sys::memset(&c, 0, sizeof(SubstCtx));
     c.tnames.ptr = arena::alloc(a, n_type * sizeof(symbol::Symbol*));
-    c.ttys.ptr = arena::alloc(a, n_type * sizeof(types::Type*));
+    c.ttys.ptr = arena::alloc(a, n_type * sizeof(types::Ty*));
     c.vnames.ptr = arena::alloc(a, n_val * sizeof(symbol::Symbol*));
     c.vvals.ptr = arena::alloc(a, n_val * sizeof(u64));
-    c.vtys.ptr = arena::alloc(a, n_val * sizeof(types::Type*));
+    c.vtys.ptr = arena::alloc(a, n_val * sizeof(types::Ty*));
     carg_index = 0;
     for(u64 i = 0; i < clone.params.len; i += 1) {
         if(clone.params[i].is_comptime) {
-            if(cargs[carg_index].kind == value::ValueKind::Type) {
+            if(cargs[carg_index].kind == value::ValueKind::TYPE) {
                 c.tnames[c.tnames.len] = clone.params[i].name;
                 c.tnames.len += 1;
                 c.ttys[c.ttys.len] = cargs[carg_index].data.type_ref;
@@ -1804,7 +1804,7 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
 
 // GENERIC CALL RESOLUTION (sema seam): infer comptime args by unifying param patterns against arg types, then monomorphize.
 
-fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* pattern, types::Type* concrete) {
+fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* pattern, types::Ty* concrete) {
     if(pattern == null || concrete == null) { return false; }
     switch(pattern.h.kind) {
     case ast::AstKind::NamedType: {
@@ -1846,7 +1846,7 @@ fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* 
     return true;
 }
 
-export fn ast::FnDeclNode* resolve_generic_call(module::Module* m, ast::FnDeclNode* callee, types::Type*[] arg_types) {
+export fn ast::FnDeclNode* resolve_generic_call(module::Module* m, ast::FnDeclNode* callee, types::Ty*[] arg_types) {
     u64 n_comptime = 0;
     for(u64 i = 0; i < callee.params.len; i += 1) {
         if(callee.params[i].is_comptime) { n_comptime += 1; }
