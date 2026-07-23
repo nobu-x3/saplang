@@ -471,6 +471,8 @@ fn void* const_value(CG* cg, sapir::ConstInit* ci) {
         for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }
         return llvm::LLVMConstArray2(map_type(cg, ci.ty.data.array.elem), vals, ci.elems.len);
     }
+    case sapir::ConstInitKind::Bytes: { return const_bytes(cg, ci); }
+    case sapir::ConstInitKind::Slice: { return const_slice(cg, ci); }
     else {
         sys::dprintf(2, "codegen: this constant initializer kind is not implemented yet\n");
         cg.failed = true;
@@ -478,6 +480,40 @@ fn void* const_value(CG* cg, sapir::ConstInit* ci) {
     }
     }
     return llvm::LLVMConstNull(map_type(cg, ci.ty));
+}
+
+// A string-literal constant: an internal NUL-terminated [N+1 x i8] global, yielded as a {ptr,len} slice, a bare pointer, or (array target) the inline bytes.
+fn void* const_bytes(CG* cg, sapir::ConstInit* ci) {
+    void* str_const = llvm::LLVMConstStringInContext2(cg.ctx, (i8*)ci.bytes.ptr, ci.bytes.len, 0);
+    if(types::is_array(ci.ty)) { return str_const; }
+    void* gv = llvm::LLVMAddGlobal(cg.llvm_module, llvm::LLVMTypeOf(str_const), cg.empty);
+    llvm::LLVMSetInitializer(gv, str_const);
+    llvm::LLVMSetLinkage(gv, llvm::InternalLinkage);
+    llvm::LLVMSetGlobalConstant(gv, 1);
+    llvm::LLVMSetUnnamedAddress(gv, llvm::GlobalUnnamedAddr);
+    if(types::is_slice(ci.ty)) {
+        void*[2] fields;
+        fields[0] = gv;
+        fields[1] = llvm::LLVMConstInt(llvm::LLVMInt64TypeInContext(cg.ctx), ci.bytes.len, 0);
+        return llvm::LLVMConstNamedStruct(map_type(cg, ci.ty), &fields[0], 2);
+    }
+    return gv;
+}
+
+// An array-literal into a slice global: the elements back an internal constant array; the slice is {ptr, len}.
+fn void* const_slice(CG* cg, sapir::ConstInit* ci) {
+    void** vals = (void**)arena::alloc(cg.arena, (ci.elems.len + 1) * sizeof(void*));
+    for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }
+    void* arr_const = llvm::LLVMConstArray2(map_type(cg, ci.ty.data.slice_elem), vals, ci.elems.len);
+    void* gv = llvm::LLVMAddGlobal(cg.llvm_module, llvm::LLVMTypeOf(arr_const), cg.empty);
+    llvm::LLVMSetInitializer(gv, arr_const);
+    llvm::LLVMSetLinkage(gv, llvm::InternalLinkage);
+    llvm::LLVMSetGlobalConstant(gv, 1);
+    llvm::LLVMSetUnnamedAddress(gv, llvm::GlobalUnnamedAddr);
+    void*[2] fields;
+    fields[0] = gv;
+    fields[1] = llvm::LLVMConstInt(llvm::LLVMInt64TypeInContext(cg.ctx), ci.elems.len, 0);
+    return llvm::LLVMConstNamedStruct(map_type(cg, ci.ty), &fields[0], 2);
 }
 
 // FUNCTIONS + INSTRUCTIONS ///////////////////////////////////////////////////////////

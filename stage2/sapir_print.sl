@@ -291,6 +291,14 @@ fn void print_const_init(sapir::SapirModule* m, sapir::ConstInit* init, io::OutB
         }
         io::outbuf_write(out, " ]");
     }
+    case sapir::ConstInitKind::Slice: {
+        io::outbuf_write(out, "slice[ ");
+        for(u64 elem_index = 0; elem_index < init.elems.len; elem_index += 1) {
+            if(elem_index > 0) { io::outbuf_write(out, ", "); }
+            print_const_init(m, &init.elems[elem_index], out);
+        }
+        io::outbuf_write(out, " ]");
+    }
     case sapir::ConstInitKind::FnRef: {
         io::outbuf_write(out, "&");
         io::outbuf_write(out, m.decls[init.decl_index].link_name);

@@ -1233,6 +1233,33 @@ fn i32 global_array_init(arena::Arena* a, u8[] msg) {
     return golden(a, "i32[3] table = [10, 20, 30];", &w, msg);
 }
 
+// A const slice global from an array literal: the elements back a static array, the slice is {ptr, len}.
+fn i32 global_slice_from_array(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 384);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_nums: i32[] const = slice[ 1, 2, 3, 4 ]");
+    return golden(a, "const i32[] nums = [1, 2, 3, 4];", &w, msg);
+}
+
+// A const u8[] global from a string literal lowers to a Bytes init.
+fn i32 global_bytes_slice(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 384);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_s: u8[] const = bytes[2]");
+    return golden(a, "const u8[] s = \"hi\";", &w, msg);
+}
+
+// A const slice of structs whose fields include a string slice — the table pattern.
+fn i32 global_struct_slice_table(arena::Arena* a, u8[] msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 512);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_tbl: main::E[] const = slice[ { bytes[1], 1 }, { bytes[2], 2 } ]");
+    return golden(a, "struct E { u8[] name; i32 v; } const E[] tbl = [ {\"a\", 1}, {\"bb\", 2} ];", &w, msg);
+}
+
 // A global compound assignment reads through GlobalAddr, combines, and stores back.
 fn i32 global_compound_assign(arena::Arena* a, u8[] msg) {
     io::OutBuf w;
@@ -1544,6 +1571,9 @@ fn i32 main() {
     testing::add(suite, "global_struct_init", &global_struct_init);
     testing::add(suite, "global_struct_reordered", &global_struct_reordered);
     testing::add(suite, "global_array_init",  &global_array_init);
+    testing::add(suite, "global_slice_from_array", &global_slice_from_array);
+    testing::add(suite, "global_bytes_slice", &global_bytes_slice);
+    testing::add(suite, "global_struct_slice_table", &global_struct_slice_table);
     testing::add(suite, "global_compound_assign", &global_compound_assign);
     testing::add(suite, "nested_call",        &nested_call);
     testing::add(suite, "call_arg_widening",  &call_arg_widening);

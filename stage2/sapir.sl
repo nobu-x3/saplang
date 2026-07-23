@@ -55,6 +55,7 @@ export enum ConstInitKind : u8 {
     Struct,
     Array,
     FnRef,
+    Slice,              // array-literal into a slice global: `elems` back a static array, the slice is {ptr, len}
 }
 
 export struct ConstInit {

@@ -1404,6 +1404,7 @@ fn sapir::ConstInit const_init_from_value(Lower* lo, value::Value* v, types::Typ
     }
     case value::ValueKind::Array: {
         ci.kind = sapir::ConstInitKind::Array;
+        if(types::is_slice(ty)) { ci.kind = sapir::ConstInitKind::Slice; }
         ci.elems = {(sapir::ConstInit*)arena::alloc(lo.arena, (v.data.elems.len + 1) * sizeof(sapir::ConstInit)), v.data.elems.len};
         for(u64 i = 0; i < v.data.elems.len; i += 1) { ci.elems[i] = const_init_from_value(lo, &v.data.elems[i], v.data.elems[i].ty); }
     }

@@ -162,6 +162,21 @@ fn i32 jit_ptr_cast_index(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { i32* p = (i32*)malloc(16); p[0] = 40; p[1] = 2; return p[0] + p[1]; }", 42, msg);
 }
 
+// A const slice global from an array literal materializes a backing array; index and .len read it back.
+fn i32 jit_const_slice_index(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "const i32[] nums = [5, 6, 7, 8]; fn i32 main() { return nums[2] + (i32)nums.len; }", 11, msg);
+}
+
+// A const u8[] from a string literal: .len and byte reads through .ptr.
+fn i32 jit_const_string_slice(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "const u8[] s = \"hello\"; fn i32 main() { return (i32)s.len + (i32)s.ptr[1]; }", 106, msg);
+}
+
+// A const table of structs whose fields include a string slice — value + nested slice len.
+fn i32 jit_const_struct_table(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "struct E { u8[] name; i32 v; } const E[] t = [ {\"ab\", 10}, {\"c\", 20} ]; fn i32 main() { return t[1].v + (i32)t[0].name.len; }", 22, msg);
+}
+
 fn bool contains(u8[] hay, u8[] needle) {
     if(needle.len > hay.len) { return false; }
     for(u64 i = 0; i + needle.len <= hay.len; i += 1) {
@@ -237,6 +252,9 @@ fn i32 main() {
     testing::add(suite, "jit_sizeof",           &jit_sizeof);
     testing::add(suite, "jit_alignof",          &jit_alignof);
     testing::add(suite, "jit_ptr_cast_index",   &jit_ptr_cast_index);
+    testing::add(suite, "jit_const_slice_index", &jit_const_slice_index);
+    testing::add(suite, "jit_const_string_slice", &jit_const_string_slice);
+    testing::add(suite, "jit_const_struct_table", &jit_const_struct_table);
     testing::add(suite, "opt_release_mem2reg",  &opt_release_mem2reg);
     testing::add(suite, "opt_debug_info",       &opt_debug_info);
     return testing::run();
