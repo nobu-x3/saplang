@@ -1325,6 +1325,8 @@ fn ast::AstNode* parse_block(Parser* p) {
 
 // TYPES ////////////////////////////////////////////////////////////////////////////////
 fn ast::AstNode* parse_type(Parser* p) {
+    // A `const T` qualifier in type position (e.g. a `(const i8*)` cast): accepted, not tracked — Stage 2 has no pointee-const, so it reduces to T like a `const` param does.
+    if(peek(p, 0).kind == token::TokenKind::CONST) { consume(p); }
     ast::AstNode* base = parse_base_type(p);
     if(!base) {
         if(!p.is_speculating) {

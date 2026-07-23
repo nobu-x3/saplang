@@ -5295,6 +5295,19 @@ fn i32 paren_ident_bare_expr_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// A `const` qualifier in cast type position is accepted (and reduces to the unqualified type).
+fn i32 cast_const_qualified_type(arena::Arena* a, u8[] msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "i8* y = (const i8*)x;", &m);
+    ast::VarDeclNode* v = compiler_testing::expect_var(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "y"), false, false, msg);
+    if(!v) { return -1; }
+    ast::CastNode* c = compiler_testing::expect_cast(v.init, msg);
+    if(!c) { return -2; }
+    if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
+    return 0;
+}
+
 fn i32 cast_primitive_ident_operand(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -13446,6 +13459,7 @@ fn i32 main() {
     testing::add(s_e, "paren_ident_in_var_init", &paren_ident_in_var_init);
     testing::add(s_e, "paren_ident_lhs_of_binop", &paren_ident_lhs_of_binop);
     testing::add(s_e, "paren_ident_bare_expr_stmt", &paren_ident_bare_expr_stmt);
+    testing::add(s_e, "cast_const_qualified_type", &cast_const_qualified_type);
     testing::add(s_e, "cast_primitive_ident_operand", &cast_primitive_ident_operand);
     testing::add(s_e, "cast_with_unary_operand", &cast_with_unary_operand);
     testing::add(s_e, "cast_with_paren_operand", &cast_with_paren_operand);

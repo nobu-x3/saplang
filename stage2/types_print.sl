@@ -1,3 +1,4 @@
+import arena;
 import ast;
 import interner;
 import io;
