@@ -2,25 +2,33 @@ import types;
 import token;
 import value;
 
+// An enum acts as its base integer type in arithmetic/bitwise/shift; comparisons keep the enum type.
+fn types::Type* enum_base_or_self(types::Type* t) {
+    if(t.kind == types::TypeKind::Enum) { return types::enum_base_type(t); }
+    return t;
+}
+
 export fn types::Type* binop_result_type(token::TokenKind op, types::Type* lt, types::Type* rt) {
     if(lt == null || rt == null) { return null; }
+    types::Type* base_lt = enum_base_or_self(lt);
+    types::Type* base_rt = enum_base_or_self(rt);
     switch(op) {
     case token::TokenKind::Plus:
     case token::TokenKind::Minus:
     case token::TokenKind::Star:
     case token::TokenKind::Slash:
     case token::TokenKind::Percent: {
-        return arithmetic_result(lt, rt);
+        return arithmetic_result(base_lt, base_rt);
     }
     case token::TokenKind::Amp:
     case token::TokenKind::Pipe:
     case token::TokenKind::Caret: {
-        if(types::is_int(lt) && types::is_int(rt)) { return int_common(lt, rt); }
+        if(types::is_int(base_lt) && types::is_int(base_rt)) { return int_common(base_lt, base_rt); }
         return null;
     }
     case token::TokenKind::LShift:
     case token::TokenKind::RShift: {
-        if(types::is_int(lt) && types::is_int(rt)) { return lt; }
+        if(types::is_int(base_lt) && types::is_int(base_rt)) { return base_lt; }
         return null;
     }
     case token::TokenKind::EqEq:
@@ -48,9 +56,10 @@ export fn types::Type* binop_result_type(token::TokenKind op, types::Type* lt, t
 
 export fn types::Type* unaryop_result_type(token::TokenKind op, types::Type* operand) {
     if(operand == null) { return null; }
+    types::Type* base = enum_base_or_self(operand);
     switch(op) {
     case token::TokenKind::Minus: {
-        if(types::is_int(operand) || types::is_float(operand)) { return operand; }
+        if(types::is_int(base) || types::is_float(base)) { return base; }
         return null;
     }
     case token::TokenKind::Bang: {
@@ -58,7 +67,7 @@ export fn types::Type* unaryop_result_type(token::TokenKind op, types::Type* ope
         return null;
     }
     case token::TokenKind::Tilde: {
-        if(types::is_int(operand)) { return operand; }
+        if(types::is_int(base)) { return base; }
         return null;
     }
     case token::TokenKind::Amp: {

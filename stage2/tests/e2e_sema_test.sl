@@ -597,6 +597,34 @@ fn i32 ok_logical_mixed_truthy_operands(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// An enum acts as its base int in arithmetic/bitwise: enum on either side, with or without a literal.
+fn i32 ok_enum_arithmetic(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum C : i32 { R, G, B } export fn i32 f(C c, i32 n) { return c - 1 + n * c + 2 * c; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_enum_bitwise(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum F : u8 { A = 1, B = 2 } export fn u8 f() { u8 x = F::A | F::B; u8 y = F::A & 3; return x + y; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Unary bitwise-not / negate on an enum act on its base int, like binary ops.
+fn i32 ok_enum_unary(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum F : u8 { A = 1 } enum C : i32 { R, G, B } export fn i32 f(C c) { u8 x = ~F::A; return (i32)x + (-c); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Comparisons stay strict: an enum compared to a bare int still needs an explicit cast.
+fn i32 err_enum_eq_int_strict(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum C : i32 { R, G, B } export fn bool f(C c) { return c == 1; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "operator is not defined for main::C and i32", m)) { return -2; }
+    return 0;
+}
+
 // A non-truthy operand (float) in a logical op is still rejected.
 fn i32 err_logical_float_operand(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f(f32 x, bool b) { if(x && b) { return 1; } return 0; }");
@@ -1181,6 +1209,10 @@ fn i32 main() {
     testing::add(suite, "ok_comptime_or_shortcircuit",  &ok_comptime_or_shortcircuit);
     testing::add(suite, "ok_logical_pointer_operands",  &ok_logical_pointer_operands);
     testing::add(suite, "ok_logical_mixed_truthy_operands", &ok_logical_mixed_truthy_operands);
+    testing::add(suite, "ok_enum_arithmetic",           &ok_enum_arithmetic);
+    testing::add(suite, "ok_enum_bitwise",              &ok_enum_bitwise);
+    testing::add(suite, "ok_enum_unary",                &ok_enum_unary);
+    testing::add(suite, "err_enum_eq_int_strict",       &err_enum_eq_int_strict);
     testing::add(suite, "err_logical_float_operand",    &err_logical_float_operand);
     testing::add(suite, "err_comptime_and_evaluates_rhs", &err_comptime_and_evaluates_rhs);
     testing::add(suite, "err_comptime_div_by_zero",     &err_comptime_div_by_zero);

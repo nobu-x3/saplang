@@ -177,6 +177,21 @@ fn i32 jit_const_struct_table(arena::Arena* a, u8[] msg) {
     return jit_return(a, "struct E { u8[] name; i32 v; } const E[] t = [ {\"ab\", 10}, {\"c\", 20} ]; fn i32 main() { return t[1].v + (i32)t[0].name.len; }", 22, msg);
 }
 
+// An enum acts as its base int in arithmetic; the runtime value is the underlying integer.
+fn i32 jit_enum_arithmetic(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "enum C : i32 { R, G, B } fn i32 main() { C c = C::B; return c - 1 + (2 * c); }", 5, msg);
+}
+
+// Unary bitwise-not on an enum operates on its base int at runtime.
+fn i32 jit_enum_unary(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "enum F : u8 { A = 1 } fn i32 main() { u8 v = ~F::A; return (i32)(v & 6); }", 6, msg);
+}
+
+// A string literal into a fixed-array const global stores the bytes inline (NUL included).
+fn i32 jit_const_array_string(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "const u8[4] MSG = \"abc\"; fn i32 main() { return (i32)MSG[0] + (i32)MSG[3]; }", 97, msg);
+}
+
 fn bool contains(u8[] hay, u8[] needle) {
     if(needle.len > hay.len) { return false; }
     for(u64 i = 0; i + needle.len <= hay.len; i += 1) {
@@ -255,6 +270,9 @@ fn i32 main() {
     testing::add(suite, "jit_const_slice_index", &jit_const_slice_index);
     testing::add(suite, "jit_const_string_slice", &jit_const_string_slice);
     testing::add(suite, "jit_const_struct_table", &jit_const_struct_table);
+    testing::add(suite, "jit_enum_arithmetic",   &jit_enum_arithmetic);
+    testing::add(suite, "jit_enum_unary",        &jit_enum_unary);
+    testing::add(suite, "jit_const_array_string", &jit_const_array_string);
     testing::add(suite, "opt_release_mem2reg",  &opt_release_mem2reg);
     testing::add(suite, "opt_debug_info",       &opt_debug_info);
     return testing::run();

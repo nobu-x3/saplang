@@ -1718,10 +1718,15 @@ fn void adapt_binop_operands(ast::AstNode* lhs, types::Type** lt, ast::AstNode* 
     bool lhs_lit = is_numeric_literal_operand(lhs);
     bool rhs_lit = is_numeric_literal_operand(rhs);
     if(lhs_lit == rhs_lit) { return; }
+    // A literal paired with an enum adapts to the enum's base int (the enum acts as its base in arithmetic/bitwise).
     if(rhs_lit) {
-        if(retype_numeric_literal(rhs, *lt)) { *rt = *lt; }
+        types::Type* target = *lt;
+        if(target.kind == types::TypeKind::Enum) { target = types::enum_base_type(target); }
+        if(retype_numeric_literal(rhs, target)) { *rt = target; }
     } else {
-        if(retype_numeric_literal(lhs, *rt)) { *lt = *rt; }
+        types::Type* target = *rt;
+        if(target.kind == types::TypeKind::Enum) { target = types::enum_base_type(target); }
+        if(retype_numeric_literal(lhs, target)) { *lt = target; }
     }
 }
 
