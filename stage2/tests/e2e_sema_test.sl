@@ -584,6 +584,27 @@ fn i32 ok_comptime_or_shortcircuit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// Logical operators accept truthy operands (bool/int/ptr/slice), like `if` and `!`.
+fn i32 ok_logical_pointer_operands(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32* p1, i32* p2) { if(p1 && p2) { return 1; } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_logical_mixed_truthy_operands(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(i32 n, u8[] s) { if(n || s) { return 1; } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A non-truthy operand (float) in a logical op is still rejected.
+fn i32 err_logical_float_operand(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(f32 x, bool b) { if(x && b) { return 1; } return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "operator is not defined for f32 and bool", m)) { return -2; }
+    return 0;
+}
+
 fn i32 err_comptime_and_evaluates_rhs(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn bool boom() { comperror(\"rhs ran\"); return true; }\ncomprun { if(true && boom()) { } }\nexport fn i32 f() { return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1158,6 +1179,9 @@ fn i32 main() {
     testing::add(suite, "ok_comprun_local",          &ok_comprun_local);
     testing::add(suite, "ok_comptime_and_shortcircuit", &ok_comptime_and_shortcircuit);
     testing::add(suite, "ok_comptime_or_shortcircuit",  &ok_comptime_or_shortcircuit);
+    testing::add(suite, "ok_logical_pointer_operands",  &ok_logical_pointer_operands);
+    testing::add(suite, "ok_logical_mixed_truthy_operands", &ok_logical_mixed_truthy_operands);
+    testing::add(suite, "err_logical_float_operand",    &err_logical_float_operand);
     testing::add(suite, "err_comptime_and_evaluates_rhs", &err_comptime_and_evaluates_rhs);
     testing::add(suite, "err_comptime_div_by_zero",     &err_comptime_div_by_zero);
     testing::add(suite, "err_comptime_shift_range",     &err_comptime_shift_range);

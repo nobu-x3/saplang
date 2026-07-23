@@ -211,8 +211,25 @@ fn i32 logic_or_bool(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 logic_int_null(arena::Arena* a, u8[] m) {
+// Logical operands are truthy (bool/int/ptr/slice), consistent with `if` / `!`.
+fn i32 logic_int_truthy(arena::Arena* a, u8[] m) {
     types::Type* r = op::binop_result_type(token::TokenKind::AmpAmp, types::prim_i32(), types::prim_bool());
+    if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
+    return 0;
+}
+
+fn i32 logic_ptr_truthy(arena::Arena* a, u8[] m) {
+    types::Type* p = types::intern_pointer(types::prim_i32(), false);
+    types::Type* r = op::binop_result_type(token::TokenKind::AmpAmp, p, p);
+    if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
+    types::Type* r2 = op::binop_result_type(token::TokenKind::PipePipe, types::intern_slice(types::prim_u8()), types::prim_bool());
+    if(!testing::expect_eq((void*)r2, (void*)types::prim_bool(), m)) { return -2; }
+    return 0;
+}
+
+// A logical operand that isn't truthy-convertible (e.g. a struct) is still rejected.
+fn i32 logic_non_cond_null(arena::Arena* a, u8[] m) {
+    types::Type* r = op::binop_result_type(token::TokenKind::AmpAmp, types::prim_f32(), types::prim_bool());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
     return 0;
 }
@@ -344,7 +361,9 @@ fn i32 main() {
     u8[] logic = "Op Logical Tests";
     testing::add(logic, "logic_and_bool", &logic_and_bool);
     testing::add(logic, "logic_or_bool",  &logic_or_bool);
-    testing::add(logic, "logic_int_null", &logic_int_null);
+    testing::add(logic, "logic_int_truthy", &logic_int_truthy);
+    testing::add(logic, "logic_ptr_truthy", &logic_ptr_truthy);
+    testing::add(logic, "logic_non_cond_null", &logic_non_cond_null);
 
     u8[] un = "Op Unary Tests";
     testing::add(un, "neg_i32",              &neg_i32);

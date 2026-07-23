@@ -37,7 +37,8 @@ export fn types::Type* binop_result_type(token::TokenKind op, types::Type* lt, t
     }
     case token::TokenKind::AmpAmp:
     case token::TokenKind::PipePipe: {
-        if(types::is_bool(lt) && types::is_bool(rt)) { return types::prim_bool(); }
+        // Truthy operands (bool/int/ptr/slice), consistent with `if` and `!`; lowering's to_bool converts each.
+        if(types::is_convertible_in_cond(lt) && types::is_convertible_in_cond(rt)) { return types::prim_bool(); }
         return null;
     }
     else { return null; }
