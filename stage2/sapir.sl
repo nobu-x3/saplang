@@ -83,6 +83,14 @@ export struct SapirVar {
     types::Type*    ty;
     u32             src_pos;
     u32             alloca_id;      // slot inst id for a memory var; INVALID_ID for an SSA var
+    void*           decl;           // sema::Decl*; lets lower map an assignment target back to its var index
+}
+
+// A source-local SSA var took `value` in `block` — codegen emits a #dbg_value so a debugger can read it there.
+export struct SapirDbgValue {
+    u32             var;            // index into SapirFn.vars
+    u32             value;          // inst id holding the var's value
+    u32             block;          // block the assignment lives in
 }
 
 export struct SapirBlock {
@@ -101,6 +109,8 @@ export struct SapirFn {
     u32             param_count;
     SapirVar[]      vars;
     u64             vars_cap;
+    SapirDbgValue[] dbg_values;
+    u64             dbg_values_cap;
     SapirBlock[]    blocks;
     u64             blocks_cap;
     u32             entry;

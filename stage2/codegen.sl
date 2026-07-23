@@ -7,6 +7,7 @@
 import sapir;
 import types;
 import interner;
+import symbol;
 import llvm;
 import arena;
 import sys;
@@ -248,9 +249,58 @@ fn void* build_di_type(CG* cg, types::Type* t) {
     case types::TypeKind::Pointer:
     case types::TypeKind::FnPtr:     { return llvm::LLVMDIBuilderCreatePointerType(cg.di_builder, null, 64, 0, 0, cg.empty, 0); }
     case types::TypeKind::Enum:      { return build_di_type(cg, types::enum_base_type(t)); }
+    case types::TypeKind::Struct:    { return build_di_composite(cg, t, false); }
+    case types::TypeKind::Union:     { return build_di_composite(cg, t, true); }
+    case types::TypeKind::Array:     { return build_di_array(cg, t); }
+    case types::TypeKind::Slice:     { return build_di_slice(cg, t); }
     else { return null; }
     }
     return null;
+}
+
+fn u8[] sym_str_or_empty(symbol::Symbol* s) {
+    if(s == null) { u8[] e = {null, 0}; return e; }
+    return interner::symbol_str(s);
+}
+
+fn void* di_member(CG* cg, u8[] name, types::Type* ft, u64 offset_bits) {
+    u64 fbits = (u64)types::size_of(null, ft) * 8;
+    u32 falign = types::align_of(null, ft) * 8;
+    return llvm::LLVMDIBuilderCreateMemberType(cg.di_builder, cg.di_file, name.ptr, name.len, cg.di_file, 0, fbits, falign, offset_bits, 0, build_di_type(cg, ft));
+}
+
+fn void* build_di_composite(CG* cg, types::Type* t, bool is_union) {
+    u64 count = types::field_count(t);
+    void** members = (void**)arena::alloc(cg.arena, (count + 1) * sizeof(void*));
+    for(u64 i = 0; i < count; i += 1) {
+        u8[] fname = sym_str_or_empty(types::field_name_sym(t, i));
+        members[i] = di_member(cg, fname, types::field_type(t, i), (u64)types::field_offset(t, i) * 8);
+    }
+    u64 size = (u64)types::size_of(null, t) * 8;
+    u32 align = types::align_of(null, t) * 8;
+    u8[] name = sym_str_or_empty(types::type_name_sym(t));
+    if(is_union) {
+        return llvm::LLVMDIBuilderCreateUnionType(cg.di_builder, cg.di_file, name.ptr, name.len, cg.di_file, 0, size, align, 0, members, (u32)count, 0, cg.empty, 0);
+    }
+    return llvm::LLVMDIBuilderCreateStructType(cg.di_builder, cg.di_file, name.ptr, name.len, cg.di_file, 0, size, align, 0, null, members, (u32)count, 0, null, cg.empty, 0);
+}
+
+fn void* build_di_array(CG* cg, types::Type* t) {
+    void* elem_di = build_di_type(cg, t.data.array.elem);
+    void* subrange = llvm::LLVMDIBuilderGetOrCreateSubrange(cg.di_builder, 0, (i64)t.data.array.count);
+    void*[1] subs;
+    subs[0] = subrange;
+    u64 size = (u64)types::size_of(null, t) * 8;
+    u32 align = types::align_of(null, t) * 8;
+    return llvm::LLVMDIBuilderCreateArrayType(cg.di_builder, size, align, elem_di, &subs[0], 1);
+}
+
+// A slice is a {ptr, len} pair: an elem-pointer at offset 0 and a u64 length at offset 8.
+fn void* build_di_slice(CG* cg, types::Type* t) {
+    void*[2] members;
+    members[0] = di_member(cg, "ptr", types::intern_pointer(t.data.slice_elem, false), 0);
+    members[1] = di_member(cg, "len", types::prim_u64(), 64);
+    return llvm::LLVMDIBuilderCreateStructType(cg.di_builder, cg.di_file, cg.empty, 0, cg.di_file, 0, 128, 64, 0, null, &members[0], 2, 0, null, cg.empty, 0);
 }
 
 fn void* di_basic_type(CG* cg, types::PrimitiveKind p) {
@@ -554,7 +604,10 @@ fn void emit_di_variables(CG* cg, sapir::SapirFn* f) {
     void* entry_term = llvm::LLVMGetBasicBlockTerminator(entry_bb);
     if(entry_term == null) { return; }
     void* empty_expr = llvm::LLVMDIBuilderCreateExpression(cg.di_builder, null, 0);
+    void** di_vars = (void**)arena::alloc(cg.arena, (f.vars.len + 1) * sizeof(void*));
+    void** di_locs = (void**)arena::alloc(cg.arena, (f.vars.len + 1) * sizeof(void*));
     for(u64 i = 0; i < f.vars.len; i += 1) {
+        di_vars[i] = null;
         sapir::SapirVar* v = &f.vars[i];
         void* di_ty = build_di_type(cg, v.ty);
         if(di_ty == null) { continue; }
@@ -570,10 +623,25 @@ fn void emit_di_variables(CG* cg, sapir::SapirFn* f) {
         } else {
             di_var = llvm::LLVMDIBuilderCreateAutoVariable(cg.di_builder, cg.di_subprogram, name.ptr, name.len, cg.di_file, line, di_ty, 1, 0, 0);
         }
+        di_vars[i] = di_var;
+        di_locs[i] = loc;
         if(v.alloca_id != sapir::INVALID_ID) {
             llvm::LLVMDIBuilderInsertDeclareRecordBefore(cg.di_builder, cg.value_map[v.alloca_id], di_var, empty_expr, loc, entry_term);
         } else if(is_param) {
             llvm::LLVMDIBuilderInsertDbgValueRecordBefore(cg.di_builder, llvm::LLVMGetParam(cg.current_fn, (u32)i), di_var, empty_expr, loc, entry_term);
+        }
+    }
+    // Each recorded SSA-local write becomes a #dbg_value at the end of its block, so a debugger can read the value there.
+    for(u64 i = 0; i < f.dbg_values.len; i += 1) {
+        sapir::SapirDbgValue* rec = &f.dbg_values[i];
+        if(di_vars[rec.var] == null) { continue; }
+        if(cg.value_map[rec.value] == null) { continue; }   // a value codegen never materialized (e.g. a phi in dead code)
+        void* block = cg.block_map[rec.block];
+        void* term = llvm::LLVMGetBasicBlockTerminator(block);
+        if(term != null) {
+            llvm::LLVMDIBuilderInsertDbgValueRecordBefore(cg.di_builder, cg.value_map[rec.value], di_vars[rec.var], empty_expr, di_locs[rec.var], term);
+        } else {
+            llvm::LLVMDIBuilderInsertDbgValueRecordAtEnd(cg.di_builder, cg.value_map[rec.value], di_vars[rec.var], empty_expr, di_locs[rec.var], block);
         }
     }
 }

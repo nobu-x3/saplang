@@ -192,6 +192,19 @@ fn i32 jit_const_array_string(arena::Arena* a, u8[] msg) {
     return jit_return(a, "const u8[4] MSG = \"abc\"; fn i32 main() { return (i32)MSG[0] + (i32)MSG[3]; }", 97, msg);
 }
 
+// A struct local gets a DICompositeType; SSA scalar locals get dbg_value records at each assignment. Verifies (DISubprogram present).
+fn i32 opt_debug_aggregate_and_ssa(arena::Arena* a, u8[] msg) {
+    arena::Arena* ja = fresh_arena(a);
+    module::Module* m = test_util::frontend(ja, "struct P { i32 x; i32 y; } fn i32 main() { P p = {.x = 1, .y = 2}; i32 s = 0; for(i32 i = 0; i < p.y; i = i + 1) { s = s + p.x; } return s; }");
+    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
+    sapir::SapirModule* sm = lower::lower_module(m);
+    u8[] ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
+    if(!contains(ir, "DISubprogram")) { return -2; }
+    if(!contains(ir, "DICompositeType")) { return -3; }
+    if(!contains(ir, "dbg_value")) { return -4; }
+    return 0;
+}
+
 fn bool contains(u8[] hay, u8[] needle) {
     if(needle.len > hay.len) { return false; }
     for(u64 i = 0; i + needle.len <= hay.len; i += 1) {
@@ -275,5 +288,6 @@ fn i32 main() {
     testing::add(suite, "jit_const_array_string", &jit_const_array_string);
     testing::add(suite, "opt_release_mem2reg",  &opt_release_mem2reg);
     testing::add(suite, "opt_debug_info",       &opt_debug_info);
+    testing::add(suite, "opt_debug_aggregate_and_ssa", &opt_debug_aggregate_and_ssa);
     return testing::run();
 }

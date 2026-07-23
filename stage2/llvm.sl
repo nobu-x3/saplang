@@ -166,6 +166,12 @@ extern {
     export fn void* LLVMGetBasicBlockTerminator(void* bb);
     export fn void* LLVMDIBuilderInsertDeclareRecordBefore(void* builder, void* storage, void* var_info, void* expr, void* debug_loc, void* instr);
     export fn void* LLVMDIBuilderInsertDbgValueRecordBefore(void* builder, void* val, void* var_info, void* expr, void* debug_loc, void* instr);
+    export fn void* LLVMDIBuilderInsertDbgValueRecordAtEnd(void* builder, void* val, void* var_info, void* expr, void* debug_loc, void* block);
+    export fn void* LLVMDIBuilderCreateStructType(void* builder, void* scope, const i8* name, u64 name_len, void* file, u32 line, u64 size_bits, u32 align_bits, i32 flags, void* derived_from, void** elements, u32 num_elements, u32 run_time_lang, void* vtable_holder, const i8* unique_id, u64 unique_id_len);
+    export fn void* LLVMDIBuilderCreateUnionType(void* builder, void* scope, const i8* name, u64 name_len, void* file, u32 line, u64 size_bits, u32 align_bits, i32 flags, void** elements, u32 num_elements, u32 run_time_lang, const i8* unique_id, u64 unique_id_len);
+    export fn void* LLVMDIBuilderCreateMemberType(void* builder, void* scope, const i8* name, u64 name_len, void* file, u32 line, u64 size_bits, u32 align_bits, u64 offset_bits, i32 flags, void* ty);
+    export fn void* LLVMDIBuilderCreateArrayType(void* builder, u64 size, u32 align_bits, void* ty, void** subscripts, u32 num_subscripts);
+    export fn void* LLVMDIBuilderGetOrCreateSubrange(void* builder, i64 lower_bound, i64 count);
 }
 
 // DWARF constants

@@ -62,6 +62,8 @@ struct Lower {
     u64                 mem_vars_cap;
     sapir::SapirVar[]   vars;           // params + locals of the current fn, for debug info; reset per fn
     u64                 vars_cap;
+    sapir::SapirDbgValue[] dbg_values;   // SSA-local (var, value, block) records for #dbg_value; reset per fn
+    u64                 dbg_values_cap;
     DeclMapEntry[]      decl_map;       // module-scoped; not reset per function
     u64                 decl_map_cap;
     types::Type*        ret_ty;         // return type of the fn being lowered; return values coerce to it
@@ -127,6 +129,9 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
     lo.vars.ptr = null;
     lo.vars.len = 0;
     lo.vars_cap = 0;
+    lo.dbg_values.ptr = null;
+    lo.dbg_values.len = 0;
+    lo.dbg_values_cap = 0;
     collect_mem_vars(lo, fn_node, g);
 
     lo.states.ptr = null;
@@ -155,6 +160,7 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
     }
     func.blocks[lo.current].body_end = (u32)func.insts.len;
     func.vars = lo.vars;
+    func.dbg_values = lo.dbg_values;
 
     remove_trivial_phis(lo);
 }
@@ -210,14 +216,14 @@ fn void emit_params(Lower* lo, ast::FnDeclNode* fn_node) {
         runtime_index += 1;
         u32 value = sapir::add_inst(lo.arena, lo.func, inst);
         u32 slot = mem_alloca(lo, param.decl);
-        push_var(lo, param.name, (types::Type*)param.resolved_type, param.src_pos, slot);
+        push_var(lo, param.name, (types::Type*)param.resolved_type, param.src_pos, slot, param.decl);
         if(slot != sapir::INVALID_ID) { emit_store(lo, slot, value); }
         else { write_var(lo, lo.current, param.decl, value); }
     }
 }
 
 // Records a param/local for debug info; alloca_id is its slot (memory var) or INVALID_ID (SSA).
-fn void push_var(Lower* lo, symbol::Symbol* name, types::Type* ty, u32 src_pos, u32 alloca_id) {
+fn void push_var(Lower* lo, symbol::Symbol* name, types::Type* ty, u32 src_pos, u32 alloca_id, void* decl) {
     if(lo.vars.len == lo.vars_cap) {
         u64 new_cap = 8;
         if(lo.vars_cap > 0) { new_cap = lo.vars_cap * 2; }
@@ -228,7 +234,37 @@ fn void push_var(Lower* lo, symbol::Symbol* name, types::Type* ty, u32 src_pos, 
     lo.vars[lo.vars.len].ty = ty;
     lo.vars[lo.vars.len].src_pos = src_pos;
     lo.vars[lo.vars.len].alloca_id = alloca_id;
+    lo.vars[lo.vars.len].decl = decl;
     lo.vars.len += 1;
+}
+
+fn u32 find_var_index(Lower* lo, void* decl) {
+    for(u64 i = 0; i < lo.vars.len; i += 1) {
+        if(lo.vars[i].decl == decl) { return (u32)i; }
+    }
+    return sapir::INVALID_ID;
+}
+
+// Records that an SSA local (found by decl) took `value` in the current block, so codegen can emit a #dbg_value.
+fn void record_dbg_value(Lower* lo, void* decl, u32 value) {
+    record_dbg_value_in(lo, decl, value, lo.current);
+}
+
+// A merge/assignment point where a source SSA local becomes `value` in `block`.
+fn void record_dbg_value_in(Lower* lo, void* decl, u32 value, u32 block) {
+    u32 var_index = find_var_index(lo, decl);
+    if(var_index == sapir::INVALID_ID) { return; }
+    if(lo.vars[var_index].alloca_id != sapir::INVALID_ID) { return; }
+    if(lo.dbg_values.len == lo.dbg_values_cap) {
+        u64 new_cap = 8;
+        if(lo.dbg_values_cap > 0) { new_cap = lo.dbg_values_cap * 2; }
+        lo.dbg_values.ptr = (sapir::SapirDbgValue*)arena::realloc_grow(lo.arena, (void*)lo.dbg_values.ptr, lo.dbg_values.len * sizeof(sapir::SapirDbgValue), new_cap * sizeof(sapir::SapirDbgValue));
+        lo.dbg_values_cap = new_cap;
+    }
+    lo.dbg_values[lo.dbg_values.len].var = var_index;
+    lo.dbg_values[lo.dbg_values.len].value = value;
+    lo.dbg_values[lo.dbg_values.len].block = block;
+    lo.dbg_values.len += 1;
 }
 
 // STATEMENTS /////////////////////////////////////////////////////////////////////
@@ -244,7 +280,7 @@ fn void lower_stmt(Lower* lo, ast::AstNode* s) {
 
 fn void lower_var_decl(Lower* lo, ast::VarDeclNode* v) {
     u32 slot = mem_alloca(lo, v.decl);
-    push_var(lo, v.name, decl_type(v.decl), v.h.src_pos, slot);
+    push_var(lo, v.name, decl_type(v.decl), v.h.src_pos, slot, v.decl);
     if(slot != sapir::INVALID_ID) {
         if(v.init == null) { emit_zero(lo, slot, decl_type(v.decl)); return; }
         if(v.init.h.kind == ast::AstKind::UndefinedLit) { return; }
@@ -253,10 +289,14 @@ fn void lower_var_decl(Lower* lo, ast::VarDeclNode* v) {
     }
     if(v.init == null || v.init.h.kind == ast::AstKind::UndefinedLit) {
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Undef, decl_type(v.decl), v.h.src_pos);
-        write_var(lo, lo.current, v.decl, sapir::add_inst(lo.arena, lo.func, inst));
+        u32 undef_val = sapir::add_inst(lo.arena, lo.func, inst);
+        write_var(lo, lo.current, v.decl, undef_val);
+        record_dbg_value(lo, v.decl, undef_val);
         return;
     }
-    write_var(lo, lo.current, v.decl, lower_expr(lo, v.init));
+    u32 init_val = lower_expr(lo, v.init);
+    write_var(lo, lo.current, v.decl, init_val);
+    record_dbg_value(lo, v.decl, init_val);
 }
 
 fn void lower_assignment(Lower* lo, ast::AssignmentNode* a) {
@@ -283,6 +323,7 @@ fn void lower_assignment(Lower* lo, ast::AssignmentNode* a) {
             rhs = sapir::add_inst(lo.arena, lo.func, inst);
         }
         write_var(lo, lo.current, target, rhs);
+        record_dbg_value(lo, target, rhs);
         return;
     }
     if(is_lvalue_kind(a.lhs)) {
@@ -595,6 +636,7 @@ fn u32 read_var_recursive(Lower* lo, u32 block, void* decl) {
     if(!lo.states[block].sealed) {
         value = emit_phi_inst(lo, block, decl_type(decl));
         incomplete_push(lo, block, decl, value);
+        record_dbg_value_in(lo, decl, value, block);
     } else {
         sapir::SapirBlock* sapir_block = &lo.func.blocks[block];
         if(sapir_block.preds.len == 0) {
@@ -605,6 +647,7 @@ fn u32 read_var_recursive(Lower* lo, u32 block, void* decl) {
             value = emit_phi_inst(lo, block, decl_type(decl));
             write_var(lo, block, decl, value);                  // pre-insert breaks lookup cycles through loops
             fill_phi_operands(lo, block, decl, value);
+            record_dbg_value_in(lo, decl, value, block);
         }
     }
     write_var(lo, block, decl, value);

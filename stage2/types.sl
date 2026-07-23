@@ -2,6 +2,7 @@ import arena;
 import ast;
 import diag;
 import mutex;
+import symbol;
 import sys;
 import token;
 
@@ -621,6 +622,34 @@ export fn Type*[] struct_field_types(Type* type, arena::Arena* a) {
     for(u64 i = 0; i < decl.fields.len; i += 1) { out[i] = (Type*)decl.fields[i].resolved_type; }
     Type*[] result = {out, decl.fields.len};
     return result;
+}
+
+// Field accessors over a struct or union, letting a backend build DWARF composite types without importing ast.
+fn ast::FieldDecl* field_at(Type* type, u64 index) {
+    if(type.kind == TypeKind::Struct) { return &((ast::StructDeclNode*)type.data.struct_decl).fields[index]; }
+    return &((ast::UnionDeclNode*)type.data.union_decl).fields[index];
+}
+
+export fn u64 field_count(Type* type) {
+    if(type.kind == TypeKind::Struct) { return ((ast::StructDeclNode*)type.data.struct_decl).fields.len; }
+    if(type.kind == TypeKind::Union)  { return ((ast::UnionDeclNode*)type.data.union_decl).fields.len; }
+    return 0;
+}
+
+export fn Type* field_type(Type* type, u64 index) { return (Type*)field_at(type, index).resolved_type; }
+
+export fn symbol::Symbol* field_name_sym(Type* type, u64 index) { return field_at(type, index).name; }
+
+export fn u32 field_offset(Type* type, u64 index) {
+    if(((u8)type.flags & (u8)LayoutFlags::Computed) == 0) { size_of(null, type); }
+    if(type.layout == null) { return 0; }
+    return type.layout.offsets[index];
+}
+
+export fn symbol::Symbol* type_name_sym(Type* type) {
+    if(type.kind == TypeKind::Struct) { return ((ast::StructDeclNode*)type.data.struct_decl).qualified_name; }
+    if(type.kind == TypeKind::Union)  { return ((ast::UnionDeclNode*)type.data.union_decl).qualified_name; }
+    return null;
 }
 
 PrimitiveTable PRIM;
