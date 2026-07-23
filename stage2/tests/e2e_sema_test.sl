@@ -625,6 +625,29 @@ fn i32 err_enum_eq_int_strict(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A fixed array has no .len (slice-only, by design); it must decay to a slice first.
+fn i32 err_array_len_rejected(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32[5] arr = [1, 2, 3, 4, 5]; return (i32)arr.len; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot access field of i32[5]", m)) { return -2; }
+    return 0;
+}
+
+// Enum casts are base-only (by design): widening an enum past its base, or building one from an int, is rejected.
+fn i32 err_enum_cast_to_wider(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum F : u8 { A = 1 } export fn u32 f() { F x = F::A; return (u32)x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot cast main::F to u32", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_int_cast_to_enum(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum F : u8 { A = 1 } export fn F f() { return (F)2; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot cast i32 to main::F", m)) { return -2; }
+    return 0;
+}
+
 // A non-truthy operand (float) in a logical op is still rejected.
 fn i32 err_logical_float_operand(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f(f32 x, bool b) { if(x && b) { return 1; } return 0; }");
@@ -1213,6 +1236,9 @@ fn i32 main() {
     testing::add(suite, "ok_enum_bitwise",              &ok_enum_bitwise);
     testing::add(suite, "ok_enum_unary",                &ok_enum_unary);
     testing::add(suite, "err_enum_eq_int_strict",       &err_enum_eq_int_strict);
+    testing::add(suite, "err_array_len_rejected",       &err_array_len_rejected);
+    testing::add(suite, "err_enum_cast_to_wider",       &err_enum_cast_to_wider);
+    testing::add(suite, "err_int_cast_to_enum",         &err_int_cast_to_enum);
     testing::add(suite, "err_logical_float_operand",    &err_logical_float_operand);
     testing::add(suite, "err_comptime_and_evaluates_rhs", &err_comptime_and_evaluates_rhs);
     testing::add(suite, "err_comptime_div_by_zero",     &err_comptime_div_by_zero);
