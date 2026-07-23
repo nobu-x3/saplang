@@ -570,6 +570,32 @@ fn i32 argv_comptime_limits(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 argv_lib_dirs_and_libs(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 5);
+    args[0] = "main.sl";
+    args[1] = "-L";
+    args[2] = "/opt/lib";
+    args[3] = "-l";
+    args[4] = "foo";
+    if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
+    if(!testing::expect_eq(c.lib_dirs.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq(c.lib_dirs[0], "/opt/lib", msg)) { return -3; }
+    if(!testing::expect_eq(c.extern_libs.len, (u64)1, msg)) { return -4; }
+    if(!testing::expect_eq(c.extern_libs[0], "foo", msg)) { return -5; }
+    return 0;
+}
+
+fn i32 argv_dangling_L_fails(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 1);
+    args[0] = "-L";
+    if(!testing::expect_true(!compiler::parse_argv(c, args), msg)) { return -1; }
+    return 0;
+}
+
 fn i32 argv_unknown_fails(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -686,6 +712,21 @@ fn i32 e2e_compile_link_run(arena::Arena* a, u8[] msg) {
     c.output_path = "e2e_out_prog";
     if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
     if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_out_prog"), (u64)42, msg)) { return -3; }
+    return 0;
+}
+
+// E2E: a -L dir reaches the linker (build_link_argv emits -L<path>) and the program still links + runs.
+fn i32 e2e_lib_dir_flag(arena::Arena* a, u8[] msg) {
+    boot(a);
+    arena::Arena* ca = sub_arena(a);
+    compiler::Compiler* c = compiler::new(ca);
+    module::Module* m = mk_source_module(ca, "ldprog", "fn i32 main() { return 42; }");
+    compiler::add_module(c, m);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    compiler::add_lib_dir(c, "/usr/lib");
+    c.output_path = "e2e_libdir_prog";
+    if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
+    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_libdir_prog"), (u64)42, msg)) { return -3; }
     return 0;
 }
 
@@ -923,6 +964,8 @@ fn i32 main() {
     u8[] av = "Compiler Argv Tests";
     testing::add(av, "argv_full",               &argv_full);
     testing::add(av, "argv_comptime_limits",    &argv_comptime_limits);
+    testing::add(av, "argv_lib_dirs_and_libs",  &argv_lib_dirs_and_libs);
+    testing::add(av, "argv_dangling_L_fails",   &argv_dangling_L_fails);
     testing::add(av, "argv_unknown_fails",      &argv_unknown_fails);
     testing::add(av, "argv_dangling_flag_fails", &argv_dangling_flag_fails);
     testing::add(av, "argv_sapir_dump",         &argv_sapir_dump);
@@ -932,6 +975,7 @@ fn i32 main() {
     testing::add(e2e, "e2e_lower_multi_module",      &e2e_lower_multi_module);
     testing::add(e2e, "e2e_lower_cross_module_call", &e2e_lower_cross_module_call);
     testing::add(e2e, "e2e_compile_link_run",        &e2e_compile_link_run);
+    testing::add(e2e, "e2e_lib_dir_flag",            &e2e_lib_dir_flag);
     testing::add(e2e, "e2e_release_build",           &e2e_release_build);
     testing::add(e2e, "e2e_asan_build",              &e2e_asan_build);
     testing::add(e2e, "e2e_link_multi_module",       &e2e_link_multi_module);

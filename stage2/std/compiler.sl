@@ -38,6 +38,8 @@ export struct Compiler {
     u8[]                 output_path;     // -o; empty defaults to "a.out"
     u8[][]               extern_libs;     // -l names, passed to the linker as -l<name>
     u64                  extern_libs_cap;
+    u8[][]               lib_dirs;        // -L paths, passed to the linker as -L<path>
+    u64                  lib_dirs_cap;
     codegen::BuildConfig config;          // -config: optimization / instrumentation pipeline; default Debug
 }
 
@@ -90,6 +92,17 @@ export fn void add_extern_lib(Compiler* c, u8[] name) {
     c.extern_libs.len += 1;
 }
 
+export fn void add_lib_dir(Compiler* c, u8[] path) {
+    if(c.lib_dirs.len == c.lib_dirs_cap) {
+        u64 new_cap = 4;
+        if(c.lib_dirs_cap > 0) { new_cap = c.lib_dirs_cap * 2; }
+        c.lib_dirs.ptr = arena::realloc_grow(c.arena, (void*)c.lib_dirs.ptr, c.lib_dirs.len * sizeof(u8[]), new_cap * sizeof(u8[]));
+        c.lib_dirs_cap = new_cap;
+    }
+    c.lib_dirs[c.lib_dirs.len] = path;
+    c.lib_dirs.len += 1;
+}
+
 export fn void add_import_path(Compiler* c, u8[] path) {
     if(c.import_paths.len == c.import_paths_cap) {
         u64 new_cap = 4;
@@ -127,6 +140,9 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
         } else if(slice_eq(arg, "-l")) {
             arg_index += 1;
             if(arg_index < args.len) { add_extern_lib(c, args[arg_index]); } else { ok = false; }
+        } else if(slice_eq(arg, "-L")) {
+            arg_index += 1;
+            if(arg_index < args.len) { add_lib_dir(c, args[arg_index]); } else { ok = false; }
         } else if(slice_eq(arg, "-config")) {
             arg_index += 1;
             if(arg_index < args.len) {
@@ -403,7 +419,7 @@ fn i32 run_link(Compiler* c, u8[][] object_paths) {
 
 // ld.lld -o <out> -dynamic-linker <ld.so> Scrt1.o crti.o -L<dirs> <objects> -l<libs> -lc crtn.o
 fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
-    u64 cap = 16 + object_paths.len + c.extern_libs.len;
+    u64 cap = 16 + object_paths.len + c.extern_libs.len + c.lib_dirs.len;
     i8** argv = (i8**)arena::alloc(c.arena, (cap + 1) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(c.arena, "ld.lld"); n += 1;
@@ -414,6 +430,8 @@ fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
     argv[n] = link_paths::crt_start(); n += 1;
     argv[n] = link_paths::crt_init(); n += 1;
     argv[n] = link_paths::lib_search_dir(); n += 1;
+    // User -L dirs precede the objects/libs so ld.lld searches them for the -l libraries.
+    for(u64 i = 0; i < c.lib_dirs.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs[i]); n += 1; }
     for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.arena, object_paths[i]); n += 1; }
     for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs[i]); n += 1; }
     // AddressSanitizer needs its runtime; the shared lib carries its own dependencies.
@@ -456,6 +474,14 @@ fn i8* lib_flag(Compiler* c, u8[] name) {
     io::outbuf_init(&buf, c.arena, 16);
     io::outbuf_write(&buf, "-l");
     io::outbuf_write(&buf, name);
+    return cstr(c.arena, io::outbuf_bytes(&buf));
+}
+
+fn i8* dir_flag(Compiler* c, u8[] path) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, c.arena, 16);
+    io::outbuf_write(&buf, "-L");
+    io::outbuf_write(&buf, path);
     return cstr(c.arena, io::outbuf_bytes(&buf));
 }
 
