@@ -618,6 +618,13 @@ fn i32 ok_enum_unary(arena::Arena* a, u8[] m) {
 }
 
 // Comparisons stay strict: an enum compared to a bare int still needs an explicit cast.
+// An array decays to void* (e.g. passed to memset) — a decayed array pointer always converts to void*.
+fn i32 ok_array_to_voidptr(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern { fn void* memset(void* p, i32 v, u64 n); } export fn i32 f() { i32[4] arr = [0, 0, 0, 0]; memset(arr, 0, 16); return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 // A module can qualify its own exported members with its own name.
 fn i32 ok_self_qualification(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 g() { return 5; } export fn i32 f() { return main::g(); }");
@@ -1255,6 +1262,7 @@ fn i32 main() {
     testing::add(suite, "ok_enum_arithmetic",           &ok_enum_arithmetic);
     testing::add(suite, "ok_enum_bitwise",              &ok_enum_bitwise);
     testing::add(suite, "ok_enum_unary",                &ok_enum_unary);
+    testing::add(suite, "ok_array_to_voidptr",         &ok_array_to_voidptr);
     testing::add(suite, "ok_self_qualification",       &ok_self_qualification);
     testing::add(suite, "ok_qualifier_over_shadowing_local", &ok_qualifier_over_shadowing_local);
     testing::add(suite, "ok_enum_ordering",            &ok_enum_ordering);

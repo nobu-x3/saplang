@@ -58,7 +58,7 @@ fn symbol::Symbol* _intern(Interner* it, u8[] bytes) {
     }
     // not found — append to slab, install in bucket
     u64 off = slab_append(it, bytes);
-    symbol::Symbol* sym = arena::alloc(it.slab_arena, sizeof(Symbol));
+    symbol::Symbol* sym = arena::alloc(it.slab_arena, sizeof(symbol::Symbol));
     sym.offset = off;
     sym.len = (u32)bytes.len;
     sym.hash = hash;

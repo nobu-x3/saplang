@@ -476,11 +476,11 @@ fn u32 decl_src_pos(Ty* t) {
 // Conversions
 export fn bool is_convertible(Ty* src, Ty* dst) {
     if (src == dst) { return true; }
-    // array -> pointer (matching depth + element)
+    // array -> pointer: decays to an element pointer (matching element, or void* which any pointer converts to)
     if (is_array(src) && is_ptr(dst)) {
         Ty* a_elem = src.data.array.elem;
         Ty* p_pee  = dst.data.pointee;
-        return a_elem == p_pee;
+        return a_elem == p_pee || is_void(p_pee);
     }
     // array -> slice
     if (is_array(src) && is_slice(dst)) {
