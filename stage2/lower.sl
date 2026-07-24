@@ -316,11 +316,7 @@ fn void lower_assignment(Lower* lo, ast::AssignmentNode* a) {
         u32 rhs = lower_expr(lo, a.rhs);
         sapir::Opcode combine = compound_opcode(a.op);
         if(combine != sapir::Opcode::INVALID) {
-            u32 current_value = read_var(lo, lo.current, target);
-            sapir::Inst inst = sapir::new_inst(combine, lhs_ty, a.h.src_pos);
-            inst.a = current_value;
-            inst.b = rhs;
-            rhs = sapir::add_inst(lo.arena, lo.func, inst);
+            rhs = emit_combine(lo, lhs_ty, read_var(lo, lo.current, target), rhs, combine, a.h.src_pos);
         }
         write_var(lo, lo.current, target, rhs);
         record_dbg_value(lo, target, rhs);
@@ -436,11 +432,11 @@ fn u32 lower_binary(Lower* lo, ast::BinaryOpNode* n) {
     u32 lhs = lower_expr(lo, n.lhs);
     u32 rhs = lower_expr(lo, n.rhs);
     if(n.op == token::TokenKind::Plus) {
-        if(types::is_ptr(lt) && types::is_int(rt)) { return emit_ptr_offset(lo, n, lhs, rhs, false); }
-        if(types::is_int(lt) && types::is_ptr(rt)) { return emit_ptr_offset(lo, n, rhs, lhs, false); }
+        if(types::is_ptr(lt) && types::is_int(rt)) { return emit_ptr_offset(lo, (types::Ty*)n.h.ty, lhs, rhs, false, n.h.src_pos); }
+        if(types::is_int(lt) && types::is_ptr(rt)) { return emit_ptr_offset(lo, (types::Ty*)n.h.ty, rhs, lhs, false, n.h.src_pos); }
     }
     if(n.op == token::TokenKind::Minus) {
-        if(types::is_ptr(lt) && types::is_int(rt)) { return emit_ptr_offset(lo, n, lhs, rhs, true); }
+        if(types::is_ptr(lt) && types::is_int(rt)) { return emit_ptr_offset(lo, (types::Ty*)n.h.ty, lhs, rhs, true, n.h.src_pos); }
         if(types::is_ptr(lt) && types::is_ptr(rt)) { return emit_ptr_diff(lo, n, lhs, rhs); }
     }
     sapir::Inst inst = sapir::new_inst(binary_opcode(n.op), (types::Ty*)n.h.ty, n.h.src_pos);
@@ -450,15 +446,25 @@ fn u32 lower_binary(Lower* lo, ast::BinaryOpNode* n) {
 }
 
 // ptr ± int is a GEP by the (optionally negated) index; the result is the pointer type.
-fn u32 emit_ptr_offset(Lower* lo, ast::BinaryOpNode* n, u32 ptr_value, u32 index, bool negate) {
+fn u32 emit_ptr_offset(Lower* lo, types::Ty* result_ty, u32 ptr_value, u32 index, bool negate, u32 src_pos) {
     if(negate) {
-        sapir::Inst neg = sapir::new_inst(sapir::Opcode::Neg, lo.func.insts[index].ty, n.h.src_pos);
+        sapir::Inst neg = sapir::new_inst(sapir::Opcode::Neg, lo.func.insts[index].ty, src_pos);
         neg.a = index;
         index = sapir::add_inst(lo.arena, lo.func, neg);
     }
-    sapir::Inst inst = sapir::new_inst(sapir::Opcode::IndexAddr, (types::Ty*)n.h.ty, n.h.src_pos);
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::IndexAddr, result_ty, src_pos);
     inst.a = ptr_value;
     inst.b = index;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+// Combines current_value with rhs_value under a compound-assign opcode, routing pointer +/- through a GEP.
+fn u32 emit_combine(Lower* lo, types::Ty* ty, u32 current_value, u32 rhs_value, sapir::Opcode combine, u32 src_pos) {
+    if(types::is_ptr(ty) && combine == sapir::Opcode::Add) { return emit_ptr_offset(lo, ty, current_value, rhs_value, false, src_pos); }
+    if(types::is_ptr(ty) && combine == sapir::Opcode::Sub) { return emit_ptr_offset(lo, ty, current_value, rhs_value, true, src_pos); }
+    sapir::Inst inst = sapir::new_inst(combine, ty, src_pos);
+    inst.a = current_value;
+    inst.b = rhs_value;
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 
@@ -1259,10 +1265,7 @@ fn void store_to_addr(Lower* lo, u32 addr, types::Ty* ty, token::TokenKind op, a
         return;
     }
     u32 current_value = emit_load(lo, addr, ty);
-    sapir::Inst inst = sapir::new_inst(combine, ty, rhs.h.src_pos);
-    inst.a = current_value;
-    inst.b = lower_expr(lo, rhs);
-    emit_store(lo, addr, sapir::add_inst(lo.arena, lo.func, inst));
+    emit_store(lo, addr, emit_combine(lo, ty, current_value, lower_expr(lo, rhs), combine, rhs.h.src_pos));
 }
 
 // CALLS + REFS + GLOBALS + SLICES ////////////////////////////////////////////////////
