@@ -618,6 +618,20 @@ fn i32 ok_enum_unary(arena::Arena* a, u8[] m) {
 }
 
 // Comparisons stay strict: an enum compared to a bare int still needs an explicit cast.
+// A module can qualify its own exported members with its own name.
+fn i32 ok_self_qualification(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 g() { return 5; } export fn i32 f() { return main::g(); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// In `X::member`, X resolves as the enum/module even when a local variable shadows the name.
+fn i32 ok_qualifier_over_shadowing_local(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum Color : i32 { R, G } export fn i32 f() { i32 Color = 5; return (i32)Color::G + Color; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 // Enums compare by their backing int: same-enum ordering (<, >, <=, >=) and equality.
 fn i32 ok_enum_ordering(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "enum C : i32 { R, G, B } export fn bool f(C c) { return c >= C::G && c < C::B; }");
@@ -1241,6 +1255,8 @@ fn i32 main() {
     testing::add(suite, "ok_enum_arithmetic",           &ok_enum_arithmetic);
     testing::add(suite, "ok_enum_bitwise",              &ok_enum_bitwise);
     testing::add(suite, "ok_enum_unary",                &ok_enum_unary);
+    testing::add(suite, "ok_self_qualification",       &ok_self_qualification);
+    testing::add(suite, "ok_qualifier_over_shadowing_local", &ok_qualifier_over_shadowing_local);
     testing::add(suite, "ok_enum_ordering",            &ok_enum_ordering);
     testing::add(suite, "ok_enum_eq_int",              &ok_enum_eq_int);
     testing::add(suite, "err_array_len_rejected",       &err_array_len_rejected);

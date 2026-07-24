@@ -921,13 +921,17 @@ fn types::Ty* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
         return decl_to_type(s, home, decl);
     }
     Decl* namespace_decl = scope_lookup(s.scope, n.namespace);
+    if(namespace_decl == null || namespace_decl.kind != DeclKind::Import) {
+        Decl* q = resolve_qualifier(s, n.namespace);
+        if(q != null) { namespace_decl = q; }
+    }
     if(namespace_decl == null || namespace_decl.kind != DeclKind::Import || namespace_decl.data.module == null) {
         diag_unknown_type(s, n.h.src_pos, n.name);
         return null;
     }
     module::Module* target = namespace_decl.data.module;
     Decl* decl = scope_lookup_local((Scope*)target.global_scope, n.name);
-    if(decl == null || !decl.is_exported) {
+    if(decl == null || (!decl.is_exported && target != s.m)) {
         diag_unknown_type(s, n.h.src_pos, n.name);
         return null;
     }
@@ -1191,10 +1195,38 @@ export fn types::Ty* synth_ident(Sema* s, ast::IdentNode* n) {
 }
 
 // Recurses when the base is itself a namespace access (`mod::Enum::Member`).
+fn bool is_namespace_decl(Decl* d) {
+    if(d == null) { return false; }
+    if(d.kind == DeclKind::Import) { return true; }
+    return d.kind == DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::EnumDecl;
+}
+
+fn Decl* self_import(Sema* s) {
+    Decl* d = (Decl*)arena::alloc(s.m.arena, sizeof(Decl));
+    sys::memset(d, 0, sizeof(Decl));
+    d.kind = DeclKind::Import;
+    d.name = s.m.name;
+    d.data.module = s.m;
+    return d;
+}
+
+// The left of `::` names a module or enum, never a value: a shadowing local must not win, and a module may name itself.
+fn Decl* resolve_qualifier(Sema* s, symbol::Symbol* name) {
+    if(name == s.m.name) { return self_import(s); }
+    Decl* g = scope_lookup_local((Scope*)s.m.global_scope, name);
+    if(is_namespace_decl(g)) { return g; }
+    return null;
+}
+
 fn Decl* resolve_namespace_decl(Sema* s, ast::AstNode* base) {
     if(base == null) { return null; }
     if(base.h.kind == ast::AstKind::Ident) {
-        return scope_lookup(s.scope, ((ast::IdentNode*)base).name);
+        symbol::Symbol* name = ((ast::IdentNode*)base).name;
+        Decl* d = scope_lookup(s.scope, name);
+        if(is_namespace_decl(d)) { return d; }
+        Decl* q = resolve_qualifier(s, name);
+        if(q != null) { return q; }
+        return d;
     }
     if(base.h.kind == ast::AstKind::NamespaceAccess) {
         ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)base;
@@ -1215,7 +1247,7 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
     if(ns.kind == DeclKind::Import) {
         module::Module* target = ns.data.module;
         Decl* found = scope_lookup_local((Scope*)target.global_scope, n.name);
-        if(found == null || !found.is_exported) {
+        if(found == null || (!found.is_exported && target != s.m)) {
             diag_unknown_member(s, n.h.src_pos, n.name);
             mark_error((ast::AstNode*)n);
             return null;
