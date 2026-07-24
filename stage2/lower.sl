@@ -294,7 +294,7 @@ fn void lower_var_decl(Lower* lo, ast::VarDeclNode* v) {
         record_dbg_value(lo, v.decl, undef_val);
         return;
     }
-    u32 init_val = lower_expr(lo, v.init);
+    u32 init_val = emit_conversion(lo, v.init, decl_type(v.decl));
     write_var(lo, lo.current, v.decl, init_val);
     record_dbg_value(lo, v.decl, init_val);
 }
@@ -313,10 +313,12 @@ fn void lower_assignment(Lower* lo, ast::AssignmentNode* a) {
         }
         u32 slot = mem_alloca(lo, target);
         if(slot != sapir::INVALID_ID) { store_to_addr(lo, slot, lhs_ty, a.op, a.rhs); return; }
-        u32 rhs = lower_expr(lo, a.rhs);
         sapir::Opcode combine = compound_opcode(a.op);
+        u32 rhs;
         if(combine != sapir::Opcode::INVALID) {
-            rhs = emit_combine(lo, lhs_ty, read_var(lo, lo.current, target), rhs, combine, a.h.src_pos);
+            rhs = emit_combine(lo, lhs_ty, read_var(lo, lo.current, target), lower_expr(lo, a.rhs), combine, a.h.src_pos);
+        } else {
+            rhs = emit_conversion(lo, a.rhs, lhs_ty);
         }
         write_var(lo, lo.current, target, rhs);
         record_dbg_value(lo, target, rhs);
@@ -439,9 +441,23 @@ fn u32 lower_binary(Lower* lo, ast::BinaryOpNode* n) {
         if(types::is_ptr(lt) && types::is_int(rt)) { return emit_ptr_offset(lo, (types::Ty*)n.h.ty, lhs, rhs, true, n.h.src_pos); }
         if(types::is_ptr(lt) && types::is_ptr(rt)) { return emit_ptr_diff(lo, n, lhs, rhs); }
     }
+    // Mismatched int widths (e.g. `x <= 'F'`) must share a type before the op; widen the narrower to the wider.
+    if(types::is_int(lt) && types::is_int(rt) && lt != rt) {
+        types::Ty* common = lt;
+        if(rt.size > lt.size) { common = rt; }
+        lhs = widen_to(lo, lhs, lt, common, n.h.src_pos);
+        rhs = widen_to(lo, rhs, rt, common, n.h.src_pos);
+    }
     sapir::Inst inst = sapir::new_inst(binary_opcode(n.op), (types::Ty*)n.h.ty, n.h.src_pos);
     inst.a = lhs;
     inst.b = rhs;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+fn u32 widen_to(Lower* lo, u32 value, types::Ty* from, types::Ty* to, u32 src_pos) {
+    if(from == to) { return value; }
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::Cast, to, src_pos);
+    inst.a = value;
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 

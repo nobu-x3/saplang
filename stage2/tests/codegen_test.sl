@@ -167,6 +167,16 @@ fn i32 jit_pointer_arithmetic(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { i32* base = (i32*)malloc(16); base[0] = 10; base[1] = 20; base[2] = 30; i32* p = base + 2; i32* q = p - 1; i64 diff = p - base; return *p + *q + (i32)diff; }", 52, msg);
 }
 
+// A void* (malloc) assigned to a typed pointer var is converted to that type, so field access works.
+fn i32 jit_voidptr_to_typed(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "struct Node { i32 v; Node* next; } extern { fn void* malloc(u64 n); } fn i32 main() { Node* p = malloc(16); p.v = 42; p.next = null; return p.v; }", 42, msg);
+}
+
+// A comparison between different int widths (i64 vs i8, same signedness) widens the narrower operand.
+fn i32 jit_mixed_int_width_cmp(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "fn i32 main() { i64 x = 66; i8 lo = 65; i8 hi = 90; if(x >= lo && x <= hi) { return 7; } return 0; }", 7, msg);
+}
+
 // Writing a slice local's .ptr/.len fields makes it a memory var; fields address correctly (ptr=0, len=1).
 fn i32 jit_slice_field_write(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { u8[] s; s.ptr = (u8*)malloc(4); s.len = 3; s.ptr[0] = 9; return (i32)s.len + (i32)s.ptr[0]; }", 12, msg);
@@ -300,6 +310,8 @@ fn i32 main() {
     testing::add(suite, "jit_sizeof",           &jit_sizeof);
     testing::add(suite, "jit_alignof",          &jit_alignof);
     testing::add(suite, "jit_ptr_cast_index",   &jit_ptr_cast_index);
+    testing::add(suite, "jit_voidptr_to_typed", &jit_voidptr_to_typed);
+    testing::add(suite, "jit_mixed_int_width_cmp", &jit_mixed_int_width_cmp);
     testing::add(suite, "jit_slice_field_write", &jit_slice_field_write);
     testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
