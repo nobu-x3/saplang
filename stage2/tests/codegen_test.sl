@@ -167,6 +167,11 @@ fn i32 jit_pointer_arithmetic(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { i32* base = (i32*)malloc(16); base[0] = 10; base[1] = 20; base[2] = 30; i32* p = base + 2; i32* q = p - 1; i64 diff = p - base; return *p + *q + (i32)diff; }", 52, msg);
 }
 
+// Writing a slice local's .ptr/.len fields makes it a memory var; fields address correctly (ptr=0, len=1).
+fn i32 jit_slice_field_write(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { u8[] s; s.ptr = (u8*)malloc(4); s.len = 3; s.ptr[0] = 9; return (i32)s.len + (i32)s.ptr[0]; }", 12, msg);
+}
+
 // A function pointer is nullable and equality-comparable: assign null, compare, reassign, call.
 fn i32 jit_fnptr_null(arena::Arena* a, u8[] msg) {
     return jit_return(a, "fn i32 dbl(i32 x) { return x * 2; } fn i32 main() { fn* i32(i32) f = null; if(f != null) { return 1; } f = dbl; if(f == null) { return 2; } return f(21); }", 42, msg);
@@ -295,6 +300,7 @@ fn i32 main() {
     testing::add(suite, "jit_sizeof",           &jit_sizeof);
     testing::add(suite, "jit_alignof",          &jit_alignof);
     testing::add(suite, "jit_ptr_cast_index",   &jit_ptr_cast_index);
+    testing::add(suite, "jit_slice_field_write", &jit_slice_field_write);
     testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
     testing::add(suite, "jit_pointer_compound",  &jit_pointer_compound);

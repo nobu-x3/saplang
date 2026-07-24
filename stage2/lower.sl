@@ -968,12 +968,24 @@ fn void scan_stmt_mem(Lower* lo, ast::AstNode* s) {
     }
     case ast::AstKind::AssignmentStmt: {
         ast::AssignmentNode* a = (ast::AssignmentNode*)s;
+        mark_value_field_target(lo, a.lhs);
         scan_addr_taken(lo, a.lhs);
         scan_addr_taken(lo, a.rhs);
     }
     case ast::AstKind::ExprStmt: { scan_addr_taken(lo, ((ast::ExprStmtNode*)s).expr); }
     else { }
     }
+}
+
+// Assigning to a field of a value lvalue local (a slice's .ptr/.len) needs that local in memory — structs/arrays are already aggregates.
+fn void mark_value_field_target(Lower* lo, ast::AstNode* lhs) {
+    if(lhs.h.kind != ast::AstKind::MemberAccess) { return; }
+    ast::AstNode* base = ((ast::MemberAccessNode*)lhs).base;
+    if(base.h.kind != ast::AstKind::Ident) { return; }
+    types::Ty* base_ty = (types::Ty*)base.h.ty;
+    if(base_ty == null || types::is_ptr(base_ty)) { return; }
+    void* root = ((ast::IdentNode*)base).resolved;
+    if(root != null && is_local_decl(lo, root)) { mark_mem_var(lo, root); }
 }
 
 // Marks the root decl of any &lvalue as memory-resident (and recurses into children).
@@ -1156,9 +1168,11 @@ fn u32 lower_addr(Lower* lo, ast::AstNode* e) {
         types::Ty* container;
         if(types::is_ptr(base_ty)) { base_addr = lower_expr(lo, n.base); container = base_ty.data.pointee; }
         else { base_addr = lower_addr(lo, n.base); container = base_ty; }
+        u32 field_idx = field_index_of(container, n.field);
+        if(types::is_slice(container)) { field_idx = 0; if(n.field != interner::intern("ptr")) { field_idx = 1; } }   // slice: ptr=0, len=1 (no struct decl)
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::FieldAddr, types::intern_pointer((types::Ty*)e.h.ty, false), e.h.src_pos);
         inst.a = base_addr;
-        inst.b = field_index_of(container, n.field);
+        inst.b = field_idx;
         return sapir::add_inst(lo.arena, lo.func, inst);
     }
     case ast::AstKind::ArrayIndex: {
