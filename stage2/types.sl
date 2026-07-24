@@ -526,12 +526,15 @@ export fn bool is_castable(Ty* src, Ty* dst) {
     if (((u8)src.flags & (u8)LayoutFlags::Opaque) != 0) { return false; }
     if (((u8)dst.flags & (u8)LayoutFlags::Opaque) != 0) { return false; }
     if (is_convertible(src, dst))                  { return true; }
-    if (is_int(src)        && is_int(dst))         { return true; }
-    if (is_int(src)        && is_float(dst))       { return true; }
-    if (is_float(src)      && is_int(dst))         { return true; }
-    if (is_float(src)      && is_float(dst))       { return true; }
-    if (is_ptr(src)        && is_ptr_sized_int(dst)) { return true; }
-    if (is_ptr_sized_int(src) && is_ptr(dst))        { return true; }
+    // An enum casts through its base integer type: int↔enum, enum↔enum, enum↔float (C treats enums as ints).
+    Ty* s = src; if (src.kind == TypeKind::Enum) { s = enum_base_type(src); }
+    Ty* d = dst; if (dst.kind == TypeKind::Enum) { d = enum_base_type(dst); }
+    if (is_int(s)          && is_int(d))           { return true; }
+    if (is_int(s)          && is_float(d))         { return true; }
+    if (is_float(s)        && is_int(d))           { return true; }
+    if (is_float(s)        && is_float(d))         { return true; }
+    if (is_ptr(s)          && is_ptr_sized_int(d)) { return true; }
+    if (is_ptr_sized_int(s) && is_ptr(d))          { return true; }
     return false;
 }
 

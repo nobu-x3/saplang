@@ -153,15 +153,19 @@ fn types::Ty* int_common(types::Ty* lt, types::Ty* rt) {
 }
 
 fn bool comparable_eq(types::Ty* lt, types::Ty* rt) {
-    if(arithmetic_result(lt, rt) != null) { return true; }
-    if(types::is_ptr(lt) && types::is_ptr(rt)) { return true; }
-    if(types::is_bool(lt) && types::is_bool(rt)) { return true; }
+    types::Ty* l = enum_base_or_self(lt);
+    types::Ty* r = enum_base_or_self(rt);
+    if(arithmetic_result(l, r) != null) { return true; }
+    if(types::is_ptr(l) && types::is_ptr(r)) { return true; }
+    if(types::is_bool(l) && types::is_bool(r)) { return true; }
     return lt == rt;
 }
 
 fn bool comparable_order(types::Ty* lt, types::Ty* rt) {
-    if(arithmetic_result(lt, rt) != null) { return true; }
-    return types::is_ptr(lt) && types::is_ptr(rt);
+    types::Ty* l = enum_base_or_self(lt);
+    types::Ty* r = enum_base_or_self(rt);
+    if(arithmetic_result(l, r) != null) { return true; }
+    return types::is_ptr(l) && types::is_ptr(r);
 }
 
 fn value::Value val_eq(value::Value l, value::Value r, bool negate) {

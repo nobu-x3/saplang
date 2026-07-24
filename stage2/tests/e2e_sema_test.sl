@@ -618,10 +618,17 @@ fn i32 ok_enum_unary(arena::Arena* a, u8[] m) {
 }
 
 // Comparisons stay strict: an enum compared to a bare int still needs an explicit cast.
-fn i32 err_enum_eq_int_strict(arena::Arena* a, u8[] m) {
+// Enums compare by their backing int: same-enum ordering (<, >, <=, >=) and equality.
+fn i32 ok_enum_ordering(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum C : i32 { R, G, B } export fn bool f(C c) { return c >= C::G && c < C::B; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// An enum compares against an int through its base (C treats enums as ints).
+fn i32 ok_enum_eq_int(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "enum C : i32 { R, G, B } export fn bool f(C c) { return c == 1; }");
-    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
-    if(!testing::expect_eq(mod.diag.entries[0].msg, "operator is not defined for main::C and i32", m)) { return -2; }
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
     return 0;
 }
 
@@ -634,17 +641,16 @@ fn i32 err_array_len_rejected(arena::Arena* a, u8[] m) {
 }
 
 // Enum casts are base-only (by design): widening an enum past its base, or building one from an int, is rejected.
-fn i32 err_enum_cast_to_wider(arena::Arena* a, u8[] m) {
+// Explicit enum→wider-int and int→enum casts go through the base (C-like).
+fn i32 ok_enum_cast_to_wider(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "enum F : u8 { A = 1 } export fn u32 f() { F x = F::A; return (u32)x; }");
-    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
-    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot cast main::F to u32", m)) { return -2; }
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
     return 0;
 }
 
-fn i32 err_int_cast_to_enum(arena::Arena* a, u8[] m) {
+fn i32 ok_int_cast_to_enum(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "enum F : u8 { A = 1 } export fn F f() { return (F)2; }");
-    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
-    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot cast i32 to main::F", m)) { return -2; }
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
     return 0;
 }
 
@@ -1235,10 +1241,11 @@ fn i32 main() {
     testing::add(suite, "ok_enum_arithmetic",           &ok_enum_arithmetic);
     testing::add(suite, "ok_enum_bitwise",              &ok_enum_bitwise);
     testing::add(suite, "ok_enum_unary",                &ok_enum_unary);
-    testing::add(suite, "err_enum_eq_int_strict",       &err_enum_eq_int_strict);
+    testing::add(suite, "ok_enum_ordering",            &ok_enum_ordering);
+    testing::add(suite, "ok_enum_eq_int",              &ok_enum_eq_int);
     testing::add(suite, "err_array_len_rejected",       &err_array_len_rejected);
-    testing::add(suite, "err_enum_cast_to_wider",       &err_enum_cast_to_wider);
-    testing::add(suite, "err_int_cast_to_enum",         &err_int_cast_to_enum);
+    testing::add(suite, "ok_enum_cast_to_wider",       &ok_enum_cast_to_wider);
+    testing::add(suite, "ok_int_cast_to_enum",         &ok_int_cast_to_enum);
     testing::add(suite, "err_logical_float_operand",    &err_logical_float_operand);
     testing::add(suite, "err_comptime_and_evaluates_rhs", &err_comptime_and_evaluates_rhs);
     testing::add(suite, "err_comptime_div_by_zero",     &err_comptime_div_by_zero);

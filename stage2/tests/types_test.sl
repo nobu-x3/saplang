@@ -3211,13 +3211,14 @@ fn i32 castable_fnptr_to_int_rejected(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 castable_enum_to_other_enum_rejected(arena::Arena* a, u8[] m) {
+// enum ↔ enum casts through the shared base int.
+fn i32 castable_enum_to_other_enum(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     types::Ty* base = fake_i32(a);
     types::Ty* e1 = fake_enum_with_base(a, base);
     types::Ty* e2 = fake_enum_with_base(a, base);
-    if(!testing::expect_eq(types::is_castable(e1, e2), false, m)) { return -1; }
-    if(!testing::expect_eq(types::is_castable(e2, e1), false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(e1, e2), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(e2, e1), true, m)) { return -2; }
     return 0;
 }
 
@@ -3263,12 +3264,13 @@ fn i32 castable_slice_ptr_rejected(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 castable_enum_to_non_base_rejected(arena::Arena* a, u8[] m) {
+// An enum casts through its base int: to any int width, and to float (C treats enums as ints).
+fn i32 castable_enum_to_int_and_float(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     types::Ty* e = fake_enum_with_base(a, fake_i32(a));
-    if(!testing::expect_eq(types::is_castable(e, fake_i64(a)), false, m)) { return -1; }
-    if(!testing::expect_eq(types::is_castable(e, fake_u32(a)), false, m)) { return -2; }
-    if(!testing::expect_eq(types::is_castable(e, fake_f32(a)), false, m)) { return -3; }
+    if(!testing::expect_eq(types::is_castable(e, fake_i64(a)), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(e, fake_u32(a)), true, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(e, fake_f32(a)), true, m)) { return -3; }
     return 0;
 }
 
@@ -3677,12 +3679,12 @@ fn i32 main() {
     testing::add(cast, "castable_comptime_rejected",             &castable_comptime_rejected);
     testing::add(cast, "castable_fnptr_ptr_rejected",            &castable_fnptr_ptr_rejected);
     testing::add(cast, "castable_slice_ptr_rejected",            &castable_slice_ptr_rejected);
-    testing::add(cast, "castable_enum_to_non_base_rejected",     &castable_enum_to_non_base_rejected);
+    testing::add(cast, "castable_enum_to_int_and_float",         &castable_enum_to_int_and_float);
     testing::add(cast, "castable_null_args_return_false",        &castable_null_args_return_false);
     testing::add(cast, "castable_pointer_const_qualifier_irrelevant", &castable_pointer_const_qualifier_irrelevant);
     testing::add(cast, "castable_identity_composite",            &castable_identity_composite);
     testing::add(cast, "castable_fnptr_to_int_rejected",         &castable_fnptr_to_int_rejected);
-    testing::add(cast, "castable_enum_to_other_enum_rejected",   &castable_enum_to_other_enum_rejected);
+    testing::add(cast, "castable_enum_to_other_enum",           &castable_enum_to_other_enum);
 
     return testing::run();
 }
