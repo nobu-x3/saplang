@@ -431,11 +431,55 @@ fn u32 lower_expr(Lower* lo, ast::AstNode* e) {
 }
 
 fn u32 lower_binary(Lower* lo, ast::BinaryOpNode* n) {
+    types::Ty* lt = (types::Ty*)n.lhs.h.ty;
+    types::Ty* rt = (types::Ty*)n.rhs.h.ty;
     u32 lhs = lower_expr(lo, n.lhs);
     u32 rhs = lower_expr(lo, n.rhs);
+    if(n.op == token::TokenKind::Plus) {
+        if(types::is_ptr(lt) && types::is_int(rt)) { return emit_ptr_offset(lo, n, lhs, rhs, false); }
+        if(types::is_int(lt) && types::is_ptr(rt)) { return emit_ptr_offset(lo, n, rhs, lhs, false); }
+    }
+    if(n.op == token::TokenKind::Minus) {
+        if(types::is_ptr(lt) && types::is_int(rt)) { return emit_ptr_offset(lo, n, lhs, rhs, true); }
+        if(types::is_ptr(lt) && types::is_ptr(rt)) { return emit_ptr_diff(lo, n, lhs, rhs); }
+    }
     sapir::Inst inst = sapir::new_inst(binary_opcode(n.op), (types::Ty*)n.h.ty, n.h.src_pos);
     inst.a = lhs;
     inst.b = rhs;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+// ptr ± int is a GEP by the (optionally negated) index; the result is the pointer type.
+fn u32 emit_ptr_offset(Lower* lo, ast::BinaryOpNode* n, u32 ptr_value, u32 index, bool negate) {
+    if(negate) {
+        sapir::Inst neg = sapir::new_inst(sapir::Opcode::Neg, lo.func.insts[index].ty, n.h.src_pos);
+        neg.a = index;
+        index = sapir::add_inst(lo.arena, lo.func, neg);
+    }
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::IndexAddr, (types::Ty*)n.h.ty, n.h.src_pos);
+    inst.a = ptr_value;
+    inst.b = index;
+    return sapir::add_inst(lo.arena, lo.func, inst);
+}
+
+// ptr - ptr is the element-count difference: (i64(a) - i64(b)) / sizeof(elem).
+fn u32 emit_ptr_diff(Lower* lo, ast::BinaryOpNode* n, u32 lhs, u32 rhs) {
+    sapir::Inst sub = sapir::new_inst(sapir::Opcode::Sub, types::prim_i64(), n.h.src_pos);
+    sub.a = emit_ptr_to_i64(lo, lhs, n.h.src_pos);
+    sub.b = emit_ptr_to_i64(lo, rhs, n.h.src_pos);
+    u32 byte_diff = sapir::add_inst(lo.arena, lo.func, sub);
+    u32 elem_size = (u32)types::size_of(null, ((types::Ty*)n.lhs.h.ty).data.pointee);
+    sapir::Inst size_inst = sapir::new_inst(sapir::Opcode::ConstInt, types::prim_i64(), n.h.src_pos);
+    size_inst.imm = (u64)elem_size;
+    sapir::Inst div = sapir::new_inst(sapir::Opcode::Div, types::prim_i64(), n.h.src_pos);
+    div.a = byte_diff;
+    div.b = sapir::add_inst(lo.arena, lo.func, size_inst);
+    return sapir::add_inst(lo.arena, lo.func, div);
+}
+
+fn u32 emit_ptr_to_i64(Lower* lo, u32 ptr_value, u32 src_pos) {
+    sapir::Inst inst = sapir::new_inst(sapir::Opcode::Cast, types::prim_i64(), src_pos);
+    inst.a = ptr_value;
     return sapir::add_inst(lo.arena, lo.func, inst);
 }
 

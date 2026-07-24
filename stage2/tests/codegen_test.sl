@@ -162,6 +162,11 @@ fn i32 jit_ptr_cast_index(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { i32* p = (i32*)malloc(16); p[0] = 40; p[1] = 2; return p[0] + p[1]; }", 42, msg);
 }
 
+// Pointer arithmetic: ptr+int and ptr-int are GEPs; ptr-ptr is the element-count difference.
+fn i32 jit_pointer_arithmetic(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { i32* base = (i32*)malloc(16); base[0] = 10; base[1] = 20; base[2] = 30; i32* p = base + 2; i32* q = p - 1; i64 diff = p - base; return *p + *q + (i32)diff; }", 52, msg);
+}
+
 // A const slice global from an array literal materializes a backing array; index and .len read it back.
 fn i32 jit_const_slice_index(arena::Arena* a, u8[] msg) {
     return jit_return(a, "const i32[] nums = [5, 6, 7, 8]; fn i32 main() { return nums[2] + (i32)nums.len; }", 11, msg);
@@ -280,6 +285,7 @@ fn i32 main() {
     testing::add(suite, "jit_sizeof",           &jit_sizeof);
     testing::add(suite, "jit_alignof",          &jit_alignof);
     testing::add(suite, "jit_ptr_cast_index",   &jit_ptr_cast_index);
+    testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
     testing::add(suite, "jit_const_slice_index", &jit_const_slice_index);
     testing::add(suite, "jit_const_string_slice", &jit_const_string_slice);
     testing::add(suite, "jit_const_struct_table", &jit_const_struct_table);

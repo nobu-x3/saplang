@@ -13,8 +13,16 @@ export fn types::Ty* binop_result_type(token::TokenKind op, types::Ty* lt, types
     types::Ty* base_lt = enum_base_or_self(lt);
     types::Ty* base_rt = enum_base_or_self(rt);
     switch(op) {
-    case token::TokenKind::Plus:
-    case token::TokenKind::Minus:
+    case token::TokenKind::Plus: {
+        if(types::is_ptr(base_lt) && types::is_int(base_rt)) { return base_lt; }   // ptr + int
+        if(types::is_int(base_lt) && types::is_ptr(base_rt)) { return base_rt; }   // int + ptr
+        return arithmetic_result(base_lt, base_rt);
+    }
+    case token::TokenKind::Minus: {
+        if(types::is_ptr(base_lt) && types::is_int(base_rt)) { return base_lt; }   // ptr - int
+        if(types::is_ptr(base_lt) && types::is_ptr(base_rt)) { return types::prim_i64(); }   // ptr - ptr: element count
+        return arithmetic_result(base_lt, base_rt);
+    }
     case token::TokenKind::Star:
     case token::TokenKind::Slash:
     case token::TokenKind::Percent: {

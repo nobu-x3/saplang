@@ -73,6 +73,22 @@ fn i32 arith_bool_null(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 arith_ptr_plus_int(arena::Arena* a, u8[] m) {
+    types::typer_init(a, 16);
+    types::Ty* p = types::intern_pointer(types::prim_i32(), false);
+    if(!testing::expect_eq((void*)op::binop_result_type(token::TokenKind::Plus, p, types::prim_i32()), (void*)p, m)) { return -1; }
+    if(!testing::expect_eq((void*)op::binop_result_type(token::TokenKind::Plus, types::prim_i32(), p), (void*)p, m)) { return -2; }
+    return 0;
+}
+
+fn i32 arith_ptr_minus_int_and_ptr(arena::Arena* a, u8[] m) {
+    types::typer_init(a, 16);
+    types::Ty* p = types::intern_pointer(types::prim_i32(), false);
+    if(!testing::expect_eq((void*)op::binop_result_type(token::TokenKind::Minus, p, types::prim_i32()), (void*)p, m)) { return -1; }
+    if(!testing::expect_eq((void*)op::binop_result_type(token::TokenKind::Minus, p, p), (void*)types::prim_i64(), m)) { return -2; }
+    return 0;
+}
+
 fn i32 arith_null_operand(arena::Arena* a, u8[] m) {
     types::Ty* r = op::binop_result_type(token::TokenKind::Plus, null, types::prim_i32());
     if(!testing::expect_eq((void*)r, null, m)) { return -1; }
@@ -328,6 +344,8 @@ fn i32 main() {
     testing::add(arith, "arith_widen_i32_i16",   &arith_widen_i32_i16);
     testing::add(arith, "arith_u8_u8",           &arith_u8_u8);
     testing::add(arith, "arith_mixed_sign_null", &arith_mixed_sign_null);
+    testing::add(arith, "arith_ptr_plus_int",    &arith_ptr_plus_int);
+    testing::add(arith, "arith_ptr_minus_int_and_ptr", &arith_ptr_minus_int_and_ptr);
     testing::add(arith, "arith_f32_f32",         &arith_f32_f32);
     testing::add(arith, "arith_f32_f64_widens",  &arith_f32_f64_widens);
     testing::add(arith, "arith_f64_f32_widens",  &arith_f64_f32_widens);
