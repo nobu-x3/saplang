@@ -167,6 +167,11 @@ fn i32 jit_pointer_arithmetic(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { i32* base = (i32*)malloc(16); base[0] = 10; base[1] = 20; base[2] = 30; i32* p = base + 2; i32* q = p - 1; i64 diff = p - base; return *p + *q + (i32)diff; }", 52, msg);
 }
 
+// A function pointer is nullable and equality-comparable: assign null, compare, reassign, call.
+fn i32 jit_fnptr_null(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "fn i32 dbl(i32 x) { return x * 2; } fn i32 main() { fn* i32(i32) f = null; if(f != null) { return 1; } f = dbl; if(f == null) { return 2; } return f(21); }", 42, msg);
+}
+
 // int + ptr and pointer compound-assign (p += n, p -= n) also route through the GEP.
 fn i32 jit_pointer_compound(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { i32* base = (i32*)malloc(16); base[0]=10; base[1]=20; base[2]=30; base[3]=40; i32* p = 1 + base; p += 2; i32* q = base; q += 3; q -= 1; return *p + *q; }", 70, msg);
@@ -290,6 +295,7 @@ fn i32 main() {
     testing::add(suite, "jit_sizeof",           &jit_sizeof);
     testing::add(suite, "jit_alignof",          &jit_alignof);
     testing::add(suite, "jit_ptr_cast_index",   &jit_ptr_cast_index);
+    testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
     testing::add(suite, "jit_pointer_compound",  &jit_pointer_compound);
     testing::add(suite, "jit_const_slice_index", &jit_const_slice_index);

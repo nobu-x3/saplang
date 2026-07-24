@@ -165,6 +165,16 @@ fn i32 eq_null_ptr_is_bool(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A function pointer compares for equality (to null and to another fn pointer).
+fn i32 eq_fnptr_and_null(arena::Arena* a, u8[] m) {
+    types::typer_init(a, 16);
+    types::Ty*[] params = {null, 0};
+    types::Ty* fp = types::intern_fn_ptr(types::prim_i32(), params, false);
+    if(!testing::expect_eq((void*)op::binop_result_type(token::TokenKind::BangEq, fp, types::prim_null_ptr()), (void*)types::prim_bool(), m)) { return -1; }
+    if(!testing::expect_eq((void*)op::binop_result_type(token::TokenKind::EqEq, fp, fp), (void*)types::prim_bool(), m)) { return -2; }
+    return 0;
+}
+
 fn i32 eq_bool_is_bool(arena::Arena* a, u8[] m) {
     types::Ty* r = op::binop_result_type(token::TokenKind::EqEq, types::prim_bool(), types::prim_bool());
     if(!testing::expect_eq((void*)r, (void*)types::prim_bool(), m)) { return -1; }
@@ -367,6 +377,7 @@ fn i32 main() {
     testing::add(cmp, "eq_widen_is_bool",     &eq_widen_is_bool);
     testing::add(cmp, "eq_ptr_is_bool",       &eq_ptr_is_bool);
     testing::add(cmp, "eq_null_ptr_is_bool",  &eq_null_ptr_is_bool);
+    testing::add(cmp, "eq_fnptr_and_null",    &eq_fnptr_and_null);
     testing::add(cmp, "eq_bool_is_bool",      &eq_bool_is_bool);
     testing::add(cmp, "eq_int_float_null",    &eq_int_float_null);
     testing::add(cmp, "eq_mixed_sign_null",   &eq_mixed_sign_null);

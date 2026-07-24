@@ -500,8 +500,8 @@ export fn bool is_convertible(Ty* src, Ty* dst) {
     }
     // pointer -> pointer (any pointee)
     if (is_ptr(src) && is_ptr(dst)) { return true; }
-    // null -> any pointer or slice
-    if (src == prim_null_ptr() && (is_ptr(dst) || is_slice(dst))) { return true; }
+    // null -> any pointer, slice, or function pointer
+    if (src == prim_null_ptr() && (is_ptr(dst) || is_slice(dst) || is_fnptr(dst))) { return true; }
     return false;
 }
 
@@ -600,6 +600,10 @@ export fn bool is_array(Ty* t) {
 
 export fn bool is_ptr(Ty* t) {
     return t.kind == TypeKind::Pointer;
+}
+
+export fn bool is_fnptr(Ty* t) {
+    return t.kind == TypeKind::FnPtr;
 }
 
 export fn bool is_named(Ty* t) {

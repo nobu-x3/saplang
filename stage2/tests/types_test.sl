@@ -1624,11 +1624,12 @@ fn i32 convert_pointer_to_int_fails(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 convert_null_to_fnptr_fails(arena::Arena* a, u8[] m) {
+// null converts to a function pointer — fn pointers are nullable.
+fn i32 convert_null_to_fnptr(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     types::Ty* n = types::prim_null_ptr();
     types::Ty* fp = types::intern_fn_ptr(fake_void(a), mk_params0(), false);
-    if(!testing::expect_eq(types::is_convertible(n, fp), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_convertible(n, fp), true, m)) { return -1; }
     return 0;
 }
 
@@ -3478,7 +3479,7 @@ fn i32 main() {
     testing::add(conv, "convert_null_to_array_fails",            &convert_null_to_array_fails);
     testing::add(conv, "convert_null_to_struct_union_enum_fails", &convert_null_to_struct_union_enum_fails);
     testing::add(conv, "convert_null_to_bool_or_float_fails",    &convert_null_to_bool_or_float_fails);
-    testing::add(conv, "convert_null_to_fnptr_fails",            &convert_null_to_fnptr_fails);
+    testing::add(conv, "convert_null_to_fnptr",                  &convert_null_to_fnptr);
     testing::add(conv, "prim_null_ptr_is_stable",                &prim_null_ptr_is_stable);
     testing::add(conv, "prim_null_ptr_kind_is_pointer",          &prim_null_ptr_kind_is_pointer);
 

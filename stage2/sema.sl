@@ -1137,7 +1137,7 @@ export fn bool check(Sema* s, ast::AstNode* e, types::Ty* expected) {
         return false;
     }
     case ast::AstKind::NullLit: {
-        if(types::is_ptr(expected) || types::is_slice(expected)) {
+        if(types::is_ptr(expected) || types::is_slice(expected) || types::is_fnptr(expected)) {
             set_expr(e, expected, (u16)ast::AstFlags::ConstExpr);
             return true;
         }

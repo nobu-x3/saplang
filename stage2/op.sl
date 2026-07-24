@@ -156,7 +156,8 @@ fn bool comparable_eq(types::Ty* lt, types::Ty* rt) {
     types::Ty* l = enum_base_or_self(lt);
     types::Ty* r = enum_base_or_self(rt);
     if(arithmetic_result(l, r) != null) { return true; }
-    if(types::is_ptr(l) && types::is_ptr(r)) { return true; }
+    // Data and function pointers compare for equality (to each other and to null), but not for ordering.
+    if((types::is_ptr(l) || types::is_fnptr(l)) && (types::is_ptr(r) || types::is_fnptr(r))) { return true; }
     if(types::is_bool(l) && types::is_bool(r)) { return true; }
     return lt == rt;
 }
