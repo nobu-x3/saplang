@@ -1201,6 +1201,13 @@ fn i32 ok_anon_struct_type_alias(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A generic `fn Type` (comptime Type param) monomorphizes to a struct type bound via alias.
+fn i32 ok_generic_struct_alias(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type Vec(comptime Type T) { return struct { T* ptr; u64 len; }; } alias VI = Vec(i32);\nexport fn i32 f(VI v) { return (i32)v.len; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 // An alias bound to a call that doesn't yield a Type is reported, not crashed.
 fn i32 err_alias_call_not_type(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 notype() { return 5; } alias W = notype();\nexport fn i32 f(W x) { return (i32)x; }");
@@ -1391,5 +1398,6 @@ fn i32 main() {
     testing::add(suite, "ok_type_returning_branch",  &ok_type_returning_branch);
     testing::add(suite, "err_alias_call_not_type",   &err_alias_call_not_type);
     testing::add(suite, "ok_anon_struct_type_alias", &ok_anon_struct_type_alias);
+    testing::add(suite, "ok_generic_struct_alias",   &ok_generic_struct_alias);
     return testing::run();
 }

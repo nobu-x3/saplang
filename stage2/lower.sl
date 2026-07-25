@@ -108,6 +108,7 @@ fn bool returns_comptime_type(ast::FnDeclNode* fn_node) {
 // Lowers a monomorphized clone: LinkOnceOdr, mangled off the clone's already-qualified name.
 fn void lower_clone(Lower* lo, ast::FnDeclNode* clone) {
     if(clone.cfg == null) { return; }
+    if(returns_comptime_type(clone)) { return; }      // a monomorphized `fn Type` (e.g. Vec(i32)) is comptime-only
     lower_fn_body(lo, clone, get_or_create_clone_decl(lo, clone));
 }
 

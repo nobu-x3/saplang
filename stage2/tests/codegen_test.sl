@@ -197,6 +197,11 @@ fn i32 jit_anon_struct_type(arena::Arena* a, u8[] msg) {
     return jit_return(a, "fn Type mk() { return struct { i32 x; i32 y; }; } alias P = mk(); fn i32 main() { P p; p.x = 40; p.y = 2; return p.x + p.y; }", 42, msg);
 }
 
+// A generic `fn Type Vec(comptime Type T)` monomorphizes to a distinct concrete struct type per type-arg.
+fn i32 jit_generic_struct(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "fn Type Vec(comptime Type T) { return struct { T* ptr; u64 len; }; } alias VI = Vec(i32); alias VU = Vec(u8); extern { fn void* malloc(u64 n); } fn i32 main() { VI a; a.ptr = (i32*)malloc(8); a.ptr[0] = 30; a.len = 1; VU b; b.ptr = (u8*)malloc(4); b.ptr[0] = (u8)12; b.len = 1; return a.ptr[0] + (i32)b.ptr[0]; }", 42, msg);
+}
+
 // A monomorphized generic fn runs end-to-end, reading slice fields through a T[]* param (generics + the fixed slice path).
 fn i32 jit_generic_slice(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn T pick(comptime Type T, T[]* s, u64 i) { return s.ptr[i]; } fn u64 glen(comptime Type T, T[]* s) { return s.len; } fn i32 main() { i32[] xs; xs.ptr = (i32*)malloc(12); xs.len = 3; xs.ptr[0] = 10; xs.ptr[1] = 20; xs.ptr[2] = 12; return pick(&xs, 1) + pick(&xs, 2) + (i32)glen(&xs); }", 35, msg);
@@ -351,6 +356,7 @@ fn i32 main() {
     testing::add(suite, "jit_slice_ptr_field_read", &jit_slice_ptr_field_read);
     testing::add(suite, "jit_type_alias",          &jit_type_alias);
     testing::add(suite, "jit_anon_struct_type",    &jit_anon_struct_type);
+    testing::add(suite, "jit_generic_struct",      &jit_generic_struct);
     testing::add(suite, "jit_generic_slice",       &jit_generic_slice);
     testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);

@@ -759,6 +759,22 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
 }
 
 fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
+    // sema already monomorphized an explicit generic call (e.g. `Vec(i32)` in type position); invoke the clone directly.
+    if(n.resolved_fn != null) {
+        ast::FnDeclNode* clone = (ast::FnDeclNode*)n.resolved_fn;
+        if(n.args.len == clone.params.len) {
+            value::Value[] cargs = {null, 0};
+            if(n.args.len > 0) {
+                cargs.ptr = arena::alloc(ip.m.arena, n.args.len * sizeof(value::Value));
+                cargs.len = n.args.len;
+                for(u64 i = 0; i < n.args.len; i += 1) {
+                    cargs[i] = eval(ip, n.args[i]);
+                    if(cargs[i].kind == value::ValueKind::Error) { return cargs[i]; }
+                }
+            }
+            return invoke(ip, clone, cargs, n.h.src_pos);
+        }
+    }
     sema::Decl* d = resolved_decl(n.callee);
     if(d != null && d.kind == sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::ExternFnDecl) {
         u8[] msg = "cannot call an extern function at comptime";
