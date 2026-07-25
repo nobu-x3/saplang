@@ -1403,7 +1403,15 @@ fn bool arg_compatible(ast::AstNode* arg, types::Ty* arg_type, types::Ty* param_
     if(arg_type == param_type) { return true; }
     if(arg.h.kind == ast::AstKind::IntLit) { return types::is_int(param_type); }
     if(arg.h.kind == ast::AstKind::FloatLit) { return types::is_float(param_type); }
+    if(arg.h.kind == ast::AstKind::StringLit) { return is_byte(string_lit_elem(param_type)); }   // a string literal targets any byte pointer/slice/array
     return types::is_convertible(arg_type, param_type);
+}
+
+fn types::Ty* string_lit_elem(types::Ty* target) {
+    if(target.kind == types::TypeKind::Pointer) { return target.data.pointee; }
+    if(target.kind == types::TypeKind::Slice)   { return target.data.slice_elem; }
+    if(target.kind == types::TypeKind::Array)   { return target.data.array.elem; }
+    return null;
 }
 
 // -1 = not a candidate; otherwise the count of exact-type args, so the closest overload wins.
@@ -1995,10 +2003,7 @@ fn bool is_byte(types::Ty* t) {
 
 // A string literal targets a `u8`/`i8` pointer, slice, or array.
 fn bool check_string_lit(Sema* s, ast::StringLitNode* n, types::Ty* expected) {
-    types::Ty* elem = null;
-    if(expected.kind == types::TypeKind::Pointer)   { elem = expected.data.pointee; }
-    else if(expected.kind == types::TypeKind::Slice) { elem = expected.data.slice_elem; }
-    else if(expected.kind == types::TypeKind::Array) { elem = expected.data.array.elem; }
+    types::Ty* elem = string_lit_elem(expected);
     if(!is_byte(elem)) {
         diag_type_mismatch(s, n.h.src_pos, types::intern_pointer(types::prim_u8(), false), expected);
         mark_error((ast::AstNode*)n);

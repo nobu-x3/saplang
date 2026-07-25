@@ -866,6 +866,8 @@ fn void rewrite_uses(Lower* lo, u32[] redirect) {
         }
         if(op_b_is_value(inst.op)) { inst.b = resolve(redirect, inst.b); }
     }
+    // The dbg-value side table records inst ids too; follow the redirect so a removed trivial phi doesn't leave a dead reference.
+    for(u64 i = 0; i < func.dbg_values.len; i += 1) { func.dbg_values[i].value = resolve(redirect, func.dbg_values[i].value); }
 }
 
 fn bool op_a_is_value(sapir::Opcode op) {

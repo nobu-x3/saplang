@@ -1166,6 +1166,27 @@ fn i32 ok_generic_call_resolves_to_instance(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A function pointer is null-testable: usable under `!`, `&&`, and a bare `if` condition.
+fn i32 ok_fnptr_in_condition(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 x) { return x; }\nexport fn i32 f() { fn* i32(i32) p = g; if(!p) { return 0; } if(p && p != null) { return p(1); } return 2; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A bool casts to/from int and float, C-style (bool as 0/1).
+fn i32 ok_bool_int_float_casts(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f(bool b, i32 n) { i32 x = (i32)b; bool y = (bool)n; f64 z = (f64)b; bool w = (bool)z; return x + (i32)y + (i32)z + (i32)w; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Overload resolution accepts a string literal for a byte pointer/slice/array parameter.
+fn i32 ok_string_lit_overload(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 pick(i32 x, i32 y) { return 1; }\nfn i32 pick(u8[] x, u8[] y) { return 2; }\nexport fn i32 f(u8[] s) { return pick(s, \"lit\") + pick(\"a\", \"b\"); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "E2E Sema Tests";
@@ -1334,5 +1355,8 @@ fn i32 main() {
     testing::add(suite, "err_generic_conflicting_infer", &err_generic_conflicting_infer);
     testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);
     testing::add(suite, "err_generic_infer_mismatch", &err_generic_infer_mismatch);
+    testing::add(suite, "ok_fnptr_in_condition",     &ok_fnptr_in_condition);
+    testing::add(suite, "ok_bool_int_float_casts",   &ok_bool_int_float_casts);
+    testing::add(suite, "ok_string_lit_overload",    &ok_string_lit_overload);
     return testing::run();
 }

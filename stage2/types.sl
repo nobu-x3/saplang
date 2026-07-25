@@ -508,7 +508,7 @@ export fn bool is_convertible(Ty* src, Ty* dst) {
 export fn bool is_convertible_in_cond(Ty* src) {
     if (is_bool(src)) { return true; }
     if (is_int(src))  { return true; }       // zero / non-zero
-    if (is_ptr(src) || is_slice(src)) { return true; }  // null / non-null
+    if (is_ptr(src) || is_slice(src) || is_fnptr(src)) { return true; }  // null / non-null
     return false;
 }
 
@@ -529,6 +529,8 @@ export fn bool is_castable(Ty* src, Ty* dst) {
     // An enum casts through its base integer type: int↔enum, enum↔enum, enum↔float (C treats enums as ints).
     Ty* s = src; if (src.kind == TypeKind::Enum) { s = enum_base_type(src); }
     Ty* d = dst; if (dst.kind == TypeKind::Enum) { d = enum_base_type(dst); }
+    if (is_bool(s) && (is_int(d) || is_float(d) || is_bool(d))) { return true; }   // C treats bool as 0/1
+    if ((is_int(s) || is_float(s)) && is_bool(d))  { return true; }
     if (is_int(s)          && is_int(d))           { return true; }
     if (is_int(s)          && is_float(d))         { return true; }
     if (is_float(s)        && is_int(d))           { return true; }

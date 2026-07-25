@@ -1141,9 +1141,9 @@ fn i32 cond_array_false(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 cond_fnptr_false(arena::Arena* a, u8[] m) {
+fn i32 cond_fnptr_true(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
-    if(!testing::expect_eq(types::is_convertible_in_cond(types::intern_fn_ptr(fake_void(a), mk_params0(), false)), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_convertible_in_cond(types::intern_fn_ptr(fake_void(a), mk_params0(), false)), true, m)) { return -1; }
     return 0;
 }
 
@@ -3163,21 +3163,21 @@ fn i32 castable_pointer_to_opaque_allowed(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 castable_int_to_bool_rejected(arena::Arena* a, u8[] m) {
-    if(!testing::expect_eq(types::is_castable(fake_i32(a), fake_bool(a)), false, m)) { return -1; }
-    if(!testing::expect_eq(types::is_castable(fake_u8(a),  fake_bool(a)), false, m)) { return -2; }
+fn i32 castable_int_to_bool_allowed(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_i32(a), fake_bool(a)), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_u8(a),  fake_bool(a)), true, m)) { return -2; }
     return 0;
 }
 
-fn i32 castable_bool_to_int_rejected(arena::Arena* a, u8[] m) {
-    if(!testing::expect_eq(types::is_castable(fake_bool(a), fake_i32(a)), false, m)) { return -1; }
-    if(!testing::expect_eq(types::is_castable(fake_bool(a), fake_u8(a)),  false, m)) { return -2; }
+fn i32 castable_bool_to_int_allowed(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_bool(a), fake_i32(a)), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_bool(a), fake_u8(a)),  true, m)) { return -2; }
     return 0;
 }
 
-fn i32 castable_bool_float_rejected(arena::Arena* a, u8[] m) {
-    if(!testing::expect_eq(types::is_castable(fake_bool(a), fake_f32(a)), false, m)) { return -1; }
-    if(!testing::expect_eq(types::is_castable(fake_f64(a),  fake_bool(a)), false, m)) { return -2; }
+fn i32 castable_bool_float_allowed(arena::Arena* a, u8[] m) {
+    if(!testing::expect_eq(types::is_castable(fake_bool(a), fake_f32(a)), true, m)) { return -1; }
+    if(!testing::expect_eq(types::is_castable(fake_f64(a),  fake_bool(a)), true, m)) { return -2; }
     return 0;
 }
 
@@ -3420,7 +3420,7 @@ fn i32 main() {
     testing::add(cond_s, "cond_pointer_true",           &cond_pointer_true);
     testing::add(cond_s, "cond_slice_true",             &cond_slice_true);
     testing::add(cond_s, "cond_array_false",            &cond_array_false);
-    testing::add(cond_s, "cond_fnptr_false",            &cond_fnptr_false);
+    testing::add(cond_s, "cond_fnptr_true",             &cond_fnptr_true);
     testing::add(cond_s, "cond_struct_union_enum_false", &cond_struct_union_enum_false);
     testing::add(cond_s, "cond_void_false",             &cond_void_false);
     testing::add(cond_s, "cond_comptime_false",         &cond_comptime_false);
@@ -3672,9 +3672,9 @@ fn i32 main() {
     testing::add(cast, "castable_opaque_src_rejected",           &castable_opaque_src_rejected);
     testing::add(cast, "castable_opaque_dst_rejected",           &castable_opaque_dst_rejected);
     testing::add(cast, "castable_pointer_to_opaque_allowed",     &castable_pointer_to_opaque_allowed);
-    testing::add(cast, "castable_int_to_bool_rejected",          &castable_int_to_bool_rejected);
-    testing::add(cast, "castable_bool_to_int_rejected",          &castable_bool_to_int_rejected);
-    testing::add(cast, "castable_bool_float_rejected",           &castable_bool_float_rejected);
+    testing::add(cast, "castable_int_to_bool_allowed",           &castable_int_to_bool_allowed);
+    testing::add(cast, "castable_bool_to_int_allowed",           &castable_bool_to_int_allowed);
+    testing::add(cast, "castable_bool_float_allowed",            &castable_bool_float_allowed);
     testing::add(cast, "castable_void_rejected",                 &castable_void_rejected);
     testing::add(cast, "castable_struct_rejected",               &castable_struct_rejected);
     testing::add(cast, "castable_comptime_rejected",             &castable_comptime_rejected);

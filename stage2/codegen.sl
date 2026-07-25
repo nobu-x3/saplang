@@ -574,6 +574,7 @@ fn void emit_fn(CG* cg, sapir::SapirFn* f) {
     cg.di_subprogram = null;
     if(cg.di_builder != null) { emit_di_subprogram(cg, f); }
     cg.value_map = (void**)arena::alloc(cg.arena, (f.insts.len + 1) * sizeof(void*));
+    sys::memset(cg.value_map, 0, (f.insts.len + 1) * sizeof(void*));   // un-materialized inst slots must read null so the dbg-value guard holds
     cg.block_map = (void**)arena::alloc(cg.arena, (f.blocks.len + 1) * sizeof(void*));
     for(u64 i = 0; i < f.blocks.len; i += 1) {
         cg.block_map[i] = llvm::LLVMAppendBasicBlockInContext(cg.ctx, cg.current_fn, cg.empty);

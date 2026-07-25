@@ -2304,9 +2304,9 @@ fn ast::AstNode* mk_ty_named(arena::Arena* a, symbol::Symbol* namespace, symbol:
 }
 
 fn ast::AstNode* mk_alias_typed(arena::Arena* a, symbol::Symbol* name, ast::AstNode* target, u32 pos) {
-    ast::AstNode* alias = mk_alias_decl(a, name, false, pos);
-    ((ast::AliasDeclNode*)alias).target = target;
-    return alias;
+    ast::AstNode* alias_node = mk_alias_decl(a, name, false, pos);
+    ((ast::AliasDeclNode*)alias_node).target = target;
+    return alias_node;
 }
 
 fn i32 rnt_named_struct(arena::Arena* a, u8[] m) {
@@ -2398,9 +2398,9 @@ fn i32 rnt_alias_to_primitive(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     symbol::Symbol* id = fake_sym_interned(mm, "Id");
     symbol::Symbol* x = fake_sym_interned(mm, "x");
-    ast::AstNode* alias = mk_alias_typed(a, id, mk_ty_prim(a, token::TokenKind::I32), 0);
+    ast::AstNode* alias_node = mk_alias_typed(a, id, mk_ty_prim(a, token::TokenKind::I32), 0);
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, id));
-    ast::AstNode*[2] stmts; stmts[0] = alias; stmts[1] = var;
+    ast::AstNode*[2] stmts; stmts[0] = alias_node; stmts[1] = var;
     set_root(mm, a, &stmts[0], 2);
     sema_run(mm);
     if(!testing::expect_eq((void*)registered(mm, x).ty, (void*)types::prim_i32(), m)) { return -1; }
@@ -2411,9 +2411,9 @@ fn i32 rnt_alias_to_pointer(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     symbol::Symbol* p = fake_sym_interned(mm, "P");
     symbol::Symbol* x = fake_sym_interned(mm, "x");
-    ast::AstNode* alias = mk_alias_typed(a, p, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false), 0);
+    ast::AstNode* alias_node = mk_alias_typed(a, p, mk_ty_ptr(a, mk_ty_prim(a, token::TokenKind::I32), false), 0);
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, p));
-    ast::AstNode*[2] stmts; stmts[0] = alias; stmts[1] = var;
+    ast::AstNode*[2] stmts; stmts[0] = alias_node; stmts[1] = var;
     set_root(mm, a, &stmts[0], 2);
     sema_run(mm);
     sema::Decl* dx = registered(mm, x);
@@ -2428,9 +2428,9 @@ fn i32 rnt_alias_to_named(arena::Arena* a, u8[] m) {
     symbol::Symbol* b = fake_sym_interned(mm, "B");
     symbol::Symbol* x = fake_sym_interned(mm, "x");
     ast::AstNode* struct_decl = mk_struct_sig(a, foo, mk_texprs1(a, mk_ty_prim(a, token::TokenKind::I32)));
-    ast::AstNode* alias = mk_alias_typed(a, b, mk_ty_named(a, null, foo), 0);
+    ast::AstNode* alias_node = mk_alias_typed(a, b, mk_ty_named(a, null, foo), 0);
     ast::AstNode* var = mk_var_typed(a, x, mk_ty_named(a, null, b));
-    ast::AstNode*[3] stmts; stmts[0] = struct_decl; stmts[1] = alias; stmts[2] = var;
+    ast::AstNode*[3] stmts; stmts[0] = struct_decl; stmts[1] = alias_node; stmts[2] = var;
     set_root(mm, a, &stmts[0], 3);
     sema_run(mm);
     if(!testing::expect_eq((void*)sema::container_decl(registered(mm, x).ty), (void*)struct_decl, m)) { return -1; }
@@ -2631,8 +2631,8 @@ fn i32 rnt_qualified_name_not_in_target(arena::Arena* a, u8[] m) {
 fn i32 rnt_self_alias_cycle_reports(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     symbol::Symbol* self = fake_sym_interned(mm, "A");
-    ast::AstNode* alias = mk_alias_typed(a, self, mk_ty_named(a, null, self), 0);
-    ast::AstNode*[1] stmts; stmts[0] = alias;
+    ast::AstNode* alias_node = mk_alias_typed(a, self, mk_ty_named(a, null, self), 0);
+    ast::AstNode*[1] stmts; stmts[0] = alias_node;
     set_root(mm, a, &stmts[0], 1);
     sema_run(mm);
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
@@ -2644,8 +2644,8 @@ fn i32 rnt_alias_to_unknown_reports(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     symbol::Symbol* first = fake_sym_interned(mm, "A");
     symbol::Symbol* missing = fake_sym_interned(mm, "Missing");
-    ast::AstNode* alias = mk_alias_typed(a, first, mk_ty_named(a, null, missing), 0);
-    ast::AstNode*[1] stmts; stmts[0] = alias;
+    ast::AstNode* alias_node = mk_alias_typed(a, first, mk_ty_named(a, null, missing), 0);
+    ast::AstNode*[1] stmts; stmts[0] = alias_node;
     set_root(mm, a, &stmts[0], 1);
     sema_run(mm);
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
