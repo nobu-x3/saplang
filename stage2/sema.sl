@@ -73,6 +73,9 @@ export fn* ast::AstNode*[](module::Module*, ast::CompInsertNode*) run_compinsert
 // Quiet fold to i64 (no diagnostics); each caller decides what a failed fold means.
 export fn* bool(module::Module*, ast::AstNode*, i64*) eval_const_i64_hook;
 
+// Evaluates a comptime expression that must yield a Type (e.g. `pick()` / `Vec(i32)` in type position); null if it isn't a Type.
+export fn* types::Ty*(module::Module*, ast::AstNode*) eval_comptime_type_hook;
+
 
 export union DeclData {
     ast::AstNode*       node;
@@ -885,6 +888,18 @@ export fn types::Ty* resolve_type(Sema* s, ast::AstNode* texpr) {
         texpr.h.ty = (void*)operand;
         return operand;
     }
+    case ast::AstKind::Call: {
+        if(eval_comptime_type_hook == null) { return null; }
+        if(synth(s, texpr) == null) { return null; }   // resolve callee + args before the interpreter runs
+        types::Ty* resolved = eval_comptime_type_hook(s.m, texpr);
+        if(resolved == null) {
+            u8[] msg = "expression does not evaluate to a type";
+            emit_diag(s, texpr.h.src_pos, msg.ptr, (i32)msg.len);
+            return null;
+        }
+        texpr.h.ty = (void*)resolved;
+        return resolved;
+    }
     else { return null; }
     }
     return null;
@@ -1040,6 +1055,12 @@ fn types::Ty* decl_to_type(Sema* s, module::Module* target, Decl* d) {
 // StructLit / ArrayLit / UndefinedLit are not synth-able — they need check-mode.
 export fn types::Ty* synth(Sema* s, ast::AstNode* e) {
     if(e == null) { return null; }
+    // A type node in value position is a `Type` value; resolve_type records the represented type in h.ty (read back by the interpreter).
+    if(ast::is_type(e.h.kind)) {
+        if(resolve_type(s, e) == null) { return null; }
+        e.h.flags = (ast::AstFlags)((u16)e.h.flags | (u16)ast::AstFlags::ConstExpr);
+        return types::prim_type();
+    }
     switch(e.h.kind) {
     case ast::AstKind::IntLit: {
         ast::IntLitNode* lit = (ast::IntLitNode*)e;

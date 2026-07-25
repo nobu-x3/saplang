@@ -1900,10 +1900,19 @@ export fn value::Value eval_const_value(module::Module* m, ast::AstNode* expr) {
     return eval(&ip, expr);
 }
 
+// Evaluates a comptime expression that must yield a Type (a `fn Type` call in type position); null if it isn't a Type.
+fn types::Ty* eval_comptime_type(module::Module* m, ast::AstNode* expr) {
+    Interp ip = new_interp(m);
+    value::Value v = eval(&ip, expr);
+    if(v.kind == value::ValueKind::TYPE) { return (types::Ty*)v.data.type_ref; }
+    return null;
+}
+
 export fn void install_hooks() {
     sema::resolve_generic_call_hook = &resolve_generic_call;
     sema::resolve_generic_explicit_hook = &resolve_generic_explicit;
     sema::run_comprun_hook = &run_comprun;
     sema::run_compinsert_stmts_hook = &run_compinsert_stmts;
     sema::eval_const_i64_hook = &const_eval_i64;
+    sema::eval_comptime_type_hook = &eval_comptime_type;
 }

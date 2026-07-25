@@ -95,7 +95,14 @@ export fn sapir::SapirModule* lower_module(module::Module* m) {
 fn void lower_fn(Lower* lo, ast::FnDeclNode* fn_node) {
     if(fn_node.cfg == null) { return; }
     if(sema::is_generic_fn(fn_node)) { return; }        // only monomorphized clones get lowered
+    if(returns_comptime_type(fn_node)) { return; }      // `fn Type ...` is comptime-only, never emitted
     lower_fn_body(lo, fn_node, get_or_create_fn_decl(lo, fn_node.decl));
+}
+
+fn bool returns_comptime_type(ast::FnDeclNode* fn_node) {
+    if(fn_node.return_type == null) { return false; }
+    types::Ty* ret = (types::Ty*)fn_node.return_type.h.ty;
+    return ret != null && ret.kind == types::TypeKind::ComptimeType;
 }
 
 // Lowers a monomorphized clone: LinkOnceOdr, mangled off the clone's already-qualified name.

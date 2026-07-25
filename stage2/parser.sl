@@ -309,7 +309,11 @@ fn ast::AstNode* parse_return(Parser* p) {
     bool had_err = false;
     ast::AstNode* expr = null;
     if(peek(p, 0).kind != token::TokenKind::Semi) {
-        expr = parse_expr(p, 0);
+        if(token::is_type_keyword(peek(p, 0).kind)) {
+            expr = parse_type(p);     // `return i32;` in a `fn Type` — a type-valued expression
+        } else {
+            expr = parse_expr(p, 0);
+        }
         if(!expr || had_error(expr)) { had_err = true; }
     }
     token::Token semi = expect(p, token::TokenKind::Semi);
@@ -699,10 +703,15 @@ fn ast::AstNode* parse_alias_decl(Parser* p, bool is_exported) {
     if(name.kind == token::TokenKind::ERROR) { had_err = true; }
     token::Token eq = expect(p, token::TokenKind::Eq);
     if(eq.kind == token::TokenKind::ERROR) { had_err = true; }
-    bool prev_allow = p.allow_anon_type;
-    p.allow_anon_type = true;
-    ast::AstNode* target = parse_type(p);
-    p.allow_anon_type = prev_allow;
+    ast::AstNode* target;
+    if(peek(p, 0).kind == token::TokenKind::Ident && peek(p, 1).kind == token::TokenKind::LParen) {
+        target = parse_expr(p, 0);   // `alias W = pick();` — a comptime call producing a Type
+    } else {
+        bool prev_allow = p.allow_anon_type;
+        p.allow_anon_type = true;
+        target = parse_type(p);
+        p.allow_anon_type = prev_allow;
+    }
     if(!target || had_error(target)) { had_err = true; }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }

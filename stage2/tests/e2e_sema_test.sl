@@ -1180,6 +1180,28 @@ fn i32 ok_bool_int_float_casts(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A `fn Type` returns a type value; an alias binds the comptime call and is then used as a type.
+fn i32 ok_type_returning_alias(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type pick() { return i32; } alias W = pick();\nexport fn i32 f() { W x = 5; return (i32)x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A branching `fn Type` selects a type at comptime.
+fn i32 ok_type_returning_branch(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type choose(bool b) { if(b) { return i64; } return i32; } alias W = choose(true);\nexport fn i32 f(W x) { return (i32)x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// An alias bound to a call that doesn't yield a Type is reported, not crashed.
+fn i32 err_alias_call_not_type(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 notype() { return 5; } alias W = notype();\nexport fn i32 f(W x) { return (i32)x; }");
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expression does not evaluate to a type", m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)46, m)) { return -2; }
+    return 0;
+}
+
 // Overload resolution accepts a string literal for a byte pointer/slice/array parameter.
 fn i32 ok_string_lit_overload(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 pick(i32 x, i32 y) { return 1; }\nfn i32 pick(u8[] x, u8[] y) { return 2; }\nexport fn i32 f(u8[] s) { return pick(s, \"lit\") + pick(\"a\", \"b\"); }");
@@ -1358,5 +1380,8 @@ fn i32 main() {
     testing::add(suite, "ok_fnptr_in_condition",     &ok_fnptr_in_condition);
     testing::add(suite, "ok_bool_int_float_casts",   &ok_bool_int_float_casts);
     testing::add(suite, "ok_string_lit_overload",    &ok_string_lit_overload);
+    testing::add(suite, "ok_type_returning_alias",   &ok_type_returning_alias);
+    testing::add(suite, "ok_type_returning_branch",  &ok_type_returning_branch);
+    testing::add(suite, "err_alias_call_not_type",   &err_alias_call_not_type);
     return testing::run();
 }
