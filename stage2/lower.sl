@@ -1159,7 +1159,10 @@ fn u32 emit_temp_alloca(Lower* lo, types::Ty* ty) {
 }
 
 fn u32 lower_slice_field(Lower* lo, ast::MemberAccessNode* n, types::Ty* result_ty) {
-    u32 slice_value = lower_expr(lo, n.base);
+    types::Ty* base_ty = (types::Ty*)n.base.h.ty;
+    u32 slice_value;
+    if(types::is_ptr(base_ty)) { slice_value = emit_load(lo, lower_expr(lo, n.base), base_ty.data.pointee); }   // `sp.len` on a slice pointer: load the slice, then extract
+    else { slice_value = lower_expr(lo, n.base); }
     sapir::Opcode op = sapir::Opcode::SliceLen;
     if(n.field == interner::intern("ptr")) { op = sapir::Opcode::SlicePtr; }
     sapir::Inst inst = sapir::new_inst(op, result_ty, n.h.src_pos);

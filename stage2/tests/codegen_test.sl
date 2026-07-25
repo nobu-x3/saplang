@@ -182,6 +182,16 @@ fn i32 jit_slice_field_write(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { u8[] s; s.ptr = (u8*)malloc(4); s.len = 3; s.ptr[0] = 9; return (i32)s.len + (i32)s.ptr[0]; }", 12, msg);
 }
 
+// Reading a slice field (.ptr/.len) through a pointer-to-slice loads the slice first (was ExtractValue on a raw pointer).
+fn i32 jit_slice_ptr_field_read(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "extern { fn void* malloc(u64 n); } fn u64 slen(i32[]* s) { return s.len; } fn i32 sfirst(i32[]* s) { return s.ptr[0]; } fn i32 main() { i32[] xs; xs.ptr = (i32*)malloc(8); xs.len = 2; xs.ptr[0] = 40; xs.ptr[1] = 99; return sfirst(&xs) + (i32)slen(&xs); }", 42, msg);
+}
+
+// A monomorphized generic fn runs end-to-end, reading slice fields through a T[]* param (generics + the fixed slice path).
+fn i32 jit_generic_slice(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "extern { fn void* malloc(u64 n); } fn T pick(comptime Type T, T[]* s, u64 i) { return s.ptr[i]; } fn u64 glen(comptime Type T, T[]* s) { return s.len; } fn i32 main() { i32[] xs; xs.ptr = (i32*)malloc(12); xs.len = 3; xs.ptr[0] = 10; xs.ptr[1] = 20; xs.ptr[2] = 12; return pick(&xs, 1) + pick(&xs, 2) + (i32)glen(&xs); }", 35, msg);
+}
+
 // A function pointer is nullable and equality-comparable: assign null, compare, reassign, call.
 fn i32 jit_fnptr_null(arena::Arena* a, u8[] msg) {
     return jit_return(a, "fn i32 dbl(i32 x) { return x * 2; } fn i32 main() { fn* i32(i32) f = null; if(f != null) { return 1; } f = dbl; if(f == null) { return 2; } return f(21); }", 42, msg);
@@ -328,6 +338,8 @@ fn i32 main() {
     testing::add(suite, "jit_voidptr_to_typed", &jit_voidptr_to_typed);
     testing::add(suite, "jit_mixed_int_width_cmp", &jit_mixed_int_width_cmp);
     testing::add(suite, "jit_slice_field_write", &jit_slice_field_write);
+    testing::add(suite, "jit_slice_ptr_field_read", &jit_slice_ptr_field_read);
+    testing::add(suite, "jit_generic_slice",       &jit_generic_slice);
     testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
     testing::add(suite, "jit_pointer_compound",  &jit_pointer_compound);
