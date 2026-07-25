@@ -13,7 +13,5 @@ CMakeUserPresets.json
 rework_tests/.runners
 tags
 
-# Stage 2 bootstrap seed binaries (reproducible via ./bootstrap.sh off the stage2-v0 tag)
-bootstrap/saplangc2
-bootstrap/stage_b
-bootstrap/stage_c
+# Stage 2 self-host binaries (reproducible via ./bootstrap.sh off the stage2-v0 tag)
+bootstrap/
