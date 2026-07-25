@@ -1,4 +1,5 @@
 import arena;
+import list;
 import diag;
 import symbol;
 import token;
@@ -44,18 +45,11 @@ export struct InsertedSource {
 export fn u32 register_inserted_source(Module* m, u8[] bytes, u32 generator_pos) {
     if(m.next_inserted_base == 0) { m.next_inserted_base = (u32)m.source.len; }
     u32 base = m.next_inserted_base;
-    if(m.inserted_sources.len == m.inserted_sources_cap) {
-        u64 new_cap = 4;
-        if(m.inserted_sources_cap > 0) { new_cap = m.inserted_sources_cap * 2; }
-        m.inserted_sources.ptr = (InsertedSource*)arena::realloc_grow(m.arena, (void*)m.inserted_sources.ptr, m.inserted_sources.len * sizeof(InsertedSource), new_cap * sizeof(InsertedSource));
-        m.inserted_sources_cap = new_cap;
-    }
     InsertedSource entry;
     entry.base = base;
     entry.bytes = bytes;
     entry.generator_pos = generator_pos;
-    m.inserted_sources[m.inserted_sources.len] = entry;
-    m.inserted_sources.len += 1;
+    list::dyn_push(&m.inserted_sources, &m.inserted_sources_cap, m.arena, entry);
     m.next_inserted_base = base + (u32)bytes.len;
     return base;
 }

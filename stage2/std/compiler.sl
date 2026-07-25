@@ -12,6 +12,7 @@ import sapir;
 import sapir_print;
 import diag;
 import arena;
+import list;
 import sys;
 import io;
 import interner;
@@ -62,14 +63,7 @@ export fn void add_module(Compiler* c, module::Module* m) {
 }
 
 export fn void add_source(Compiler* c, u8[] path) {
-    if(c.entry_sources.len == c.entry_sources_cap) {
-        u64 new_cap = 4;
-        if(c.entry_sources_cap > 0) { new_cap = c.entry_sources_cap * 2; }
-        c.entry_sources.ptr = arena::realloc_grow(c.arena, (void*)c.entry_sources.ptr, c.entry_sources.len * sizeof(u8[]), new_cap * sizeof(u8[]));
-        c.entry_sources_cap = new_cap;
-    }
-    c.entry_sources[c.entry_sources.len] = path;
-    c.entry_sources.len += 1;
+    list::dyn_push(&c.entry_sources, &c.entry_sources_cap, c.arena, path);
 }
 
 fn bool parse_config(Compiler* c, u8[] name) {
@@ -82,36 +76,15 @@ fn bool parse_config(Compiler* c, u8[] name) {
 }
 
 export fn void add_extern_lib(Compiler* c, u8[] name) {
-    if(c.extern_libs.len == c.extern_libs_cap) {
-        u64 new_cap = 4;
-        if(c.extern_libs_cap > 0) { new_cap = c.extern_libs_cap * 2; }
-        c.extern_libs.ptr = arena::realloc_grow(c.arena, (void*)c.extern_libs.ptr, c.extern_libs.len * sizeof(u8[]), new_cap * sizeof(u8[]));
-        c.extern_libs_cap = new_cap;
-    }
-    c.extern_libs[c.extern_libs.len] = name;
-    c.extern_libs.len += 1;
+    list::dyn_push(&c.extern_libs, &c.extern_libs_cap, c.arena, name);
 }
 
 export fn void add_lib_dir(Compiler* c, u8[] path) {
-    if(c.lib_dirs.len == c.lib_dirs_cap) {
-        u64 new_cap = 4;
-        if(c.lib_dirs_cap > 0) { new_cap = c.lib_dirs_cap * 2; }
-        c.lib_dirs.ptr = arena::realloc_grow(c.arena, (void*)c.lib_dirs.ptr, c.lib_dirs.len * sizeof(u8[]), new_cap * sizeof(u8[]));
-        c.lib_dirs_cap = new_cap;
-    }
-    c.lib_dirs[c.lib_dirs.len] = path;
-    c.lib_dirs.len += 1;
+    list::dyn_push(&c.lib_dirs, &c.lib_dirs_cap, c.arena, path);
 }
 
 export fn void add_import_path(Compiler* c, u8[] path) {
-    if(c.import_paths.len == c.import_paths_cap) {
-        u64 new_cap = 4;
-        if(c.import_paths_cap > 0) { new_cap = c.import_paths_cap * 2; }
-        c.import_paths.ptr = arena::realloc_grow(c.arena, (void*)c.import_paths.ptr, c.import_paths.len * sizeof(u8[]), new_cap * sizeof(u8[]));
-        c.import_paths_cap = new_cap;
-    }
-    c.import_paths[c.import_paths.len] = path;
-    c.import_paths.len += 1;
+    list::dyn_push(&c.import_paths, &c.import_paths_cap, c.arena, path);
 }
 
 export fn void set_target(Compiler* c, u8[] t) {
