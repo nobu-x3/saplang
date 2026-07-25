@@ -3,6 +3,7 @@ import ast;
 import token;
 import diag;
 import arena;
+import list;
 import symbol;
 import interner;
 import sys;
@@ -254,21 +255,13 @@ fn ast::Param[] parse_params(Parser* p, bool* had_err) {
         if(!type_expr || had_error(type_expr)) { *had_err = true; }
         token::Token name = expect(p, token::TokenKind::Ident);
         if(name.kind == token::TokenKind::ERROR) { *had_err = true; }
-        if(arr.len + 1 > cap) {
-            u64 new_cap = 4;
-            if(cap > 0) { new_cap = cap * 2; }
-            arr.ptr = arena::realloc_grow(p.m.arena, arr.ptr,
-                    cap * sizeof(ast::Param),
-                    new_cap * sizeof(ast::Param));
-            cap = new_cap;
-        }
-        ast::Param* prm = &arr[arr.len];
+        ast::Param prm;
         prm.name = name.data.sym;
         prm.type_expr = type_expr;
         prm.is_const = is_const;
         prm.is_comptime = is_comptime;
         prm.src_pos = start;
-        arr.len += 1;
+        list::dyn_push(&arr, &cap, p.m.arena, prm);
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     return arr;
@@ -392,19 +385,11 @@ fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
         if(name.kind == token::TokenKind::ERROR) { *had_err = true; }
         token::Token semi = expect(p, token::TokenKind::Semi);
         if(semi.kind == token::TokenKind::ERROR) { *had_err = true; }
-        if(arr.len + 1 > cap) {
-            u64 new_cap = 4;
-            if(cap > 0) { new_cap = cap * 2; }
-            arr.ptr = arena::realloc_grow(p.m.arena, arr.ptr,
-                    cap * sizeof(ast::FieldDecl),
-                    new_cap * sizeof(ast::FieldDecl));
-            cap = new_cap;
-        }
-        ast::FieldDecl* fd = &arr[arr.len];
+        ast::FieldDecl fd;
         fd.name = name.data.sym;
         fd.type_expr = type_expr;
         fd.src_pos = start;
-        arr.len += 1;
+        list::dyn_push(&arr, &cap, p.m.arena, fd);
         if(p.idx == prev_idx) { consume(p); *had_err = true; }
     }
     p.allow_anon_type = prev_allow;
@@ -749,19 +734,11 @@ fn ast::EnumMember[] parse_enum_members(Parser* p, bool* had_err) {
             value_expr = parse_expr(p, 0);
             if(!value_expr || had_error(value_expr)) { *had_err = true; }
         }
-        if(arr.len + 1 > cap) {
-            u64 new_cap = 4;
-            if(cap > 0) { new_cap = cap * 2; }
-            arr.ptr = arena::realloc_grow(p.m.arena, arr.ptr,
-                    cap * sizeof(ast::EnumMember),
-                    new_cap * sizeof(ast::EnumMember));
-            cap = new_cap;
-        }
-        ast::EnumMember* em = &arr[arr.len];
+        ast::EnumMember em;
         em.name = name.data.sym;
         em.value_expr = value_expr;
         em.src_pos = start;
-        arr.len += 1;
+        list::dyn_push(&arr, &cap, p.m.arena, em);
         if(!match(p, token::TokenKind::Comma)) { break; }
         if(p.idx == prev) { consume(p); *had_err = true; }
     }
@@ -1227,22 +1204,14 @@ fn ast::AstNode* parse_switch(Parser* p) {
                 body = parse_block(p);
                 if(had_error(body)) { had_err = true; }
             }
-            if(arms.len + 1 > arms_cap) {
-                u64 new_cap = 4;
-                if(arms_cap > 0) { new_cap = arms_cap * 2; }
-                arms.ptr = arena::realloc_grow(p.m.arena, arms.ptr,
-                        arms_cap * sizeof(ast::SwitchArm),
-                        new_cap * sizeof(ast::SwitchArm));
-                arms_cap = new_cap;
-            }
             ast::ListBuilder labels_b;
             ast::list_init(&labels_b, p.m.arena, 1);
             ast::list_push(&labels_b, p.m.arena, label);
-            ast::SwitchArm* arm = &arms[arms.len];
+            ast::SwitchArm arm;
             arm.labels = ast::list_freeze(&labels_b);
             arm.body = body;
             arm.src_pos = label_pos;
-            arms.len += 1;
+            list::dyn_push(&arms, &arms_cap, p.m.arena, arm);
         } else if(k == token::TokenKind::ELSE) {
             u32 else_pos = peek(p, 0).src_pos;
             consume(p);
@@ -1849,19 +1818,11 @@ fn ast::AstNode* parse_struct_lit(Parser* p) {
             fi_name = name.data.sym;
         }
         ast::AstNode* val = parse_expr(p, 0);
-        if(inits_arr.len + 1 > cap) {
-            u64 new_cap = 4;
-            if(cap > 0) { new_cap = cap * 2; }
-            inits_arr.ptr = arena::realloc_grow(p.m.arena, inits_arr.ptr,
-                    cap * sizeof(ast::FieldInitializer),
-                    new_cap * sizeof(ast::FieldInitializer));
-            cap = new_cap;
-        }
-        ast::FieldInitializer* fi = &inits_arr[inits_arr.len];
+        ast::FieldInitializer fi;
         fi.name = fi_name;
         fi.value = val;
         fi.src_pos = fi_pos;
-        inits_arr.len += 1;
+        list::dyn_push(&inits_arr, &cap, p.m.arena, fi);
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     expect(p, token::TokenKind::RBrace);

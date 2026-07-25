@@ -1,6 +1,7 @@
 import ast;
 import module;
 import arena;
+import list;
 import types;
 import diag;
 import sys;
@@ -350,30 +351,17 @@ fn void emit_pending_defers_through_loop(CfgBuilder* b, u64 scope_base) {
 // HELPERS
 
 export fn u32 new_block(Cfg* g, arena::Arena* a) {
-    if(g.blocks.len == g.blocks_cap) {
-        u64 new_cap = 4;
-        if(g.blocks_cap > 0) { new_cap = g.blocks_cap * 2; }
-        g.blocks.ptr = arena::realloc_grow(a, (void*)g.blocks.ptr, g.blocks.len * sizeof(BasicBlock), new_cap * sizeof(BasicBlock));
-        g.blocks_cap = new_cap;
-    }
     u32 id = (u32)g.blocks.len;
-    BasicBlock* block = &g.blocks[id];
-    sys::memset(block, 0, sizeof(BasicBlock));
+    BasicBlock block;
+    sys::memset(&block, 0, sizeof(BasicBlock));
     block.id = id;
-    g.blocks.len += 1;
+    list::dyn_push(&g.blocks, &g.blocks_cap, a, block);
     return id;
 }
 
 fn void append_stmt(CfgBuilder* b, ast::AstNode* stmt) {
     BasicBlock* block = &b.cfg.blocks[b.current];
-    if(block.stmts.len == block.stmts_cap) {
-        u64 new_cap = 4;
-        if(block.stmts_cap > 0) { new_cap = block.stmts_cap * 2; }
-        block.stmts.ptr = arena::realloc_grow(b.arena, (void*)block.stmts.ptr, block.stmts.len * sizeof(ast::AstNode*), new_cap * sizeof(ast::AstNode*));
-        block.stmts_cap = new_cap;
-    }
-    block.stmts[block.stmts.len] = stmt;
-    block.stmts.len += 1;
+    list::dyn_push(&block.stmts, &block.stmts_cap, b.arena, stmt);
 }
 
 fn bool block_terminated(CfgBuilder* b, u32 blk) {
@@ -424,15 +412,9 @@ fn void terminate_unreachable(CfgBuilder* b, u32 blk) {
 }
 
 fn void push_scope(CfgBuilder* b) {
-    if(b.scope_stack.len == b.scope_cap) {
-        u64 new_cap = 4;
-        if(b.scope_cap > 0) { new_cap = b.scope_cap * 2; }
-        b.scope_stack.ptr = arena::realloc_grow(b.arena, (void*)b.scope_stack.ptr, b.scope_stack.len * sizeof(ScopeFrame), new_cap * sizeof(ScopeFrame));
-        b.scope_cap = new_cap;
-    }
-    ScopeFrame* frame = &b.scope_stack[b.scope_stack.len];
-    sys::memset(frame, 0, sizeof(ScopeFrame));
-    b.scope_stack.len += 1;
+    ScopeFrame frame;
+    sys::memset(&frame, 0, sizeof(ScopeFrame));
+    list::dyn_push(&b.scope_stack, &b.scope_cap, b.arena, frame);
 }
 
 fn void pop_scope(CfgBuilder* b) {
@@ -444,32 +426,18 @@ fn ScopeFrame* current_scope(CfgBuilder* b) {
 }
 
 fn void push_defer(ScopeFrame* sc, arena::Arena* a, ast::AstNode* body, u32 src_pos) {
-    if(sc.defers.len == sc.defer_cap) {
-        u64 new_cap = 4;
-        if(sc.defer_cap > 0) { new_cap = sc.defer_cap * 2; }
-        sc.defers.ptr = arena::realloc_grow(a, (void*)sc.defers.ptr, sc.defers.len * sizeof(DeferEntry), new_cap * sizeof(DeferEntry));
-        sc.defer_cap = new_cap;
-    }
     DeferEntry e;
     e.body = body;
     e.src_pos = src_pos;
-    sc.defers[sc.defers.len] = e;
-    sc.defers.len += 1;
+    list::dyn_push(&sc.defers, &sc.defer_cap, a, e);
 }
 
 fn void push_loop(CfgBuilder* b, u32 header, u32 after) {
-    if(b.loop_stack.len == b.loop_cap) {
-        u64 new_cap = 4;
-        if(b.loop_cap > 0) { new_cap = b.loop_cap * 2; }
-        b.loop_stack.ptr = arena::realloc_grow(b.arena, (void*)b.loop_stack.ptr, b.loop_stack.len * sizeof(LoopFrame), new_cap * sizeof(LoopFrame));
-        b.loop_cap = new_cap;
-    }
     LoopFrame frame;
     frame.header = header;
     frame.after = after;
     frame.scope_base = b.scope_stack.len;
-    b.loop_stack[b.loop_stack.len] = frame;
-    b.loop_stack.len += 1;
+    list::dyn_push(&b.loop_stack, &b.loop_cap, b.arena, frame);
 }
 
 fn void pop_loop(CfgBuilder* b) {
@@ -489,30 +457,16 @@ fn LoopFrame* nearest_loop(CfgBuilder* b) {
 }
 
 fn SwitchTarget[] push_switch_target(SwitchTarget[] arms, u64* cap, arena::Arena* a, ast::AstNode* label, u32 target) {
-    if(arms.len == *cap) {
-        u64 new_cap = 4;
-        if(*cap > 0) { new_cap = *cap * 2; }
-        arms.ptr = arena::realloc_grow(a, (void*)arms.ptr, arms.len * sizeof(SwitchTarget), new_cap * sizeof(SwitchTarget));
-        *cap = new_cap;
-    }
     SwitchTarget t;
     t.label = label;
     t.target = target;
-    arms[arms.len] = t;
-    arms.len += 1;
+    list::dyn_push(&arms, cap, a, t);
     return arms;
 }
 
 fn void add_predecessor(Cfg* g, arena::Arena* a, u32 block_id, u32 pred) {
     BasicBlock* block = &g.blocks[block_id];
-    if(block.predecessors.len == block.pred_cap) {
-        u64 new_cap = 4;
-        if(block.pred_cap > 0) { new_cap = block.pred_cap * 2; }
-        block.predecessors.ptr = arena::realloc_grow(a, (void*)block.predecessors.ptr, block.predecessors.len * sizeof(u32), new_cap * sizeof(u32));
-        block.pred_cap = new_cap;
-    }
-    block.predecessors[block.predecessors.len] = pred;
-    block.predecessors.len += 1;
+    list::dyn_push(&block.predecessors, &block.pred_cap, a, pred);
 }
 
 export fn void compute_predecessors(Cfg* g, arena::Arena* a) {
