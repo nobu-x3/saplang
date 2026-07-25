@@ -155,6 +155,8 @@ export fn value::Value eval(Interp* ip, ast::AstNode* e) {
     case ast::AstKind::PointerType:
     case ast::AstKind::ArrayType:
     case ast::AstKind::SliceType:
+    case ast::AstKind::StructType:
+    case ast::AstKind::UnionType:
     case ast::AstKind::FnPtrType: { return eval_type_expr(ip, e); }
     case ast::AstKind::ComprunStmt: { return eval_comprun(ip, (ast::CompRunNode*)e); }
     case ast::AstKind::ComperrorStmt:   { return eval_comperror(ip, (ast::CompErrorNode*)e); }

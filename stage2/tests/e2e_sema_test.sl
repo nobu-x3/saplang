@@ -1194,6 +1194,13 @@ fn i32 ok_type_returning_branch(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A comptime fn returns an anonymous struct type value; the alias binds it and it is used as a struct type.
+fn i32 ok_anon_struct_type_alias(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type mk() { return struct { i32 x; }; } alias P = mk();\nexport fn i32 f() { P p; p.x = 7; return p.x; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 // An alias bound to a call that doesn't yield a Type is reported, not crashed.
 fn i32 err_alias_call_not_type(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 notype() { return 5; } alias W = notype();\nexport fn i32 f(W x) { return (i32)x; }");
@@ -1383,5 +1390,6 @@ fn i32 main() {
     testing::add(suite, "ok_type_returning_alias",   &ok_type_returning_alias);
     testing::add(suite, "ok_type_returning_branch",  &ok_type_returning_branch);
     testing::add(suite, "err_alias_call_not_type",   &err_alias_call_not_type);
+    testing::add(suite, "ok_anon_struct_type_alias", &ok_anon_struct_type_alias);
     return testing::run();
 }

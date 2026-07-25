@@ -309,8 +309,12 @@ fn ast::AstNode* parse_return(Parser* p) {
     bool had_err = false;
     ast::AstNode* expr = null;
     if(peek(p, 0).kind != token::TokenKind::Semi) {
-        if(token::is_type_keyword(peek(p, 0).kind)) {
-            expr = parse_type(p);     // `return i32;` in a `fn Type` — a type-valued expression
+        token::TokenKind rk = peek(p, 0).kind;
+        if(token::is_type_keyword(rk) || rk == token::TokenKind::STRUCT || rk == token::TokenKind::UNION) {
+            bool prev_allow = p.allow_anon_type;   // `return i32;` / `return struct {...};` in a `fn Type` — a type-valued expression
+            p.allow_anon_type = true;
+            expr = parse_type(p);
+            p.allow_anon_type = prev_allow;
         } else {
             expr = parse_expr(p, 0);
         }

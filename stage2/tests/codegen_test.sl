@@ -192,6 +192,11 @@ fn i32 jit_type_alias(arena::Arena* a, u8[] msg) {
     return jit_return(a, "fn Type choose(bool b) { if(b) { return i64; } return i32; } alias W = choose(false); fn i32 main() { W x = 40; return (i32)x + 2; }", 42, msg);
 }
 
+// A comptime fn returns an anonymous struct type; an alias binds it and it's used as a runtime struct.
+fn i32 jit_anon_struct_type(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "fn Type mk() { return struct { i32 x; i32 y; }; } alias P = mk(); fn i32 main() { P p; p.x = 40; p.y = 2; return p.x + p.y; }", 42, msg);
+}
+
 // A monomorphized generic fn runs end-to-end, reading slice fields through a T[]* param (generics + the fixed slice path).
 fn i32 jit_generic_slice(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn T pick(comptime Type T, T[]* s, u64 i) { return s.ptr[i]; } fn u64 glen(comptime Type T, T[]* s) { return s.len; } fn i32 main() { i32[] xs; xs.ptr = (i32*)malloc(12); xs.len = 3; xs.ptr[0] = 10; xs.ptr[1] = 20; xs.ptr[2] = 12; return pick(&xs, 1) + pick(&xs, 2) + (i32)glen(&xs); }", 35, msg);
@@ -345,6 +350,7 @@ fn i32 main() {
     testing::add(suite, "jit_slice_field_write", &jit_slice_field_write);
     testing::add(suite, "jit_slice_ptr_field_read", &jit_slice_ptr_field_read);
     testing::add(suite, "jit_type_alias",          &jit_type_alias);
+    testing::add(suite, "jit_anon_struct_type",    &jit_anon_struct_type);
     testing::add(suite, "jit_generic_slice",       &jit_generic_slice);
     testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
