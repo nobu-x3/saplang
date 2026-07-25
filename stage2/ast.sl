@@ -2,6 +2,7 @@ import symbol;
 import token;
 import sys;
 import arena;
+import list;
 
 export struct AstHeader {
     AstKind     kind;                   // AstKind enum value
@@ -17,25 +18,18 @@ export struct AstNode { AstHeader h; }
 // LIST BUILDER ////////////////////////////////////////////////////////////////////////
 export struct ListBuilder {
     AstNode*[]  items;
-    u32         cap;
+    u64         cap;
 }
 
 export fn void list_init(ListBuilder* b, arena::Arena* a, u32 initial_cap) {
     sys::memset(b, 0, sizeof(ListBuilder));
     b.items = {(AstNode**)arena::alloc(a, sizeof(AstNode*) * initial_cap), 0};
-    b.cap = initial_cap;
+    b.cap = (u64)initial_cap;
 }
 
 export fn void list_push(ListBuilder* b, arena::Arena* a, AstNode* node) {
     if(!b || !a || !node) { return; }
-    if(b.items.len + 1 > b.cap) {
-        u64 new_cap = (u64)b.cap * 2;
-        const u64 elem_size = sizeof(AstNode*);
-        b.items = {(AstNode**)arena::realloc_grow(a, b.items.ptr, (u64)b.cap * elem_size, new_cap * elem_size), b.items.len};
-        b.cap = (u32)new_cap;
-    }
-    b.items[b.items.len] = node;
-    b.items.len += 1;
+    list::dyn_push(&b.items, &b.cap, a, node);
 }
 
 // Freezes to a slice for attachment to an AST node. The builder is dead after this.

@@ -1,0 +1,35 @@
+import testing;
+import list;
+import arena;
+import sys;
+
+// Scalar elements: growth doubles (min 4), values survive the reallocs.
+fn i32 dyn_push_grows(arena::Arena* a, u8[] m) {
+    i32[] xs = {null, 0}; u64 cap = 0;
+    for(i32 i = 0; i < 10; i = i + 1) { list::dyn_push(&xs, &cap, a, i * i); }
+    if(!testing::expect_eq(xs.len, (u64)10, m)) { return -1; }
+    if(!testing::expect_eq(cap, (u64)16, m)) { return -2; }
+    i32 sum = 0;
+    for(u64 j = 0; j < xs.len; j = j + 1) { sum = sum + xs.ptr[j]; }
+    if(!testing::expect_eq(sum, 285, m)) { return -3; }
+    return 0;
+}
+
+// Pointer elements (the ListBuilder use case): a distinct monomorphization from the scalar one.
+fn i32 dyn_push_pointer_elem(arena::Arena* a, u8[] m) {
+    i32 v0 = 7; i32 v1 = 8;
+    i32*[] ps = {null, 0}; u64 cap = 0;
+    list::dyn_push(&ps, &cap, a, &v0);
+    list::dyn_push(&ps, &cap, a, &v1);
+    if(!testing::expect_eq(ps.len, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq(*ps.ptr[0] + *ps.ptr[1], 15, m)) { return -2; }
+    return 0;
+}
+
+fn i32 main() {
+    testing::init();
+    u8[] suite = "List Tests";
+    testing::add(suite, "dyn_push_grows", &dyn_push_grows);
+    testing::add(suite, "dyn_push_pointer_elem", &dyn_push_pointer_elem);
+    return testing::run();
+}
