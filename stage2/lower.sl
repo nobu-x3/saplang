@@ -478,6 +478,7 @@ fn u32 emit_ptr_offset(Lower* lo, types::Ty* result_ty, u32 ptr_value, u32 index
 fn u32 emit_combine(Lower* lo, types::Ty* ty, u32 current_value, u32 rhs_value, sapir::Opcode combine, u32 src_pos) {
     if(types::is_ptr(ty) && combine == sapir::Opcode::Add) { return emit_ptr_offset(lo, ty, current_value, rhs_value, false, src_pos); }
     if(types::is_ptr(ty) && combine == sapir::Opcode::Sub) { return emit_ptr_offset(lo, ty, current_value, rhs_value, true, src_pos); }
+    rhs_value = widen_to(lo, rhs_value, lo.func.insts[rhs_value].ty, ty, src_pos);   // `x op= y` combines at x's width; widen a narrower y (e.g. `hash ^= byte`)
     sapir::Inst inst = sapir::new_inst(combine, ty, src_pos);
     inst.a = current_value;
     inst.b = rhs_value;
@@ -1183,7 +1184,7 @@ fn u32 lower_addr(Lower* lo, ast::AstNode* e) {
         u32 base_addr;
         types::Ty* container;
         if(types::is_ptr(base_ty)) { base_addr = lower_expr(lo, n.base); container = base_ty.data.pointee; }
-        else { base_addr = lower_addr(lo, n.base); container = base_ty; }
+        else { base_addr = addr_of(lo, n.base); container = base_ty; }
         u32 field_idx = field_index_of(container, n.field);
         if(types::is_slice(container)) { field_idx = 0; if(n.field != interner::intern("ptr")) { field_idx = 1; } }   // slice: ptr=0, len=1 (no struct decl)
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::FieldAddr, types::intern_pointer((types::Ty*)e.h.ty, false), e.h.src_pos);
@@ -1198,7 +1199,7 @@ fn u32 lower_addr(Lower* lo, ast::AstNode* e) {
         u32 base_addr;
         if(types::is_slice(base_ty)) { base_addr = emit_slice_ptr(lo, lower_expr(lo, n.base), types::intern_pointer(base_ty.data.slice_elem, false), e.h.src_pos); }
         else if(types::is_ptr(base_ty)) { base_addr = lower_expr(lo, n.base); }
-        else { base_addr = lower_addr(lo, n.base); }
+        else { base_addr = addr_of(lo, n.base); }
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::IndexAddr, types::intern_pointer((types::Ty*)e.h.ty, false), e.h.src_pos);
         inst.a = base_addr;
         inst.b = index;

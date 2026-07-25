@@ -578,14 +578,20 @@ fn void emit_fn(CG* cg, sapir::SapirFn* f) {
     for(u64 i = 0; i < f.blocks.len; i += 1) {
         cg.block_map[i] = llvm::LLVMAppendBasicBlockInContext(cg.ctx, cg.current_fn, cg.empty);
     }
+    // All phi nodes across all blocks first: a back-edge phi can be used by an instruction in an earlier-emitted block.
+    for(u64 i = 0; i < f.blocks.len; i += 1) {
+        sapir::SapirBlock* b = &f.blocks[i];
+        llvm::LLVMPositionBuilderAtEnd(cg.builder, cg.block_map[i]);
+        for(u64 p = 0; p < b.phis.len; p += 1) {
+            u32 phi_id = b.phis[p];
+            set_debug_loc(cg, cg.f.insts[phi_id].src_pos);
+            cg.value_map[phi_id] = llvm::LLVMBuildPhi(cg.builder, map_type(cg, cg.f.insts[phi_id].ty), cg.empty);
+        }
+    }
     for(u64 i = 0; i < f.blocks.len; i += 1) {
         sapir::SapirBlock* b = &f.blocks[i];
         cg.current_block = cg.block_map[i];
         llvm::LLVMPositionBuilderAtEnd(cg.builder, cg.current_block);
-        for(u64 p = 0; p < b.phis.len; p += 1) {
-            u32 phi_id = b.phis[p];
-            cg.value_map[phi_id] = llvm::LLVMBuildPhi(cg.builder, map_type(cg, cg.f.insts[phi_id].ty), cg.empty);
-        }
         for(u32 id = b.body_start; id < b.body_end; id += 1) {
             if(f.insts[id].op == sapir::Opcode::Phi) { continue; }
             emit_inst(cg, id);

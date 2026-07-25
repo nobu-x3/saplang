@@ -192,6 +192,21 @@ fn i32 jit_pointer_compound(arena::Arena* a, u8[] msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn i32 main() { i32* base = (i32*)malloc(16); base[0]=10; base[1]=20; base[2]=30; base[3]=40; i32* p = 1 + base; p += 2; i32* q = base; q += 3; q -= 1; return *p + *q; }", 70, msg);
 }
 
+// A field read on a by-value struct rvalue (a call result) spills the rvalue to a temp before addressing the field.
+fn i32 jit_rvalue_struct_field(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "struct P { i32 x; i32 y; } fn P make(i32 v) { P p = {.x = v, .y = v + 1}; return p; } fn i32 main() { return make(40).x + make(40).y; }", 81, msg);
+}
+
+// A nested field read through an rvalue struct: make().inner is itself an rvalue struct addressed for the inner field.
+fn i32 jit_rvalue_field_nested(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "struct Inner { i32 z; } struct Outer { Inner inner; i32 w; } fn Outer make() { Outer o = {.inner = {.z = 30}, .w = 12}; return o; } fn i32 main() { return make().inner.z + make().w; }", 42, msg);
+}
+
+// Compound-assign combines at the lhs width: a narrower rhs is widened (SSA local `h ^= b`, memory var `m += c`).
+fn i32 jit_compound_assign_widen(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "fn i32 main() { u32 h = 100; u8 b = 7; h ^= b; u32 m = 200; u32* mp = &m; u8 c = 4; m += c; return (i32)h + (i32)(*mp); }", 303, msg);
+}
+
 // A const slice global from an array literal materializes a backing array; index and .len read it back.
 fn i32 jit_const_slice_index(arena::Arena* a, u8[] msg) {
     return jit_return(a, "const i32[] nums = [5, 6, 7, 8]; fn i32 main() { return nums[2] + (i32)nums.len; }", 11, msg);
@@ -316,6 +331,9 @@ fn i32 main() {
     testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
     testing::add(suite, "jit_pointer_compound",  &jit_pointer_compound);
+    testing::add(suite, "jit_rvalue_struct_field", &jit_rvalue_struct_field);
+    testing::add(suite, "jit_rvalue_field_nested", &jit_rvalue_field_nested);
+    testing::add(suite, "jit_compound_assign_widen", &jit_compound_assign_widen);
     testing::add(suite, "jit_const_slice_index", &jit_const_slice_index);
     testing::add(suite, "jit_const_string_slice", &jit_const_string_slice);
     testing::add(suite, "jit_const_struct_table", &jit_const_struct_table);
