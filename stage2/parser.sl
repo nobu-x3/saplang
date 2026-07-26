@@ -14,6 +14,7 @@ export struct Parser {
     bool in_extern;
     bool is_speculating;
     bool allow_anon_type;
+    bool suppress_type_call;   // in a return-type position a trailing `(` is a param list, never a comptime type call
 }
 
 export fn ast::AstNode* parse(module::Module* m) {
@@ -198,7 +199,9 @@ fn ast::AstNode* parse_fn_decl(Parser* p, bool is_exported) {
     }
     bool is_const = peek(p, 0).kind == token::TokenKind::CONST;
     if(is_const) { consume(p); }
+    p.suppress_type_call = true;
     ast::AstNode* type_expr = parse_type(p);
+    p.suppress_type_call = false;
     bool had_err = !type_expr || had_error(type_expr);
     token::Token ident = expect(p, token::TokenKind::Ident);
     if(ident.kind == token::TokenKind::ERROR) { had_err = true; }
@@ -457,7 +460,9 @@ fn ast::AstNode* parse_extern_fn_decl(Parser* p, bool is_exported, u32 start) {
     if(fn_tok.kind == token::TokenKind::ERROR) {
         return mk_error_node_and_consume(p, fn_tok.src_pos);
     }
+    p.suppress_type_call = true;
     ast::AstNode* type_expr = parse_type(p);
+    p.suppress_type_call = false;
     bool had_err = !type_expr || had_error(type_expr);
     token::Token ident = expect(p, token::TokenKind::Ident);
     if(ident.kind == token::TokenKind::ERROR) { had_err = true; }
@@ -1316,6 +1321,22 @@ fn ast::AstNode* parse_type(Parser* p) {
         }
         return mk_error_node(p, peek(p, 0).src_pos);
     }
+    // A comptime type call in type position: `Vec(i32)`, `List(T)`. The named base becomes the callee.
+    if(!p.suppress_type_call && base.h.kind == ast::AstKind::NamedType && ((ast::TypeNamedNode*)base).namespace == null && peek(p, 0).kind == token::TokenKind::LParen) {
+        ast::IdentNode* callee = arena::alloc(p.m.arena, sizeof(ast::IdentNode));
+        callee.h.kind = ast::AstKind::Ident;
+        callee.h.flags = (ast::AstFlags)0;
+        callee.h.src_pos = base.h.src_pos;
+        callee.name = ((ast::TypeNamedNode*)base).name;
+        callee.resolved = null;
+        ast::CallNode* call = arena::alloc(p.m.arena, sizeof(ast::CallNode));
+        call.h.kind = ast::AstKind::Call;
+        call.h.flags = (ast::AstFlags)0;
+        call.h.src_pos = base.h.src_pos;
+        call.callee = (ast::AstNode*)callee;
+        call.args = parse_call_args(p, true);
+        base = (ast::AstNode*)call;
+    }
     return parse_type_suffix(p, base);
 }
 
@@ -1335,7 +1356,10 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         consume(p);
         token::Token star = expect(p, token::TokenKind::Star);
         if(star.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
+        bool prev_suppress = p.suppress_type_call;
+        p.suppress_type_call = true;
         ast::AstNode* ret = parse_type(p);
+        p.suppress_type_call = prev_suppress;
         token::Token lparen = expect(p, token::TokenKind::LParen);
         if(lparen.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
         ast::ListBuilder pb;
@@ -1569,31 +1593,38 @@ fn ast::AstNode* parse_unary(Parser* p) {
     return parse_postfix(p);
 }
 
+// Parses `( arg, ... )` (the leading `(` already peeked). A type-keyword/`fn`-leading arg is an explicit type argument to a generic;
+// in a type-position call (`type_ctx`) a bare identifier arg is a type too (`Box(T)`, `List(SomeAlias)`).
+fn ast::AstNode*[] parse_call_args(Parser* p, bool type_ctx) {
+    consume(p);   // '('
+    ast::ListBuilder b;
+    ast::list_init(&b, p.m.arena, 4);
+    while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
+        ast::AstNode* arg;
+        token::TokenKind k = peek(p, 0).kind;
+        if(token::is_type_keyword(k) || k == token::TokenKind::FN || (type_ctx && k == token::TokenKind::Ident)) {
+            arg = parse_type(p);
+        } else {
+            arg = parse_expr(p, 0);
+        }
+        ast::list_push(&b, p.m.arena, arg);
+        if(!match(p, token::TokenKind::Comma)) { break; }
+    }
+    expect(p, token::TokenKind::RParen);
+    return ast::list_freeze(&b);
+}
+
 fn ast::AstNode* parse_postfix(Parser* p) {
     ast::AstNode* e = parse_primary(p);
     while(true) {
         token::Token t = peek(p, 0);
         if(t.kind == token::TokenKind::LParen) {
-            consume(p);
-            ast::ListBuilder b;
-            ast::list_init(&b, p.m.arena, 4);
-            while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
-                ast::AstNode* arg;
-                if(token::is_type_keyword(peek(p, 0).kind) || peek(p, 0).kind == token::TokenKind::FN) {
-                    arg = parse_type(p);     // explicit type argument to a generic
-                } else {
-                    arg = parse_expr(p, 0);
-                }
-                ast::list_push(&b, p.m.arena, arg);
-                if(!match(p, token::TokenKind::Comma)) { break; }
-            }
-            expect(p, token::TokenKind::RParen);
             ast::CallNode* n = arena::alloc(p.m.arena, sizeof(ast::CallNode));
             n.h.kind = ast::AstKind::Call;
             n.h.flags = (ast::AstFlags)0;
             n.h.src_pos = t.src_pos;
             n.callee = e;
-            n.args = ast::list_freeze(&b);
+            n.args = parse_call_args(p, false);
             e = (ast::AstNode*)n;
         } else if(t.kind == token::TokenKind::LBracket) {
             consume(p);
