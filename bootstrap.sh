@@ -1,12 +1,15 @@
 #!/usr/bin/env sh
-# Two-stage self-host bootstrap.
+# Multi-stage self-host bootstrap.
 #
-#   Stage 1 (build/bin/saplangc, C)  --builds-->  v0 seed (from the stage2-v0 tag)
-#   v0 seed                          --builds-->  the current compiler (may use v1 features)
+# Stage 1 (build/bin/saplangc, C) can only build the Stage-1 language subset. Each later stage adds
+# features used in the compiler's own source, so it must be built by the previous stage's compiler:
 #
-# Stage 1 can only build the v0 source (Stage-1 language subset). The current source may use
-# v1 features (comptime/generics/alias) that Stage 1 can't read, so the seed is built once from
-# the frozen `stage2-v0` tag and cached in bootstrap/saplangc2; the seed then builds current.
+#   Stage 1 (C)              --builds-->  stage2-v0               (source = Stage-1 subset)
+#   stage2-v0 compiler       --builds-->  stage2-generic-structs  (source uses generic functions)
+#   stage2-generic-structs   --builds-->  current source          (uses generic structs, List(T), ...)
+#
+# Each stage's compiler is built once (in a detached worktree of its tag) and cached under bootstrap/.
+# The last stage's compiler is the seed that builds the current working tree.
 #
 # Usage:
 #   ./bootstrap.sh            build the current compiler at build/bin/saplangc2
@@ -17,30 +20,40 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 cd "$ROOT"
 
 STAGE1=build/bin/saplangc
-SEED=bootstrap/saplangc2
 OUT=build/bin/saplangc2
 INCLUDES="stage2/std;stage2"
-V0_TAG=stage2-v0
+STAGES="stage2-v0 stage2-generic-structs"   # ordered; each built by the previous stage's compiler
 
 mkdir -p bootstrap build/bin
 
-# 1. Seed: Stage 1 compiles the frozen v0 tag, once. Cached in bootstrap/saplangc2.
-if [ ! -x "$SEED" ]; then
-    if [ ! -x "$STAGE1" ]; then
-        echo "Stage 1 compiler not found at $STAGE1."
-        echo "Build it first:  cmake -B build -DBUILD_TESTS=On && make -C build"
-        exit 1
-    fi
-    echo "Building v0 seed from tag $V0_TAG via Stage 1..."
-    WT=$(mktemp -d)
-    git worktree add --quiet --detach "$WT" "$V0_TAG"
-    ( cd "$WT" && rm -rf .tmp && "$ROOT/$STAGE1" stage2/saplangc.sl -o "$ROOT/$SEED" -i "$INCLUDES" -l "LLVM-19" -j 1 )
-    git worktree remove --force "$WT"
-    echo "Seed: $SEED"
-fi
+# Build tag $1 with compiler $2 (extra flags $3) into $4, from a detached worktree of the tag.
+build_stage() {
+    tag=$1; cc=$2; flags=$3; out=$4
+    wt=$(mktemp -d)
+    git worktree add --quiet --detach "$wt" "$tag"
+    ( cd "$wt" && rm -rf .tmp && "$ROOT/$cc" stage2/saplangc.sl -o "$ROOT/$out" -i "$INCLUDES" -l "LLVM-19" -target linux $flags )
+    git worktree remove --force "$wt"
+}
 
-# 2. The seed builds the current compiler (self-hosted; single-threaded by default, no race).
-echo "Building the current compiler with the seed..."
+prev="$STAGE1"
+prev_flags="-j 1"   # Stage 1's parallel driver has an intermittent segfault race
+for tag in $STAGES; do
+    seed="bootstrap/seed-$tag"
+    if [ ! -x "$seed" ]; then
+        if [ ! -x "$STAGE1" ] && [ "$prev" = "$STAGE1" ]; then
+            echo "Stage 1 compiler not found at $STAGE1."
+            echo "Build it first:  cmake -B build -DBUILD_TESTS=On && make -C build"
+            exit 1
+        fi
+        echo "Building $tag via $(basename "$prev")..."
+        build_stage "$tag" "$prev" "$prev_flags" "$seed"
+    fi
+    prev="$seed"
+    prev_flags=""   # stage-2 compilers are single-threaded by default (no race)
+done
+SEED="$prev"
+
+echo "Building the current compiler with the seed ($(basename "$SEED"))..."
 "$SEED" stage2/saplangc.sl -o "$OUT" -i "$INCLUDES" -l "LLVM-19" -target linux
 echo "Compiler: $OUT"
 
