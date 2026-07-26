@@ -22,12 +22,9 @@ import pool;
 
 export struct Compiler {
     arena::Arena*        arena;
-    module::Module*[]    modules;         // flat, indexed by ModuleId (the array index)
-    u64                  modules_cap;
-    u8[][]               entry_sources;   // user-supplied source file paths
-    u64                  entry_sources_cap;
-    u8[][]               import_paths;    // -i search list
-    u64                  import_paths_cap;
+    list::List(module::Module*) modules;  // flat, indexed by ModuleId (the array index)
+    list::List(u8[])     entry_sources;   // user-supplied source file paths
+    list::List(u8[])     import_paths;    // -i search list
     u8[]                 target;          // conditional-compilation infix; empty = none
     bool                 is_multithreaded; // run phases on a thread pool sized to cpu_count
     bool                 cfg_dump;         // -cfg-dump: print each function's CFG to stdout
@@ -37,10 +34,8 @@ export struct Compiler {
     pool::ThreadPool*    pool;            // non-null only while multithreaded
     i64                  error_count;
     u8[]                 output_path;     // -o; empty defaults to "a.out"
-    u8[][]               extern_libs;     // -l names, passed to the linker as -l<name>
-    u64                  extern_libs_cap;
-    u8[][]               lib_dirs;        // -L paths, passed to the linker as -L<path>
-    u64                  lib_dirs_cap;
+    list::List(u8[])     extern_libs;     // -l names, passed to the linker as -l<name>
+    list::List(u8[])     lib_dirs;        // -L paths, passed to the linker as -L<path>
     codegen::BuildConfig config;          // -config: optimization / instrumentation pipeline; default Debug
 }
 
@@ -52,18 +47,11 @@ export fn Compiler* new(arena::Arena* a) {
 }
 
 export fn void add_module(Compiler* c, module::Module* m) {
-    if(c.modules.len == c.modules_cap) {
-        u64 new_cap = 8;
-        if(c.modules_cap > 0) { new_cap = c.modules_cap * 2; }
-        c.modules.ptr = (module::Module**)arena::realloc_grow(c.arena, (void*)c.modules.ptr, c.modules.len * sizeof(module::Module*), new_cap * sizeof(module::Module*));
-        c.modules_cap = new_cap;
-    }
-    c.modules[c.modules.len] = m;
-    c.modules.len += 1;
+    list::push(&c.modules, c.arena, m);
 }
 
 export fn void add_source(Compiler* c, u8[] path) {
-    list::dyn_push(&c.entry_sources, &c.entry_sources_cap, c.arena, path);
+    list::push(&c.entry_sources, c.arena, path);
 }
 
 fn bool parse_config(Compiler* c, u8[] name) {
@@ -76,15 +64,15 @@ fn bool parse_config(Compiler* c, u8[] name) {
 }
 
 export fn void add_extern_lib(Compiler* c, u8[] name) {
-    list::dyn_push(&c.extern_libs, &c.extern_libs_cap, c.arena, name);
+    list::push(&c.extern_libs, c.arena, name);
 }
 
 export fn void add_lib_dir(Compiler* c, u8[] path) {
-    list::dyn_push(&c.lib_dirs, &c.lib_dirs_cap, c.arena, path);
+    list::push(&c.lib_dirs, c.arena, path);
 }
 
 export fn void add_import_path(Compiler* c, u8[] path) {
-    list::dyn_push(&c.import_paths, &c.import_paths_cap, c.arena, path);
+    list::push(&c.import_paths, c.arena, path);
 }
 
 export fn void set_target(Compiler* c, u8[] t) {
@@ -186,11 +174,11 @@ fn bool ends_with(u8[] s, u8[] suffix) {
 // Scanner output only, no parsing; import cycles are fine.
 export fn void discover(Compiler* c) {
     for(u64 entry_index = 0; entry_index < c.entry_sources.len; entry_index += 1) {
-        add_entry_module(c, c.entry_sources[entry_index]);
+        add_entry_module(c, c.entry_sources.ptr[entry_index]);
     }
     u64 cursor = 0;
     while(cursor < c.modules.len) {
-        module::Module* m = c.modules[cursor];
+        module::Module* m = c.modules.ptr[cursor];
         scanner::scan(m);
         discover_imports(c, m);
         cursor += 1;
@@ -266,7 +254,7 @@ fn bool is_import_at(token::Token[] toks, u64 token_index) {
 
 fn module::Module* find_module(Compiler* c, symbol::Symbol* name) {
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        if(c.modules[module_index].name == name) { return c.modules[module_index]; }
+        if(c.modules.ptr[module_index].name == name) { return c.modules.ptr[module_index]; }
     }
     return null;
 }
@@ -287,11 +275,11 @@ fn ResolvedSource resolve_import_source(Compiler* c, symbol::Symbol* name) {
     for(u64 path_index = 0; path_index < c.import_paths.len; path_index += 1) {
         bool found = false;
         if(c.target.len > 0) {
-            u8[] platform = join_filename(c, c.import_paths[path_index], name_bytes, c.target);
+            u8[] platform = join_filename(c, c.import_paths.ptr[path_index], name_bytes, c.target);
             u8[] bytes = open_and_read(c, platform, &found);
             if(found) { result.found = true; result.path = platform; result.src = bytes; return result; }
         }
-        u8[] candidate = join_filename(c, c.import_paths[path_index], name_bytes, empty);
+        u8[] candidate = join_filename(c, c.import_paths.ptr[path_index], name_bytes, empty);
         u8[] bytes = open_and_read(c, candidate, &found);
         if(found) { result.found = true; result.path = candidate; result.src = bytes; return result; }
     }
@@ -371,7 +359,7 @@ fn u8[][] run_codegen(Compiler* c) {
     paths.ptr = arena::alloc(c.arena, (c.modules.len + 1) * sizeof(u8[]));
     paths.len = 0;
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        module::Module* m = c.modules[module_index];
+        module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
         u8[] obj_path = tmp_object_path(c, m);
         if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.arena, cstr(c.arena, obj_path), c.config) != 0) { c.error_count += 1; }
@@ -404,9 +392,9 @@ fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
     argv[n] = link_paths::crt_init(); n += 1;
     argv[n] = link_paths::lib_search_dir(); n += 1;
     // User -L dirs precede the objects/libs so ld.lld searches them for the -l libraries.
-    for(u64 i = 0; i < c.lib_dirs.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs[i]); n += 1; }
+    for(u64 i = 0; i < c.lib_dirs.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs.ptr[i]); n += 1; }
     for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.arena, object_paths[i]); n += 1; }
-    for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs[i]); n += 1; }
+    for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs.ptr[i]); n += 1; }
     // AddressSanitizer needs its runtime; the shared lib carries its own dependencies.
     if(c.config == codegen::BuildConfig::AddressSanitizer) { argv[n] = cstr(c.arena, "-lasan"); n += 1; }
     argv[n] = cstr(c.arena, "-lc"); n += 1;
@@ -470,8 +458,8 @@ export fn i32 run_frontend(Compiler* c) {
     comptime_interp::install_hooks();
     sema::init_body_sync();
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        c.modules[module_index].comptime_max_depth = c.comptime_depth;
-        c.modules[module_index].comptime_max_iterations = c.comptime_iterations;
+        c.modules.ptr[module_index].comptime_max_depth = c.comptime_depth;
+        c.modules.ptr[module_index].comptime_max_iterations = c.comptime_iterations;
     }
     if(c.is_multithreaded) { c.pool = pool::new(c.arena, sys::cpu_count()); }
     run_parse(c);
@@ -505,13 +493,13 @@ export fn i32 run_frontend(Compiler* c) {
 fn void run_phase(Compiler* c, fn* void(void*) job) {
     if(c.pool != null) {
         for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-            pool::submit(c.pool, job, (void*)c.modules[module_index]);
+            pool::submit(c.pool, job, (void*)c.modules.ptr[module_index]);
         }
         pool::wait_all(c.pool);
         return;
     }
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        job((void*)c.modules[module_index]);
+        job((void*)c.modules.ptr[module_index]);
     }
 }
 
@@ -564,7 +552,7 @@ fn void dump_sapir(Compiler* c) {
     io::OutBuf out;
     io::outbuf_init(&out, c.arena, 4096);
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        module::Module* m = c.modules[module_index];
+        module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
         sapir_print::print_module((sapir::SapirModule*)m.sapir, &out);
     }
@@ -576,7 +564,7 @@ fn void dump_cfgs(Compiler* c) {
     io::OutBuf out;
     io::outbuf_init(&out, c.arena, 4096);
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        cfg_print::print_module(c.modules[module_index], &out);
+        cfg_print::print_module(c.modules.ptr[module_index], &out);
     }
     u8[] bytes = io::outbuf_bytes(&out);
     sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
@@ -585,7 +573,7 @@ fn void dump_cfgs(Compiler* c) {
 // Write each module's diagnostics to stderr in ModuleId order, tally errors, reset.
 export fn void drain_diagnostics(Compiler* c) {
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        module::Module* m = c.modules[module_index];
+        module::Module* m = c.modules.ptr[module_index];
         for(u64 entry_index = 0; entry_index < m.diag.entries.len; entry_index += 1) {
             diag::DiagEntry* entry = &m.diag.entries[entry_index];
             if(!entry.is_warning) { c.error_count += 1; }
