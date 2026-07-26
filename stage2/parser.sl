@@ -1279,7 +1279,10 @@ fn bool looks_like_var_decl(Parser* p) {
     bool prev_spec = p.is_speculating;
     p.is_speculating = true;
     ast::AstNode* ty = parse_type(p);
-    bool ok = ty && !had_error(ty) && peek(p, 0).kind == token::TokenKind::Ident;
+    // A declaration is `<type> <name> ;|=`; the name is followed by `;` or `=`. This rejects a bare
+    // call statement like `mod::fn(a * b);` whose comptime-type-call speculation leaves a stray identifier.
+    bool ok = ty && !had_error(ty) && peek(p, 0).kind == token::TokenKind::Ident
+              && (peek(p, 1).kind == token::TokenKind::Semi || peek(p, 1).kind == token::TokenKind::Eq);
     p.is_speculating = prev_spec;
     rewind(p, s);
     return ok;
