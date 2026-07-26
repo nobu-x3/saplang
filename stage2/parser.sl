@@ -1321,19 +1321,34 @@ fn ast::AstNode* parse_type(Parser* p) {
         }
         return mk_error_node(p, peek(p, 0).src_pos);
     }
-    // A comptime type call in type position: `Vec(i32)`, `List(T)`. The named base becomes the callee.
-    if(!p.suppress_type_call && base.h.kind == ast::AstKind::NamedType && ((ast::TypeNamedNode*)base).namespace == null && peek(p, 0).kind == token::TokenKind::LParen) {
-        ast::IdentNode* callee = arena::alloc(p.m.arena, sizeof(ast::IdentNode));
-        callee.h.kind = ast::AstKind::Ident;
-        callee.h.flags = (ast::AstFlags)0;
-        callee.h.src_pos = base.h.src_pos;
-        callee.name = ((ast::TypeNamedNode*)base).name;
-        callee.resolved = null;
+    // A comptime type call in type position: `Vec(i32)`, `List(T)`, `list::List(i32)`. The named base becomes the callee.
+    if(!p.suppress_type_call && base.h.kind == ast::AstKind::NamedType && peek(p, 0).kind == token::TokenKind::LParen) {
+        ast::TypeNamedNode* named = (ast::TypeNamedNode*)base;
+        ast::IdentNode* leaf = arena::alloc(p.m.arena, sizeof(ast::IdentNode));
+        leaf.h.kind = ast::AstKind::Ident;
+        leaf.h.flags = (ast::AstFlags)0;
+        leaf.h.src_pos = base.h.src_pos;
+        leaf.resolved = null;
+        ast::AstNode* callee;
+        if(named.namespace == null) {
+            leaf.name = named.name;
+            callee = (ast::AstNode*)leaf;
+        } else {
+            leaf.name = named.namespace;
+            ast::NamespaceAccessNode* na = arena::alloc(p.m.arena, sizeof(ast::NamespaceAccessNode));
+            na.h.kind = ast::AstKind::NamespaceAccess;
+            na.h.flags = (ast::AstFlags)0;
+            na.h.src_pos = base.h.src_pos;
+            na.base = (ast::AstNode*)leaf;
+            na.name = named.name;
+            na.resolved = null;
+            callee = (ast::AstNode*)na;
+        }
         ast::CallNode* call = arena::alloc(p.m.arena, sizeof(ast::CallNode));
         call.h.kind = ast::AstKind::Call;
         call.h.flags = (ast::AstFlags)0;
         call.h.src_pos = base.h.src_pos;
-        call.callee = (ast::AstNode*)callee;
+        call.callee = callee;
         call.args = parse_call_args(p, true);
         base = (ast::AstNode*)call;
     }
