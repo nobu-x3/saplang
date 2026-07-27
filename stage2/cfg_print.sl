@@ -43,13 +43,13 @@ fn void write_terminator(io::OutBuf* out, cfg::Terminator* t) {
 
 export fn void print_cfg(cfg::Cfg* g, io::OutBuf* out) {
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        cfg::BasicBlock* block = &g.blocks[block_index];
+        cfg::BasicBlock* block = &g.blocks.ptr[block_index];
         io::outbuf_write(out, "  bb");
         io::outbuf_write_u64(out, (u64)block.id);
         write_role(out, g, block);
         io::outbuf_write(out, ":\n");
         for(u64 stmt_index = 0; stmt_index < block.stmts.len; stmt_index += 1) {
-            ast_print::print(block.stmts[stmt_index], 2, out);
+            ast_print::print(block.stmts.ptr[stmt_index], 2, out);
         }
         io::outbuf_write(out, "    -> ");
         write_terminator(out, &block.term);
@@ -73,7 +73,7 @@ export fn void print_module(module::Module* m, io::OutBuf* out) {
     if(m.root_node == null) { return; }
     ast::BlockNode* global_block = (ast::BlockNode*)m.root_node;
     for(u64 stmt_index = 0; stmt_index < global_block.stmts.len; stmt_index += 1) {
-        ast::AstNode* node = global_block.stmts[stmt_index];
+        ast::AstNode* node = global_block.stmts.ptr[stmt_index];
         if(node.h.kind != ast::AstKind::FnDecl) { continue; }
         ast::FnDeclNode* func = (ast::FnDeclNode*)node;
         if(func.cfg == null) { continue; }

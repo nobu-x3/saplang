@@ -141,9 +141,9 @@ fn i32 straight_line_void(arena::Arena* a, u8[] m) {
     if(!testing::expect_eq(g.blocks.len, (u64)2, m)) { return -1; }
     if(!testing::expect_eq((u64)g.entry, (u64)0, m)) { return -2; }
     if(!testing::expect_eq((u64)g.exit, (u64)1, m)) { return -3; }
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)2, m)) { return -4; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -5; }
-    if(!testing::expect_true(g.blocks[0].terminated, m)) { return -6; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)2, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -5; }
+    if(!testing::expect_true(g.blocks.ptr[0].terminated, m)) { return -6; }
     return 0;
 }
 
@@ -154,7 +154,7 @@ fn i32 non_void_no_return_is_unreachable(arena::Arena* a, u8[] m) {
     ast::AstNode* ret_ty = mk_prim_type(a, types::prim_i32());
     ast::FnDeclNode* func = mk_fn(a, ret_ty, mk_block(a, &stmts[0], 1));
     cfg::Cfg* g = cfg::build_cfg(mm, func);
-    if(!testing::expect_eq((u64)g.blocks[0].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -1; }
     return 0;
 }
 
@@ -173,9 +173,9 @@ fn i32 mixed_leaf_kinds_referenced(arena::Arena* a, u8[] m) {
     stmts[2] = mk_kind(a, ast::AstKind::ExprStmt);
     ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &stmts[0], 3));
     cfg::Cfg* g = cfg::build_cfg(mm, func);
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)3, m)) { return -1; }
-    if(!testing::expect_eq((void*)g.blocks[0].stmts[0], (void*)stmts[0], m)) { return -2; }
-    if(!testing::expect_eq((void*)g.blocks[0].stmts[2], (void*)stmts[2], m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)3, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].stmts.ptr[0], (void*)stmts[0], m)) { return -2; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].stmts.ptr[2], (void*)stmts[2], m)) { return -3; }
     return 0;
 }
 
@@ -185,10 +185,10 @@ fn i32 predecessors_and_exit_finalized(arena::Arena* a, u8[] m) {
     stmts[0] = mk_expr_stmt(a, mk_int_lit(a));
     ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &stmts[0], 1));
     cfg::Cfg* g = cfg::build_cfg(mm, func);
-    if(!testing::expect_eq(g.blocks[g.entry].predecessors.len, (u64)0, m)) { return -1; }
-    if(!testing::expect_eq(g.blocks[g.exit].predecessors.len, (u64)0, m)) { return -2; }
-    if(!testing::expect_true(g.blocks[g.exit].terminated, m)) { return -3; }
-    if(!testing::expect_eq((u64)g.blocks[g.exit].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -4; }
+    if(!testing::expect_eq(g.blocks.ptr[g.entry].predecessors.len, (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(g.blocks.ptr[g.exit].predecessors.len, (u64)0, m)) { return -2; }
+    if(!testing::expect_true(g.blocks.ptr[g.exit].terminated, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[g.exit].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -4; }
     return 0;
 }
 
@@ -196,8 +196,8 @@ fn i32 empty_void_body(arena::Arena* a, u8[] m) {
     module::Module* mm = mk_module(a);
     ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, null, 0));
     cfg::Cfg* g = cfg::build_cfg(mm, func);
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)0, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -2; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)0, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -2; }
     return 0;
 }
 
@@ -212,7 +212,7 @@ fn i32 nested_blocks_flatten(arena::Arena* a, u8[] m) {
     ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &outer_stmts[0], 2));
     cfg::Cfg* g = cfg::build_cfg(mm, func);
     if(!testing::expect_eq(g.blocks.len, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)2, m)) { return -2; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)2, m)) { return -2; }
     return 0;
 }
 
@@ -224,7 +224,7 @@ fn i32 haderror_stmt_skipped(arena::Arena* a, u8[] m) {
     stmts[0] = bad;
     ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, &stmts[0], 1));
     cfg::Cfg* g = cfg::build_cfg(mm, func);
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)0, m)) { return -1; }
     return 0;
 }
 
@@ -239,13 +239,13 @@ fn i32 if_else_merge(arena::Arena* a, u8[] m) {
     body[0] = iff;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
     if(!testing::expect_eq(g.blocks.len, (u64)5, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.then_target, (u64)2, m)) { return -3; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.else_target, (u64)3, m)) { return -4; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.kind, (u64)cfg::TermKind::Goto, m)) { return -5; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.goto_target, (u64)4, m)) { return -6; }
-    if(!testing::expect_eq(g.blocks[4].predecessors.len, (u64)2, m)) { return -7; }
-    if(!testing::expect_eq((u64)g.blocks[4].term.kind, (u64)cfg::TermKind::Return, m)) { return -8; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.then_target, (u64)2, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.else_target, (u64)3, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.kind, (u64)cfg::TermKind::Goto, m)) { return -5; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.goto_target, (u64)4, m)) { return -6; }
+    if(!testing::expect_eq(g.blocks.ptr[4].predecessors.len, (u64)2, m)) { return -7; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[4].term.kind, (u64)cfg::TermKind::Return, m)) { return -8; }
     return 0;
 }
 
@@ -257,10 +257,10 @@ fn i32 if_no_else(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = iff;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq(g.blocks[3].stmts.len, (u64)0, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.kind, (u64)cfg::TermKind::Goto, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)4, m)) { return -3; }
-    if(!testing::expect_eq(g.blocks[4].predecessors.len, (u64)2, m)) { return -4; }
+    if(!testing::expect_eq(g.blocks.ptr[3].stmts.len, (u64)0, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.kind, (u64)cfg::TermKind::Goto, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)4, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[4].predecessors.len, (u64)2, m)) { return -4; }
     return 0;
 }
 
@@ -274,9 +274,9 @@ fn i32 if_both_return_after_unreachable(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = iff;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[2].term.kind, (u64)cfg::TermKind::Return, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.kind, (u64)cfg::TermKind::Return, m)) { return -2; }
-    if(!testing::expect_eq(g.blocks[4].predecessors.len, (u64)0, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.kind, (u64)cfg::TermKind::Return, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.kind, (u64)cfg::TermKind::Return, m)) { return -2; }
+    if(!testing::expect_eq(g.blocks.ptr[4].predecessors.len, (u64)0, m)) { return -3; }
     return 0;
 }
 
@@ -288,14 +288,14 @@ fn i32 while_loop_edges(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = wh;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[0].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.goto_target, (u64)2, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -3; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.then_target, (u64)3, m)) { return -4; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.else_target, (u64)4, m)) { return -5; }
-    if(!testing::expect_eq(g.blocks[2].predecessors.len, (u64)2, m)) { return -6; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)2, m)) { return -7; }
-    if(!testing::expect_eq(g.blocks[4].predecessors.len, (u64)1, m)) { return -8; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.goto_target, (u64)2, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.then_target, (u64)3, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.else_target, (u64)4, m)) { return -5; }
+    if(!testing::expect_eq(g.blocks.ptr[2].predecessors.len, (u64)2, m)) { return -6; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)2, m)) { return -7; }
+    if(!testing::expect_eq(g.blocks.ptr[4].predecessors.len, (u64)1, m)) { return -8; }
     return 0;
 }
 
@@ -307,10 +307,10 @@ fn i32 while_break(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = wh;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[3].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)4, m)) { return -2; }
-    if(!testing::expect_eq(g.blocks[2].predecessors.len, (u64)1, m)) { return -3; }
-    if(!testing::expect_eq(g.blocks[4].predecessors.len, (u64)2, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)4, m)) { return -2; }
+    if(!testing::expect_eq(g.blocks.ptr[2].predecessors.len, (u64)1, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[4].predecessors.len, (u64)2, m)) { return -4; }
     return 0;
 }
 
@@ -322,9 +322,9 @@ fn i32 while_continue(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = wh;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq(g.blocks[2].predecessors.len, (u64)2, m)) { return -2; }
-    if(!testing::expect_eq(g.blocks[4].predecessors.len, (u64)1, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq(g.blocks.ptr[2].predecessors.len, (u64)2, m)) { return -2; }
+    if(!testing::expect_eq(g.blocks.ptr[4].predecessors.len, (u64)1, m)) { return -3; }
     return 0;
 }
 
@@ -336,14 +336,14 @@ fn i32 for_loop_edges(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = fr;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)1, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.goto_target, (u64)2, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -3; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.then_target, (u64)3, m)) { return -4; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.else_target, (u64)5, m)) { return -5; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)4, m)) { return -6; }
-    if(!testing::expect_eq((u64)g.blocks[4].term.goto_target, (u64)2, m)) { return -7; }
-    if(!testing::expect_eq(g.blocks[2].predecessors.len, (u64)2, m)) { return -8; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.goto_target, (u64)2, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.then_target, (u64)3, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.else_target, (u64)5, m)) { return -5; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)4, m)) { return -6; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[4].term.goto_target, (u64)2, m)) { return -7; }
+    if(!testing::expect_eq(g.blocks.ptr[2].predecessors.len, (u64)2, m)) { return -8; }
     return 0;
 }
 
@@ -355,9 +355,9 @@ fn i32 for_no_cond(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = fr;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[2].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.goto_target, (u64)3, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[4].term.goto_target, (u64)2, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.goto_target, (u64)3, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[4].term.goto_target, (u64)2, m)) { return -3; }
     return 0;
 }
 
@@ -369,7 +369,7 @@ fn i32 for_continue_targets_post(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = fr;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)4, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)4, m)) { return -1; }
     return 0;
 }
 
@@ -393,13 +393,13 @@ fn i32 switch_arms_dispatch(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = sw;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[0].term.kind, (u64)cfg::TermKind::Switch, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_default, (u64)3, m)) { return -2; }
-    if(!testing::expect_eq(g.blocks[0].term.switch_arms.len, (u64)2, m)) { return -3; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[0].target, (u64)4, m)) { return -4; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[1].target, (u64)5, m)) { return -5; }
-    if(!testing::expect_eq(g.blocks[2].predecessors.len, (u64)3, m)) { return -6; }
-    if(!testing::expect_eq((u64)g.blocks[4].term.goto_target, (u64)2, m)) { return -7; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.kind, (u64)cfg::TermKind::Switch, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.switch_default, (u64)3, m)) { return -2; }
+    if(!testing::expect_eq(g.blocks.ptr[0].term.switch_arms.len, (u64)2, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.switch_arms[0].target, (u64)4, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.switch_arms[1].target, (u64)5, m)) { return -5; }
+    if(!testing::expect_eq(g.blocks.ptr[2].predecessors.len, (u64)3, m)) { return -6; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[4].term.goto_target, (u64)2, m)) { return -7; }
     return 0;
 }
 
@@ -417,10 +417,10 @@ fn i32 switch_no_else_default_falls_through(arena::Arena* a, u8[] m) {
     body[0] = sw;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
     // No else: the default edge targets the after-switch block, which continues (here, to the function exit), not a dead-end.
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_default, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.kind, (u64)cfg::TermKind::Return, m)) { return -2; }
-    if(!testing::expect_eq(g.blocks[0].term.switch_arms.len, (u64)1, m)) { return -3; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[0].target, (u64)3, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.switch_default, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.kind, (u64)cfg::TermKind::Return, m)) { return -2; }
+    if(!testing::expect_eq(g.blocks.ptr[0].term.switch_arms.len, (u64)1, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.switch_arms[0].target, (u64)3, m)) { return -4; }
     return 0;
 }
 
@@ -437,8 +437,8 @@ fn i32 switch_break_fresh_continuation(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = sw;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[4].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[4].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -2; }
     if(!testing::expect_eq(g.blocks.len, (u64)5, m)) { return -3; }
     return 0;
 }
@@ -448,10 +448,10 @@ fn i32 return_fresh_unreachable(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = mk_return(a, null);
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -1; }
-    if(!testing::expect_eq((void*)g.blocks[0].term.return_value, null, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].term.return_value, null, m)) { return -2; }
     if(!testing::expect_eq(g.blocks.len, (u64)3, m)) { return -3; }
-    if(!testing::expect_eq((u64)g.blocks[2].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.kind, (u64)cfg::TermKind::Unreachable, m)) { return -4; }
     return 0;
 }
 
@@ -462,7 +462,7 @@ fn i32 return_value_recorded(arena::Arena* a, u8[] m) {
     body[0] = mk_return(a, val);
     ast::AstNode* ret_ty = mk_prim_type(a, types::prim_i32());
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, ret_ty, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((void*)g.blocks[0].term.return_value, (void*)val, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].term.return_value, (void*)val, m)) { return -1; }
     return 0;
 }
 
@@ -474,9 +474,9 @@ fn i32 defer_fallthrough(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = mk_defer(a, mk_block(a, &dbody[0], 1));
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)1, m)) { return -1; }
-    if(!testing::expect_eq((void*)g.blocks[0].stmts[0], (void*)s, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].stmts.ptr[0], (void*)s, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -3; }
     return 0;
 }
 
@@ -492,9 +492,9 @@ fn i32 defer_reverse_order(arena::Arena* a, u8[] m) {
     body[0] = mk_defer(a, mk_block(a, &da[0], 1));
     body[1] = mk_defer(a, mk_block(a, &db[0], 1));
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 2)));
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq((void*)g.blocks[0].stmts[0], (void*)sb, m)) { return -2; }
-    if(!testing::expect_eq((void*)g.blocks[0].stmts[1], (void*)sa, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].stmts.ptr[0], (void*)sb, m)) { return -2; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].stmts.ptr[1], (void*)sa, m)) { return -3; }
     return 0;
 }
 
@@ -507,9 +507,9 @@ fn i32 defer_on_return(arena::Arena* a, u8[] m) {
     body[0] = mk_defer(a, mk_block(a, &dbody[0], 1));
     body[1] = mk_return(a, null);
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 2)));
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)1, m)) { return -1; }
-    if(!testing::expect_eq((void*)g.blocks[0].stmts[0], (void*)s, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].stmts.ptr[0], (void*)s, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.kind, (u64)cfg::TermKind::Return, m)) { return -3; }
     return 0;
 }
 
@@ -525,9 +525,9 @@ fn i32 defer_on_break(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = wh;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq(g.blocks[3].stmts.len, (u64)1, m)) { return -1; }
-    if(!testing::expect_eq((void*)g.blocks[3].stmts[0], (void*)s, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)4, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[3].stmts.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[3].stmts.ptr[0], (void*)s, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)4, m)) { return -3; }
     return 0;
 }
 
@@ -542,9 +542,9 @@ fn i32 nested_if_in_while(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = wh;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[3].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[7].term.kind, (u64)cfg::TermKind::Goto, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[7].term.goto_target, (u64)2, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[7].term.kind, (u64)cfg::TermKind::Goto, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[7].term.goto_target, (u64)2, m)) { return -3; }
     return 0;
 }
 
@@ -564,8 +564,8 @@ fn i32 continue_through_switch(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = wh;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[6].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[6].term.goto_target, (u64)2, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[6].term.kind, (u64)cfg::TermKind::Goto, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[6].term.goto_target, (u64)2, m)) { return -2; }
     return 0;
 }
 
@@ -585,11 +585,11 @@ fn i32 switch_fallthrough(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = sw;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq(g.blocks[0].term.switch_arms.len, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[0].target, (u64)3, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[0].term.switch_arms[1].target, (u64)3, m)) { return -3; }
-    if(!testing::expect_eq(g.blocks[3].predecessors.len, (u64)1, m)) { return -4; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)2, m)) { return -5; }
+    if(!testing::expect_eq(g.blocks.ptr[0].term.switch_arms.len, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.switch_arms[0].target, (u64)3, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[0].term.switch_arms[1].target, (u64)3, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[3].predecessors.len, (u64)1, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)2, m)) { return -5; }
     return 0;
 }
 
@@ -606,11 +606,11 @@ fn i32 if_else_if_chain(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = outer;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[3].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.then_target, (u64)5, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.else_target, (u64)6, m)) { return -3; }
-    if(!testing::expect_eq((u64)g.blocks[7].term.goto_target, (u64)4, m)) { return -4; }
-    if(!testing::expect_eq(g.blocks[4].predecessors.len, (u64)2, m)) { return -5; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.kind, (u64)cfg::TermKind::CondBranch, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.then_target, (u64)5, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.else_target, (u64)6, m)) { return -3; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[7].term.goto_target, (u64)4, m)) { return -4; }
+    if(!testing::expect_eq(g.blocks.ptr[4].predecessors.len, (u64)2, m)) { return -5; }
     return 0;
 }
 
@@ -622,7 +622,7 @@ fn i32 for_break(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = fr;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)5, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)5, m)) { return -1; }
     return 0;
 }
 
@@ -638,9 +638,9 @@ fn i32 defer_on_continue(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = wh;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq(g.blocks[3].stmts.len, (u64)1, m)) { return -1; }
-    if(!testing::expect_eq((void*)g.blocks[3].stmts[0], (void*)s, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)2, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[3].stmts.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[3].stmts.ptr[0], (void*)s, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)2, m)) { return -3; }
     return 0;
 }
 
@@ -658,9 +658,9 @@ fn i32 nested_block_defers(arena::Arena* a, u8[] m) {
     outer_s[0] = mk_defer(a, mk_block(a, &da[0], 1));
     outer_s[1] = mk_block(a, &inner_s[0], 1);
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &outer_s[0], 2)));
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq((void*)g.blocks[0].stmts[0], (void*)sb, m)) { return -2; }
-    if(!testing::expect_eq((void*)g.blocks[0].stmts[1], (void*)sa, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].stmts.ptr[0], (void*)sb, m)) { return -2; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].stmts.ptr[1], (void*)sa, m)) { return -3; }
     return 0;
 }
 
@@ -677,9 +677,9 @@ fn i32 defer_with_control_flow(arena::Arena* a, u8[] m) {
     bool has_cond = false;
     bool if_is_leaf = false;
     for(u64 bi = 0; bi < g.blocks.len; bi += 1) {
-        if((u32)g.blocks[bi].term.kind == (u32)cfg::TermKind::CondBranch) { has_cond = true; }
-        for(u64 si = 0; si < g.blocks[bi].stmts.len; si += 1) {
-            if((u16)g.blocks[bi].stmts[si].h.kind == (u16)ast::AstKind::IfStmt) { if_is_leaf = true; }
+        if((u32)g.blocks.ptr[bi].term.kind == (u32)cfg::TermKind::CondBranch) { has_cond = true; }
+        for(u64 si = 0; si < g.blocks.ptr[bi].stmts.len; si += 1) {
+            if((u16)g.blocks.ptr[bi].stmts.ptr[si].h.kind == (u16)ast::AstKind::IfStmt) { if_is_leaf = true; }
         }
     }
     if(!testing::expect_true(has_cond, m)) { return -1; }
@@ -697,10 +697,10 @@ fn i32 if_then_returns_else_falls(arena::Arena* a, u8[] m) {
     ast::AstNode*[1] body;
     body[0] = iff;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 1)));
-    if(!testing::expect_eq((u64)g.blocks[2].term.kind, (u64)cfg::TermKind::Return, m)) { return -1; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.kind, (u64)cfg::TermKind::Goto, m)) { return -2; }
-    if(!testing::expect_eq((u64)g.blocks[3].term.goto_target, (u64)4, m)) { return -3; }
-    if(!testing::expect_eq(g.blocks[4].predecessors.len, (u64)1, m)) { return -4; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[2].term.kind, (u64)cfg::TermKind::Return, m)) { return -1; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.kind, (u64)cfg::TermKind::Goto, m)) { return -2; }
+    if(!testing::expect_eq((u64)g.blocks.ptr[3].term.goto_target, (u64)4, m)) { return -3; }
+    if(!testing::expect_eq(g.blocks.ptr[4].predecessors.len, (u64)1, m)) { return -4; }
     return 0;
 }
 
@@ -711,8 +711,8 @@ fn i32 comp_stmt_emits_nothing(arena::Arena* a, u8[] m) {
     body[0] = mk_kind(a, ast::AstKind::ComprunStmt);
     body[1] = s;
     cfg::Cfg* g = cfg::build_cfg(mm, mk_fn(a, null, mk_block(a, &body[0], 2)));
-    if(!testing::expect_eq(g.blocks[0].stmts.len, (u64)1, m)) { return -1; }
-    if(!testing::expect_eq((void*)g.blocks[0].stmts[0], (void*)s, m)) { return -2; }
+    if(!testing::expect_eq(g.blocks.ptr[0].stmts.len, (u64)1, m)) { return -1; }
+    if(!testing::expect_eq((void*)g.blocks.ptr[0].stmts.ptr[0], (void*)s, m)) { return -2; }
     return 0;
 }
 

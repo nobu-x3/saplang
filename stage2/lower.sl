@@ -149,7 +149,7 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
         new_sapir_block(lo);
     }
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        lo.states[block_index].cfg_preds_remaining = distinct_pred_count(&g.blocks[block_index]);
+        lo.states[block_index].cfg_preds_remaining = distinct_pred_count(&g.blocks.ptr[block_index]);
     }
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
         if(lo.states[block_index].cfg_preds_remaining == 0) { seal_block(lo, (u32)block_index); }
@@ -159,10 +159,10 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
     for(u64 block_index = 0; block_index < lo.cfg_block_count; block_index += 1) {
         switch_to_block(lo, (u32)block_index);
         if((u32)block_index == g.entry) { emit_mem_var_allocas(lo); emit_params(lo, fn_node); }
-        cfg::BasicBlock* cfg_block = &g.blocks[block_index];
+        cfg::BasicBlock* cfg_block = &g.blocks.ptr[block_index];
         u64 stmt_cut = cfg_block.stmts.len;
         if(cfg_block.term.kind == cfg::TermKind::Return && (u64)cfg_block.term.defer_start < stmt_cut) { stmt_cut = (u64)cfg_block.term.defer_start; }
-        for(u64 s = 0; s < stmt_cut; s += 1) { lower_stmt(lo, cfg_block.stmts[s]); }
+        for(u64 s = 0; s < stmt_cut; s += 1) { lower_stmt(lo, cfg_block.stmts.ptr[s]); }
         lower_terminator(lo, cfg_block);
         seal_cfg_successors(lo, &cfg_block.term);
     }
@@ -198,7 +198,7 @@ fn u32 distinct_pred_count(cfg::BasicBlock* block) {
     for(u64 i = 0; i < block.predecessors.len; i += 1) {
         bool seen = false;
         for(u64 j = 0; j < i; j += 1) {
-            if(block.predecessors[j] == block.predecessors[i]) { seen = true; break; }
+            if(block.predecessors.ptr[j] == block.predecessors.ptr[i]) { seen = true; break; }
         }
         if(!seen) { count += 1; }
     }
@@ -640,7 +640,7 @@ fn void lower_terminator(Lower* lo, cfg::BasicBlock* cfg_block) {
     case cfg::TermKind::Return: {
         u32 value = sapir::INVALID_ID;
         if(term.return_value != null) { value = emit_conversion(lo, term.return_value, lo.ret_ty); }
-        for(u64 s = (u64)term.defer_start; s < cfg_block.stmts.len; s += 1) { lower_stmt(lo, cfg_block.stmts[s]); }
+        for(u64 s = (u64)term.defer_start; s < cfg_block.stmts.len; s += 1) { lower_stmt(lo, cfg_block.stmts.ptr[s]); }
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Ret, types::prim_void(), term.src_pos);
         inst.a = value;
         sapir::add_inst(lo.arena, lo.func, inst);
@@ -969,17 +969,17 @@ fn u32 mem_alloca(Lower* lo, void* decl) {
 fn void collect_mem_vars(Lower* lo, ast::FnDeclNode* fn_node, cfg::Cfg* g) {
     for(u64 i = 0; i < fn_node.params.len; i += 1) { add_local_decl(lo, fn_node.params[i].decl); }
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        cfg::BasicBlock* block = &g.blocks[block_index];
+        cfg::BasicBlock* block = &g.blocks.ptr[block_index];
         for(u64 s = 0; s < block.stmts.len; s += 1) {
-            if(block.stmts[s].h.kind == ast::AstKind::VarDecl) { add_local_decl(lo, ((ast::VarDeclNode*)block.stmts[s]).decl); }
+            if(block.stmts.ptr[s].h.kind == ast::AstKind::VarDecl) { add_local_decl(lo, ((ast::VarDeclNode*)block.stmts.ptr[s]).decl); }
         }
     }
     for(u64 i = 0; i < fn_node.params.len; i += 1) {
         if(is_aggregate((types::Ty*)fn_node.params[i].resolved_type)) { mark_mem_var(lo, fn_node.params[i].decl); }
     }
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        cfg::BasicBlock* block = &g.blocks[block_index];
-        for(u64 s = 0; s < block.stmts.len; s += 1) { scan_stmt_mem(lo, block.stmts[s]); }
+        cfg::BasicBlock* block = &g.blocks.ptr[block_index];
+        for(u64 s = 0; s < block.stmts.len; s += 1) { scan_stmt_mem(lo, block.stmts.ptr[s]); }
         scan_addr_taken(lo, block.term.cond);
         scan_addr_taken(lo, block.term.return_value);
         scan_addr_taken(lo, block.term.switch_value);
