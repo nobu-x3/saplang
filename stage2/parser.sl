@@ -8,6 +8,8 @@ import symbol;
 import interner;
 import sys;
 
+alias NodeList = list::List(ast::AstNode*);
+
 export struct Parser {
     module::Module* m;
     u32 idx;
@@ -19,7 +21,7 @@ export struct Parser {
 
 export fn ast::AstNode* parse(module::Module* m) {
     Parser p = { m, 0, false, false, false };
-    list::List(ast::AstNode*) decls = {null, 0, 0};
+    NodeList decls = {null, 0, 0};
     while (peek(&p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* d = parse_top_decl(&p);
         if (d != null) { list::push(&decls, m.arena, d); }
@@ -35,7 +37,7 @@ export fn ast::AstNode* parse(module::Module* m) {
 // Parse a brace-less statement list (used for compinsert fragments in function bodies).
 export fn ast::AstNode* parse_stmt_fragment(module::Module* m) {
     Parser p = { m, 0, false, false, false };
-    list::List(ast::AstNode*) stmts = {null, 0, 0};
+    NodeList stmts = {null, 0, 0};
     while (peek(&p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* s = parse_stmt(&p);
         if (s != null) { list::push(&stmts, m.arena, s); }
@@ -668,7 +670,7 @@ fn ast::AstNode* parse_extern_block(Parser* p) {
     }
     token::Token lbrace = expect(p, token::TokenKind::LBrace);
     if(lbrace.kind == token::TokenKind::ERROR) { had_err = true; }
-    list::List(ast::AstNode*) items = {null, 0, 0};
+    NodeList items = {null, 0, 0};
     bool saved_in_extern = p.in_extern;
     p.in_extern = true;
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
@@ -984,7 +986,7 @@ fn ast::AstNode* parse_defer(Parser* p) {
         ast::AstNode* inner = parse_stmt(p);
         bool inner_err = had_error(inner);
         if(inner_err) { had_err = true; }
-        list::List(ast::AstNode*) b = {null, 0, 0};
+        NodeList b = {null, 0, 0};
         list::push(&b, p.m.arena, inner);
         ast::BlockNode* blk = arena::alloc(p.m.arena, sizeof(ast::BlockNode));
         blk.h.kind = ast::AstKind::BlockStmt;
@@ -1206,7 +1208,7 @@ fn ast::AstNode* parse_switch(Parser* p) {
                 body = parse_block(p);
                 if(had_error(body)) { had_err = true; }
             }
-            list::List(ast::AstNode*) labels_b = {null, 0, 0};
+            NodeList labels_b = {null, 0, 0};
             list::push(&labels_b, p.m.arena, label);
             ast::SwitchArm arm;
             arm.labels = {labels_b.ptr, labels_b.len};
@@ -1276,7 +1278,7 @@ fn ast::AstNode* parse_block(Parser* p) {
     bool local_err = false;
     token::Token open = expect(p, token::TokenKind::LBrace);
     if(open.kind == token::TokenKind::ERROR) { return mk_error_node(p, start); }
-    list::List(ast::AstNode*) stmts = {null, 0, 0};
+    NodeList stmts = {null, 0, 0};
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* s = parse_stmt(p);
         if(s) {
@@ -1362,7 +1364,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         p.suppress_type_call = prev_suppress;
         token::Token lparen = expect(p, token::TokenKind::LParen);
         if(lparen.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
-        list::List(ast::AstNode*) pb = {null, 0, 0};
+        NodeList pb = {null, 0, 0};
         while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
             list::push(&pb, p.m.arena, parse_type(p));
             if(!match(p, token::TokenKind::Comma)) { break; }
@@ -1596,7 +1598,7 @@ fn ast::AstNode* parse_unary(Parser* p) {
 // in a type-position call (`type_ctx`) a bare identifier arg is a type too (`Box(T)`, `List(SomeAlias)`).
 fn ast::AstNode*[] parse_call_args(Parser* p, bool type_ctx) {
     consume(p);   // '('
-    list::List(ast::AstNode*) b = {null, 0, 0};
+    NodeList b = {null, 0, 0};
     while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* arg;
         token::TokenKind k = peek(p, 0).kind;
@@ -1875,7 +1877,7 @@ fn ast::AstNode* parse_struct_lit(Parser* p) {
 
 fn ast::AstNode* parse_array_lit(Parser* p) {
     token::Token open = consume(p);
-    list::List(ast::AstNode*) b = {null, 0, 0};
+    NodeList b = {null, 0, 0};
     while(peek(p, 0).kind != token::TokenKind::RBracket && peek(p, 0).kind != token::TokenKind::EOF) {
         list::push(&b, p.m.arena, parse_expr(p, 0));
         if(!match(p, token::TokenKind::Comma)) { break; }
