@@ -1,8 +1,5 @@
 import symbol;
 import token;
-import sys;
-import arena;
-import list;
 
 export struct AstHeader {
     AstKind     kind;                   // AstKind enum value
@@ -14,31 +11,6 @@ export struct AstHeader {
 // abstract handle
 // should cast like AstNode* n; if(n.h.kind == AstKind::BinaryOp) { BinaryOpNode* b = (BinaryOpNode*)n; }
 export struct AstNode { AstHeader h; }
-
-// LIST BUILDER ////////////////////////////////////////////////////////////////////////
-export struct ListBuilder {
-    AstNode*[]  items;
-    u64         cap;
-}
-
-export fn void list_init(ListBuilder* b, arena::Arena* a, u32 initial_cap) {
-    sys::memset(b, 0, sizeof(ListBuilder));
-    b.items = {(AstNode**)arena::alloc(a, sizeof(AstNode*) * initial_cap), 0};
-    b.cap = (u64)initial_cap;
-}
-
-export fn void list_push(ListBuilder* b, arena::Arena* a, AstNode* node) {
-    if(!b || !a || !node) { return; }
-    list::dyn_push(&b.items, &b.cap, a, node);
-}
-
-// Freezes to a slice for attachment to an AST node. The builder is dead after this.
-export fn AstNode*[] list_freeze(ListBuilder* b) {
-    AstNode*[] out;
-    out.ptr = b.items.ptr;
-    out.len = (u64)b.items.len;
-    return out;
-}
 
 // decls /////////////////////////////////////////////////////////////////////////////////
 export struct ImportNode {
