@@ -240,8 +240,7 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
         }
     }
 
-    SwitchTarget[] arms = {null, 0};
-    u64 arms_cap = 0;
+    list::List(SwitchTarget) arms = {null, 0, 0};
     for(u64 arm_index = 0; arm_index < n.arms.len; arm_index += 1) {
         u32 target = arm_blocks[arm_index];
         if(target == INVALID_BLOCK) {                       // null body: fall through to the next bodied arm
@@ -254,7 +253,10 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
         }
         ast::SwitchArm* arm = &n.arms[arm_index];
         for(u64 label_index = 0; label_index < arm.labels.len; label_index += 1) {
-            arms = push_switch_target(arms, &arms_cap, b.arena, arm.labels[label_index], target);
+            SwitchTarget t;
+            t.label = arm.labels[label_index];
+            t.target = target;
+            list::push(&arms, b.arena, t);
         }
     }
 
@@ -269,7 +271,7 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
         pop_scope(b);
     }
 
-    terminate_switch(b, origin, n.discriminant, def_blk, arms, n.h.src_pos);
+    terminate_switch(b, origin, n.discriminant, def_blk, {arms.ptr, arms.len}, n.h.src_pos);
     b.current = after;
 }
 
@@ -451,13 +453,6 @@ fn LoopFrame* nearest_loop(CfgBuilder* b) {
     return null;
 }
 
-fn SwitchTarget[] push_switch_target(SwitchTarget[] arms, u64* cap, arena::Arena* a, ast::AstNode* label, u32 target) {
-    SwitchTarget t;
-    t.label = label;
-    t.target = target;
-    list::dyn_push(&arms, cap, a, t);
-    return arms;
-}
 
 fn void add_predecessor(Cfg* g, arena::Arena* a, u32 block_id, u32 pred) {
     BasicBlock* block = &g.blocks.ptr[block_id];
