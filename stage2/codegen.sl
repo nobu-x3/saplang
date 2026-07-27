@@ -10,6 +10,7 @@ import interner;
 import symbol;
 import llvm;
 import arena;
+import list;
 import sys;
 
 // Build configuration selecting the optimization/instrumentation pipeline.
@@ -36,8 +37,7 @@ struct CG {
     bool                failed;
 
     void**              decl_map;       // decl index -> LLVMValueRef (function / global)
-    TypeMapEntry[]      type_map;       // Type* -> LLVMTypeRef
-    u64                 type_map_cap;
+    list::List(TypeMapEntry) type_map;   // Type* -> LLVMTypeRef
 
     // Debug info; di_builder is null unless the config wants DWARF.
     void*               di_builder;
@@ -443,21 +443,16 @@ fn void* map_fn_type(CG* cg, types::Ty* fnty) {
 
 fn void* type_map_lookup(CG* cg, types::Ty* t) {
     for(u64 i = 0; i < cg.type_map.len; i += 1) {
-        if(cg.type_map[i].ty == t) { return cg.type_map[i].llvm; }
+        if(cg.type_map.ptr[i].ty == t) { return cg.type_map.ptr[i].llvm; }
     }
     return null;
 }
 
 fn void type_map_insert(CG* cg, types::Ty* t, void* llvm_ty) {
-    if(cg.type_map.len == cg.type_map_cap) {
-        u64 new_cap = 16;
-        if(cg.type_map_cap > 0) { new_cap = cg.type_map_cap * 2; }
-        cg.type_map.ptr = (TypeMapEntry*)arena::realloc_grow(cg.arena, (void*)cg.type_map.ptr, cg.type_map.len * sizeof(TypeMapEntry), new_cap * sizeof(TypeMapEntry));
-        cg.type_map_cap = new_cap;
-    }
-    cg.type_map[cg.type_map.len].ty = t;
-    cg.type_map[cg.type_map.len].llvm = llvm_ty;
-    cg.type_map.len += 1;
+    TypeMapEntry e;
+    e.ty = t;
+    e.llvm = llvm_ty;
+    list::push(&cg.type_map, cg.arena, e);
 }
 
 // DECLS + GLOBALS ///////////////////////////////////////////////////////////////////

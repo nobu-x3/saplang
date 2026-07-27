@@ -1,4 +1,5 @@
 import arena;
+import list;
 import sys;
 
 struct TestCase {
@@ -9,8 +10,7 @@ struct TestCase {
 
 struct Runner {
     arena::Arena        arena;
-    TestCase[]          cases;
-    u64                 cases_cap;
+    list::List(TestCase) cases;
 }
 
 Runner runner;
@@ -18,27 +18,15 @@ Runner runner;
 // state
 export fn void init() {
     runner.arena = {0, null};
-    runner.cases = {null, 0};
-    runner.cases_cap = 0;
+    runner.cases = {null, 0, 0};
 }
 
 export fn void add(u8[] suite, u8[] name, fn* i32(arena::Arena*, u8[]) body) {
-    if(runner.cases.len >= runner.cases_cap) {
-        u64 new_cap = 16;
-        u64 old_cap = runner.cases.len;
-        if(runner.cases_cap > 0) {
-            new_cap = runner.cases_cap * 2;
-        }
-        u64 elem_size = sizeof(TestCase);
-        void* fresh = arena::realloc_grow(&runner.arena, (void*)runner.cases.ptr, runner.cases_cap * elem_size, new_cap * elem_size);
-        runner.cases = {(TestCase*)fresh, runner.cases.len}; // maybe new_cap instead?
-        runner.cases_cap = new_cap;
-    }
-    TestCase* slot = &runner.cases[runner.cases.len];
-    slot.suite = suite;
-    slot.name = name;
-    slot.body = body;
-    runner.cases.len += 1;
+    TestCase c;
+    c.suite = suite;
+    c.name = name;
+    c.body = body;
+    list::push(&runner.cases, &runner.arena, c);
 }
 
 // returns 0 on all-pass
@@ -46,7 +34,7 @@ export fn i32 run() {
     u64 failed_count = 0;
     u64 passed_count = 0;
     for(u64 i = 0; i < runner.cases.len; i += 1) {
-        const TestCase* test_case = &runner.cases[i];
+        const TestCase* test_case = &runner.cases.ptr[i];
         if(!test_case) {
             sys::printf("Something went wrong with arena allocator in test setups. Case %d is null.\n", i);
             return -1;
