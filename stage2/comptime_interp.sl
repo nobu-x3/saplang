@@ -2,6 +2,7 @@ import value;
 import ast;
 import module;
 import arena;
+import list;
 import types;
 import types_print;
 import diag;
@@ -1539,14 +1540,7 @@ export fn ast::FnDeclNode* clone_fn_decl(arena::Arena* a, ast::FnDeclNode* orig)
 }
 
 fn void instantiated_fns_push(module::Module* m, ast::FnDeclNode* clone) {
-    if(m.instantiated_fns.len == m.instantiated_fns_cap) {
-        u64 new_cap = 4;
-        if(m.instantiated_fns_cap > 0) { new_cap = m.instantiated_fns_cap * 2; }
-        m.instantiated_fns.ptr = arena::realloc_grow(m.arena, (void*)m.instantiated_fns.ptr, m.instantiated_fns.len * sizeof(ast::FnDeclNode*), new_cap * sizeof(ast::FnDeclNode*));
-        m.instantiated_fns_cap = new_cap;
-    }
-    m.instantiated_fns[m.instantiated_fns.len] = clone;
-    m.instantiated_fns.len += 1;
+    list::push(&m.instantiated_fns, m.arena, clone);
 }
 
 // Distinct deterministic name per instantiation (module-qualified type reprs) so it mangles identically across modules for linkonce_odr dedup.

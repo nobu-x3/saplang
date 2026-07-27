@@ -22,8 +22,7 @@ export struct Module {
     void*                   global_scope;    // sema::Scope* — every top-level decl; exports filtered by Decl.is_exported
     u16                     sema_phase;      // bitflags from sema::SemaPhase; later phases assert earlier bits
     void*                   mono_cache;      // comptime_interp::MonoCache* — caller-side monomorphization cache (void* breaks the cycle)
-    ast::FnDeclNode*[]      instantiated_fns; // monomorphized clones; CFG + codegen pick these up
-    u64                     instantiated_fns_cap;
+    list::List(ast::FnDeclNode*) instantiated_fns; // monomorphized clones; CFG + codegen pick these up
     u32                     next_inserted_base;   // first virtual src_pos for compinsert-generated code; set to source.len at scan
     list::List(InsertedSource) inserted_sources;
     void*                   reflect_typeinfo;     // types::Ty* — synthesized TypeInfo/FieldInfo, built lazily per module

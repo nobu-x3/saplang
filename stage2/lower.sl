@@ -84,7 +84,7 @@ export fn sapir::SapirModule* lower_module(module::Module* m) {
         ast::AstNode* node = root.stmts[stmt_index];
         if(node.h.kind == ast::AstKind::FnDecl) { lower_fn(&lo, (ast::FnDeclNode*)node); }
     }
-    for(u64 i = 0; i < m.instantiated_fns.len; i += 1) { lower_clone(&lo, m.instantiated_fns[i]); }
+    for(u64 i = 0; i < m.instantiated_fns.len; i += 1) { lower_clone(&lo, m.instantiated_fns.ptr[i]); }
     for(u64 stmt_index = 0; stmt_index < root.stmts.len; stmt_index += 1) {
         ast::AstNode* node = root.stmts[stmt_index];
         if(node.h.kind == ast::AstKind::VarDecl) { lower_global(&lo, (ast::VarDeclNode*)node); }

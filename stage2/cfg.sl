@@ -577,6 +577,6 @@ export fn void build_all_functions(module::Module* m) {
         }
     }
     for(u64 clone_index = 0; clone_index < m.instantiated_fns.len; clone_index += 1) {
-        analyze_function(m, m.instantiated_fns[clone_index]);
+        analyze_function(m, m.instantiated_fns.ptr[clone_index]);
     }
 }
