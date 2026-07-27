@@ -225,10 +225,7 @@ fn ast::AstNode* parse_fn_decl(Parser* p, bool is_exported) {
     return (ast::AstNode*)fn_decl_node;
 }
 fn ast::Param[] parse_params(Parser* p, bool* had_err) {
-    ast::Param[] arr;
-    arr.ptr = null;
-    arr.len = 0;
-    u64 cap = 0;
+    list::List(ast::Param) arr = {null, 0, 0};
     while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
         if(p.in_extern && peek(p, 0).kind == token::TokenKind::DotDotDot) { break; }
         u32 start = peek(p, 0).src_pos;
@@ -262,10 +259,10 @@ fn ast::Param[] parse_params(Parser* p, bool* had_err) {
         prm.is_const = is_const;
         prm.is_comptime = is_comptime;
         prm.src_pos = start;
-        list::dyn_push(&arr, &cap, p.m.arena, prm);
+        list::push(&arr, p.m.arena, prm);
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
-    return arr;
+    return {arr.ptr, arr.len};
 }
 
 // STATEMENTS ///////////////////////////////////////////////////////////////////////////
@@ -381,10 +378,7 @@ fn ast::AstNode* parse_comprun(Parser* p) {
 fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
     bool prev_allow = p.allow_anon_type;
     p.allow_anon_type = false;
-    ast::FieldDecl[] arr;
-    arr.ptr = null;
-    arr.len = 0;
-    u64 cap = 0;
+    list::List(ast::FieldDecl) arr = {null, 0, 0};
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         u32 prev_idx = p.idx;
         u32 start = peek(p, 0).src_pos;
@@ -398,11 +392,11 @@ fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
         fd.name = name.data.sym;
         fd.type_expr = type_expr;
         fd.src_pos = start;
-        list::dyn_push(&arr, &cap, p.m.arena, fd);
+        list::push(&arr, p.m.arena, fd);
         if(p.idx == prev_idx) { consume(p); *had_err = true; }
     }
     p.allow_anon_type = prev_allow;
-    return arr;
+    return {arr.ptr, arr.len};
 }
 
 fn ast::AstNode* parse_struct_decl(Parser* p, bool is_exported) {
@@ -734,10 +728,7 @@ fn ast::AstNode* parse_alias_decl(Parser* p, bool is_exported) {
 }
 
 fn ast::EnumMember[] parse_enum_members(Parser* p, bool* had_err) {
-    ast::EnumMember[] arr;
-    arr.ptr = null;
-    arr.len = 0;
-    u64 cap = 0;
+    list::List(ast::EnumMember) arr = {null, 0, 0};
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         u32 prev = p.idx;
         u32 start = peek(p, 0).src_pos;
@@ -753,11 +744,11 @@ fn ast::EnumMember[] parse_enum_members(Parser* p, bool* had_err) {
         em.name = name.data.sym;
         em.value_expr = value_expr;
         em.src_pos = start;
-        list::dyn_push(&arr, &cap, p.m.arena, em);
+        list::push(&arr, p.m.arena, em);
         if(!match(p, token::TokenKind::Comma)) { break; }
         if(p.idx == prev) { consume(p); *had_err = true; }
     }
-    return arr;
+    return {arr.ptr, arr.len};
 }
 
 fn ast::AstNode* parse_enum_decl(Parser* p, bool is_exported) {
@@ -1198,10 +1189,7 @@ fn ast::AstNode* parse_switch(Parser* p) {
     token::Token lbrace = expect(p, token::TokenKind::LBrace);
     if(lbrace.kind == token::TokenKind::ERROR) { had_err = true; }
 
-    ast::SwitchArm[] arms;
-    arms.ptr = null;
-    arms.len = 0;
-    u64 arms_cap = 0;
+    list::List(ast::SwitchArm) arms = {null, 0, 0};
     ast::AstNode* else_block = null;
 
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
@@ -1224,7 +1212,7 @@ fn ast::AstNode* parse_switch(Parser* p) {
             arm.labels = {labels_b.ptr, labels_b.len};
             arm.body = body;
             arm.src_pos = label_pos;
-            list::dyn_push(&arms, &arms_cap, p.m.arena, arm);
+            list::push(&arms, p.m.arena, arm);
         } else if(k == token::TokenKind::ELSE) {
             u32 else_pos = peek(p, 0).src_pos;
             consume(p);
@@ -1263,7 +1251,7 @@ fn ast::AstNode* parse_switch(Parser* p) {
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
     n.discriminant = disc;
-    n.arms = arms;
+    n.arms = {arms.ptr, arms.len};
     n.else_block = else_block;
     return (ast::AstNode*)n;
 }
@@ -1858,10 +1846,7 @@ fn ast::AstNode* parse_paren_or_cast(Parser* p) {
 
 fn ast::AstNode* parse_struct_lit(Parser* p) {
     token::Token open = consume(p);
-    ast::FieldInitializer[] inits_arr;
-    inits_arr.ptr = null;
-    inits_arr.len = 0;
-    u64 cap = 0;
+    list::List(ast::FieldInitializer) inits_arr = {null, 0, 0};
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         u32 fi_pos = peek(p, 0).src_pos;
         symbol::Symbol* fi_name = null;
@@ -1876,7 +1861,7 @@ fn ast::AstNode* parse_struct_lit(Parser* p) {
         fi.name = fi_name;
         fi.value = val;
         fi.src_pos = fi_pos;
-        list::dyn_push(&inits_arr, &cap, p.m.arena, fi);
+        list::push(&inits_arr, p.m.arena, fi);
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     expect(p, token::TokenKind::RBrace);
@@ -1884,7 +1869,7 @@ fn ast::AstNode* parse_struct_lit(Parser* p) {
     n.h.kind = ast::AstKind::StructLit;
     n.h.flags = (ast::AstFlags)0;
     n.h.src_pos = open.src_pos;
-    n.inits = inits_arr;
+    n.inits = {inits_arr.ptr, inits_arr.len};
     return (ast::AstNode*)n;
 }
 
