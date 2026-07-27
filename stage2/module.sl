@@ -25,8 +25,7 @@ export struct Module {
     ast::FnDeclNode*[]      instantiated_fns; // monomorphized clones; CFG + codegen pick these up
     u64                     instantiated_fns_cap;
     u32                     next_inserted_base;   // first virtual src_pos for compinsert-generated code; set to source.len at scan
-    InsertedSource[]        inserted_sources;
-    u64                     inserted_sources_cap;
+    list::List(InsertedSource) inserted_sources;
     void*                   reflect_typeinfo;     // types::Ty* — synthesized TypeInfo/FieldInfo, built lazily per module
     void*                   reflect_fieldinfo;
     i32                     comptime_max_depth;      // interpreter recursion cap; 0 = built-in default
@@ -49,14 +48,14 @@ export fn u32 register_inserted_source(Module* m, u8[] bytes, u32 generator_pos)
     entry.base = base;
     entry.bytes = bytes;
     entry.generator_pos = generator_pos;
-    list::dyn_push(&m.inserted_sources, &m.inserted_sources_cap, m.arena, entry);
+    list::push(&m.inserted_sources, m.arena, entry);
     m.next_inserted_base = base + (u32)bytes.len;
     return base;
 }
 
 export fn InsertedSource* find_inserted_source(Module* m, u32 pos) {
     for(u64 i = 0; i < m.inserted_sources.len; i += 1) {
-        InsertedSource* src = &m.inserted_sources[i];
+        InsertedSource* src = &m.inserted_sources.ptr[i];
         if(pos >= src.base && pos < src.base + (u32)src.bytes.len) { return src; }
     }
     return null;
