@@ -135,6 +135,7 @@ export fn void collect_names(module::Module* m) {
     s.m.global_scope = (void*)module_scope;
     s.scope = module_scope;
     if(s.m.root_node == null) {
+        register_reflection_names(s, module_scope);
         s.m.sema_phase |= SemaPhase::Names;
         return;
     }
@@ -142,6 +143,7 @@ export fn void collect_names(module::Module* m) {
     for(u64 stmt_index = 0; stmt_index < global_block.stmts.len; stmt_index += 1) {
         collect_name_for_decl(s, global_block.stmts[stmt_index]);
     }
+    register_reflection_names(s, module_scope);
     s.m.sema_phase |= SemaPhase::Names;
 }
 
@@ -463,6 +465,27 @@ fn symbol::Symbol*[] collect_comptime_type_names(Sema* s, ast::FnDeclNode* fn_de
     return names;
 }
 
+// A Type has no runtime representation; pointers stop the walk since an address is representable.
+fn bool type_has_comptime_part(types::Ty* t) {
+    if(t == null) { return false; }
+    if(t.kind == types::TypeKind::ComptimeType) { return true; }
+    if(t.kind == types::TypeKind::Array) { return type_has_comptime_part(t.data.array.elem); }
+    ast::FieldDecl[] fields = {null, 0};
+    if(t.kind == types::TypeKind::Struct) { fields = ((ast::StructDeclNode*)t.data.struct_decl).fields; }
+    else if(t.kind == types::TypeKind::Union) { fields = ((ast::UnionDeclNode*)t.data.union_decl).fields; }
+    for(u64 field_index = 0; field_index < fields.len; field_index += 1) {
+        if(type_has_comptime_part((types::Ty*)fields[field_index].resolved_type)) { return true; }
+    }
+    return false;
+}
+
+fn void diag_comptime_only_type(Sema* s, u32 src_pos, types::Ty* t) {
+    u8[] type_str = types_print::print_to_arena(t, balloc(s));
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "%.*s is comptime-only and has no runtime representation", (i32)type_str.len, (i8*)type_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
 fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
     symbol::Symbol*[] saved_type_names = s.comptime_type_names;
     s.comptime_type_names = collect_comptime_type_names(s, fn_decl);
@@ -480,6 +503,15 @@ fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
             param_type_mem[param_index] = param_type;
         }
         param_types = {param_type_mem, fn_decl.params.len};
+    }
+    // A template's `T value` param is still the Type placeholder; only its clones are lowered.
+    if(return_type.kind != types::TypeKind::ComptimeType && !is_generic_fn(fn_decl)) {
+        if(type_has_comptime_part(return_type)) { diag_comptime_only_type(s, fn_decl.h.src_pos, return_type); }
+        for(u64 param_index = 0; param_index < fn_decl.params.len; param_index += 1) {
+            if(fn_decl.params[param_index].is_comptime) { continue; }
+            types::Ty* pt = (types::Ty*)fn_decl.params[param_index].resolved_type;
+            if(type_has_comptime_part(pt)) { diag_comptime_only_type(s, fn_decl.params[param_index].src_pos, pt); }
+        }
     }
     Decl* own = (Decl*)fn_decl.decl;
     if(own != null) { own.ty = types::intern_fn_ptr(return_type, param_types, false); }
@@ -1858,42 +1890,142 @@ fn void reflect_set_field(ast::FieldDecl* f, u8[] name, types::Ty* ty) {
     f.resolved_type = (void*)ty;
 }
 
+// TypeInfo / FieldInfo / TypeKind are spelled like ordinary types, so every module scope carries them.
+// A module declaring one of those names keeps its own (types.sl has its own TypeKind).
+fn void register_reflection_names(Sema* s, Scope* module_scope) {
+    types::Ty* ti = reflection_typeinfo_type(s.m);
+    types::Ty* fi = reflection_fieldinfo_type(s.m);
+    types::Ty* tk = reflection_typekind_type(s.m);
+
+    register_builtin_type(s, module_scope, "TypeInfo", ti, (ast::AstNode*)ti.data.struct_decl);
+    register_builtin_type(s, module_scope, "FieldInfo", fi, (ast::AstNode*)fi.data.struct_decl);
+    if(register_builtin_type(s, module_scope, "TypeKind", tk, (ast::AstNode*)g_reflect_typekind_decl)) {
+        ast::EnumDeclNode* enum_decl = (ast::EnumDeclNode*)g_reflect_typekind_decl;
+        for(u64 member_index = 0; member_index < enum_decl.members.len; member_index += 1) {
+            if(enum_decl.members[member_index].decl != null) { continue; }
+            Decl* member_decl = new_decl(s, DeclKind::EnumMember, enum_decl.members[member_index].name, tk);
+            member_decl.data.member = &enum_decl.members[member_index];
+            enum_decl.members[member_index].decl = (void*)member_decl;
+        }
+    }
+}
+
+fn bool register_builtin_type(Sema* s, Scope* module_scope, u8[] name, types::Ty* ty, ast::AstNode* node) {
+    symbol::Symbol* sym = interner::intern(name);
+    if(scope_lookup_local(module_scope, sym) != null) { return false; }
+    Decl* decl = new_decl(s, DeclKind::Node, sym, ty);
+    decl.data.node = node;
+    _scope_insert(module_scope, sym, decl);
+    return true;
+}
+
+mutex::Mutex g_reflect_lock;
+bool         g_reflect_lock_ready;
+types::Ty*   g_reflect_fieldinfo;
+types::Ty*   g_reflect_typeinfo;
+types::Ty*   g_reflect_typekind;
+void*        g_reflect_typekind_decl;   // ast::EnumDeclNode*, for TypeKind::<member> lookups
+u64          g_reflect_generation;      // typer generation the cache was built against
+
+// Cached types belong to one typer generation; a re-init (tests) invalidates them along with the interner.
+fn void reflect_lock() {
+    if(!g_reflect_lock_ready) {
+        mutex::create(&g_reflect_lock);
+        g_reflect_lock_ready = true;
+    }
+    mutex::lock(&g_reflect_lock);
+    if(g_reflect_generation != types::generation()) {
+        g_reflect_generation = types::generation();
+        g_reflect_fieldinfo = null;
+        g_reflect_typeinfo = null;
+        g_reflect_typekind = null;
+        g_reflect_typekind_decl = null;
+    }
+}
+
+// The reflection types are process-global so a TypeInfo built in one module is the same Ty* in another.
 export fn types::Ty* reflection_fieldinfo_type(module::Module* m) {
-    if(m.reflect_fieldinfo != null) { return (types::Ty*)m.reflect_fieldinfo; }
-    ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(m.arena, sizeof(ast::StructDeclNode));
-    sys::memset(sd, 0, sizeof(ast::StructDeclNode));
-    sd.h.kind = ast::AstKind::StructDecl;
-    sd.name = interner::intern("FieldInfo");
-    sd.qualified_name = sd.name;
-    ast::FieldDecl* flds = (ast::FieldDecl*)arena::alloc(m.arena, 3 * sizeof(ast::FieldDecl));
-    reflect_set_field(&flds[0], "name", types::intern_slice(types::prim_u8()));
-    reflect_set_field(&flds[1], "ty", types::prim_type());
-    reflect_set_field(&flds[2], "offset", types::prim_u64());
-    sd.fields = {flds, 3};
-    m.reflect_fieldinfo = (void*)types::intern_struct((void*)sd);
-    return (types::Ty*)m.reflect_fieldinfo;
+    reflect_lock();
+    if(g_reflect_fieldinfo == null) {
+        arena::Arena* a = types::global_arena();
+        ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+        sys::memset(sd, 0, sizeof(ast::StructDeclNode));
+        sd.h.kind = ast::AstKind::StructDecl;
+        sd.name = interner::intern("FieldInfo");
+        sd.qualified_name = sd.name;
+        ast::FieldDecl* flds = (ast::FieldDecl*)arena::alloc(a, 3 * sizeof(ast::FieldDecl));
+        reflect_set_field(&flds[0], "name", types::intern_slice(types::prim_u8()));
+        reflect_set_field(&flds[1], "ty", types::prim_type());
+        reflect_set_field(&flds[2], "offset", types::prim_u64());
+        sd.fields = {flds, 3};
+        g_reflect_fieldinfo = types::intern_struct((void*)sd);
+    }
+    types::Ty* result = g_reflect_fieldinfo;
+    mutex::unlock(&g_reflect_lock);
+    return result;
 }
 
 export fn types::Ty* reflection_typeinfo_type(module::Module* m) {
-    if(m.reflect_typeinfo != null) { return (types::Ty*)m.reflect_typeinfo; }
     types::Ty* fi = reflection_fieldinfo_type(m);
-    ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(m.arena, sizeof(ast::StructDeclNode));
-    sys::memset(sd, 0, sizeof(ast::StructDeclNode));
-    sd.h.kind = ast::AstKind::StructDecl;
-    sd.name = interner::intern("TypeInfo");
-    sd.qualified_name = sd.name;
-    ast::FieldDecl* flds = (ast::FieldDecl*)arena::alloc(m.arena, 8 * sizeof(ast::FieldDecl));
-    reflect_set_field(&flds[0], "kind", types::prim_i32());
-    reflect_set_field(&flds[1], "name", types::intern_slice(types::prim_u8()));
-    reflect_set_field(&flds[2], "size", types::prim_u64());
-    reflect_set_field(&flds[3], "align", types::prim_u64());
-    reflect_set_field(&flds[4], "fields", types::intern_slice(fi));
-    reflect_set_field(&flds[5], "pointee", types::prim_type());
-    reflect_set_field(&flds[6], "elem", types::prim_type());
-    reflect_set_field(&flds[7], "array_count", types::prim_u64());
-    sd.fields = {flds, 8};
-    m.reflect_typeinfo = (void*)types::intern_struct((void*)sd);
-    return (types::Ty*)m.reflect_typeinfo;
+    reflect_lock();
+    if(g_reflect_typeinfo == null) {
+        arena::Arena* a = types::global_arena();
+        ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
+        sys::memset(sd, 0, sizeof(ast::StructDeclNode));
+        sd.h.kind = ast::AstKind::StructDecl;
+        sd.name = interner::intern("TypeInfo");
+        sd.qualified_name = sd.name;
+        ast::FieldDecl* flds = (ast::FieldDecl*)arena::alloc(a, 8 * sizeof(ast::FieldDecl));
+        reflect_set_field(&flds[0], "kind", reflection_typekind_type_locked());
+        reflect_set_field(&flds[1], "name", types::intern_slice(types::prim_u8()));
+        reflect_set_field(&flds[2], "size", types::prim_u64());
+        reflect_set_field(&flds[3], "align", types::prim_u64());
+        reflect_set_field(&flds[4], "fields", types::intern_slice(fi));
+        reflect_set_field(&flds[5], "pointee", types::prim_type());
+        reflect_set_field(&flds[6], "elem", types::prim_type());
+        reflect_set_field(&flds[7], "array_count", types::prim_u64());
+        sd.fields = {flds, 8};
+        g_reflect_typeinfo = types::intern_struct((void*)sd);
+    }
+    types::Ty* result = g_reflect_typeinfo;
+    mutex::unlock(&g_reflect_lock);
+    return result;
+}
+
+export fn types::Ty* reflection_typekind_type(module::Module* m) {
+    reflect_lock();
+    types::Ty* result = reflection_typekind_type_locked();
+    mutex::unlock(&g_reflect_lock);
+    return result;
+}
+
+// Members mirror types::TypeKind's order, so TypeInfo.kind is that ordinal with no mapping table.
+fn types::Ty* reflection_typekind_type_locked() {
+    if(g_reflect_typekind != null) { return g_reflect_typekind; }
+    arena::Arena* a = types::global_arena();
+    ast::EnumDeclNode* ed = (ast::EnumDeclNode*)arena::alloc(a, sizeof(ast::EnumDeclNode));
+    sys::memset(ed, 0, sizeof(ast::EnumDeclNode));
+    ed.h.kind = ast::AstKind::EnumDecl;
+    ed.name = interner::intern("TypeKind");
+    ed.qualified_name = ed.name;
+    u8[][8] names;
+    names[0] = "Primitive";
+    names[1] = "Pointer";
+    names[2] = "Array";
+    names[3] = "Slice";
+    names[4] = "FnPtr";
+    names[5] = "Struct";
+    names[6] = "Union";
+    names[7] = "Enum";
+    ast::EnumMember* members = (ast::EnumMember*)arena::alloc(a, 8 * sizeof(ast::EnumMember));
+    sys::memset(members, 0, 8 * sizeof(ast::EnumMember));
+    for(u64 member_index = 0; member_index < 8; member_index += 1) {
+        members[member_index].name = interner::intern(names[member_index]);
+    }
+    ed.members = {members, 8};
+    g_reflect_typekind = types::intern_enum((void*)ed);
+    g_reflect_typekind_decl = (void*)ed;
+    return g_reflect_typekind;
 }
 
 // A comprun body, a module-scope initializer (always constant-folded), or a `fn Type ...` body.

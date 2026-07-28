@@ -95,6 +95,11 @@ export struct TypeInterner {
 
 // Process-global; reached only through acquire()/release() or the self-locking wrappers.
 TypeInterner GLOBAL_TYPER;
+u64          GLOBAL_TYPER_GENERATION;   // bumped by typer_init so caches of interned types can invalidate
+
+export fn u64 generation() {
+    return GLOBAL_TYPER_GENERATION;
+}
 
 export fn void typer_init(arena::Arena* a, u64 initial_cap) {
     u64 bytes = initial_cap * sizeof(TypeBucket);
@@ -103,7 +108,13 @@ export fn void typer_init(arena::Arena* a, u64 initial_cap) {
     GLOBAL_TYPER.count = 0;
     GLOBAL_TYPER.cap   = initial_cap;
     GLOBAL_TYPER.arena = a;
+    GLOBAL_TYPER_GENERATION += 1;
     mutex::create(&GLOBAL_TYPER.lock);
+}
+
+// Process-lifetime storage, for data that must outlive any single module (the reflection decls).
+export fn arena::Arena* global_arena() {
+    return GLOBAL_TYPER.arena;
 }
 
 export fn TypeInterner* acquire() {

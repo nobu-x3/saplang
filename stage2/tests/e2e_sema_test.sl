@@ -328,6 +328,33 @@ fn i32 err_type_info_at_runtime(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// TypeInfo / FieldInfo / TypeKind are nameable in user scope.
+fn i32 ok_reflection_names(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; }\ncomprun { TypeInfo ti = type_info(P); FieldInfo f = ti.fields[1]; if(f.offset != (u64)4) { comperror(\"off\"); } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_typekind_enum(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; }\ncomprun { if(type_info(P).kind != TypeKind::Struct) { comperror(\"k\"); } if(type_info(i32).kind != TypeKind::Primitive) { comperror(\"p\"); } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A module declaring one of the builtin names keeps its own (the compiler's types.sl has a TypeKind).
+fn i32 ok_user_type_shadows_builtin(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "enum TypeKind : i32 { A, B }\nexport fn i32 f() { return (i32)TypeKind::B; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_typeinfo_runtime_param(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn u64 f(TypeInfo ti) { return ti.size; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "TypeInfo is comptime-only and has no runtime representation", m)) { return -2; }
+    return 0;
+}
+
 fn i32 ok_type_info_in_comprun(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; }\ncomprun { if(type_info(P).size != (u64)8) { comperror(\"bad size\"); } }\nexport fn i32 f() { return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1377,6 +1404,10 @@ fn i32 main() {
     testing::add(suite, "err_compsplice_unsupported", &err_compsplice_unsupported);
     testing::add(suite, "err_type_info_at_runtime",  &err_type_info_at_runtime);
     testing::add(suite, "ok_type_info_in_comprun",   &ok_type_info_in_comprun);
+    testing::add(suite, "ok_reflection_names",       &ok_reflection_names);
+    testing::add(suite, "ok_typekind_enum",          &ok_typekind_enum);
+    testing::add(suite, "ok_user_type_shadows_builtin", &ok_user_type_shadows_builtin);
+    testing::add(suite, "err_typeinfo_runtime_param", &err_typeinfo_runtime_param);
     testing::add(suite, "ok_type_info_global_init",  &ok_type_info_global_init);
     testing::add(suite, "ok_alignof",               &ok_alignof);
     testing::add(suite, "ok_char_lit",              &ok_char_lit);
