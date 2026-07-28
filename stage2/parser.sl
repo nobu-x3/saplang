@@ -1509,15 +1509,31 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner) {
                 n.element = inner;
                 inner = (ast::AstNode*)n;
             } else {
+                // Nest a run of dimensions leftmost-outermost so i32[2][3] is 2 rows of 3 (C order).
+                NodeList sizes = {null, 0, 0};
+                list::List(u32) positions;
+                positions.ptr = null; positions.len = 0; positions.cap = 0;
                 ast::AstNode* sz = parse_expr(p, 0);
                 expect(p, token::TokenKind::RBracket);
-                ast::TypeArrayNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeArrayNode));
-                n.h.kind = ast::AstKind::ArrayType;
-                n.h.flags = (ast::AstFlags)0;
-                n.h.src_pos = t.src_pos;
-                n.element = inner;
-                n.size_expr = sz;
-                inner = (ast::AstNode*)n;
+                list::push(&sizes, p.m.arena, sz);
+                list::push(&positions, p.m.arena, t.src_pos);
+                while(peek(p, 0).kind == token::TokenKind::LBracket && peek(p, 1).kind != token::TokenKind::RBracket) {
+                    token::Token bracket = peek(p, 0);
+                    consume(p);
+                    ast::AstNode* dim = parse_expr(p, 0);
+                    expect(p, token::TokenKind::RBracket);
+                    list::push(&sizes, p.m.arena, dim);
+                    list::push(&positions, p.m.arena, bracket.src_pos);
+                }
+                for(i64 dim_index = (i64)sizes.len - 1; dim_index >= 0; dim_index -= 1) {
+                    ast::TypeArrayNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeArrayNode));
+                    n.h.kind = ast::AstKind::ArrayType;
+                    n.h.flags = (ast::AstFlags)0;
+                    n.h.src_pos = positions.ptr[(u64)dim_index];
+                    n.element = inner;
+                    n.size_expr = sizes.ptr[(u64)dim_index];
+                    inner = (ast::AstNode*)n;
+                }
             }
         } else {
             return inner;

@@ -17,10 +17,17 @@ export fn void print(types::Ty* t, io::OutBuf* out) {
             io::outbuf_write_byte(out, '*');
         }
         case types::TypeKind::Array: {
-            print(t.data.array.elem, out);
-            io::outbuf_write_byte(out, '[');
-            io::outbuf_write_u64(out, t.data.array.count);
-            io::outbuf_write_byte(out, ']');
+            // Base type, then dimensions outer->inner: arr(2, arr(3, i32)) prints i32[2][3] (C order).
+            types::Ty* base = t;
+            while(base.kind == types::TypeKind::Array) { base = base.data.array.elem; }
+            print(base, out);
+            types::Ty* dim = t;
+            while(dim.kind == types::TypeKind::Array) {
+                io::outbuf_write_byte(out, '[');
+                io::outbuf_write_u64(out, dim.data.array.count);
+                io::outbuf_write_byte(out, ']');
+                dim = dim.data.array.elem;
+            }
         }
         case types::TypeKind::Slice: {
             print(t.data.slice_elem, out);

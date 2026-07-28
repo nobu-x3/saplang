@@ -186,7 +186,7 @@ fn i32 print_nested_array(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     types::Ty* inner = types::intern_array(fake_i32(a), 3);
     types::Ty* outer = types::intern_array(inner, 2);
-    if(!testing::expect_eq(do_print(a, outer), "i32[3][2]", m)) { return -1; }
+    if(!testing::expect_eq(do_print(a, outer), "i32[2][3]", m)) { return -1; }
     return 0;
 }
 
