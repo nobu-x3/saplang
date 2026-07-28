@@ -311,6 +311,35 @@ fn i32 ok_sizeof_value(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+fn i32 err_compsplice_unsupported(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { compsplice frag; return 0; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "compsplice is not yet supported", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)20, m)) { return -3; }
+    return 0;
+}
+
+// type_info yields a TypeInfo whose Type field has no runtime representation.
+fn i32 err_type_info_at_runtime(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; }\nexport fn u64 f() { return type_info(P).size; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "type_info is only available at comptime", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)47, m)) { return -3; }
+    return 0;
+}
+
+fn i32 ok_type_info_in_comprun(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; }\ncomprun { if(type_info(P).size != (u64)8) { comperror(\"bad size\"); } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_type_info_global_init(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; }\nconst u64 SZ = type_info(P).size;\nexport fn u64 f() { return SZ; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 err_compcode_unsupported(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 x = compcode { i32 y = 1; }; return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1345,6 +1374,10 @@ fn i32 main() {
     testing::add(suite, "ok_sizeof",                &ok_sizeof);
     testing::add(suite, "ok_sizeof_value",          &ok_sizeof_value);
     testing::add(suite, "err_compcode_unsupported", &err_compcode_unsupported);
+    testing::add(suite, "err_compsplice_unsupported", &err_compsplice_unsupported);
+    testing::add(suite, "err_type_info_at_runtime",  &err_type_info_at_runtime);
+    testing::add(suite, "ok_type_info_in_comprun",   &ok_type_info_in_comprun);
+    testing::add(suite, "ok_type_info_global_init",  &ok_type_info_global_init);
     testing::add(suite, "ok_alignof",               &ok_alignof);
     testing::add(suite, "ok_char_lit",              &ok_char_lit);
     testing::add(suite, "ok_array_index",           &ok_array_index);

@@ -1896,7 +1896,24 @@ export fn types::Ty* reflection_typeinfo_type(module::Module* m) {
     return (types::Ty*)m.reflect_typeinfo;
 }
 
+// A comprun body, a module-scope initializer (always constant-folded), or a `fn Type ...` body.
+fn bool in_comptime_context(Sema* s) {
+    if(s.in_comprun) { return true; }
+    if(s.current_fn == null) { return true; }
+    ast::FnDeclNode* func = (ast::FnDeclNode*)s.current_fn;
+    if(func.return_type == null) { return false; }
+    types::Ty* ret = (types::Ty*)func.return_type.h.ty;
+    return ret != null && ret.kind == types::TypeKind::ComptimeType;
+}
+
+// TypeInfo carries a Type field, which has no runtime representation; without this the leak surfaces as an internal codegen error.
 fn types::Ty* synth_type_info(Sema* s, ast::TypeInfoNode* n) {
+    if(!in_comptime_context(s)) {
+        u8[] msg = "type_info is only available at comptime";
+        sema_report(s, n.h.src_pos, msg);
+        mark_error((ast::AstNode*)n);
+        return null;
+    }
     types::Ty* arg = resolve_type(s, n.arg);
     if(arg == null) { mark_error((ast::AstNode*)n); return null; }
     n.arg.h.ty = (void*)arg;
@@ -2208,6 +2225,11 @@ fn void stmt(Sema* s, ast::AstNode* st) {
     }
     case ast::AstKind::CompinsertStmt: {
         synth(s, ((ast::CompInsertNode*)st).source_expr);   // in a comprun_node; resolve the arg so eval_compinsert can read it
+    }
+    case ast::AstKind::CompspliceStmt: {
+        u8[] msg = "compsplice is not yet supported";
+        sema_report(s, st.h.src_pos, msg);
+        mark_error(st);
     }
     else { }
     }
