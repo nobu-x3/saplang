@@ -37,6 +37,7 @@ export struct Compiler {
     list::List(u8[])     extern_libs;     // -l names, passed to the linker as -l<name>
     list::List(u8[])     lib_dirs;        // -L paths, passed to the linker as -L<path>
     codegen::BuildConfig config;          // -config: optimization / instrumentation pipeline; default Debug
+    u8[]                 deps_path;       // -deps: write every discovered source path here (for build-system caching)
 }
 
 export fn Compiler* new(arena::Arena* a) {
@@ -109,6 +110,9 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
             if(arg_index < args.len) {
                 if(!parse_config(c, args[arg_index])) { ok = false; }
             } else { ok = false; }
+        } else if(slice_eq(arg, "-deps")) {
+            arg_index += 1;
+            if(arg_index < args.len) { c.deps_path = args[arg_index]; } else { ok = false; }
         } else if(slice_eq(arg, "-mt")) {
             c.is_multithreaded = true;
         } else if(slice_eq(arg, "-cfg-dump")) {
@@ -330,12 +334,26 @@ fn u8[] path_stem(u8[] path) {
 // Discover -> frontend -> codegen -> link. Returns 0 on success.
 export fn i32 run(Compiler* c) {
     discover(c);
+    if(c.deps_path.len > 0) { write_depfile(c); }
     drain_diagnostics(c);
     if(bail_on_errors(c)) { return 1; }
     i32 rc = run_frontend(c);
     if(rc != 0) { return rc; }
     if(c.cfg_dump || c.sapir_dump) { return 0; }    // dump modes stop before the backend
     return run_backend(c);
+}
+
+// One source path per line: the full transitive set discover() walked, for build-system caching.
+fn void write_depfile(Compiler* c) {
+    io::File f = io::open(c.deps_path, "w");
+    if(f.fp == null) { return; }
+    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
+        u8[] path = c.modules.ptr[module_index].path;
+        if(path.len == 0) { continue; }
+        io::write_string(&f, path);
+        io::write_string(&f, "\n");
+    }
+    io::close(&f);
 }
 
 // sapir -> object files -> linked executable. Assumes the frontend already ran.
