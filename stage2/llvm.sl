@@ -61,6 +61,22 @@ extern {
     export fn void  LLVMDisposeTargetMachine(void* tm);
     export fn i32   LLVMTargetMachineEmitToFile(void* tm, void* m, const i8* filename, i32 file_type, i8** err);
     export fn i32   LLVMVerifyModule(void* m, i32 action, i8** err);
+
+    // global-constructor relocation: the C API has no UseInitArray setter, so codegen re-emits
+    // llvm.global_ctors entries into .init_array itself
+    export fn void  LLVMSetSection(void* global, const i8* section);
+    export fn void* LLVMGetNamedGlobal(void* m, const i8* name);
+    export fn void* LLVMGetInitializer(void* global);
+    export fn u32   LLVMGetNumOperands(void* value);
+    export fn void* LLVMGetOperand(void* value, u32 index);
+    export fn void  LLVMSetAlignment(void* value, u32 bytes);
+    export fn void  LLVMSetTarget(void* m, const i8* triple);
+    export fn void  LLVMSetDataLayout(void* m, const i8* layout);
+    export fn void* LLVMCreateTargetDataLayout(void* tm);
+    export fn i8*   LLVMCopyStringRepOfTargetData(void* td);
+    export fn void  LLVMDisposeTargetData(void* td);
+    export fn void* LLVMGetComdat(void* global);
+    export fn void  LLVMSetComdat(void* global, void* comdat);
     export fn void  LLVMDisposeMessage(i8* msg);
 
     // optimization (new pass manager)

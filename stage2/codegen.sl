@@ -60,7 +60,9 @@ export fn i32 emit_object(sapir::SapirModule* sm, arena::Arena* a, i8* obj_path,
     if(!build_module(&cg)) { return 1; }
     void* tm = make_target_machine();
     if(tm == null) { return 1; }
+    set_module_target(&cg, tm);
     if(!run_passes(&cg, tm)) { llvm::LLVMDisposeTargetMachine(tm); return 1; }
+    relocate_global_ctors(&cg);
     i32 rc = 0;
     i8* err = null;
     if(llvm::LLVMTargetMachineEmitToFile(tm, cg.llvm_module, obj_path, llvm::ObjectFile, &err) != 0) {
@@ -70,6 +72,48 @@ export fn i32 emit_object(sapir::SapirModule* sm, arena::Arena* a, i8* obj_path,
     }
     llvm::LLVMDisposeTargetMachine(tm);
     return rc;
+}
+
+// LLVM's C API exposes no UseInitArray setter, so the backend emits llvm.global_ctors into the
+// legacy .ctors, which glibc never runs (ASan's __asan_init silently never fired). Re-emit each
+// entry as its own .init_array global instead.
+fn void relocate_global_ctors(CG* cg) {
+    void* ctors = llvm::LLVMGetNamedGlobal(cg.llvm_module, cstr(cg.arena, "llvm.global_ctors"));
+    if(ctors == null) { return; }
+    void* array = llvm::LLVMGetInitializer(ctors);
+    if(array == null) { return; }
+    void* fn_ptr_ty = llvm::LLVMPointerTypeInContext(cg.ctx, 0);
+    u32 count = llvm::LLVMGetNumOperands(array);
+    for(u32 entry_index = 0; entry_index < count; entry_index += 1) {
+        void* entry = llvm::LLVMGetOperand(array, entry_index);
+        if(entry == null) { continue; }
+        if(llvm::LLVMGetNumOperands(entry) < 2) { continue; }
+        void* ctor_fn = llvm::LLVMGetOperand(entry, 1);     // { priority, fn, data }
+        if(ctor_fn == null) { continue; }
+        u8[16] name_buf;
+        i32 written = sys::snprintf((i8*)&name_buf[0], 16, "__sap_ctor_%u", entry_index);
+        if(written <= 0) { continue; }
+        void* slot = llvm::LLVMAddGlobal(cg.llvm_module, fn_ptr_ty, (i8*)&name_buf[0]);
+        llvm::LLVMSetInitializer(slot, ctor_fn);
+        llvm::LLVMSetLinkage(slot, llvm::InternalLinkage);
+        llvm::LLVMSetSection(slot, cstr(cg.arena, ".init_array"));
+        llvm::LLVMSetAlignment(slot, 8);
+        // The ctor sits in a comdat group, so the entry must join it or it outlives a discarded ctor.
+        void* group = llvm::LLVMGetComdat(ctor_fn);
+        if(group != null) { llvm::LLVMSetComdat(slot, group); }
+    }
+}
+
+// Target-sensitive passes read the module's own triple, not the TargetMachine's: without this the
+// ASan pass picked its generic 1<<44 shadow mapping while the runtime used the x86-64 one.
+fn void set_module_target(CG* cg, void* tm) {
+    i8* triple = llvm::LLVMGetDefaultTargetTriple();
+    llvm::LLVMSetTarget(cg.llvm_module, triple);
+    void* layout = llvm::LLVMCreateTargetDataLayout(tm);
+    i8* layout_str = llvm::LLVMCopyStringRepOfTargetData(layout);
+    llvm::LLVMSetDataLayout(cg.llvm_module, layout_str);
+    llvm::LLVMDisposeMessage(layout_str);
+    llvm::LLVMDisposeTargetData(layout);
 }
 
 fn void* make_target_machine() {
@@ -107,7 +151,7 @@ fn u8[] pipeline_for(BuildConfig config) {
     case BuildConfig::Debug:            { return ""; }
     case BuildConfig::Release:          { return "default<O2>"; }
     case BuildConfig::ReleaseDebug:     { return "default<O2>"; }
-    case BuildConfig::AddressSanitizer: { return "default<O1>,asan"; }
+    case BuildConfig::AddressSanitizer: { return "asan"; }   // unoptimized: a sanitizer build is for diagnosis, and O1 folds faults away
     else { return ""; }
     }
     return "";

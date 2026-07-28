@@ -428,7 +428,7 @@ fn i32 run_link(Compiler* c, u8[][] object_paths) {
 
 // ld.lld -o <out> -dynamic-linker <ld.so> Scrt1.o crti.o -L<dirs> <objects> -l<libs> -lc crtn.o
 fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
-    u64 cap = 16 + object_paths.len + c.extern_libs.len + c.lib_dirs.len;
+    u64 cap = 24 + object_paths.len + c.extern_libs.len + c.lib_dirs.len;
     i8** argv = (i8**)arena::alloc(c.arena, (cap + 1) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(c.arena, "ld.lld"); n += 1;
@@ -444,7 +444,18 @@ fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
     for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.arena, object_paths[i]); n += 1; }
     for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs.ptr[i]); n += 1; }
     // AddressSanitizer needs its runtime; the shared lib carries its own dependencies.
-    if(c.config == codegen::BuildConfig::AddressSanitizer) { argv[n] = cstr(c.arena, "-lasan"); n += 1; }
+    if(c.config == codegen::BuildConfig::AddressSanitizer) {
+        argv[n] = link_paths::asan_runtime_static(); n += 1;
+        argv[n] = link_paths::asan_runtime(); n += 1;
+        argv[n] = link_paths::asan_dynamic_list(); n += 1;
+        argv[n] = cstr(c.arena, "-lpthread"); n += 1;
+        argv[n] = cstr(c.arena, "-lrt"); n += 1;
+        argv[n] = cstr(c.arena, "-ldl"); n += 1;
+        argv[n] = cstr(c.arena, "-lresolv"); n += 1;
+        argv[n] = cstr(c.arena, "-lm"); n += 1;
+        argv[n] = link_paths::unwind_runtime(); n += 1;
+        argv[n] = cstr(c.arena, "--export-dynamic"); n += 1;
+    }
     argv[n] = cstr(c.arena, "-lc"); n += 1;
     argv[n] = link_paths::crt_fini(); n += 1;
     argv[n] = null; n += 1;
