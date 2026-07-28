@@ -61,7 +61,13 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
         t = peek(p, 0);
     }
     switch (t.kind) {
-        case token::TokenKind::IMPORT:  { return parse_import(p, is_exported); }
+        case token::TokenKind::IMPORT:  {
+            if(is_exported && !p.is_speculating) {
+                u8[] msg = "imports cannot be exported; each module states its own imports";
+                diag::report(&p.m.diag, p.m.arena, t.src_pos, msg);
+            }
+            return parse_import(p);
+        }
         case token::TokenKind::CONST:   { return parse_var_decl(p, is_exported); }
         case token::TokenKind::EXTERN:  { return parse_extern_block(p); }
         case token::TokenKind::COMPRUN: {
@@ -130,7 +136,7 @@ fn bool can_start_expr(token::TokenKind k) {
         || k == token::TokenKind::Star;
 }
 
-fn ast::AstNode* parse_import(Parser* p, bool is_reexport) {
+fn ast::AstNode* parse_import(Parser* p) {
     token::Token import_tok = expect(p, token::TokenKind::IMPORT);
     if(import_tok.kind == token::TokenKind::ERROR) {
         return mk_error_node_and_consume(p, import_tok.src_pos);
@@ -148,7 +154,6 @@ fn ast::AstNode* parse_import(Parser* p, bool is_reexport) {
     import_node.h.flags = (ast::AstFlags)0;
     import_node.h.src_pos = import_tok.src_pos;
     import_node.module_name = module_name.data.sym;
-    import_node.is_reexport = is_reexport;
     return (ast::AstNode*)import_node;
 }
 

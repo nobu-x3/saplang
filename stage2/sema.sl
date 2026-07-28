@@ -153,7 +153,7 @@ fn void collect_name_for_decl(Sema* s, ast::AstNode* top_level_node) {
     switch(top_level_node.h.kind) {
     case ast::AstKind::ImportDecl: {
         ast::ImportNode* import_node = (ast::ImportNode*)top_level_node;
-        Decl* decl = register_sym(s, module_scope, import_node.module_name, import_node.is_reexport, DeclKind::Import, import_node.h.src_pos);
+        Decl* decl = register_sym(s, module_scope, import_node.module_name, false, DeclKind::Import, import_node.h.src_pos);
         if(decl != null) { decl.data.module = find_import_module(s, import_node.module_name); }
     }
     case ast::AstKind::VarDecl: {

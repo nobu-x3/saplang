@@ -1669,13 +1669,12 @@ fn ast::AstNode* mk_alias_decl(arena::Arena* a, symbol::Symbol* name, bool expor
     return (ast::AstNode*)n;
 }
 
-fn ast::AstNode* mk_import_decl(arena::Arena* a, symbol::Symbol* module_name, bool reexport, u32 pos) {
+fn ast::AstNode* mk_import_decl(arena::Arena* a, symbol::Symbol* module_name, bool unused_reexport, u32 pos) {
     ast::ImportNode* n = (ast::ImportNode*)arena::alloc(a, sizeof(ast::ImportNode));
     sys::memset(n, 0, sizeof(ast::ImportNode));
     n.h.kind = ast::AstKind::ImportDecl;
     n.h.src_pos = pos;
     n.module_name = module_name;
-    n.is_reexport = reexport;
     return (ast::AstNode*)n;
 }
 
@@ -1872,7 +1871,7 @@ fn i32 cn_import_resolves_module(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 cn_import_reexport_no_match(arena::Arena* a, u8[] m) {
+fn i32 cn_import_never_exported(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     symbol::Symbol* io = fake_sym_interned(mm, "io");
     ast::AstNode* imp = mk_import_decl(a, io, true, 0);
@@ -1883,7 +1882,7 @@ fn i32 cn_import_reexport_no_match(arena::Arena* a, u8[] m) {
     sema::Decl* d = registered(mm, io);
     if(!testing::expect_not_null((void*)d, m)) { return -1; }
     if(!testing::expect_eq((u16)d.kind, (u16)sema::DeclKind::Import, m)) { return -2; }
-    if(!testing::expect_eq(d.is_exported, true, m)) { return -3; }
+    if(!testing::expect_eq(d.is_exported, false, m)) { return -3; }
     if(!testing::expect_eq((void*)d.data.module, (void*)null, m)) { return -4; }
     return 0;
 }
@@ -5077,7 +5076,7 @@ fn i32 main() {
     testing::add(cn, "cn_duplicate_fns_overload",        &cn_duplicate_fns_overload);
     testing::add(cn, "cn_two_distinct_no_diag",          &cn_two_distinct_no_diag);
     testing::add(cn, "cn_import_resolves_module",        &cn_import_resolves_module);
-    testing::add(cn, "cn_import_reexport_no_match",      &cn_import_reexport_no_match);
+    testing::add(cn, "cn_import_never_exported",       &cn_import_never_exported);
     testing::add(cn, "cn_extern_block_items_registered", &cn_extern_block_items_registered);
     testing::add(cn, "cn_extern_var_qualified",          &cn_extern_var_qualified);
     testing::add(cn, "cn_sets_names_phase",              &cn_sets_names_phase);

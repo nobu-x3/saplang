@@ -175,26 +175,24 @@ fn i32 import_error_does_not_loop_forever(arena::Arena* a, u8[] msg) {
     if(!(testing::expect_not_null((void*)root, msg))) { return -1; } return 0;
 }
 
-fn i32 import_not_reexport_by_default(arena::Arena* a, u8[] msg) {
+fn i32 import_parses_plain(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import io;", &m);
     ast::ImportNode* imp = compiler_testing::expect_import(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "io"), msg);
     if(!imp) { return -1; }
-    if(!testing::expect_eq(imp.is_reexport, false, msg)) { return -2; }
-    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -3; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -2; }
     return 0;
 }
 
-fn i32 import_export_marks_reexport(arena::Arena* a, u8[] msg) {
+// `export import` is not a language feature; every module states its own imports.
+fn i32 import_export_rejected(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
-    ast::AstNode* root = compiler_testing::parse_src(&local, "export import io;", &m);
-    ast::ImportNode* imp = compiler_testing::expect_import(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "io"), msg);
-    if(!imp) { return -1; }
-    if(!testing::expect_eq(imp.is_reexport, true, msg)) { return -2; }
-    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -3; }
-    if(!testing::expect_eq((u16)imp.h.flags, (u16)0, msg)) { return -4; }
+    compiler_testing::parse_src(&local, "export import io;", &m);
+    if(!testing::expect_true(m.diag.entries.len >= (u64)1, msg)) { return -1; }
+    if(!testing::expect_eq(m.diag.entries[0].msg, "imports cannot be exported; each module states its own imports", msg)) { return -2; }
+    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)7, msg)) { return -3; }
     return 0;
 }
 
@@ -202,13 +200,11 @@ fn i32 import_export_then_plain_import(arena::Arena* a, u8[] msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export import a; import b;", &m);
-    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -1; }
+    if(!testing::expect_true(m.diag.entries.len >= (u64)1, msg)) { return -1; }
     ast::ImportNode* i0 = compiler_testing::expect_import(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "a"), msg);
     if(!i0) { return -2; }
-    if(!testing::expect_eq(i0.is_reexport, true, msg)) { return -3; }
     ast::ImportNode* i1 = compiler_testing::expect_import(compiler_testing::nth_stmt(root, 1), compiler_testing::sym(m, "b"), msg);
-    if(!i1) { return -4; }
-    if(!testing::expect_eq(i1.is_reexport, false, msg)) { return -5; }
+    if(!i1) { return -3; }
     return 0;
 }
 
@@ -218,20 +214,15 @@ fn i32 import_export_with_bad_module_name_recovers(arena::Arena* a, u8[] msg) {
     ast::AstNode* root = compiler_testing::parse_src(&local, "export import 123; import io;", &m);
     ast::BlockNode* b = (ast::BlockNode*)root;
     bool found_io = false;
-    bool io_is_reexport = true;
     symbol::Symbol* want = compiler_testing::sym(m, "io");
     for(u64 i = 0; i < b.stmts.len; i += 1) {
         ast::AstNode* s = b.stmts.ptr[i];
         if(s && s.h.kind == ast::AstKind::ImportDecl) {
             ast::ImportNode* ii = (ast::ImportNode*)s;
-            if(ii.module_name == want) {
-                found_io = true;
-                io_is_reexport = ii.is_reexport;
-            }
+            if(ii.module_name == want) { found_io = true; }
         }
     }
     if(!testing::expect_true(found_io, msg)) { return -1; }
-    if(!testing::expect_eq(io_is_reexport, false, msg)) { return -2; }
     return 0;
 }
 
@@ -241,20 +232,15 @@ fn i32 import_export_with_keyword_module_name_recovers(arena::Arena* a, u8[] msg
     ast::AstNode* root = compiler_testing::parse_src(&local, "export import const; import io;", &m);
     ast::BlockNode* b = (ast::BlockNode*)root;
     bool found_io = false;
-    bool io_is_reexport = true;
     symbol::Symbol* want = compiler_testing::sym(m, "io");
     for(u64 i = 0; i < b.stmts.len; i += 1) {
         ast::AstNode* s = b.stmts.ptr[i];
         if(s && s.h.kind == ast::AstKind::ImportDecl) {
             ast::ImportNode* ii = (ast::ImportNode*)s;
-            if(ii.module_name == want) {
-                found_io = true;
-                io_is_reexport = ii.is_reexport;
-            }
+            if(ii.module_name == want) { found_io = true; }
         }
     }
     if(!testing::expect_true(found_io, msg)) { return -1; }
-    if(!testing::expect_eq(io_is_reexport, false, msg)) { return -2; }
     return 0;
 }
 
@@ -12650,8 +12636,8 @@ fn i32 main() {
     testing::add(s_imp, "import_qualified_name_rejected", &import_qualified_name_rejected);
     testing::add(s_imp, "import_error_then_valid_recovers", &import_error_then_valid_recovers);
     testing::add(s_imp, "import_error_does_not_loop_forever", &import_error_does_not_loop_forever);
-    testing::add(s_imp, "import_not_reexport_by_default", &import_not_reexport_by_default);
-    testing::add(s_imp, "import_export_marks_reexport", &import_export_marks_reexport);
+    testing::add(s_imp, "import_parses_plain", &import_parses_plain);
+    testing::add(s_imp, "import_export_rejected", &import_export_rejected);
     testing::add(s_imp, "import_export_then_plain_import", &import_export_then_plain_import);
     testing::add(s_imp, "import_export_with_bad_module_name_recovers", &import_export_with_bad_module_name_recovers);
     testing::add(s_imp, "import_export_with_keyword_module_name_recovers", &import_export_with_keyword_module_name_recovers);

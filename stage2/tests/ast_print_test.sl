@@ -617,21 +617,8 @@ fn i32 print_import(arena::Arena* a, u8[] m) {
     ast::ImportNode* n = arena::alloc(&local, sizeof(ast::ImportNode));
     n.h.kind = ast::AstKind::ImportDecl;
     n.module_name = interner::intern("io");
-    n.is_reexport = false;
     ast_print::print((ast::AstNode*)n, 0, &c.buf);
     if(!check(&c, "Import io\n", m)) { return -1; }
-    return 0;
-}
-
-fn i32 print_import_reexport(arena::Arena* a, u8[] m) {
-    arena::Arena local = {4096, null};
-    Ctx c; setup(&c, &local);
-    ast::ImportNode* n = arena::alloc(&local, sizeof(ast::ImportNode));
-    n.h.kind = ast::AstKind::ImportDecl;
-    n.module_name = interner::intern("io");
-    n.is_reexport = true;
-    ast_print::print((ast::AstNode*)n, 0, &c.buf);
-    if(!check(&c, "Import io reexport\n", m)) { return -1; }
     return 0;
 }
 
@@ -1247,7 +1234,6 @@ fn i32 main() {
 
     // declarations
     testing::add(suite, "print_import", &print_import);
-    testing::add(suite, "print_import_reexport", &print_import_reexport);
     testing::add(suite, "print_var_decl", &print_var_decl);
     testing::add(suite, "print_var_decl_const_exported", &print_var_decl_const_exported);
     testing::add(suite, "print_var_decl_no_init", &print_var_decl_no_init);

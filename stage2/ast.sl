@@ -16,7 +16,6 @@ export struct AstNode { AstHeader h; }
 export struct ImportNode {
     AstHeader h;
     symbol::Symbol*   module_name;
-    bool      is_reexport;              // `export import foo;` — re-exports foo's exported symbols
 }
 
 export struct VarDeclNode {
