@@ -1597,11 +1597,14 @@ struct SubstCtx {
     symbol::Symbol*[] vnames;
     u64[]             vvals;
     types::Ty*[]    vtys;
+    symbol::Symbol*[] vorig;   // vnames is blanked while walking a block that shadows the name; vorig restores it
+    arena::Arena*     arena;
 }
 
 fn void subst_node(SubstCtx* c, ast::AstNode* n) {
     if(n == null) { return; }
     switch(n.h.kind) {
+    case ast::AstKind::Ident: { subst_value_ident(c, n); return; }
     case ast::AstKind::NamedType: {
         ast::TypeNamedNode* t = (ast::TypeNamedNode*)n;
         if(t.namespace == null) {
@@ -1636,8 +1639,10 @@ fn void subst_node(SubstCtx* c, ast::AstNode* n) {
         return;
     }
     case ast::AstKind::BlockStmt: {
-        ast::BlockNode* b = (ast::BlockNode*)n;
-        for(u64 i = 0; i < b.stmts.len; i += 1) { subst_node(c, b.stmts[i]); }
+        ast::BlockNode* block = (ast::BlockNode*)n;
+        blank_shadowed_names(c, block);
+        for(u64 stmt_index = 0; stmt_index < block.stmts.len; stmt_index += 1) { subst_node(c, block.stmts[stmt_index]); }
+        restore_shadowed_names(c);
         return;
     }
     case ast::AstKind::IfStmt: {
@@ -1748,18 +1753,7 @@ fn void subst_node(SubstCtx* c, ast::AstNode* n) {
 fn void subst_size_expr(SubstCtx* c, ast::AstNode* n) {
     if(n == null) { return; }
     switch(n.h.kind) {
-    case ast::AstKind::Ident: {
-        ast::IdentNode* id = (ast::IdentNode*)n;
-        for(u64 i = 0; i < c.vnames.len; i += 1) {
-            if(id.name == c.vnames[i]) {
-                n.h.kind = ast::AstKind::IntLit;
-                n.h.ty = (void*)c.vtys[i];
-                ((ast::IntLitNode*)n).value = c.vvals[i];
-                return;
-            }
-        }
-        return;
-    }
+    case ast::AstKind::Ident: { subst_value_ident(c, n); return; }
     case ast::AstKind::BinaryOp: {
         ast::BinaryOpNode* e = (ast::BinaryOpNode*)n;
         subst_size_expr(c, e.lhs);
@@ -1768,6 +1762,49 @@ fn void subst_size_expr(SubstCtx* c, ast::AstNode* n) {
     }
     case ast::AstKind::UnaryOp: { subst_size_expr(c, ((ast::UnaryOpNode*)n).operand); return; }
     else { subst_node(c, n); return; }
+    }
+}
+
+fn void subst_value_ident(SubstCtx* c, ast::AstNode* n) {
+    ast::IdentNode* id = (ast::IdentNode*)n;
+    for(u64 value_index = 0; value_index < c.vnames.len; value_index += 1) {
+        if(c.vnames[value_index] == null || id.name != c.vnames[value_index]) { continue; }
+        i64 bound = (i64)c.vvals[value_index];
+        // synth re-derives an IntLit's type from its value, so a negative takes the source-level -lit shape.
+        if(bound < 0) {
+            ast::IntLitNode* magnitude = (ast::IntLitNode*)arena::alloc(c.arena, sizeof(ast::IntLitNode));
+            sys::memset(magnitude, 0, sizeof(ast::IntLitNode));
+            magnitude.h.kind = ast::AstKind::IntLit;
+            magnitude.h.src_pos = n.h.src_pos;
+            magnitude.value = (u64)(0 - bound);
+            n.h.kind = ast::AstKind::UnaryOp;
+            n.h.ty = null;
+            ((ast::UnaryOpNode*)n).op = token::TokenKind::Minus;
+            ((ast::UnaryOpNode*)n).operand = (ast::AstNode*)magnitude;
+            return;
+        }
+        n.h.kind = ast::AstKind::IntLit;
+        n.h.ty = (void*)c.vtys[value_index];
+        ((ast::IntLitNode*)n).value = c.vvals[value_index];
+        return;
+    }
+}
+
+// A local redeclaring a value param shadows it, so the param's literal must not replace refs in that block.
+fn void blank_shadowed_names(SubstCtx* c, ast::BlockNode* block) {
+    for(u64 stmt_index = 0; stmt_index < block.stmts.len; stmt_index += 1) {
+        ast::AstNode* stmt = block.stmts[stmt_index];
+        if(stmt == null || stmt.h.kind != ast::AstKind::VarDecl) { continue; }
+        symbol::Symbol* local_name = ((ast::VarDeclNode*)stmt).name;
+        for(u64 value_index = 0; value_index < c.vnames.len; value_index += 1) {
+            if(c.vnames[value_index] == local_name) { c.vnames[value_index] = null; }
+        }
+    }
+}
+
+fn void restore_shadowed_names(SubstCtx* c) {
+    for(u64 value_index = 0; value_index < c.vnames.len; value_index += 1) {
+        c.vnames[value_index] = c.vorig[value_index];
     }
 }
 
@@ -1785,9 +1822,11 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
     if(n_type == 0 && n_val == 0) { return; }
     SubstCtx c;
     sys::memset(&c, 0, sizeof(SubstCtx));
+    c.arena = a;
     c.tnames.ptr = arena::alloc(a, n_type * sizeof(symbol::Symbol*));
     c.ttys.ptr = arena::alloc(a, n_type * sizeof(types::Ty*));
     c.vnames.ptr = arena::alloc(a, n_val * sizeof(symbol::Symbol*));
+    c.vorig.ptr = arena::alloc(a, n_val * sizeof(symbol::Symbol*));
     c.vvals.ptr = arena::alloc(a, n_val * sizeof(u64));
     c.vtys.ptr = arena::alloc(a, n_val * sizeof(types::Ty*));
     carg_index = 0;
@@ -1801,6 +1840,8 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
             } else if(cargs[carg_index].kind == value::ValueKind::Int) {
                 c.vnames[c.vnames.len] = clone.params[i].name;
                 c.vnames.len += 1;
+                c.vorig[c.vorig.len] = clone.params[i].name;
+                c.vorig.len += 1;
                 c.vvals[c.vvals.len] = (u64)cargs[carg_index].data.i;
                 c.vvals.len += 1;
                 c.vtys[c.vtys.len] = cargs[carg_index].ty;

@@ -2038,6 +2038,7 @@ fn i32 monomorphize_mangles_distinct(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
+    comptime_interp::install_hooks();   // sema resolves generic calls through these, as the driver does
     u8[] suite = "Comptime Tests";
     testing::add(suite, "env_bind_lookup",            &env_bind_lookup);
     testing::add(suite, "env_parent_chain",           &env_parent_chain);

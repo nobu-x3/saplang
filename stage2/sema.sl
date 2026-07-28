@@ -1567,13 +1567,6 @@ fn types::Ty* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* gen
     return ret;
 }
 
-fn bool has_comptime_type_param(ast::FnDeclNode* generic) {
-    for(u64 i = 0; i < generic.params.len; i += 1) {
-        if(generic.params[i].is_comptime && is_type_kw(generic.params[i].type_expr)) { return true; }
-    }
-    return false;
-}
-
 // An explicit type argument is a type expression, or a bare name / mod::name that resolves to a nominal type.
 fn types::Ty* resolve_type_arg(Sema* s, ast::AstNode* arg) {
     if(ast::is_type(arg.h.kind)) { return resolve_type(s, arg); }
@@ -1665,9 +1658,9 @@ fn types::Ty* synth_call(Sema* s, ast::CallNode* n) {
             for(u64 i = 0; i < generic.params.len; i += 1) {
                 if(!generic.params[i].is_comptime) { n_runtime += 1; }
             }
-            // Inference form (runtime args only) vs explicit all-args form; value-param generics (no comptime Type param) use the normal path.
+            // Inference form (runtime args only) vs explicit all-args form.
             if(n.args.len == n_runtime) { return synth_generic_call(s, n, generic); }
-            if(n.args.len == generic.params.len && has_comptime_type_param(generic)) {
+            if(n.args.len == generic.params.len) {
                 return synth_generic_call_explicit(s, n, generic);
             }
         }

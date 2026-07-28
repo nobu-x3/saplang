@@ -546,6 +546,42 @@ fn i32 ok_generic_infer_slice(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A comptime value param monomorphizes like a type param; refs to it become the bound literal.
+fn i32 ok_comptime_value_param(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 addn(comptime i32 N, i32 x) { return x + N; }\nexport fn i32 f() { return addn(5, 3); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)1, m)) { return -2; }
+    return 0;
+}
+
+fn i32 ok_comptime_value_param_distinct(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 mul(comptime i32 N, i32 x) { return x * N; }\nexport fn i32 f() { return mul(1, 5) + mul(4, 3); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)2, m)) { return -2; }
+    return 0;
+}
+
+fn i32 ok_comptime_value_param_negative(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 addn(comptime i32 N, i32 x) { return x + N; }\nexport fn i32 f() { return addn(-3, 10); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A local shadowing the value param keeps its own value; substitution must not reach it.
+fn i32 ok_comptime_value_param_shadowed(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 f2(comptime i32 N, i32 x) { { i32 N = 7; return N; } }\nexport fn i32 f() { return f2(5, 1); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_comptime_value_param_not_literal(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 addn(comptime i32 N, i32 x) { return x + N; }\nexport fn i32 f() { i32 v = 2; return addn(v, 3); }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "comptime value argument must be an integer literal", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)96, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_generic_explicit(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { return id(i32, 5); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1343,6 +1379,11 @@ fn i32 main() {
     testing::add(suite, "ok_generic_call_infer",    &ok_generic_call_infer);
     testing::add(suite, "err_generic_call_return_type", &err_generic_call_return_type);
     testing::add(suite, "ok_generic_infer_pointer",  &ok_generic_infer_pointer);
+    testing::add(suite, "ok_comptime_value_param",   &ok_comptime_value_param);
+    testing::add(suite, "ok_comptime_value_param_distinct", &ok_comptime_value_param_distinct);
+    testing::add(suite, "ok_comptime_value_param_negative", &ok_comptime_value_param_negative);
+    testing::add(suite, "ok_comptime_value_param_shadowed", &ok_comptime_value_param_shadowed);
+    testing::add(suite, "err_comptime_value_param_not_literal", &err_comptime_value_param_not_literal);
     testing::add(suite, "ok_generic_infer_slice",    &ok_generic_infer_slice);
     testing::add(suite, "ok_generic_explicit",      &ok_generic_explicit);
     testing::add(suite, "err_generic_explicit_arg_mismatch", &err_generic_explicit_arg_mismatch);
