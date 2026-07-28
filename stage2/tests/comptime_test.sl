@@ -1513,7 +1513,7 @@ fn i32 eval_call_extern_rejected(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 eval_call_generic_needs_inference(arena::Arena* a, u8[] m) {
+fn i32 eval_call_generic_uninferable(arena::Arena* a, u8[] m) {
     module::Module* mm = mk_module(a);
     comptime_interp::Interp ip = comptime_interp::new_interp(mm);
     ast::FnDeclNode* gen = mk_fn_node(a, mk_block(a, null, 0));
@@ -1525,7 +1525,7 @@ fn i32 eval_call_generic_needs_inference(arena::Arena* a, u8[] m) {
     gen.params = {&params[0], 1};
     value::Value v = comptime_interp::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_gen, null), null, 0));
     if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Error, m)) { return -1; }
-    if(!testing::expect_substr(mm.diag.entries[0].msg, "inference", m)) { return -2; }
+    if(!testing::expect_substr(mm.diag.entries[0].msg, "cannot infer comptime arguments", m)) { return -2; }
     return 0;
 }
 
@@ -2117,7 +2117,7 @@ fn i32 main() {
     testing::add(suite, "eval_call_recursion_limit",   &eval_call_recursion_limit);
     testing::add(suite, "new_interp_uses_module_limits", &new_interp_uses_module_limits);
     testing::add(suite, "eval_call_extern_rejected",   &eval_call_extern_rejected);
-    testing::add(suite, "eval_call_generic_needs_inference", &eval_call_generic_needs_inference);
+    testing::add(suite, "eval_call_generic_uninferable", &eval_call_generic_uninferable);
     testing::add(suite, "eval_call_multi_param",        &eval_call_multi_param);
     testing::add(suite, "eval_call_arg_error",          &eval_call_arg_error);
     testing::add(suite, "clone_fn_deep_copy",           &clone_fn_deep_copy);

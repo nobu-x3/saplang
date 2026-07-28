@@ -680,6 +680,12 @@ export fn void init_body_sync() {
 
 // Exactly one thread checks a given fn; others wait for Checked. body_owner lets a comptime call recursing into the
 // fn being checked (same thread) proceed instead of self-waiting. check_fn_body runs unlocked, so N fns check at once.
+// True while this very thread is checking func's body — a comptime call in would interpret a half-checked body.
+export fn bool body_check_reentrant(ast::FnDeclNode* func) {
+    if(!g_body_sync_ready) { return false; }
+    return func.body_state == ast::BodyState::InProgress && func.body_owner == threads::self();
+}
+
 export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, module::Module* requester) {
     if(!g_body_sync_ready) { init_body_sync(); }
     u64 me = threads::self();

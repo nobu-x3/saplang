@@ -748,6 +748,18 @@ fn bool has_comptime_params(ast::FnDeclNode* func) {
 }
 
 fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u32 call_site_pos) {
+    if(sema::body_check_reentrant(func)) {
+        u8[] name_str = interner::symbol_str(func.name);
+        u8[256] scratch;
+        i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot call %.*s at comptime from inside its own body", (i32)name_str.len, (i8*)name_str.ptr);
+        if(written > 0) {
+            u64 message_len = (u64)written;
+            if(message_len > 255) { message_len = 255; }
+            u8[] msg = {&scratch[0], message_len};
+            diag::report(&ip.m.diag, ip.m.arena, call_site_pos, msg);
+        }
+        return value::val_error();
+    }
     if(ip.depth >= ip.max_depth) {
         u8[] msg = "comptime recursion limit exceeded";
         diag::report(&ip.m.diag, ip.m.arena, call_site_pos, msg);
@@ -756,9 +768,14 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
     ip.depth += 1;
     Env* saved = ip.env;
     ip.env = env_push(saved, ip.m.arena, 16);
+    // A clone invoked with runtime-only args has its comptime params already substituted away.
+    bool runtime_args_only = args.len != func.params.len;
+    u64 arg_cursor = 0;
     for(u64 param_index = 0; param_index < func.params.len; param_index += 1) {
+        if(runtime_args_only && func.params[param_index].is_comptime) { continue; }
         sema::Decl* pd = (sema::Decl*)func.params[param_index].decl;
-        if(pd != null && param_index < args.len) { env_bind(ip.env, ip.m.arena, pd, args[param_index]); }
+        if(pd != null && arg_cursor < args.len) { env_bind(ip.env, ip.m.arena, pd, args[arg_cursor]); }
+        arg_cursor += 1;
     }
     Flow saved_flow = ip.flow;
     value::Value saved_return_value = ip.return_value;
@@ -778,7 +795,11 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
     // sema already monomorphized an explicit generic call (e.g. `Vec(i32)` in type position); invoke the clone directly.
     if(n.resolved_fn != null) {
         ast::FnDeclNode* clone = (ast::FnDeclNode*)n.resolved_fn;
-        if(n.args.len == clone.params.len) {
+        u64 clone_runtime = 0;
+        for(u64 param_index = 0; param_index < clone.params.len; param_index += 1) {
+            if(!clone.params[param_index].is_comptime) { clone_runtime += 1; }
+        }
+        if(n.args.len == clone.params.len || n.args.len == clone_runtime) {
             value::Value[] cargs = {null, 0};
             if(n.args.len > 0) {
                 cargs.ptr = arena::alloc(ip.m.arena, n.args.len * sizeof(value::Value));
@@ -830,10 +851,28 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
         }
     }
     if(has_comptime_params(func)) {
+        // Inference form: only the runtime args are given, so unify them against the param patterns.
         if(n.args.len != func.params.len) {
-            u8[] msg = "comptime argument inference not yet supported; pass all arguments explicitly";
-            diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
-            return value::val_error();
+            u64 runtime_count = 0;
+            for(u64 param_index = 0; param_index < func.params.len; param_index += 1) {
+                if(!func.params[param_index].is_comptime) { runtime_count += 1; }
+            }
+            if(n.args.len != runtime_count) {
+                u8[] msg = "wrong number of arguments for a generic call at comptime";
+                diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+                return value::val_error();
+            }
+            types::Ty*[] arg_types;
+            arg_types.ptr = (types::Ty**)arena::alloc(ip.m.arena, (args.len + 1) * sizeof(types::Ty*));
+            arg_types.len = args.len;
+            for(u64 arg_index = 0; arg_index < args.len; arg_index += 1) { arg_types[arg_index] = args[arg_index].ty; }
+            ast::FnDeclNode* inferred = resolve_generic_call(ip.m, func, arg_types);
+            if(inferred == null) {
+                u8[] msg = "cannot infer comptime arguments; pass them explicitly";
+                diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+                return value::val_error();
+            }
+            return invoke(ip, inferred, args, n.h.src_pos);
         }
         value::Value[] cargs;
         cargs.ptr = arena::alloc(ip.m.arena, func.params.len * sizeof(value::Value));

@@ -331,6 +331,21 @@ fn i32 err_type_info_at_runtime(arena::Arena* a, u8[] m) {
 // TypeInfo / FieldInfo / TypeKind are nameable in user scope.
 // A global initializer may take another global's address; the linker resolves it.
 // Overloads differ by parameter types; identical signatures and extern participation are errors.
+// A comptime call to a generic infers its type args from the runtime args, like the runtime path.
+fn i32 ok_comprun_generic_inferred(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\ncomprun { i32 v = id(5); if(v != 5) { comperror(\"bad\"); } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A comptime call into the function whose body is being checked is diagnosed, not spun to the recursion cap.
+fn i32 err_comptime_self_reentry(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 selfish(i32 x) {\n  comprun { i32 v = selfish(1); }\n  return x;\n}\nexport fn i32 f() { return selfish(2); }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot call selfish at comptime from inside its own body", m)) { return -2; }
+    return 0;
+}
+
 fn i32 ok_overload_distinct_params(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 f(i32 x) { return x; }\nfn i32 f(f64 x) { return (i32)x; }\nexport fn i32 g() { return f(1) + f(1.0); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1446,6 +1461,8 @@ fn i32 main() {
     testing::add(suite, "err_compsplice_unsupported", &err_compsplice_unsupported);
     testing::add(suite, "err_type_info_at_runtime",  &err_type_info_at_runtime);
     testing::add(suite, "ok_type_info_in_comprun",   &ok_type_info_in_comprun);
+    testing::add(suite, "ok_comprun_generic_inferred", &ok_comprun_generic_inferred);
+    testing::add(suite, "err_comptime_self_reentry",  &err_comptime_self_reentry);
     testing::add(suite, "ok_overload_distinct_params", &ok_overload_distinct_params);
     testing::add(suite, "err_overload_duplicate_signature", &err_overload_duplicate_signature);
     testing::add(suite, "err_extern_fn_overload",    &err_extern_fn_overload);
