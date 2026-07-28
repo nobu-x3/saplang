@@ -1541,6 +1541,7 @@ fn sapir::ConstInit const_init_from_value(Lower* lo, value::Value* v, types::Ty*
     case value::ValueKind::Null:  { ci.kind = sapir::ConstInitKind::Null; }
     case value::ValueKind::Bytes: { ci.kind = sapir::ConstInitKind::Bytes; ci.bytes = v.data.bytes; }
     case value::ValueKind::FnRef: { ci.kind = sapir::ConstInitKind::FnRef; ci.decl_index = get_or_create_fn_decl(lo, ((ast::FnDeclNode*)v.data.fn_ref).decl); }
+    case value::ValueKind::GlobalRef: { ci.kind = sapir::ConstInitKind::GlobalRef; ci.decl_index = get_or_create_global_decl(lo, ((ast::VarDeclNode*)v.data.global_ref).decl); }
     case value::ValueKind::Struct: {
         ci.kind = sapir::ConstInitKind::Struct;
         ci.elems = {(sapir::ConstInit*)arena::alloc(lo.arena, (v.data.elems.len + 1) * sizeof(sapir::ConstInit)), v.data.elems.len};

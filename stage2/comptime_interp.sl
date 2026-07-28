@@ -503,6 +503,10 @@ fn value::Value eval_binary(Interp* ip, ast::BinaryOpNode* n) {
 }
 
 fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
+    if(n.op == token::TokenKind::Amp) {
+        ast::VarDeclNode* target = global_operand(n.operand);
+        if(target != null) { return value::val_global_ref(target, (types::Ty*)n.h.ty); }
+    }
     value::Value v = eval(ip, n.operand);
     if(v.kind == value::ValueKind::Error) { return v; }
     // &fn is the function pointer itself, same value as the bare function.
@@ -512,6 +516,17 @@ fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "operator cannot be evaluated at comptime");
     }
     return result;
+}
+
+// Locals share DeclKind::Node with globals; only a top-level var carries a qualified_name.
+fn ast::VarDeclNode* global_operand(ast::AstNode* operand) {
+    if(operand == null || operand.h.kind != ast::AstKind::Ident) { return null; }
+    sema::Decl* d = (sema::Decl*)((ast::IdentNode*)operand).resolved;
+    if(d == null || d.kind != sema::DeclKind::Node) { return null; }
+    if(d.data.node == null || d.data.node.h.kind != ast::AstKind::VarDecl) { return null; }
+    ast::VarDeclNode* var_decl = (ast::VarDeclNode*)d.data.node;
+    if(var_decl.qualified_name == null) { return null; }
+    return var_decl;
 }
 
 fn value::Value eval_cast(Interp* ip, ast::CastNode* n) {

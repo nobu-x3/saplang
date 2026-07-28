@@ -12,6 +12,7 @@ export enum ValueKind : u16 {
     Struct,
     Array,
     FnRef,
+    GlobalRef,
     Null,
     Void,
     Error,
@@ -25,6 +26,7 @@ export union ValueData {
     types::Ty*      type_ref;
     Value[]           elems;
     ast::FnDeclNode*  fn_ref;
+    ast::VarDeclNode* global_ref;
 }
 
 export struct Value {
@@ -102,6 +104,16 @@ export fn Value val_fn(ast::FnDeclNode* func, types::Ty* ty) {
     r.kind = ValueKind::FnRef;
     r.ty = ty;
     r.data.fn_ref = func;
+    return r;
+}
+
+// &<module-level var>: a link-time address, not a foldable value.
+export fn Value val_global_ref(ast::VarDeclNode* var_decl, types::Ty* ty) {
+    Value r;
+    sys::memset(&r, 0, sizeof(Value));
+    r.kind = ValueKind::GlobalRef;
+    r.ty = ty;
+    r.data.global_ref = var_decl;
     return r;
 }
 

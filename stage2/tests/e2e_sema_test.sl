@@ -329,6 +329,27 @@ fn i32 err_type_info_at_runtime(arena::Arena* a, u8[] m) {
 }
 
 // TypeInfo / FieldInfo / TypeKind are nameable in user scope.
+// A global initializer may take another global's address; the linker resolves it.
+fn i32 ok_global_addr_of_global(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "i32 v = 5;\ni32* p = &v;\nexport fn i32 f() { return *p; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_global_addr_of_struct_global(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 a; i32 b; }\nP g = {7, 8};\nP* gp = &g;\nexport fn i32 f() { return gp.a; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A local is not a link-time address, so &local stays a comptime error.
+fn i32 err_comptime_addr_of_local(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun { i32 x = 5; i32* p = &x; }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "operator cannot be evaluated at comptime", m)) { return -2; }
+    return 0;
+}
+
 fn i32 ok_reflection_names(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; }\ncomprun { TypeInfo ti = type_info(P); FieldInfo f = ti.fields[1]; if(f.offset != (u64)4) { comperror(\"off\"); } }\nexport fn i32 f() { return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1404,6 +1425,9 @@ fn i32 main() {
     testing::add(suite, "err_compsplice_unsupported", &err_compsplice_unsupported);
     testing::add(suite, "err_type_info_at_runtime",  &err_type_info_at_runtime);
     testing::add(suite, "ok_type_info_in_comprun",   &ok_type_info_in_comprun);
+    testing::add(suite, "ok_global_addr_of_global",  &ok_global_addr_of_global);
+    testing::add(suite, "ok_global_addr_of_struct_global", &ok_global_addr_of_struct_global);
+    testing::add(suite, "err_comptime_addr_of_local", &err_comptime_addr_of_local);
     testing::add(suite, "ok_reflection_names",       &ok_reflection_names);
     testing::add(suite, "ok_typekind_enum",          &ok_typekind_enum);
     testing::add(suite, "ok_user_type_shadows_builtin", &ok_user_type_shadows_builtin);

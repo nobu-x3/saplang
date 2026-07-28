@@ -506,6 +506,7 @@ fn void* const_value(CG* cg, sapir::ConstInit* ci) {
     case sapir::ConstInitKind::Float: { return llvm::LLVMConstReal(map_type(cg, ci.ty), ci.f); }
     case sapir::ConstInitKind::Null:  { return llvm::LLVMConstNull(map_type(cg, ci.ty)); }
     case sapir::ConstInitKind::FnRef: { return cg.decl_map[ci.decl_index]; }
+    case sapir::ConstInitKind::GlobalRef: { return cg.decl_map[ci.decl_index]; }
     case sapir::ConstInitKind::Struct: {
         void** vals = (void**)arena::alloc(cg.arena, (ci.elems.len + 1) * sizeof(void*));
         for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }

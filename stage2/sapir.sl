@@ -55,6 +55,7 @@ export enum ConstInitKind : u8 {
     Struct,
     Array,
     FnRef,
+    GlobalRef,           // &<global>: the address of another global, resolved by the linker
     Slice,              // array-literal into a slice global: `elems` back a static array, the slice is {ptr, len}
 }
 
@@ -65,7 +66,7 @@ export struct ConstInit {
     f64             f;              // Float
     u8[]            bytes;          // Bytes
     ConstInit[]     elems;          // Struct (field order) / Array
-    u32             decl_index;     // FnRef — into SapirModule.decls
+    u32             decl_index;     // FnRef / GlobalRef — into SapirModule.decls
 }
 
 export struct SapirGlobal {
