@@ -493,6 +493,22 @@ fn bool type_has_comptime_part(types::Ty* t) {
     return false;
 }
 
+// Runs in the body phase, not signature resolution: it reads other decls' field types, which are
+// only complete once every signature has resolved.
+fn void check_signature_is_runtime(Sema* s, ast::FnDeclNode* func) {
+    if(is_generic_fn(func)) { return; }   // a template's `T value` param is still the Type placeholder
+    types::Ty* ret = null;
+    if(func.return_type != null) { ret = (types::Ty*)func.return_type.h.ty; }
+    if(ret != null && ret.kind != types::TypeKind::ComptimeType && type_has_comptime_part(ret)) {
+        diag_comptime_only_type(s, func.h.src_pos, ret);
+    }
+    for(u64 param_index = 0; param_index < func.params.len; param_index += 1) {
+        if(func.params[param_index].is_comptime) { continue; }
+        types::Ty* pt = (types::Ty*)func.params[param_index].resolved_type;
+        if(type_has_comptime_part(pt)) { diag_comptime_only_type(s, func.params[param_index].src_pos, pt); }
+    }
+}
+
 fn void diag_comptime_only_type(Sema* s, u32 src_pos, types::Ty* t) {
     u8[] type_str = types_print::print_to_arena(t, balloc(s));
     u8[256] scratch;
@@ -517,15 +533,6 @@ fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
             param_type_mem[param_index] = param_type;
         }
         param_types = {param_type_mem, fn_decl.params.len};
-    }
-    // A template's `T value` param is still the Type placeholder; only its clones are lowered.
-    if(return_type.kind != types::TypeKind::ComptimeType && !is_generic_fn(fn_decl)) {
-        if(type_has_comptime_part(return_type)) { diag_comptime_only_type(s, fn_decl.h.src_pos, return_type); }
-        for(u64 param_index = 0; param_index < fn_decl.params.len; param_index += 1) {
-            if(fn_decl.params[param_index].is_comptime) { continue; }
-            types::Ty* pt = (types::Ty*)fn_decl.params[param_index].resolved_type;
-            if(type_has_comptime_part(pt)) { diag_comptime_only_type(s, fn_decl.params[param_index].src_pos, pt); }
-        }
     }
     Decl* own = (Decl*)fn_decl.decl;
     if(own != null) { own.ty = types::intern_fn_ptr(return_type, param_types, false); }
@@ -717,6 +724,7 @@ export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, mod
 
 fn void check_fn_body(Sema* s, ast::FnDeclNode* func) {
     if(func.body == null) { return; }
+    check_signature_is_runtime(s, func);
     Scope* fn_scope = scope_new(balloc(s), (Scope*)s.m.global_scope, 16);
     for(u64 i = 0; i < func.params.len; i += 1) {
         Decl* param_decl = register_sym(s, fn_scope, func.params[i].name, false, DeclKind::Param, func.params[i].src_pos);

@@ -26,7 +26,7 @@ export fn ast::AstNode* parse(module::Module* m) {
         ast::AstNode* d = parse_top_decl(&p);
         if (d != null) { list::push(&decls, m.arena, d); }
     }
-    ast::BlockNode* root = arena::alloc(m.arena, sizeof(ast::BlockNode));
+    ast::BlockNode* root = node_alloc(m.arena, sizeof(ast::BlockNode));
     root.h.kind = ast::AstKind::BlockStmt;
     root.h.flags = (ast::AstFlags)0;
     root.h.src_pos = 0;
@@ -42,7 +42,7 @@ export fn ast::AstNode* parse_stmt_fragment(module::Module* m) {
         ast::AstNode* s = parse_stmt(&p);
         if (s != null) { list::push(&stmts, m.arena, s); }
     }
-    ast::BlockNode* blk = arena::alloc(m.arena, sizeof(ast::BlockNode));
+    ast::BlockNode* blk = node_alloc(m.arena, sizeof(ast::BlockNode));
     blk.h.kind = ast::AstKind::BlockStmt;
     blk.h.flags = (ast::AstFlags)0;
     blk.h.src_pos = 0;
@@ -136,6 +136,14 @@ fn bool can_start_expr(token::TokenKind k) {
         || k == token::TokenKind::Star;
 }
 
+// AST nodes are zeroed on allocation: the whole compiler reads unset header fields (h.ty above all)
+// as null, and arena::alloc hands back whatever the page held.
+fn void* node_alloc(arena::Arena* a, u64 size) {
+    void* mem = arena::alloc(a, size);
+    if(mem != null) { sys::memset(mem, 0, size); }
+    return mem;
+}
+
 fn ast::AstNode* parse_import(Parser* p) {
     token::Token import_tok = expect(p, token::TokenKind::IMPORT);
     if(import_tok.kind == token::TokenKind::ERROR) {
@@ -149,7 +157,7 @@ fn ast::AstNode* parse_import(Parser* p) {
     if(semi_colon.kind == token::TokenKind::ERROR) {
         return mk_error_node_and_consume(p, semi_colon.src_pos);
     }
-    ast::ImportNode* import_node = arena::alloc(p.m.arena, sizeof(ast::ImportNode));
+    ast::ImportNode* import_node = node_alloc(p.m.arena, sizeof(ast::ImportNode));
     import_node.h.kind = ast::AstKind::ImportDecl;
     import_node.h.flags = (ast::AstFlags)0;
     import_node.h.src_pos = import_tok.src_pos;
@@ -170,7 +178,7 @@ fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
         consume(p);
         if(peek(p, 0).kind == token::TokenKind::UNDEFINED && peek(p, 1).kind == token::TokenKind::Semi) {
             token::Token u_tok = consume(p);
-            ast::UndefinedLitNode* u = arena::alloc(p.m.arena, sizeof(ast::UndefinedLitNode));
+            ast::UndefinedLitNode* u = node_alloc(p.m.arena, sizeof(ast::UndefinedLitNode));
             u.h.kind = ast::AstKind::UndefinedLit;
             u.h.flags = (ast::AstFlags)0;
             u.h.src_pos = u_tok.src_pos;
@@ -182,8 +190,7 @@ fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
     }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::VarDeclNode* var_decl_node = arena::alloc(p.m.arena, sizeof(ast::VarDeclNode));
-    sys::memset(var_decl_node, 0, sizeof(ast::VarDeclNode));
+    ast::VarDeclNode* var_decl_node = node_alloc(p.m.arena, sizeof(ast::VarDeclNode));
     var_decl_node.h.kind = ast::AstKind::VarDecl;
     var_decl_node.h.flags = (ast::AstFlags)0;
     if(had_err) { var_decl_node.h.flags = ast::AstFlags::HadError; }
@@ -217,8 +224,7 @@ fn ast::AstNode* parse_fn_decl(Parser* p, bool is_exported) {
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
     ast::AstNode* body = parse_block(p);
     if(had_error(body)) { had_err = true; }
-    ast::FnDeclNode* fn_decl_node = arena::alloc(p.m.arena, sizeof(ast::FnDeclNode));
-    sys::memset(fn_decl_node, 0, sizeof(ast::FnDeclNode));
+    ast::FnDeclNode* fn_decl_node = node_alloc(p.m.arena, sizeof(ast::FnDeclNode));
     fn_decl_node.h.kind = ast::AstKind::FnDecl;
     fn_decl_node.h.flags = (ast::AstFlags)0;
     if(had_err) { fn_decl_node.h.flags = ast::AstFlags::HadError; }
@@ -327,7 +333,7 @@ fn ast::AstNode* parse_return(Parser* p) {
     }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::ReturnNode* n = arena::alloc(p.m.arena, sizeof(ast::ReturnNode));
+    ast::ReturnNode* n = node_alloc(p.m.arena, sizeof(ast::ReturnNode));
     n.h.kind = ast::AstKind::ReturnStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -343,7 +349,7 @@ fn ast::AstNode* parse_break(Parser* p) {
     bool had_err = false;
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::BreakNode* n = arena::alloc(p.m.arena, sizeof(ast::BreakNode));
+    ast::BreakNode* n = node_alloc(p.m.arena, sizeof(ast::BreakNode));
     n.h.kind = ast::AstKind::BreakStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -358,7 +364,7 @@ fn ast::AstNode* parse_continue(Parser* p) {
     bool had_err = false;
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::ContinueNode* n = arena::alloc(p.m.arena, sizeof(ast::ContinueNode));
+    ast::ContinueNode* n = node_alloc(p.m.arena, sizeof(ast::ContinueNode));
     n.h.kind = ast::AstKind::ContinueStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -373,7 +379,7 @@ fn ast::AstNode* parse_comprun(Parser* p) {
     bool had_err = false;
     ast::AstNode* body = parse_block(p);
     if(had_error(body)) { had_err = true; }
-    ast::CompRunNode* n = arena::alloc(p.m.arena, sizeof(ast::CompRunNode));
+    ast::CompRunNode* n = node_alloc(p.m.arena, sizeof(ast::CompRunNode));
     n.h.kind = ast::AstKind::ComprunStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -418,8 +424,7 @@ fn ast::AstNode* parse_struct_decl(Parser* p, bool is_exported) {
     ast::FieldDecl[] fields = parse_fields(p, &had_err);
     token::Token rbrace = expect(p, token::TokenKind::RBrace);
     if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::StructDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::StructDeclNode));
-    sys::memset(n, 0, sizeof(ast::StructDeclNode));
+    ast::StructDeclNode* n = node_alloc(p.m.arena, sizeof(ast::StructDeclNode));
     n.h.kind = ast::AstKind::StructDecl;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -442,8 +447,7 @@ fn ast::AstNode* parse_union_decl(Parser* p, bool is_exported) {
     ast::FieldDecl[] fields = parse_fields(p, &had_err);
     token::Token rbrace = expect(p, token::TokenKind::RBrace);
     if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::UnionDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::UnionDeclNode));
-    sys::memset(n, 0, sizeof(ast::UnionDeclNode));
+    ast::UnionDeclNode* n = node_alloc(p.m.arena, sizeof(ast::UnionDeclNode));
     n.h.kind = ast::AstKind::UnionDecl;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -477,8 +481,7 @@ fn ast::AstNode* parse_extern_fn_decl(Parser* p, bool is_exported, u32 start) {
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::ExternFnDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternFnDeclNode));
-    sys::memset(n, 0, sizeof(ast::ExternFnDeclNode));
+    ast::ExternFnDeclNode* n = node_alloc(p.m.arena, sizeof(ast::ExternFnDeclNode));
     n.h.kind = ast::AstKind::ExternFnDecl;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -542,8 +545,7 @@ fn ast::AstNode* parse_extern_struct_decl(Parser* p, bool is_exported, u32 start
             if(peek(p, 0).kind == token::TokenKind::Semi) { consume(p); }   // a braced body self-terminates; a trailing ; is optional
         }
     }
-    ast::ExternStructDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternStructDeclNode));
-    sys::memset(n, 0, sizeof(ast::ExternStructDeclNode));
+    ast::ExternStructDeclNode* n = node_alloc(p.m.arena, sizeof(ast::ExternStructDeclNode));
     n.h.kind = ast::AstKind::ExternStructDecl;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -605,8 +607,7 @@ fn ast::AstNode* parse_extern_union_decl(Parser* p, bool is_exported, u32 start,
             if(peek(p, 0).kind == token::TokenKind::Semi) { consume(p); }   // a braced body self-terminates; a trailing ; is optional
         }
     }
-    ast::ExternUnionDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternUnionDeclNode));
-    sys::memset(n, 0, sizeof(ast::ExternUnionDeclNode));
+    ast::ExternUnionDeclNode* n = node_alloc(p.m.arena, sizeof(ast::ExternUnionDeclNode));
     n.h.kind = ast::AstKind::ExternUnionDecl;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -693,8 +694,7 @@ fn ast::AstNode* parse_extern_block(Parser* p) {
     p.in_extern = saved_in_extern;
     token::Token rbrace = expect(p, token::TokenKind::RBrace);
     if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::ExternBlockNode* n = arena::alloc(p.m.arena, sizeof(ast::ExternBlockNode));
-    sys::memset(n, 0, sizeof(ast::ExternBlockNode));
+    ast::ExternBlockNode* n = node_alloc(p.m.arena, sizeof(ast::ExternBlockNode));
     n.h.kind = ast::AstKind::ExternBlock;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -725,8 +725,7 @@ fn ast::AstNode* parse_alias_decl(Parser* p, bool is_exported) {
     if(!target || had_error(target)) { had_err = true; }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::AliasDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::AliasDeclNode));
-    sys::memset(n, 0, sizeof(ast::AliasDeclNode));
+    ast::AliasDeclNode* n = node_alloc(p.m.arena, sizeof(ast::AliasDeclNode));
     n.h.kind = ast::AstKind::AliasDecl;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -779,8 +778,7 @@ fn ast::AstNode* parse_enum_decl(Parser* p, bool is_exported) {
     ast::EnumMember[] members = parse_enum_members(p, &had_err);
     token::Token rbrace = expect(p, token::TokenKind::RBrace);
     if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::EnumDeclNode* n = arena::alloc(p.m.arena, sizeof(ast::EnumDeclNode));
-    sys::memset(n, 0, sizeof(ast::EnumDeclNode));
+    ast::EnumDeclNode* n = node_alloc(p.m.arena, sizeof(ast::EnumDeclNode));
     n.h.kind = ast::AstKind::EnumDecl;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -816,7 +814,7 @@ fn ast::AstNode* parse_sizeof(Parser* p) {
     ast::AstNode* arg = parse_sizeof_alignof_arg(p, &had_err);
     token::Token rparen = expect(p, token::TokenKind::RParen);
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::SizeofNode* n = arena::alloc(p.m.arena, sizeof(ast::SizeofNode));
+    ast::SizeofNode* n = node_alloc(p.m.arena, sizeof(ast::SizeofNode));
     n.h.kind = ast::AstKind::Sizeof;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -834,7 +832,7 @@ fn ast::AstNode* parse_alignof(Parser* p) {
     ast::AstNode* arg = parse_sizeof_alignof_arg(p, &had_err);
     token::Token rparen = expect(p, token::TokenKind::RParen);
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::AlignofNode* n = arena::alloc(p.m.arena, sizeof(ast::AlignofNode));
+    ast::AlignofNode* n = node_alloc(p.m.arena, sizeof(ast::AlignofNode));
     n.h.kind = ast::AstKind::Alignof;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -853,7 +851,7 @@ fn ast::AstNode* parse_typeof(Parser* p) {
     if(!expr || had_error(expr)) { had_err = true; }
     token::Token rparen = expect(p, token::TokenKind::RParen);
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::TypeofNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeofNode));
+    ast::TypeofNode* n = node_alloc(p.m.arena, sizeof(ast::TypeofNode));
     n.h.kind = ast::AstKind::Typeof;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -872,7 +870,7 @@ fn ast::AstNode* parse_type_info(Parser* p) {
     if(!arg || had_error(arg)) { had_err = true; }
     token::Token rparen = expect(p, token::TokenKind::RParen);
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::TypeInfoNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeInfoNode));
+    ast::TypeInfoNode* n = node_alloc(p.m.arena, sizeof(ast::TypeInfoNode));
     n.h.kind = ast::AstKind::Type_info;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -888,7 +886,7 @@ fn ast::AstNode* parse_compcode(Parser* p) {
     bool had_err = false;
     ast::AstNode* body = parse_block(p);
     if(had_error(body)) { had_err = true; }
-    ast::CompCodeNode* n = arena::alloc(p.m.arena, sizeof(ast::CompCodeNode));
+    ast::CompCodeNode* n = node_alloc(p.m.arena, sizeof(ast::CompCodeNode));
     n.h.kind = ast::AstKind::Compcode;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -906,7 +904,7 @@ fn ast::AstNode* parse_compsplice(Parser* p) {
     if(!code || had_error(code)) { had_err = true; }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::CompSpliceNode* n = arena::alloc(p.m.arena, sizeof(ast::CompSpliceNode));
+    ast::CompSpliceNode* n = node_alloc(p.m.arena, sizeof(ast::CompSpliceNode));
     n.h.kind = ast::AstKind::CompspliceStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -928,7 +926,7 @@ fn ast::AstNode* parse_compinsert(Parser* p) {
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::CompInsertNode* n = arena::alloc(p.m.arena, sizeof(ast::CompInsertNode));
+    ast::CompInsertNode* n = node_alloc(p.m.arena, sizeof(ast::CompInsertNode));
     n.h.kind = ast::AstKind::CompinsertStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -950,7 +948,7 @@ fn ast::AstNode* parse_comperror(Parser* p) {
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::CompErrorNode* n = arena::alloc(p.m.arena, sizeof(ast::CompErrorNode));
+    ast::CompErrorNode* n = node_alloc(p.m.arena, sizeof(ast::CompErrorNode));
     n.h.kind = ast::AstKind::ComperrorStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -972,7 +970,7 @@ fn ast::AstNode* parse_compwarning(Parser* p) {
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
     token::Token semi = expect(p, token::TokenKind::Semi);
     if(semi.kind == token::TokenKind::ERROR) { had_err = true; }
-    ast::CompWarningNode* n = arena::alloc(p.m.arena, sizeof(ast::CompWarningNode));
+    ast::CompWarningNode* n = node_alloc(p.m.arena, sizeof(ast::CompWarningNode));
     n.h.kind = ast::AstKind::CompwarningStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -996,7 +994,7 @@ fn ast::AstNode* parse_defer(Parser* p) {
         if(inner_err) { had_err = true; }
         NodeList b = {null, 0, 0};
         list::push(&b, p.m.arena, inner);
-        ast::BlockNode* blk = arena::alloc(p.m.arena, sizeof(ast::BlockNode));
+        ast::BlockNode* blk = node_alloc(p.m.arena, sizeof(ast::BlockNode));
         blk.h.kind = ast::AstKind::BlockStmt;
         blk.h.flags = (ast::AstFlags)0;
         if(inner_err) { blk.h.flags = ast::AstFlags::HadError; }
@@ -1006,7 +1004,7 @@ fn ast::AstNode* parse_defer(Parser* p) {
     }
     if(had_error(body)) { had_err = true; }
 
-    ast::DeferNode* n = arena::alloc(p.m.arena, sizeof(ast::DeferNode));
+    ast::DeferNode* n = node_alloc(p.m.arena, sizeof(ast::DeferNode));
     n.h.kind = ast::AstKind::DeferStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1041,7 +1039,7 @@ fn ast::AstNode* parse_assignment_or_expr_stmt(Parser* p) {
         if(had_err) { node.h.flags = (ast::AstFlags)((u16)node.h.flags | (u16)ast::AstFlags::HadError); }
         return node;
     }
-    ast::ExprStmtNode* n = arena::alloc(p.m.arena, sizeof(ast::ExprStmtNode));
+    ast::ExprStmtNode* n = node_alloc(p.m.arena, sizeof(ast::ExprStmtNode));
     n.h.kind = ast::AstKind::ExprStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1061,7 +1059,7 @@ fn ast::AstNode* parse_assign_or_expr(Parser* p, bool* had_err) {
         consume(p);
         ast::AstNode* rhs = parse_expr(p, 0);
         if(!rhs || had_error(rhs)) { *had_err = true; }
-        ast::AssignmentNode* a = arena::alloc(p.m.arena, sizeof(ast::AssignmentNode));
+        ast::AssignmentNode* a = node_alloc(p.m.arena, sizeof(ast::AssignmentNode));
         a.h.kind = ast::AstKind::AssignmentStmt;
         a.h.flags = (ast::AstFlags)0;
         a.h.src_pos = start;
@@ -1115,7 +1113,7 @@ fn ast::AstNode* parse_for(Parser* p) {
     ast::AstNode* body = parse_block(p);
     if(had_error(body)) { had_err = true; }
 
-    ast::ForNode* n = arena::alloc(p.m.arena, sizeof(ast::ForNode));
+    ast::ForNode* n = node_alloc(p.m.arena, sizeof(ast::ForNode));
     n.h.kind = ast::AstKind::ForStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1140,7 +1138,7 @@ fn ast::AstNode* parse_while(Parser* p) {
     if(rparen.kind == token::TokenKind::ERROR) { had_err = true; }
     ast::AstNode* body = parse_block(p);
     if(had_error(body)) { had_err = true; }
-    ast::WhileNode* n = arena::alloc(p.m.arena, sizeof(ast::WhileNode));
+    ast::WhileNode* n = node_alloc(p.m.arena, sizeof(ast::WhileNode));
     n.h.kind = ast::AstKind::WhileStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1173,7 +1171,7 @@ fn ast::AstNode* parse_if(Parser* p) {
         }
         if(had_error(else_block)) { had_err = true; }
     }
-    ast::IfNode* n = arena::alloc(p.m.arena, sizeof(ast::IfNode));
+    ast::IfNode* n = node_alloc(p.m.arena, sizeof(ast::IfNode));
     n.h.kind = ast::AstKind::IfStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1255,7 +1253,7 @@ fn ast::AstNode* parse_switch(Parser* p) {
     token::Token rbrace = expect(p, token::TokenKind::RBrace);
     if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
 
-    ast::SwitchNode* n = arena::alloc(p.m.arena, sizeof(ast::SwitchNode));
+    ast::SwitchNode* n = node_alloc(p.m.arena, sizeof(ast::SwitchNode));
     n.h.kind = ast::AstKind::SwitchStmt;
     n.h.flags = (ast::AstFlags)0;
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1296,7 +1294,7 @@ fn ast::AstNode* parse_block(Parser* p) {
     }
     token::Token close = expect(p, token::TokenKind::RBrace);
     if(close.kind == token::TokenKind::ERROR) { local_err = true; }
-    ast::BlockNode* blk = arena::alloc(p.m.arena, sizeof(ast::BlockNode));
+    ast::BlockNode* blk = node_alloc(p.m.arena, sizeof(ast::BlockNode));
     blk.h.kind = ast::AstKind::BlockStmt;
     blk.h.flags = (ast::AstFlags)0;
     if(local_err) { blk.h.flags = ast::AstFlags::HadError; }
@@ -1319,7 +1317,7 @@ fn ast::AstNode* parse_type(Parser* p) {
     // A comptime type call in type position: `Vec(i32)`, `List(T)`, `list::List(i32)`. The named base becomes the callee.
     if(!p.suppress_type_call && base.h.kind == ast::AstKind::NamedType && peek(p, 0).kind == token::TokenKind::LParen) {
         ast::TypeNamedNode* named = (ast::TypeNamedNode*)base;
-        ast::IdentNode* leaf = arena::alloc(p.m.arena, sizeof(ast::IdentNode));
+        ast::IdentNode* leaf = node_alloc(p.m.arena, sizeof(ast::IdentNode));
         leaf.h.kind = ast::AstKind::Ident;
         leaf.h.flags = (ast::AstFlags)0;
         leaf.h.src_pos = base.h.src_pos;
@@ -1330,7 +1328,7 @@ fn ast::AstNode* parse_type(Parser* p) {
             callee = (ast::AstNode*)leaf;
         } else {
             leaf.name = named.namespace;
-            ast::NamespaceAccessNode* na = arena::alloc(p.m.arena, sizeof(ast::NamespaceAccessNode));
+            ast::NamespaceAccessNode* na = node_alloc(p.m.arena, sizeof(ast::NamespaceAccessNode));
             na.h.kind = ast::AstKind::NamespaceAccess;
             na.h.flags = (ast::AstFlags)0;
             na.h.src_pos = base.h.src_pos;
@@ -1339,7 +1337,7 @@ fn ast::AstNode* parse_type(Parser* p) {
             na.resolved = null;
             callee = (ast::AstNode*)na;
         }
-        ast::CallNode* call = arena::alloc(p.m.arena, sizeof(ast::CallNode));
+        ast::CallNode* call = node_alloc(p.m.arena, sizeof(ast::CallNode));
         call.h.kind = ast::AstKind::Call;
         call.h.flags = (ast::AstFlags)0;
         call.h.src_pos = base.h.src_pos;
@@ -1354,7 +1352,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
     token::Token t = peek(p, 0);
     if(token::is_type_keyword(t.kind)) {
         consume(p);
-        ast::TypePrimitiveNode* n = arena::alloc(p.m.arena, sizeof(ast::TypePrimitiveNode));
+        ast::TypePrimitiveNode* n = node_alloc(p.m.arena, sizeof(ast::TypePrimitiveNode));
         n.h.kind = ast::AstKind::PrimitiveType;
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
@@ -1378,7 +1376,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
             if(!match(p, token::TokenKind::Comma)) { break; }
         }
         expect(p, token::TokenKind::RParen);
-        ast::TypeFnPtrNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeFnPtrNode));
+        ast::TypeFnPtrNode* n = node_alloc(p.m.arena, sizeof(ast::TypeFnPtrNode));
         n.h.kind = ast::AstKind::FnPtrType;
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
@@ -1400,7 +1398,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         ast::FieldDecl[] fields = parse_fields(p, &had_err);
         token::Token rbrace = expect(p, token::TokenKind::RBrace);
         if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
-        ast::TypeStructNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeStructNode));
+        ast::TypeStructNode* n = node_alloc(p.m.arena, sizeof(ast::TypeStructNode));
         n.h.kind = ast::AstKind::StructType;
         n.h.flags = (ast::AstFlags)0;
         if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1422,7 +1420,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         ast::FieldDecl[] fields = parse_fields(p, &had_err);
         token::Token rbrace = expect(p, token::TokenKind::RBrace);
         if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
-        ast::TypeStructNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeStructNode));
+        ast::TypeStructNode* n = node_alloc(p.m.arena, sizeof(ast::TypeStructNode));
         n.h.kind = ast::AstKind::StructType;
         n.h.flags = (ast::AstFlags)0;
         if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1444,7 +1442,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         ast::FieldDecl[] fields = parse_fields(p, &had_err);
         token::Token rbrace = expect(p, token::TokenKind::RBrace);
         if(rbrace.kind == token::TokenKind::ERROR) { had_err = true; }
-        ast::TypeUnionNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeUnionNode));
+        ast::TypeUnionNode* n = node_alloc(p.m.arena, sizeof(ast::TypeUnionNode));
         n.h.kind = ast::AstKind::UnionType;
         n.h.flags = (ast::AstFlags)0;
         if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1480,7 +1478,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
                 if(nx.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
             }
         }
-        ast::TypeNamedNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeNamedNode));
+        ast::TypeNamedNode* n = node_alloc(p.m.arena, sizeof(ast::TypeNamedNode));
         n.h.kind = ast::AstKind::NamedType;
         n.h.flags = (ast::AstFlags)0;
         if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1499,7 +1497,7 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner) {
         token::Token t = peek(p, 0);
         if(t.kind == token::TokenKind::Star) {
             consume(p);
-            ast::TypePointerNode* n = arena::alloc(p.m.arena, sizeof(ast::TypePointerNode));
+            ast::TypePointerNode* n = node_alloc(p.m.arena, sizeof(ast::TypePointerNode));
             n.h.kind = ast::AstKind::PointerType;
             n.h.flags = (ast::AstFlags)0;
             n.h.src_pos = t.src_pos;
@@ -1510,7 +1508,7 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner) {
             consume(p);
             if(peek(p, 0).kind == token::TokenKind::RBracket) {
                 consume(p);
-                ast::TypeSliceNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeSliceNode));
+                ast::TypeSliceNode* n = node_alloc(p.m.arena, sizeof(ast::TypeSliceNode));
                 n.h.kind = ast::AstKind::SliceType;
                 n.h.flags = (ast::AstFlags)0;
                 n.h.src_pos = t.src_pos;
@@ -1534,7 +1532,7 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner) {
                     list::push(&positions, p.m.arena, bracket.src_pos);
                 }
                 for(i64 dim_index = (i64)sizes.len - 1; dim_index >= 0; dim_index -= 1) {
-                    ast::TypeArrayNode* n = arena::alloc(p.m.arena, sizeof(ast::TypeArrayNode));
+                    ast::TypeArrayNode* n = node_alloc(p.m.arena, sizeof(ast::TypeArrayNode));
                     n.h.kind = ast::AstKind::ArrayType;
                     n.h.flags = (ast::AstFlags)0;
                     n.h.src_pos = positions.ptr[(u64)dim_index];
@@ -1586,7 +1584,7 @@ fn ast::AstNode* parse_expr(Parser* p, i16 min_prec) {
         if(prec == 0 || prec < min_prec) { break; }
         consume(p);
         ast::AstNode* rhs = parse_expr(p, prec + 1);
-        ast::BinaryOpNode* b = arena::alloc(p.m.arena, sizeof(ast::BinaryOpNode));
+        ast::BinaryOpNode* b = node_alloc(p.m.arena, sizeof(ast::BinaryOpNode));
         b.h.kind = ast::AstKind::BinaryOp;
         b.h.flags = (ast::AstFlags)0;
         b.h.src_pos = tok.src_pos;
@@ -1607,7 +1605,7 @@ fn ast::AstNode* parse_unary(Parser* p) {
        || t.kind == token::TokenKind::Star) {
         consume(p);
         ast::AstNode* operand = parse_unary(p);
-        ast::UnaryOpNode* u = arena::alloc(p.m.arena, sizeof(ast::UnaryOpNode));
+        ast::UnaryOpNode* u = node_alloc(p.m.arena, sizeof(ast::UnaryOpNode));
         u.h.kind = ast::AstKind::UnaryOp;
         u.h.flags = (ast::AstFlags)0;
         u.h.src_pos = t.src_pos;
@@ -1643,7 +1641,7 @@ fn ast::AstNode* parse_postfix(Parser* p) {
     while(true) {
         token::Token t = peek(p, 0);
         if(t.kind == token::TokenKind::LParen) {
-            ast::CallNode* n = arena::alloc(p.m.arena, sizeof(ast::CallNode));
+            ast::CallNode* n = node_alloc(p.m.arena, sizeof(ast::CallNode));
             n.h.kind = ast::AstKind::Call;
             n.h.flags = (ast::AstFlags)0;
             n.h.src_pos = t.src_pos;
@@ -1684,7 +1682,7 @@ fn ast::AstNode* parse_postfix(Parser* p) {
                 }
             }
             if(is_range) {
-                ast::SliceRangeNode* n = arena::alloc(p.m.arena, sizeof(ast::SliceRangeNode));
+                ast::SliceRangeNode* n = node_alloc(p.m.arena, sizeof(ast::SliceRangeNode));
                 n.h.kind = ast::AstKind::SliceRange;
                 n.h.flags = (ast::AstFlags)0;
                 if(had_err) { n.h.flags = ast::AstFlags::HadError; }
@@ -1694,7 +1692,7 @@ fn ast::AstNode* parse_postfix(Parser* p) {
                 n.hi = hi;
                 e = (ast::AstNode*)n;
             } else {
-                ast::ArrayIndexNode* n = arena::alloc(p.m.arena, sizeof(ast::ArrayIndexNode));
+                ast::ArrayIndexNode* n = node_alloc(p.m.arena, sizeof(ast::ArrayIndexNode));
                 n.h.kind = ast::AstKind::ArrayIndex;
                 n.h.flags = (ast::AstFlags)0;
                 n.h.src_pos = t.src_pos;
@@ -1706,7 +1704,7 @@ fn ast::AstNode* parse_postfix(Parser* p) {
             consume(p);
             token::Token name = expect(p, token::TokenKind::Ident);
             if(name.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
-            ast::MemberAccessNode* n = arena::alloc(p.m.arena, sizeof(ast::MemberAccessNode));
+            ast::MemberAccessNode* n = node_alloc(p.m.arena, sizeof(ast::MemberAccessNode));
             n.h.kind = ast::AstKind::MemberAccess;
             n.h.flags = (ast::AstFlags)0;
             n.h.src_pos = t.src_pos;
@@ -1725,7 +1723,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
     switch(t.kind) {
     case token::TokenKind::IntLit: {
         consume(p);
-        ast::IntLitNode* n = arena::alloc(p.m.arena, sizeof(ast::IntLitNode));
+        ast::IntLitNode* n = node_alloc(p.m.arena, sizeof(ast::IntLitNode));
         n.h.kind = ast::AstKind::IntLit;
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
@@ -1734,7 +1732,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
     }
     case token::TokenKind::FloatLit: {
         consume(p);
-        ast::FloatLitNode* n = arena::alloc(p.m.arena, sizeof(ast::FloatLitNode));
+        ast::FloatLitNode* n = node_alloc(p.m.arena, sizeof(ast::FloatLitNode));
         n.h.kind = ast::AstKind::FloatLit;
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
@@ -1743,7 +1741,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
     }
     case token::TokenKind::CharLit: {
         consume(p);
-        ast::CharLitNode* n = arena::alloc(p.m.arena, sizeof(ast::CharLitNode));
+        ast::CharLitNode* n = node_alloc(p.m.arena, sizeof(ast::CharLitNode));
         n.h.kind = ast::AstKind::CharLit;
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
@@ -1752,7 +1750,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
     }
     case token::TokenKind::StringLit: {
         consume(p);
-        ast::StringLitNode* n = arena::alloc(p.m.arena, sizeof(ast::StringLitNode));
+        ast::StringLitNode* n = node_alloc(p.m.arena, sizeof(ast::StringLitNode));
         n.h.kind = ast::AstKind::StringLit;
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
@@ -1762,7 +1760,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
     }
     case token::TokenKind::TRUE: {
         consume(p);
-        ast::BoolLitNode* n = arena::alloc(p.m.arena, sizeof(ast::BoolLitNode));
+        ast::BoolLitNode* n = node_alloc(p.m.arena, sizeof(ast::BoolLitNode));
         n.h.kind = ast::AstKind::BoolLit;
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
@@ -1771,7 +1769,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
     }
     case token::TokenKind::FALSE: {
         consume(p);
-        ast::BoolLitNode* n = arena::alloc(p.m.arena, sizeof(ast::BoolLitNode));
+        ast::BoolLitNode* n = node_alloc(p.m.arena, sizeof(ast::BoolLitNode));
         n.h.kind = ast::AstKind::BoolLit;
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
@@ -1780,7 +1778,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
     }
     case token::TokenKind::NULL: {
         consume(p);
-        ast::NullLitNode* n = arena::alloc(p.m.arena, sizeof(ast::NullLitNode));
+        ast::NullLitNode* n = node_alloc(p.m.arena, sizeof(ast::NullLitNode));
         n.h.kind = ast::AstKind::NullLit;
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
@@ -1792,7 +1790,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
             u8[] msg = "`undefined` is only valid as a var-decl initializer";
             diag::report(&p.m.diag, p.m.arena, t.src_pos, msg);
         }
-        ast::UndefinedLitNode* n = arena::alloc(p.m.arena, sizeof(ast::UndefinedLitNode));
+        ast::UndefinedLitNode* n = node_alloc(p.m.arena, sizeof(ast::UndefinedLitNode));
         n.h.kind = ast::AstKind::UndefinedLit;
         n.h.flags = ast::AstFlags::HadError;
         n.h.src_pos = t.src_pos;
@@ -1817,7 +1815,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
 
 fn ast::AstNode* parse_ident_or_ns(Parser* p) {
     token::Token t = consume(p);
-    ast::IdentNode* id = arena::alloc(p.m.arena, sizeof(ast::IdentNode));
+    ast::IdentNode* id = node_alloc(p.m.arena, sizeof(ast::IdentNode));
     id.h.kind = ast::AstKind::Ident;
     id.h.flags = (ast::AstFlags)0;
     id.h.src_pos = t.src_pos;
@@ -1827,7 +1825,7 @@ fn ast::AstNode* parse_ident_or_ns(Parser* p) {
         consume(p);
         token::Token n2 = expect(p, token::TokenKind::Ident);
         if(n2.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
-        ast::NamespaceAccessNode* na = arena::alloc(p.m.arena, sizeof(ast::NamespaceAccessNode));
+        ast::NamespaceAccessNode* na = node_alloc(p.m.arena, sizeof(ast::NamespaceAccessNode));
         na.h.kind = ast::AstKind::NamespaceAccess;
         na.h.flags = (ast::AstFlags)0;
         na.h.src_pos = t.src_pos;
@@ -1852,7 +1850,7 @@ fn ast::AstNode* parse_paren_or_cast(Parser* p) {
     if(ty && !had_error(ty) && peek(p, 0).kind == token::TokenKind::RParen && can_start_expr(peek(p, 1).kind)) {
         consume(p);
         ast::AstNode* operand = parse_unary(p);
-        ast::CastNode* c = arena::alloc(p.m.arena, sizeof(ast::CastNode));
+        ast::CastNode* c = node_alloc(p.m.arena, sizeof(ast::CastNode));
         c.h.kind = ast::AstKind::Cast;
         c.h.flags = (ast::AstFlags)0;
         c.h.src_pos = open.src_pos;
@@ -1891,7 +1889,7 @@ fn ast::AstNode* parse_struct_lit(Parser* p) {
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     expect(p, token::TokenKind::RBrace);
-    ast::StructLitNode* n = arena::alloc(p.m.arena, sizeof(ast::StructLitNode));
+    ast::StructLitNode* n = node_alloc(p.m.arena, sizeof(ast::StructLitNode));
     n.h.kind = ast::AstKind::StructLit;
     n.h.flags = (ast::AstFlags)0;
     n.h.src_pos = open.src_pos;
@@ -1907,7 +1905,7 @@ fn ast::AstNode* parse_array_lit(Parser* p) {
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     expect(p, token::TokenKind::RBracket);
-    ast::ArrayLitNode* n = arena::alloc(p.m.arena, sizeof(ast::ArrayLitNode));
+    ast::ArrayLitNode* n = node_alloc(p.m.arena, sizeof(ast::ArrayLitNode));
     n.h.kind = ast::AstKind::ArrayLit;
     n.h.flags = (ast::AstFlags)0;
     n.h.src_pos = open.src_pos;
@@ -1966,7 +1964,7 @@ fn token::Token mk_error_token(u32 pos) {
 }
 
 fn ast::AstNode* mk_error_node_and_consume(Parser* p, u32 pos) {
-    ast::AstNode* error_node = arena::alloc(p.m.arena, sizeof(ast::AstNode));
+    ast::AstNode* error_node = node_alloc(p.m.arena, sizeof(ast::AstNode));
     error_node.h.kind = ast::AstKind::ERROR;
     error_node.h.flags = ast::AstFlags::HadError;
     error_node.h.src_pos = pos;
@@ -1975,7 +1973,7 @@ fn ast::AstNode* mk_error_node_and_consume(Parser* p, u32 pos) {
 }
 
 fn ast::AstNode* mk_error_node(Parser* p, u32 pos) {
-    ast::AstNode* error_node = arena::alloc(p.m.arena, sizeof(ast::AstNode));
+    ast::AstNode* error_node = node_alloc(p.m.arena, sizeof(ast::AstNode));
     error_node.h.kind = ast::AstKind::ERROR;
     error_node.h.flags = ast::AstFlags::HadError;
     error_node.h.src_pos = pos;
