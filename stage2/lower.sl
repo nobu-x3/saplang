@@ -88,6 +88,16 @@ export fn sapir::SapirModule* lower_module(module::Module* m) {
     for(u64 stmt_index = 0; stmt_index < root.stmts.len; stmt_index += 1) {
         ast::AstNode* node = root.stmts[stmt_index];
         if(node.h.kind == ast::AstKind::VarDecl) { lower_global(&lo, (ast::VarDeclNode*)node); }
+        // An extern const with an initializer is our own definition, so it needs a global emitted.
+        if(node.h.kind == ast::AstKind::ExternBlock) {
+            ast::ExternBlockNode* block = (ast::ExternBlockNode*)node;
+            for(u64 item_index = 0; item_index < block.items.len; item_index += 1) {
+                ast::AstNode* item = block.items[item_index];
+                if(item.h.kind != ast::AstKind::VarDecl) { continue; }
+                ast::VarDeclNode* extern_var = (ast::VarDeclNode*)item;
+                if(extern_var.init != null) { lower_global(&lo, extern_var); }
+            }
+        }
     }
     return lo.out;
 }
@@ -1626,6 +1636,14 @@ fn u32 get_or_create_global_decl(Lower* lo, void* sema_decl) {
     d.ty = decl.ty;
     d.fn_index = sapir::INVALID_ID;
     d.global_index = sapir::INVALID_ID;
+    // An initializer-less extern var names a C global directly, so it keeps the raw symbol name.
+    if(var.is_extern && var.init == null) {
+        d.linkage = sapir::SapirLinkage::Foreign;
+        d.link_name = interner::symbol_str(var.name);
+        u32 foreign_index = sapir::add_decl(lo.arena, lo.out, d);
+        decl_map_insert(lo, sema_decl, foreign_index);
+        return foreign_index;
+    }
     if(decl.home == lo.m) {
         if(var.is_exported) { d.linkage = sapir::SapirLinkage::Export; }
         else { d.linkage = sapir::SapirLinkage::Internal; }

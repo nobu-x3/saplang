@@ -442,6 +442,26 @@ fn i32 ok_extern_variadic(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// An extern const/var/enum item gets a resolved signature; without one the use site carried a null
+// type into lowering and segfaulted.
+fn i32 ok_extern_const(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern { export const i32 EOF = -1; }\nexport fn i32 f() { return EOF; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_extern_var_no_init(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern { export u8** environ; }\nexport fn u8** f() { return environ; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_extern_enum(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern { export enum E : i32 { A, B } }\nexport fn i32 f() { return (i32)E::B; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 err_extern_call_arity(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "extern \"c\" { fn i32 puts(const i8* s); }\nexport fn i32 f() { return puts(); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
@@ -1308,6 +1328,9 @@ fn i32 main() {
     testing::add(suite, "ok_extern_struct_ptr",     &ok_extern_struct_ptr);
     testing::add(suite, "ok_extern_union",          &ok_extern_union);
     testing::add(suite, "ok_extern_variadic",       &ok_extern_variadic);
+    testing::add(suite, "ok_extern_const",          &ok_extern_const);
+    testing::add(suite, "ok_extern_var_no_init",    &ok_extern_var_no_init);
+    testing::add(suite, "ok_extern_enum",           &ok_extern_enum);
     testing::add(suite, "err_extern_call_arity",    &err_extern_call_arity);
     testing::add(suite, "ok_enum_explicit",         &ok_enum_explicit);
     testing::add(suite, "ok_multi_case",            &ok_multi_case);

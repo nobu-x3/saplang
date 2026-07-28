@@ -228,6 +228,8 @@ export enum CastOp : u8 {
 
 // Only ever called on an is_castable pair; a -> bool never is one (truthiness is cond_test).
 export fn CastOp cast_op(types::Ty* src, types::Ty* dst) {
+    // A null side means sema left the expression untyped after reporting an error — don't crash the cascade.
+    if(src == null || dst == null) { return CastOp::Nop; }
     types::Ty* source = cast_reduce(src);
     types::Ty* dest = cast_reduce(dst);
 
@@ -282,6 +284,7 @@ export enum CondTest : u8 {
 }
 
 export fn CondTest cond_test(types::Ty* t) {
+    if(t == null) { return CondTest::IntNonZero; }
     types::Ty* reduced = cast_reduce(t);
     if(types::is_bool(reduced)) { return CondTest::AsBool; }
     if(types::is_slice(reduced)) { return CondTest::SliceNonEmpty; }

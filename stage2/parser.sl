@@ -646,7 +646,10 @@ fn ast::AstNode* parse_extern_item(Parser* p) {
     ast::AstNode* node = null;
     if(k == token::TokenKind::FN) { node = parse_extern_fn_decl(p, is_exported, start); }
     else if(k == token::TokenKind::ENUM) { node = parse_enum_decl(p, is_exported); }
-    else if(k == token::TokenKind::CONST || looks_like_type_start(k)) { node = parse_var_decl(p, is_exported); }
+    else if(k == token::TokenKind::CONST || looks_like_type_start(k)) {
+        node = parse_var_decl(p, is_exported);
+        if(node != null && node.h.kind == ast::AstKind::VarDecl) { ((ast::VarDeclNode*)node).is_extern = true; }
+    }
     else {
         report_expected(p, peek(p, 0), token::TokenKind::FN);
         return mk_error_node_and_consume(p, start);

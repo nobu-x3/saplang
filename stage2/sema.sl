@@ -216,6 +216,12 @@ fn void collect_name_for_decl(Sema* s, ast::AstNode* top_level_node) {
                 Decl* decl = register_sym(s, module_scope, extern_var.name, extern_var.is_exported, DeclKind::Node, extern_var.h.src_pos);
                 if(decl != null) { decl.data.node = extern_item; extern_var.decl = (void*)decl; }
             }
+            case ast::AstKind::EnumDecl: {
+                ast::EnumDeclNode* extern_enum = (ast::EnumDeclNode*)extern_item;
+                extern_enum.qualified_name = qualify_decl_name(s, extern_enum.name);
+                Decl* decl = register_sym(s, module_scope, extern_enum.name, extern_enum.is_exported, DeclKind::Node, extern_enum.h.src_pos);
+                if(decl != null) { decl.data.node = extern_item; }
+            }
             else { }
             }
         }
@@ -416,6 +422,9 @@ fn void resolve_extern_item_signature(Sema* s, ast::AstNode* item) {
         resolve_fields(s, materialized.fields);
         decl.ty = types::intern_union((void*)materialized);
     }
+    // extern var/const and enum items resolve exactly like their top-level forms.
+    case ast::AstKind::VarDecl:  { resolve_decl_signature(s, item); }
+    case ast::AstKind::EnumDecl: { resolve_decl_signature(s, item); }
     else { }
     }
 }
