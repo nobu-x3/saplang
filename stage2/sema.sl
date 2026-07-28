@@ -272,6 +272,15 @@ fn bool chain_has_generic(Decl* head) {
     return false;
 }
 
+fn bool chain_has_extern(Decl* head) {
+    Decl* d = head;
+    while(d != null) {
+        if(d.kind == DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::ExternFnDecl) { return true; }
+        d = d.next_overload;
+    }
+    return false;
+}
+
 fn Decl* register_fn(Sema* s, Scope* scope, ast::FnDeclNode* fn_decl, bool is_exported) {
     symbol::Symbol* name = fn_decl.name;
     Decl* existing = scope_lookup_local(scope, name);
@@ -280,6 +289,11 @@ fn Decl* register_fn(Sema* s, Scope* scope, ast::FnDeclNode* fn_decl, bool is_ex
     }
     if(is_generic_fn(fn_decl) || chain_has_generic(existing)) {
         u8[] msg = "generic functions cannot be overloaded";
+        sema_report(s, fn_decl.h.src_pos, msg);
+        return null;
+    }
+    if(chain_has_extern(existing)) {
+        u8[] msg = "extern functions cannot be overloaded";
         sema_report(s, fn_decl.h.src_pos, msg);
         return null;
     }
@@ -518,6 +532,15 @@ fn void resolve_fn_signature(Sema* s, ast::FnDeclNode* fn_decl) {
     Decl* head = scope_lookup_local(s.scope, fn_decl.name);
     if(head != null && own != null && head != own && head.ty != null && head.ty.kind == types::TypeKind::FnPtr) {
         if(head.ty.data.fn_ptr.ret != return_type) { diag_overload_return_mismatch(s, fn_decl.h.src_pos, fn_decl.name); }
+        // Types are interned, so an identical signature is the identical Ty*; report at the later decl.
+        Decl* prior = head;
+        while(prior != null) {
+            if(prior != own && prior.ty == own.ty) {
+                diag_overload_duplicate(s, fn_decl.h.src_pos, fn_decl.name);
+                break;
+            }
+            prior = prior.next_overload;
+        }
     }
     s.comptime_type_names = saved_type_names;
 }
@@ -2602,6 +2625,14 @@ export fn void diag_ambiguous_overload(Sema* s, u32 src_pos, symbol::Symbol* nam
     u8[] name_str = interner::symbol_str(name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "ambiguous call to %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+export fn void diag_overload_duplicate(Sema* s, u32 src_pos, symbol::Symbol* name) {
+    if(name == null) { return; }
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "duplicate definition of %.*s with the same parameter types", (i32)name_str.len, (i8*)name_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 

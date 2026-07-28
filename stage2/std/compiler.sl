@@ -38,6 +38,29 @@ export struct Compiler {
     list::List(u8[])     lib_dirs;        // -L paths, passed to the linker as -L<path>
     codegen::BuildConfig config;          // -config: optimization / instrumentation pipeline; default Debug
     u8[]                 deps_path;       // -deps: write every discovered source path here (for build-system caching)
+    bool                 wants_exit;      // --help / --version handled; the driver should stop before compiling
+}
+
+export const u8[] VERSION = "0.1.0 (stage2, self-hosted)";
+
+export fn void print_usage() {
+    sys::dprintf(1, "Usage: saplangc <file.sl>... [options]\n");
+    sys::dprintf(1, "       saplangc build [step]... [-Dkey=value]...\n\n");
+    sys::dprintf(1, "Options:\n");
+    sys::dprintf(1, "  -o <path>              output executable (default a.out)\n");
+    sys::dprintf(1, "  -i \"<p1;p2>\"           module search paths, ;-separated\n");
+    sys::dprintf(1, "  -l <name>              link library <name>\n");
+    sys::dprintf(1, "  -L <dir>               add a library search directory\n");
+    sys::dprintf(1, "  -target <name>         target platform for conditional compilation\n");
+    sys::dprintf(1, "  -config <mode>         Debug | Release | ReleaseDebug | AddressSanitizer\n");
+    sys::dprintf(1, "  -deps <path>           write every discovered source path to <path>\n");
+    sys::dprintf(1, "  -mt                    compile modules on a thread pool\n");
+    sys::dprintf(1, "  -comptime-depth <N>    comptime recursion cap (0 = default)\n");
+    sys::dprintf(1, "  -comptime-iterations <N>  comptime per-loop cap (0 = default)\n");
+    sys::dprintf(1, "  -cfg-dump              print each function's CFG, then stop\n");
+    sys::dprintf(1, "  -sapir-dump            print each module's sapir IR, then stop\n");
+    sys::dprintf(1, "  --help, -h             show this help\n");
+    sys::dprintf(1, "  --version              show the version\n");
 }
 
 export fn Compiler* new(arena::Arena* a) {
@@ -113,6 +136,12 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
         } else if(slice_eq(arg, "-deps")) {
             arg_index += 1;
             if(arg_index < args.len) { c.deps_path = args[arg_index]; } else { ok = false; }
+        } else if(slice_eq(arg, "--help") || slice_eq(arg, "-h")) {
+            print_usage();
+            c.wants_exit = true;
+        } else if(slice_eq(arg, "--version")) {
+            sys::dprintf(1, "saplangc %.*s\n", (i32)VERSION.len, (i8*)VERSION.ptr);
+            c.wants_exit = true;
         } else if(slice_eq(arg, "-mt")) {
             c.is_multithreaded = true;
         } else if(slice_eq(arg, "-cfg-dump")) {
@@ -333,6 +362,7 @@ fn u8[] path_stem(u8[] path) {
 
 // Discover -> frontend -> codegen -> link. Returns 0 on success.
 export fn i32 run(Compiler* c) {
+    if(c.wants_exit) { return 0; }
     discover(c);
     if(c.deps_path.len > 0) { write_depfile(c); }
     drain_diagnostics(c);

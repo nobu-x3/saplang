@@ -330,6 +330,27 @@ fn i32 err_type_info_at_runtime(arena::Arena* a, u8[] m) {
 
 // TypeInfo / FieldInfo / TypeKind are nameable in user scope.
 // A global initializer may take another global's address; the linker resolves it.
+// Overloads differ by parameter types; identical signatures and extern participation are errors.
+fn i32 ok_overload_distinct_params(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 f(i32 x) { return x; }\nfn i32 f(f64 x) { return (i32)x; }\nexport fn i32 g() { return f(1) + f(1.0); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_overload_duplicate_signature(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 d(i32 x) { return x; }\nfn i32 d(i32 x) { return x + 1; }\nexport fn i32 g() { return 0; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "duplicate definition of d with the same parameter types", m)) { return -2; }
+    return 0;
+}
+
+fn i32 err_extern_fn_overload(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "extern { export fn i32 dup(i32 x); }\nfn i32 dup(f64 x) { return (i32)x; }\nexport fn i32 g() { return 0; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "extern functions cannot be overloaded", m)) { return -2; }
+    return 0;
+}
+
 fn i32 ok_global_addr_of_global(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "i32 v = 5;\ni32* p = &v;\nexport fn i32 f() { return *p; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1425,6 +1446,9 @@ fn i32 main() {
     testing::add(suite, "err_compsplice_unsupported", &err_compsplice_unsupported);
     testing::add(suite, "err_type_info_at_runtime",  &err_type_info_at_runtime);
     testing::add(suite, "ok_type_info_in_comprun",   &ok_type_info_in_comprun);
+    testing::add(suite, "ok_overload_distinct_params", &ok_overload_distinct_params);
+    testing::add(suite, "err_overload_duplicate_signature", &err_overload_duplicate_signature);
+    testing::add(suite, "err_extern_fn_overload",    &err_extern_fn_overload);
     testing::add(suite, "ok_global_addr_of_global",  &ok_global_addr_of_global);
     testing::add(suite, "ok_global_addr_of_struct_global", &ok_global_addr_of_struct_global);
     testing::add(suite, "err_comptime_addr_of_local", &err_comptime_addr_of_local);

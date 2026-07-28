@@ -1817,6 +1817,7 @@ fn i32 cn_duplicate_one_diag_exact(arena::Arena* a, u8[] m) {
 }
 
 // Two same-name functions overload rather than collide (no diagnostic; chained off the head).
+// Same-name fns still chain structurally; an identical signature is diagnosed in the signature phase.
 fn i32 cn_duplicate_fns_overload(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     symbol::Symbol* foo = fake_sym_interned(mm, "foo");
@@ -1827,7 +1828,7 @@ fn i32 cn_duplicate_fns_overload(arena::Arena* a, u8[] m) {
     stmts[1] = fn2;
     set_root(mm, a, &stmts[0], 2);
     sema_run(mm);
-    if(!testing::expect_eq(mm.diag.entries.len, 0, m)) { return -1; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "duplicate definition of foo with the same parameter types", m)) { return -1; }
     sema::Decl* head = registered(mm, foo);
     if(!testing::expect_eq((void*)head.data.node, (void*)fn1, m)) { return -2; }
     if(!testing::expect_not_null((void*)head.next_overload, m)) { return -3; }
