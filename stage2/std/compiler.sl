@@ -748,18 +748,38 @@ export fn void drain_diagnostics(Compiler* c) {
 fn void print_diagnostic(module::Module* m, diag::DiagEntry* entry) {
     u32 pos = entry.src_pos;
     bool generated = false;
+    u32 fragment_line = 0;
+    u32 fragment_col = 0;
     while(pos >= (u32)m.source.len) {
         module::InsertedSource* src = module::find_inserted_source(m, pos);
         if(src == null) { break; }
+        // Only the innermost fragment's coordinates are reported; outer frames just walk to the generator.
+        if(!generated) { fragment_position(src, pos, &fragment_line, &fragment_col); }
         pos = src.generator_pos;
         generated = true;
     }
     u32 line = 0;
     u32 col = 0;
     module::line_col(m, pos, &line, &col);
-    u8[] tag = "";
-    if(generated) { tag = " (in generated code)"; }
-    sys::dprintf(2, "%.*s:%u:%u: %.*s%.*s\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr, (i32)tag.len, (i8*)tag.ptr);
+    if(generated) {
+        sys::dprintf(2, "%.*s:%u:%u: %.*s (in generated code at %u:%u)\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr, fragment_line, fragment_col);
+        return;
+    }
+    sys::dprintf(2, "%.*s:%u:%u: %.*s\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr);
+}
+
+fn void fragment_position(module::InsertedSource* src, u32 pos, u32* line, u32* col) {
+    u32 offset = pos - src.base;
+    u32 found_line = 1;
+    u32 line_start = 0;
+    for(u32 scan = 0; scan < offset && scan < (u32)src.bytes.len; scan += 1) {
+        if(src.bytes[scan] == 10) {
+            found_line += 1;
+            line_start = scan + 1;
+        }
+    }
+    *line = found_line;
+    *col = offset - line_start + 1;
 }
 
 export fn bool bail_on_errors(Compiler* c) {
