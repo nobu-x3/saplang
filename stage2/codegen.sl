@@ -74,9 +74,7 @@ export fn i32 emit_object(sapir::SapirModule* sm, arena::Arena* a, i8* obj_path,
     return rc;
 }
 
-// LLVM's C API exposes no UseInitArray setter, so the backend emits llvm.global_ctors into the
-// legacy .ctors, which glibc never runs (ASan's __asan_init silently never fired). Re-emit each
-// entry as its own .init_array global instead.
+// The C API has no UseInitArray setter, so the backend emits .ctors, which glibc never runs.
 fn void relocate_global_ctors(CG* cg) {
     void* ctors = llvm::LLVMGetNamedGlobal(cg.llvm_module, cstr(cg.arena, "llvm.global_ctors"));
     if(ctors == null) { return; }
@@ -104,8 +102,7 @@ fn void relocate_global_ctors(CG* cg) {
     }
 }
 
-// Target-sensitive passes read the module's own triple, not the TargetMachine's: without this the
-// ASan pass picked its generic 1<<44 shadow mapping while the runtime used the x86-64 one.
+// Target-sensitive passes read the module's own triple, not the TargetMachine's.
 fn void set_module_target(CG* cg, void* tm) {
     i8* triple = llvm::LLVMGetDefaultTargetTriple();
     llvm::LLVMSetTarget(cg.llvm_module, triple);

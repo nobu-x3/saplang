@@ -119,8 +119,7 @@ fn u8[] find_unwind_runtime() {
     return none;
 }
 
-// Newest major version wins; the installed clang's version is not knowable up front, and Debian
-// nests the runtime under /usr/lib/llvm-<major>/ while Arch keeps it in /usr/lib/clang/<major>/.
+// Newest major version wins; Arch and Debian nest the runtime differently.
 fn u8[] find_clang_runtime_dir(arena::Arena* arena_ptr) {
     u64 major_version = 40;
     while(major_version >= 14) {

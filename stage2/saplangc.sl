@@ -14,8 +14,8 @@ fn u8[] cstr_slice(u8* cstr) {
     return out;
 }
 
-fn i8* cstr(arena::Arena* a, u8[] bytes) {
-    i8* out = (i8*)arena::alloc(a, bytes.len + 1);
+fn i8* cstr(arena::Arena* arena_ptr, u8[] bytes) {
+    i8* out = (i8*)arena::alloc(arena_ptr, bytes.len + 1);
     for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
     out[bytes.len] = 0;
     return out;
@@ -29,20 +29,20 @@ fn bool cstr_eq(u8* s, u8[] lit) {
 }
 
 // std/ ships beside the binary; SAPLANG_STD overrides it, and an empty result means neither exists.
-fn u8[] find_std_dir(arena::Arena* a, u8** argv) {
-    i8* override_dir = sys::getenv(cstr(a, "SAPLANG_STD"));
+fn u8[] find_std_dir(arena::Arena* arena_ptr, u8** argv) {
+    i8* override_dir = sys::getenv(cstr(arena_ptr, "SAPLANG_STD"));
     if(override_dir != null) { return cstr_slice((u8*)override_dir); }
-    u8[] exe_dir = find_exe_dir(a, argv);
+    u8[] exe_dir = find_exe_dir(arena_ptr, argv);
     if(exe_dir.len == 0) { u8[] none = {null, 0}; return none; }
-    u8[] candidate = join_path(a, exe_dir, "/std");
-    if(dir_has_std(candidate, a)) { return candidate; }
+    u8[] candidate = join_path(arena_ptr, exe_dir, "/std");
+    if(dir_has_std(candidate, arena_ptr)) { return candidate; }
     u8[] none = {null, 0};
     return none;
 }
 
-fn u8[] find_exe_dir(arena::Arena* a, u8** argv) {
-    u8* path_buf = (u8*)arena::alloc(a, 4096);
-    i64 written = sys::readlink(cstr(a, "/proc/self/exe"), (i8*)path_buf, 4095);
+fn u8[] find_exe_dir(arena::Arena* arena_ptr, u8** argv) {
+    u8* path_buf = (u8*)arena::alloc(arena_ptr, 4096);
+    i64 written = sys::readlink(cstr(arena_ptr, "/proc/self/exe"), (i8*)path_buf, 4095);
     u8[] exe_path = {null, 0};
     if(written > 0) {
         exe_path = {path_buf, (u64)written};
@@ -58,16 +58,16 @@ fn u8[] find_exe_dir(arena::Arena* a, u8** argv) {
     return dir;
 }
 
-fn bool dir_has_std(u8[] dir, arena::Arena* a) {
-    io::File probe = io::open(join_path(a, dir, "/sys.sl"), "r");
+fn bool dir_has_std(u8[] dir, arena::Arena* arena_ptr) {
+    io::File probe = io::open(join_path(arena_ptr, dir, "/sys.sl"), "r");
     if(probe.fp == null) { return false; }
     io::close(&probe);
     return true;
 }
 
-fn u8[] join_path(arena::Arena* a, u8[] prefix, u8[] suffix) {
+fn u8[] join_path(arena::Arena* arena_ptr, u8[] prefix, u8[] suffix) {
     io::OutBuf buf;
-    io::outbuf_init(&buf, a, prefix.len + suffix.len + 1);
+    io::outbuf_init(&buf, arena_ptr, prefix.len + suffix.len + 1);
     io::outbuf_write(&buf, prefix);
     io::outbuf_write(&buf, suffix);
     return io::outbuf_bytes(&buf);
@@ -108,7 +108,7 @@ fn i32 main(i32 argc, u8** argv) {
 }
 
 // `saplangc build [step] [-Dopt=val]`: compile builder + ./build.sl into a runner, then exec it.
-fn i32 run_build(arena::Arena* a, i32 argc, u8** argv) {
+fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
     io::File bf = io::open("build.sl", "r");
     if(bf.fp == null) {
         sys::dprintf(2, "error: no build.sl in the current directory\n");
@@ -116,7 +116,7 @@ fn i32 run_build(arena::Arena* a, i32 argc, u8** argv) {
     }
     io::close(&bf);
 
-    sys::mkdir(cstr(a, ".sap-cache"), 493);
+    sys::mkdir(cstr(arena_ptr, ".sap-cache"), 493);
     u8[] runner_path = ".sap-cache/__build_runner.sl";
     if(!write_runner(runner_path)) {
         sys::dprintf(2, "error: could not write build runner\n");
@@ -124,12 +124,12 @@ fn i32 run_build(arena::Arena* a, i32 argc, u8** argv) {
     }
 
     // The runner recompile is skipped when build.sl and everything it pulls in are unchanged.
-    if(!runner_fresh(a)) {
-        compiler::Compiler* c = compiler::new(a);
+    if(!runner_fresh(arena_ptr)) {
+        compiler::Compiler* c = compiler::new(arena_ptr);
         compiler::add_source(c, runner_path);
         compiler::add_import_path(c, ".");
         add_passthrough_import_paths(c, argc, argv);
-        u8[] std_dir = find_std_dir(a, argv);
+        u8[] std_dir = find_std_dir(arena_ptr, argv);
         if(std_dir.len > 0) { compiler::add_import_path(c, std_dir); }
         c.deps_path = ".sap-cache/build.dep";
         c.output_path = ".sap-cache/build";
@@ -137,15 +137,14 @@ fn i32 run_build(arena::Arena* a, i32 argc, u8** argv) {
             sys::dprintf(2, "error: could not compile build.sl (is `builder` reachable? std/ must sit beside saplangc, or set SAPLANG_STD)\n");
             return 1;
         }
-        write_runner_stamp(a);
+        write_runner_stamp(arena_ptr);
     }
 
-    sys::setenv(cstr(a, "SAPLANGC"), argv[0], 1);
-    // Forward the build args to the runner, minus the driver-only `-i <path>` pairs (those
-    // located `builder`; the runner already has build.sl baked in and only wants steps / -D).
-    i8** rargv = (i8**)arena::alloc(a, (u64)argc * sizeof(i8*));
+    sys::setenv(cstr(arena_ptr, "SAPLANGC"), argv[0], 1);
+    // Drop the driver-only `-i` pairs; the runner has build.sl baked in and wants only steps / -D.
+    i8** rargv = (i8**)arena::alloc(arena_ptr, (u64)argc * sizeof(i8*));
     u64 forwarded = 0;
-    rargv[forwarded] = cstr(a, ".sap-cache/build"); forwarded += 1;
+    rargv[forwarded] = cstr(arena_ptr, ".sap-cache/build"); forwarded += 1;
     for(i32 arg_index = 2; arg_index < argc; arg_index += 1) {
         if(cstr_eq(argv[arg_index], "-i")) { arg_index += 1; continue; }
         rargv[forwarded] = (i8*)argv[arg_index]; forwarded += 1;
@@ -175,16 +174,15 @@ fn bool file_exists(u8[] path) {
     return true;
 }
 
-// A content hash over every source the last runner compile read (the `-deps` depfile); empty if
-// the depfile is missing or a listed source vanished.
-fn u8[] runner_stamp(arena::Arena* a) {
+// Content hash over every source the last runner compile read; empty when anything is missing.
+fn u8[] runner_stamp(arena::Arena* arena_ptr) {
     io::File df = io::open(".sap-cache/build.dep", "r");
     if(df.fp == null) { u8[] e = {null, 0}; return e; }
-    u8[] listing = io::read_all(&df, a);
+    u8[] listing = io::read_all(&df, arena_ptr);
     io::close(&df);
 
     io::OutBuf buf;
-    io::outbuf_init(&buf, a, 4096);
+    io::outbuf_init(&buf, arena_ptr, 4096);
     u64 start = 0;
     for(u64 char_index = 0; char_index <= listing.len; char_index += 1) {
         if(char_index == listing.len || listing[char_index] == '\n') {
@@ -192,31 +190,31 @@ fn u8[] runner_stamp(arena::Arena* a) {
                 u8[] path = {&listing.ptr[start], char_index - start};
                 io::File sf = io::open(path, "r");
                 if(sf.fp == null) { u8[] e = {null, 0}; return e; }
-                io::outbuf_write(&buf, io::read_all(&sf, a));
+                io::outbuf_write(&buf, io::read_all(&sf, arena_ptr));
                 io::close(&sf);
             }
             start = char_index + 1;
         }
     }
     io::OutBuf hb;
-    io::outbuf_init(&hb, a, 24);
+    io::outbuf_init(&hb, arena_ptr, 24);
     io::outbuf_write_u64(&hb, hash::fnv1a_64(io::outbuf_bytes(&buf)));
     return io::outbuf_bytes(&hb);
 }
 
-fn bool runner_fresh(arena::Arena* a) {
+fn bool runner_fresh(arena::Arena* arena_ptr) {
     if(!file_exists(".sap-cache/build")) { return false; }
     io::File sf = io::open(".sap-cache/build.stamp", "r");
     if(sf.fp == null) { return false; }
-    u8[] stored = io::read_all(&sf, a);
+    u8[] stored = io::read_all(&sf, arena_ptr);
     io::close(&sf);
-    u8[] current = runner_stamp(a);
+    u8[] current = runner_stamp(arena_ptr);
     if(current.len == 0) { return false; }
     return slice_eq(stored, current);
 }
 
-fn void write_runner_stamp(arena::Arena* a) {
-    u8[] current = runner_stamp(a);
+fn void write_runner_stamp(arena::Arena* arena_ptr) {
+    u8[] current = runner_stamp(arena_ptr);
     if(current.len == 0) { return; }
     io::File f = io::open(".sap-cache/build.stamp", "w");
     if(f.fp == null) { return; }

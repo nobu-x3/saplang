@@ -1,5 +1,6 @@
 import testing;
 import compiler;
+import link_paths;
 import module;
 import interner;
 import types;
@@ -555,6 +556,65 @@ fn i32 argv_full(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 argv_dump_flags(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 5);
+    args[0] = "main.sl";
+    args[1] = "-token-dump";
+    args[2] = "-ast-dump";
+    args[3] = "-llvm-dump";
+    args[4] = "-show-timings";
+    if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
+    if(!testing::expect_true(c.token_dump, msg)) { return -2; }
+    if(!testing::expect_true(c.ast_dump, msg)) { return -3; }
+    if(!testing::expect_true(c.llvm_dump, msg)) { return -4; }
+    if(!testing::expect_true(c.show_timings, msg)) { return -5; }
+    // token/ast dumps stop before codegen; llvm-dump needs the backend to have run.
+    if(!testing::expect_true(compiler::stops_before_backend(c), msg)) { return -6; }
+    return 0;
+}
+
+fn i32 argv_link_config(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 3);
+    args[0] = "main.sl";
+    args[1] = "-link-config";
+    args[2] = "paths.cfg";
+    if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
+    if(!testing::expect_eq(c.link_config, "paths.cfg", msg)) { return -2; }
+    return 0;
+}
+
+// key=value lines override probed paths; comments and unknown keys are ignored.
+fn i32 link_config_override(arena::Arena* a, u8[] msg) {
+    io::File f = io::open("lp_test.cfg", "w");
+    if(!testing::expect_true(f.fp != null, msg)) { return -1; }
+    io::write_string(&f, "# comment
+crt_start=/tmp/custom/Scrt1.o
+unknown_key=ignored
+lib_dir=/tmp/custom
+");
+    io::close(&f);
+
+    link_paths::LinkPaths paths = link_paths::resolve(a);
+    if(!testing::expect_true(link_paths::apply_override(&paths, a, "lp_test.cfg"), msg)) { return -2; }
+    if(!testing::expect_eq(cstr_slice((u8*)paths.crt_start), "/tmp/custom/Scrt1.o", msg)) { return -3; }
+    if(!testing::expect_eq(cstr_slice((u8*)paths.lib_dir), "-L/tmp/custom", msg)) { return -4; }
+    io::unlink("lp_test.cfg");
+
+    if(!testing::expect_true(!link_paths::apply_override(&paths, a, "no_such_file.cfg"), msg)) { return -5; }
+    return 0;
+}
+
+fn u8[] cstr_slice(u8* raw) {
+    u64 len = 0;
+    while(raw[len] != 0) { len += 1; }
+    u8[] out = {raw, len};
+    return out;
+}
+
 fn i32 argv_comptime_limits(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -963,6 +1023,9 @@ fn i32 main() {
 
     u8[] av = "Compiler Argv Tests";
     testing::add(av, "argv_full",               &argv_full);
+    testing::add(av, "argv_dump_flags",         &argv_dump_flags);
+    testing::add(av, "argv_link_config",        &argv_link_config);
+    testing::add(av, "link_config_override",    &link_config_override);
     testing::add(av, "argv_comptime_limits",    &argv_comptime_limits);
     testing::add(av, "argv_lib_dirs_and_libs",  &argv_lib_dirs_and_libs);
     testing::add(av, "argv_dangling_L_fails",   &argv_dangling_L_fails);

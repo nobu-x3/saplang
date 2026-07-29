@@ -503,8 +503,7 @@ fn bool type_has_comptime_part(types::Ty* t) {
     return false;
 }
 
-// Runs in the body phase, not signature resolution: it reads other decls' field types, which are
-// only complete once every signature has resolved.
+// Body phase, not signature resolution: it reads field types only complete once all signatures resolve.
 fn void check_signature_is_runtime(Sema* s, ast::FnDeclNode* func) {
     if(is_generic_fn(func)) { return; }   // a template's `T value` param is still the Type placeholder
     types::Ty* ret = null;
@@ -707,8 +706,7 @@ export fn void init_body_sync(arena::Arena* wait_arena) {
 
 // Exactly one thread checks a given fn; others wait for Checked. body_owner lets a comptime call recursing into the
 // fn being checked (same thread) proceed instead of self-waiting. check_fn_body runs unlocked, so N fns check at once.
-// Pure over the wait table so the cycle rule is testable without threads: follow owner -> what that
-// owner waits on; reaching a function this thread already owns means the wait would never end.
+// Pure over the wait table so the rule is testable without threads.
 export fn bool wait_would_cycle(BodyWait[] waits, ast::FnDeclNode* target, u64 me) {
     ast::FnDeclNode* current = target;
     u64 hops = 0;
@@ -1551,8 +1549,7 @@ fn types::Ty* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
     return result;
 }
 
-// `g` / `&g` naming an overload set picks the overload matching the expected signature; without this
-// it always took the head and reported a mismatch even when a match existed.
+// Without this an overload set always yielded its head, mismatching even when a candidate fit.
 fn bool check_overloaded_fn_ref(Sema* s, ast::AstNode* e, types::Ty* expected) {
     ast::AstNode* name_node = e;
     if(e.h.kind == ast::AstKind::UnaryOp) {
@@ -2029,8 +2026,7 @@ fn void reflect_set_field(ast::FieldDecl* f, u8[] name, types::Ty* ty) {
     f.resolved_type = (void*)ty;
 }
 
-// TypeInfo / FieldInfo / TypeKind are spelled like ordinary types, so every module scope carries them.
-// A module declaring one of those names keeps its own (types.sl has its own TypeKind).
+// A module declaring one of these names keeps its own (types.sl has its own TypeKind).
 fn void register_reflection_names(Sema* s, Scope* module_scope) {
     types::Ty* ti = reflection_typeinfo_type(s.m);
     types::Ty* fi = reflection_fieldinfo_type(s.m);
