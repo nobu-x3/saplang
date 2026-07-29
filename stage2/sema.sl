@@ -1210,6 +1210,7 @@ fn bool expr_has_flag(ast::AstNode* e, ast::AstFlags f) {
 // Literal carve-outs, then fall back to synth + is_convertible.
 export fn bool check(Sema* s, ast::AstNode* e, types::Ty* expected) {
     if(e == null || expected == null) { return false; }
+    if(expected.kind == types::TypeKind::FnPtr && check_overloaded_fn_ref(s, e, expected)) { return true; }
     if(e.h.kind == ast::AstKind::UnaryOp) {
         ast::UnaryOpNode* unary = (ast::UnaryOpNode*)e;
         if(unary.op == token::TokenKind::Minus && unary.operand != null && unary.operand.h.kind == ast::AstKind::IntLit) {
@@ -1477,6 +1478,32 @@ fn types::Ty* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
     types::Ty* result = types::intern_slice(elem);
     set_expr((ast::AstNode*)n, result, 0);
     return result;
+}
+
+// `g` / `&g` naming an overload set picks the overload matching the expected signature; without this
+// it always took the head and reported a mismatch even when a match existed.
+fn bool check_overloaded_fn_ref(Sema* s, ast::AstNode* e, types::Ty* expected) {
+    ast::AstNode* name_node = e;
+    if(e.h.kind == ast::AstKind::UnaryOp) {
+        ast::UnaryOpNode* unary = (ast::UnaryOpNode*)e;
+        if(unary.op != token::TokenKind::Amp) { return false; }
+        name_node = unary.operand;
+    }
+    if(name_node == null) { return false; }
+    if(name_node.h.kind != ast::AstKind::Ident && name_node.h.kind != ast::AstKind::NamespaceAccess) { return false; }
+    Decl* head = callee_overload_head(s, name_node);
+    if(head == null || head.next_overload == null) { return false; }
+    Decl* candidate = head;
+    while(candidate != null) {
+        if(candidate.ty == expected) {
+            if(name_node.h.kind == ast::AstKind::Ident) { ((ast::IdentNode*)name_node).resolved = (void*)candidate; }
+            set_expr(name_node, expected, 0);
+            if(e != name_node) { set_expr(e, expected, 0); }
+            return true;
+        }
+        candidate = candidate.next_overload;
+    }
+    return false;
 }
 
 fn Decl* callee_overload_head(Sema* s, ast::AstNode* callee) {

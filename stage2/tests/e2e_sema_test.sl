@@ -346,6 +346,26 @@ fn i32 err_comptime_self_reentry(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// An expected fn-pointer type selects the overload; before this it always took the head.
+fn i32 ok_addr_of_overload_selects(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 x) { return x; }\nfn i32 g(u8 x) { return (i32)x; }\nexport fn i32 f() { fn* i32(u8) p = &g; return p((u8)1); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_bare_overload_name_selects(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 x) { return x; }\nfn i32 g(u8 x) { return (i32)x; }\nexport fn i32 f() { fn* i32(u8) p = g; return p((u8)1); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_addr_of_overload_no_match(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g(i32 x) { return x; }\nfn i32 g(u8 x) { return (i32)x; }\nexport fn i32 f() { fn* i32(f64) p = &g; return 0; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_substr(mod.diag.entries[0].msg, "expected fn* i32(f64)", m)) { return -2; }
+    return 0;
+}
+
 fn i32 ok_overload_distinct_params(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 f(i32 x) { return x; }\nfn i32 f(f64 x) { return (i32)x; }\nexport fn i32 g() { return f(1) + f(1.0); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1463,6 +1483,9 @@ fn i32 main() {
     testing::add(suite, "ok_type_info_in_comprun",   &ok_type_info_in_comprun);
     testing::add(suite, "ok_comprun_generic_inferred", &ok_comprun_generic_inferred);
     testing::add(suite, "err_comptime_self_reentry",  &err_comptime_self_reentry);
+    testing::add(suite, "ok_addr_of_overload_selects", &ok_addr_of_overload_selects);
+    testing::add(suite, "ok_bare_overload_name_selects", &ok_bare_overload_name_selects);
+    testing::add(suite, "err_addr_of_overload_no_match", &err_addr_of_overload_no_match);
     testing::add(suite, "ok_overload_distinct_params", &ok_overload_distinct_params);
     testing::add(suite, "err_overload_duplicate_signature", &err_overload_duplicate_signature);
     testing::add(suite, "err_extern_fn_overload",    &err_extern_fn_overload);
