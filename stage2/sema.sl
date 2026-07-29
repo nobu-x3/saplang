@@ -2059,6 +2059,7 @@ bool         g_reflect_lock_ready;
 types::Ty*   g_reflect_fieldinfo;
 types::Ty*   g_reflect_typeinfo;
 types::Ty*   g_reflect_typekind;
+arena::Arena g_reflect_arena;        // guarded by g_reflect_lock; the typer's arena has a different lock
 void*        g_reflect_typekind_decl;   // ast::EnumDeclNode*, for TypeKind::<member> lookups
 u64          g_reflect_generation;      // typer generation the cache was built against
 
@@ -2066,6 +2067,8 @@ u64          g_reflect_generation;      // typer generation the cache was built 
 fn void reflect_lock() {
     if(!g_reflect_lock_ready) {
         mutex::create(&g_reflect_lock);
+        sys::memset(&g_reflect_arena, 0, sizeof(arena::Arena));
+        g_reflect_arena.default_page_size = 65536;
         g_reflect_lock_ready = true;
     }
     mutex::lock(&g_reflect_lock);
@@ -2082,7 +2085,7 @@ fn void reflect_lock() {
 export fn types::Ty* reflection_fieldinfo_type(module::Module* m) {
     reflect_lock();
     if(g_reflect_fieldinfo == null) {
-        arena::Arena* a = types::global_arena();
+        arena::Arena* a = &g_reflect_arena;
         ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
         sys::memset(sd, 0, sizeof(ast::StructDeclNode));
         sd.h.kind = ast::AstKind::StructDecl;
@@ -2104,7 +2107,7 @@ export fn types::Ty* reflection_typeinfo_type(module::Module* m) {
     types::Ty* fi = reflection_fieldinfo_type(m);
     reflect_lock();
     if(g_reflect_typeinfo == null) {
-        arena::Arena* a = types::global_arena();
+        arena::Arena* a = &g_reflect_arena;
         ast::StructDeclNode* sd = (ast::StructDeclNode*)arena::alloc(a, sizeof(ast::StructDeclNode));
         sys::memset(sd, 0, sizeof(ast::StructDeclNode));
         sd.h.kind = ast::AstKind::StructDecl;
@@ -2137,7 +2140,7 @@ export fn types::Ty* reflection_typekind_type(module::Module* m) {
 // Members mirror types::TypeKind's order, so TypeInfo.kind is that ordinal with no mapping table.
 fn types::Ty* reflection_typekind_type_locked() {
     if(g_reflect_typekind != null) { return g_reflect_typekind; }
-    arena::Arena* a = types::global_arena();
+    arena::Arena* a = &g_reflect_arena;
     ast::EnumDeclNode* ed = (ast::EnumDeclNode*)arena::alloc(a, sizeof(ast::EnumDeclNode));
     sys::memset(ed, 0, sizeof(ast::EnumDeclNode));
     ed.h.kind = ast::AstKind::EnumDecl;

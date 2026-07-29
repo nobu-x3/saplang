@@ -2,6 +2,9 @@ import value;
 import ast;
 import module;
 import arena;
+import mutex;
+import condvar;
+import threads;
 import list;
 import types;
 import types_print;
@@ -1621,7 +1624,66 @@ fn void rename_mangled(module::Module* m, ast::FnDeclNode* clone, value::Value[]
     clone.qualified_name = sym;
 }
 
+// A type constructor's clone carries the struct decl that becomes the interned type, so it is shared
+// process-wide; sharing a value generic's clone would cut across the per-module linkonce_odr model.
+MonoCache    g_type_mono_cache;
+arena::Arena g_type_mono_arena;   // guarded by g_type_mono_lock; the typer's arena has a different lock
+mutex::Mutex     g_type_mono_lock;
+condvar::Condvar g_type_mono_cv;
+bool         g_type_mono_ready;
+
+fn bool returns_type(ast::FnDeclNode* callee) {
+    if(callee.return_type == null) { return false; }
+    types::Ty* ret = (types::Ty*)callee.return_type.h.ty;
+    return ret != null && ret.kind == types::TypeKind::ComptimeType;
+}
+
+fn ast::FnDeclNode* monomorphize_type_ctor(Interp* ip, ast::FnDeclNode* callee, value::Value[] cargs) {
+    if(!g_type_mono_ready) {
+        mutex::create(&g_type_mono_lock);
+        condvar::create(&g_type_mono_cv);
+        sys::memset(&g_type_mono_arena, 0, sizeof(arena::Arena));
+        g_type_mono_arena.default_page_size = 262144;
+        g_type_mono_ready = true;
+    }
+    arena::Arena* shared = &g_type_mono_arena;
+    u64 me = threads::self();
+    MonoKey key;
+    key.callee = callee;
+    key.args = cargs;
+
+    mutex::lock(&g_type_mono_lock);
+    ast::FnDeclNode* hit = mono_cache_lookup(&g_type_mono_cache, &key);
+    if(hit != null) {
+        // A clone this thread is already checking is returned as-is; that is the recursive-generic case.
+        while(hit.body_state == ast::BodyState::InProgress && hit.body_owner != me) {
+            condvar::wait(&g_type_mono_cv, &g_type_mono_lock);
+        }
+        mutex::unlock(&g_type_mono_lock);
+        return hit;
+    }
+    ast::FnDeclNode* clone = clone_fn_decl(shared, callee);
+    rename_mangled(ip.m, clone, cargs);
+    substitute_type_params(shared, clone, cargs);
+    clone.body_state = ast::BodyState::InProgress;
+    clone.body_owner = me;
+    mono_cache_insert(&g_type_mono_cache, shared, key, clone);
+    mutex::unlock(&g_type_mono_lock);
+
+    instantiated_fns_push(ip.m, clone);
+    module::Module* defining = ip.m;
+    if(callee.decl != null) { defining = ((sema::Decl*)callee.decl).home; }
+    sema::sema_check_clone(ip.m, defining, clone);
+
+    mutex::lock(&g_type_mono_lock);
+    clone.body_state = ast::BodyState::Checked;
+    condvar::broadcast(&g_type_mono_cv);
+    mutex::unlock(&g_type_mono_lock);
+    return clone;
+}
+
 export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, value::Value[] cargs) {
+    if(returns_type(callee)) { return monomorphize_type_ctor(ip, callee, cargs); }
     if(ip.m.mono_cache == null) {
         ip.m.mono_cache = arena::alloc(ip.m.arena, sizeof(MonoCache));
         sys::memset(ip.m.mono_cache, 0, sizeof(MonoCache));

@@ -59,6 +59,21 @@ fn i32 cross_module_generic_call(arena::Arena* a, u8[] msg) {
 
 // A generic in `b` whose body uses b's own private type resolves that type against b (its defining module),
 // not the caller `a`, when monomorphized — the clone re-check uses the defining module's scope.
+// A type constructor is interned process-wide, so the same instantiation is one type in both modules.
+fn i32 cross_module_generic_type_identity(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "fn Type Box(comptime Type T) { return struct { T value; }; }\nexport alias BoxI32 = Box(i32);\nexport fn i32 unwrap(BoxI32 x) { return x.value; }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nfn Type Box(comptime Type T) { return struct { T value; }; }\nexport fn i32 use() { b::BoxI32 mine; mine.value = 7; return b::unwrap(mine); }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    return 0;
+}
+
 fn i32 cross_module_generic_uses_home_type(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -987,6 +1002,7 @@ fn i32 main() {
     testing::add(fe, "generic_template_frontend", &generic_template_frontend);
     testing::add(fe, "generic_call_frontend",    &generic_call_frontend);
     testing::add(fe, "cross_module_generic_call", &cross_module_generic_call);
+    testing::add(fe, "cross_module_generic_type_identity", &cross_module_generic_type_identity);
     testing::add(fe, "cross_module_generic_uses_home_type", &cross_module_generic_uses_home_type);
     testing::add(fe, "cross_module_comptime_call_ok",  &cross_module_comptime_call_ok);
     testing::add(fe, "cross_module_comptime_call_err", &cross_module_comptime_call_err);

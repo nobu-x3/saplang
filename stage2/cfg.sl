@@ -577,6 +577,8 @@ export fn void build_all_functions(module::Module* m) {
         }
     }
     for(u64 clone_index = 0; clone_index < m.instantiated_fns.len; clone_index += 1) {
+        // A shared type-constructor clone is reachable from several modules; analyze it once.
+        if(m.instantiated_fns.ptr[clone_index].cfg != null) { continue; }
         analyze_function(m, m.instantiated_fns.ptr[clone_index]);
     }
 }
