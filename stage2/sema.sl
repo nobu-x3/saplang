@@ -1233,7 +1233,8 @@ export fn types::Ty* synth(Sema* s, ast::AstNode* e) {
         return types::prim_u8();
     }
     case ast::AstKind::StringLit: {
-        types::Ty* t = types::intern_pointer(types::prim_u8(), false);
+        // The bytes live in a read-only section, so writing through one would fault at run time.
+        types::Ty* t = types::intern_pointer(types::prim_u8(), true);
         set_expr(e, t, (u16)ast::AstFlags::ConstExpr);
         return t;
     }
@@ -2322,6 +2323,12 @@ fn bool check_string_lit(Sema* s, ast::StringLitNode* n, types::Ty* expected) {
     types::Ty* elem = string_lit_elem(expected);
     if(!is_byte(elem)) {
         diag_type_mismatch(s, n.h.src_pos, types::intern_pointer(types::prim_u8(), false), expected);
+        mark_error((ast::AstNode*)n);
+        return false;
+    }
+    // A pointer target aliases the read-only bytes, so it has to keep the qualifier; an array copies them.
+    if(types::is_ptr(expected) && !types::is_const_ptr(expected)) {
+        diag_type_mismatch(s, n.h.src_pos, types::intern_pointer(types::prim_u8(), true), expected);
         mark_error((ast::AstNode*)n);
         return false;
     }

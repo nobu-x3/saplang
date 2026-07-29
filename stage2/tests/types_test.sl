@@ -1454,13 +1454,15 @@ fn i32 convert_void_ptr_to_typed_ptr(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// Adding const converts; dropping it needs an explicit cast, or a read-only pointee could be written.
 fn i32 convert_ptr_to_ptr_through_const_qual(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     types::Ty* elem = fake_i32(a);
     types::Ty* p     = types::intern_pointer(elem, false);
     types::Ty* p_c   = types::intern_pointer(elem, true);
     if(!testing::expect_eq(types::is_convertible(p,   p_c), true, m)) { return -1; }
-    if(!testing::expect_eq(types::is_convertible(p_c, p),   true, m)) { return -2; }
+    if(!testing::expect_eq(types::is_convertible(p_c, p),   false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_castable(p_c, p),      true, m)) { return -3; }
     return 0;
 }
 

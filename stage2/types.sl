@@ -509,8 +509,8 @@ export fn bool is_convertible(Ty* src, Ty* dst) {
         if (src.prim == PrimitiveKind::F32 && dst.prim == PrimitiveKind::F64) { return true; }
         return false;
     }
-    // pointer -> pointer (any pointee)
-    if (is_ptr(src) && is_ptr(dst)) { return true; }
+    // pointer -> pointer (any pointee); dropping const would allow writing through a read-only pointee
+    if (is_ptr(src) && is_ptr(dst)) { return !is_const_ptr(src) || is_const_ptr(dst); }
     // null -> any pointer, slice, or function pointer
     if (src == prim_null_ptr() && (is_ptr(dst) || is_slice(dst) || is_fnptr(dst))) { return true; }
     return false;
@@ -548,6 +548,8 @@ export fn bool is_castable(Ty* src, Ty* dst) {
     if (is_float(s)        && is_float(d))         { return true; }
     if (is_ptr(s)          && is_ptr_sized_int(d)) { return true; }
     if (is_ptr_sized_int(s) && is_ptr(d))          { return true; }
+    // An explicit cast is the escape hatch for dropping a pointee's const, which conversion refuses.
+    if (is_ptr(s)          && is_ptr(d))           { return true; }
     return false;
 }
 
@@ -613,6 +615,11 @@ export fn bool is_array(Ty* t) {
 
 export fn bool is_ptr(Ty* t) {
     return t.kind == TypeKind::Pointer;
+}
+
+// `const u8*`: the flag rides on the pointer and qualifies what it points at.
+export fn bool is_const_ptr(Ty* t) {
+    return is_ptr(t) && ((u8)t.flags & (u8)LayoutFlags::Const) != 0;
 }
 
 export fn bool is_fnptr(Ty* t) {

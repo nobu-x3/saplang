@@ -624,8 +624,16 @@ fn i32 ok_multi_case(arena::Arena* a, u8[] m) {
 }
 
 fn i32 ok_string_lit(arena::Arena* a, u8[] m) {
-    module::Module* mod = test_util::frontend(a, "export fn u8* f() { u8* s = \"hi\"; return s; }");
+    module::Module* mod = test_util::frontend(a, "export fn const u8* f() { const u8* s = \"hi\"; return s; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// The bytes are read-only, so a writable pointer target is refused.
+fn i32 err_string_lit_to_mutable_ptr(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { u8* s = \"hi\"; return 0; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_substr(mod.diag.entries[0].msg, "found const u8*", m)) { return -2; }
     return 0;
 }
 
@@ -1532,6 +1540,7 @@ fn i32 main() {
     testing::add(suite, "ok_enum_explicit",         &ok_enum_explicit);
     testing::add(suite, "ok_multi_case",            &ok_multi_case);
     testing::add(suite, "ok_string_lit",            &ok_string_lit);
+    testing::add(suite, "err_string_lit_to_mutable_ptr", &err_string_lit_to_mutable_ptr);
     testing::add(suite, "ok_slice_ptr",             &ok_slice_ptr);
     testing::add(suite, "ok_comprun_empty",         &ok_comprun_empty);
     testing::add(suite, "ok_widen_conversion",      &ok_widen_conversion);

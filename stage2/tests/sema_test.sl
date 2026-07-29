@@ -2736,7 +2736,7 @@ fn i32 synth_string_lit(arena::Arena* a, u8[] m) {
     sema::Sema s = mk_sema(mm);
     ast::StringLitNode* lit = fake_string_lit_node(a, 0);
     types::Ty* t = sema::synth(&s, (ast::AstNode*)lit);
-    types::Ty* want = types::intern_pointer(types::prim_u8(), false);
+    types::Ty* want = types::intern_pointer(types::prim_u8(), true);   // the literal's bytes are read-only
     if(!testing::expect_eq((void*)t, (void*)want, m)) { return -1; }
     if(!testing::expect_true(has_flag((ast::AstNode*)lit, ast::AstFlags::ConstExpr), m)) { return -2; }
     return 0;
@@ -3009,13 +3009,16 @@ fn i32 check_char_to_u8(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A literal fits a const byte pointer; a writable one is refused, since the bytes are read-only.
 fn i32 check_string_to_u8_ptr(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
+    types::Ty* const_u8ptr = types::intern_pointer(types::prim_u8(), true);
     types::Ty* u8ptr = types::intern_pointer(types::prim_u8(), false);
     ast::StringLitNode* lit = fake_string_lit_node(a, 0);
-    bool ok = sema::check(&s, (ast::AstNode*)lit, u8ptr);
-    if(!testing::expect_true(ok, m)) { return -1; }
+    if(!testing::expect_true(sema::check(&s, (ast::AstNode*)lit, const_u8ptr), m)) { return -1; }
+    ast::StringLitNode* writable = fake_string_lit_node(a, 0);
+    if(!testing::expect_true(!sema::check(&s, (ast::AstNode*)writable, u8ptr), m)) { return -2; }
     return 0;
 }
 
@@ -4666,7 +4669,7 @@ fn i32 check_string_to_i8_ptr(arena::Arena* a, u8[] m) {
     module::Module* mm = run_module(a, "testmod");
     sema::Sema s = mk_sema(mm);
     ast::StringLitNode* lit = fake_string_lit_node(a, 0);
-    bool ok = sema::check(&s, (ast::AstNode*)lit, types::intern_pointer(types::prim_i8(), false));
+    bool ok = sema::check(&s, (ast::AstNode*)lit, types::intern_pointer(types::prim_i8(), true));
     if(!testing::expect_true(ok, m)) { return -1; }
     return 0;
 }

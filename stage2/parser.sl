@@ -169,7 +169,7 @@ fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
     u32 start = peek(p, 0).src_pos;
     bool is_const = peek(p, 0).kind == token::TokenKind::CONST;
     if(is_const) { consume(p); }
-    ast::AstNode* type_expr = parse_type(p);
+    ast::AstNode* type_expr = parse_type_qualified(p, is_const);
     bool had_err = !type_expr || had_error(type_expr);
     token::Token ident = expect(p, token::TokenKind::Ident);
     if(ident.kind == token::TokenKind::ERROR) { had_err = true; }
@@ -212,7 +212,7 @@ fn ast::AstNode* parse_fn_decl(Parser* p, bool is_exported) {
     bool is_const = peek(p, 0).kind == token::TokenKind::CONST;
     if(is_const) { consume(p); }
     p.suppress_type_call = true;
-    ast::AstNode* type_expr = parse_type(p);
+    ast::AstNode* type_expr = parse_type_qualified(p, is_const);
     p.suppress_type_call = false;
     bool had_err = !type_expr || had_error(type_expr);
     token::Token ident = expect(p, token::TokenKind::Ident);
@@ -262,7 +262,7 @@ fn ast::Param[] parse_params(Parser* p, bool* had_err) {
                 }
             }
         }
-        ast::AstNode* type_expr = parse_type(p);
+        ast::AstNode* type_expr = parse_type_qualified(p, is_const);
         if(!type_expr || had_error(type_expr)) { *had_err = true; }
         token::Token name = expect(p, token::TokenKind::Ident);
         if(name.kind == token::TokenKind::ERROR) { *had_err = true; }
@@ -1305,8 +1305,13 @@ fn ast::AstNode* parse_block(Parser* p) {
 
 // TYPES ////////////////////////////////////////////////////////////////////////////////
 fn ast::AstNode* parse_type(Parser* p) {
-    // A `const T` qualifier in type position (e.g. a `(const i8*)` cast): accepted, not tracked — Stage 2 has no pointee-const, so it reduces to T like a `const` param does.
-    if(peek(p, 0).kind == token::TokenKind::CONST) { consume(p); }
+    bool pointee_const = peek(p, 0).kind == token::TokenKind::CONST;
+    if(pointee_const) { consume(p); }
+    return parse_type_qualified(p, pointee_const);
+}
+
+// A declaration consumes its own leading `const` before the type, so it passes the qualifier in here.
+fn ast::AstNode* parse_type_qualified(Parser* p, bool pointee_const) {
     ast::AstNode* base = parse_base_type(p);
     if(!base) {
         if(!p.is_speculating) {
@@ -1345,7 +1350,7 @@ fn ast::AstNode* parse_type(Parser* p) {
         call.args = parse_call_args(p, true);
         base = (ast::AstNode*)call;
     }
-    return parse_type_suffix(p, base);
+    return parse_type_suffix(p, base, pointee_const);
 }
 
 fn ast::AstNode* parse_base_type(Parser* p) {
@@ -1492,7 +1497,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
     return null;
 }
 
-fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner) {
+fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner, bool pointee_const) {
     while(true) {
         token::Token t = peek(p, 0);
         if(t.kind == token::TokenKind::Star) {
@@ -1502,7 +1507,9 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner) {
             n.h.flags = (ast::AstFlags)0;
             n.h.src_pos = t.src_pos;
             n.pointee = inner;
-            n.is_const = false;
+            // `const u8**` qualifies the bytes, so only the pointer nearest the base type carries it.
+            n.is_const = pointee_const;
+            pointee_const = false;
             inner = (ast::AstNode*)n;
         } else if(t.kind == token::TokenKind::LBracket) {
             consume(p);

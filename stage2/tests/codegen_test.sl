@@ -102,7 +102,7 @@ fn i32 jit_string_len(arena::Arena* a, u8[] msg) {
 }
 
 fn i32 jit_printf(arena::Arena* a, u8[] msg) {
-    return jit_return(a, "extern { fn i32 printf(u8* fmt, ...); } fn i32 main() { printf(\"[codegen jit_printf ok]\\n\"); return 0; }", 0, msg);
+    return jit_return(a, "extern { fn i32 printf(const u8* fmt, ...); } fn i32 main() { printf(\"[codegen jit_printf ok]\\n\"); return 0; }", 0, msg);
 }
 
 fn i32 jit_struct_global(arena::Arena* a, u8[] msg) {

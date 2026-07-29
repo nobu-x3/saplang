@@ -992,7 +992,7 @@ fn i32 extern_variadic_call(arena::Arena* a, u8[] msg) {
     wl(&w, "b1:  ; preds:");
     wl(&w, "    unreachable");
     wl(&w, "}");
-    return golden(a, "extern { fn i32 printf(u8* fmt, ...); } fn void f() { printf(\"%d\", 42); }", &w, msg);
+    return golden(a, "extern { fn i32 printf(const u8* fmt, ...); } fn void f() { printf(\"%d\", 42); }", &w, msg);
 }
 
 // A variadic-tail f32 widens to f64 per the C default argument promotions.
@@ -1010,7 +1010,7 @@ fn i32 vararg_promote_f32(arena::Arena* a, u8[] msg) {
     wl(&w, "b1:  ; preds:");
     wl(&w, "    unreachable");
     wl(&w, "}");
-    return golden(a, "extern { fn i32 printf(u8* fmt, ...); } fn void f(f32 x) { printf(\"%f\", x); }", &w, msg);
+    return golden(a, "extern { fn i32 printf(const u8* fmt, ...); } fn void f(f32 x) { printf(\"%f\", x); }", &w, msg);
 }
 
 // A variadic-tail u8 promotes to i32 (integer promotion).
@@ -1028,7 +1028,7 @@ fn i32 vararg_promote_int(arena::Arena* a, u8[] msg) {
     wl(&w, "b1:  ; preds:");
     wl(&w, "    unreachable");
     wl(&w, "}");
-    return golden(a, "extern { fn i32 printf(u8* fmt, ...); } fn void f(u8 x) { printf(\"%d\", x); }", &w, msg);
+    return golden(a, "extern { fn i32 printf(const u8* fmt, ...); } fn void f(u8 x) { printf(\"%d\", x); }", &w, msg);
 }
 
 // A call through a fn-pointer value is Indirect: the callee slot holds a value id, printed with %.
@@ -1092,7 +1092,7 @@ fn i32 string_literal(arena::Arena* a, u8[] msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
-    wl(&w, "fn __main_f() -> u8* {");
+    wl(&w, "fn __main_f() -> const u8* {");
     wl(&w, "b0:  ; preds:");
     wl(&w, "    %0 = conststr @0+2");
     wl(&w, "    ret %0");
@@ -1101,7 +1101,7 @@ fn i32 string_literal(arena::Arena* a, u8[] msg) {
     wl(&w, "b2:  ; preds:");
     wl(&w, "    unreachable");
     wl(&w, "}");
-    return golden(a, "fn u8* f() { return \"hi\"; }", &w, msg);
+    return golden(a, "fn const u8* f() { return \"hi\"; }", &w, msg);
 }
 
 fn i32 slice_index(arena::Arena* a, u8[] msg) {
