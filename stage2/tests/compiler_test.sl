@@ -571,6 +571,17 @@ fn i32 argv_full(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+fn i32 argv_compile_only(arena::Arena* a, u8[] msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    u8[][] args = mk_args(a, 2);
+    args[0] = "main.sl";
+    args[1] = "-c";
+    if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
+    if(!testing::expect_true(c.compile_only, msg)) { return -2; }
+    return 0;
+}
+
 fn i32 argv_dump_flags(arena::Arena* a, u8[] msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
@@ -1039,6 +1050,7 @@ fn i32 main() {
 
     u8[] av = "Compiler Argv Tests";
     testing::add(av, "argv_full",               &argv_full);
+    testing::add(av, "argv_compile_only",       &argv_compile_only);
     testing::add(av, "argv_dump_flags",         &argv_dump_flags);
     testing::add(av, "argv_link_config",        &argv_link_config);
     testing::add(av, "link_config_override",    &link_config_override);

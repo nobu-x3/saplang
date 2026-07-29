@@ -46,6 +46,7 @@ export struct Compiler {
     u8[]                 deps_path;       // -deps: write every discovered source path here (for build-system caching)
     bool                 wants_exit;      // --help / --version handled; the driver should stop before compiling
     u8[]                 link_config;     // -link-config: file overriding the probed link paths
+    bool                 compile_only;    // -c: emit one object per module and skip the link step
 }
 
 export const u8[] VERSION = "0.1.0 (stage2, self-hosted)";
@@ -62,6 +63,7 @@ export fn void print_usage() {
     sys::dprintf(1, "  -config <mode>         Debug | Release | ReleaseDebug | AddressSanitizer | ThreadSanitizer\n");
     sys::dprintf(1, "  -deps <path>           write every discovered source path to <path>\n");
     sys::dprintf(1, "  -link-config <file>    override probed link paths (key=value per line)\n");
+    sys::dprintf(1, "  -c                     emit <module>.o per module, skip linking (-o renames the entry object)\n");
     sys::dprintf(1, "  -mt                    compile modules on a thread pool\n");
     sys::dprintf(1, "  -comptime-depth <N>    comptime recursion cap (0 = default)\n");
     sys::dprintf(1, "  -comptime-iterations <N>  comptime per-loop cap (0 = default)\n");
@@ -158,6 +160,8 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
         } else if(slice_eq(arg, "--version")) {
             sys::dprintf(1, "saplangc %.*s\n", (i32)VERSION.len, (i8*)VERSION.ptr);
             c.wants_exit = true;
+        } else if(slice_eq(arg, "-c")) {
+            c.compile_only = true;
         } else if(slice_eq(arg, "-mt")) {
             c.is_multithreaded = true;
         } else if(slice_eq(arg, "-cfg-dump")) {
@@ -412,9 +416,10 @@ fn void write_depfile(Compiler* c) {
 
 // sapir -> object files -> linked executable. Assumes the frontend already ran.
 export fn i32 run_backend(Compiler* c) {
-    sys::mkdir(cstr(c.arena, ".tmp"), 493);
+    if(!c.compile_only) { sys::mkdir(cstr(c.arena, ".tmp"), 493); }
     u8[][] object_paths = run_codegen(c);
     if(bail_on_errors(c)) { return 1; }
+    if(c.compile_only) { return 0; }
     return run_link(c, object_paths);
 }
 
@@ -433,7 +438,7 @@ fn u8[][] run_codegen(Compiler* c) {
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
-        u8[] obj_path = tmp_object_path(c, m);
+        u8[] obj_path = object_path_for(c, m);
         if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.arena, cstr(c.arena, obj_path), c.config) != 0) { c.error_count += 1; }
         paths[paths.len] = obj_path;
         paths.len += 1;
@@ -525,6 +530,18 @@ fn i32 spawn_and_wait(i8** argv) {
     i32 status = 0;
     sys::waitpid(pid, &status, 0);
     return (status >> 8) & 255;
+}
+
+// -c writes <module>.o beside the caller; -o renames only the entry module's object, since
+// discovered imports each get one too and cannot share the name.
+fn u8[] object_path_for(Compiler* c, module::Module* m) {
+    if(!c.compile_only) { return tmp_object_path(c, m); }
+    if(c.output_path.len > 0 && c.modules.len > 0 && c.modules.ptr[0] == m) { return c.output_path; }
+    io::OutBuf buf;
+    io::outbuf_init(&buf, c.arena, 64);
+    io::outbuf_write(&buf, interner::symbol_str(m.name));
+    io::outbuf_write(&buf, ".o");
+    return io::outbuf_bytes(&buf);
 }
 
 fn u8[] tmp_object_path(Compiler* c, module::Module* m) {
