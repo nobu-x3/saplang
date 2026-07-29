@@ -39,6 +39,7 @@ export struct Compiler {
     codegen::BuildConfig config;          // -config: optimization / instrumentation pipeline; default Debug
     u8[]                 deps_path;       // -deps: write every discovered source path here (for build-system caching)
     bool                 wants_exit;      // --help / --version handled; the driver should stop before compiling
+    u8[]                 link_config;     // -link-config: file overriding the probed link paths
 }
 
 export const u8[] VERSION = "0.1.0 (stage2, self-hosted)";
@@ -54,6 +55,7 @@ export fn void print_usage() {
     sys::dprintf(1, "  -target <name>         target platform for conditional compilation\n");
     sys::dprintf(1, "  -config <mode>         Debug | Release | ReleaseDebug | AddressSanitizer\n");
     sys::dprintf(1, "  -deps <path>           write every discovered source path to <path>\n");
+    sys::dprintf(1, "  -link-config <file>    override probed link paths (key=value per line)\n");
     sys::dprintf(1, "  -mt                    compile modules on a thread pool\n");
     sys::dprintf(1, "  -comptime-depth <N>    comptime recursion cap (0 = default)\n");
     sys::dprintf(1, "  -comptime-iterations <N>  comptime per-loop cap (0 = default)\n");
@@ -133,6 +135,9 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
             if(arg_index < args.len) {
                 if(!parse_config(c, args[arg_index])) { ok = false; }
             } else { ok = false; }
+        } else if(slice_eq(arg, "-link-config")) {
+            arg_index += 1;
+            if(arg_index < args.len) { c.link_config = args[arg_index]; } else { ok = false; }
         } else if(slice_eq(arg, "-deps")) {
             arg_index += 1;
             if(arg_index < args.len) { c.deps_path = args[arg_index]; } else { ok = false; }
@@ -418,7 +423,22 @@ fn u8[][] run_codegen(Compiler* c) {
 }
 
 fn i32 run_link(Compiler* c, u8[][] object_paths) {
-    i8** argv = build_link_argv(c, object_paths);
+    link_paths::LinkPaths paths = link_paths::resolve(c.arena);
+    if(c.link_config.len > 0) {
+        if(!link_paths::apply_override(&paths, c.arena, c.link_config)) {
+            sys::dprintf(2, "error: cannot read link config %.*s\n", (i32)c.link_config.len, (i8*)c.link_config.ptr);
+            return 1;
+        }
+    }
+    if(!paths.found_crt) {
+        sys::dprintf(2, "error: cannot locate the C runtime startup files or dynamic linker; pass -link-config\n");
+        return 1;
+    }
+    if(c.config == codegen::BuildConfig::AddressSanitizer && !paths.found_asan) {
+        sys::dprintf(2, "error: cannot locate the clang AddressSanitizer runtime; pass -link-config\n");
+        return 1;
+    }
+    i8** argv = build_link_argv(c, object_paths, &paths);
     if(spawn_and_wait(argv) != 0) {
         sys::dprintf(2, "error: link step failed\n");
         return 1;
@@ -426,8 +446,7 @@ fn i32 run_link(Compiler* c, u8[][] object_paths) {
     return 0;
 }
 
-// ld.lld -o <out> -dynamic-linker <ld.so> Scrt1.o crti.o -L<dirs> <objects> -l<libs> -lc crtn.o
-fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
+fn i8** build_link_argv(Compiler* c, u8[][] object_paths, link_paths::LinkPaths* paths) {
     u64 cap = 24 + object_paths.len + c.extern_libs.len + c.lib_dirs.len;
     i8** argv = (i8**)arena::alloc(c.arena, (cap + 1) * sizeof(i8*));
     u64 n = 0;
@@ -435,29 +454,28 @@ fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
     argv[n] = cstr(c.arena, "-o"); n += 1;
     argv[n] = output_cstr(c); n += 1;
     argv[n] = cstr(c.arena, "-dynamic-linker"); n += 1;
-    argv[n] = link_paths::dynamic_linker(); n += 1;
-    argv[n] = link_paths::crt_start(); n += 1;
-    argv[n] = link_paths::crt_init(); n += 1;
-    argv[n] = link_paths::lib_search_dir(); n += 1;
+    argv[n] = paths.dynamic_linker; n += 1;
+    argv[n] = paths.crt_start; n += 1;
+    argv[n] = paths.crt_init; n += 1;
+    argv[n] = paths.lib_dir; n += 1;
     // User -L dirs precede the objects/libs so ld.lld searches them for the -l libraries.
     for(u64 i = 0; i < c.lib_dirs.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs.ptr[i]); n += 1; }
     for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.arena, object_paths[i]); n += 1; }
     for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs.ptr[i]); n += 1; }
-    // AddressSanitizer needs its runtime; the shared lib carries its own dependencies.
     if(c.config == codegen::BuildConfig::AddressSanitizer) {
-        argv[n] = link_paths::asan_runtime_static(); n += 1;
-        argv[n] = link_paths::asan_runtime(); n += 1;
-        argv[n] = link_paths::asan_dynamic_list(); n += 1;
+        argv[n] = paths.asan_runtime_static; n += 1;
+        argv[n] = paths.asan_runtime; n += 1;
+        argv[n] = paths.asan_dynamic_list; n += 1;
         argv[n] = cstr(c.arena, "-lpthread"); n += 1;
         argv[n] = cstr(c.arena, "-lrt"); n += 1;
         argv[n] = cstr(c.arena, "-ldl"); n += 1;
         argv[n] = cstr(c.arena, "-lresolv"); n += 1;
         argv[n] = cstr(c.arena, "-lm"); n += 1;
-        argv[n] = link_paths::unwind_runtime(); n += 1;
+        argv[n] = paths.unwind_runtime; n += 1;
         argv[n] = cstr(c.arena, "--export-dynamic"); n += 1;
     }
     argv[n] = cstr(c.arena, "-lc"); n += 1;
-    argv[n] = link_paths::crt_fini(); n += 1;
+    argv[n] = paths.crt_fini; n += 1;
     argv[n] = null; n += 1;
     return argv;
 }
