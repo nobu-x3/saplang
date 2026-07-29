@@ -1,6 +1,6 @@
-#!/usr/bin/env sh
-# Mutation fuzzer for the front end. Seeds from real sources, mutates bytes, and compiles each case
-# under a timeout — any signal (not a diagnostic) or a hang is a finding, kept in fuzz-out/.
+#!/usr/bin/env bash
+# Mutation fuzzer for the front end. Needs bash for $RANDOM; under dash it would silently test one input.
+# Seeds from real sources, mutates bytes, compiles each under a timeout; a signal or hang is a finding.
 #
 #   ./fuzz.sh [ITERATIONS] [COMPILER]
 set -u

@@ -119,26 +119,41 @@ fn u8[] find_unwind_runtime() {
     return none;
 }
 
-// Newest major version wins; the installed clang's version is not knowable up front.
+// Newest major version wins; the installed clang's version is not knowable up front, and Debian
+// nests the runtime under /usr/lib/llvm-<major>/ while Arch keeps it in /usr/lib/clang/<major>/.
 fn u8[] find_clang_runtime_dir(arena::Arena* arena_ptr) {
-    u8[][2] roots;
-    roots[0] = "/usr/lib/clang/";
-    roots[1] = "/usr/lib64/clang/";
-    for(u64 root_index = 0; root_index < 2; root_index += 1) {
-        u64 major_version = 40;
-        while(major_version >= 14) {
-            io::OutBuf buf;
-            io::outbuf_init(&buf, arena_ptr, 64);
-            io::outbuf_write(&buf, roots[root_index]);
-            io::outbuf_write_u64(&buf, major_version);
-            io::outbuf_write(&buf, "/lib/linux/");
-            u8[] dir = io::outbuf_bytes(&buf);
-            if(file_exists(join(arena_ptr, dir, "libclang_rt.asan-x86_64.a"))) { return dir; }
-            major_version -= 1;
-        }
+    u64 major_version = 40;
+    while(major_version >= 14) {
+        u8[] arch_dir = clang_dir_arch(arena_ptr, "/usr/lib/clang/", major_version);
+        if(file_exists(join(arena_ptr, arch_dir, "libclang_rt.asan-x86_64.a"))) { return arch_dir; }
+        u8[] lib64_dir = clang_dir_arch(arena_ptr, "/usr/lib64/clang/", major_version);
+        if(file_exists(join(arena_ptr, lib64_dir, "libclang_rt.asan-x86_64.a"))) { return lib64_dir; }
+        u8[] debian_dir = clang_dir_debian(arena_ptr, major_version);
+        if(file_exists(join(arena_ptr, debian_dir, "libclang_rt.asan-x86_64.a"))) { return debian_dir; }
+        major_version -= 1;
     }
     u8[] none = {null, 0};
     return none;
+}
+
+fn u8[] clang_dir_arch(arena::Arena* arena_ptr, u8[] root, u64 major_version) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, arena_ptr, 64);
+    io::outbuf_write(&buf, root);
+    io::outbuf_write_u64(&buf, major_version);
+    io::outbuf_write(&buf, "/lib/linux/");
+    return io::outbuf_bytes(&buf);
+}
+
+fn u8[] clang_dir_debian(arena::Arena* arena_ptr, u64 major_version) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, arena_ptr, 80);
+    io::outbuf_write(&buf, "/usr/lib/llvm-");
+    io::outbuf_write_u64(&buf, major_version);
+    io::outbuf_write(&buf, "/lib/clang/");
+    io::outbuf_write_u64(&buf, major_version);
+    io::outbuf_write(&buf, "/lib/linux/");
+    return io::outbuf_bytes(&buf);
 }
 
 fn bool file_exists(u8[] path) {
