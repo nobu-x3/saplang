@@ -833,15 +833,26 @@ fn void* emit_alloca(CG* cg, sapir::Inst* inst) {
 
 fn void* emit_index_addr(CG* cg, sapir::Inst* inst) {
     types::Ty* base_pointee = cg.f.insts[inst.a].ty.data.pointee;
+    void* index = widen_index(cg, inst.b);
     if(base_pointee.kind == types::TypeKind::Array) {
         void*[2] indices;
         indices[0] = llvm::LLVMConstInt(llvm::LLVMInt64TypeInContext(cg.ctx), 0, 0);
-        indices[1] = cg.value_map[inst.b];
+        indices[1] = index;
         return llvm::LLVMBuildGEP2(cg.builder, map_type(cg, base_pointee), cg.value_map[inst.a], &indices[0], 2, cg.empty);
     }
     void*[1] indices;
-    indices[0] = cg.value_map[inst.b];
+    indices[0] = index;
     return llvm::LLVMBuildGEP2(cg.builder, map_type(cg, base_pointee), cg.value_map[inst.a], &indices[0], 1, cg.empty);
+}
+
+// GEP sign-extends a narrow index, so an unsigned one past 0x7f would address backwards.
+fn void* widen_index(CG* cg, u32 index_id) {
+    void* value = cg.value_map[index_id];
+    types::Ty* index_ty = cg.f.insts[index_id].ty;
+    if(!types::is_int(index_ty) || index_ty.size >= 8) { return value; }
+    void* target = llvm::LLVMInt64TypeInContext(cg.ctx);
+    if(types::is_signed_int(index_ty)) { return llvm::LLVMBuildSExt(cg.builder, value, target, cg.empty); }
+    return llvm::LLVMBuildZExt(cg.builder, value, target, cg.empty);
 }
 
 fn void* emit_cast(CG* cg, sapir::Inst* inst) {

@@ -319,6 +319,28 @@ fn i32 opt_release_mem2reg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// GEP sign-extends a narrow index, so an unsigned one past 0x7f must be zero-extended first.
+fn i32 unsigned_index_zero_extends(arena::Arena* a, u8[] msg) {
+    arena::Arena* ja = fresh_arena(a);
+    module::Module* m = test_util::frontend(ja, "fn u8 pick(u8[256] table, u8 index) { return table[index]; }");
+    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
+    sapir::SapirModule* sm = lower::lower_module(m);
+    u8[] ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
+    if(!contains(ir, "zext")) { return -2; }
+    if(contains(ir, "sext")) { return -3; }
+    return 0;
+}
+
+fn i32 signed_index_sign_extends(arena::Arena* a, u8[] msg) {
+    arena::Arena* ja = fresh_arena(a);
+    module::Module* m = test_util::frontend(ja, "fn i32 pick(i32[8] table, i8 index) { return table[index]; }");
+    if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
+    sapir::SapirModule* sm = lower::lower_module(m);
+    u8[] ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
+    if(!contains(ir, "sext")) { return -2; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Codegen Tests";
@@ -379,5 +401,7 @@ fn i32 main() {
     testing::add(suite, "opt_release_mem2reg",  &opt_release_mem2reg);
     testing::add(suite, "opt_debug_info",       &opt_debug_info);
     testing::add(suite, "opt_debug_aggregate_and_ssa", &opt_debug_aggregate_and_ssa);
+    testing::add(suite, "unsigned_index_zero_extends", &unsigned_index_zero_extends);
+    testing::add(suite, "signed_index_sign_extends", &signed_index_sign_extends);
     return testing::run();
 }

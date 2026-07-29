@@ -15,3 +15,5 @@ tags
 
 # Stage 2 self-host binaries (reproducible via ./bootstrap.sh off the stage2-v0 tag)
 bootstrap/
+fuzz-out/
+dist/
