@@ -19,6 +19,7 @@ extern {
     export fn void _exit(i32 code);
     export fn i32  mkdir(const i8* path, u32 mode);
     export fn i8*  getenv(const i8* name);
+    export fn i64  readlink(const i8* path, i8* buf, u64 size);
     export fn i32  setenv(const i8* name, const i8* value, i32 overwrite);
 
     // stdio

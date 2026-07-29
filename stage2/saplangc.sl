@@ -28,6 +28,51 @@ fn bool cstr_eq(u8* s, u8[] lit) {
     return s[lit.len] == 0;
 }
 
+// std/ ships beside the binary; SAPLANG_STD overrides it, and an empty result means neither exists.
+fn u8[] find_std_dir(arena::Arena* a, u8** argv) {
+    i8* override_dir = sys::getenv(cstr(a, "SAPLANG_STD"));
+    if(override_dir != null) { return cstr_slice((u8*)override_dir); }
+    u8[] exe_dir = find_exe_dir(a, argv);
+    if(exe_dir.len == 0) { u8[] none = {null, 0}; return none; }
+    u8[] candidate = join_path(a, exe_dir, "/std");
+    if(dir_has_std(candidate, a)) { return candidate; }
+    u8[] none = {null, 0};
+    return none;
+}
+
+fn u8[] find_exe_dir(arena::Arena* a, u8** argv) {
+    u8* path_buf = (u8*)arena::alloc(a, 4096);
+    i64 written = sys::readlink(cstr(a, "/proc/self/exe"), (i8*)path_buf, 4095);
+    u8[] exe_path = {null, 0};
+    if(written > 0) {
+        exe_path = {path_buf, (u64)written};
+    } else if(argv != null && argv[0] != null) {
+        exe_path = cstr_slice(argv[0]);
+    }
+    u64 last_slash = exe_path.len;
+    for(u64 char_index = 0; char_index < exe_path.len; char_index += 1) {
+        if(exe_path[char_index] == '/') { last_slash = char_index; }
+    }
+    if(last_slash == exe_path.len) { u8[] none = {null, 0}; return none; }
+    u8[] dir = {exe_path.ptr, last_slash};
+    return dir;
+}
+
+fn bool dir_has_std(u8[] dir, arena::Arena* a) {
+    io::File probe = io::open(join_path(a, dir, "/sys.sl"), "r");
+    if(probe.fp == null) { return false; }
+    io::close(&probe);
+    return true;
+}
+
+fn u8[] join_path(arena::Arena* a, u8[] prefix, u8[] suffix) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, a, prefix.len + suffix.len + 1);
+    io::outbuf_write(&buf, prefix);
+    io::outbuf_write(&buf, suffix);
+    return io::outbuf_bytes(&buf);
+}
+
 fn i32 main(i32 argc, u8** argv) {
     arena::Arena symbol_arena;
     arena::Arena type_arena;
@@ -57,6 +102,8 @@ fn i32 main(i32 argc, u8** argv) {
         }
     }
     if(!compiler::parse_argv(c, args)) { return 1; }
+    u8[] std_dir = find_std_dir(&arena, argv);
+    if(std_dir.len > 0) { compiler::add_import_path(c, std_dir); }
     return compiler::run(c);
 }
 
@@ -81,13 +128,13 @@ fn i32 run_build(arena::Arena* a, i32 argc, u8** argv) {
         compiler::Compiler* c = compiler::new(a);
         compiler::add_source(c, runner_path);
         compiler::add_import_path(c, ".");
-        i8* std_env = sys::getenv(cstr(a, "SAPLANG_STD"));
-        if(std_env != null) { compiler::add_import_path(c, cstr_slice((u8*)std_env)); }
         add_passthrough_import_paths(c, argc, argv);
+        u8[] std_dir = find_std_dir(a, argv);
+        if(std_dir.len > 0) { compiler::add_import_path(c, std_dir); }
         c.deps_path = ".sap-cache/build.dep";
         c.output_path = ".sap-cache/build";
         if(compiler::run(c) != 0) {
-            sys::dprintf(2, "error: could not compile build.sl (is `builder` on the include path? set SAPLANG_STD or pass -i)\n");
+            sys::dprintf(2, "error: could not compile build.sl (is `builder` reachable? std/ must sit beside saplangc, or set SAPLANG_STD)\n");
             return 1;
         }
         write_runner_stamp(a);
