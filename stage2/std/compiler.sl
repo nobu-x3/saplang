@@ -118,6 +118,16 @@ export fn void set_target(Compiler* c, u8[] t) {
     c.target = t;
 }
 
+// Only Linux links today: link_paths is Linux-only, so any other target would silently emit an ELF.
+export fn bool set_validated_target(Compiler* c, u8[] t) {
+    if(slice_eq(t, "linux")) {
+        c.target = t;
+        return true;
+    }
+    sys::dprintf(2, "unsupported -target %.*s (only 'linux' is supported)\n", (i32)t.len, (i8*)t.ptr);
+    return false;
+}
+
 export fn void set_multithreaded(Compiler* c, bool on) {
     c.is_multithreaded = on;
 }
@@ -133,7 +143,9 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
             if(arg_index < args.len) { add_import_path_list(c, args[arg_index]); } else { ok = false; }
         } else if(slice_eq(arg, "-target")) {
             arg_index += 1;
-            if(arg_index < args.len) { c.target = args[arg_index]; } else { ok = false; }
+            if(arg_index < args.len) {
+                if(!set_validated_target(c, args[arg_index])) { ok = false; }
+            } else { ok = false; }
         } else if(slice_eq(arg, "-o")) {
             arg_index += 1;
             if(arg_index < args.len) { c.output_path = args[arg_index]; } else { ok = false; }
