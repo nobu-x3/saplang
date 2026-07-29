@@ -40,6 +40,15 @@ fn diag::DiagBuf* bdiag(Sema* s) {
     return &s.m.diag;
 }
 
+// An error inside a generic body points at the template, so pin the call site that instantiated it.
+fn void note_instantiation(Sema* s, u32 src_pos, ast::FnDeclNode* generic, u64 diags_before) {
+    if(bdiag(s).entries.len == diags_before) { return; }
+    u8[] name_str = interner::symbol_str(generic.name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "in instantiation of %.*s requested here", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
 fn void sema_report(Sema* s, u32 pos, u8[] msg) {
     diag::report(bdiag(s), balloc(s), pos, msg);
 }
@@ -1644,7 +1653,9 @@ fn types::Ty* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* gen
         if(arg_types[i] == null) { args_ok = false; }
     }
     if(!args_ok) { mark_error((ast::AstNode*)n); return null; }
+    u64 diags_before = bdiag(s).entries.len;
     ast::FnDeclNode* clone = resolve_generic_call_hook(s.m, generic, arg_types);
+    note_instantiation(s, n.h.src_pos, generic, diags_before);
     if(clone == null) {
         diag_infer_failure(s, n.h.src_pos, generic.name);
         mark_error((ast::AstNode*)n);
@@ -1732,7 +1743,9 @@ fn types::Ty* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDecl
         }
         cargs.len += 1;
     }
+    u64 diags_before = bdiag(s).entries.len;
     ast::FnDeclNode* clone = resolve_generic_explicit_hook(s.m, generic, cargs);
+    note_instantiation(s, n.h.src_pos, generic, diags_before);
     if(clone == null) { diag_infer_failure(s, n.h.src_pos, generic.name); mark_error((ast::AstNode*)n); return null; }
     for(u64 i = 0; i < clone.params.len; i += 1) {
         if(clone.params[i].is_comptime) { continue; }

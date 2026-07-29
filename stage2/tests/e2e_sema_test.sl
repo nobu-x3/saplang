@@ -347,6 +347,14 @@ fn i32 err_comptime_self_reentry(arena::Arena* a, u8[] m) {
 }
 
 // An expected fn-pointer type selects the overload; before this it always took the head.
+// An error inside a generic body points at the template, so the call site is pinned as a follow-up.
+fn i32 err_instantiation_note(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn T bad(comptime Type T, T x) { return x.nope; }\nexport fn i32 f() { i32 v = 3; return bad(v); }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)2, m)) { return -1; }
+    if(!testing::expect_substr(mod.diag.entries[1].msg, "in instantiation of bad requested here", m)) { return -2; }
+    return 0;
+}
+
 fn i32 ok_addr_of_overload_selects(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 g(i32 x) { return x; }\nfn i32 g(u8 x) { return (i32)x; }\nexport fn i32 f() { fn* i32(u8) p = &g; return p((u8)1); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1483,6 +1491,7 @@ fn i32 main() {
     testing::add(suite, "ok_type_info_in_comprun",   &ok_type_info_in_comprun);
     testing::add(suite, "ok_comprun_generic_inferred", &ok_comprun_generic_inferred);
     testing::add(suite, "err_comptime_self_reentry",  &err_comptime_self_reentry);
+    testing::add(suite, "err_instantiation_note",    &err_instantiation_note);
     testing::add(suite, "ok_addr_of_overload_selects", &ok_addr_of_overload_selects);
     testing::add(suite, "ok_bare_overload_name_selects", &ok_bare_overload_name_selects);
     testing::add(suite, "err_addr_of_overload_no_match", &err_addr_of_overload_no_match);
