@@ -926,6 +926,7 @@ fn ast::AstNode* compile_fragment(module::Module* m, u8[] bytes, bool as_stmts, 
     frag.source = bytes;
     frag.literal_pool = m.literal_pool;
     frag.literal_pool_cap = m.literal_pool_cap;
+    frag.build = m.build;
     scanner::scan(frag);
     u32 base = module::register_inserted_source(m, bytes, generator_pos);
     for(u64 token_index = 0; token_index < frag.tokens.len; token_index += 1) { frag.tokens[token_index].src_pos += base; }

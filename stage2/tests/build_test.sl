@@ -115,6 +115,22 @@ fn i32 target_option(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// Options other than optimize/target reach the source as compiler defines; the command string also keys the rebuild stamp.
+fn i32 defines_forwarded(arena::Arena* a, u8[] m) {
+    builder::Build* b = builder::new_build(a);
+    b.compiler_path = "saplangc";
+    builder::define(b, "optimize", "Release", true);
+    builder::define(b, "tracing", "", false);
+    builder::define(b, "level", "high", true);
+    builder::standard_optimize_options(b);
+
+    builder::CompileStep* exe = builder::add_executable(b, "app", "main.sl");
+    u8[] cmd = builder::compile_command_string(b, exe);
+    u8[] want = "saplangc main.sl -o .sap-cache/app -config Release -Dtracing -Dlevel=high";
+    if(!testing::expect_eq(cmd, want, m)) { return -1; }
+    return 0;
+}
+
 // The parallel scheduler gathers every reachable compile once; a step shared by install and run
 // is not double-counted.
 fn i32 gather_compiles(arena::Arena* a, u8[] m) {
@@ -148,6 +164,7 @@ fn i32 main() {
     testing::add(suite, "command_string_minimal", &command_string_minimal);
     testing::add(suite, "options", &options);
     testing::add(suite, "target_option", &target_option);
+    testing::add(suite, "defines_forwarded", &defines_forwarded);
     testing::add(suite, "gather_compiles", &gather_compiles);
     return testing::run();
 }

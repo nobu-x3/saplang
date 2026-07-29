@@ -30,7 +30,21 @@ export struct Module {
     i32                     comptime_max_depth;      // interpreter recursion cap; 0 = built-in default
     u64                     comptime_max_iterations; // interpreter per-loop cap; 0 = built-in default
     void*                   sapir;                   // sapir::SapirModule* — set by lower, consumed by codegen
+    BuildInfo               build;                   // what `comprun if (build::...)` folds against
     // codegen fields added by later phases
+}
+
+// What `comprun if (build::...)` conditions read; the driver fills it before parsing.
+export struct BuildInfo {
+    u8[]        os;
+    u8[]        arch;
+    u8[]        config;
+    Define[]    defines;
+}
+
+export struct Define {
+    u8[] name;
+    u8[] value;     // empty for a bare -Dname
 }
 
 // Positions in [base, base+bytes.len) belong to this fragment and render via generator_pos.

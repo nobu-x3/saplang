@@ -355,11 +355,35 @@ export fn u8[] compile_command_string(Build* b, CompileStep* c) {
     }
     io::outbuf_write(&buf, " -config ");
     io::outbuf_write(&buf, optimize_name(c.optimize));
+    for(u64 cli_index = 0; cli_index < b.cli_args.len; cli_index += 1) {
+        CliArg* a = &b.cli_args.ptr[cli_index];
+        if(is_forwarded_define(a)) {
+            io::outbuf_write_byte(&buf, ' ');
+            io::outbuf_write(&buf, define_arg(b, a));
+        }
+    }
+    return io::outbuf_bytes(&buf);
+}
+
+// `optimize` and `target` already reach the compiler as -config/-target.
+fn bool is_forwarded_define(CliArg* a) {
+    return !slice_eq(a.key, "optimize") && !slice_eq(a.key, "target");
+}
+
+fn u8[] define_arg(Build* b, CliArg* a) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, b.arena, 32);
+    io::outbuf_write(&buf, "-D");
+    io::outbuf_write(&buf, a.key);
+    if(a.has_value) {
+        io::outbuf_write_byte(&buf, '=');
+        io::outbuf_write(&buf, a.value);
+    }
     return io::outbuf_bytes(&buf);
 }
 
 fn i8** build_compile_argv(Build* b, CompileStep* c, u8[] out) {
-    u64 cap = 12 + c.libs.len * 2 + c.lib_dirs.len * 2;
+    u64 cap = 12 + c.libs.len * 2 + c.lib_dirs.len * 2 + b.cli_args.len;
     i8** argv = (i8**)arena::alloc(b.arena, (cap + 1) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(b.arena, b.compiler_path); n += 1;
@@ -386,6 +410,10 @@ fn i8** build_compile_argv(Build* b, CompileStep* c, u8[] out) {
     argv[n] = cstr(b.arena, cache_sidecar(b, c.artifact_name, ".dep")); n += 1;
     argv[n] = cstr(b.arena, "-config");                  n += 1;
     argv[n] = cstr(b.arena, optimize_name(c.optimize));  n += 1;
+    for(u64 cli_index = 0; cli_index < b.cli_args.len; cli_index += 1) {
+        CliArg* a = &b.cli_args.ptr[cli_index];
+        if(is_forwarded_define(a)) { argv[n] = cstr(b.arena, define_arg(b, a)); n += 1; }
+    }
     argv[n] = null;
     return argv;
 }

@@ -47,6 +47,7 @@ export struct Compiler {
     bool                 wants_exit;      // --help / --version handled; the driver should stop before compiling
     u8[]                 link_config;     // -link-config: file overriding the probed link paths
     bool                 compile_only;    // -c: emit one object per module and skip the link step
+    list::List(module::Define) defines;   // -D<name>[=<value>]: readable from `comprun if (build::defined(...))`
 }
 
 export const u8[] VERSION = "0.1.0 (stage2, self-hosted)";
@@ -61,6 +62,7 @@ export fn void print_usage() {
     sys::dprintf(1, "  -L <dir>               add a library search directory\n");
     sys::dprintf(1, "  -target <name>         target platform for conditional compilation\n");
     sys::dprintf(1, "  -config <mode>         Debug | Release | ReleaseDebug | AddressSanitizer | ThreadSanitizer\n");
+    sys::dprintf(1, "  -D<name>[=<value>]     define a flag readable from `comprun if (build::defined(...))`\n");
     sys::dprintf(1, "  -deps <path>           write every discovered source path to <path>\n");
     sys::dprintf(1, "  -link-config <file>    override probed link paths (key=value per line)\n");
     sys::dprintf(1, "  -c                     emit <module>.o per module, skip linking (-o renames the entry object)\n");
@@ -110,6 +112,23 @@ export fn void add_lib_dir(Compiler* c, u8[] path) {
     list::push(&c.lib_dirs, c.arena, path);
 }
 
+// `-Dname` or `-Dname=value`; a bare name carries an empty value and is still "defined".
+export fn void add_define(Compiler* c, u8[] arg) {
+    u8[] body = {&arg.ptr[2], arg.len - 2};
+    u64 separator = body.len;
+    for(u64 char_index = 0; char_index < body.len; char_index += 1) {
+        if(body[char_index] == '=') {
+            separator = char_index;
+            break;
+        }
+    }
+    module::Define entry;
+    entry.name = {body.ptr, separator};
+    entry.value = {null, 0};
+    if(separator < body.len) { entry.value = {&body.ptr[separator + 1], body.len - separator - 1}; }
+    list::push(&c.defines, c.arena, entry);
+}
+
 export fn void add_import_path(Compiler* c, u8[] path) {
     list::push(&c.import_paths, c.arena, path);
 }
@@ -155,6 +174,8 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
         } else if(slice_eq(arg, "-L")) {
             arg_index += 1;
             if(arg_index < args.len) { add_lib_dir(c, args[arg_index]); } else { ok = false; }
+        } else if(starts_with(arg, "-D")) {
+            if(arg.len > 2) { add_define(c, arg); } else { ok = false; }
         } else if(slice_eq(arg, "-config")) {
             arg_index += 1;
             if(arg_index < args.len) {
@@ -282,7 +303,38 @@ fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, u8[] pat
     m.name = name;
     m.path = path;
     m.source = src;
+    m.build = build_info(c);
     return m;
+}
+
+// The parser reads this while folding `comprun if`, so it has to be set before any module is parsed.
+fn module::BuildInfo build_info(Compiler* c) {
+    module::BuildInfo info;
+    info.os = "linux";
+    if(c.target.len > 0) { info.os = c.target; }
+    info.arch = "x86_64";
+    info.config = config_name(c.config);
+    info.defines = {c.defines.ptr, c.defines.len};
+    return info;
+}
+
+fn u8[] config_name(codegen::BuildConfig config) {
+    switch(config) {
+    case codegen::BuildConfig::Debug:            { return "Debug"; }
+    case codegen::BuildConfig::Release:          { return "Release"; }
+    case codegen::BuildConfig::ReleaseDebug:     { return "ReleaseDebug"; }
+    case codegen::BuildConfig::AddressSanitizer: { return "AddressSanitizer"; }
+    case codegen::BuildConfig::ThreadSanitizer:  { return "ThreadSanitizer"; }
+    else                                         { return "Debug"; }
+    }
+}
+
+fn bool starts_with(u8[] text, u8[] prefix) {
+    if(prefix.len > text.len) { return false; }
+    for(u64 char_index = 0; char_index < prefix.len; char_index += 1) {
+        if(text[char_index] != prefix[char_index]) { return false; }
+    }
+    return true;
 }
 
 fn void discover_imports(Compiler* c, module::Module* m) {

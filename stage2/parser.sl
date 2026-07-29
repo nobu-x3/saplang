@@ -24,7 +24,7 @@ export fn ast::AstNode* parse(module::Module* m) {
     NodeList decls = {null, 0, 0};
     while (peek(&p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* d = parse_top_decl(&p);
-        if (d != null) { list::push(&decls, m.arena, d); }
+        if (d != null) { push_or_splice(&decls, m.arena, d); }
     }
     ast::BlockNode* root = node_alloc(m.arena, sizeof(ast::BlockNode));
     root.h.kind = ast::AstKind::BlockStmt;
@@ -40,7 +40,7 @@ export fn ast::AstNode* parse_stmt_fragment(module::Module* m) {
     NodeList stmts = {null, 0, 0};
     while (peek(&p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* s = parse_stmt(&p);
-        if (s != null) { list::push(&stmts, m.arena, s); }
+        if (s != null) { push_or_splice(&stmts, m.arena, s); }
     }
     ast::BlockNode* blk = node_alloc(m.arena, sizeof(ast::BlockNode));
     blk.h.kind = ast::AstKind::BlockStmt;
@@ -71,7 +71,7 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
         case token::TokenKind::CONST:   { return parse_var_decl(p, is_exported); }
         case token::TokenKind::EXTERN:  { return parse_extern_block(p); }
         case token::TokenKind::COMPRUN: {
-            ast::AstNode* cr = parse_comprun(p);
+            ast::AstNode* cr = parse_comprun(p, true);
             if(is_exported) {
                 if(!p.is_speculating) {
                     u8[] msg = "`export` is not valid on `comprun` (it does not declare a named symbol)";
@@ -291,7 +291,7 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         case token::TokenKind::BREAK:        { return parse_break(p); }
         case token::TokenKind::CONTINUE:     { return parse_continue(p); }
         case token::TokenKind::DEFER:        { return parse_defer(p); }
-        case token::TokenKind::COMPRUN:      { return parse_comprun(p); }
+        case token::TokenKind::COMPRUN:      { return parse_comprun(p, false); }
         case token::TokenKind::COMPINSERT:   { return parse_compinsert(p); }
         case token::TokenKind::COMPSPLICE:   { return parse_compsplice(p); }
         case token::TokenKind::COMPERROR:    { return parse_comperror(p); }
@@ -372,10 +372,11 @@ fn ast::AstNode* parse_continue(Parser* p) {
     return (ast::AstNode*)n;
 }
 
-fn ast::AstNode* parse_comprun(Parser* p) {
+fn ast::AstNode* parse_comprun(Parser* p, bool at_top_level) {
     u32 start = peek(p, 0).src_pos;
     token::Token kw = expect(p, token::TokenKind::COMPRUN);
     if(kw.kind == token::TokenKind::ERROR) { return mk_error_node_and_consume(p, start); }
+    if(peek(p, 0).kind == token::TokenKind::IF) { return parse_comp_if(p, start, at_top_level); }
     bool had_err = false;
     ast::AstNode* body = parse_block(p);
     if(had_error(body)) { had_err = true; }
@@ -386,6 +387,209 @@ fn ast::AstNode* parse_comprun(Parser* p) {
     n.h.src_pos = start;
     n.body = body;
     return (ast::AstNode*)n;
+}
+
+// Both branches parse but only the taken one survives, so the other may name APIs this target lacks.
+fn ast::AstNode* parse_comp_if(Parser* p, u32 start, bool at_top_level) {
+    consume(p);
+    bool had_err = expect(p, token::TokenKind::LParen).kind == token::TokenKind::ERROR;
+    bool taken = parse_build_cond(p, &had_err);
+    if(had_err) { skip_to_cond_end(p); }
+    if(expect(p, token::TokenKind::RParen).kind == token::TokenKind::ERROR) { had_err = true; }
+
+    ast::AstNode* then_block = parse_comp_branch(p, at_top_level);
+    if(had_error(then_block)) { had_err = true; }
+    ast::AstNode* else_block = null;
+    if(peek(p, 0).kind == token::TokenKind::ELSE) {
+        consume(p);
+        if(peek(p, 0).kind == token::TokenKind::IF) {
+            else_block = parse_comp_if(p, peek(p, 0).src_pos, at_top_level);
+        } else {
+            else_block = parse_comp_branch(p, at_top_level);
+        }
+        if(had_error(else_block)) { had_err = true; }
+    }
+
+    ast::AstNode* chosen = then_block;
+    if(!taken) { chosen = else_block; }
+    if(chosen == null) {
+        ast::BlockNode* empty = node_alloc(p.m.arena, sizeof(ast::BlockNode));
+        empty.h.kind = ast::AstKind::BlockStmt;
+        empty.h.src_pos = start;
+        chosen = (ast::AstNode*)empty;
+    }
+    if(had_err) { chosen.h.flags = (ast::AstFlags)((u16)chosen.h.flags | (u16)ast::AstFlags::HadError); }
+    if(chosen.h.kind != ast::AstKind::BlockStmt) { return chosen; }
+    chosen.h.flags = (ast::AstFlags)((u16)chosen.h.flags | (u16)ast::AstFlags::Spliced);
+    return chosen;
+}
+
+// After a rejected condition, resync on the `)` so the branch bodies still parse cleanly.
+fn void skip_to_cond_end(Parser* p) {
+    u32 depth = 0;
+    while(true) {
+        token::TokenKind k = peek(p, 0).kind;
+        if(k == token::TokenKind::EOF || k == token::TokenKind::LBrace) { return; }
+        if(k == token::TokenKind::LParen) { depth += 1; }
+        if(k == token::TokenKind::RParen) {
+            if(depth == 0) { return; }
+            depth -= 1;
+        }
+        consume(p);
+    }
+}
+
+fn bool parse_build_cond(Parser* p, bool* had_err) {
+    bool value = parse_build_and(p, had_err);
+    while(peek(p, 0).kind == token::TokenKind::PipePipe) {
+        consume(p);
+        bool rhs = parse_build_and(p, had_err);
+        value = value || rhs;
+    }
+    return value;
+}
+
+fn bool parse_build_and(Parser* p, bool* had_err) {
+    bool value = parse_build_unary(p, had_err);
+    while(peek(p, 0).kind == token::TokenKind::AmpAmp) {
+        consume(p);
+        bool rhs = parse_build_unary(p, had_err);
+        value = value && rhs;
+    }
+    return value;
+}
+
+fn bool parse_build_unary(Parser* p, bool* had_err) {
+    if(peek(p, 0).kind == token::TokenKind::Bang) {
+        consume(p);
+        return !parse_build_unary(p, had_err);
+    }
+    if(peek(p, 0).kind == token::TokenKind::LParen) {
+        consume(p);
+        bool inner = parse_build_cond(p, had_err);
+        if(expect(p, token::TokenKind::RParen).kind == token::TokenKind::ERROR) { *had_err = true; }
+        return inner;
+    }
+    return parse_build_query(p, had_err);
+}
+
+// `build::os == "linux"`, `build::config != "Debug"`, `build::defined("tracing")`.
+fn bool parse_build_query(Parser* p, bool* had_err) {
+    token::Token head = peek(p, 0);
+    if(head.kind != token::TokenKind::Ident || !slice_eq(interner::symbol_str(head.data.sym), "build")) {
+        report_build_cond_error(p, head.src_pos);
+        *had_err = true;
+        consume(p);
+        return false;
+    }
+    consume(p);
+    if(expect(p, token::TokenKind::ColonColon).kind == token::TokenKind::ERROR) { *had_err = true; return false; }
+    token::Token field = expect(p, token::TokenKind::Ident);
+    if(field.kind == token::TokenKind::ERROR) { *had_err = true; return false; }
+    u8[] field_name = interner::symbol_str(field.data.sym);
+
+    if(slice_eq(field_name, "defined")) {
+        if(expect(p, token::TokenKind::LParen).kind == token::TokenKind::ERROR) { *had_err = true; return false; }
+        u8[] wanted = parse_build_string(p, had_err);
+        if(expect(p, token::TokenKind::RParen).kind == token::TokenKind::ERROR) { *had_err = true; }
+        return build_defined(p, wanted);
+    }
+
+    u8[] actual;
+    if(slice_eq(field_name, "define")) {
+        if(expect(p, token::TokenKind::LParen).kind == token::TokenKind::ERROR) { *had_err = true; return false; }
+        u8[] name = parse_build_string(p, had_err);
+        if(expect(p, token::TokenKind::RParen).kind == token::TokenKind::ERROR) { *had_err = true; }
+        actual = define_value(p, name);
+    } else {
+        actual = build_field(p, field_name, had_err, field.src_pos);
+    }
+
+    bool negated = peek(p, 0).kind == token::TokenKind::BangEq;
+    if(!negated && expect(p, token::TokenKind::EqEq).kind == token::TokenKind::ERROR) { *had_err = true; return false; }
+    if(negated) { consume(p); }
+    u8[] wanted = parse_build_string(p, had_err);
+    bool matches = slice_eq(actual, wanted);
+    if(negated) { return !matches; }
+    return matches;
+}
+
+// At top level a branch holds declarations, inside a function it holds statements.
+fn ast::AstNode* parse_comp_branch(Parser* p, bool at_top_level) {
+    if(!at_top_level) { return parse_block(p); }
+    u32 start = peek(p, 0).src_pos;
+    token::Token open = expect(p, token::TokenKind::LBrace);
+    if(open.kind == token::TokenKind::ERROR) { return mk_error_node(p, start); }
+    bool local_err = false;
+    NodeList decls = {null, 0, 0};
+    while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
+        ast::AstNode* d = parse_top_decl(p);
+        if(d) {
+            push_or_splice(&decls, p.m.arena, d);
+            if(had_error(d)) { local_err = true; }
+        }
+    }
+    if(expect(p, token::TokenKind::RBrace).kind == token::TokenKind::ERROR) { local_err = true; }
+    ast::BlockNode* blk = node_alloc(p.m.arena, sizeof(ast::BlockNode));
+    blk.h.kind = ast::AstKind::BlockStmt;
+    blk.h.flags = (ast::AstFlags)0;
+    if(local_err) { blk.h.flags = ast::AstFlags::HadError; }
+    blk.h.src_pos = start;
+    blk.stmts = {decls.ptr, decls.len};
+    return (ast::AstNode*)blk;
+}
+
+fn u8[] parse_build_string(Parser* p, bool* had_err) {
+    token::Token t = peek(p, 0);
+    if(t.kind != token::TokenKind::StringLit) {
+        report_build_cond_error(p, t.src_pos);
+        *had_err = true;
+        u8[] none = {null, 0};
+        return none;
+    }
+    consume(p);
+    u8[] bytes = {&p.m.literal_pool.ptr[t.data.bytes.off], (u64)t.data.bytes.len};
+    return bytes;
+}
+
+fn u8[] build_field(Parser* p, u8[] field_name, bool* had_err, u32 src_pos) {
+    if(slice_eq(field_name, "os"))     { return p.m.build.os; }
+    if(slice_eq(field_name, "arch"))   { return p.m.build.arch; }
+    if(slice_eq(field_name, "config")) { return p.m.build.config; }
+    report_build_cond_error(p, src_pos);
+    *had_err = true;
+    u8[] none = {null, 0};
+    return none;
+}
+
+fn bool build_defined(Parser* p, u8[] wanted) {
+    for(u64 define_index = 0; define_index < p.m.build.defines.len; define_index += 1) {
+        if(slice_eq(p.m.build.defines[define_index].name, wanted)) { return true; }
+    }
+    return false;
+}
+
+// An undefined name and a bare `-Dname` both read as the empty string.
+fn u8[] define_value(Parser* p, u8[] wanted) {
+    for(u64 define_index = 0; define_index < p.m.build.defines.len; define_index += 1) {
+        if(slice_eq(p.m.build.defines[define_index].name, wanted)) { return p.m.build.defines[define_index].value; }
+    }
+    u8[] none = {null, 0};
+    return none;
+}
+
+fn void report_build_cond_error(Parser* p, u32 src_pos) {
+    if(p.is_speculating) { return; }
+    u8[] msg = "comprun if condition must use build::os, build::arch, build::config, build::define(\"name\"), or build::defined(\"name\")";
+    diag::report(&p.m.diag, p.m.arena, src_pos, msg);
+}
+
+fn bool slice_eq(u8[] a, u8[] b) {
+    if(a.len != b.len) { return false; }
+    for(u64 char_index = 0; char_index < a.len; char_index += 1) {
+        if(a[char_index] != b[char_index]) { return false; }
+    }
+    return true;
 }
 
 fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
@@ -993,7 +1197,7 @@ fn ast::AstNode* parse_defer(Parser* p) {
         bool inner_err = had_error(inner);
         if(inner_err) { had_err = true; }
         NodeList b = {null, 0, 0};
-        list::push(&b, p.m.arena, inner);
+        push_or_splice(&b, p.m.arena, inner);
         ast::BlockNode* blk = node_alloc(p.m.arena, sizeof(ast::BlockNode));
         blk.h.kind = ast::AstKind::BlockStmt;
         blk.h.flags = (ast::AstFlags)0;
@@ -1279,6 +1483,18 @@ fn bool looks_like_var_decl(Parser* p) {
     return ok;
 }
 
+// A `comprun if` branch is inlined rather than nested, so its declarations land in the enclosing scope.
+fn void push_or_splice(NodeList* out, arena::Arena* a, ast::AstNode* node) {
+    if(((u16)node.h.flags & (u16)ast::AstFlags::Spliced) == 0) {
+        list::push(out, a, node);
+        return;
+    }
+    ast::BlockNode* block = (ast::BlockNode*)node;
+    for(u64 stmt_index = 0; stmt_index < block.stmts.len; stmt_index += 1) {
+        list::push(out, a, block.stmts[stmt_index]);
+    }
+}
+
 fn ast::AstNode* parse_block(Parser* p) {
     u32 start = peek(p, 0).src_pos;
     bool local_err = false;
@@ -1288,7 +1504,7 @@ fn ast::AstNode* parse_block(Parser* p) {
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* s = parse_stmt(p);
         if(s) {
-            list::push(&stmts, p.m.arena, s);
+            push_or_splice(&stmts, p.m.arena, s);
             if(had_error(s)) { local_err = true; }
         }
     }

@@ -415,7 +415,8 @@ export enum AstFlags : u16 {
     LValue = 1,
     ConstExpr = 2,
     HadError = 4,
-    Parenthesized = 8
+    Parenthesized = 8,
+    Spliced = 16        // a block the parser inlines into its enclosing list; never reaches sema
 }
 
 export enum AstKind : u16 {

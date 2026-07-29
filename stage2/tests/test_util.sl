@@ -16,6 +16,19 @@ const u64 E2E_BUCKETS = 64;
 // Runs the single-module frontend (scan → parse → sema → cfg) with driver-style bail between phases.
 // Diagnostics stay in m.diag (not drained), so tests can pin exact messages + src_pos.
 export fn module::Module* frontend(arena::Arena* a, u8[] src) {
+    return frontend_build(a, src, host_build());
+}
+
+export fn module::BuildInfo host_build() {
+    module::BuildInfo build;
+    build.os = "linux";
+    build.arch = "x86_64";
+    build.config = "Debug";
+    build.defines = {null, 0};
+    return build;
+}
+
+export fn module::Module* frontend_build(arena::Arena* a, u8[] src, module::BuildInfo build) {
     interner::init(a, E2E_BUCKETS);
     token::load_keywords();
     types::typer_init(a, E2E_BUCKETS);
@@ -24,6 +37,7 @@ export fn module::Module* frontend(arena::Arena* a, u8[] src) {
     sys::memset(m, 0, sizeof(module::Module));
     m.arena = a;
     m.source = src;
+    m.build = build;
     m.name = interner::intern("main");
     scanner::scan(m);
     m.root_node = parser::parse(m);

@@ -1413,7 +1413,7 @@ fn Decl* resolve_namespace_decl(Sema* s, ast::AstNode* base) {
 fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
     Decl* ns = resolve_namespace_decl(s, n.base);
     if(ns == null) {
-        diag_not_namespace(s, n.h.src_pos);
+        if(is_build_qualifier(n.base)) { diag_build_outside_comp_if(s, n.h.src_pos); } else { diag_not_namespace(s, n.h.src_pos); }
         mark_error((ast::AstNode*)n);
         return null;
     }
@@ -2789,6 +2789,16 @@ export fn void diag_arity(Sema* s, u32 src_pos, u64 expected, u64 got) {
 // "left of '::' is not a module or enum". Used by synth_ns_access.
 export fn void diag_not_namespace(Sema* s, u32 src_pos) {
     u8[] msg = "left of '::' is not a module or enum";
+    sema_report(s, src_pos, msg);
+}
+
+fn bool is_build_qualifier(ast::AstNode* base) {
+    if(base == null || base.h.kind != ast::AstKind::Ident) { return false; }
+    return ((ast::IdentNode*)base).name == interner::intern("build");
+}
+
+export fn void diag_build_outside_comp_if(Sema* s, u32 src_pos) {
+    u8[] msg = "`build::` is only available in a `comprun if` condition";
     sema_report(s, src_pos, msg);
 }
 
