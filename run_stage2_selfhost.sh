@@ -32,4 +32,24 @@ done
 
 echo "build: $bok ok, $bfail failed"
 echo "run: $rok ok, $rfail failed"
-[ "$bfail" -eq 0 ] && [ "$rfail" -eq 0 ]
+
+# Second pass through -mt: the parallel path is otherwise untested, and its bugs are races that a
+# single run can miss, so each build is repeated.
+MT_REPEATS=${MT_REPEATS:-2}
+mtfail=0
+for f in stage2/tests/*.sl; do
+    base=$(basename "$f" .sl)
+    [ "$base" = "test_util" ] && continue
+    attempt=1
+    while [ "$attempt" -le "$MT_REPEATS" ]; do
+        if "$SC" "$f" -o "$TMP/mt-$base" -i "$INC" -l "LLVM-19" -target linux -mt > "$TMP/mt-$base.log" 2>&1; then
+            "$TMP/mt-$base" > /dev/null 2>&1 || { mtfail=$((mtfail + 1)); echo "  MT-RUN-FAIL: $base (attempt $attempt)"; }
+        else
+            mtfail=$((mtfail + 1)); echo "  MT-BUILD-FAIL: $base (attempt $attempt) :: $(head -1 "$TMP/mt-$base.log")"
+        fi
+        attempt=$((attempt + 1))
+    done
+done
+echo "mt: $mtfail failed (x$MT_REPEATS each)"
+
+[ "$bfail" -eq 0 ] && [ "$rfail" -eq 0 ] && [ "$mtfail" -eq 0 ]
