@@ -696,9 +696,12 @@ condvar::Condvar g_body_cv;
 bool             g_body_sync_ready;
 
 // Called once, single-threaded, before parallel body checking.
+// Every global lock is created here, single-threaded: creating one lazily lets two threads
+// re-initialize a mutex a third already holds.
 export fn void init_body_sync(arena::Arena* wait_arena) {
     if(g_body_sync_ready) { return; }
     g_body_waits_arena = wait_arena;
+    ensure_reflect_lock();
     mutex::create(&g_body_lock);
     condvar::create(&g_body_cv);
     g_body_sync_ready = true;
@@ -2064,13 +2067,16 @@ void*        g_reflect_typekind_decl;   // ast::EnumDeclNode*, for TypeKind::<me
 u64          g_reflect_generation;      // typer generation the cache was built against
 
 // Cached types belong to one typer generation; a re-init (tests) invalidates them along with the interner.
+fn void ensure_reflect_lock() {
+    if(g_reflect_lock_ready) { return; }
+    mutex::create(&g_reflect_lock);
+    sys::memset(&g_reflect_arena, 0, sizeof(arena::Arena));
+    g_reflect_arena.default_page_size = 65536;
+    g_reflect_lock_ready = true;
+}
+
 fn void reflect_lock() {
-    if(!g_reflect_lock_ready) {
-        mutex::create(&g_reflect_lock);
-        sys::memset(&g_reflect_arena, 0, sizeof(arena::Arena));
-        g_reflect_arena.default_page_size = 65536;
-        g_reflect_lock_ready = true;
-    }
+    ensure_reflect_lock();
     mutex::lock(&g_reflect_lock);
     if(g_reflect_generation != types::generation()) {
         g_reflect_generation = types::generation();

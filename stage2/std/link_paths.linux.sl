@@ -12,9 +12,12 @@ export struct LinkPaths {
     i8* asan_runtime;
     i8* asan_runtime_static;
     i8* asan_dynamic_list;
+    i8* tsan_runtime;
+    i8* tsan_dynamic_list;
     i8* unwind_runtime;
     bool found_crt;
     bool found_asan;
+    bool found_tsan;
 }
 
 export fn LinkPaths resolve(arena::Arena* arena_ptr) {
@@ -39,6 +42,11 @@ export fn LinkPaths resolve(arena::Arena* arena_ptr) {
         paths.asan_runtime        = cstr(arena_ptr, join(arena_ptr, clang_dir, "libclang_rt.asan-x86_64.a"));
         paths.asan_runtime_static = cstr(arena_ptr, join(arena_ptr, clang_dir, "libclang_rt.asan_static-x86_64.a"));
         paths.asan_dynamic_list   = cstr(arena_ptr, join(arena_ptr, "--dynamic-list=", join(arena_ptr, clang_dir, "libclang_rt.asan-x86_64.a.syms")));
+    }
+    paths.found_tsan = clang_dir.len > 0 && unwind.len > 0;
+    if(clang_dir.len > 0) {
+        paths.tsan_runtime      = cstr(arena_ptr, join(arena_ptr, clang_dir, "libclang_rt.tsan-x86_64.a"));
+        paths.tsan_dynamic_list = cstr(arena_ptr, join(arena_ptr, "--dynamic-list=", join(arena_ptr, clang_dir, "libclang_rt.tsan-x86_64.a.syms")));
     }
     if(unwind.len > 0) { paths.unwind_runtime = cstr(arena_ptr, unwind); }
     return paths;
@@ -77,6 +85,8 @@ fn void assign_entry(LinkPaths* paths, arena::Arena* arena_ptr, u8[] key, u8[] v
     if(slice_eq(key, "asan_runtime"))        { paths.asan_runtime = cstr(arena_ptr, value); paths.found_asan = true; return; }
     if(slice_eq(key, "asan_runtime_static")) { paths.asan_runtime_static = cstr(arena_ptr, value); return; }
     if(slice_eq(key, "asan_dynamic_list"))   { paths.asan_dynamic_list = cstr(arena_ptr, join(arena_ptr, "--dynamic-list=", value)); return; }
+    if(slice_eq(key, "tsan_runtime"))        { paths.tsan_runtime = cstr(arena_ptr, value); paths.found_tsan = true; return; }
+    if(slice_eq(key, "tsan_dynamic_list"))   { paths.tsan_dynamic_list = cstr(arena_ptr, join(arena_ptr, "--dynamic-list=", value)); return; }
     if(slice_eq(key, "unwind_runtime"))      { paths.unwind_runtime = cstr(arena_ptr, value); return; }
 }
 

@@ -1638,14 +1638,18 @@ fn bool returns_type(ast::FnDeclNode* callee) {
     return ret != null && ret.kind == types::TypeKind::ComptimeType;
 }
 
+// Called single-threaded by the driver; lazy creation would let two threads re-init a held mutex.
+export fn void init_mono_sync() {
+    if(g_type_mono_ready) { return; }
+    mutex::create(&g_type_mono_lock);
+    condvar::create(&g_type_mono_cv);
+    sys::memset(&g_type_mono_arena, 0, sizeof(arena::Arena));
+    g_type_mono_arena.default_page_size = 262144;
+    g_type_mono_ready = true;
+}
+
 fn ast::FnDeclNode* monomorphize_type_ctor(Interp* ip, ast::FnDeclNode* callee, value::Value[] cargs) {
-    if(!g_type_mono_ready) {
-        mutex::create(&g_type_mono_lock);
-        condvar::create(&g_type_mono_cv);
-        sys::memset(&g_type_mono_arena, 0, sizeof(arena::Arena));
-        g_type_mono_arena.default_page_size = 262144;
-        g_type_mono_ready = true;
-    }
+    init_mono_sync();
     arena::Arena* shared = &g_type_mono_arena;
     u64 me = threads::self();
     MonoKey key;

@@ -59,7 +59,7 @@ export fn void print_usage() {
     sys::dprintf(1, "  -l <name>              link library <name>\n");
     sys::dprintf(1, "  -L <dir>               add a library search directory\n");
     sys::dprintf(1, "  -target <name>         target platform for conditional compilation\n");
-    sys::dprintf(1, "  -config <mode>         Debug | Release | ReleaseDebug | AddressSanitizer\n");
+    sys::dprintf(1, "  -config <mode>         Debug | Release | ReleaseDebug | AddressSanitizer | ThreadSanitizer\n");
     sys::dprintf(1, "  -deps <path>           write every discovered source path to <path>\n");
     sys::dprintf(1, "  -link-config <file>    override probed link paths (key=value per line)\n");
     sys::dprintf(1, "  -mt                    compile modules on a thread pool\n");
@@ -95,7 +95,8 @@ fn bool parse_config(Compiler* c, u8[] name) {
     if(slice_eq(name, "Release"))          { c.config = codegen::BuildConfig::Release; return true; }
     if(slice_eq(name, "ReleaseDebug"))     { c.config = codegen::BuildConfig::ReleaseDebug; return true; }
     if(slice_eq(name, "AddressSanitizer")) { c.config = codegen::BuildConfig::AddressSanitizer; return true; }
-    sys::dprintf(2, "unknown -config value: %.*s (expected Debug|Release|ReleaseDebug|AddressSanitizer)\n", (i32)name.len, (i8*)name.ptr);
+    if(slice_eq(name, "ThreadSanitizer"))  { c.config = codegen::BuildConfig::ThreadSanitizer; return true; }
+    sys::dprintf(2, "unknown -config value: %.*s (expected Debug|Release|ReleaseDebug|AddressSanitizer|ThreadSanitizer)\n", (i32)name.len, (i8*)name.ptr);
     return false;
 }
 
@@ -456,6 +457,10 @@ fn i32 run_link(Compiler* c, u8[][] object_paths) {
         sys::dprintf(2, "error: cannot locate the clang AddressSanitizer runtime; pass -link-config\n");
         return 1;
     }
+    if(c.config == codegen::BuildConfig::ThreadSanitizer && !paths.found_tsan) {
+        sys::dprintf(2, "error: cannot locate the clang ThreadSanitizer runtime; pass -link-config\n");
+        return 1;
+    }
     i8** argv = build_link_argv(c, object_paths, &paths);
     if(spawn_and_wait(argv) != 0) {
         sys::dprintf(2, "error: link step failed\n");
@@ -484,6 +489,17 @@ fn i8** build_link_argv(Compiler* c, u8[][] object_paths, link_paths::LinkPaths*
         argv[n] = paths.asan_runtime_static; n += 1;
         argv[n] = paths.asan_runtime; n += 1;
         argv[n] = paths.asan_dynamic_list; n += 1;
+        argv[n] = cstr(c.arena, "-lpthread"); n += 1;
+        argv[n] = cstr(c.arena, "-lrt"); n += 1;
+        argv[n] = cstr(c.arena, "-ldl"); n += 1;
+        argv[n] = cstr(c.arena, "-lresolv"); n += 1;
+        argv[n] = cstr(c.arena, "-lm"); n += 1;
+        argv[n] = paths.unwind_runtime; n += 1;
+        argv[n] = cstr(c.arena, "--export-dynamic"); n += 1;
+    }
+    if(c.config == codegen::BuildConfig::ThreadSanitizer) {
+        argv[n] = paths.tsan_runtime; n += 1;
+        argv[n] = paths.tsan_dynamic_list; n += 1;
         argv[n] = cstr(c.arena, "-lpthread"); n += 1;
         argv[n] = cstr(c.arena, "-lrt"); n += 1;
         argv[n] = cstr(c.arena, "-ldl"); n += 1;
@@ -551,6 +567,7 @@ fn i8* cstr(arena::Arena* a, u8[] bytes) {
 // Runs the frontend phases (parse -> barriered sema); 0 on success, 1 on any error.
 export fn i32 run_frontend(Compiler* c) {
     comptime_interp::install_hooks();
+    comptime_interp::init_mono_sync();
     sema::init_body_sync(c.arena);
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         c.modules.ptr[module_index].comptime_max_depth = c.comptime_depth;

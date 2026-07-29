@@ -19,6 +19,7 @@ export enum BuildConfig : u8 {
     Release,            // -O2
     ReleaseDebug,       // -O2 with debug info (DWARF lands with the debug-info milestone)
     AddressSanitizer,   // -O1 + AddressSanitizer instrumentation, linked against the asan runtime
+    ThreadSanitizer,    // data-race detection; reports even when a race does not manifest
 }
 
 struct TypeMapEntry {
@@ -149,6 +150,7 @@ fn u8[] pipeline_for(BuildConfig config) {
     case BuildConfig::Release:          { return "default<O2>"; }
     case BuildConfig::ReleaseDebug:     { return "default<O2>"; }
     case BuildConfig::AddressSanitizer: { return "asan"; }   // unoptimized: a sanitizer build is for diagnosis, and O1 folds faults away
+    case BuildConfig::ThreadSanitizer:  { return "tsan-module,function(tsan)"; }   // the ctor comes from the module half
     else { return ""; }
     }
     return "";
@@ -504,7 +506,8 @@ fn void declare_decl(CG* cg, u32 index) {
         void* fn_ty = map_fn_type(cg, d.ty);
         void* val = llvm::LLVMAddFunction(cg.llvm_module, cstr(cg.arena, d.link_name), fn_ty);
         llvm::LLVMSetLinkage(val, decl_linkage(d));
-        if(cg.config == BuildConfig::AddressSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_address(cg, val); }
+        if(cg.config == BuildConfig::AddressSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_attr(cg, val, "sanitize_address", 16); }
+        if(cg.config == BuildConfig::ThreadSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_attr(cg, val, "sanitize_thread", 15); }
         cg.decl_map[index] = val;
     } else {
         void* ty = map_type(cg, d.ty);
@@ -514,8 +517,8 @@ fn void declare_decl(CG* cg, u32 index) {
     }
 }
 
-fn void add_sanitize_address(CG* cg, void* fn_val) {
-    u32 kind = llvm::LLVMGetEnumAttributeKindForName(cstr(cg.arena, "sanitize_address"), 16);
+fn void add_sanitize_attr(CG* cg, void* fn_val, u8[] attr_name, u64 name_len) {
+    u32 kind = llvm::LLVMGetEnumAttributeKindForName(cstr(cg.arena, attr_name), name_len);
     void* attr = llvm::LLVMCreateEnumAttribute(cg.ctx, kind, 0);
     llvm::LLVMAddAttributeAtIndex(fn_val, llvm::AttributeFunctionIndex, attr);
 }
