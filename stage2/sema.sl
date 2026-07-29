@@ -10,6 +10,7 @@ import op;
 import sys;
 import interner;
 import value;
+import list;
 import mutex;
 import condvar;
 import threads;
@@ -682,13 +683,23 @@ export fn void ensure_var_init_checked(module::Module* m, ast::VarDeclNode* vd) 
     if(declared != null) { check(s, vd.init, declared); } else { synth(s, vd.init); }
 }
 
+// Who each thread is blocked on, so a mutual comptime wait is reported instead of hanging forever.
+export struct BodyWait {
+    u64              thread;
+    ast::FnDeclNode* waiting_on;
+}
+
+list::List(BodyWait) g_body_waits;   // guarded by g_body_lock
+arena::Arena*        g_body_waits_arena;
+
 mutex::Mutex     g_body_lock;
 condvar::Condvar g_body_cv;
 bool             g_body_sync_ready;
 
 // Called once, single-threaded, before parallel body checking.
-export fn void init_body_sync() {
+export fn void init_body_sync(arena::Arena* wait_arena) {
     if(g_body_sync_ready) { return; }
+    g_body_waits_arena = wait_arena;
     mutex::create(&g_body_lock);
     condvar::create(&g_body_cv);
     g_body_sync_ready = true;
@@ -696,6 +707,48 @@ export fn void init_body_sync() {
 
 // Exactly one thread checks a given fn; others wait for Checked. body_owner lets a comptime call recursing into the
 // fn being checked (same thread) proceed instead of self-waiting. check_fn_body runs unlocked, so N fns check at once.
+// Pure over the wait table so the cycle rule is testable without threads: follow owner -> what that
+// owner waits on; reaching a function this thread already owns means the wait would never end.
+export fn bool wait_would_cycle(BodyWait[] waits, ast::FnDeclNode* target, u64 me) {
+    ast::FnDeclNode* current = target;
+    u64 hops = 0;
+    while(current != null && hops <= waits.len) {
+        if(current.body_owner == me) { return true; }
+        ast::FnDeclNode* next = null;
+        for(u64 wait_index = 0; wait_index < waits.len; wait_index += 1) {
+            if(waits[wait_index].thread == current.body_owner) { next = waits[wait_index].waiting_on; }
+        }
+        current = next;
+        hops += 1;
+    }
+    return false;
+}
+
+fn void set_waiting(u64 thread, ast::FnDeclNode* target) {
+    for(u64 wait_index = 0; wait_index < g_body_waits.len; wait_index += 1) {
+        if(g_body_waits.ptr[wait_index].thread == thread) {
+            g_body_waits.ptr[wait_index].waiting_on = target;
+            return;
+        }
+    }
+    if(target == null) { return; }
+    BodyWait entry;
+    entry.thread = thread;
+    entry.waiting_on = target;
+    list::push(&g_body_waits, g_body_waits_arena, entry);
+}
+
+fn void diag_comptime_wait_cycle(module::Module* requester, ast::FnDeclNode* func) {
+    u8[] name_str = interner::symbol_str(func.name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "comptime call cycle: %.*s is being checked by another thread that is waiting on this one", (i32)name_str.len, (i8*)name_str.ptr);
+    if(written <= 0) { return; }
+    u64 message_len = (u64)written;
+    if(message_len > 255) { message_len = 255; }
+    u8[] msg = {&scratch[0], message_len};
+    diag::report(&requester.diag, requester.arena, func.h.src_pos, msg);
+}
+
 // True while this very thread is checking func's body — a comptime call in would interpret a half-checked body.
 export fn bool body_check_reentrant(ast::FnDeclNode* func) {
     if(!g_body_sync_ready) { return false; }
@@ -703,11 +756,20 @@ export fn bool body_check_reentrant(ast::FnDeclNode* func) {
 }
 
 export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, module::Module* requester) {
-    if(!g_body_sync_ready) { init_body_sync(); }
+    if(!g_body_sync_ready) { init_body_sync(m.arena); }
     u64 me = threads::self();
     mutex::lock(&g_body_lock);
-    while(func.body_state == ast::BodyState::InProgress && func.body_owner != me) {
-        condvar::wait(&g_body_cv, &g_body_lock);
+    if(func.body_state == ast::BodyState::InProgress && func.body_owner != me) {
+        if(wait_would_cycle({g_body_waits.ptr, g_body_waits.len}, func, me)) {
+            mutex::unlock(&g_body_lock);
+            diag_comptime_wait_cycle(requester, func);
+            return;
+        }
+        set_waiting(me, func);
+        while(func.body_state == ast::BodyState::InProgress && func.body_owner != me) {
+            condvar::wait(&g_body_cv, &g_body_lock);
+        }
+        set_waiting(me, null);
     }
     if(func.body_state == ast::BodyState::Checked || func.body_state == ast::BodyState::InProgress) {
         mutex::unlock(&g_body_lock);

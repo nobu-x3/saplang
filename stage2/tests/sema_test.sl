@@ -1,5 +1,6 @@
 import testing;
 import sema;
+import list;
 import module;
 import diag;
 import types;
@@ -4952,6 +4953,42 @@ fn i32 nonconst_field_ok(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// The cross-thread wait rule, exercised without threads: A waits on B, B waits on a fn A owns.
+fn i32 wait_cycle_detected(arena::Arena* a, u8[] m) {
+    ast::FnDeclNode* owned_by_me = mk_fn_body(a, null, null, null);
+    ast::FnDeclNode* owned_by_other = mk_fn_body(a, null, null, null);
+    owned_by_me.body_owner = 1;
+    owned_by_other.body_owner = 2;
+
+    list::List(sema::BodyWait) waits;
+    waits.ptr = null; waits.len = 0; waits.cap = 0;
+    sema::BodyWait other_waits_on_mine;
+    other_waits_on_mine.thread = 2;
+    other_waits_on_mine.waiting_on = owned_by_me;
+    list::push(&waits, a, other_waits_on_mine);
+
+    if(!testing::expect_true(sema::wait_would_cycle({waits.ptr, waits.len}, owned_by_other, 1), m)) { return -1; }
+    return 0;
+}
+
+fn i32 wait_no_cycle_when_owner_idle(arena::Arena* a, u8[] m) {
+    ast::FnDeclNode* owned_by_other = mk_fn_body(a, null, null, null);
+    owned_by_other.body_owner = 2;
+    list::List(sema::BodyWait) waits;
+    waits.ptr = null; waits.len = 0; waits.cap = 0;
+    if(!testing::expect_true(!sema::wait_would_cycle({waits.ptr, waits.len}, owned_by_other, 1), m)) { return -1; }
+    return 0;
+}
+
+fn i32 wait_self_owned_is_cycle(arena::Arena* a, u8[] m) {
+    ast::FnDeclNode* mine = mk_fn_body(a, null, null, null);
+    mine.body_owner = 1;
+    list::List(sema::BodyWait) waits;
+    waits.ptr = null; waits.len = 0; waits.cap = 0;
+    if(!testing::expect_true(sema::wait_would_cycle({waits.ptr, waits.len}, mine, 1), m)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -5078,6 +5115,9 @@ fn i32 main() {
     testing::add(cn, "cn_two_distinct_no_diag",          &cn_two_distinct_no_diag);
     testing::add(cn, "cn_import_resolves_module",        &cn_import_resolves_module);
     testing::add(cn, "cn_import_never_exported",       &cn_import_never_exported);
+    testing::add(cn, "wait_cycle_detected",            &wait_cycle_detected);
+    testing::add(cn, "wait_no_cycle_when_owner_idle",  &wait_no_cycle_when_owner_idle);
+    testing::add(cn, "wait_self_owned_is_cycle",       &wait_self_owned_is_cycle);
     testing::add(cn, "cn_extern_block_items_registered", &cn_extern_block_items_registered);
     testing::add(cn, "cn_extern_var_qualified",          &cn_extern_var_qualified);
     testing::add(cn, "cn_sets_names_phase",              &cn_sets_names_phase);
