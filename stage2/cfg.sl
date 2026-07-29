@@ -365,7 +365,15 @@ fn bool block_terminated(CfgBuilder* b, u32 blk) {
     return b.cfg.blocks.ptr[blk].terminated;
 }
 
+// The first terminator wins: a second one would silently drop the block's real exit.
+fn bool claim_terminator(CfgBuilder* b, u32 blk) {
+    if(!b.cfg.blocks.ptr[blk].terminated) { return true; }
+    sys::dprintf(2, "cfg: internal error: block %u terminated twice\n", blk);
+    return false;
+}
+
 fn void terminate_goto(CfgBuilder* b, u32 blk, u32 target, u32 src_pos) {
+    if(!claim_terminator(b, blk)) { return; }
     BasicBlock* block = &b.cfg.blocks.ptr[blk];
     block.term.kind = TermKind::Goto;
     block.term.src_pos = src_pos;
@@ -374,6 +382,7 @@ fn void terminate_goto(CfgBuilder* b, u32 blk, u32 target, u32 src_pos) {
 }
 
 fn void terminate_cond(CfgBuilder* b, u32 blk, ast::AstNode* cond, u32 then_t, u32 else_t, u32 src_pos) {
+    if(!claim_terminator(b, blk)) { return; }
     BasicBlock* block = &b.cfg.blocks.ptr[blk];
     block.term.kind = TermKind::CondBranch;
     block.term.src_pos = src_pos;
@@ -384,6 +393,7 @@ fn void terminate_cond(CfgBuilder* b, u32 blk, ast::AstNode* cond, u32 then_t, u
 }
 
 fn void terminate_switch(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 default_t, SwitchTarget[] arms, u32 src_pos) {
+    if(!claim_terminator(b, blk)) { return; }
     BasicBlock* block = &b.cfg.blocks.ptr[blk];
     block.term.kind = TermKind::Switch;
     block.term.src_pos = src_pos;
@@ -394,6 +404,7 @@ fn void terminate_switch(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 defaul
 }
 
 fn void terminate_return(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 src_pos) {
+    if(!claim_terminator(b, blk)) { return; }
     BasicBlock* block = &b.cfg.blocks.ptr[blk];
     block.term.kind = TermKind::Return;
     block.term.src_pos = src_pos;
@@ -403,6 +414,7 @@ fn void terminate_return(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 src_po
 }
 
 fn void terminate_unreachable(CfgBuilder* b, u32 blk) {
+    if(!claim_terminator(b, blk)) { return; }
     BasicBlock* block = &b.cfg.blocks.ptr[blk];
     block.term.kind = TermKind::Unreachable;
     block.terminated = true;
