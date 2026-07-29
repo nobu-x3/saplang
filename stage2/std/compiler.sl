@@ -10,6 +10,8 @@ import codegen;
 import link_paths;
 import sapir;
 import sapir_print;
+import ast_print;
+import bench;
 import diag;
 import arena;
 import list;
@@ -29,6 +31,10 @@ export struct Compiler {
     bool                 is_multithreaded; // run phases on a thread pool sized to cpu_count
     bool                 cfg_dump;         // -cfg-dump: print each function's CFG to stdout
     bool                 sapir_dump;       // -sapir-dump: print each module's lowered sapir to stdout
+    bool                 token_dump;       // -token-dump: print the scanner's tokens
+    bool                 ast_dump;         // -ast-dump: print the parsed AST
+    bool                 llvm_dump;        // -llvm-dump: print the generated LLVM IR
+    bool                 show_timings;     // -show-timings: print per-phase wall time
     i32                  comptime_depth;      // -comptime-depth: interpreter recursion cap; 0 = default
     u64                  comptime_iterations; // -comptime-iterations: interpreter per-loop cap; 0 = default
     pool::ThreadPool*    pool;            // non-null only while multithreaded
@@ -61,6 +67,10 @@ export fn void print_usage() {
     sys::dprintf(1, "  -comptime-iterations <N>  comptime per-loop cap (0 = default)\n");
     sys::dprintf(1, "  -cfg-dump              print each function's CFG, then stop\n");
     sys::dprintf(1, "  -sapir-dump            print each module's sapir IR, then stop\n");
+    sys::dprintf(1, "  -token-dump            print the scanner's tokens, then stop\n");
+    sys::dprintf(1, "  -ast-dump              print the parsed AST, then stop\n");
+    sys::dprintf(1, "  -llvm-dump             print the generated LLVM IR, then stop\n");
+    sys::dprintf(1, "  -show-timings          print per-phase wall time\n");
     sys::dprintf(1, "  --help, -h             show this help\n");
     sys::dprintf(1, "  --version              show the version\n");
 }
@@ -153,6 +163,14 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
             c.cfg_dump = true;
         } else if(slice_eq(arg, "-sapir-dump")) {
             c.sapir_dump = true;
+        } else if(slice_eq(arg, "-token-dump")) {
+            c.token_dump = true;
+        } else if(slice_eq(arg, "-ast-dump")) {
+            c.ast_dump = true;
+        } else if(slice_eq(arg, "-llvm-dump")) {
+            c.llvm_dump = true;
+        } else if(slice_eq(arg, "-show-timings")) {
+            c.show_timings = true;
         } else if(slice_eq(arg, "-comptime-depth")) {
             arg_index += 1;
             if(arg_index < args.len) { c.comptime_depth = (i32)parse_u64(args[arg_index]); } else { ok = false; }
@@ -374,7 +392,7 @@ export fn i32 run(Compiler* c) {
     if(bail_on_errors(c)) { return 1; }
     i32 rc = run_frontend(c);
     if(rc != 0) { return rc; }
-    if(c.cfg_dump || c.sapir_dump) { return 0; }    // dump modes stop before the backend
+    if(stops_before_backend(c)) { return 0; }
     return run_backend(c);
 }
 
@@ -539,23 +557,32 @@ export fn i32 run_frontend(Compiler* c) {
         c.modules.ptr[module_index].comptime_max_iterations = c.comptime_iterations;
     }
     if(c.is_multithreaded) { c.pool = pool::new(c.arena, sys::cpu_count()); }
+    u64 phase_start = bench::now_ns();
     run_parse(c);
+    phase_start = report_phase(c, "parse", phase_start);
     i32 rc = 0;
     if(bail_on_errors(c)) {
         rc = 1;
+        if(c.token_dump) { dump_tokens(c); }
     } else {
+        if(c.token_dump) { dump_tokens(c); }
+        if(c.ast_dump) { dump_asts(c); }
         run_sema(c);
+        phase_start = report_phase(c, "sema", phase_start);
         if(bail_on_errors(c)) {
             rc = 1;
         } else {
             run_cfg(c);
+            phase_start = report_phase(c, "cfg", phase_start);
             if(bail_on_errors(c)) { rc = 1; }
             if(c.cfg_dump) { dump_cfgs(c); }
             if(rc == 0) {
                 run_lower(c);
+                phase_start = report_phase(c, "lower", phase_start);
                 drain_diagnostics(c);
                 if(bail_on_errors(c)) { rc = 1; }
                 if(c.sapir_dump) { dump_sapir(c); }
+                if(c.llvm_dump && rc == 0) { dump_llvm(c); }
             }
         }
     }
@@ -623,6 +650,63 @@ fn void run_lower(Compiler* c) {
 fn void lower_job(void* arg) {
     module::Module* m = (module::Module*)arg;
     m.sapir = (void*)lower::lower_module(m);
+}
+
+// Returns the new mark so a caller can chain phases without repeating the now_ns() dance.
+fn u64 report_phase(Compiler* c, u8[] name, u64 started_ns) {
+    u64 now = bench::now_ns();
+    if(c.show_timings) {
+        sys::dprintf(2, "  %-8.*s %lu ms\n", (i32)name.len, (i8*)name.ptr, (now - started_ns) / 1000000);
+    }
+    return now;
+}
+
+export fn bool stops_before_backend(Compiler* c) {
+    return c.cfg_dump || c.sapir_dump || c.token_dump || c.ast_dump;
+}
+
+fn void dump_tokens(Compiler* c) {
+    io::OutBuf out;
+    io::outbuf_init(&out, c.arena, 4096);
+    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
+        module::Module* m = c.modules.ptr[module_index];
+        io::outbuf_write(&out, "module ");
+        io::outbuf_write(&out, interner::symbol_str(m.name));
+        io::outbuf_write_byte(&out, 10);
+        for(u64 token_index = 0; token_index < m.tokens.len; token_index += 1) {
+            io::outbuf_write(&out, "  ");
+            io::outbuf_write_u64(&out, (u64)m.tokens[token_index].src_pos);
+            io::outbuf_write(&out, " ");
+            io::outbuf_write(&out, token::kind_name(m.tokens[token_index].kind));
+            io::outbuf_write_byte(&out, 10);
+        }
+    }
+    u8[] bytes = io::outbuf_bytes(&out);
+    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+}
+
+fn void dump_asts(Compiler* c) {
+    io::OutBuf out;
+    io::outbuf_init(&out, c.arena, 4096);
+    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
+        module::Module* m = c.modules.ptr[module_index];
+        if(m.root_node == null) { continue; }
+        io::outbuf_write(&out, "module ");
+        io::outbuf_write(&out, interner::symbol_str(m.name));
+        io::outbuf_write_byte(&out, 10);
+        ast_print::print(m.root_node, 1, &out);
+    }
+    u8[] bytes = io::outbuf_bytes(&out);
+    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+}
+
+fn void dump_llvm(Compiler* c) {
+    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
+        module::Module* m = c.modules.ptr[module_index];
+        if(m.sapir == null) { continue; }
+        u8[] ir = codegen::codegen_ir_string((sapir::SapirModule*)m.sapir, c.arena, c.config);
+        sys::dprintf(1, "%.*s", (i32)ir.len, (i8*)ir.ptr);
+    }
 }
 
 fn void dump_sapir(Compiler* c) {
