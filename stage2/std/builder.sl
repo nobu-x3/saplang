@@ -32,7 +32,6 @@ export struct Step {
     list::List(Step*) deps;
     bool              done;         // executed already; dedups shared subgraphs during make
     bool              queued;       // visited already; dedups shared subgraphs during the compile gather
-    arena::Arena*     arena;
     mem::Allocator    allocator;
 }
 
@@ -69,7 +68,6 @@ struct CliArg {
 }
 
 export struct Build {
-    arena::Arena*          arena;
     mem::Allocator         allocator;
     u8[]                   compiler_path;    // resolved from $SAPLANGC; the exe compile steps spawn
     Step*                  install_step;     // default top step; install_artifact hangs deps off it
@@ -87,18 +85,16 @@ export struct Build {
 export fn Build* new_build(arena::Arena* a) {
     Build* b = (Build*)arena::alloc(a, sizeof(Build));
     sys::memset(b, 0, sizeof(Build));
-    b.arena = a;
     b.allocator = arena::allocator(a);
     return b;
 }
 
 export fn Step* step(Build* b, u8[] name, u8[] description) {
-    Step* s = (Step*)arena::alloc(b.arena, sizeof(Step));
+    Step* s = (Step*)mem::alloc(b.allocator, sizeof(Step));
     sys::memset(s, 0, sizeof(Step));
     s.kind = StepKind::Top;
     s.name = name;
     s.description = description;
-    s.arena = b.arena;
     s.allocator = b.allocator;
     list::push(&b.top_steps, b.allocator, s);
     return s;
@@ -109,11 +105,10 @@ export fn void depend_on(Step* s, Step* dep) {
 }
 
 export fn CompileStep* add_executable(Build* b, u8[] name, u8[] root_source) {
-    CompileStep* c = (CompileStep*)arena::alloc(b.arena, sizeof(CompileStep));
+    CompileStep* c = (CompileStep*)mem::alloc(b.allocator, sizeof(CompileStep));
     sys::memset(c, 0, sizeof(CompileStep));
     c.step.kind = StepKind::Compile;
     c.step.name = name;
-    c.step.arena = b.arena;
     c.step.allocator = b.allocator;
     c.artifact_name = name;
     c.root_source = root_source;
@@ -149,11 +144,10 @@ export fn void install_artifact(Build* b, CompileStep* c) {
 }
 
 export fn RunStep* add_run_artifact(Build* b, CompileStep* c) {
-    RunStep* r = (RunStep*)arena::alloc(b.arena, sizeof(RunStep));
+    RunStep* r = (RunStep*)mem::alloc(b.allocator, sizeof(RunStep));
     sys::memset(r, 0, sizeof(RunStep));
     r.step.kind = StepKind::Run;
     r.step.name = c.artifact_name;
-    r.step.arena = b.arena;
     r.step.allocator = b.allocator;
     r.exe = c;
     r.owner = b;
@@ -248,16 +242,16 @@ fn u8[] optimize_name(Optimize o) {
 
 // Installed artifacts land in sap-out/bin/; transient ones (run-only) in .sap-cache/.
 export fn u8[] artifact_path(Build* b, CompileStep* c) {
-    if(c.installed) { return join(b.arena, "sap-out/bin/", c.artifact_name); }
-    return join(b.arena, ".sap-cache/", c.artifact_name);
+    if(c.installed) { return join(b.allocator, "sap-out/bin/", c.artifact_name); }
+    return join(b.allocator, ".sap-cache/", c.artifact_name);
 }
 
 fn void ensure_output_dir(Build* b, CompileStep* c) {
     if(c.installed) {
-        sys::mkdir(cstr(b.arena, "sap-out"), 493);
-        sys::mkdir(cstr(b.arena, "sap-out/bin"), 493);
+        sys::mkdir(cstr(b.allocator, "sap-out"), 493);
+        sys::mkdir(cstr(b.allocator, "sap-out/bin"), 493);
     } else {
-        sys::mkdir(cstr(b.arena, ".sap-cache"), 493);
+        sys::mkdir(cstr(b.allocator, ".sap-cache"), 493);
     }
 }
 
@@ -269,7 +263,7 @@ fn void ensure_output_dir(Build* b, CompileStep* c) {
 
 fn u8[] cache_sidecar(Build* b, u8[] name, u8[] ext) {
     io::OutBuf buf;
-    io::outbuf_init(&buf, b.arena, 32);
+    io::outbuf_init(&buf, b.allocator, 32);
     io::outbuf_write(&buf, ".sap-cache/");
     io::outbuf_write(&buf, name);
     io::outbuf_write(&buf, ext);
@@ -288,11 +282,11 @@ fn bool file_exists(u8[] path) {
 fn u8[] compute_stamp(Build* b, CompileStep* c) {
     io::File df = io::open(cache_sidecar(b, c.artifact_name, ".dep"), "r");
     if(df.fp == null) { return empty_slice(); }
-    u8[] listing = io::read_all(&df, b.arena);
+    u8[] listing = io::read_all(&df, b.allocator);
     io::close(&df);
 
     io::OutBuf buf;
-    io::outbuf_init(&buf, b.arena, 4096);
+    io::outbuf_init(&buf, b.allocator, 4096);
     io::outbuf_write(&buf, compile_command_string(b, c));
     io::outbuf_write_byte(&buf, '\n');
     u64 start = 0;
@@ -302,7 +296,7 @@ fn u8[] compute_stamp(Build* b, CompileStep* c) {
                 u8[] path = {&listing.ptr[start], char_index - start};
                 io::File sf = io::open(path, "r");
                 if(sf.fp == null) { return empty_slice(); }
-                io::outbuf_write(&buf, io::read_all(&sf, b.arena));
+                io::outbuf_write(&buf, io::read_all(&sf, b.allocator));
                 io::close(&sf);
             }
             start = char_index + 1;
@@ -310,7 +304,7 @@ fn u8[] compute_stamp(Build* b, CompileStep* c) {
     }
     u64 h = hash::fnv1a_64(io::outbuf_bytes(&buf));
     io::OutBuf hb;
-    io::outbuf_init(&hb, b.arena, 24);
+    io::outbuf_init(&hb, b.allocator, 24);
     io::outbuf_write_u64(&hb, h);
     return io::outbuf_bytes(&hb);
 }
@@ -319,7 +313,7 @@ fn bool is_fresh(Build* b, CompileStep* c, u8[] out) {
     if(!file_exists(out)) { return false; }
     io::File sf = io::open(cache_sidecar(b, c.artifact_name, ".stamp"), "r");
     if(sf.fp == null) { return false; }
-    u8[] stored = io::read_all(&sf, b.arena);
+    u8[] stored = io::read_all(&sf, b.allocator);
     io::close(&sf);
     u8[] current = compute_stamp(b, c);
     if(current.len == 0) { return false; }
@@ -338,7 +332,7 @@ fn void write_stamp(Build* b, CompileStep* c) {
 // The exact `saplangc` invocation a compile step runs, space-joined; also used by --help/tests.
 export fn u8[] compile_command_string(Build* b, CompileStep* c) {
     io::OutBuf buf;
-    io::outbuf_init(&buf, b.arena, 128);
+    io::outbuf_init(&buf, b.allocator, 128);
     io::outbuf_write(&buf, b.compiler_path);
     io::outbuf_write_byte(&buf, ' ');
     io::outbuf_write(&buf, c.root_source);
@@ -346,7 +340,7 @@ export fn u8[] compile_command_string(Build* b, CompileStep* c) {
     io::outbuf_write(&buf, artifact_path(b, c));
     if(c.import_paths.len > 0) {
         io::outbuf_write(&buf, " -i ");
-        io::outbuf_write(&buf, join_semicolons(b.arena, &c.import_paths));
+        io::outbuf_write(&buf, join_semicolons(b.allocator, &c.import_paths));
     }
     for(u64 lib_index = 0; lib_index < c.libs.len; lib_index += 1) {
         io::outbuf_write(&buf, " -l ");
@@ -379,7 +373,7 @@ fn bool is_forwarded_define(CliArg* a) {
 
 fn u8[] define_arg(Build* b, CliArg* a) {
     io::OutBuf buf;
-    io::outbuf_init(&buf, b.arena, 32);
+    io::outbuf_init(&buf, b.allocator, 32);
     io::outbuf_write(&buf, "-D");
     io::outbuf_write(&buf, a.key);
     if(a.has_value) {
@@ -391,35 +385,35 @@ fn u8[] define_arg(Build* b, CliArg* a) {
 
 fn i8** build_compile_argv(Build* b, CompileStep* c, u8[] out) {
     u64 cap = 12 + c.libs.len * 2 + c.lib_dirs.len * 2 + b.cli_args.len;
-    i8** argv = (i8**)arena::alloc(b.arena, (cap + 1) * sizeof(i8*));
+    i8** argv = (i8**)mem::alloc(b.allocator, (cap + 1) * sizeof(i8*));
     u64 n = 0;
-    argv[n] = cstr(b.arena, b.compiler_path); n += 1;
-    argv[n] = cstr(b.arena, c.root_source);   n += 1;
-    argv[n] = cstr(b.arena, "-o");            n += 1;
-    argv[n] = cstr(b.arena, out);             n += 1;
+    argv[n] = cstr(b.allocator, b.compiler_path); n += 1;
+    argv[n] = cstr(b.allocator, c.root_source);   n += 1;
+    argv[n] = cstr(b.allocator, "-o");            n += 1;
+    argv[n] = cstr(b.allocator, out);             n += 1;
     if(c.import_paths.len > 0) {
-        argv[n] = cstr(b.arena, "-i");                                n += 1;
-        argv[n] = cstr(b.arena, join_semicolons(b.arena, &c.import_paths)); n += 1;
+        argv[n] = cstr(b.allocator, "-i");                                n += 1;
+        argv[n] = cstr(b.allocator, join_semicolons(b.allocator, &c.import_paths)); n += 1;
     }
     for(u64 lib_index = 0; lib_index < c.libs.len; lib_index += 1) {
-        argv[n] = cstr(b.arena, "-l");                   n += 1;
-        argv[n] = cstr(b.arena, c.libs.ptr[lib_index]);  n += 1;
+        argv[n] = cstr(b.allocator, "-l");                   n += 1;
+        argv[n] = cstr(b.allocator, c.libs.ptr[lib_index]);  n += 1;
     }
     for(u64 dir_index = 0; dir_index < c.lib_dirs.len; dir_index += 1) {
-        argv[n] = cstr(b.arena, "-L");                       n += 1;
-        argv[n] = cstr(b.arena, c.lib_dirs.ptr[dir_index]);  n += 1;
+        argv[n] = cstr(b.allocator, "-L");                       n += 1;
+        argv[n] = cstr(b.allocator, c.lib_dirs.ptr[dir_index]);  n += 1;
     }
     if(c.target.name.len > 0) {
-        argv[n] = cstr(b.arena, "-target");       n += 1;
-        argv[n] = cstr(b.arena, c.target.name);   n += 1;
+        argv[n] = cstr(b.allocator, "-target");       n += 1;
+        argv[n] = cstr(b.allocator, c.target.name);   n += 1;
     }
-    argv[n] = cstr(b.arena, "-deps");                              n += 1;
-    argv[n] = cstr(b.arena, cache_sidecar(b, c.artifact_name, ".dep")); n += 1;
-    argv[n] = cstr(b.arena, "-config");                  n += 1;
-    argv[n] = cstr(b.arena, optimize_name(c.optimize));  n += 1;
+    argv[n] = cstr(b.allocator, "-deps");                              n += 1;
+    argv[n] = cstr(b.allocator, cache_sidecar(b, c.artifact_name, ".dep")); n += 1;
+    argv[n] = cstr(b.allocator, "-config");                  n += 1;
+    argv[n] = cstr(b.allocator, optimize_name(c.optimize));  n += 1;
     for(u64 cli_index = 0; cli_index < b.cli_args.len; cli_index += 1) {
         CliArg* a = &b.cli_args.ptr[cli_index];
-        if(is_forwarded_define(a)) { argv[n] = cstr(b.arena, define_arg(b, a)); n += 1; }
+        if(is_forwarded_define(a)) { argv[n] = cstr(b.allocator, define_arg(b, a)); n += 1; }
     }
     argv[n] = null;
     return argv;
@@ -433,7 +427,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
     arena.default_page_size = 262144;
 
     Build* b = new_build(&arena);
-    b.compiler_path = resolve_compiler_path(&arena);
+    b.compiler_path = resolve_compiler_path(b.allocator);
     b.install_step = step(b, "install", "Copy build artifacts into sap-out/");
 
     for(i32 arg_index = 1; arg_index < argc; arg_index += 1) {
@@ -498,8 +492,8 @@ export fn void collect_compiles(Step* s, list::List(CompileStep*)* out, mem::All
 fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
     u64 workers = (u64)sys::cpu_count();
     if(workers == 0) { workers = 1; }
-    i32* pids = (i32*)arena::alloc(b.arena, workers * sizeof(i32));
-    CompileStep** running = (CompileStep**)arena::alloc(b.arena, workers * sizeof(CompileStep*));
+    i32* pids = (i32*)mem::alloc(b.allocator, workers * sizeof(i32));
+    CompileStep** running = (CompileStep**)mem::alloc(b.allocator, workers * sizeof(CompileStep*));
     for(u64 slot = 0; slot < workers; slot += 1) { pids[slot] = 0; running[slot] = null; }
 
     u64 next = 0;
@@ -511,7 +505,7 @@ fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
             next += 1;
             u8[] out = artifact_path(b, c);
             ensure_output_dir(b, c);
-            sys::mkdir(cstr(b.arena, ".sap-cache"), 493);
+            sys::mkdir(cstr(b.allocator, ".sap-cache"), 493);
             if(is_fresh(b, c, out)) {
                 sys::dprintf(1, "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
                 c.step.done = true;
@@ -587,7 +581,7 @@ fn i32 make(Build* b, Step* s) {
 fn i32 make_compile(Build* b, CompileStep* c) {
     u8[] out = artifact_path(b, c);
     ensure_output_dir(b, c);
-    sys::mkdir(cstr(b.arena, ".sap-cache"), 493);
+    sys::mkdir(cstr(b.allocator, ".sap-cache"), 493);
     if(is_fresh(b, c, out)) {
         sys::dprintf(1, "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
         return 0;
@@ -605,10 +599,10 @@ fn i32 make_compile(Build* b, CompileStep* c) {
 
 fn i32 make_run(Build* b, RunStep* r) {
     u8[] path = artifact_path(b, r.exe);
-    i8** argv = (i8**)arena::alloc(b.arena, (r.args.len + 2) * sizeof(i8*));
+    i8** argv = (i8**)mem::alloc(b.allocator, (r.args.len + 2) * sizeof(i8*));
     u64 n = 0;
-    argv[n] = cstr(b.arena, path); n += 1;
-    for(u64 arg_index = 0; arg_index < r.args.len; arg_index += 1) { argv[n] = cstr(b.arena, r.args.ptr[arg_index]); n += 1; }
+    argv[n] = cstr(b.allocator, path); n += 1;
+    for(u64 arg_index = 0; arg_index < r.args.len; arg_index += 1) { argv[n] = cstr(b.allocator, r.args.ptr[arg_index]); n += 1; }
     argv[n] = null;
     sys::dprintf(1, "  RUN  %.*s\n", (i32)path.len, (i8*)path.ptr);
     return spawn_and_wait(argv);
@@ -645,7 +639,7 @@ fn void parse_define_arg(Build* b, u8[] arg) {
     define(b, key, value, true);
 }
 
-fn u8[] resolve_compiler_path(arena::Arena* a) {
+fn u8[] resolve_compiler_path(mem::Allocator a) {
     i8* raw = sys::getenv(cstr(a, "SAPLANGC"));
     if(raw == null) { return "saplangc"; }
     return cstr_slice((u8*)raw);
@@ -664,7 +658,7 @@ fn i32 spawn_and_wait(i8** argv) {
     return (status >> 8) & 255;
 }
 
-fn u8[] join_semicolons(arena::Arena* a, list::List(u8[])* parts) {
+fn u8[] join_semicolons(mem::Allocator a, list::List(u8[])* parts) {
     io::OutBuf buf;
     io::outbuf_init(&buf, a, 64);
     for(u64 part_index = 0; part_index < parts.len; part_index += 1) {
@@ -674,7 +668,7 @@ fn u8[] join_semicolons(arena::Arena* a, list::List(u8[])* parts) {
     return io::outbuf_bytes(&buf);
 }
 
-fn u8[] join(arena::Arena* a, u8[] prefix, u8[] name) {
+fn u8[] join(mem::Allocator a, u8[] prefix, u8[] name) {
     io::OutBuf buf;
     io::outbuf_init(&buf, a, prefix.len + name.len + 1);
     io::outbuf_write(&buf, prefix);
@@ -682,8 +676,8 @@ fn u8[] join(arena::Arena* a, u8[] prefix, u8[] name) {
     return io::outbuf_bytes(&buf);
 }
 
-fn i8* cstr(arena::Arena* a, u8[] bytes) {
-    i8* out = (i8*)arena::alloc(a, bytes.len + 1);
+fn i8* cstr(mem::Allocator a, u8[] bytes) {
+    i8* out = (i8*)mem::alloc(a, bytes.len + 1);
     for(u64 char_index = 0; char_index < bytes.len; char_index += 1) { out[char_index] = (i8)bytes[char_index]; }
     out[bytes.len] = 0;
     return out;

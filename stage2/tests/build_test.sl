@@ -1,7 +1,31 @@
 import testing;
+import test_util;
 import builder;
 import arena;
+import mem;
 import list;
+import sys;
+
+test_util::Counting g_counting;
+
+// Build owns no arena — only an Allocator — so the whole step graph can be built on a caller's allocator.
+fn i32 graph_allocates_through_caller_allocator(arena::Arena* a, u8[] m) {
+    sys::memset(&g_counting, 0, sizeof(test_util::Counting));
+    g_counting.inner = arena::allocator(a);
+
+    builder::Build* b = builder::new_build(a);
+    b.allocator = test_util::counting_allocator(&g_counting);
+    b.install_step = builder::step(b, "install", "install");
+    u64 before = g_counting.allocs;
+
+    builder::CompileStep* exe = builder::add_executable(b, "app", "main.sl");
+    builder::add_import_path(exe, "std");
+    builder::install_artifact(b, exe);
+
+    if(!testing::expect_true(g_counting.allocs > before, m)) { return -1; }
+    if(!testing::expect_eq(builder::artifact_path(b, exe), "sap-out/bin/app", m)) { return -2; }
+    return 0;
+}
 
 // Graph shape: install_artifact hangs the compile step off install; a run step depends on the
 // same compile step; a named top step depends on the run step. First-field aliasing means
@@ -158,6 +182,7 @@ fn i32 gather_compiles(arena::Arena* a, u8[] m) {
 fn i32 main() {
     testing::init();
     u8[] suite = "Build System Tests";
+    testing::add(suite, "graph_allocates_through_caller_allocator", &graph_allocates_through_caller_allocator);
     testing::add(suite, "graph_structure", &graph_structure);
     testing::add(suite, "artifact_paths", &artifact_paths);
     testing::add(suite, "command_string", &command_string);

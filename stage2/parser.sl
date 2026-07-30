@@ -21,6 +21,11 @@ export struct Parser {
 }
 
 export fn ast::AstNode* parse(module::Module* m) {
+    // Without this the first list growth returns null and the crash lands on the write, not the omission.
+    if(!module::has_arena(m)) {
+        diag::report(&m.diag, m.arena, 0, "internal: module has no allocator; construct it with module::set_arena");
+        return null;
+    }
     Parser p = { m, 0, false, false, false };
     NodeList decls = {null, 0, 0};
     while (peek(&p, 0).kind != token::TokenKind::EOF) {

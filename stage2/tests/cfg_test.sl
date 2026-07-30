@@ -11,8 +11,7 @@ import sys;
 fn module::Module* mk_module(arena::Arena* a) {
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
-    m.arena = a;
-    m.allocator = arena::allocator(a);
+    module::set_arena(m, a);
     return m;
 }
 

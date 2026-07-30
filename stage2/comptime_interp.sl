@@ -925,8 +925,7 @@ fn value::Value eval_compwarning(Interp* ip, ast::CompWarningNode* n) {
 fn ast::AstNode* compile_fragment(module::Module* m, u8[] bytes, bool as_stmts, u32 generator_pos) {
     module::Module* frag = (module::Module*)arena::alloc(m.arena, sizeof(module::Module));
     sys::memset(frag, 0, sizeof(module::Module));
-    frag.arena = m.arena;
-    frag.allocator = m.allocator;
+    module::set_arena(frag, m.arena);
     frag.name = m.name;
     frag.source = bytes;
     frag.literal_pool = m.literal_pool;

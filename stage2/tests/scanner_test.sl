@@ -31,8 +31,7 @@ fn module::Module* prepare(arena::Arena* a, u8[] src) {
     m.tokens_cap = 0;
     m.literal_pool = {null, 0};
     m.literal_pool_cap = 0;
-    m.arena = a;
-    m.allocator = arena::allocator(a);
+    module::set_arena(m, a);
     m.diag.entries = {null, 0};
     m.diag.entries_cap = 0;
     return m;

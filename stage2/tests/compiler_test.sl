@@ -30,8 +30,7 @@ fn void boot(arena::Arena* a) {
 fn module::Module* mk_source_module(arena::Arena* a, u8[] name, u8[] src) {
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
-    m.arena = sub_arena(a);
-    m.allocator = arena::allocator(m.arena);
+    module::set_arena(m, sub_arena(a));
     m.source = src;
     m.name = interner::intern(name);
     return m;
@@ -798,7 +797,7 @@ fn i32 e2e_compile_link_run(arena::Arena* a, u8[] msg) {
     if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
     c.output_path = "e2e_out_prog";
     if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
-    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_out_prog"), (u64)42, msg)) { return -3; }
+    if(!testing::expect_eq((u64)compiler::run_executable(arena::allocator(ca),"./e2e_out_prog"), (u64)42, msg)) { return -3; }
     return 0;
 }
 
@@ -813,7 +812,7 @@ fn i32 e2e_lib_dir_flag(arena::Arena* a, u8[] msg) {
     compiler::add_lib_dir(c, "/usr/lib");
     c.output_path = "e2e_libdir_prog";
     if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
-    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_libdir_prog"), (u64)42, msg)) { return -3; }
+    if(!testing::expect_eq((u64)compiler::run_executable(arena::allocator(ca),"./e2e_libdir_prog"), (u64)42, msg)) { return -3; }
     return 0;
 }
 
@@ -828,7 +827,7 @@ fn i32 e2e_release_build(arena::Arena* a, u8[] msg) {
     c.config = codegen::BuildConfig::Release;
     c.output_path = "e2e_release_prog";
     if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
-    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_release_prog"), (u64)42, msg)) { return -3; }
+    if(!testing::expect_eq((u64)compiler::run_executable(arena::allocator(ca),"./e2e_release_prog"), (u64)42, msg)) { return -3; }
     return 0;
 }
 
@@ -843,7 +842,7 @@ fn i32 e2e_asan_build(arena::Arena* a, u8[] msg) {
     c.config = codegen::BuildConfig::AddressSanitizer;
     c.output_path = "e2e_asan_prog";
     if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
-    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_asan_prog"), (u64)42, msg)) { return -3; }
+    if(!testing::expect_eq((u64)compiler::run_executable(arena::allocator(ca),"./e2e_asan_prog"), (u64)42, msg)) { return -3; }
     return 0;
 }
 
@@ -860,7 +859,7 @@ fn i32 e2e_link_multi_module(arena::Arena* a, u8[] msg) {
     if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
     c.output_path = "e2e_multi_prog";
     if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
-    if(!testing::expect_eq((u64)compiler::run_executable(ca, "./e2e_multi_prog"), (u64)42, msg)) { return -3; }
+    if(!testing::expect_eq((u64)compiler::run_executable(arena::allocator(ca),"./e2e_multi_prog"), (u64)42, msg)) { return -3; }
     return 0;
 }
 

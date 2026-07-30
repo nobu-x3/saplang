@@ -17,7 +17,7 @@ export struct Module {
     u8[]                    literal_pool;    // decoded string-literal bytes
     u64                     literal_pool_cap;
     arena::Arena*           arena;
-    mem::Allocator          allocator;       // arena, as the interface std allocates through
+    mem::Allocator          allocator;       // the arena as an interface; set together via set_arena
     diag::DiagBuf           diag;
 
     Module*[]               imports;         // resolved at discovery; sema reads to map DeclKind::Import
@@ -34,6 +34,17 @@ export struct Module {
     void*                   sapir;                   // sapir::SapirModule* — set by lower, consumed by codegen
     BuildInfo               build;                   // what `comprun if (build::...)` folds against
     // codegen fields added by later phases
+}
+
+// Sets both storage fields. Assigning m.arena alone leaves a null allocator, and the crash then lands on
+// the first push through it rather than here — every module must be given its arena this way.
+export fn void set_arena(Module* m, arena::Arena* a) {
+    m.arena = a;
+    m.allocator = arena::allocator(a);
+}
+
+export fn bool has_arena(Module* m) {
+    return m.arena != null && m.allocator.alloc_fn != null;
 }
 
 // What `comprun if (build::...)` conditions read; the driver fills it before parsing.

@@ -71,8 +71,7 @@ export fn void boot(arena::Arena* a) {
 export fn module::Module* mk_module(arena::Arena* a, u8[] name, u8[] src) {
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
-    m.arena = sub_arena(a);
-    m.allocator = arena::allocator(m.arena);
+    module::set_arena(m, sub_arena(a));
     m.source = src;
     m.name = interner::intern(name);
     m.build = host_build();
@@ -130,8 +129,7 @@ export fn module::Module* frontend_build(arena::Arena* a, u8[] src, module::Buil
     comptime_interp::install_hooks();
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
-    m.arena = a;
-    m.allocator = arena::allocator(a);
+    module::set_arena(m, a);
     m.source = src;
     m.build = build;
     m.name = interner::intern("main");

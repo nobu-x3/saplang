@@ -292,18 +292,17 @@ fn void add_entry_module(Compiler* c, u8[] path) {
         diag::report(&m.diag, m.arena, 0, "cannot read source file");
         return;
     }
-    m.source = io::read_all(&f, c.arena);
+    m.source = io::read_all(&f, c.allocator);
     io::close(&f);
 }
 
 fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, u8[] path, u8[] src) {
-    module::Module* m = (module::Module*)arena::alloc(c.arena, sizeof(module::Module));
+    module::Module* m = (module::Module*)mem::alloc(c.allocator, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
-    arena::Arena* module_arena = (arena::Arena*)arena::alloc(c.arena, sizeof(arena::Arena));
+    arena::Arena* module_arena = (arena::Arena*)mem::alloc(c.allocator, sizeof(arena::Arena));
     sys::memset(module_arena, 0, sizeof(arena::Arena));
     module_arena.default_page_size = 1048576;
-    m.arena = module_arena;
-    m.allocator = arena::allocator(module_arena);
+    module::set_arena(m, module_arena);
     m.name = name;
     m.path = path;
     m.source = src;
@@ -350,7 +349,7 @@ fn void discover_imports(Compiler* c, module::Module* m) {
         token_index += 1;
     }
     if(import_count == 0) { return; }
-    module::Module** import_list = (module::Module**)arena::alloc(c.arena, import_count * sizeof(module::Module*));
+    module::Module** import_list = (module::Module**)mem::alloc(c.allocator, import_count * sizeof(module::Module*));
     u64 filled = 0;
     token_index = 0;
     while(token_index < toks.len) {
@@ -426,7 +425,7 @@ fn u8[] join_filename(Compiler* c, u8[] dir, u8[] name, u8[] target) {
     if(written <= 0) { u8[] none = {null, 0}; return none; }
     u64 len = (u64)written;
     if(len > 1023) { len = 1023; }
-    u8* out = (u8*)arena::alloc(c.arena, len);
+    u8* out = (u8*)mem::alloc(c.allocator, len);
     sys::memcpy(out, &buf[0], len);
     u8[] result = {out, len};
     return result;
@@ -437,7 +436,7 @@ fn u8[] open_and_read(Compiler* c, u8[] path, bool* found) {
     io::File f = io::open(path, "r");
     u8[] empty = {null, 0};
     if(f.fp == null) { *found = false; return empty; }
-    u8[] bytes = io::read_all(&f, c.arena);
+    u8[] bytes = io::read_all(&f, c.allocator);
     io::close(&f);
     *found = true;
     return bytes;
@@ -484,7 +483,7 @@ fn void write_depfile(Compiler* c) {
 
 // sapir -> object files -> linked executable. Assumes the frontend already ran.
 export fn i32 run_backend(Compiler* c) {
-    if(!c.compile_only) { sys::mkdir(cstr(c.arena, ".tmp"), 493); }
+    if(!c.compile_only) { sys::mkdir(cstr(c.allocator, ".tmp"), 493); }
     u8[][] object_paths = run_codegen(c);
     if(bail_on_errors(c)) { return 1; }
     if(c.compile_only) { return 0; }
@@ -492,8 +491,8 @@ export fn i32 run_backend(Compiler* c) {
 }
 
 // Runs a produced executable and returns its exit code (or -1 on spawn failure).
-export fn i32 run_executable(arena::Arena* a, u8[] path) {
-    i8** argv = (i8**)arena::alloc(a, 2 * sizeof(i8*));
+export fn i32 run_executable(mem::Allocator a, u8[] path) {
+    i8** argv = (i8**)mem::alloc(a, 2 * sizeof(i8*));
     argv[0] = cstr(a, path);
     argv[1] = null;
     return spawn_and_wait(argv);
@@ -501,13 +500,13 @@ export fn i32 run_executable(arena::Arena* a, u8[] path) {
 
 fn u8[][] run_codegen(Compiler* c) {
     u8[][] paths;
-    paths.ptr = arena::alloc(c.arena, (c.modules.len + 1) * sizeof(u8[]));
+    paths.ptr = mem::alloc(c.allocator, (c.modules.len + 1) * sizeof(u8[]));
     paths.len = 0;
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
         u8[] obj_path = object_path_for(c, m);
-        if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.arena, cstr(c.arena, obj_path), c.config) != 0) { c.error_count += 1; }
+        if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.arena, cstr(c.allocator, obj_path), c.config) != 0) { c.error_count += 1; }
         paths[paths.len] = obj_path;
         paths.len += 1;
     }
@@ -544,44 +543,44 @@ fn i32 run_link(Compiler* c, u8[][] object_paths) {
 
 fn i8** build_link_argv(Compiler* c, u8[][] object_paths, link_paths::LinkPaths* paths) {
     u64 cap = 24 + object_paths.len + c.extern_libs.len + c.lib_dirs.len;
-    i8** argv = (i8**)arena::alloc(c.arena, (cap + 1) * sizeof(i8*));
+    i8** argv = (i8**)mem::alloc(c.allocator, (cap + 1) * sizeof(i8*));
     u64 n = 0;
-    argv[n] = cstr(c.arena, "ld.lld"); n += 1;
-    argv[n] = cstr(c.arena, "-o"); n += 1;
+    argv[n] = cstr(c.allocator, "ld.lld"); n += 1;
+    argv[n] = cstr(c.allocator, "-o"); n += 1;
     argv[n] = output_cstr(c); n += 1;
-    argv[n] = cstr(c.arena, "-dynamic-linker"); n += 1;
+    argv[n] = cstr(c.allocator, "-dynamic-linker"); n += 1;
     argv[n] = paths.dynamic_linker; n += 1;
     argv[n] = paths.crt_start; n += 1;
     argv[n] = paths.crt_init; n += 1;
     argv[n] = paths.lib_dir; n += 1;
     // User -L dirs precede the objects/libs so ld.lld searches them for the -l libraries.
     for(u64 i = 0; i < c.lib_dirs.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs.ptr[i]); n += 1; }
-    for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.arena, object_paths[i]); n += 1; }
+    for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.allocator, object_paths[i]); n += 1; }
     for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs.ptr[i]); n += 1; }
     if(c.config == codegen::BuildConfig::AddressSanitizer) {
         argv[n] = paths.asan_runtime_static; n += 1;
         argv[n] = paths.asan_runtime; n += 1;
         argv[n] = paths.asan_dynamic_list; n += 1;
-        argv[n] = cstr(c.arena, "-lpthread"); n += 1;
-        argv[n] = cstr(c.arena, "-lrt"); n += 1;
-        argv[n] = cstr(c.arena, "-ldl"); n += 1;
-        argv[n] = cstr(c.arena, "-lresolv"); n += 1;
-        argv[n] = cstr(c.arena, "-lm"); n += 1;
+        argv[n] = cstr(c.allocator, "-lpthread"); n += 1;
+        argv[n] = cstr(c.allocator, "-lrt"); n += 1;
+        argv[n] = cstr(c.allocator, "-ldl"); n += 1;
+        argv[n] = cstr(c.allocator, "-lresolv"); n += 1;
+        argv[n] = cstr(c.allocator, "-lm"); n += 1;
         argv[n] = paths.unwind_runtime; n += 1;
-        argv[n] = cstr(c.arena, "--export-dynamic"); n += 1;
+        argv[n] = cstr(c.allocator, "--export-dynamic"); n += 1;
     }
     if(c.config == codegen::BuildConfig::ThreadSanitizer) {
         argv[n] = paths.tsan_runtime; n += 1;
         argv[n] = paths.tsan_dynamic_list; n += 1;
-        argv[n] = cstr(c.arena, "-lpthread"); n += 1;
-        argv[n] = cstr(c.arena, "-lrt"); n += 1;
-        argv[n] = cstr(c.arena, "-ldl"); n += 1;
-        argv[n] = cstr(c.arena, "-lresolv"); n += 1;
-        argv[n] = cstr(c.arena, "-lm"); n += 1;
+        argv[n] = cstr(c.allocator, "-lpthread"); n += 1;
+        argv[n] = cstr(c.allocator, "-lrt"); n += 1;
+        argv[n] = cstr(c.allocator, "-ldl"); n += 1;
+        argv[n] = cstr(c.allocator, "-lresolv"); n += 1;
+        argv[n] = cstr(c.allocator, "-lm"); n += 1;
         argv[n] = paths.unwind_runtime; n += 1;
-        argv[n] = cstr(c.arena, "--export-dynamic"); n += 1;
+        argv[n] = cstr(c.allocator, "--export-dynamic"); n += 1;
     }
-    argv[n] = cstr(c.arena, "-lc"); n += 1;
+    argv[n] = cstr(c.allocator, "-lc"); n += 1;
     argv[n] = paths.crt_fini; n += 1;
     argv[n] = null; n += 1;
     return argv;
@@ -606,7 +605,7 @@ fn u8[] object_path_for(Compiler* c, module::Module* m) {
     if(!c.compile_only) { return tmp_object_path(c, m); }
     if(c.output_path.len > 0 && c.modules.len > 0 && c.modules.ptr[0] == m) { return c.output_path; }
     io::OutBuf buf;
-    io::outbuf_init(&buf, c.arena, 64);
+    io::outbuf_init(&buf, c.allocator, 64);
     io::outbuf_write(&buf, interner::symbol_str(m.name));
     io::outbuf_write(&buf, ".o");
     return io::outbuf_bytes(&buf);
@@ -614,7 +613,7 @@ fn u8[] object_path_for(Compiler* c, module::Module* m) {
 
 fn u8[] tmp_object_path(Compiler* c, module::Module* m) {
     io::OutBuf buf;
-    io::outbuf_init(&buf, c.arena, 64);
+    io::outbuf_init(&buf, c.allocator, 64);
     io::outbuf_write(&buf, ".tmp/");
     io::outbuf_write(&buf, interner::symbol_str(m.name));
     io::outbuf_write(&buf, ".o");
@@ -622,28 +621,28 @@ fn u8[] tmp_object_path(Compiler* c, module::Module* m) {
 }
 
 fn i8* output_cstr(Compiler* c) {
-    if(c.output_path.len == 0) { return cstr(c.arena, "a.out"); }
-    return cstr(c.arena, c.output_path);
+    if(c.output_path.len == 0) { return cstr(c.allocator, "a.out"); }
+    return cstr(c.allocator, c.output_path);
 }
 
 fn i8* lib_flag(Compiler* c, u8[] name) {
     io::OutBuf buf;
-    io::outbuf_init(&buf, c.arena, 16);
+    io::outbuf_init(&buf, c.allocator, 16);
     io::outbuf_write(&buf, "-l");
     io::outbuf_write(&buf, name);
-    return cstr(c.arena, io::outbuf_bytes(&buf));
+    return cstr(c.allocator, io::outbuf_bytes(&buf));
 }
 
 fn i8* dir_flag(Compiler* c, u8[] path) {
     io::OutBuf buf;
-    io::outbuf_init(&buf, c.arena, 16);
+    io::outbuf_init(&buf, c.allocator, 16);
     io::outbuf_write(&buf, "-L");
     io::outbuf_write(&buf, path);
-    return cstr(c.arena, io::outbuf_bytes(&buf));
+    return cstr(c.allocator, io::outbuf_bytes(&buf));
 }
 
-fn i8* cstr(arena::Arena* a, u8[] bytes) {
-    i8* out = (i8*)arena::alloc(a, bytes.len + 1);
+fn i8* cstr(mem::Allocator a, u8[] bytes) {
+    i8* out = (i8*)mem::alloc(a, bytes.len + 1);
     for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
     out[bytes.len] = 0;
     return out;
@@ -653,7 +652,7 @@ fn i8* cstr(arena::Arena* a, u8[] bytes) {
 export fn i32 run_frontend(Compiler* c) {
     comptime_interp::install_hooks();
     comptime_interp::init_mono_sync();
-    sema::init_body_sync(c.arena);
+    sema::init_body_sync(c.allocator);
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         c.modules.ptr[module_index].comptime_max_depth = c.comptime_depth;
         c.modules.ptr[module_index].comptime_max_iterations = c.comptime_iterations;
@@ -769,7 +768,7 @@ export fn bool stops_before_backend(Compiler* c) {
 
 fn void dump_tokens(Compiler* c) {
     io::OutBuf out;
-    io::outbuf_init(&out, c.arena, 4096);
+    io::outbuf_init(&out, c.allocator, 4096);
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         io::outbuf_write(&out, "module ");
@@ -789,7 +788,7 @@ fn void dump_tokens(Compiler* c) {
 
 fn void dump_asts(Compiler* c) {
     io::OutBuf out;
-    io::outbuf_init(&out, c.arena, 4096);
+    io::outbuf_init(&out, c.allocator, 4096);
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.root_node == null) { continue; }
@@ -813,7 +812,7 @@ fn void dump_llvm(Compiler* c) {
 
 fn void dump_sapir(Compiler* c) {
     io::OutBuf out;
-    io::outbuf_init(&out, c.arena, 4096);
+    io::outbuf_init(&out, c.allocator, 4096);
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
@@ -825,7 +824,7 @@ fn void dump_sapir(Compiler* c) {
 
 fn void dump_cfgs(Compiler* c) {
     io::OutBuf out;
-    io::outbuf_init(&out, c.arena, 4096);
+    io::outbuf_init(&out, c.allocator, 4096);
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         cfg_print::print_module(c.modules.ptr[module_index], &out);
     }

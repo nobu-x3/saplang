@@ -699,9 +699,9 @@ bool             g_body_sync_ready;
 // Called once, single-threaded, before parallel body checking.
 // Every global lock is created here, single-threaded: creating one lazily lets two threads
 // re-initialize a mutex a third already holds.
-export fn void init_body_sync(arena::Arena* wait_arena) {
+export fn void init_body_sync(mem::Allocator wait_allocator) {
     if(g_body_sync_ready) { return; }
-    g_body_waits_allocator = arena::allocator(wait_arena);
+    g_body_waits_allocator = wait_allocator;
     ensure_reflect_lock();
     mutex::create(&g_body_lock);
     condvar::create(&g_body_cv);
@@ -758,7 +758,7 @@ export fn bool body_check_reentrant(ast::FnDeclNode* func) {
 }
 
 export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, module::Module* requester) {
-    if(!g_body_sync_ready) { init_body_sync(m.arena); }
+    if(!g_body_sync_ready) { init_body_sync(m.allocator); }
     u64 me = threads::self();
     mutex::lock(&g_body_lock);
     if(func.body_state == ast::BodyState::InProgress && func.body_owner != me) {
