@@ -113,6 +113,32 @@ fn i32 err_circular_alias_definition(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A qualified constructor pattern resolves through the generic's own imports, not the caller's.
+fn i32 infers_through_qualified_constructor(arena::Arena* a, u8[] m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nfn T unwrap(comptime Type T, b::Box(T)* boxed) { return boxed.value; }\nexport fn i32 f() { b::Box(i32) boxed = {9}; return unwrap(&boxed); }", "export fn Type Box(comptime Type T) { return struct { T value; }; }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Two modules can both export a `fn Type Box`. Matching a pattern on the trailing name alone bound T
+// from the wrong constructor, and pointer-to-pointer conversion then hid it: the callee read the wrong field.
+fn i32 err_same_named_constructors_do_not_unify(arena::Arena* a, u8[] m) {
+    test_util::boot(a);
+    module::Module* user = test_util::mk_module(a, "a", "import b;\nimport c;\nfn T unwrap(comptime Type T, b::Box(T)* boxed) { return boxed.value; }\nexport fn i32 f() { c::Box(i32) from_c; from_c.value = 7; return unwrap(&from_c); }");
+    module::Module* owner = test_util::mk_module(a, "b", "export fn Type Box(comptime Type T) { return struct { T value; }; }");
+    module::Module* impostor = test_util::mk_module(a, "c", "export fn Type Box(comptime Type T) { return struct { u64 tag; T value; }; }");
+    module::Module** all = (module::Module**)arena::alloc(a, 3 * sizeof(module::Module*));
+    all[0] = user; all[1] = owner; all[2] = impostor;
+    module::Module*[] modules = {all, 3};
+    test_util::wire_imports(a, user, {&all[1], 2});
+    test_util::frontend_modules(modules);
+    if(!testing::expect_true(test_util::errors_in(modules) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].msg, "cannot infer comptime arguments for unwrap", m)) { return -2; }
+    return 0;
+}
+
 // ---- export enforcement ----
 
 fn i32 err_private_fn_not_visible(arena::Arena* a, u8[] m) {
@@ -172,6 +198,8 @@ fn i32 main() {
     testing::add(suite, "circular_alias_resolution",             &circular_alias_resolution);
     testing::add(suite, "circular_const_read",                   &circular_const_read);
     testing::add(suite, "err_circular_alias_definition",         &err_circular_alias_definition);
+    testing::add(suite, "infers_through_qualified_constructor",  &infers_through_qualified_constructor);
+    testing::add(suite, "err_same_named_constructors_do_not_unify", &err_same_named_constructors_do_not_unify);
     testing::add(suite, "err_private_fn_not_visible",            &err_private_fn_not_visible);
     testing::add(suite, "err_private_struct_not_visible",        &err_private_struct_not_visible);
     testing::add(suite, "err_private_const_not_visible",         &err_private_const_not_visible);

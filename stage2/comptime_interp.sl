@@ -2030,15 +2030,38 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
 
 // GENERIC CALL RESOLUTION (sema seam): infer comptime args by unifying param patterns against arg types, then monomorphize.
 
-// Compared by trailing identifier: the pattern's callee is unresolved while the comptime params are still free.
-fn bool callee_names_match(ast::AstNode* callee, ast::FnDeclNode* ctor) {
-    if(callee == null || ctor == null) { return false; }
-    if(callee.h.kind == ast::AstKind::Ident) { return ((ast::IdentNode*)callee).name == ctor.name; }
-    if(callee.h.kind == ast::AstKind::NamespaceAccess) { return ((ast::NamespaceAccessNode*)callee).name == ctor.name; }
-    return false;
+// Resolved against the generic's own module, because matching the trailing name confuses two modules' `Box`.
+fn bool same_constructor(ast::FnDeclNode* generic, ast::AstNode* callee, ast::FnDeclNode* ctor) {
+    if(generic == null || callee == null || ctor == null || generic.decl == null) { return false; }
+    module::Module* home = ((sema::Decl*)generic.decl).home;
+    if(home == null || home.global_scope == null) { return false; }
+
+    symbol::Symbol* name;
+    if(callee.h.kind == ast::AstKind::Ident) {
+        name = ((ast::IdentNode*)callee).name;
+    } else if(callee.h.kind == ast::AstKind::NamespaceAccess) {
+        ast::NamespaceAccessNode* qualified = (ast::NamespaceAccessNode*)callee;
+        symbol::Symbol* namespace_name = qualifier_symbol(qualified.base);
+        if(namespace_name == null) { return false; }
+        sema::Decl* imported = sema::scope_lookup_local((sema::Scope*)home.global_scope, namespace_name);
+        if(imported == null || imported.kind != sema::DeclKind::Import || imported.data.module == null) { return false; }
+        home = imported.data.module;
+        name = qualified.name;
+    } else {
+        return false;
+    }
+
+    sema::Decl* found = sema::scope_lookup_local((sema::Scope*)home.global_scope, name);
+    if(found == null || found.kind != sema::DeclKind::Node) { return false; }
+    return found.data.node == (ast::AstNode*)ctor;
 }
 
-fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* pattern, types::Ty* concrete) {
+fn symbol::Symbol* qualifier_symbol(ast::AstNode* base) {
+    if(base == null || base.h.kind != ast::AstKind::Ident) { return null; }
+    return ((ast::IdentNode*)base).name;
+}
+
+fn bool unify_type(ast::FnDeclNode* generic, symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* pattern, types::Ty* concrete) {
     if(pattern == null || concrete == null) { return false; }
     switch(pattern.h.kind) {
     case ast::AstKind::NamedType: {
@@ -2055,15 +2078,15 @@ fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* 
     }
     case ast::AstKind::PointerType: {
         if(concrete.kind != types::TypeKind::Pointer) { return false; }
-        return unify_type(names, binds, ((ast::TypePointerNode*)pattern).pointee, concrete.data.pointee);
+        return unify_type(generic, names, binds, ((ast::TypePointerNode*)pattern).pointee, concrete.data.pointee);
     }
     case ast::AstKind::SliceType: {
         if(concrete.kind != types::TypeKind::Slice) { return false; }
-        return unify_type(names, binds, ((ast::TypeSliceNode*)pattern).element, concrete.data.slice_elem);
+        return unify_type(generic, names, binds, ((ast::TypeSliceNode*)pattern).element, concrete.data.slice_elem);
     }
     case ast::AstKind::ArrayType: {
         if(concrete.kind != types::TypeKind::Array) { return false; }
-        return unify_type(names, binds, ((ast::TypeArrayNode*)pattern).element, concrete.data.array.elem);
+        return unify_type(generic, names, binds, ((ast::TypeArrayNode*)pattern).element, concrete.data.array.elem);
     }
     // Unprovable rather than false when provenance is missing, so another parameter can still bind the name.
     case ast::AstKind::Call: {
@@ -2072,22 +2095,22 @@ fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* 
         value::Value[] synth_args;
         if(!read_type_provenance(concrete, &ctor, &synth_args)) { return true; }
         ast::CallNode* call = (ast::CallNode*)pattern;
-        if(!callee_names_match(call.callee, ctor)) { return true; }
+        if(!same_constructor(generic, call.callee, ctor)) { return true; }
         if(call.args.len != synth_args.len) { return true; }
         for(u64 arg_index = 0; arg_index < call.args.len; arg_index += 1) {
             if(synth_args[arg_index].kind != value::ValueKind::TYPE) { continue; }
             types::Ty* concrete_arg = (types::Ty*)synth_args[arg_index].data.type_ref;
-            if(!unify_type(names, binds, call.args[arg_index], concrete_arg)) { return false; }
+            if(!unify_type(generic, names, binds, call.args[arg_index], concrete_arg)) { return false; }
         }
         return true;
     }
     case ast::AstKind::FnPtrType: {
         if(concrete.kind != types::TypeKind::FnPtr) { return false; }
         ast::TypeFnPtrNode* fp = (ast::TypeFnPtrNode*)pattern;
-        if(!unify_type(names, binds, fp.return_type, concrete.data.fn_ptr.ret)) { return false; }
+        if(!unify_type(generic, names, binds, fp.return_type, concrete.data.fn_ptr.ret)) { return false; }
         if(fp.param_types.len != concrete.data.fn_ptr.params.len) { return false; }
         for(u64 i = 0; i < fp.param_types.len; i += 1) {
-            if(!unify_type(names, binds, fp.param_types[i], concrete.data.fn_ptr.params[i])) { return false; }
+            if(!unify_type(generic, names, binds, fp.param_types[i], concrete.data.fn_ptr.params[i])) { return false; }
         }
         return true;
     }
@@ -2116,7 +2139,7 @@ export fn ast::FnDeclNode* resolve_generic_call(module::Module* m, ast::FnDeclNo
     for(u64 i = 0; i < callee.params.len; i += 1) {
         if(callee.params[i].is_comptime) { continue; }
         if(runtime_index >= arg_types.len) { return null; }
-        if(!unify_type(names, binds, callee.params[i].type_expr, arg_types[runtime_index])) { return null; }
+        if(!unify_type(callee, names, binds, callee.params[i].type_expr, arg_types[runtime_index])) { return null; }
         runtime_index += 1;
     }
     for(u64 k = 0; k < n_comptime; k += 1) {
