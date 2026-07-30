@@ -140,7 +140,7 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
         write_runner_stamp(arena_ptr);
     }
 
-    sys::setenv(cstr(arena_ptr, "SAPLANGC"), argv[0], 1);
+    sys::setenv(cstr(arena_ptr, "SAPLANGC"), (const i8*)argv[0], 1);
     // Drop the driver-only `-i` pairs; the runner has build.sl baked in and wants only steps / -D.
     i8** rargv = (i8**)arena::alloc(arena_ptr, (u64)argc * sizeof(i8*));
     u64 forwarded = 0;

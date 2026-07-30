@@ -282,7 +282,7 @@ fn void emit_di_subprogram(CG* cg, sapir::SapirFn* f) {
     u8[] link_name = cg.sm.decls[f.decl_index].link_name;
     i32 opt = 0;
     if(cg.config != BuildConfig::Debug) { opt = 1; }
-    void* sp = llvm::LLVMDIBuilderCreateFunction(cg.di_builder, cg.di_file, name.ptr, name.len, link_name.ptr, link_name.len, cg.di_file, line, sub_ty, 0, 1, line, 0, opt);
+    void* sp = llvm::LLVMDIBuilderCreateFunction(cg.di_builder, cg.di_file, (const i8*)name.ptr, name.len, (const i8*)link_name.ptr, link_name.len, cg.di_file, line, sub_ty, 0, 1, line, 0, opt);
     llvm::LLVMSetSubprogram(cg.current_fn, sp);
     cg.di_subprogram = sp;
 }
@@ -312,7 +312,7 @@ fn u8[] sym_str_or_empty(symbol::Symbol* s) {
 fn void* di_member(CG* cg, u8[] name, types::Ty* ft, u64 offset_bits) {
     u64 fbits = (u64)types::size_of(null, ft) * 8;
     u32 falign = types::align_of(null, ft) * 8;
-    return llvm::LLVMDIBuilderCreateMemberType(cg.di_builder, cg.di_file, name.ptr, name.len, cg.di_file, 0, fbits, falign, offset_bits, 0, build_di_type(cg, ft));
+    return llvm::LLVMDIBuilderCreateMemberType(cg.di_builder, cg.di_file, (const i8*)name.ptr, name.len, cg.di_file, 0, fbits, falign, offset_bits, 0, build_di_type(cg, ft));
 }
 
 fn void* build_di_composite(CG* cg, types::Ty* t, bool is_union) {
@@ -326,9 +326,9 @@ fn void* build_di_composite(CG* cg, types::Ty* t, bool is_union) {
     u32 align = types::align_of(null, t) * 8;
     u8[] name = sym_str_or_empty(types::type_name_sym(t));
     if(is_union) {
-        return llvm::LLVMDIBuilderCreateUnionType(cg.di_builder, cg.di_file, name.ptr, name.len, cg.di_file, 0, size, align, 0, members, (u32)count, 0, cg.empty, 0);
+        return llvm::LLVMDIBuilderCreateUnionType(cg.di_builder, cg.di_file, (const i8*)name.ptr, name.len, cg.di_file, 0, size, align, 0, members, (u32)count, 0, cg.empty, 0);
     }
-    return llvm::LLVMDIBuilderCreateStructType(cg.di_builder, cg.di_file, name.ptr, name.len, cg.di_file, 0, size, align, 0, null, members, (u32)count, 0, null, cg.empty, 0);
+    return llvm::LLVMDIBuilderCreateStructType(cg.di_builder, cg.di_file, (const i8*)name.ptr, name.len, cg.di_file, 0, size, align, 0, null, members, (u32)count, 0, null, cg.empty, 0);
 }
 
 fn void* build_di_array(CG* cg, types::Ty* t) {
@@ -368,7 +368,7 @@ fn void* di_basic_type(CG* cg, types::PrimitiveKind p) {
     else { bits = 32; enc = llvm::DW_ATE_signed; }
     }
     u8[] name = prim_name(p);
-    return llvm::LLVMDIBuilderCreateBasicType(cg.di_builder, name.ptr, name.len, bits, enc, 0);
+    return llvm::LLVMDIBuilderCreateBasicType(cg.di_builder, (const i8*)name.ptr, name.len, bits, enc, 0);
 }
 
 fn u8[] prim_name(types::PrimitiveKind p) {
@@ -669,9 +669,9 @@ fn void emit_di_variables(CG* cg, sapir::SapirFn* f) {
         bool is_param = i < (u64)f.param_count;
         void* di_var;
         if(is_param) {
-            di_var = llvm::LLVMDIBuilderCreateParameterVariable(cg.di_builder, cg.di_subprogram, name.ptr, name.len, (u32)i + 1, cg.di_file, line, di_ty, 1, 0);
+            di_var = llvm::LLVMDIBuilderCreateParameterVariable(cg.di_builder, cg.di_subprogram, (const i8*)name.ptr, name.len, (u32)i + 1, cg.di_file, line, di_ty, 1, 0);
         } else {
-            di_var = llvm::LLVMDIBuilderCreateAutoVariable(cg.di_builder, cg.di_subprogram, name.ptr, name.len, cg.di_file, line, di_ty, 1, 0, 0);
+            di_var = llvm::LLVMDIBuilderCreateAutoVariable(cg.di_builder, cg.di_subprogram, (const i8*)name.ptr, name.len, cg.di_file, line, di_ty, 1, 0, 0);
         }
         di_vars[i] = di_var;
         di_locs[i] = loc;

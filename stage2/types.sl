@@ -515,8 +515,12 @@ export fn bool is_convertible(Ty* src, Ty* dst) {
         if (src.prim == PrimitiveKind::F32 && dst.prim == PrimitiveKind::F64) { return true; }
         return false;
     }
-    // pointer -> pointer (any pointee); dropping const would allow writing through a read-only pointee
-    if (is_ptr(src) && is_ptr(dst)) { return !is_const_ptr(src) || is_const_ptr(dst); }
+    // pointer -> pointer: only to void* or the same pointee, or an implicit A* -> B* reinterprets memory.
+    if (is_ptr(src) && is_ptr(dst)) {
+        if (is_const_ptr(src) && !is_const_ptr(dst)) { return false; }
+        if (is_void(dst.data.pointee) || is_void(src.data.pointee)) { return true; }
+        return src.data.pointee == dst.data.pointee;
+    }
     // null -> any pointer, slice, or function pointer
     if (src == prim_null_ptr() && (is_ptr(dst) || is_slice(dst) || is_fnptr(dst))) { return true; }
     return false;

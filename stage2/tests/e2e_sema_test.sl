@@ -494,6 +494,28 @@ fn i32 ok_type_info_in_comprun(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// void* is the untyped pointer, so it converts both ways; reinterpreting one pointee as another does not.
+fn i32 ok_pointer_conversions_through_void(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() {\n  i32 n = 1;\n  i32* typed = &n;\n  void* raw = typed;\n  i32* back = raw;\n  u8* reinterpreted = (u8*)typed;\n  const i32* readonly = typed;\n  return *back + (i32)*reinterpreted + *readonly;\n}");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_implicit_pointer_reinterpret(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "export fn i32 f() { i32 n = 1; i32* p = &n; u8* q = p; return (i32)*q; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expected u8*, found i32*", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)52, m)) { return -3; }
+    return 0;
+}
+
+fn i32 err_implicit_struct_pointer_reinterpret(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "struct A { i32 x; }\nstruct B { i64 x; }\nexport fn i32 f() { A a; a.x = 1; B* b = &a; return (i32)b.x; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expected main::B*, found main::A*", m)) { return -2; }
+    return 0;
+}
+
 // types.sl hardcodes these layouts and guards them with a comprun of its own.
 fn i32 ok_slice_and_pointer_layout(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "comprun {\n  if(sizeof(u8[]) != (u64)16 || alignof(u8[]) != (u64)8) { comperror(\"slice\"); }\n  if(sizeof(void*) != (u64)8 || alignof(void*) != (u64)8) { comperror(\"ptr\"); }\n  if(sizeof(fn* i32(i32)) != (u64)8) { comperror(\"fnptr\"); }\n}\nexport fn i32 f() { return 0; }");
@@ -1553,6 +1575,9 @@ fn i32 main() {
     testing::add(suite, "err_type_info_at_runtime",  &err_type_info_at_runtime);
     testing::add(suite, "ok_type_info_in_comprun",   &ok_type_info_in_comprun);
     testing::add(suite, "ok_slice_and_pointer_layout", &ok_slice_and_pointer_layout);
+    testing::add(suite, "ok_pointer_conversions_through_void", &ok_pointer_conversions_through_void);
+    testing::add(suite, "err_implicit_pointer_reinterpret", &err_implicit_pointer_reinterpret);
+    testing::add(suite, "err_implicit_struct_pointer_reinterpret", &err_implicit_struct_pointer_reinterpret);
     testing::add(suite, "ok_comprun_generic_inferred", &ok_comprun_generic_inferred);
     testing::add(suite, "ok_infer_through_generic_struct", &ok_infer_through_generic_struct);
     testing::add(suite, "ok_infer_generic_struct_by_value", &ok_infer_generic_struct_by_value);

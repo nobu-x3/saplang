@@ -466,7 +466,7 @@ fn void resolve_fields(Sema* s, ast::FieldDecl[] fields) {
     }
 }
 
-fn bool is_type_kw(ast::AstNode* type_expr) {
+export fn bool is_type_kw(ast::AstNode* type_expr) {
     return type_expr != null && type_expr.h.kind == ast::AstKind::PrimitiveType && ((ast::TypePrimitiveNode*)type_expr).kind == token::TokenKind::TYPE;
 }
 

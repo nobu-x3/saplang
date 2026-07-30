@@ -5416,7 +5416,7 @@ fn i32 paren_ident_then_rparen_followed_by_semi(arena::Arena* a, u8[] msg) {
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo((x)); }", &m);
     ast::FnDeclNode* f = compiler_testing::expect_fn_decl(compiler_testing::nth_stmt(root, 0), null, 0, false, msg);
     if(!f) { return -1; }
-    ast::AstNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
+    ast::ExprStmtNode* es = compiler_testing::expect_expr_stmt(compiler_testing::nth_stmt(f.body, 0), msg);
     if(!es) { return -2; }
     if(!testing::expect_eq(m.diag.entries.len, 0, msg)) { return -3; }
     return 0;

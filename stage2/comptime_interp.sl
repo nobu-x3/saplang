@@ -1638,8 +1638,10 @@ mutex::Mutex     g_type_mono_lock;
 condvar::Condvar g_type_mono_cv;
 bool         g_type_mono_ready;
 
+// Syntax first: a caller can instantiate List(i32) before list's own signature phase resolves the return type.
 fn bool returns_type(ast::FnDeclNode* callee) {
     if(callee.return_type == null) { return false; }
+    if(sema::is_type_kw(callee.return_type)) { return true; }
     types::Ty* ret = (types::Ty*)callee.return_type.h.ty;
     return ret != null && ret.kind == types::TypeKind::ComptimeType;
 }

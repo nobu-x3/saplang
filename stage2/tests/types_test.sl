@@ -1432,16 +1432,19 @@ fn i32 convert_float_identity_via_pointer(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-// ===== is_convertible — Rule 8 (pointer → pointer, any pointee) =====
+// ===== is_convertible — Rule 8 (pointer → pointer: to void*, or the same pointee) =====
 
-fn i32 convert_ptr_to_ptr_distinct_pointees(arena::Arena* a, u8[] m) {
+// Distinct pointees never convert implicitly — that would reinterpret memory. An explicit cast still works.
+fn i32 convert_ptr_to_ptr_distinct_pointees_fails(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     types::Ty* p_i32  = types::intern_pointer(fake_i32(a), false);
     types::Ty* p_i64  = types::intern_pointer(fake_i64(a), false);
     types::Ty* p_bool = types::intern_pointer(fake_bool(a), false);
-    if(!testing::expect_eq(types::is_convertible(p_i32, p_i64),  true, m)) { return -1; }
-    if(!testing::expect_eq(types::is_convertible(p_i32, p_bool), true, m)) { return -2; }
-    if(!testing::expect_eq(types::is_convertible(p_i64, p_i32),  true, m)) { return -3; }
+    if(!testing::expect_eq(types::is_convertible(p_i32, p_i64),  false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_convertible(p_i32, p_bool), false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_convertible(p_i64, p_i32),  false, m)) { return -3; }
+    if(!testing::expect_eq(types::is_convertible(p_i32, p_i32),  true, m))  { return -4; }
+    if(!testing::expect_eq(types::is_castable(p_i32, p_i64),     true, m))  { return -5; }
     return 0;
 }
 
@@ -1475,13 +1478,16 @@ fn i32 convert_ptr_to_slice_fails(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 convert_ptr_to_named_struct_ptr(arena::Arena* a, u8[] m) {
+fn i32 convert_ptr_to_named_struct_ptr_fails(arena::Arena* a, u8[] m) {
     types::typer_init(a, 16);
     types::Ty* sd = types::intern_struct(fake_decl(a));
     types::Ty* p_s   = types::intern_pointer(sd, false);
     types::Ty* p_i32 = types::intern_pointer(fake_i32(a), false);
-    if(!testing::expect_eq(types::is_convertible(p_s,   p_i32), true, m)) { return -1; }
-    if(!testing::expect_eq(types::is_convertible(p_i32, p_s),   true, m)) { return -2; }
+    types::Ty* p_void = types::intern_pointer(fake_void(a), false);
+    if(!testing::expect_eq(types::is_convertible(p_s,   p_i32), false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_convertible(p_i32, p_s),   false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_convertible(p_s,   p_void), true, m)) { return -3; }
+    if(!testing::expect_eq(types::is_convertible(p_void, p_s),   true, m)) { return -4; }
     return 0;
 }
 
@@ -1689,14 +1695,18 @@ fn i32 convert_ptr_to_ptr_all_pointee_kinds(arena::Arena* a, u8[] m) {
     types::Ty* p_union  = types::intern_pointer(types::intern_union(fake_decl(a)),  false);
     types::Ty* p_enum   = types::intern_pointer(types::intern_enum(fake_decl(a)),   false);
     types::Ty* p_ptr    = types::intern_pointer(p_prim, false);
-    if(!testing::expect_eq(types::is_convertible(p_prim,   p_arr),    true, m)) { return -1; }
-    if(!testing::expect_eq(types::is_convertible(p_arr,    p_slc),    true, m)) { return -2; }
-    if(!testing::expect_eq(types::is_convertible(p_slc,    p_fn),     true, m)) { return -3; }
-    if(!testing::expect_eq(types::is_convertible(p_fn,     p_struct), true, m)) { return -4; }
-    if(!testing::expect_eq(types::is_convertible(p_struct, p_union),  true, m)) { return -5; }
-    if(!testing::expect_eq(types::is_convertible(p_union,  p_enum),   true, m)) { return -6; }
-    if(!testing::expect_eq(types::is_convertible(p_enum,   p_ptr),    true, m)) { return -7; }
-    if(!testing::expect_eq(types::is_convertible(p_ptr,    p_prim),   true, m)) { return -8; }
+    types::Ty* p_void = types::intern_pointer(fake_void(a), false);
+    if(!testing::expect_eq(types::is_convertible(p_prim,   p_arr),    false, m)) { return -1; }
+    if(!testing::expect_eq(types::is_convertible(p_arr,    p_slc),    false, m)) { return -2; }
+    if(!testing::expect_eq(types::is_convertible(p_slc,    p_fn),     false, m)) { return -3; }
+    if(!testing::expect_eq(types::is_convertible(p_fn,     p_struct), false, m)) { return -4; }
+    if(!testing::expect_eq(types::is_convertible(p_struct, p_union),  false, m)) { return -5; }
+    if(!testing::expect_eq(types::is_convertible(p_union,  p_enum),   false, m)) { return -6; }
+    if(!testing::expect_eq(types::is_convertible(p_enum,   p_ptr),    false, m)) { return -7; }
+    if(!testing::expect_eq(types::is_convertible(p_ptr,    p_prim),   false, m)) { return -8; }
+    // ...but every one of them reaches void*, and an explicit cast reaches any of the others.
+    if(!testing::expect_eq(types::is_convertible(p_struct, p_void),   true, m))  { return -9; }
+    if(!testing::expect_eq(types::is_castable(p_struct,    p_union),  true, m))  { return -10; }
     return 0;
 }
 
@@ -3467,11 +3477,11 @@ fn i32 main() {
     testing::add(conv, "convert_float_f64_to_f32_fails",    &convert_float_f64_to_f32_fails);
     testing::add(conv, "convert_float_identity_via_pointer", &convert_float_identity_via_pointer);
 
-    testing::add(conv, "convert_ptr_to_ptr_distinct_pointees",   &convert_ptr_to_ptr_distinct_pointees);
+    testing::add(conv, "convert_ptr_to_ptr_distinct_pointees_fails", &convert_ptr_to_ptr_distinct_pointees_fails);
     testing::add(conv, "convert_void_ptr_to_typed_ptr",          &convert_void_ptr_to_typed_ptr);
     testing::add(conv, "convert_ptr_to_ptr_through_const_qual",  &convert_ptr_to_ptr_through_const_qual);
     testing::add(conv, "convert_ptr_to_slice_fails",             &convert_ptr_to_slice_fails);
-    testing::add(conv, "convert_ptr_to_named_struct_ptr",        &convert_ptr_to_named_struct_ptr);
+    testing::add(conv, "convert_ptr_to_named_struct_ptr_fails",  &convert_ptr_to_named_struct_ptr_fails);
     testing::add(conv, "convert_ptr_to_non_ptr_fails",           &convert_ptr_to_non_ptr_fails);
     testing::add(conv, "convert_ptr_to_ptr_all_pointee_kinds",   &convert_ptr_to_ptr_all_pointee_kinds);
 

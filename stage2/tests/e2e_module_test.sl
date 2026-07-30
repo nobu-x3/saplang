@@ -113,6 +113,17 @@ fn i32 err_circular_alias_definition(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A field instantiates b::Box(i32) during a's signature phase, before b has resolved Box's return type.
+// Deciding "is this a type constructor?" from the resolved type there sent it caller-side, minting a
+// second, distinct struct type for the same written type; only the permissive pointer rule hid it.
+fn i32 instantiation_identity_across_phases(arena::Arena* a, u8[] m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nstruct Holder { b::Box(i32) boxed; }\nfn i32 unwrap(b::Box(i32)* p) { return p.value; }\nexport fn i32 f() {\n  Holder h;\n  h.boxed.value = 1;\n  b::Box(i32) local;\n  local.value = 2;\n  return unwrap(&h.boxed) + unwrap(&local);\n}", "export fn Type Box(comptime Type T) { return struct { T value; }; }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 // A qualified constructor pattern resolves through the generic's own imports, not the caller's.
 fn i32 infers_through_qualified_constructor(arena::Arena* a, u8[] m) {
     test_util::boot(a);
@@ -198,6 +209,7 @@ fn i32 main() {
     testing::add(suite, "circular_alias_resolution",             &circular_alias_resolution);
     testing::add(suite, "circular_const_read",                   &circular_const_read);
     testing::add(suite, "err_circular_alias_definition",         &err_circular_alias_definition);
+    testing::add(suite, "instantiation_identity_across_phases",  &instantiation_identity_across_phases);
     testing::add(suite, "infers_through_qualified_constructor",  &infers_through_qualified_constructor);
     testing::add(suite, "err_same_named_constructors_do_not_unify", &err_same_named_constructors_do_not_unify);
     testing::add(suite, "err_private_fn_not_visible",            &err_private_fn_not_visible);
