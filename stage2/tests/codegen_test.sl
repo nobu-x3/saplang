@@ -21,7 +21,7 @@ fn i32 jit_return(arena::Arena* a, u8[] src, i32 expected, u8[] msg) {
     module::Module* m = test_util::frontend(ja, src);
     if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
     sapir::SapirModule* sm = lower::lower_module(m);
-    i32 result = codegen::jit_run_main(sm, ja);
+    i32 result = codegen::jit_run_main(sm, arena::allocator(ja));
     if(!testing::expect_eq((u64)result, (u64)expected, msg)) { return -2; }
     return 0;
 }
@@ -273,7 +273,7 @@ fn i32 opt_debug_aggregate_and_ssa(arena::Arena* a, u8[] msg) {
     module::Module* m = test_util::frontend(ja, "struct P { i32 x; i32 y; } fn i32 main() { P p = {.x = 1, .y = 2}; i32 s = 0; for(i32 i = 0; i < p.y; i = i + 1) { s = s + p.x; } return s; }");
     if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
     sapir::SapirModule* sm = lower::lower_module(m);
-    u8[] ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
+    u8[] ir = codegen::codegen_ir_string(sm, arena::allocator(ja), codegen::BuildConfig::Debug);
     if(!contains(ir, "DISubprogram")) { return -2; }
     if(!contains(ir, "DICompositeType")) { return -3; }
     if(!contains(ir, "dbg_value")) { return -4; }
@@ -297,8 +297,8 @@ fn i32 opt_debug_info(arena::Arena* a, u8[] msg) {
     module::Module* m = test_util::frontend(ja, "struct P { i32 x; } fn void noop() {} fn i32 g(P p, i32* q) { return p.x + *q; } fn i32 main() { noop(); P p = {.x = 40}; i32 y = 2; return g(p, &y); }");
     if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
     sapir::SapirModule* sm = lower::lower_module(m);
-    u8[] debug_ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
-    u8[] release_ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Release);
+    u8[] debug_ir = codegen::codegen_ir_string(sm, arena::allocator(ja), codegen::BuildConfig::Debug);
+    u8[] release_ir = codegen::codegen_ir_string(sm, arena::allocator(ja), codegen::BuildConfig::Release);
     if(!contains(debug_ir, "DISubprogram")) { return -2; }        // fails if the module didn't verify (returns "<codegen failed>")
     if(!contains(debug_ir, "DILocation")) { return -3; }
     if(!contains(debug_ir, "DILocalVariable")) { return -4; }     // the i32* param gets a variable
@@ -312,8 +312,8 @@ fn i32 opt_release_mem2reg(arena::Arena* a, u8[] msg) {
     module::Module* m = test_util::frontend(ja, "fn i32 main() { i32 x = 5; i32* p = &x; *p = 42; return x; }");
     if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
     sapir::SapirModule* sm = lower::lower_module(m);
-    u8[] debug_ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
-    u8[] release_ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Release);
+    u8[] debug_ir = codegen::codegen_ir_string(sm, arena::allocator(ja), codegen::BuildConfig::Debug);
+    u8[] release_ir = codegen::codegen_ir_string(sm, arena::allocator(ja), codegen::BuildConfig::Release);
     if(!contains(debug_ir, "alloca")) { return -2; }
     if(contains(release_ir, "alloca")) { return -3; }
     return 0;
@@ -325,7 +325,7 @@ fn i32 unsigned_index_zero_extends(arena::Arena* a, u8[] msg) {
     module::Module* m = test_util::frontend(ja, "fn u8 pick(u8[256] table, u8 index) { return table[index]; }");
     if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
     sapir::SapirModule* sm = lower::lower_module(m);
-    u8[] ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
+    u8[] ir = codegen::codegen_ir_string(sm, arena::allocator(ja), codegen::BuildConfig::Debug);
     if(!contains(ir, "zext")) { return -2; }
     if(contains(ir, "sext")) { return -3; }
     return 0;
@@ -336,7 +336,7 @@ fn i32 signed_index_sign_extends(arena::Arena* a, u8[] msg) {
     module::Module* m = test_util::frontend(ja, "fn i32 pick(i32[8] table, i8 index) { return table[index]; }");
     if(!testing::expect_eq(test_util::error_count(m), (u64)0, msg)) { return -1; }
     sapir::SapirModule* sm = lower::lower_module(m);
-    u8[] ir = codegen::codegen_ir_string(sm, ja, codegen::BuildConfig::Debug);
+    u8[] ir = codegen::codegen_ir_string(sm, arena::allocator(ja), codegen::BuildConfig::Debug);
     if(!contains(ir, "sext")) { return -2; }
     return 0;
 }

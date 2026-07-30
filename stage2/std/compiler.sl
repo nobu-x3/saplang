@@ -24,7 +24,6 @@ import token;
 import pool;
 
 export struct Compiler {
-    arena::Arena*        arena;
     mem::Allocator       allocator;
     list::List(module::Module*) modules;  // flat, indexed by ModuleId (the array index)
     list::List(u8[])     entry_sources;   // user-supplied source file paths
@@ -84,7 +83,6 @@ export fn void print_usage() {
 export fn Compiler* new(arena::Arena* a) {
     Compiler* c = (Compiler*)arena::alloc(a, sizeof(Compiler));
     sys::memset(c, 0, sizeof(Compiler));
-    c.arena = a;
     c.allocator = arena::allocator(a);
     return c;
 }
@@ -506,7 +504,7 @@ fn u8[][] run_codegen(Compiler* c) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
         u8[] obj_path = object_path_for(c, m);
-        if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.arena, cstr(c.allocator, obj_path), c.config) != 0) { c.error_count += 1; }
+        if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.allocator, cstr(c.allocator, obj_path), c.config) != 0) { c.error_count += 1; }
         paths[paths.len] = obj_path;
         paths.len += 1;
     }
@@ -805,7 +803,7 @@ fn void dump_llvm(Compiler* c) {
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
-        u8[] ir = codegen::codegen_ir_string((sapir::SapirModule*)m.sapir, c.arena, c.config);
+        u8[] ir = codegen::codegen_ir_string((sapir::SapirModule*)m.sapir, c.allocator, c.config);
         sys::dprintf(1, "%.*s", (i32)ir.len, (i8*)ir.ptr);
     }
 }

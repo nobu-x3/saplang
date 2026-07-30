@@ -9,7 +9,6 @@ import types;
 import interner;
 import symbol;
 import llvm;
-import arena;
 import mem;
 import list;
 import sys;
@@ -30,7 +29,6 @@ struct TypeMapEntry {
 
 struct CG {
     sapir::SapirModule* sm;
-    arena::Arena*       arena;
     mem::Allocator      allocator;
     BuildConfig         config;
     void*               ctx;
@@ -57,7 +55,7 @@ struct CG {
 }
 
 // Builds the LLVM module, runs the config's pass pipeline, and emits obj_path. Returns 0 on success.
-export fn i32 emit_object(sapir::SapirModule* sm, arena::Arena* a, i8* obj_path, BuildConfig config) {
+export fn i32 emit_object(sapir::SapirModule* sm, mem::Allocator a, i8* obj_path, BuildConfig config) {
     CG cg;
     cg_init(&cg, sm, a, config);
     if(!build_module(&cg)) { return 1; }
@@ -79,7 +77,7 @@ export fn i32 emit_object(sapir::SapirModule* sm, arena::Arena* a, i8* obj_path,
 
 // The C API has no UseInitArray setter, so the backend emits .ctors, which glibc never runs.
 fn void relocate_global_ctors(CG* cg) {
-    void* ctors = llvm::LLVMGetNamedGlobal(cg.llvm_module, cstr(cg.arena, "llvm.global_ctors"));
+    void* ctors = llvm::LLVMGetNamedGlobal(cg.llvm_module, cstr(cg.allocator, "llvm.global_ctors"));
     if(ctors == null) { return; }
     void* array = llvm::LLVMGetInitializer(ctors);
     if(array == null) { return; }
@@ -97,7 +95,7 @@ fn void relocate_global_ctors(CG* cg) {
         void* slot = llvm::LLVMAddGlobal(cg.llvm_module, fn_ptr_ty, (i8*)&name_buf[0]);
         llvm::LLVMSetInitializer(slot, ctor_fn);
         llvm::LLVMSetLinkage(slot, llvm::InternalLinkage);
-        llvm::LLVMSetSection(slot, cstr(cg.arena, ".init_array"));
+        llvm::LLVMSetSection(slot, cstr(cg.allocator, ".init_array"));
         llvm::LLVMSetAlignment(slot, 8);
         // The ctor sits in a comdat group, so the entry must join it or it outlives a discarded ctor.
         void* group = llvm::LLVMGetComdat(ctor_fn);
@@ -136,7 +134,7 @@ fn bool run_passes(CG* cg, void* tm) {
     u8[] pipeline = pipeline_for(cg.config);
     if(pipeline.len == 0) { return true; }
     void* opts = llvm::LLVMCreatePassBuilderOptions();
-    void* err = llvm::LLVMRunPasses(cg.llvm_module, cstr(cg.arena, pipeline), tm, opts);
+    void* err = llvm::LLVMRunPasses(cg.llvm_module, cstr(cg.allocator, pipeline), tm, opts);
     llvm::LLVMDisposePassBuilderOptions(opts);
     if(err != null) {
         sys::dprintf(2, "codegen: optimization pipeline failed\n");
@@ -159,7 +157,7 @@ fn u8[] pipeline_for(BuildConfig config) {
 }
 
 // Builds the module, runs the config's pipeline, and returns its LLVM IR as text; used by tests.
-export fn u8[] codegen_ir_string(sapir::SapirModule* sm, arena::Arena* a, BuildConfig config) {
+export fn u8[] codegen_ir_string(sapir::SapirModule* sm, mem::Allocator a, BuildConfig config) {
     CG cg;
     cg_init(&cg, sm, a, config);
     if(!build_module(&cg)) { return "<codegen failed>"; }
@@ -171,17 +169,17 @@ export fn u8[] codegen_ir_string(sapir::SapirModule* sm, arena::Arena* a, BuildC
     return out;
 }
 
-fn u8[] copy_cstr(arena::Arena* a, i8* s) {
+fn u8[] copy_cstr(mem::Allocator a, i8* s) {
     u64 len = 0;
     while(s[len] != 0) { len += 1; }
-    u8* out = (u8*)arena::alloc(a, len + 1);
+    u8* out = (u8*)mem::alloc(a, len + 1);
     for(u64 i = 0; i < len; i += 1) { out[i] = (u8)s[i]; }
     u8[] result = {out, len};
     return result;
 }
 
 // Builds the module and JIT-runs main() in-process (no external linker). Returns main's exit code, or -1 on failure.
-export fn i32 jit_run_main(sapir::SapirModule* sm, arena::Arena* a) {
+export fn i32 jit_run_main(sapir::SapirModule* sm, mem::Allocator a) {
     CG cg;
     cg_init(&cg, sm, a, BuildConfig::Debug);
     if(!build_module(&cg)) { return -1; }
@@ -213,17 +211,16 @@ export fn i32 jit_run_main(sapir::SapirModule* sm, arena::Arena* a) {
     return result;
 }
 
-fn void cg_init(CG* cg, sapir::SapirModule* sm, arena::Arena* a, BuildConfig config) {
+fn void cg_init(CG* cg, sapir::SapirModule* sm, mem::Allocator a, BuildConfig config) {
     sys::memset(cg, 0, sizeof(CG));
     cg.sm = sm;
-    cg.arena = a;
-    cg.allocator = arena::allocator(a);
+    cg.allocator = a;
     cg.config = config;
     cg.ctx = llvm::LLVMContextCreate();
-    cg.llvm_module = llvm::LLVMModuleCreateWithNameInContext(cstr(a, interner::symbol_str(sm.name)), cg.ctx);
+    cg.llvm_module = llvm::LLVMModuleCreateWithNameInContext(cstr(cg.allocator, interner::symbol_str(sm.name)), cg.ctx);
     cg.builder = llvm::LLVMCreateBuilderInContext(cg.ctx);
-    cg.empty = cstr(a, "");
-    cg.decl_map = (void**)arena::alloc(a, (sm.decls.len + 1) * sizeof(void*));
+    cg.empty = cstr(cg.allocator, "");
+    cg.decl_map = (void**)mem::alloc(cg.allocator, (sm.decls.len + 1) * sizeof(void*));
 }
 
 fn bool build_module(CG* cg) {
@@ -256,22 +253,22 @@ fn void debug_info_init(CG* cg) {
     cg.di_builder = llvm::LLVMCreateDIBuilder(cg.llvm_module);
     u8[] path = cg.sm.src_path;
     if(path.len == 0) { path = interner::symbol_str(cg.sm.name); }
-    cg.di_file = llvm::LLVMDIBuilderCreateFile(cg.di_builder, cstr(cg.arena, path), path.len, cstr(cg.arena, "."), 1);
+    cg.di_file = llvm::LLVMDIBuilderCreateFile(cg.di_builder, cstr(cg.allocator, path), path.len, cstr(cg.allocator, "."), 1);
     bool optimized = cg.config != BuildConfig::Debug;
     i32 opt = 0;
     if(optimized) { opt = 1; }
-    cg.di_compile_unit = llvm::LLVMDIBuilderCreateCompileUnit(cg.di_builder, llvm::DWARFSourceLanguageC, cg.di_file, cstr(cg.arena, "saplangc"), 8, opt, cstr(cg.arena, ""), 0, 0, cstr(cg.arena, ""), 0, llvm::DWARFEmissionFull, 0, 0, 0, cstr(cg.arena, ""), 0, cstr(cg.arena, ""), 0);
+    cg.di_compile_unit = llvm::LLVMDIBuilderCreateCompileUnit(cg.di_builder, llvm::DWARFSourceLanguageC, cg.di_file, cstr(cg.allocator, "saplangc"), 8, opt, cstr(cg.allocator, ""), 0, 0, cstr(cg.allocator, ""), 0, llvm::DWARFEmissionFull, 0, 0, 0, cstr(cg.allocator, ""), 0, cstr(cg.allocator, ""), 0);
 }
 
 fn void add_debug_module_flags(CG* cg) {
     void* three = llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(cg.ctx), 3, 0);
-    llvm::LLVMAddModuleFlag(cg.llvm_module, llvm::ModuleFlagBehaviorWarning, cstr(cg.arena, "Debug Info Version"), 18, llvm::LLVMValueAsMetadata(three));
+    llvm::LLVMAddModuleFlag(cg.llvm_module, llvm::ModuleFlagBehaviorWarning, cstr(cg.allocator, "Debug Info Version"), 18, llvm::LLVMValueAsMetadata(three));
 }
 
 fn void emit_di_subprogram(CG* cg, sapir::SapirFn* f) {
     types::Ty* fnty = cg.sm.decls[f.decl_index].ty;
     types::Ty*[] params = fnty.data.fn_ptr.params;
-    void** di_params = (void**)arena::alloc(cg.arena, (params.len + 2) * sizeof(void*));
+    void** di_params = (void**)mem::alloc(cg.allocator, (params.len + 2) * sizeof(void*));
     di_params[0] = build_di_type(cg, fnty.data.fn_ptr.ret);
     for(u64 i = 0; i < params.len; i += 1) { di_params[i + 1] = build_di_type(cg, params[i]); }
     void* sub_ty = llvm::LLVMDIBuilderCreateSubroutineType(cg.di_builder, cg.di_file, di_params, (u32)params.len + 1, 0);
@@ -317,7 +314,7 @@ fn void* di_member(CG* cg, u8[] name, types::Ty* ft, u64 offset_bits) {
 
 fn void* build_di_composite(CG* cg, types::Ty* t, bool is_union) {
     u64 count = types::field_count(t);
-    void** members = (void**)arena::alloc(cg.arena, (count + 1) * sizeof(void*));
+    void** members = (void**)mem::alloc(cg.allocator, (count + 1) * sizeof(void*));
     for(u64 i = 0; i < count; i += 1) {
         u8[] fname = sym_str_or_empty(types::field_name_sym(t, i));
         members[i] = di_member(cg, fname, types::field_type(t, i), (u64)types::field_offset(t, i) * 8);
@@ -438,8 +435,8 @@ fn void* map_type(CG* cg, types::Ty* t) {
 }
 
 fn void fill_struct_body(CG* cg, types::Ty* t, void* struct_ty) {
-    types::Ty*[] fields = types::struct_field_types(t, cg.arena);
-    void** llvm_fields = (void**)arena::alloc(cg.arena, (fields.len + 1) * sizeof(void*));
+    types::Ty*[] fields = types::struct_field_types(t, cg.allocator);
+    void** llvm_fields = (void**)mem::alloc(cg.allocator, (fields.len + 1) * sizeof(void*));
     for(u64 i = 0; i < fields.len; i += 1) { llvm_fields[i] = map_type(cg, fields[i]); }
     llvm::LLVMStructSetBody(struct_ty, llvm_fields, (u32)fields.len, 0);
 }
@@ -479,7 +476,7 @@ fn void* slice_struct_type(CG* cg) {
 
 fn void* map_fn_type(CG* cg, types::Ty* fnty) {
     types::Ty*[] params = fnty.data.fn_ptr.params;
-    void** llvm_params = (void**)arena::alloc(cg.arena, (params.len + 1) * sizeof(void*));
+    void** llvm_params = (void**)mem::alloc(cg.allocator, (params.len + 1) * sizeof(void*));
     for(u64 i = 0; i < params.len; i += 1) { llvm_params[i] = map_type(cg, params[i]); }
     void* ret = map_type(cg, fnty.data.fn_ptr.ret);
     i32 variadic = 0;
@@ -507,21 +504,21 @@ fn void declare_decl(CG* cg, u32 index) {
     sapir::SapirDecl* d = &cg.sm.decls[index];
     if(d.kind == sapir::SapirDeclKind::Fn) {
         void* fn_ty = map_fn_type(cg, d.ty);
-        void* val = llvm::LLVMAddFunction(cg.llvm_module, cstr(cg.arena, d.link_name), fn_ty);
+        void* val = llvm::LLVMAddFunction(cg.llvm_module, cstr(cg.allocator, d.link_name), fn_ty);
         llvm::LLVMSetLinkage(val, decl_linkage(d));
         if(cg.config == BuildConfig::AddressSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_attr(cg, val, "sanitize_address", 16); }
         if(cg.config == BuildConfig::ThreadSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_attr(cg, val, "sanitize_thread", 15); }
         cg.decl_map[index] = val;
     } else {
         void* ty = map_type(cg, d.ty);
-        void* val = llvm::LLVMAddGlobal(cg.llvm_module, ty, cstr(cg.arena, d.link_name));
+        void* val = llvm::LLVMAddGlobal(cg.llvm_module, ty, cstr(cg.allocator, d.link_name));
         llvm::LLVMSetLinkage(val, decl_linkage(d));
         cg.decl_map[index] = val;
     }
 }
 
 fn void add_sanitize_attr(CG* cg, void* fn_val, u8[] attr_name, u64 name_len) {
-    u32 kind = llvm::LLVMGetEnumAttributeKindForName(cstr(cg.arena, attr_name), name_len);
+    u32 kind = llvm::LLVMGetEnumAttributeKindForName(cstr(cg.allocator, attr_name), name_len);
     void* attr = llvm::LLVMCreateEnumAttribute(cg.ctx, kind, 0);
     llvm::LLVMAddAttributeAtIndex(fn_val, llvm::AttributeFunctionIndex, attr);
 }
@@ -555,12 +552,12 @@ fn void* const_value(CG* cg, sapir::ConstInit* ci) {
     case sapir::ConstInitKind::FnRef: { return cg.decl_map[ci.decl_index]; }
     case sapir::ConstInitKind::GlobalRef: { return cg.decl_map[ci.decl_index]; }
     case sapir::ConstInitKind::Struct: {
-        void** vals = (void**)arena::alloc(cg.arena, (ci.elems.len + 1) * sizeof(void*));
+        void** vals = (void**)mem::alloc(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
         for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }
         return llvm::LLVMConstNamedStruct(map_type(cg, ci.ty), vals, (u32)ci.elems.len);
     }
     case sapir::ConstInitKind::Array: {
-        void** vals = (void**)arena::alloc(cg.arena, (ci.elems.len + 1) * sizeof(void*));
+        void** vals = (void**)mem::alloc(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
         for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }
         return llvm::LLVMConstArray2(map_type(cg, ci.ty.data.array.elem), vals, ci.elems.len);
     }
@@ -595,7 +592,7 @@ fn void* const_bytes(CG* cg, sapir::ConstInit* ci) {
 
 // An array-literal into a slice global: the elements back an internal constant array; the slice is {ptr, len}.
 fn void* const_slice(CG* cg, sapir::ConstInit* ci) {
-    void** vals = (void**)arena::alloc(cg.arena, (ci.elems.len + 1) * sizeof(void*));
+    void** vals = (void**)mem::alloc(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
     for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }
     void* arr_const = llvm::LLVMConstArray2(map_type(cg, ci.ty.data.slice_elem), vals, ci.elems.len);
     void* gv = llvm::LLVMAddGlobal(cg.llvm_module, llvm::LLVMTypeOf(arr_const), cg.empty);
@@ -616,9 +613,9 @@ fn void emit_fn(CG* cg, sapir::SapirFn* f) {
     cg.current_fn = cg.decl_map[f.decl_index];
     cg.di_subprogram = null;
     if(cg.di_builder != null) { emit_di_subprogram(cg, f); }
-    cg.value_map = (void**)arena::alloc(cg.arena, (f.insts.len + 1) * sizeof(void*));
+    cg.value_map = (void**)mem::alloc(cg.allocator, (f.insts.len + 1) * sizeof(void*));
     sys::memset(cg.value_map, 0, (f.insts.len + 1) * sizeof(void*));   // un-materialized inst slots must read null so the dbg-value guard holds
-    cg.block_map = (void**)arena::alloc(cg.arena, (f.blocks.len + 1) * sizeof(void*));
+    cg.block_map = (void**)mem::alloc(cg.allocator, (f.blocks.len + 1) * sizeof(void*));
     for(u64 i = 0; i < f.blocks.len; i += 1) {
         cg.block_map[i] = llvm::LLVMAppendBasicBlockInContext(cg.ctx, cg.current_fn, cg.empty);
     }
@@ -654,8 +651,8 @@ fn void emit_di_variables(CG* cg, sapir::SapirFn* f) {
     void* entry_term = llvm::LLVMGetBasicBlockTerminator(entry_bb);
     if(entry_term == null) { return; }
     void* empty_expr = llvm::LLVMDIBuilderCreateExpression(cg.di_builder, null, 0);
-    void** di_vars = (void**)arena::alloc(cg.arena, (f.vars.len + 1) * sizeof(void*));
-    void** di_locs = (void**)arena::alloc(cg.arena, (f.vars.len + 1) * sizeof(void*));
+    void** di_vars = (void**)mem::alloc(cg.allocator, (f.vars.len + 1) * sizeof(void*));
+    void** di_locs = (void**)mem::alloc(cg.allocator, (f.vars.len + 1) * sizeof(void*));
     for(u64 i = 0; i < f.vars.len; i += 1) {
         di_vars[i] = null;
         sapir::SapirVar* v = &f.vars[i];
@@ -699,8 +696,8 @@ fn void emit_di_variables(CG* cg, sapir::SapirFn* f) {
 fn void fill_phi(CG* cg, u32 phi_id) {
     sapir::Inst* inst = &cg.f.insts[phi_id];
     u32 count = cg.f.extra[inst.b];
-    void** values = (void**)arena::alloc(cg.arena, ((u64)count + 1) * sizeof(void*));
-    void** blocks = (void**)arena::alloc(cg.arena, ((u64)count + 1) * sizeof(void*));
+    void** values = (void**)mem::alloc(cg.allocator, ((u64)count + 1) * sizeof(void*));
+    void** blocks = (void**)mem::alloc(cg.allocator, ((u64)count + 1) * sizeof(void*));
     for(u32 k = 0; k < count; k += 1) {
         u32 pair_base = inst.b + 1 + k * 2;
         blocks[k] = cg.block_map[cg.f.extra[pair_base]];
@@ -882,7 +879,7 @@ fn void* emit_cast(CG* cg, sapir::Inst* inst) {
 
 fn void* emit_call(CG* cg, sapir::Inst* inst) {
     u32 argc = cg.f.extra[inst.b];
-    void** args = (void**)arena::alloc(cg.arena, ((u64)argc + 1) * sizeof(void*));
+    void** args = (void**)mem::alloc(cg.allocator, ((u64)argc + 1) * sizeof(void*));
     for(u32 k = 0; k < argc; k += 1) { args[k] = cg.value_map[cg.f.extra[inst.b + 1 + k]]; }
     bool indirect = ((u16)inst.flags & (u16)sapir::InstFlags::Indirect) != 0;
     void* callee;
@@ -936,8 +933,8 @@ fn void* emit_const_str(CG* cg, sapir::Inst* inst) {
 
 // HELPERS ////////////////////////////////////////////////////////////////////////////
 
-fn i8* cstr(arena::Arena* a, u8[] bytes) {
-    i8* out = (i8*)arena::alloc(a, bytes.len + 1);
+fn i8* cstr(mem::Allocator a, u8[] bytes) {
+    i8* out = (i8*)mem::alloc(a, bytes.len + 1);
     for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
     out[bytes.len] = 0;
     return out;

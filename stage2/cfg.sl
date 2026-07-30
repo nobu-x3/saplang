@@ -1,6 +1,5 @@
 import ast;
 import module;
-import arena;
 import mem;
 import list;
 import types;
@@ -56,7 +55,6 @@ struct ScopeFrame { list::List(DeferEntry) defers; }
 
 struct CfgBuilder {
     Cfg*            cfg;
-    arena::Arena*   arena;
     mem::Allocator  allocator;
     u32             current;
     list::List(LoopFrame) loop_stack;
@@ -65,18 +63,17 @@ struct CfgBuilder {
 }
 
 export fn Cfg* build_cfg(module::Module* m, ast::FnDeclNode* func) {
-    Cfg* g = (Cfg*)arena::alloc(m.arena, sizeof(Cfg));
+    Cfg* g = (Cfg*)mem::alloc(m.allocator, sizeof(Cfg));
     sys::memset(g, 0, sizeof(Cfg));
 
     CfgBuilder builder;
     sys::memset(&builder, 0, sizeof(CfgBuilder));
     builder.cfg = g;
-    builder.arena = m.arena;
     builder.allocator = m.allocator;
     builder.m = m;
 
-    g.entry = new_block(g, m.arena);
-    g.exit = new_block(g, m.arena);
+    g.entry = new_block(g, m.allocator);
+    g.exit = new_block(g, m.allocator);
     builder.current = g.entry;
 
     push_scope(&builder);
@@ -93,7 +90,7 @@ export fn Cfg* build_cfg(module::Module* m, ast::FnDeclNode* func) {
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
         if(!g.blocks.ptr[block_index].terminated) { terminate_unreachable(&builder, (u32)block_index); }
     }
-    compute_predecessors(g, m.arena);
+    compute_predecessors(g, m.allocator);
     return g;
 }
 
@@ -142,9 +139,9 @@ fn void build_block(CfgBuilder* b, ast::BlockNode* blk) {
 }
 
 fn void build_if(CfgBuilder* b, ast::IfNode* n) {
-    u32 then_blk = new_block(b.cfg, b.arena);
-    u32 else_blk = new_block(b.cfg, b.arena);
-    u32 after    = new_block(b.cfg, b.arena);
+    u32 then_blk = new_block(b.cfg, b.allocator);
+    u32 else_blk = new_block(b.cfg, b.allocator);
+    u32 after    = new_block(b.cfg, b.allocator);
 
     terminate_cond(b, b.current, n.cond, then_blk, else_blk, n.h.src_pos);
 
@@ -160,9 +157,9 @@ fn void build_if(CfgBuilder* b, ast::IfNode* n) {
 }
 
 fn void build_while(CfgBuilder* b, ast::WhileNode* n) {
-    u32 header = new_block(b.cfg, b.arena);
-    u32 body   = new_block(b.cfg, b.arena);
-    u32 after  = new_block(b.cfg, b.arena);
+    u32 header = new_block(b.cfg, b.allocator);
+    u32 body   = new_block(b.cfg, b.allocator);
+    u32 after  = new_block(b.cfg, b.allocator);
 
     terminate_goto(b, b.current, header, n.h.src_pos);
     terminate_cond(b, header, n.cond, body, after, n.h.src_pos);
@@ -184,10 +181,10 @@ fn void build_while(CfgBuilder* b, ast::WhileNode* n) {
 fn void build_for(CfgBuilder* b, ast::ForNode* n) {
     push_scope(b);
     if(n.init != null) { build_stmt(b, n.init); }
-    u32 header = new_block(b.cfg, b.arena);
-    u32 body   = new_block(b.cfg, b.arena);
-    u32 post   = new_block(b.cfg, b.arena);
-    u32 after  = new_block(b.cfg, b.arena);
+    u32 header = new_block(b.cfg, b.allocator);
+    u32 body   = new_block(b.cfg, b.allocator);
+    u32 post   = new_block(b.cfg, b.allocator);
+    u32 after  = new_block(b.cfg, b.allocator);
 
     terminate_goto(b, b.current, header, n.h.src_pos);
     if(n.cond != null) {
@@ -217,18 +214,18 @@ fn void build_for(CfgBuilder* b, ast::ForNode* n) {
 
 fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
     u32 origin = b.current;
-    u32 after = new_block(b.cfg, b.arena);
+    u32 after = new_block(b.cfg, b.allocator);
     // No else: an unmatched discriminant falls through to the code after the switch.
     u32 def_blk = after;
-    if(n.else_block != null) { def_blk = new_block(b.cfg, b.arena); }
+    if(n.else_block != null) { def_blk = new_block(b.cfg, b.allocator); }
 
-    u32* arm_blocks = arena::alloc(b.arena, n.arms.len * sizeof(u32));
+    u32* arm_blocks = mem::alloc(b.allocator, n.arms.len * sizeof(u32));
     for(u64 arm_index = 0; arm_index < n.arms.len; arm_index += 1) {
         ast::SwitchArm* arm = &n.arms[arm_index];
         if(arm.body == null) {
             arm_blocks[arm_index] = INVALID_BLOCK;
         } else {
-            u32 arm_blk = new_block(b.cfg, b.arena);
+            u32 arm_blk = new_block(b.cfg, b.allocator);
             arm_blocks[arm_index] = arm_blk;
             push_loop(b, INVALID_BLOCK, after);
             push_scope(b);
@@ -283,7 +280,7 @@ fn void build_return(CfgBuilder* b, ast::ReturnNode* n) {
     emit_pending_defers_for_exit(b);
     terminate_return(b, b.current, n.expr, n.h.src_pos);
     b.cfg.blocks.ptr[b.current].term.defer_start = defer_start;
-    b.current = new_block(b.cfg, b.arena);
+    b.current = new_block(b.cfg, b.allocator);
     terminate_unreachable(b, b.current);
 }
 
@@ -294,7 +291,7 @@ fn void build_break(CfgBuilder* b, ast::BreakNode* n) {
     u64 base = frame.scope_base;
     emit_pending_defers_through_loop(b, base);
     terminate_goto(b, b.current, after, n.h.src_pos);
-    b.current = new_block(b.cfg, b.arena);
+    b.current = new_block(b.cfg, b.allocator);
     terminate_unreachable(b, b.current);
 }
 
@@ -305,12 +302,12 @@ fn void build_continue(CfgBuilder* b, ast::ContinueNode* n) {
     u64 base = frame.scope_base;
     emit_pending_defers_through_loop(b, base);
     terminate_goto(b, b.current, header, n.h.src_pos);
-    b.current = new_block(b.cfg, b.arena);
+    b.current = new_block(b.cfg, b.allocator);
     terminate_unreachable(b, b.current);
 }
 
 fn void register_defer(CfgBuilder* b, ast::DeferNode* n) {
-    push_defer(current_scope(b), b.arena, n.body, n.h.src_pos);
+    push_defer(current_scope(b), b.allocator, n.body, n.h.src_pos);
 }
 
 // Snapshot the pending defer bodies (LIFO) before building them: build_stmt pushes scopes and may realloc the
@@ -320,7 +317,7 @@ fn void run_pending_defers(CfgBuilder* b, i64 from_scope, i64 to_scope) {
     u64 total = 0;
     for(i64 scope_index = from_scope; scope_index >= to_scope; scope_index -= 1) { total += b.scope_stack.ptr[(u64)scope_index].defers.len; }
     if(total == 0) { return; }
-    ast::AstNode** bodies = (ast::AstNode**)arena::alloc(b.arena, total * sizeof(ast::AstNode*));
+    ast::AstNode** bodies = (ast::AstNode**)mem::alloc(b.allocator, total * sizeof(ast::AstNode*));
     u64 count = 0;
     for(i64 scope_index = from_scope; scope_index >= to_scope; scope_index -= 1) {
         ScopeFrame* sc = &b.scope_stack.ptr[(u64)scope_index];
@@ -350,12 +347,12 @@ fn void emit_pending_defers_through_loop(CfgBuilder* b, u64 scope_base) {
 
 // HELPERS
 
-export fn u32 new_block(Cfg* g, arena::Arena* a) {
+export fn u32 new_block(Cfg* g, mem::Allocator a) {
     u32 id = (u32)g.blocks.len;
     BasicBlock block;
     sys::memset(&block, 0, sizeof(BasicBlock));
     block.id = id;
-    list::push(&g.blocks, arena::allocator(a), block);
+    list::push(&g.blocks, a, block);
     return id;
 }
 
@@ -437,11 +434,11 @@ fn ScopeFrame* current_scope(CfgBuilder* b) {
     return &b.scope_stack.ptr[b.scope_stack.len - 1];
 }
 
-fn void push_defer(ScopeFrame* sc, arena::Arena* a, ast::AstNode* body, u32 src_pos) {
+fn void push_defer(ScopeFrame* sc, mem::Allocator a, ast::AstNode* body, u32 src_pos) {
     DeferEntry e;
     e.body = body;
     e.src_pos = src_pos;
-    list::push(&sc.defers, arena::allocator(a), e);
+    list::push(&sc.defers, a, e);
 }
 
 fn void push_loop(CfgBuilder* b, u32 header, u32 after) {
@@ -469,12 +466,12 @@ fn LoopFrame* nearest_loop(CfgBuilder* b) {
 }
 
 
-fn void add_predecessor(Cfg* g, arena::Arena* a, u32 block_id, u32 pred) {
+fn void add_predecessor(Cfg* g, mem::Allocator a, u32 block_id, u32 pred) {
     BasicBlock* block = &g.blocks.ptr[block_id];
-    list::push(&block.predecessors, arena::allocator(a), pred);
+    list::push(&block.predecessors, a, pred);
 }
 
-export fn void compute_predecessors(Cfg* g, arena::Arena* a) {
+export fn void compute_predecessors(Cfg* g, mem::Allocator a) {
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
         BasicBlock* block = &g.blocks.ptr[block_index];
         if(!block.terminated) { continue; }      // kind 0 == Goto; never trust an unterminated block
@@ -517,13 +514,13 @@ fn u64 mark_successor(bool[] reachable, u32* stack, u64 sp, u32 target) {
     return sp;
 }
 
-fn bool[] bfs_reachable_from(Cfg* g, arena::Arena* a, u32 entry) {
+fn bool[] bfs_reachable_from(Cfg* g, mem::Allocator a, u32 entry) {
     bool[] reachable;
-    reachable.ptr = arena::alloc(a, g.blocks.len * sizeof(bool));
+    reachable.ptr = mem::alloc(a, g.blocks.len * sizeof(bool));
     reachable.len = g.blocks.len;
     for(u64 block_index = 0; block_index < reachable.len; block_index += 1) { reachable[block_index] = false; }
 
-    u32* stack = arena::alloc(a, g.blocks.len * sizeof(u32));
+    u32* stack = mem::alloc(a, g.blocks.len * sizeof(u32));
     u64 sp = 0;
     reachable[entry] = true;
     stack[0] = entry;
@@ -551,7 +548,7 @@ fn bool[] bfs_reachable_from(Cfg* g, arena::Arena* a, u32 entry) {
 export fn bool check_return_paths(module::Module* m, ast::FnDeclNode* func) {
     if(types::is_void(fn_return_type(func))) { return true; }
     Cfg* g = (Cfg*)func.cfg;
-    bool[] reachable = bfs_reachable_from(g, m.arena, g.entry);
+    bool[] reachable = bfs_reachable_from(g, m.allocator, g.entry);
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
         if(!reachable[block_index]) { continue; }
         if(g.blocks.ptr[block_index].term.kind == TermKind::Unreachable) {
@@ -565,7 +562,7 @@ export fn bool check_return_paths(module::Module* m, ast::FnDeclNode* func) {
 
 export fn void check_unreachable(module::Module* m, ast::FnDeclNode* func) {
     Cfg* g = (Cfg*)func.cfg;
-    bool[] reachable = bfs_reachable_from(g, m.arena, g.entry);
+    bool[] reachable = bfs_reachable_from(g, m.allocator, g.entry);
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
         if(g.blocks.ptr[block_index].id <= 1) { continue; }             // entry/exit
         if(reachable[block_index]) { continue; }

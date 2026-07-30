@@ -1,4 +1,5 @@
 import arena;
+import mem;
 import ast;
 import diag;
 import mutex;
@@ -653,9 +654,9 @@ export fn Ty* enum_base_type(Ty* type) {
 }
 
 // A struct's field types in declaration order; lets a backend build the LLVM struct body without importing ast.
-export fn Ty*[] struct_field_types(Ty* type, arena::Arena* a) {
+export fn Ty*[] struct_field_types(Ty* type, mem::Allocator a) {
     ast::StructDeclNode* decl = (ast::StructDeclNode*)type.data.struct_decl;
-    Ty** out = (Ty**)arena::alloc(a, (decl.fields.len + 1) * sizeof(Ty*));
+    Ty** out = (Ty**)mem::alloc(a, (decl.fields.len + 1) * sizeof(Ty*));
     for(u64 i = 0; i < decl.fields.len; i += 1) { out[i] = (Ty*)decl.fields[i].resolved_type; }
     Ty*[] result = {out, decl.fields.len};
     return result;
