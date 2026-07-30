@@ -1262,10 +1262,13 @@ fn void lower_init_into(Lower* lo, u32 addr, types::Ty* ty, ast::AstNode* init) 
 fn void build_struct_lit(Lower* lo, u32 addr, types::Ty* ty, ast::StructLitNode* lit) {
     emit_zero(lo, addr, ty);
     ast::StructDeclNode* decl = (ast::StructDeclNode*)sema::container_decl(ty);
+    // The positional counter advances only on unnamed inits, matching check_struct_lit and eval_struct_lit.
+    u64 positional = 0;
     for(u64 i = 0; i < lit.inits.len; i += 1) {
         ast::FieldInitializer* fi = &lit.inits[i];
-        u32 field_index = (u32)i;
-        if(fi.name != null) { field_index = field_index_of(ty, fi.name); }
+        u32 field_index = (u32)positional;
+        if(fi.name == null) { positional += 1; }
+        else { field_index = field_index_of(ty, fi.name); }
         types::Ty* field_ty = (types::Ty*)decl.fields[field_index].resolved_type;
         sapir::Inst addr_inst = sapir::new_inst(sapir::Opcode::FieldAddr, types::intern_pointer(field_ty, false), fi.src_pos);
         addr_inst.a = addr;
@@ -1275,7 +1278,7 @@ fn void build_struct_lit(Lower* lo, u32 addr, types::Ty* ty, ast::StructLitNode*
     }
 }
 
-// A `{ptr, len}` brace literal targeting a slice: build the two-field slice value directly, since a slice has no struct decl to walk. Fields map by name or position, matching check_slice_lit.
+// A `{ptr, len}` brace literal targeting a slice: build the two-field slice value directly, since a slice has no struct decl to walk. Fields map by name or position, matching check_slice_lit; a missing field zero-fills like a partial struct literal.
 fn u32 build_slice_lit(Lower* lo, types::Ty* ty, ast::StructLitNode* lit) {
     types::Ty* elem_ptr = types::intern_pointer(ty.data.slice_elem, false);
     ast::AstNode* ptr_expr = null;
@@ -1289,8 +1292,20 @@ fn u32 build_slice_lit(Lower* lo, types::Ty* ty, ast::StructLitNode* lit) {
         else { is_ptr = false; }
         if(is_ptr) { ptr_expr = fi.value; } else { len_expr = fi.value; }
     }
-    u32 ptr_val = emit_conversion(lo, ptr_expr, elem_ptr);
-    u32 len_val = coerce_to_u64(lo, lower_expr(lo, len_expr), (types::Ty*)len_expr.h.ty, lit.h.src_pos);
+    u32 ptr_val = sapir::INVALID_ID;
+    if(ptr_expr != null) {
+        ptr_val = emit_conversion(lo, ptr_expr, elem_ptr);
+    } else {
+        sapir::Inst nul = sapir::new_inst(sapir::Opcode::ConstNull, elem_ptr, lit.h.src_pos);
+        ptr_val = sapir::add_inst(lo.arena, lo.func, nul);
+    }
+    u32 len_val = sapir::INVALID_ID;
+    if(len_expr != null) {
+        len_val = coerce_to_u64(lo, lower_expr(lo, len_expr), (types::Ty*)len_expr.h.ty, lit.h.src_pos);
+    } else {
+        sapir::Inst zero = sapir::new_inst(sapir::Opcode::ConstInt, types::prim_u64(), lit.h.src_pos);
+        len_val = sapir::add_inst(lo.arena, lo.func, zero);
+    }
     sapir::Inst make = sapir::new_inst(sapir::Opcode::SliceMake, ty, lit.h.src_pos);
     make.a = ptr_val;
     make.b = len_val;

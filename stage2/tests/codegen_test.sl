@@ -341,6 +341,19 @@ fn i32 signed_index_sign_extends(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
+// A positional init after a designated one binds the next undesignated field, matching sema and comptime.
+fn i32 jit_mixed_struct_lit(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "struct V { i32 x; i32 y; i32 z; } fn i32 main() { V v = {5, .z = 9, 6}; return v.y * 10 + v.z; }", 69, msg);
+}
+
+fn i32 jit_partial_slice_lit(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "fn i32 main() { u8 b = 65; u8* p = &b; u8[] s = {p}; u8[] t = {.len = 3}; u8[] e = {}; i32 out = (i32)s.len + (i32)e.len; if(t.ptr == null) { out += 100; } if(e.ptr == null) { out += 1000; } return out + (i32)t.len; }", 1103, msg);
+}
+
+fn i32 jit_sizeof_generic_instantiation(arena::Arena* a, u8[] msg) {
+    return jit_return(a, "fn Type Box(comptime Type T) { return struct { T value; u64 tag; }; } fn i32 main() { return (i32)sizeof(Box(i32)) * 100 + (i32)alignof(Box(i32)); }", 1608, msg);
+}
+
 fn i32 main() {
     testing::init();
     u8[] suite = "Codegen Tests";
@@ -376,6 +389,9 @@ fn i32 main() {
     testing::add(suite, "jit_string_array",     &jit_string_array);
     testing::add(suite, "jit_sizeof",           &jit_sizeof);
     testing::add(suite, "jit_alignof",          &jit_alignof);
+    testing::add(suite, "jit_mixed_struct_lit", &jit_mixed_struct_lit);
+    testing::add(suite, "jit_partial_slice_lit", &jit_partial_slice_lit);
+    testing::add(suite, "jit_sizeof_generic_instantiation", &jit_sizeof_generic_instantiation);
     testing::add(suite, "jit_ptr_cast_index",   &jit_ptr_cast_index);
     testing::add(suite, "jit_voidptr_to_typed", &jit_voidptr_to_typed);
     testing::add(suite, "jit_mixed_int_width_cmp", &jit_mixed_int_width_cmp);

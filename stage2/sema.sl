@@ -2016,7 +2016,12 @@ fn types::Ty* sizeof_operand_type(Sema* s, ast::AstNode* arg) {
         }
     }
     if(ast::is_type(arg.h.kind) || arg.h.kind == ast::AstKind::Typeof) { return resolve_type(s, arg); }
-    return synth(s, arg);
+    types::Ty* synthed = synth(s, arg);
+    // A constructor call names its instantiation, not the `Type` value it synthesizes as.
+    if(synthed != null && synthed.kind == types::TypeKind::ComptimeType && arg.h.kind == ast::AstKind::Call) {
+        return resolve_type(s, arg);
+    }
+    return synthed;
 }
 
 fn types::Ty* synth_typeof(Sema* s, ast::TypeofNode* n) {
