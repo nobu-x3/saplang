@@ -1,48 +1,13 @@
 import testing;
+import test_util;
 import mem;
 import arena;
 import list;
 import io;
 import sys;
 
-// A caller-defined allocator: std only sees the three thunks, so an implementation outside std works.
-struct Counting {
-    mem::Allocator inner;
-    u64            allocs;
-    u64            frees;
-    u64            bytes;
-}
-
-Counting g_counting;
-
-fn void* counting_alloc(void* ctx, u64 size) {
-    Counting* c = (Counting*)ctx;
-    c.allocs += 1;
-    c.bytes += size;
-    return mem::alloc(c.inner, size);
-}
-
-fn void* counting_realloc_grow(void* ctx, void* old, u64 old_size, u64 new_size) {
-    Counting* c = (Counting*)ctx;
-    c.allocs += 1;
-    c.bytes += new_size - old_size;
-    return mem::realloc_grow(c.inner, old, old_size, new_size);
-}
-
-fn void counting_free(void* ctx, void* ptr, u64 size) {
-    Counting* c = (Counting*)ctx;
-    c.frees += 1;
-    mem::free(c.inner, ptr, size);
-}
-
-fn mem::Allocator counting_allocator(Counting* c) {
-    mem::Allocator out;
-    out.ctx = (void*)c;
-    out.alloc_fn = &counting_alloc;
-    out.realloc_grow_fn = &counting_realloc_grow;
-    out.free_fn = &counting_free;
-    return out;
-}
+// test_util::Counting is defined outside std, so driving std through it proves the interface is the seam.
+test_util::Counting g_counting;
 
 fn i32 arena_allocator_allocates(arena::Arena* a, u8[] m) {
     mem::Allocator alloc = arena::allocator(a);
@@ -89,9 +54,9 @@ fn i32 null_allocator_is_inert(arena::Arena* a, u8[] m) {
 }
 
 fn i32 list_grows_through_any_allocator(arena::Arena* a, u8[] m) {
-    sys::memset(&g_counting, 0, sizeof(Counting));
+    sys::memset(&g_counting, 0, sizeof(test_util::Counting));
     g_counting.inner = arena::allocator(a);
-    mem::Allocator alloc = counting_allocator(&g_counting);
+    mem::Allocator alloc = test_util::counting_allocator(&g_counting);
 
     list::List(i32) xs = {null, 0, 0};
     for(i32 value = 0; value < 10; value += 1) { list::push(&xs, alloc, value); }
@@ -107,9 +72,9 @@ fn i32 list_grows_through_any_allocator(arena::Arena* a, u8[] m) {
 }
 
 fn i32 outbuf_writes_through_any_allocator(arena::Arena* a, u8[] m) {
-    sys::memset(&g_counting, 0, sizeof(Counting));
+    sys::memset(&g_counting, 0, sizeof(test_util::Counting));
     g_counting.inner = arena::allocator(a);
-    mem::Allocator alloc = counting_allocator(&g_counting);
+    mem::Allocator alloc = test_util::counting_allocator(&g_counting);
 
     io::OutBuf buf;
     io::outbuf_init(&buf, alloc, 4);

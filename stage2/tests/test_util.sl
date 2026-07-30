@@ -1,5 +1,6 @@
 import ast;
 import arena;
+import mem;
 import cfg;
 import comptime_interp;
 import interner;
@@ -12,6 +13,44 @@ import token;
 import types;
 
 const u64 E2E_BUCKETS = 64;
+
+// An allocator defined outside std, so tests can prove a std module really allocates through the
+// interface rather than through an arena it names. Wraps any inner allocator and tallies the traffic.
+export struct Counting {
+    mem::Allocator inner;
+    u64            allocs;
+    u64            frees;
+    u64            bytes;
+}
+
+export fn mem::Allocator counting_allocator(Counting* c) {
+    mem::Allocator out;
+    out.ctx = (void*)c;
+    out.alloc_fn = &counting_alloc;
+    out.realloc_grow_fn = &counting_realloc_grow;
+    out.free_fn = &counting_free;
+    return out;
+}
+
+fn void* counting_alloc(void* ctx, u64 size) {
+    Counting* c = (Counting*)ctx;
+    c.allocs += 1;
+    c.bytes += size;
+    return mem::alloc(c.inner, size);
+}
+
+fn void* counting_realloc_grow(void* ctx, void* old, u64 old_size, u64 new_size) {
+    Counting* c = (Counting*)ctx;
+    c.allocs += 1;
+    c.bytes += new_size - old_size;
+    return mem::realloc_grow(c.inner, old, old_size, new_size);
+}
+
+fn void counting_free(void* ctx, void* ptr, u64 size) {
+    Counting* c = (Counting*)ctx;
+    c.frees += 1;
+    mem::free(c.inner, ptr, size);
+}
 
 // Each module needs its own arena: the driver gives every module one, and sharing hides ownership bugs.
 export fn arena::Arena* sub_arena(arena::Arena* a) {

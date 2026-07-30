@@ -1,4 +1,4 @@
-import arena;
+import mem;
 import threads;
 import mutex;
 import condvar;
@@ -10,7 +10,7 @@ struct Job {
 }
 
 export struct ThreadPool {
-    arena::Arena*       arena;
+    mem::Allocator      allocator;
     threads::Thread*    workers;
     u32                 n_workers;
     Job*                queue;
@@ -24,18 +24,18 @@ export struct ThreadPool {
     bool                shutdown;
 }
 
-export fn ThreadPool* new(arena::Arena* a, u32 n_workers) {
+export fn ThreadPool* new(mem::Allocator a, u32 n_workers) {
     if(n_workers < 1) { n_workers = 1; }        // 0 workers would deadlock wait_all
-    ThreadPool* pool = (ThreadPool*)arena::alloc(a, sizeof(ThreadPool));
+    ThreadPool* pool = (ThreadPool*)mem::alloc(a, sizeof(ThreadPool));
     sys::memset(pool, 0, sizeof(ThreadPool));
-    pool.arena = a;
+    pool.allocator = a;
     pool.n_workers = n_workers;
     mutex::create(&pool.lock);
     condvar::create(&pool.not_empty);
     condvar::create(&pool.idle);
     pool.queue_cap = 64;
-    pool.queue = (Job*)arena::alloc(a, pool.queue_cap * sizeof(Job));
-    pool.workers = (threads::Thread*)arena::alloc(a, (u64)n_workers * sizeof(threads::Thread));
+    pool.queue = (Job*)mem::alloc(a, pool.queue_cap * sizeof(Job));
+    pool.workers = (threads::Thread*)mem::alloc(a, (u64)n_workers * sizeof(threads::Thread));
     for(u32 worker_index = 0; worker_index < n_workers; worker_index += 1) {
         threads::spawn(&pool.workers[worker_index], &worker_main, (void*)pool);
     }
@@ -72,7 +72,7 @@ export fn void submit(ThreadPool* pool, fn* void(void*) proc, void* arg) {
     if(pool.pending == 0) { pool.head = 0; pool.tail = 0; }       // empty: reclaim the ring for the next batch
     if(pool.tail == pool.queue_cap) {
         u64 new_cap = pool.queue_cap * 2;
-        pool.queue = (Job*)arena::realloc_grow(pool.arena, (void*)pool.queue, pool.queue_cap * sizeof(Job), new_cap * sizeof(Job));
+        pool.queue = (Job*)mem::realloc_grow(pool.allocator, (void*)pool.queue, pool.queue_cap * sizeof(Job), new_cap * sizeof(Job));
         pool.queue_cap = new_cap;
     }
     pool.queue[pool.tail].proc = proc;

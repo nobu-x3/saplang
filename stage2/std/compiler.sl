@@ -515,9 +515,9 @@ fn u8[][] run_codegen(Compiler* c) {
 }
 
 fn i32 run_link(Compiler* c, u8[][] object_paths) {
-    link_paths::LinkPaths paths = link_paths::resolve(c.arena);
+    link_paths::LinkPaths paths = link_paths::resolve(c.allocator);
     if(c.link_config.len > 0) {
-        if(!link_paths::apply_override(&paths, c.arena, c.link_config)) {
+        if(!link_paths::apply_override(&paths, c.allocator, c.link_config)) {
             sys::dprintf(2, "error: cannot read link config %.*s\n", (i32)c.link_config.len, (i8*)c.link_config.ptr);
             return 1;
         }
@@ -658,7 +658,7 @@ export fn i32 run_frontend(Compiler* c) {
         c.modules.ptr[module_index].comptime_max_depth = c.comptime_depth;
         c.modules.ptr[module_index].comptime_max_iterations = c.comptime_iterations;
     }
-    if(c.is_multithreaded) { c.pool = pool::new(c.arena, sys::cpu_count()); }
+    if(c.is_multithreaded) { c.pool = pool::new(c.allocator, sys::cpu_count()); }
     u64 phase_start = bench::now_ns();
     run_parse(c);
     phase_start = report_phase(c, "parse", phase_start);

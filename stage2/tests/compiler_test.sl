@@ -625,13 +625,13 @@ lib_dir=/tmp/custom
 ");
     io::close(&f);
 
-    link_paths::LinkPaths paths = link_paths::resolve(a);
-    if(!testing::expect_true(link_paths::apply_override(&paths, a, "lp_test.cfg"), msg)) { return -2; }
+    link_paths::LinkPaths paths = link_paths::resolve(arena::allocator(a));
+    if(!testing::expect_true(link_paths::apply_override(&paths, arena::allocator(a), "lp_test.cfg"), msg)) { return -2; }
     if(!testing::expect_eq(cstr_slice((u8*)paths.crt_start), "/tmp/custom/Scrt1.o", msg)) { return -3; }
     if(!testing::expect_eq(cstr_slice((u8*)paths.lib_dir), "-L/tmp/custom", msg)) { return -4; }
     io::unlink("lp_test.cfg");
 
-    if(!testing::expect_true(!link_paths::apply_override(&paths, a, "no_such_file.cfg"), msg)) { return -5; }
+    if(!testing::expect_true(!link_paths::apply_override(&paths, arena::allocator(a), "no_such_file.cfg"), msg)) { return -5; }
     return 0;
 }
 
