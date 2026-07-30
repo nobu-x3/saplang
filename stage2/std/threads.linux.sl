@@ -3,6 +3,11 @@ export struct Thread {
     u64 id;
 }
 
+// pthread_create writes a pthread_t through this pointer; a wider struct would let it scribble past the caller's slot.
+comprun {
+    if(sizeof(Thread) != (u64)8 || alignof(Thread) != (u64)8) { comperror("Thread must match glibc pthread_t: 8 bytes, 8-aligned"); }
+}
+
 extern {
     fn i32 pthread_create(Thread* th, void* attr, fn* void*(void*) start, void* arg);
     fn i32 pthread_join(u64 th, void** retval);

@@ -337,6 +337,12 @@ fn Ty* _intern_enum(TypeInterner* it, void* decl) {
     return install(it, hash, t);
 }
 
+// A stage must agree with the stage that built it, so the layout hardcoded here is checked against the host's.
+comprun {
+    if(sizeof(u8[]) != (u64)16 || alignof(u8[]) != (u64)8) { comperror("slice layout is not {ptr, len} at 16 bytes / 8-aligned; the Slice cases hardcode that"); }
+    if(sizeof(void*) != (u64)8 || alignof(void*) != (u64)8) { comperror("pointers are not 8 bytes / 8-aligned; the Pointer and FnPtr cases hardcode that"); }
+}
+
 // sizeof/alignof — diag is nullable; layout/cycle errors report there when set.
 export fn u32 size_of(diag::DiagBuf* diag, Ty* type) {
     if(((u8)type.flags & (u8)LayoutFlags::Opaque) != 0) {

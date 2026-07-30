@@ -6,7 +6,8 @@
 #
 #   Stage 1 (C)              --builds-->  stage2-v0               (source = Stage-1 subset)
 #   stage2-v0 compiler       --builds-->  stage2-generic-structs  (source uses generic functions)
-#   stage2-generic-structs   --builds-->  current source          (uses generic structs, List(T), ...)
+#   stage2-generic-structs   --builds-->  stage2-v1               (source uses generic structs, List(T), alias)
+#   stage2-v1 compiler       --builds-->  current source          (uses comprun + reflection)
 #
 # Each stage's compiler is built once (in a detached worktree of its tag) and cached under bootstrap/.
 # The last stage's compiler is the seed that builds the current working tree.
@@ -22,7 +23,7 @@ cd "$ROOT"
 STAGE1=build/bin/saplangc
 OUT=build/bin/saplangc2
 INCLUDES="stage2/std;stage2"
-STAGES="stage2-v0 stage2-generic-structs"   # ordered; each built by the previous stage's compiler
+STAGES="stage2-v0 stage2-generic-structs stage2-v1"   # ordered; each built by the previous stage's compiler
 
 mkdir -p bootstrap build/bin
 
