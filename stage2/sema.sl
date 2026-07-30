@@ -1092,13 +1092,13 @@ fn types::Ty* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
         if(q != null) { namespace_decl = q; }
     }
     if(namespace_decl == null || namespace_decl.kind != DeclKind::Import || namespace_decl.data.module == null) {
-        diag_unknown_type(s, n.h.src_pos, n.name);
+        diag_unknown_qualified_type(s, n.h.src_pos, n.namespace, n.name);
         return null;
     }
     module::Module* target = namespace_decl.data.module;
     Decl* decl = scope_lookup_local((Scope*)target.global_scope, n.name);
     if(decl == null || (!decl.is_exported && target != s.m)) {
-        diag_unknown_type(s, n.h.src_pos, n.name);
+        diag_unknown_qualified_type(s, n.h.src_pos, n.namespace, n.name);
         return null;
     }
     return decl_to_type(s, target, decl);
@@ -1755,7 +1755,7 @@ fn types::Ty* resolve_type_arg(Sema* s, ast::AstNode* arg) {
             Decl* decl = scope_lookup_local((Scope*)ns.data.module.global_scope, na.name);
             if(decl != null && decl.is_exported) { return decl_to_type(s, ns.data.module, decl); }
         }
-        diag_unknown_type(s, arg.h.src_pos, na.name);
+        diag_unknown_qualified_type(s, arg.h.src_pos, qualifier_name(na.base), na.name);
         return null;
     }
     u8[] msg = "expected a type argument for the comptime parameter";
@@ -2794,6 +2794,11 @@ export fn void diag_not_namespace(Sema* s, u32 src_pos) {
     sema_report(s, src_pos, msg);
 }
 
+fn symbol::Symbol* qualifier_name(ast::AstNode* base) {
+    if(base == null || base.h.kind != ast::AstKind::Ident) { return null; }
+    return ((ast::IdentNode*)base).name;
+}
+
 fn bool is_build_qualifier(ast::AstNode* base) {
     if(base == null || base.h.kind != ast::AstKind::Ident) { return false; }
     return ((ast::IdentNode*)base).name == interner::intern("build");
@@ -2922,6 +2927,17 @@ export fn void diag_unknown_type(Sema* s, u32 src_pos, symbol::Symbol* name) {
     u8[] name_str = interner::symbol_str(name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "unknown type %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// Echoes the qualifier the source wrote; a bare `unknown type Hidden` reads as if the module were never named.
+export fn void diag_unknown_qualified_type(Sema* s, u32 src_pos, symbol::Symbol* namespace, symbol::Symbol* name) {
+    if(namespace == null) { diag_unknown_type(s, src_pos, name); return; }
+    if(name == null) { return; }
+    u8[] namespace_str = interner::symbol_str(namespace);
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "unknown type %.*s::%.*s", (i32)namespace_str.len, (i8*)namespace_str.ptr, (i32)name_str.len, (i8*)name_str.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 

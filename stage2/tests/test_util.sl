@@ -13,6 +13,62 @@ import types;
 
 const u64 E2E_BUCKETS = 64;
 
+// Each module needs its own arena: the driver gives every module one, and sharing hides ownership bugs.
+export fn arena::Arena* sub_arena(arena::Arena* a) {
+    arena::Arena* sub = (arena::Arena*)arena::alloc(a, sizeof(arena::Arena));
+    sys::memset(sub, 0, sizeof(arena::Arena));
+    sub.default_page_size = 1048576;
+    return sub;
+}
+
+// Process-global state the multi-module path needs; the single-module frontend below does its own.
+export fn void boot(arena::Arena* a) {
+    interner::init(sub_arena(a), E2E_BUCKETS);
+    types::typer_init(sub_arena(a), E2E_BUCKETS);
+    token::load_keywords();
+    comptime_interp::install_hooks();
+}
+
+export fn module::Module* mk_module(arena::Arena* a, u8[] name, u8[] src) {
+    module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
+    sys::memset(m, 0, sizeof(module::Module));
+    m.arena = sub_arena(a);
+    m.allocator = arena::allocator(m.arena);
+    m.source = src;
+    m.name = interner::intern(name);
+    m.build = host_build();
+    return m;
+}
+
+// The multi-module analogue of frontend: the driver's barriered sema order, but without draining the
+// diagnostics, so a test can pin a cross-module message and its src_pos.
+export fn void frontend_modules(module::Module*[] modules) {
+    for(u64 index = 0; index < modules.len; index += 1) {
+        scanner::scan(modules[index]);
+        modules[index].root_node = parser::parse(modules[index]);
+    }
+    if(errors_in(modules) > 0) { return; }
+    for(u64 index = 0; index < modules.len; index += 1) { sema::collect_names(modules[index]); }
+    if(errors_in(modules) > 0) { return; }
+    for(u64 index = 0; index < modules.len; index += 1) { sema::resolve_signatures(modules[index]); }
+    if(errors_in(modules) > 0) { return; }
+    for(u64 index = 0; index < modules.len; index += 1) { sema::check_bodies(modules[index]); }
+    if(errors_in(modules) > 0) { return; }
+    for(u64 index = 0; index < modules.len; index += 1) { cfg::build_all_functions(modules[index]); }
+}
+
+export fn u64 errors_in(module::Module*[] modules) {
+    u64 count = 0;
+    for(u64 index = 0; index < modules.len; index += 1) { count += error_count(modules[index]); }
+    return count;
+}
+
+export fn void wire_imports(arena::Arena* a, module::Module* m, module::Module*[] deps) {
+    module::Module** imports = (module::Module**)arena::alloc(a, deps.len * sizeof(module::Module*));
+    for(u64 dep_index = 0; dep_index < deps.len; dep_index += 1) { imports[dep_index] = deps[dep_index]; }
+    m.imports = {imports, deps.len};
+}
+
 // Runs the single-module frontend (scan → parse → sema → cfg) with driver-style bail between phases.
 // Diagnostics stay in m.diag (not drained), so tests can pin exact messages + src_pos.
 export fn module::Module* frontend(arena::Arena* a, u8[] src) {
