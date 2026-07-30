@@ -36,6 +36,7 @@ export fn module::Module* frontend_build(arena::Arena* a, u8[] src, module::Buil
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
     m.arena = a;
+    m.allocator = arena::allocator(a);
     m.source = src;
     m.build = build;
     m.name = interner::intern("main");

@@ -14,6 +14,7 @@ import ast_print;
 import bench;
 import diag;
 import arena;
+import mem;
 import list;
 import sys;
 import io;
@@ -24,6 +25,7 @@ import pool;
 
 export struct Compiler {
     arena::Arena*        arena;
+    mem::Allocator       allocator;
     list::List(module::Module*) modules;  // flat, indexed by ModuleId (the array index)
     list::List(u8[])     entry_sources;   // user-supplied source file paths
     list::List(u8[])     import_paths;    // -i search list
@@ -83,15 +85,16 @@ export fn Compiler* new(arena::Arena* a) {
     Compiler* c = (Compiler*)arena::alloc(a, sizeof(Compiler));
     sys::memset(c, 0, sizeof(Compiler));
     c.arena = a;
+    c.allocator = arena::allocator(a);
     return c;
 }
 
 export fn void add_module(Compiler* c, module::Module* m) {
-    list::push(&c.modules, c.arena, m);
+    list::push(&c.modules, c.allocator, m);
 }
 
 export fn void add_source(Compiler* c, u8[] path) {
-    list::push(&c.entry_sources, c.arena, path);
+    list::push(&c.entry_sources, c.allocator, path);
 }
 
 fn bool parse_config(Compiler* c, u8[] name) {
@@ -105,11 +108,11 @@ fn bool parse_config(Compiler* c, u8[] name) {
 }
 
 export fn void add_extern_lib(Compiler* c, u8[] name) {
-    list::push(&c.extern_libs, c.arena, name);
+    list::push(&c.extern_libs, c.allocator, name);
 }
 
 export fn void add_lib_dir(Compiler* c, u8[] path) {
-    list::push(&c.lib_dirs, c.arena, path);
+    list::push(&c.lib_dirs, c.allocator, path);
 }
 
 // `-Dname` or `-Dname=value`; a bare name carries an empty value and is still "defined".
@@ -126,11 +129,11 @@ export fn void add_define(Compiler* c, u8[] arg) {
     entry.name = {body.ptr, separator};
     entry.value = {null, 0};
     if(separator < body.len) { entry.value = {&body.ptr[separator + 1], body.len - separator - 1}; }
-    list::push(&c.defines, c.arena, entry);
+    list::push(&c.defines, c.allocator, entry);
 }
 
 export fn void add_import_path(Compiler* c, u8[] path) {
-    list::push(&c.import_paths, c.arena, path);
+    list::push(&c.import_paths, c.allocator, path);
 }
 
 export fn void set_target(Compiler* c, u8[] t) {
@@ -300,6 +303,7 @@ fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, u8[] pat
     sys::memset(module_arena, 0, sizeof(arena::Arena));
     module_arena.default_page_size = 1048576;
     m.arena = module_arena;
+    m.allocator = arena::allocator(module_arena);
     m.name = name;
     m.path = path;
     m.source = src;

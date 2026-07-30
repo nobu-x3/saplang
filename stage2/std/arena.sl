@@ -1,4 +1,5 @@
 import sys;
+import mem;
 
 struct ArenaPage {
     u64 cap;
@@ -49,6 +50,27 @@ export fn void* realloc_grow(Arena* arena, void* old, u64 old_size, u64 new_size
         sys::memcpy(fresh, old, old_size);
     }
     return fresh;
+}
+
+export fn mem::Allocator allocator(Arena* arena) {
+    mem::Allocator out;
+    out.ctx = (void*)arena;
+    out.alloc_fn = &alloc_thunk;
+    out.realloc_grow_fn = &realloc_grow_thunk;
+    out.free_fn = &free_thunk;
+    return out;
+}
+
+fn void* alloc_thunk(void* ctx, u64 size) {
+    return alloc((Arena*)ctx, size);
+}
+
+fn void* realloc_grow_thunk(void* ctx, void* old, u64 old_size, u64 new_size) {
+    return realloc_grow((Arena*)ctx, old, old_size, new_size);
+}
+
+// An arena releases in bulk, so a single allocation cannot be reclaimed.
+fn void free_thunk(void* ctx, void* ptr, u64 size) {
 }
 
 export fn u64 align_up(u64 value, u64 alignment) {

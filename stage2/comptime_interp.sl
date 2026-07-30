@@ -812,7 +812,9 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
                     if(cargs[i].kind == value::ValueKind::Error) { return cargs[i]; }
                 }
             }
-            return invoke(ip, clone, cargs, n.h.src_pos);
+            value::Value produced = invoke(ip, clone, cargs, n.h.src_pos);
+            record_type_provenance(clone, cargs, produced);
+            return produced;
         }
     }
     sema::Decl* d = resolved_decl(n.callee);
@@ -887,7 +889,9 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
             }
         }
         ast::FnDeclNode* mono = monomorphize(ip, func, cargs);
-        return invoke(ip, mono, args, n.h.src_pos);
+        value::Value produced = invoke(ip, mono, args, n.h.src_pos);
+        record_type_provenance(mono, cargs, produced);
+        return produced;
     }
     if(d != null && d.home != null) { sema::ensure_body_checked(d.home, func, ip.m); }     // same- or cross-module: check the callee in its own module
     return invoke(ip, func, args, n.h.src_pos);
@@ -922,6 +926,7 @@ fn ast::AstNode* compile_fragment(module::Module* m, u8[] bytes, bool as_stmts, 
     module::Module* frag = (module::Module*)arena::alloc(m.arena, sizeof(module::Module));
     sys::memset(frag, 0, sizeof(module::Module));
     frag.arena = m.arena;
+    frag.allocator = m.allocator;
     frag.name = m.name;
     frag.source = bytes;
     frag.literal_pool = m.literal_pool;
@@ -1598,7 +1603,7 @@ export fn ast::FnDeclNode* clone_fn_decl(arena::Arena* a, ast::FnDeclNode* orig)
 }
 
 fn void instantiated_fns_push(module::Module* m, ast::FnDeclNode* clone) {
-    list::push(&m.instantiated_fns, m.arena, clone);
+    list::push(&m.instantiated_fns, m.allocator, clone);
 }
 
 // Distinct deterministic name per instantiation (module-qualified type reprs) so it mangles identically across modules for linkonce_odr dedup.
@@ -1685,6 +1690,53 @@ fn ast::FnDeclNode* monomorphize_type_ctor(Interp* ip, ast::FnDeclNode* callee, 
     condvar::broadcast(&g_type_mono_cv);
     mutex::unlock(&g_type_mono_lock);
     return clone;
+}
+
+// Copied out under the lock rather than read in place; another thread may still be recording.
+fn bool read_type_provenance(types::Ty* concrete, ast::FnDeclNode** ctor, value::Value[]* args) {
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)concrete.data.struct_decl;
+    if(decl == null) { return false; }
+    init_mono_sync();
+    mutex::lock(&g_type_mono_lock);
+    bool found = decl.synth_callee != null;
+    if(found) {
+        *ctor = (ast::FnDeclNode*)decl.synth_callee;
+        *args = {(value::Value*)decl.synth_args_ptr, decl.synth_args_len};
+    }
+    mutex::unlock(&g_type_mono_lock);
+    return found;
+}
+
+// clone_fn_decl clears the decl backlink, so the cache that produced the clone is what names its generic.
+fn ast::FnDeclNode* generic_for_clone(ast::FnDeclNode* clone) {
+    for(u64 slot = 0; slot < g_type_mono_cache.cap; slot += 1) {
+        if(g_type_mono_cache.buckets[slot].hash != 0 && g_type_mono_cache.buckets[slot].clone == clone) {
+            return g_type_mono_cache.buckets[slot].key.callee;
+        }
+    }
+    return null;
+}
+
+// Args are copied into the shared arena: the interned decl outlives any one module's.
+fn void record_type_provenance(ast::FnDeclNode* clone, value::Value[] cargs, value::Value produced) {
+    if(clone == null || produced.kind != value::ValueKind::TYPE) { return; }
+    types::Ty* ty = (types::Ty*)produced.data.type_ref;
+    if(ty == null || ty.kind != types::TypeKind::Struct) { return; }
+    ast::StructDeclNode* decl = (ast::StructDeclNode*)ty.data.struct_decl;
+    if(decl == null) { return; }
+    init_mono_sync();
+    mutex::lock(&g_type_mono_lock);
+    if(decl.synth_callee == null) {
+        ast::FnDeclNode* generic = generic_for_clone(clone);
+        if(generic != null) {
+            value::Value* copied = (value::Value*)arena::alloc(&g_type_mono_arena, cargs.len * sizeof(value::Value));
+            for(u64 arg_index = 0; arg_index < cargs.len; arg_index += 1) { copied[arg_index] = cargs[arg_index]; }
+            decl.synth_args_ptr = (void*)copied;
+            decl.synth_args_len = cargs.len;
+            decl.synth_callee = (void*)generic;
+        }
+    }
+    mutex::unlock(&g_type_mono_lock);
 }
 
 export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, value::Value[] cargs) {
@@ -1978,6 +2030,14 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
 
 // GENERIC CALL RESOLUTION (sema seam): infer comptime args by unifying param patterns against arg types, then monomorphize.
 
+// Compared by trailing identifier: the pattern's callee is unresolved while the comptime params are still free.
+fn bool callee_names_match(ast::AstNode* callee, ast::FnDeclNode* ctor) {
+    if(callee == null || ctor == null) { return false; }
+    if(callee.h.kind == ast::AstKind::Ident) { return ((ast::IdentNode*)callee).name == ctor.name; }
+    if(callee.h.kind == ast::AstKind::NamespaceAccess) { return ((ast::NamespaceAccessNode*)callee).name == ctor.name; }
+    return false;
+}
+
 fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* pattern, types::Ty* concrete) {
     if(pattern == null || concrete == null) { return false; }
     switch(pattern.h.kind) {
@@ -2004,6 +2064,22 @@ fn bool unify_type(symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* 
     case ast::AstKind::ArrayType: {
         if(concrete.kind != types::TypeKind::Array) { return false; }
         return unify_type(names, binds, ((ast::TypeArrayNode*)pattern).element, concrete.data.array.elem);
+    }
+    // Unprovable rather than false when provenance is missing, so another parameter can still bind the name.
+    case ast::AstKind::Call: {
+        if(concrete.kind != types::TypeKind::Struct) { return true; }
+        ast::FnDeclNode* ctor;
+        value::Value[] synth_args;
+        if(!read_type_provenance(concrete, &ctor, &synth_args)) { return true; }
+        ast::CallNode* call = (ast::CallNode*)pattern;
+        if(!callee_names_match(call.callee, ctor)) { return true; }
+        if(call.args.len != synth_args.len) { return true; }
+        for(u64 arg_index = 0; arg_index < call.args.len; arg_index += 1) {
+            if(synth_args[arg_index].kind != value::ValueKind::TYPE) { continue; }
+            types::Ty* concrete_arg = (types::Ty*)synth_args[arg_index].data.type_ref;
+            if(!unify_type(names, binds, call.args[arg_index], concrete_arg)) { return false; }
+        }
+        return true;
     }
     case ast::AstKind::FnPtrType: {
         if(concrete.kind != types::TypeKind::FnPtr) { return false; }

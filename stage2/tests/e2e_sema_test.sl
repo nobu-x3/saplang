@@ -338,6 +338,54 @@ fn i32 ok_comprun_generic_inferred(arena::Arena* a, u8[] m) {
     return 0;
 }
 
+// A `Ctor(T)` parameter is the only mention of T, so inference has to run backwards from the instantiation.
+fn i32 ok_infer_through_generic_struct(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type Box(comptime Type T) { return struct { T value; }; }\nfn T unwrap(comptime Type T, Box(T)* b) { return b.value; }\nexport fn i32 f() { Box(i32) b = {41}; return unwrap(&b); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_infer_generic_struct_by_value(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type Box(comptime Type T) { return struct { T value; }; }\nfn T take(comptime Type T, Box(T) b) { return b.value; }\nexport fn i32 f() { Box(i32) b = {7}; return take(b); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_infer_nested_generic_struct(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type Box(comptime Type T) { return struct { T value; }; }\nfn T inner(comptime Type T, Box(Box(T))* b) { return b.value.value; }\nexport fn i32 f() { Box(Box(i32)) b; b.value.value = 5; return inner(&b); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_infer_generic_struct_slice(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type Box(comptime Type T) { return struct { T value; }; }\nfn u64 count(comptime Type T, Box(T)[] xs) { return xs.len; }\nexport fn u64 f() { Box(i32)[3] boxes; return count(boxes[0..2]); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_generic_struct_binds_with_other_param(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type Box(comptime Type T) { return struct { T value; }; }\nfn void put(comptime Type T, Box(T)* b, T v) { b.value = v; }\nexport fn i64 f() { Box(i64) b = {0}; put(&b, (i64)1); return b.value; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Once a parameter binds T, a later parameter needs that exact type: an i32 literal does not widen to i64.
+fn i32 err_infer_conflicts_with_literal(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type Box(comptime Type T) { return struct { T value; }; }\nfn void put(comptime Type T, Box(T)* b, T v) { b.value = v; }\nexport fn i64 f() { Box(i64) b = {0}; put(&b, 1); return b.value; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot infer comptime arguments for put", m)) { return -2; }
+    return 0;
+}
+
+// Provenance names one constructor; a pattern naming a different one must not bind through it.
+fn i32 err_infer_wrong_constructor(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "fn Type Box(comptime Type T) { return struct { T value; }; }\nfn Type Crate(comptime Type T) { return struct { T value; }; }\nfn T unwrap(comptime Type T, Crate(T)* c) { return c.value; }\nexport fn i32 f() { Box(i32) b = {1}; return unwrap(&b); }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "cannot infer comptime arguments for unwrap", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)237, m)) { return -3; }
+    return 0;
+}
+
 // A comptime call into the function whose body is being checked is diagnosed, not spun to the recursion cap.
 fn i32 err_comptime_self_reentry(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "fn i32 selfish(i32 x) {\n  comprun { i32 v = selfish(1); }\n  return x;\n}\nexport fn i32 f() { return selfish(2); }");
@@ -442,6 +490,13 @@ fn i32 err_typeinfo_runtime_param(arena::Arena* a, u8[] m) {
 
 fn i32 ok_type_info_in_comprun(arena::Arena* a, u8[] m) {
     module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; }\ncomprun { if(type_info(P).size != (u64)8) { comperror(\"bad size\"); } }\nexport fn i32 f() { return 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// types.sl hardcodes these layouts and guards them with a comprun of its own.
+fn i32 ok_slice_and_pointer_layout(arena::Arena* a, u8[] m) {
+    module::Module* mod = test_util::frontend(a, "comprun {\n  if(sizeof(u8[]) != (u64)16 || alignof(u8[]) != (u64)8) { comperror(\"slice\"); }\n  if(sizeof(void*) != (u64)8 || alignof(void*) != (u64)8) { comperror(\"ptr\"); }\n  if(sizeof(fn* i32(i32)) != (u64)8) { comperror(\"fnptr\"); }\n}\nexport fn i32 f() { return 0; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
     return 0;
 }
@@ -1497,7 +1552,15 @@ fn i32 main() {
     testing::add(suite, "err_compsplice_unsupported", &err_compsplice_unsupported);
     testing::add(suite, "err_type_info_at_runtime",  &err_type_info_at_runtime);
     testing::add(suite, "ok_type_info_in_comprun",   &ok_type_info_in_comprun);
+    testing::add(suite, "ok_slice_and_pointer_layout", &ok_slice_and_pointer_layout);
     testing::add(suite, "ok_comprun_generic_inferred", &ok_comprun_generic_inferred);
+    testing::add(suite, "ok_infer_through_generic_struct", &ok_infer_through_generic_struct);
+    testing::add(suite, "ok_infer_generic_struct_by_value", &ok_infer_generic_struct_by_value);
+    testing::add(suite, "ok_infer_nested_generic_struct", &ok_infer_nested_generic_struct);
+    testing::add(suite, "ok_infer_generic_struct_slice", &ok_infer_generic_struct_slice);
+    testing::add(suite, "ok_generic_struct_binds_with_other_param", &ok_generic_struct_binds_with_other_param);
+    testing::add(suite, "err_infer_conflicts_with_literal", &err_infer_conflicts_with_literal);
+    testing::add(suite, "err_infer_wrong_constructor", &err_infer_wrong_constructor);
     testing::add(suite, "err_comptime_self_reentry",  &err_comptime_self_reentry);
     testing::add(suite, "err_instantiation_note",    &err_instantiation_note);
     testing::add(suite, "ok_addr_of_overload_selects", &ok_addr_of_overload_selects);

@@ -2,6 +2,7 @@
 // that constructs a DAG of steps; `saplangc build [step] [-Dopt=val]` compiles this module plus
 // build.sl into a runner and executes the requested step(s). Compile steps spawn `saplangc`.
 import arena;
+import mem;
 import list;
 import sys;
 import io;
@@ -32,6 +33,7 @@ export struct Step {
     bool              done;         // executed already; dedups shared subgraphs during make
     bool              queued;       // visited already; dedups shared subgraphs during the compile gather
     arena::Arena*     arena;
+    mem::Allocator    allocator;
 }
 
 export struct CompileStep {
@@ -68,6 +70,7 @@ struct CliArg {
 
 export struct Build {
     arena::Arena*          arena;
+    mem::Allocator         allocator;
     u8[]                   compiler_path;    // resolved from $SAPLANGC; the exe compile steps spawn
     Step*                  install_step;     // default top step; install_artifact hangs deps off it
     list::List(Step*)      top_steps;
@@ -85,6 +88,7 @@ export fn Build* new_build(arena::Arena* a) {
     Build* b = (Build*)arena::alloc(a, sizeof(Build));
     sys::memset(b, 0, sizeof(Build));
     b.arena = a;
+    b.allocator = arena::allocator(a);
     return b;
 }
 
@@ -95,12 +99,13 @@ export fn Step* step(Build* b, u8[] name, u8[] description) {
     s.name = name;
     s.description = description;
     s.arena = b.arena;
-    list::push(&b.top_steps, b.arena, s);
+    s.allocator = b.allocator;
+    list::push(&b.top_steps, b.allocator, s);
     return s;
 }
 
 export fn void depend_on(Step* s, Step* dep) {
-    list::push(&s.deps, s.arena, dep);
+    list::push(&s.deps, s.allocator, dep);
 }
 
 export fn CompileStep* add_executable(Build* b, u8[] name, u8[] root_source) {
@@ -109,6 +114,7 @@ export fn CompileStep* add_executable(Build* b, u8[] name, u8[] root_source) {
     c.step.kind = StepKind::Compile;
     c.step.name = name;
     c.step.arena = b.arena;
+    c.step.allocator = b.allocator;
     c.artifact_name = name;
     c.root_source = root_source;
     c.optimize = b.optimize;   // sensible defaults; set_optimize/set_target override
@@ -118,15 +124,15 @@ export fn CompileStep* add_executable(Build* b, u8[] name, u8[] root_source) {
 }
 
 export fn void add_import_path(CompileStep* c, u8[] path) {
-    list::push(&c.import_paths, c.owner.arena, path);
+    list::push(&c.import_paths, c.owner.allocator, path);
 }
 
 export fn void link_lib(CompileStep* c, u8[] name) {
-    list::push(&c.libs, c.owner.arena, name);
+    list::push(&c.libs, c.owner.allocator, name);
 }
 
 export fn void link_lib_dir(CompileStep* c, u8[] path) {
-    list::push(&c.lib_dirs, c.owner.arena, path);
+    list::push(&c.lib_dirs, c.owner.allocator, path);
 }
 
 export fn void set_target(CompileStep* c, Target t) {
@@ -139,7 +145,7 @@ export fn void set_optimize(CompileStep* c, Optimize o) {
 
 export fn void install_artifact(Build* b, CompileStep* c) {
     c.installed = true;
-    list::push(&b.install_step.deps, b.arena, &c.step);
+    list::push(&b.install_step.deps, b.allocator, &c.step);
 }
 
 export fn RunStep* add_run_artifact(Build* b, CompileStep* c) {
@@ -148,14 +154,15 @@ export fn RunStep* add_run_artifact(Build* b, CompileStep* c) {
     r.step.kind = StepKind::Run;
     r.step.name = c.artifact_name;
     r.step.arena = b.arena;
+    r.step.allocator = b.allocator;
     r.exe = c;
     r.owner = b;
-    list::push(&r.step.deps, b.arena, &c.step);
+    list::push(&r.step.deps, b.allocator, &c.step);
     return r;
 }
 
 export fn void run_arg(RunStep* r, u8[] arg) {
-    list::push(&r.args, r.owner.arena, arg);
+    list::push(&r.args, r.owner.allocator, arg);
 }
 
 // ---- options ----
@@ -165,7 +172,7 @@ fn void declare_option(Build* b, u8[] name, u8[] description, u8[] kind) {
     o.name = name;
     o.description = description;
     o.kind = kind;
-    list::push(&b.options, b.arena, o);
+    list::push(&b.options, b.allocator, o);
 }
 
 // Records a parsed CLI override; the runner calls this while scanning argv.
@@ -174,7 +181,7 @@ export fn void define(Build* b, u8[] key, u8[] value, bool has_value) {
     a.key = key;
     a.value = value;
     a.has_value = has_value;
-    list::push(&b.cli_args, b.arena, a);
+    list::push(&b.cli_args, b.allocator, a);
 }
 
 fn CliArg* find_cli(Build* b, u8[] key) {
@@ -436,7 +443,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
         } else if(starts_with(arg, "-D")) {
             parse_define_arg(b, arg);
         } else {
-            list::push(&b.requested_steps, b.arena, arg);
+            list::push(&b.requested_steps, b.allocator, arg);
         }
     }
 
@@ -447,7 +454,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
     list::List(Step*) roots;
     roots.ptr = null; roots.len = 0; roots.cap = 0;
     if(b.requested_steps.len == 0) {
-        list::push(&roots, b.arena, b.install_step);
+        list::push(&roots, b.allocator, b.install_step);
     } else {
         for(u64 step_index = 0; step_index < b.requested_steps.len; step_index += 1) {
             u8[] name = b.requested_steps.ptr[step_index];
@@ -456,7 +463,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
                 sys::dprintf(2, "error: no step named '%.*s' (run `saplangc build --help`)\n", (i32)name.len, (i8*)name.ptr);
                 return 1;
             }
-            list::push(&roots, b.arena, s);
+            list::push(&roots, b.allocator, s);
         }
     }
 
@@ -465,7 +472,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
     list::List(CompileStep*) compiles;
     compiles.ptr = null; compiles.len = 0; compiles.cap = 0;
     for(u64 root_index = 0; root_index < roots.len; root_index += 1) {
-        collect_compiles(roots.ptr[root_index], &compiles, b.arena);
+        collect_compiles(roots.ptr[root_index], &compiles, b.allocator);
     }
     i32 crc = run_compiles_parallel(b, &compiles);
     if(crc != 0) { return crc; }
@@ -478,7 +485,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
 }
 
 // Gathers every reachable Compile step once (queued dedups shared subgraphs).
-export fn void collect_compiles(Step* s, list::List(CompileStep*)* out, arena::Arena* a) {
+export fn void collect_compiles(Step* s, list::List(CompileStep*)* out, mem::Allocator a) {
     if(s.queued) { return; }
     s.queued = true;
     for(u64 dep_index = 0; dep_index < s.deps.len; dep_index += 1) {

@@ -10,6 +10,7 @@ import interner;
 import symbol;
 import llvm;
 import arena;
+import mem;
 import list;
 import sys;
 
@@ -30,6 +31,7 @@ struct TypeMapEntry {
 struct CG {
     sapir::SapirModule* sm;
     arena::Arena*       arena;
+    mem::Allocator      allocator;
     BuildConfig         config;
     void*               ctx;
     void*               llvm_module;
@@ -215,6 +217,7 @@ fn void cg_init(CG* cg, sapir::SapirModule* sm, arena::Arena* a, BuildConfig con
     sys::memset(cg, 0, sizeof(CG));
     cg.sm = sm;
     cg.arena = a;
+    cg.allocator = arena::allocator(a);
     cg.config = config;
     cg.ctx = llvm::LLVMContextCreate();
     cg.llvm_module = llvm::LLVMModuleCreateWithNameInContext(cstr(a, interner::symbol_str(sm.name)), cg.ctx);
@@ -495,7 +498,7 @@ fn void type_map_insert(CG* cg, types::Ty* t, void* llvm_ty) {
     TypeMapEntry e;
     e.ty = t;
     e.llvm = llvm_ty;
-    list::push(&cg.type_map, cg.arena, e);
+    list::push(&cg.type_map, cg.allocator, e);
 }
 
 // DECLS + GLOBALS ///////////////////////////////////////////////////////////////////

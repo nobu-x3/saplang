@@ -1,4 +1,5 @@
 import arena;
+import mem;
 import list;
 import diag;
 import symbol;
@@ -16,6 +17,7 @@ export struct Module {
     u8[]                    literal_pool;    // decoded string-literal bytes
     u64                     literal_pool_cap;
     arena::Arena*           arena;
+    mem::Allocator          allocator;       // arena, as the interface std allocates through
     diag::DiagBuf           diag;
 
     Module*[]               imports;         // resolved at discovery; sema reads to map DeclKind::Import
@@ -61,7 +63,7 @@ export fn u32 register_inserted_source(Module* m, u8[] bytes, u32 generator_pos)
     entry.base = base;
     entry.bytes = bytes;
     entry.generator_pos = generator_pos;
-    list::push(&m.inserted_sources, m.arena, entry);
+    list::push(&m.inserted_sources, m.allocator, entry);
     m.next_inserted_base = base + (u32)bytes.len;
     return base;
 }

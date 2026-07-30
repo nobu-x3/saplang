@@ -66,11 +66,10 @@ export struct StructDeclNode {
     symbol::Symbol*   qualified_name;
     FieldDecl[] fields;
     bool      is_exported;
-    // Provenance for monomorphization-produced anonymous structs
-    // Null for source-declared structs; set when sema/comptime synthesizes a struct
-    // from a comptime function returning Type.
-    //FnDeclNode* synth_callee;
-    //Value[]     synth_args;
+    // Which `fn Type` produced this struct: FnDeclNode* + value::Value[], untyped because value.sl imports ast.
+    void*     synth_callee;
+    void*     synth_args_ptr;
+    u64       synth_args_len;
 }
 
 export struct UnionDeclNode {

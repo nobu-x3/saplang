@@ -1,6 +1,7 @@
 import ast;
 import module;
 import arena;
+import mem;
 import list;
 import types;
 import diag;
@@ -56,6 +57,7 @@ struct ScopeFrame { list::List(DeferEntry) defers; }
 struct CfgBuilder {
     Cfg*            cfg;
     arena::Arena*   arena;
+    mem::Allocator  allocator;
     u32             current;
     list::List(LoopFrame) loop_stack;
     list::List(ScopeFrame) scope_stack;
@@ -70,6 +72,7 @@ export fn Cfg* build_cfg(module::Module* m, ast::FnDeclNode* func) {
     sys::memset(&builder, 0, sizeof(CfgBuilder));
     builder.cfg = g;
     builder.arena = m.arena;
+    builder.allocator = m.allocator;
     builder.m = m;
 
     g.entry = new_block(g, m.arena);
@@ -256,7 +259,7 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
             SwitchTarget t;
             t.label = arm.labels[label_index];
             t.target = target;
-            list::push(&arms, b.arena, t);
+            list::push(&arms, b.allocator, t);
         }
     }
 
@@ -352,13 +355,13 @@ export fn u32 new_block(Cfg* g, arena::Arena* a) {
     BasicBlock block;
     sys::memset(&block, 0, sizeof(BasicBlock));
     block.id = id;
-    list::push(&g.blocks, a, block);
+    list::push(&g.blocks, arena::allocator(a), block);
     return id;
 }
 
 fn void append_stmt(CfgBuilder* b, ast::AstNode* stmt) {
     BasicBlock* block = &b.cfg.blocks.ptr[b.current];
-    list::push(&block.stmts, b.arena, stmt);
+    list::push(&block.stmts, b.allocator, stmt);
 }
 
 fn bool block_terminated(CfgBuilder* b, u32 blk) {
@@ -423,7 +426,7 @@ fn void terminate_unreachable(CfgBuilder* b, u32 blk) {
 fn void push_scope(CfgBuilder* b) {
     ScopeFrame frame;
     sys::memset(&frame, 0, sizeof(ScopeFrame));
-    list::push(&b.scope_stack, b.arena, frame);
+    list::push(&b.scope_stack, b.allocator, frame);
 }
 
 fn void pop_scope(CfgBuilder* b) {
@@ -438,7 +441,7 @@ fn void push_defer(ScopeFrame* sc, arena::Arena* a, ast::AstNode* body, u32 src_
     DeferEntry e;
     e.body = body;
     e.src_pos = src_pos;
-    list::push(&sc.defers, a, e);
+    list::push(&sc.defers, arena::allocator(a), e);
 }
 
 fn void push_loop(CfgBuilder* b, u32 header, u32 after) {
@@ -446,7 +449,7 @@ fn void push_loop(CfgBuilder* b, u32 header, u32 after) {
     frame.header = header;
     frame.after = after;
     frame.scope_base = b.scope_stack.len;
-    list::push(&b.loop_stack, b.arena, frame);
+    list::push(&b.loop_stack, b.allocator, frame);
 }
 
 fn void pop_loop(CfgBuilder* b) {
@@ -468,7 +471,7 @@ fn LoopFrame* nearest_loop(CfgBuilder* b) {
 
 fn void add_predecessor(Cfg* g, arena::Arena* a, u32 block_id, u32 pred) {
     BasicBlock* block = &g.blocks.ptr[block_id];
-    list::push(&block.predecessors, a, pred);
+    list::push(&block.predecessors, arena::allocator(a), pred);
 }
 
 export fn void compute_predecessors(Cfg* g, arena::Arena* a) {

@@ -3,6 +3,7 @@ import ast;
 import token;
 import diag;
 import arena;
+import mem;
 import list;
 import symbol;
 import interner;
@@ -24,7 +25,7 @@ export fn ast::AstNode* parse(module::Module* m) {
     NodeList decls = {null, 0, 0};
     while (peek(&p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* d = parse_top_decl(&p);
-        if (d != null) { push_or_splice(&decls, m.arena, d); }
+        if (d != null) { push_or_splice(&decls, m.allocator, d); }
     }
     ast::BlockNode* root = node_alloc(m.arena, sizeof(ast::BlockNode));
     root.h.kind = ast::AstKind::BlockStmt;
@@ -40,7 +41,7 @@ export fn ast::AstNode* parse_stmt_fragment(module::Module* m) {
     NodeList stmts = {null, 0, 0};
     while (peek(&p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* s = parse_stmt(&p);
-        if (s != null) { push_or_splice(&stmts, m.arena, s); }
+        if (s != null) { push_or_splice(&stmts, m.allocator, s); }
     }
     ast::BlockNode* blk = node_alloc(m.arena, sizeof(ast::BlockNode));
     blk.h.kind = ast::AstKind::BlockStmt;
@@ -272,7 +273,7 @@ fn ast::Param[] parse_params(Parser* p, bool* had_err) {
         prm.is_const = is_const;
         prm.is_comptime = is_comptime;
         prm.src_pos = start;
-        list::push(&arr, p.m.arena, prm);
+        list::push(&arr, p.m.allocator, prm);
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     return {arr.ptr, arr.len};
@@ -525,7 +526,7 @@ fn ast::AstNode* parse_comp_branch(Parser* p, bool at_top_level) {
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* d = parse_top_decl(p);
         if(d) {
-            push_or_splice(&decls, p.m.arena, d);
+            push_or_splice(&decls, p.m.allocator, d);
             if(had_error(d)) { local_err = true; }
         }
     }
@@ -609,7 +610,7 @@ fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
         fd.name = name.data.sym;
         fd.type_expr = type_expr;
         fd.src_pos = start;
-        list::push(&arr, p.m.arena, fd);
+        list::push(&arr, p.m.allocator, fd);
         if(p.idx == prev_idx) { consume(p); *had_err = true; }
     }
     p.allow_anon_type = prev_allow;
@@ -891,7 +892,7 @@ fn ast::AstNode* parse_extern_block(Parser* p) {
         ast::AstNode* item = parse_extern_item(p);
         if(item) {
             if(had_error(item)) { had_err = true; }
-            list::push(&items, p.m.arena, item);
+            list::push(&items, p.m.allocator, item);
         }
         if(p.idx == prev) { consume(p); had_err = true; }
     }
@@ -957,7 +958,7 @@ fn ast::EnumMember[] parse_enum_members(Parser* p, bool* had_err) {
         em.name = name.data.sym;
         em.value_expr = value_expr;
         em.src_pos = start;
-        list::push(&arr, p.m.arena, em);
+        list::push(&arr, p.m.allocator, em);
         if(!match(p, token::TokenKind::Comma)) { break; }
         if(p.idx == prev) { consume(p); *had_err = true; }
     }
@@ -1197,7 +1198,7 @@ fn ast::AstNode* parse_defer(Parser* p) {
         bool inner_err = had_error(inner);
         if(inner_err) { had_err = true; }
         NodeList b = {null, 0, 0};
-        push_or_splice(&b, p.m.arena, inner);
+        push_or_splice(&b, p.m.allocator, inner);
         ast::BlockNode* blk = node_alloc(p.m.arena, sizeof(ast::BlockNode));
         blk.h.kind = ast::AstKind::BlockStmt;
         blk.h.flags = (ast::AstFlags)0;
@@ -1419,12 +1420,12 @@ fn ast::AstNode* parse_switch(Parser* p) {
                 if(had_error(body)) { had_err = true; }
             }
             NodeList labels_b = {null, 0, 0};
-            list::push(&labels_b, p.m.arena, label);
+            list::push(&labels_b, p.m.allocator, label);
             ast::SwitchArm arm;
             arm.labels = {labels_b.ptr, labels_b.len};
             arm.body = body;
             arm.src_pos = label_pos;
-            list::push(&arms, p.m.arena, arm);
+            list::push(&arms, p.m.allocator, arm);
         } else if(k == token::TokenKind::ELSE) {
             u32 else_pos = peek(p, 0).src_pos;
             consume(p);
@@ -1484,7 +1485,7 @@ fn bool looks_like_var_decl(Parser* p) {
 }
 
 // A `comprun if` branch is inlined rather than nested, so its declarations land in the enclosing scope.
-fn void push_or_splice(NodeList* out, arena::Arena* a, ast::AstNode* node) {
+fn void push_or_splice(NodeList* out, mem::Allocator a, ast::AstNode* node) {
     if(((u16)node.h.flags & (u16)ast::AstFlags::Spliced) == 0) {
         list::push(out, a, node);
         return;
@@ -1504,7 +1505,7 @@ fn ast::AstNode* parse_block(Parser* p) {
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* s = parse_stmt(p);
         if(s) {
-            push_or_splice(&stmts, p.m.arena, s);
+            push_or_splice(&stmts, p.m.allocator, s);
             if(had_error(s)) { local_err = true; }
         }
     }
@@ -1593,7 +1594,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         if(lparen.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
         NodeList pb = {null, 0, 0};
         while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
-            list::push(&pb, p.m.arena, parse_type(p));
+            list::push(&pb, p.m.allocator, parse_type(p));
             if(!match(p, token::TokenKind::Comma)) { break; }
         }
         expect(p, token::TokenKind::RParen);
@@ -1744,15 +1745,15 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner, bool pointee_
                 positions.ptr = null; positions.len = 0; positions.cap = 0;
                 ast::AstNode* sz = parse_expr(p, 0);
                 expect(p, token::TokenKind::RBracket);
-                list::push(&sizes, p.m.arena, sz);
-                list::push(&positions, p.m.arena, t.src_pos);
+                list::push(&sizes, p.m.allocator, sz);
+                list::push(&positions, p.m.allocator, t.src_pos);
                 while(peek(p, 0).kind == token::TokenKind::LBracket && peek(p, 1).kind != token::TokenKind::RBracket) {
                     token::Token bracket = peek(p, 0);
                     consume(p);
                     ast::AstNode* dim = parse_expr(p, 0);
                     expect(p, token::TokenKind::RBracket);
-                    list::push(&sizes, p.m.arena, dim);
-                    list::push(&positions, p.m.arena, bracket.src_pos);
+                    list::push(&sizes, p.m.allocator, dim);
+                    list::push(&positions, p.m.allocator, bracket.src_pos);
                 }
                 for(i64 dim_index = (i64)sizes.len - 1; dim_index >= 0; dim_index -= 1) {
                     ast::TypeArrayNode* n = node_alloc(p.m.arena, sizeof(ast::TypeArrayNode));
@@ -1852,7 +1853,7 @@ fn ast::AstNode*[] parse_call_args(Parser* p, bool type_ctx) {
         } else {
             arg = parse_expr(p, 0);
         }
-        list::push(&b, p.m.arena, arg);
+        list::push(&b, p.m.allocator, arg);
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     expect(p, token::TokenKind::RParen);
@@ -2108,7 +2109,7 @@ fn ast::AstNode* parse_struct_lit(Parser* p) {
         fi.name = fi_name;
         fi.value = val;
         fi.src_pos = fi_pos;
-        list::push(&inits_arr, p.m.arena, fi);
+        list::push(&inits_arr, p.m.allocator, fi);
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     expect(p, token::TokenKind::RBrace);
@@ -2124,7 +2125,7 @@ fn ast::AstNode* parse_array_lit(Parser* p) {
     token::Token open = consume(p);
     NodeList b = {null, 0, 0};
     while(peek(p, 0).kind != token::TokenKind::RBracket && peek(p, 0).kind != token::TokenKind::EOF) {
-        list::push(&b, p.m.arena, parse_expr(p, 0));
+        list::push(&b, p.m.allocator, parse_expr(p, 0));
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     expect(p, token::TokenKind::RBracket);

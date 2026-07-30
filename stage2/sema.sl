@@ -1,6 +1,7 @@
 import module;
 import symbol;
 import arena;
+import mem;
 import ast;
 import diag;
 import token;
@@ -689,7 +690,7 @@ export struct BodyWait {
 }
 
 list::List(BodyWait) g_body_waits;   // guarded by g_body_lock
-arena::Arena*        g_body_waits_arena;
+mem::Allocator       g_body_waits_allocator;
 
 mutex::Mutex     g_body_lock;
 condvar::Condvar g_body_cv;
@@ -700,7 +701,7 @@ bool             g_body_sync_ready;
 // re-initialize a mutex a third already holds.
 export fn void init_body_sync(arena::Arena* wait_arena) {
     if(g_body_sync_ready) { return; }
-    g_body_waits_arena = wait_arena;
+    g_body_waits_allocator = arena::allocator(wait_arena);
     ensure_reflect_lock();
     mutex::create(&g_body_lock);
     condvar::create(&g_body_cv);
@@ -736,7 +737,7 @@ fn void set_waiting(u64 thread, ast::FnDeclNode* target) {
     BodyWait entry;
     entry.thread = thread;
     entry.waiting_on = target;
-    list::push(&g_body_waits, g_body_waits_arena, entry);
+    list::push(&g_body_waits, g_body_waits_allocator, entry);
 }
 
 fn void diag_comptime_wait_cycle(module::Module* requester, ast::FnDeclNode* func) {
@@ -1740,6 +1741,7 @@ fn types::Ty* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* gen
 // An explicit type argument is a type expression, or a bare name / mod::name that resolves to a nominal type.
 fn types::Ty* resolve_type_arg(Sema* s, ast::AstNode* arg) {
     if(ast::is_type(arg.h.kind)) { return resolve_type(s, arg); }
+    if(arg.h.kind == ast::AstKind::Call) { return resolve_type(s, arg); }   // a nested constructor: Box(Box(T))
     if(arg.h.kind == ast::AstKind::Ident) {
         symbol::Symbol* name = ((ast::IdentNode*)arg).name;
         Decl* decl = scope_lookup_local((Scope*)s.m.global_scope, name);

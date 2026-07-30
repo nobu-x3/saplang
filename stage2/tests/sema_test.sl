@@ -20,6 +20,7 @@ fn module::Module* fresh_module(arena::Arena* a) {
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
     m.arena = a;
+    m.allocator = arena::allocator(a);
     return m;
 }
 
@@ -4968,7 +4969,7 @@ fn i32 wait_cycle_detected(arena::Arena* a, u8[] m) {
     sema::BodyWait other_waits_on_mine;
     other_waits_on_mine.thread = 2;
     other_waits_on_mine.waiting_on = owned_by_me;
-    list::push(&waits, a, other_waits_on_mine);
+    list::push(&waits, arena::allocator(a), other_waits_on_mine);
 
     if(!testing::expect_true(sema::wait_would_cycle({waits.ptr, waits.len}, owned_by_other, 1), m)) { return -1; }
     return 0;

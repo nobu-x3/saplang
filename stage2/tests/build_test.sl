@@ -148,8 +148,8 @@ fn i32 gather_compiles(arena::Arena* a, u8[] m) {
 
     list::List(builder::CompileStep*) compiles;
     compiles.ptr = null; compiles.len = 0; compiles.cap = 0;
-    builder::collect_compiles(b.install_step, &compiles, a);
-    builder::collect_compiles(run_step, &compiles, a);
+    builder::collect_compiles(b.install_step, &compiles, arena::allocator(a));
+    builder::collect_compiles(run_step, &compiles, arena::allocator(a));
 
     if(!testing::expect_eq(compiles.len, (u64)2, m)) { return -1; }
     return 0;

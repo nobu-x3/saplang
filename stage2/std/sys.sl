@@ -4,6 +4,7 @@
 extern {
     // memory
     export fn void* malloc(u64 size);
+    export fn void* realloc(void* p, u64 size);
     export fn void  free(void* p);
     export fn void* memcpy(void* dst, const void* src, u64 n);
     export fn void* memset(void* p, i32 byte, u64 n);

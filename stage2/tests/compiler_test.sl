@@ -31,6 +31,7 @@ fn module::Module* mk_source_module(arena::Arena* a, u8[] name, u8[] src) {
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
     m.arena = sub_arena(a);
+    m.allocator = arena::allocator(m.arena);
     m.source = src;
     m.name = interner::intern(name);
     return m;

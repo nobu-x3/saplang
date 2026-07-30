@@ -1,5 +1,6 @@
 import sys;
 import arena;
+import mem;
 
 // Byte constants for read_until / write_until delimiters.
 export const u8 NEXT_LINE       = '\n';
@@ -69,8 +70,12 @@ export fn u64 write(File* f, u8[] src) {
 // {null, 0} = EOF before any byte; {ptr, 0} = delim was the next byte;
 // {ptr, n} = n bytes then delim or EOF.
 export fn u8[] read_until(File* f, arena::Arena* a, u8 delim) {
+    return read_until(f, arena::allocator(a), delim);
+}
+
+export fn u8[] read_until(File* f, mem::Allocator a, u8 delim) {
     u8[] out = {null, 0};
-    if(!f || !f.fp || !a) {
+    if(!f || !f.fp) {
         return out;
     }
     i32 first = sys::fgetc(f.fp);
@@ -78,7 +83,7 @@ export fn u8[] read_until(File* f, arena::Arena* a, u8 delim) {
         return out;
     }
     u64 cap = 64;
-    u8* buf = arena::alloc(a, cap);
+    u8* buf = mem::alloc(a, cap);
     if(!buf) {
         return out;
     }
@@ -87,7 +92,7 @@ export fn u8[] read_until(File* f, arena::Arena* a, u8 delim) {
     while(c >= 0 && (u8)c != delim) {
         if(len >= cap) {
             u64 new_cap = cap * 2;
-            buf = arena::realloc_grow(a, buf, cap, new_cap);
+            buf = mem::realloc_grow(a, buf, cap, new_cap);
             if(!buf) {
                 out.ptr = null;
                 out.len = 0;
@@ -105,13 +110,21 @@ export fn u8[] read_until(File* f, arena::Arena* a, u8 delim) {
 }
 
 export fn u8[] read_line(File* f, arena::Arena* a) {
+    return read_until(f, arena::allocator(a), NEXT_LINE);
+}
+
+export fn u8[] read_line(File* f, mem::Allocator a) {
     return read_until(f, a, NEXT_LINE);
 }
 
-// Falls back to chunked read when fseek/ftell isn't supported.
 export fn u8[] read_all(File* f, arena::Arena* a) {
+    return read_all(f, arena::allocator(a));
+}
+
+// Falls back to chunked read when fseek/ftell isn't supported.
+export fn u8[] read_all(File* f, mem::Allocator a) {
     u8[] out = {null, 0};
-    if(!f || !f.fp || !a) {
+    if(!f || !f.fp) {
         return out;
     }
     if(sys::fseek(f.fp, 0, sys::SEEK_END) == 0) {
@@ -120,7 +133,7 @@ export fn u8[] read_all(File* f, arena::Arena* a) {
         if(sz < 0) {
             return out;
         }
-        u8* buf = arena::alloc(a, (u64)sz + 1);
+        u8* buf = mem::alloc(a, (u64)sz + 1);
         if(!buf) {
             return out;
         }
@@ -172,18 +185,22 @@ export fn bool unlink(u8[] path) {
     return sys::remove((const i8*)&path_buf[0]) == 0;
 }
 
-// Growable byte buffer backed by an arena. Append-only; the underlying
-// memory comes from the arena and lives as long as the arena does.
+// Growable byte buffer. Append-only; the memory comes from the caller's
+// allocator and lives as long as that allocator does.
 export struct OutBuf {
-    arena::Arena* arena;
-    u8[]          data;
-    u64           cap;
+    mem::Allocator allocator;
+    u8[]           data;
+    u64            cap;
+}
+
+export fn void outbuf_init(OutBuf* b, mem::Allocator a, u64 initial_cap) {
+    b.allocator = a;
+    b.data = {(u8*)mem::alloc(a, initial_cap), 0};
+    b.cap = initial_cap;
 }
 
 export fn void outbuf_init(OutBuf* b, arena::Arena* a, u64 initial_cap) {
-    b.arena = a;
-    b.data = {(u8*)arena::alloc(a, initial_cap), 0};
-    b.cap = initial_cap;
+    outbuf_init(b, arena::allocator(a), initial_cap);
 }
 
 export fn void outbuf_reset(OutBuf* b) {
@@ -229,15 +246,15 @@ fn void outbuf_ensure(OutBuf* b, u64 add) {
     u64 new_cap = b.cap * 2;
     if(new_cap == 0) { new_cap = 64; }
     while(new_cap < need) { new_cap *= 2; }
-    b.data.ptr = (u8*)arena::realloc_grow(b.arena, b.data.ptr, b.data.len, new_cap);
+    b.data.ptr = (u8*)mem::realloc_grow(b.allocator, b.data.ptr, b.data.len, new_cap);
     b.cap = new_cap;
 }
 
 // PRIVATE
-fn u8[] read_growing(File* f, arena::Arena* a) {
+fn u8[] read_growing(File* f, mem::Allocator a) {
     u8[] out = {null, 0};
     u64 cap = 4096;
-    u8* buf = arena::alloc(a, cap);
+    u8* buf = mem::alloc(a, cap);
     if(!buf) {
         return out;
     }
@@ -245,7 +262,7 @@ fn u8[] read_growing(File* f, arena::Arena* a) {
     while(true) {
         if(len == cap) {
             u64 new_cap = cap * 2;
-            buf = arena::realloc_grow(a, buf, cap, new_cap);
+            buf = mem::realloc_grow(a, buf, cap, new_cap);
             if(!buf) {
                 out.ptr = null;
                 out.len = 0;

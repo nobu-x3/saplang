@@ -26,7 +26,7 @@ export fn void add(u8[] suite, u8[] name, fn* i32(arena::Arena*, u8[]) body) {
     c.suite = suite;
     c.name = name;
     c.body = body;
-    list::push(&runner.cases, &runner.arena, c);
+    list::push(&runner.cases, arena::allocator(&runner.arena), c);
 }
 
 // returns 0 on all-pass
