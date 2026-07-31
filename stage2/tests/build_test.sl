@@ -9,7 +9,7 @@ import sys;
 test_util::Counting g_counting;
 
 // Build owns no arena — only an Allocator — so the whole step graph can be built on a caller's allocator.
-fn i32 graph_allocates_through_caller_allocator(arena::Arena* a, u8[] m) {
+fn i32 graph_allocates_through_caller_allocator(arena::Arena* a, const u8[]m) {
     sys::memset(&g_counting, 0, sizeof(test_util::Counting));
     g_counting.inner = arena::allocator(a);
 
@@ -30,7 +30,7 @@ fn i32 graph_allocates_through_caller_allocator(arena::Arena* a, u8[] m) {
 // Graph shape: install_artifact hangs the compile step off install; a run step depends on the
 // same compile step; a named top step depends on the run step. First-field aliasing means
 // &exe.step is the CompileStep address.
-fn i32 graph_structure(arena::Arena* a, u8[] m) {
+fn i32 graph_structure(arena::Arena* a, const u8[]m) {
     builder::Build* b = builder::new_build(a);
     b.compiler_path = "saplangc";
     b.install_step = builder::step(b, "install", "install");
@@ -58,7 +58,7 @@ fn i32 graph_structure(arena::Arena* a, u8[] m) {
 }
 
 // Installed artifacts resolve under sap-out/bin/; run-only ones under .sap-cache/.
-fn i32 artifact_paths(arena::Arena* a, u8[] m) {
+fn i32 artifact_paths(arena::Arena* a, const u8[]m) {
     builder::Build* b = builder::new_build(a);
     b.install_step = builder::step(b, "install", "x");
 
@@ -72,7 +72,7 @@ fn i32 artifact_paths(arena::Arena* a, u8[] m) {
 }
 
 // The assembled saplangc invocation, exercised with every flag class at once.
-fn i32 command_string(arena::Arena* a, u8[] m) {
+fn i32 command_string(arena::Arena* a, const u8[]m) {
     builder::Build* b = builder::new_build(a);
     b.compiler_path = "saplangc";
     b.install_step = builder::step(b, "install", "x");
@@ -89,25 +89,25 @@ fn i32 command_string(arena::Arena* a, u8[] m) {
     builder::install_artifact(b, exe);
 
     u8[] cmd = builder::compile_command_string(b, exe);
-    u8[] want = "saplangc main.sl -o sap-out/bin/app -i std;vendor -l LLVM-19 -L /opt/lib -target linux -config Release";
+    const u8[] want = "saplangc main.sl -o sap-out/bin/app -i std;vendor -l LLVM-19 -L /opt/lib -target linux -config Release";
     if(!testing::expect_eq(cmd, want, m)) { return -1; }
     return 0;
 }
 
 // A run-only artifact with no imports/libs and a default (Debug) optimize.
-fn i32 command_string_minimal(arena::Arena* a, u8[] m) {
+fn i32 command_string_minimal(arena::Arena* a, const u8[]m) {
     builder::Build* b = builder::new_build(a);
     b.compiler_path = "saplangc";
 
     builder::CompileStep* exe = builder::add_executable(b, "t", "t.sl");
     u8[] cmd = builder::compile_command_string(b, exe);
-    u8[] want = "saplangc t.sl -o .sap-cache/t -config Debug";
+    const u8[] want = "saplangc t.sl -o .sap-cache/t -config Debug";
     if(!testing::expect_eq(cmd, want, m)) { return -1; }
     return 0;
 }
 
 // -D overrides resolve through the standard/option accessors; bare -Dflag reads as true.
-fn i32 options(arena::Arena* a, u8[] m) {
+fn i32 options(arena::Arena* a, const u8[]m) {
     builder::Build* b = builder::new_build(a);
     builder::define(b, "optimize", "Release", true);
     builder::define(b, "verbose", "", false);
@@ -125,7 +125,7 @@ fn i32 options(arena::Arena* a, u8[] m) {
 }
 
 // An explicit -Dtarget flows into standard_target_options and out into the command.
-fn i32 target_option(arena::Arena* a, u8[] m) {
+fn i32 target_option(arena::Arena* a, const u8[]m) {
     builder::Build* b = builder::new_build(a);
     b.compiler_path = "saplangc";
     builder::define(b, "target", "windows", true);
@@ -134,13 +134,13 @@ fn i32 target_option(arena::Arena* a, u8[] m) {
     builder::CompileStep* exe = builder::add_executable(b, "app", "main.sl");
     builder::set_target(exe, tg);
     u8[] cmd = builder::compile_command_string(b, exe);
-    u8[] want = "saplangc main.sl -o .sap-cache/app -target windows -config Debug";
+    const u8[] want = "saplangc main.sl -o .sap-cache/app -target windows -config Debug";
     if(!testing::expect_eq(cmd, want, m)) { return -1; }
     return 0;
 }
 
 // Options other than optimize/target reach the source as compiler defines; the command string also keys the rebuild stamp.
-fn i32 defines_forwarded(arena::Arena* a, u8[] m) {
+fn i32 defines_forwarded(arena::Arena* a, const u8[]m) {
     builder::Build* b = builder::new_build(a);
     b.compiler_path = "saplangc";
     builder::define(b, "optimize", "Release", true);
@@ -150,14 +150,14 @@ fn i32 defines_forwarded(arena::Arena* a, u8[] m) {
 
     builder::CompileStep* exe = builder::add_executable(b, "app", "main.sl");
     u8[] cmd = builder::compile_command_string(b, exe);
-    u8[] want = "saplangc main.sl -o .sap-cache/app -config Release -Dtracing -Dlevel=high";
+    const u8[] want = "saplangc main.sl -o .sap-cache/app -config Release -Dtracing -Dlevel=high";
     if(!testing::expect_eq(cmd, want, m)) { return -1; }
     return 0;
 }
 
 // The parallel scheduler gathers every reachable compile once; a step shared by install and run
 // is not double-counted.
-fn i32 gather_compiles(arena::Arena* a, u8[] m) {
+fn i32 gather_compiles(arena::Arena* a, const u8[]m) {
     builder::Build* b = builder::new_build(a);
     b.install_step = builder::step(b, "install", "x");
 
@@ -181,7 +181,7 @@ fn i32 gather_compiles(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "Build System Tests";
+    const u8[] suite = "Build System Tests";
     testing::add(suite, "graph_allocates_through_caller_allocator", &graph_allocates_through_caller_allocator);
     testing::add(suite, "graph_structure", &graph_structure);
     testing::add(suite, "artifact_paths", &artifact_paths);

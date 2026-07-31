@@ -8,8 +8,8 @@ import ast;
 
 export struct Module {
     symbol::Symbol*         name;
-    u8[]                    path;            // source file path, for diagnostics
-    u8[]                    source;          // owned; loaded by driver
+    const u8[]              path;            // source file path, for diagnostics
+    const u8[]              source;          // owned; loaded by driver
     u32[]                   line_starts;     // byte offset of every line start
     token::Token[]          tokens;          // scanner output
     u64                     tokens_cap;      // arena-grown capacity
@@ -49,25 +49,25 @@ export fn bool has_arena(Module* m) {
 
 // What `comprun if (build::...)` conditions read; the driver fills it before parsing.
 export struct BuildInfo {
-    u8[]        os;
-    u8[]        arch;
-    u8[]        config;
+    const u8[]  os;
+    const u8[]  arch;
+    const u8[]  config;
     Define[]    defines;
 }
 
 export struct Define {
-    u8[] name;
-    u8[] value;     // empty for a bare -Dname
+    const u8[] name;
+    const u8[] value;     // empty for a bare -Dname
 }
 
 // Positions in [base, base+bytes.len) belong to this fragment and render via generator_pos.
 export struct InsertedSource {
     u32     base;
-    u8[]    bytes;
+    const u8[] bytes;
     u32     generator_pos;
 }
 
-export fn u32 register_inserted_source(Module* m, u8[] bytes, u32 generator_pos) {
+export fn u32 register_inserted_source(Module* m, const u8[] bytes, u32 generator_pos) {
     if(m.next_inserted_base == 0) { m.next_inserted_base = (u32)m.source.len; }
     u32 base = m.next_inserted_base;
     InsertedSource entry;

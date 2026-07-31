@@ -14,14 +14,14 @@ fn u8[] cstr_slice(u8* cstr) {
     return out;
 }
 
-fn i8* cstr(arena::Arena* arena_ptr, u8[] bytes) {
+fn i8* cstr(arena::Arena* arena_ptr, const u8[] bytes) {
     i8* out = (i8*)arena::alloc(arena_ptr, bytes.len + 1);
     for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
     out[bytes.len] = 0;
     return out;
 }
 
-fn bool cstr_eq(u8* s, u8[] lit) {
+fn bool cstr_eq(u8* s, const u8[] lit) {
     for(u64 i = 0; i < lit.len; i += 1) {
         if(s[i] == 0 || s[i] != lit[i]) { return false; }
     }
@@ -65,7 +65,7 @@ fn bool dir_has_std(u8[] dir, arena::Arena* arena_ptr) {
     return true;
 }
 
-fn u8[] join_path(arena::Arena* arena_ptr, u8[] prefix, u8[] suffix) {
+fn u8[] join_path(arena::Arena* arena_ptr, const u8[] prefix, const u8[] suffix) {
     io::OutBuf buf;
     io::outbuf_init(&buf, arena_ptr, prefix.len + suffix.len + 1);
     io::outbuf_write(&buf, prefix);
@@ -93,13 +93,12 @@ fn i32 main(i32 argc, u8** argv) {
 
     compiler::Compiler* c = compiler::new(&arena);
 
-    u8[][] args = {null, 0};
-    if(argc > 1) {
-        args.len = (u64)(argc - 1);
-        args.ptr = arena::alloc(&arena, args.len * sizeof(u8[]));
-        for(i32 arg_index = 1; arg_index < argc; arg_index += 1) {
-            args[arg_index - 1] = cstr_slice(argv[arg_index]);
-        }
+    // Built in one initializer: the seed still reads the leading `const` as freezing the binding.
+    u64 arg_count = 0;
+    if(argc > 1) { arg_count = (u64)(argc - 1); }
+    const u8[][] args = {arena::alloc(&arena, arg_count * sizeof(const u8[])), arg_count};
+    for(i32 arg_index = 1; arg_index < argc; arg_index += 1) {
+        args[arg_index - 1] = cstr_slice(argv[arg_index]);
     }
     if(!compiler::parse_argv(c, args)) { return 1; }
     u8[] std_dir = find_std_dir(&arena, argv);
@@ -117,7 +116,7 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
     io::close(&bf);
 
     sys::mkdir(cstr(arena_ptr, ".sap-cache"), 493);
-    u8[] runner_path = ".sap-cache/__build_runner.sl";
+    const u8[] runner_path = ".sap-cache/__build_runner.sl";
     if(!write_runner(runner_path)) {
         sys::dprintf(2, "error: could not write build runner\n");
         return 1;
@@ -155,7 +154,7 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
     return 127;
 }
 
-fn bool write_runner(u8[] path) {
+fn bool write_runner(const u8[] path) {
     io::File f = io::open(path, "w");
     if(f.fp == null) { return false; }
     io::write_string(&f, "import builder;\n");
@@ -167,7 +166,7 @@ fn bool write_runner(u8[] path) {
     return true;
 }
 
-fn bool file_exists(u8[] path) {
+fn bool file_exists(const u8[] path) {
     io::File f = io::open(path, "r");
     if(f.fp == null) { return false; }
     io::close(&f);
@@ -222,7 +221,7 @@ fn void write_runner_stamp(arena::Arena* arena_ptr) {
     io::close(&f);
 }
 
-fn bool slice_eq(u8[] x, u8[] y) {
+fn bool slice_eq(const u8[] x, const u8[] y) {
     if(x.len != y.len) { return false; }
     for(u64 char_index = 0; char_index < x.len; char_index += 1) {
         if(x[char_index] != y[char_index]) { return false; }

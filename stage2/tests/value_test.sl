@@ -3,7 +3,7 @@ import value;
 import types;
 import arena;
 
-fn i32 scalar_values(arena::Arena* a, u8[] m) {
+fn i32 scalar_values(arena::Arena* a, const u8[]m) {
     value::Value i = value::val_int(42, types::prim_i32());
     if(!testing::expect_eq((u64)i.kind, (u64)value::ValueKind::Int, m)) { return -1; }
     if(!testing::expect_eq((u64)i.data.i, (u64)42, m)) { return -2; }
@@ -20,12 +20,12 @@ fn i32 scalar_values(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 ref_values(arena::Arena* a, u8[] m) {
+fn i32 ref_values(arena::Arena* a, const u8[]m) {
     value::Value t = value::val_type(types::prim_u32());
     if(!testing::expect_eq((u64)t.kind, (u64)value::ValueKind::TYPE, m)) { return -1; }
     if(!testing::expect_eq((void*)t.data.type_ref, (void*)types::prim_u32(), m)) { return -2; }
 
-    u8[] hi = "hi";
+    const u8[] hi = "hi";
     value::Value by = value::val_bytes(hi, null);
     if(!testing::expect_eq((u64)by.kind, (u64)value::ValueKind::Bytes, m)) { return -3; }
     if(!testing::expect_eq(by.data.bytes.len, (u64)2, m)) { return -4; }
@@ -40,7 +40,7 @@ fn i32 ref_values(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 composite_values(arena::Arena* a, u8[] m) {
+fn i32 composite_values(arena::Arena* a, const u8[]m) {
     value::Value[2] fields;
     fields[0] = value::val_int(1, types::prim_i32());
     fields[1] = value::val_int(2, types::prim_i32());
@@ -57,7 +57,7 @@ fn i32 composite_values(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 void_and_error(arena::Arena* a, u8[] m) {
+fn i32 void_and_error(arena::Arena* a, const u8[]m) {
     value::Value v = value::val_void();
     if(!testing::expect_eq((u64)v.kind, (u64)value::ValueKind::Void, m)) { return -1; }
     value::Value e = value::val_error();
@@ -67,7 +67,7 @@ fn i32 void_and_error(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "Value Tests";
+    const u8[] suite = "Value Tests";
     testing::add(suite, "scalar_values",    &scalar_values);
     testing::add(suite, "ref_values",       &ref_values);
     testing::add(suite, "composite_values", &composite_values);

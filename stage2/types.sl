@@ -193,19 +193,25 @@ fn Ty* _intern_array(TypeInterner* it, Ty* elem, u64 count) {
 }
 
 export fn Ty* intern_slice(Ty* elem) {
+    return intern_slice(elem, false);
+}
+
+export fn Ty* intern_slice(Ty* elem, bool is_const) {
     TypeInterner* it = types::acquire();
-    Ty* t = _intern_slice(it, elem);
+    Ty* t = _intern_slice(it, elem, is_const);
     types::release();
     return t;
 }
 
-fn Ty* _intern_slice(TypeInterner* it, Ty* elem) {
-    u32 hash = hash_slice(elem);
+fn Ty* _intern_slice(TypeInterner* it, Ty* elem, bool is_const) {
+    u32 hash = hash_slice(elem, is_const);
     u64 mask = it.cap - 1;
     u64 idx = (u64)hash & mask;
     while(it.buckets[idx].hash != 0) {
         Ty* cur = it.buckets[idx].type;
+        bool cur_const = ((u8)cur.flags & (u8)LayoutFlags::Const) != 0;
         if(it.buckets[idx].hash == hash
+                && is_const == cur_const
                 && cur.kind == TypeKind::Slice
                 && cur.data.slice_elem == elem) {
             return cur;
@@ -218,6 +224,9 @@ fn Ty* _intern_slice(TypeInterner* it, Ty* elem) {
     type.size = 16;
     type.align = 8;
     type.flags = LayoutFlags::Computed;
+    if(is_const) {
+        type.flags = (LayoutFlags)((u8)type.flags | (u8)LayoutFlags::Const);
+    }
     type.data.slice_elem = elem;
     return install(it, hash, type);
 }
@@ -504,6 +513,11 @@ export fn bool is_convertible(Ty* src, Ty* dst) {
     if (is_array(src) && is_slice(dst)) {
         return src.data.array.elem == dst.data.slice_elem;
     }
+    // slice -> slice: same element, and only toward const — dropping it would hand out writable aliases.
+    if (is_slice(src) && is_slice(dst)) {
+        if (is_const_slice(src) && !is_const_slice(dst)) { return false; }
+        return src.data.slice_elem == dst.data.slice_elem;
+    }
     // enum -> base
     if (src.kind == TypeKind::Enum && enum_base_type(src) == dst) { return true; }
     // integer widening, same signedness
@@ -561,6 +575,7 @@ export fn bool is_castable(Ty* src, Ty* dst) {
     if (is_ptr_sized_int(s) && is_ptr(d))          { return true; }
     // An explicit cast is the escape hatch for dropping a pointee's const, which conversion refuses.
     if (is_ptr(s)          && is_ptr(d))           { return true; }
+    if (is_slice(s) && is_slice(d) && s.data.slice_elem == d.data.slice_elem) { return true; }
     return false;
 }
 
@@ -631,6 +646,10 @@ export fn bool is_ptr(Ty* t) {
 // `const u8*`: the flag rides on the pointer and qualifies what it points at.
 export fn bool is_const_ptr(Ty* t) {
     return is_ptr(t) && ((u8)t.flags & (u8)LayoutFlags::Const) != 0;
+}
+
+export fn bool is_const_slice(Ty* t) {
+    return is_slice(t) && ((u8)t.flags & (u8)LayoutFlags::Const) != 0;
 }
 
 export fn bool is_fnptr(Ty* t) {
@@ -872,8 +891,9 @@ fn u32 hash_array(Ty* elem, u64 count) {
     return h;
 }
 
-fn u32 hash_slice(Ty* elem) {
+fn u32 hash_slice(Ty* elem, bool is_const) {
     u32 h = hash_ptr(elem) ^ 0x10000003;
+    if (is_const) { h = h ^ 0x5bf03635; }
     if (h == 0) { h = 1; }
     return h;
 }

@@ -328,7 +328,7 @@ fn void write_sym(io::OutBuf* out, symbol::Symbol* s) {
     io::outbuf_write(out, interner::symbol_str(s));
 }
 
-fn u8[] opcode_name(sapir::Opcode op) {
+fn const u8[] opcode_name(sapir::Opcode op) {
     switch(op) {
     case sapir::Opcode::ConstInt:    { return "const"; }
     case sapir::Opcode::ConstFloat:  { return "const"; }

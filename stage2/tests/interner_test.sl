@@ -8,9 +8,9 @@ fn u64 intern_count()    { interner::Interner* it = interner::acquire(); u64 cou
 fn u64 intern_slab_cap() { interner::Interner* it = interner::acquire(); u64 slab_cap = it.slab_cap; interner::release(); return slab_cap; }
 fn u64 intern_slab_len() { interner::Interner* it = interner::acquire(); u64 slab_len = it.slab.len; interner::release(); return slab_len; }
 
-fn i32 intern_dedup(arena::Arena* a, u8[] m) {
+fn i32 intern_dedup(arena::Arena* a, const u8[]m) {
     interner::init(a, 16);
-    u8[] s = "hello";
+    const u8[] s = "hello";
     symbol::Symbol* a1 = interner::intern(s);
     symbol::Symbol* a2 = interner::intern(s);
     if(!testing::expect_eq((void*)a1, (void*)a2, m)) { return -1; }
@@ -18,7 +18,7 @@ fn i32 intern_dedup(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 intern_distinct(arena::Arena* a, u8[] m) {
+fn i32 intern_distinct(arena::Arena* a, const u8[]m) {
     interner::init(a, 16);
     symbol::Symbol* a1 = interner::intern("foo");
     symbol::Symbol* a2 = interner::intern("bar");
@@ -27,18 +27,18 @@ fn i32 intern_distinct(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 intern_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 intern_roundtrip(arena::Arena* a, const u8[]m) {
     interner::init(a, 16);
-    u8[] s = "round-trip";
+    const u8[] s = "round-trip";
     symbol::Symbol* sym = interner::intern(s);
     u8[] back = interner::symbol_str(sym);
     if(!testing::expect_eq(back, s, m)) { return -1; }
     return 0;
 }
 
-fn i32 intern_symbol_fields(arena::Arena* a, u8[] m) {
+fn i32 intern_symbol_fields(arena::Arena* a, const u8[]m) {
     interner::init(a, 16);
-    u8[] s = "abcdef";
+    const u8[] s = "abcdef";
     symbol::Symbol* sym = interner::intern(s);
     if(!testing::expect_eq((u64)sym.len, s.len, m)) { return -1; }
     if(!testing::expect_eq(sym.offset, 0, m)) { return -2; }
@@ -49,7 +49,7 @@ fn i32 intern_symbol_fields(arena::Arena* a, u8[] m) {
 
 // Forces multiple entries into the same bucket. With only 2 buckets,
 // 4+ inserts guarantee collisions on at least one chain.
-fn i32 intern_chain_dedup(arena::Arena* a, u8[] m) {
+fn i32 intern_chain_dedup(arena::Arena* a, const u8[]m) {
     interner::init(a, 2);
     symbol::Symbol* s1 = interner::intern("alpha");
     symbol::Symbol* s2 = interner::intern("beta");
@@ -64,7 +64,7 @@ fn i32 intern_chain_dedup(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 intern_empty_bytes(arena::Arena* a, u8[] m) {
+fn i32 intern_empty_bytes(arena::Arena* a, const u8[]m) {
     interner::init(a, 16);
     u8[] empty = {null, 0};
     symbol::Symbol* s1 = interner::intern(empty);
@@ -74,7 +74,7 @@ fn i32 intern_empty_bytes(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 intern_dedup_distinct_buffers(arena::Arena* a, u8[] m) {
+fn i32 intern_dedup_distinct_buffers(arena::Arena* a, const u8[]m) {
     interner::init(a, 16);
     u8[] b1 = {(u8*)arena::alloc(a, 3), 3};
     u8[] b2 = {(u8*)arena::alloc(a, 3), 3};
@@ -89,7 +89,7 @@ fn i32 intern_dedup_distinct_buffers(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 intern_hash_buffer_independent(arena::Arena* a, u8[] m) {
+fn i32 intern_hash_buffer_independent(arena::Arena* a, const u8[]m) {
     interner::init(a, 16);
     u8[] b1 = {(u8*)arena::alloc(a, 5), 5};
     u8[] b2 = {(u8*)arena::alloc(a, 5), 5};
@@ -101,7 +101,7 @@ fn i32 intern_hash_buffer_independent(arena::Arena* a, u8[] m) {
 }
 
 // Forces slab capacity to grow past the initial 4096-byte floor.
-fn i32 intern_slab_growth(arena::Arena* a, u8[] m) {
+fn i32 intern_slab_growth(arena::Arena* a, const u8[]m) {
     interner::init(a, 16);
     u64 chunk_size = 600;
     u8[] chunk = {(u8*)arena::alloc(a, chunk_size), chunk_size};
@@ -119,7 +119,7 @@ fn i32 intern_slab_growth(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "Interner Tests";
+    const u8[] suite = "Interner Tests";
     testing::add(suite, "intern_dedup", &intern_dedup);
     testing::add(suite, "intern_distinct", &intern_distinct);
     testing::add(suite, "intern_roundtrip", &intern_roundtrip);

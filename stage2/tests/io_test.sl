@@ -6,7 +6,7 @@ import sys;
 // Reads `path` via raw sys::fopen + sys::fread (no io.sl involvement) and
 // asserts the content matches `expected`. Catches the case where io.sl's
 // write and read are both no-ops yet round-trip.
-fn bool verify_file_bytes(u8[] path, u8[] expected, arena::Arena* a, u8[] m) {
+fn bool verify_file_bytes(const u8[] path, const u8[] expected, arena::Arena* a, const u8[] m) {
     u8[4096] path_buf;
     u64 i = 0;
     while(i < path.len) {
@@ -36,15 +36,15 @@ fn bool verify_file_bytes(u8[] path, u8[] expected, arena::Arena* a, u8[] m) {
     return true;
 }
 
-fn i32 open_nonexistent(arena::Arena* a, u8[] m) {
+fn i32 open_nonexistent(arena::Arena* a, const u8[]m) {
     io::unlink("./io_t_nope.txt");
     io::File f = io::open("./io_t_nope.txt", "r");
     if(!testing::expect_null((void*)f.fp, m)) { return -1; }
     return 0;
 }
 
-fn i32 open_then_close(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_open.txt";
+fn i32 open_then_close(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_open.txt";
     io::unlink(path);
     io::File f = io::open(path, "w");
     if(!testing::expect_not_null((void*)f.fp, m)) { return -1; }
@@ -54,8 +54,8 @@ fn i32 open_then_close(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 close_idempotent(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_close2.txt";
+fn i32 close_idempotent(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_close2.txt";
     io::unlink(path);
     io::File f = io::open(path, "w");
     if(!testing::expect_true(io::close(&f), m)) { return -1; }
@@ -64,12 +64,12 @@ fn i32 close_idempotent(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 write_then_read_raw(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_raw.txt";
+fn i32 write_then_read_raw(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_raw.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     if(!testing::expect_not_null((void*)w.fp, m)) { return -1; }
-    u8[] payload = "hello bytes";
+    const u8[] payload = "hello bytes";
     if(!testing::expect_eq(io::write(&w, payload), payload.len, m)) { return -2; }
     io::close(&w);
 
@@ -88,8 +88,8 @@ fn i32 write_then_read_raw(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 write_string_round_trip(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_ws.txt";
+fn i32 write_string_round_trip(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_ws.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     if(!testing::expect_true(io::write_string(&w, "abc xyz"), m)) { return -1; }
@@ -105,8 +105,8 @@ fn i32 write_string_round_trip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 write_line_then_read_line(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_wl.txt";
+fn i32 write_line_then_read_line(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_wl.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     if(!testing::expect_true(io::write_line(&w, "first line"), m)) { return -1; }
@@ -125,8 +125,8 @@ fn i32 write_line_then_read_line(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 read_line_multiple(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_ml.txt";
+fn i32 read_line_multiple(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_ml.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     io::write_line(&w, "alpha");
@@ -150,8 +150,8 @@ fn i32 read_line_multiple(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 read_line_empty(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_empty_line.txt";
+fn i32 read_line_empty(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_empty_line.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     io::write_line(&w, "");
@@ -171,8 +171,8 @@ fn i32 read_line_empty(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 read_until_middle(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_ru_mid.txt";
+fn i32 read_until_middle(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_ru_mid.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     io::write_string(&w, "abc;def");
@@ -190,8 +190,8 @@ fn i32 read_until_middle(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 read_until_absent_delim(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_ru_abs.txt";
+fn i32 read_until_absent_delim(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_ru_abs.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     io::write_string(&w, "abc");
@@ -207,8 +207,8 @@ fn i32 read_until_absent_delim(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 read_until_immediate_delim(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_ru_im.txt";
+fn i32 read_until_immediate_delim(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_ru_im.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     io::write_string(&w, ";rest");
@@ -227,8 +227,8 @@ fn i32 read_until_immediate_delim(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 read_until_grows_buffer(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_ru_grow.txt";
+fn i32 read_until_grows_buffer(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_ru_grow.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     u64 payload_len = 500;
@@ -257,8 +257,8 @@ fn i32 read_until_grows_buffer(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 read_all_empty(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_all_empty.txt";
+fn i32 read_all_empty(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_all_empty.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     io::close(&w);
@@ -272,8 +272,8 @@ fn i32 read_all_empty(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 read_all_contents(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_all.txt";
+fn i32 read_all_contents(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_all.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     io::write_string(&w, "the quick brown fox\nover the lazy dog\n");
@@ -289,8 +289,8 @@ fn i32 read_all_contents(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 write_until_delim_present(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_wu_present.txt";
+fn i32 write_until_delim_present(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_wu_present.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     u64 n = io::write_until(&w, "abc;def", ';');
@@ -307,8 +307,8 @@ fn i32 write_until_delim_present(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 write_until_delim_absent(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_wu_absent.txt";
+fn i32 write_until_delim_absent(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_wu_absent.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     u64 n = io::write_until(&w, "abc", ';');
@@ -325,8 +325,8 @@ fn i32 write_until_delim_absent(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 flush_persists_data(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_flush.txt";
+fn i32 flush_persists_data(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_flush.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     io::write_string(&w, "buffered");
@@ -343,8 +343,8 @@ fn i32 flush_persists_data(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 is_eof_after_read_all(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_eof.txt";
+fn i32 is_eof_after_read_all(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_eof.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     io::write_string(&w, "tiny");
@@ -364,14 +364,14 @@ fn i32 is_eof_after_read_all(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 is_eof_on_closed(arena::Arena* a, u8[] m) {
+fn i32 is_eof_on_closed(arena::Arena* a, const u8[]m) {
     io::File f = {null};
     if(!testing::expect_true(io::is_eof(&f), m)) { return -1; }
     return 0;
 }
 
-fn i32 unlink_existing(arena::Arena* a, u8[] m) {
-    u8[] path = "./io_t_unlink.txt";
+fn i32 unlink_existing(arena::Arena* a, const u8[]m) {
+    const u8[] path = "./io_t_unlink.txt";
     io::unlink(path);
     io::File w = io::open(path, "w");
     if(!testing::expect_not_null((void*)w.fp, m)) { return -1; }
@@ -382,13 +382,13 @@ fn i32 unlink_existing(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 unlink_missing_returns_false(arena::Arena* a, u8[] m) {
+fn i32 unlink_missing_returns_false(arena::Arena* a, const u8[]m) {
     io::unlink("./io_t_missing.txt");
     if(!testing::expect_false(io::unlink("./io_t_missing.txt"), m)) { return -1; }
     return 0;
 }
 
-fn i32 write_ops_on_closed(arena::Arena* a, u8[] m) {
+fn i32 write_ops_on_closed(arena::Arena* a, const u8[]m) {
     io::File f = {null};
     if(!testing::expect_eq(io::write(&f, "x"), 0, m)) { return -1; }
     if(!testing::expect_false(io::write_string(&f, "x"), m)) { return -2; }
@@ -398,7 +398,7 @@ fn i32 write_ops_on_closed(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 read_ops_on_closed(arena::Arena* a, u8[] m) {
+fn i32 read_ops_on_closed(arena::Arena* a, const u8[]m) {
     io::File f = {null};
     u8[16] tmp;
     u8[] dst = {&tmp[0], 16};
@@ -412,7 +412,7 @@ fn i32 read_ops_on_closed(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "IO Tests";
+    const u8[] suite = "IO Tests";
     testing::add(suite, "open_nonexistent", &open_nonexistent);
     testing::add(suite, "open_then_close", &open_then_close);
     testing::add(suite, "close_idempotent", &close_idempotent);

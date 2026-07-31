@@ -109,6 +109,18 @@ fn void lower_fn(Lower* lo, ast::FnDeclNode* fn_node) {
     lower_fn_body(lo, fn_node, get_or_create_fn_decl(lo, fn_node.decl));
 }
 
+// `main` is the C entry point, so it is lowered as `fn i32` even when written void — the runtime reads an exit code either way.
+fn bool is_void_main(ast::FnDeclNode* fn_node) {
+    if(!slice_eq(interner::symbol_str(fn_node.name), "main")) { return false; }
+    if(fn_node.return_type == null) { return true; }
+    return types::is_void((types::Ty*)fn_node.return_type.h.ty);
+}
+
+fn types::Ty* exit_code_fn_type(types::Ty* declared) {
+    if(declared == null || declared.kind != types::TypeKind::FnPtr) { return declared; }
+    return types::intern_fn_ptr(types::prim_i32(), declared.data.fn_ptr.params, declared.data.fn_ptr.is_variadic);
+}
+
 fn bool returns_comptime_type(ast::FnDeclNode* fn_node) {
     if(fn_node.return_type == null) { return false; }
     types::Ty* ret = (types::Ty*)fn_node.return_type.h.ty;
@@ -132,6 +144,7 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
     func.param_count = runtime_param_count(fn_node);
     lo.ret_ty = types::prim_void();
     if(fn_node.return_type != null) { lo.ret_ty = (types::Ty*)fn_node.return_type.h.ty; }
+    if(is_void_main(fn_node)) { lo.ret_ty = types::prim_i32(); }
 
     cfg::Cfg* g = (cfg::Cfg*)fn_node.cfg;
     lo.func = func;
@@ -650,6 +663,10 @@ fn void lower_terminator(Lower* lo, cfg::BasicBlock* cfg_block) {
     case cfg::TermKind::Return: {
         u32 value = sapir::INVALID_ID;
         if(term.return_value != null) { value = emit_conversion(lo, term.return_value, lo.ret_ty); }
+        // Only a void `main` gets here valueless with a non-void return type; every other such fn is a sema error.
+        else if(!types::is_void(lo.ret_ty)) {
+            value = sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::ConstInt, lo.ret_ty, term.src_pos));
+        }
         for(u64 s = (u64)term.defer_start; s < cfg_block.stmts.len; s += 1) { lower_stmt(lo, cfg_block.stmts.ptr[s]); }
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Ret, types::prim_void(), term.src_pos);
         inst.a = value;
@@ -1280,7 +1297,7 @@ fn void build_struct_lit(Lower* lo, u32 addr, types::Ty* ty, ast::StructLitNode*
 
 // A `{ptr, len}` brace literal targeting a slice: build the two-field slice value directly, since a slice has no struct decl to walk. Fields map by name or position, matching check_slice_lit; a missing field zero-fills like a partial struct literal.
 fn u32 build_slice_lit(Lower* lo, types::Ty* ty, ast::StructLitNode* lit) {
-    types::Ty* elem_ptr = types::intern_pointer(ty.data.slice_elem, false);
+    types::Ty* elem_ptr = types::intern_pointer(ty.data.slice_elem, types::is_const_slice(ty));
     ast::AstNode* ptr_expr = null;
     ast::AstNode* len_expr = null;
     u64 positional = 0;
@@ -1619,6 +1636,7 @@ fn u32 get_or_create_fn_decl(Lower* lo, void* sema_decl) {
             d.linkage = sapir::SapirLinkage::Foreign;
         }
         d.link_name = mangle_fn_named(lo, decl, fn_node);
+        if(is_void_main(fn_node)) { d.ty = exit_code_fn_type(d.ty); }
     }
     u32 index = sapir::add_decl(lo.arena, lo.out, d);
     decl_map_insert(lo, sema_decl, index);
@@ -1697,7 +1715,7 @@ fn u8[] mangle_named(Lower* lo, symbol::Symbol* module_sym, symbol::Symbol* name
 }
 
 // An overloaded fn (its name binds more than one decl) gets a "__<paramtypes>" suffix so each overload has a distinct symbol.
-fn u8[] mangle_fn_named(Lower* lo, sema::Decl* decl, ast::FnDeclNode* fn_node) {
+fn const u8[] mangle_fn_named(Lower* lo, sema::Decl* decl, ast::FnDeclNode* fn_node) {
     if(slice_eq(interner::symbol_str(fn_node.name), "main")) { return "main"; }
     io::OutBuf buf;
     io::outbuf_init(&buf, lo.arena, 32);
@@ -1763,7 +1781,7 @@ fn void collapse_qualified(io::OutBuf* buf, symbol::Symbol* sym) {
     }
 }
 
-fn bool slice_eq(u8[] a, u8[] b) {
+fn bool slice_eq(const u8[] a, const u8[] b) {
     if(a.len != b.len) { return false; }
     for(u64 i = 0; i < a.len; i += 1) {
         if(a[i] != b[i]) { return false; }

@@ -51,7 +51,7 @@ fn void note_instantiation(Sema* s, u32 src_pos, ast::FnDeclNode* generic, u64 d
     emit_diag(s, src_pos, &scratch[0], written);
 }
 
-fn void sema_report(Sema* s, u32 pos, u8[] msg) {
+fn void sema_report(Sema* s, u32 pos, const u8[] msg) {
     diag::report(bdiag(s), balloc(s), pos, msg);
 }
 
@@ -299,12 +299,12 @@ fn Decl* register_fn(Sema* s, Scope* scope, ast::FnDeclNode* fn_decl, bool is_ex
         return register_sym(s, scope, name, is_exported, DeclKind::Node, fn_decl.h.src_pos);
     }
     if(is_generic_fn(fn_decl) || chain_has_generic(existing)) {
-        u8[] msg = "generic functions cannot be overloaded";
+        const u8[] msg = "generic functions cannot be overloaded";
         sema_report(s, fn_decl.h.src_pos, msg);
         return null;
     }
     if(chain_has_extern(existing)) {
-        u8[] msg = "extern functions cannot be overloaded";
+        const u8[] msg = "extern functions cannot be overloaded";
         sema_report(s, fn_decl.h.src_pos, msg);
         return null;
     }
@@ -1000,7 +1000,7 @@ export fn types::Ty* resolve_type(Sema* s, ast::AstNode* texpr) {
         ast::TypeSliceNode* slice_node = (ast::TypeSliceNode*)texpr;
         types::Ty* element_type = resolve_type(s, slice_node.element);
         if(element_type == null) { return null; }
-        types::Ty* resolved = types::intern_slice(element_type);
+        types::Ty* resolved = types::intern_slice(element_type, slice_node.is_const);
         texpr.h.ty = (void*)resolved;
         return resolved;
     }
@@ -1044,8 +1044,8 @@ export fn types::Ty* resolve_type(Sema* s, ast::AstNode* texpr) {
         if(synth(s, texpr) == null) { return null; }   // resolve callee + args before the interpreter runs
         types::Ty* resolved = eval_comptime_type_hook(s.m, texpr);
         if(resolved == null) {
-            u8[] msg = "expression does not evaluate to a type";
-            emit_diag(s, texpr.h.src_pos, msg.ptr, (i32)msg.len);
+            const u8[] msg = "expression does not evaluate to a type";
+            sema_report(s, texpr.h.src_pos, msg);
             return null;
         }
         texpr.h.ty = (void*)resolved;
@@ -1464,9 +1464,11 @@ fn types::Ty* synth_member_access(Sema* s, ast::MemberAccessNode* n) {
     if(base.kind != types::TypeKind::Pointer && expr_has_flag(n.base, ast::AstFlags::ConstExpr)) {
         field_flags = field_flags | (u16)ast::AstFlags::ConstExpr;
     }
+    if(types::is_const_ptr(base)) { field_flags = field_flags | (u16)ast::AstFlags::ConstExpr; }
     if(container.kind == types::TypeKind::Slice) {
         if(n.field == interner::intern("ptr")) {
-            types::Ty* elem_ptr = types::intern_pointer(container.data.slice_elem, false);
+            // The element qualifier rides out on the pointer, or `s.ptr[0] = v` would launder it away.
+            types::Ty* elem_ptr = types::intern_pointer(container.data.slice_elem, types::is_const_slice(container));
             set_expr((ast::AstNode*)n, elem_ptr, field_flags);
             return elem_ptr;
         }
@@ -1526,6 +1528,10 @@ fn types::Ty* synth_array_index(Sema* s, ast::ArrayIndexNode* n) {
     if(base_is_array && expr_has_flag(n.base, ast::AstFlags::ConstExpr)) {
         flags = flags | (u16)ast::AstFlags::ConstExpr;
     }
+    // ...unless that separate storage is itself qualified const, which is exactly what the qualifier promises.
+    if(types::is_const_slice(base) || types::is_const_ptr(base)) {
+        flags = flags | (u16)ast::AstFlags::ConstExpr;
+    }
     set_expr((ast::AstNode*)n, elem, flags);
     return elem;
 }
@@ -1549,7 +1555,8 @@ fn types::Ty* synth_slice_range(Sema* s, ast::SliceRangeNode* n) {
     }
     if(n.lo != null && !check_index(s, n.lo)) { mark_error((ast::AstNode*)n); return null; }
     if(n.hi != null && !check_index(s, n.hi)) { mark_error((ast::AstNode*)n); return null; }
-    types::Ty* result = types::intern_slice(elem);
+    // A sub-slice reaches the same elements, so it keeps the qualifier.
+    types::Ty* result = types::intern_slice(elem, types::is_const_slice(base) || types::is_const_ptr(base));
     set_expr((ast::AstNode*)n, result, 0);
     return result;
 }
@@ -1688,7 +1695,7 @@ fn types::Ty* clone_return_type(ast::FnDeclNode* clone) {
 // Generic callee: sema synths runtime args, the hook infers comptime args + monomorphizes, then sema checks args vs the clone.
 fn types::Ty* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
     if(resolve_generic_call_hook == null) {
-        u8[] msg = "generic calls require the comptime interpreter";
+        const u8[] msg = "generic calls require the comptime interpreter";
         sema_report(s, n.h.src_pos, msg);
         mark_error((ast::AstNode*)n);
         return null;
@@ -1698,7 +1705,7 @@ fn types::Ty* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* gen
         if(!generic.params[i].is_comptime) { n_runtime += 1; }
     }
     if(n.args.len != n_runtime) {
-        u8[] msg = "generic call: pass exactly the runtime arguments (explicit comptime args not yet supported)";
+        const u8[] msg = "generic call: pass exactly the runtime arguments (explicit comptime args not yet supported)";
         sema_report(s, n.h.src_pos, msg);
         mark_error((ast::AstNode*)n);
         return null;
@@ -1708,11 +1715,14 @@ fn types::Ty* synth_generic_call(Sema* s, ast::CallNode* n, ast::FnDeclNode* gen
     bool args_ok = true;
     for(u64 i = 0; i < n.args.len; i += 1) {
         if(ast::is_type(n.args[i].h.kind)) {
-            u8[] msg = "type argument passed to a runtime parameter";
+            const u8[] msg = "type argument passed to a runtime parameter";
             sema_report(s, n.args[i].h.src_pos, msg);
             mark_error((ast::AstNode*)n);
             return null;
         }
+        // A string literal adapts to a pointer, slice, or array target, so it carries no type of its own to infer
+        // from; it sits out inference and is checked against the bound parameter type afterwards.
+        if(n.args[i].h.kind == ast::AstKind::StringLit) { arg_types[i] = null; continue; }
         arg_types[i] = synth(s, n.args[i]);
         if(arg_types[i] == null) { args_ok = false; }
     }
@@ -1758,7 +1768,7 @@ fn types::Ty* resolve_type_arg(Sema* s, ast::AstNode* arg) {
         diag_unknown_qualified_type(s, arg.h.src_pos, qualifier_name(na.base), na.name);
         return null;
     }
-    u8[] msg = "expected a type argument for the comptime parameter";
+    const u8[] msg = "expected a type argument for the comptime parameter";
     sema_report(s, arg.h.src_pos, msg);
     return null;
 }
@@ -1766,7 +1776,7 @@ fn types::Ty* resolve_type_arg(Sema* s, ast::AstNode* arg) {
 // Explicit form: comptime-Type-param positions hold type-expression args; resolve them and monomorphize.
 fn types::Ty* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDeclNode* generic) {
     if(resolve_generic_explicit_hook == null) {
-        u8[] msg = "generic calls require the comptime interpreter";
+        const u8[] msg = "generic calls require the comptime interpreter";
         sema_report(s, n.h.src_pos, msg);
         mark_error((ast::AstNode*)n);
         return null;
@@ -1798,7 +1808,7 @@ fn types::Ty* synth_generic_call_explicit(Sema* s, ast::CallNode* n, ast::FnDecl
                 }
             }
             if(!is_const) {
-                u8[] msg = "comptime value argument must be an integer literal";
+                const u8[] msg = "comptime value argument must be an integer literal";
                 sema_report(s, varg.h.src_pos, msg);
                 mark_error((ast::AstNode*)n);
                 return null;
@@ -1913,6 +1923,7 @@ fn types::Ty* synth_unary(Sema* s, ast::UnaryOpNode* n) {
     u16 flags = 0;
     if(n.op == token::TokenKind::Star) {
         flags = (u16)ast::AstFlags::LValue;
+        if(types::is_const_ptr(operand)) { flags = flags | (u16)ast::AstFlags::ConstExpr; }
     } else if(n.op != token::TokenKind::Amp && expr_has_flag(n.operand, ast::AstFlags::ConstExpr)) {
         flags = (u16)ast::AstFlags::ConstExpr;
     }
@@ -2031,7 +2042,7 @@ fn types::Ty* synth_typeof(Sema* s, ast::TypeofNode* n) {
     return types::prim_type();
 }
 
-fn void reflect_set_field(ast::FieldDecl* f, u8[] name, types::Ty* ty) {
+fn void reflect_set_field(ast::FieldDecl* f, const u8[] name, types::Ty* ty) {
     sys::memset(f, 0, sizeof(ast::FieldDecl));
     f.name = interner::intern(name);
     f.resolved_type = (void*)ty;
@@ -2056,7 +2067,7 @@ fn void register_reflection_names(Sema* s, Scope* module_scope) {
     }
 }
 
-fn bool register_builtin_type(Sema* s, Scope* module_scope, u8[] name, types::Ty* ty, ast::AstNode* node) {
+fn bool register_builtin_type(Sema* s, Scope* module_scope, const u8[] name, types::Ty* ty, ast::AstNode* node) {
     symbol::Symbol* sym = interner::intern(name);
     if(scope_lookup_local(module_scope, sym) != null) { return false; }
     Decl* decl = new_decl(s, DeclKind::Node, sym, ty);
@@ -2160,15 +2171,7 @@ fn types::Ty* reflection_typekind_type_locked() {
     ed.h.kind = ast::AstKind::EnumDecl;
     ed.name = interner::intern("TypeKind");
     ed.qualified_name = ed.name;
-    u8[][8] names;
-    names[0] = "Primitive";
-    names[1] = "Pointer";
-    names[2] = "Array";
-    names[3] = "Slice";
-    names[4] = "FnPtr";
-    names[5] = "Struct";
-    names[6] = "Union";
-    names[7] = "Enum";
+    const u8[][8] names = ["Primitive", "Pointer", "Array", "Slice", "FnPtr", "Struct", "Union", "Enum"];
     ast::EnumMember* members = (ast::EnumMember*)arena::alloc(a, 8 * sizeof(ast::EnumMember));
     sys::memset(members, 0, 8 * sizeof(ast::EnumMember));
     for(u64 member_index = 0; member_index < 8; member_index += 1) {
@@ -2193,7 +2196,7 @@ fn bool in_comptime_context(Sema* s) {
 // TypeInfo carries a Type field, which has no runtime representation; without this the leak surfaces as an internal codegen error.
 fn types::Ty* synth_type_info(Sema* s, ast::TypeInfoNode* n) {
     if(!in_comptime_context(s)) {
-        u8[] msg = "type_info is only available at comptime";
+        const u8[] msg = "type_info is only available at comptime";
         sema_report(s, n.h.src_pos, msg);
         mark_error((ast::AstNode*)n);
         return null;
@@ -2207,7 +2210,7 @@ fn types::Ty* synth_type_info(Sema* s, ast::TypeInfoNode* n) {
 }
 
 fn types::Ty* synth_compcode(Sema* s, ast::CompCodeNode* n) {
-    u8[] msg = "compcode is not yet supported";
+    const u8[] msg = "compcode is not yet supported";
     sema_report(s, n.h.src_pos, msg);
     mark_error((ast::AstNode*)n);
     return null;
@@ -2333,9 +2336,14 @@ fn bool check_string_lit(Sema* s, ast::StringLitNode* n, types::Ty* expected) {
         mark_error((ast::AstNode*)n);
         return false;
     }
-    // A pointer target aliases the read-only bytes, so it has to keep the qualifier; an array copies them.
+    // A pointer or slice target aliases the read-only bytes, so it has to keep the qualifier; an array copies them.
     if(types::is_ptr(expected) && !types::is_const_ptr(expected)) {
         diag_type_mismatch(s, n.h.src_pos, types::intern_pointer(types::prim_u8(), true), expected);
+        mark_error((ast::AstNode*)n);
+        return false;
+    }
+    if(types::is_slice(expected) && !types::is_const_slice(expected)) {
+        diag_type_mismatch(s, n.h.src_pos, types::intern_slice(types::prim_u8(), true), expected);
         mark_error((ast::AstNode*)n);
         return false;
     }
@@ -2353,7 +2361,7 @@ fn bool check_string_lit(Sema* s, ast::StringLitNode* n, types::Ty* expected) {
 
 // `{.ptr = ..., .len = ...}` or positional `{ptr, len}` against a slice target.
 fn bool check_slice_lit(Sema* s, ast::StructLitNode* n, types::Ty* expected) {
-    types::Ty* ptr_ty = types::intern_pointer(expected.data.slice_elem, false);
+    types::Ty* ptr_ty = types::intern_pointer(expected.data.slice_elem, types::is_const_slice(expected));
     bool ok = true;
     bool seen_ptr = false;
     bool seen_len = false;
@@ -2517,7 +2525,7 @@ fn void stmt(Sema* s, ast::AstNode* st) {
         synth(s, ((ast::CompInsertNode*)st).source_expr);   // in a comprun_node; resolve the arg so eval_compinsert can read it
     }
     case ast::AstKind::CompspliceStmt: {
-        u8[] msg = "compsplice is not yet supported";
+        const u8[] msg = "compsplice is not yet supported";
         sema_report(s, st.h.src_pos, msg);
         mark_error(st);
     }
@@ -2560,6 +2568,27 @@ fn void stmt_return(Sema* s, ast::ReturnNode* ret) {
     }
 }
 
+// The type the write reaches through when an l-value is const by qualifier rather than by binding.
+fn types::Ty* const_pointee_base(ast::AstNode* lhs) {
+    if(lhs.h.kind == ast::AstKind::UnaryOp) {
+        ast::UnaryOpNode* deref = (ast::UnaryOpNode*)lhs;
+        if(deref.op != token::TokenKind::Star) { return null; }
+        types::Ty* base = (types::Ty*)deref.operand.h.ty;
+        if(types::is_const_ptr(base)) { return base; }
+        return null;
+    }
+    if(lhs.h.kind == ast::AstKind::ArrayIndex) {
+        types::Ty* base = (types::Ty*)((ast::ArrayIndexNode*)lhs).base.h.ty;
+        if(types::is_const_slice(base) || types::is_const_ptr(base)) { return base; }
+        return null;
+    }
+    if(lhs.h.kind == ast::AstKind::MemberAccess) {
+        types::Ty* base = (types::Ty*)((ast::MemberAccessNode*)lhs).base.h.ty;
+        if(types::is_const_ptr(base)) { return base; }
+    }
+    return null;
+}
+
 fn void stmt_assignment(Sema* s, ast::AssignmentNode* assign) {
     types::Ty* lt = synth(s, assign.lhs);
     if(lt == null) { synth(s, assign.rhs); return; }
@@ -2569,7 +2598,9 @@ fn void stmt_assignment(Sema* s, ast::AssignmentNode* assign) {
         return;
     }
     if(expr_has_flag(assign.lhs, ast::AstFlags::ConstExpr)) {
-        diag_assign_to_const(s, assign.lhs.h.src_pos);
+        types::Ty* through = const_pointee_base(assign.lhs);
+        if(through != null) { diag_write_through_const(s, assign.lhs.h.src_pos, through); }
+        else { diag_assign_to_const(s, assign.lhs.h.src_pos); }
         synth(s, assign.rhs);
         return;
     }
@@ -2647,7 +2678,7 @@ export fn void diag_lit_overflow(Sema* s, u32 src_pos, u64 value, types::Ty* exp
 
 // Emitted when synth is called on a StructLit or ArrayLit with no expected type.
 export fn void diag_needs_context(Sema* s, ast::AstNode* e) {
-    u8[] msg = "literal requires an expected type";
+    const u8[] msg = "literal requires an expected type";
     sema_report(s, e.h.src_pos, msg);
 }
 
@@ -2670,7 +2701,7 @@ export fn void diag_binop_mismatch(Sema* s, u32 src_pos, token::TokenKind op, ty
 
 // "operator `<op>` is not defined for `<type>`". Used by synth_unary.
 export fn void diag_unary_mismatch(Sema* s, u32 src_pos, token::TokenKind op, types::Ty* operand) {
-    u8[] op_str = token::kind_name(op);
+    const u8[] op_str = token::kind_name(op);
     u8[] operand_str = types_print::print_to_arena(operand, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "operator %.*s is not defined for %.*s", (i32)op_str.len, (i8*)op_str.ptr, (i32)operand_str.len, (i8*)operand_str.ptr);
@@ -2679,7 +2710,7 @@ export fn void diag_unary_mismatch(Sema* s, u32 src_pos, token::TokenKind op, ty
 
 // "cannot take the address of a non-lvalue". Used by synth_unary for `&x`.
 export fn void diag_not_lvalue(Sema* s, u32 src_pos) {
-    u8[] msg = "cannot take the address of a non-lvalue";
+    const u8[] msg = "cannot take the address of a non-lvalue";
     sema_report(s, src_pos, msg);
 }
 
@@ -2710,7 +2741,7 @@ export fn void diag_not_indexable(Sema* s, u32 src_pos, types::Ty* got) {
 
 // "slicing a pointer requires an upper bound". Used by synth_slice_range.
 export fn void diag_ptr_slice_needs_hi(Sema* s, u32 src_pos) {
-    u8[] msg = "slicing a pointer requires an upper bound";
+    const u8[] msg = "slicing a pointer requires an upper bound";
     sema_report(s, src_pos, msg);
 }
 
@@ -2724,17 +2755,17 @@ export fn void diag_index_not_int(Sema* s, u32 src_pos, types::Ty* got) {
 
 // "array size must be a compile-time constant". Used by eval_const_u64.
 export fn void diag_array_size_not_const(Sema* s, u32 src_pos) {
-    u8[] msg = "array size must be a compile-time constant";
+    const u8[] msg = "array size must be a compile-time constant";
     sema_report(s, src_pos, msg);
 }
 
 export fn void diag_array_size_not_int(Sema* s, u32 src_pos) {
-    u8[] msg = "array size must be a compile-time integer";
+    const u8[] msg = "array size must be a compile-time integer";
     sema_report(s, src_pos, msg);
 }
 
 export fn void diag_array_size_negative(Sema* s, u32 src_pos) {
-    u8[] msg = "array size cannot be negative";
+    const u8[] msg = "array size cannot be negative";
     sema_report(s, src_pos, msg);
 }
 
@@ -2795,7 +2826,7 @@ export fn void diag_arity(Sema* s, u32 src_pos, u64 expected, u64 got) {
 
 // "left of '::' is not a module or enum". Used by synth_ns_access.
 export fn void diag_not_namespace(Sema* s, u32 src_pos) {
-    u8[] msg = "left of '::' is not a module or enum";
+    const u8[] msg = "left of '::' is not a module or enum";
     sema_report(s, src_pos, msg);
 }
 
@@ -2810,7 +2841,7 @@ fn bool is_build_qualifier(ast::AstNode* base) {
 }
 
 export fn void diag_build_outside_comp_if(Sema* s, u32 src_pos) {
-    u8[] msg = "`build::` is only available in a `comprun if` condition";
+    const u8[] msg = "`build::` is only available in a `comprun if` condition";
     sema_report(s, src_pos, msg);
 }
 
@@ -2823,7 +2854,7 @@ export fn void diag_unknown_member(Sema* s, u32 src_pos, symbol::Symbol* name) {
 }
 
 // "cannot use `<kind>` literal as `<T>`". Used by the literal-check helpers.
-export fn void diag_lit_wrong_target(Sema* s, u32 src_pos, u8[] kind, types::Ty* expected) {
+export fn void diag_lit_wrong_target(Sema* s, u32 src_pos, const u8[] kind, types::Ty* expected) {
     u8[] expected_str = types_print::print_to_arena(expected, balloc(s));
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot use %.*s literal as %.*s", (i32)kind.len, (i8*)kind.ptr, (i32)expected_str.len, (i8*)expected_str.ptr);
@@ -2840,7 +2871,7 @@ export fn void diag_dup_field(Sema* s, u32 src_pos, symbol::Symbol* name) {
 
 // "too many initializers". Used by check_struct_lit / check_slice_lit.
 export fn void diag_extra_initializer(Sema* s, u32 src_pos) {
-    u8[] msg = "too many initializers";
+    const u8[] msg = "too many initializers";
     sema_report(s, src_pos, msg);
 }
 
@@ -2853,14 +2884,22 @@ export fn void diag_array_len_mismatch(Sema* s, u32 src_pos, u64 expected, u64 g
 
 // "cannot assign to a non-lvalue". Used by stmt_assignment.
 export fn void diag_not_assignable(Sema* s, u32 src_pos) {
-    u8[] msg = "cannot assign to a non-lvalue";
+    const u8[] msg = "cannot assign to a non-lvalue";
     sema_report(s, src_pos, msg);
 }
 
 // "cannot assign to a constant". Used by stmt_assignment.
 export fn void diag_assign_to_const(Sema* s, u32 src_pos) {
-    u8[] msg = "cannot assign to a constant";
+    const u8[] msg = "cannot assign to a constant";
     sema_report(s, src_pos, msg);
+}
+
+// "cannot write through %T". Used by stmt_assignment when the target is const because of a qualified pointee.
+export fn void diag_write_through_const(Sema* s, u32 src_pos, types::Ty* base) {
+    u8[] base_str = types_print::print_to_arena(base, balloc(s));
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "cannot write through %.*s", (i32)base_str.len, (i8*)base_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
 }
 
 // "string literal has M bytes (incl. NUL) but N expected". Used by check_string_lit.
@@ -2872,7 +2911,7 @@ export fn void diag_string_len_mismatch(Sema* s, u32 src_pos, u64 expected, u64 
 
 // "break outside loop or switch". Used by stmt.
 export fn void diag_break_outside(Sema* s, u32 src_pos) {
-    u8[] msg = "break outside loop or switch";
+    const u8[] msg = "break outside loop or switch";
     sema_report(s, src_pos, msg);
 }
 
@@ -2885,19 +2924,19 @@ export fn void diag_switch_discriminant(Sema* s, u32 src_pos, types::Ty* got) {
 }
 
 export fn void diag_duplicate_case(Sema* s, u32 src_pos) {
-    u8[] msg = "duplicate case label";
+    const u8[] msg = "duplicate case label";
     sema_report(s, src_pos, msg);
 }
 
 // "continue outside loop". Used by stmt.
 export fn void diag_continue_outside(Sema* s, u32 src_pos) {
-    u8[] msg = "continue outside loop";
+    const u8[] msg = "continue outside loop";
     sema_report(s, src_pos, msg);
 }
 
 // "cannot return a value from a void function". Used by stmt_return.
 export fn void diag_return_value_in_void(Sema* s, u32 src_pos) {
-    u8[] msg = "cannot return a value from a void function";
+    const u8[] msg = "cannot return a value from a void function";
     sema_report(s, src_pos, msg);
 }
 

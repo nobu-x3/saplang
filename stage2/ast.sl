@@ -354,6 +354,7 @@ export struct TypeArrayNode {
 export struct TypeSliceNode {
     AstHeader h;
     AstNode*  element;
+    bool      is_const;
 }
 
 export struct TypeFnPtrNode {

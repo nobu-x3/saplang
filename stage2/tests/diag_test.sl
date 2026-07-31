@@ -10,7 +10,7 @@ fn diag::DiagBuf make_empty_buf() {
     return d;
 }
 
-fn i32 empty_buf_zero_state(arena::Arena* a, u8[] m) {
+fn i32 empty_buf_zero_state(arena::Arena* a, const u8[]m) {
     diag::DiagBuf d = make_empty_buf();
     if(!testing::expect_eq(d.entries.len, (u64)0, m)) { return -1; }
     if(!testing::expect_eq(d.entries_cap, (u64)0, m)) { return -2; }
@@ -18,7 +18,7 @@ fn i32 empty_buf_zero_state(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 report_single_appends_one_entry(arena::Arena* a, u8[] m) {
+fn i32 report_single_appends_one_entry(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 42, "boom");
@@ -26,7 +26,7 @@ fn i32 report_single_appends_one_entry(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 report_first_push_allocates_buffer(arena::Arena* a, u8[] m) {
+fn i32 report_first_push_allocates_buffer(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 0, "x");
@@ -35,7 +35,7 @@ fn i32 report_first_push_allocates_buffer(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 report_stores_src_pos(arena::Arena* a, u8[] m) {
+fn i32 report_stores_src_pos(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 42, "boom");
@@ -43,7 +43,7 @@ fn i32 report_stores_src_pos(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 report_stores_msg(arena::Arena* a, u8[] m) {
+fn i32 report_stores_msg(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 0, "hello world");
@@ -51,7 +51,7 @@ fn i32 report_stores_msg(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 report_marks_error_not_warning(arena::Arena* a, u8[] m) {
+fn i32 report_marks_error_not_warning(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 0, "err");
@@ -59,7 +59,7 @@ fn i32 report_marks_error_not_warning(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 report_warning_marks_warning(arena::Arena* a, u8[] m) {
+fn i32 report_warning_marks_warning(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report_warning(&d, &local, 0, "warn");
@@ -67,7 +67,7 @@ fn i32 report_warning_marks_warning(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 report_warning_stores_src_pos_and_msg(arena::Arena* a, u8[] m) {
+fn i32 report_warning_stores_src_pos_and_msg(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report_warning(&d, &local, 99, "careful");
@@ -76,7 +76,7 @@ fn i32 report_warning_stores_src_pos_and_msg(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 multiple_reports_preserve_order(arena::Arena* a, u8[] m) {
+fn i32 multiple_reports_preserve_order(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 1, "a");
@@ -89,7 +89,7 @@ fn i32 multiple_reports_preserve_order(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 multiple_reports_preserve_msgs(arena::Arena* a, u8[] m) {
+fn i32 multiple_reports_preserve_msgs(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 1, "alpha");
@@ -101,7 +101,7 @@ fn i32 multiple_reports_preserve_msgs(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 growth_doubles_when_full(arena::Arena* a, u8[] m) {
+fn i32 growth_doubles_when_full(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     for(u32 i = 0; i < 8; i += 1) {
@@ -115,7 +115,7 @@ fn i32 growth_doubles_when_full(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 growth_doubles_multiple_times(arena::Arena* a, u8[] m) {
+fn i32 growth_doubles_multiple_times(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     for(u32 i = 0; i < 50; i += 1) {
@@ -127,7 +127,7 @@ fn i32 growth_doubles_multiple_times(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 entries_intact_across_growth(arena::Arena* a, u8[] m) {
+fn i32 entries_intact_across_growth(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     for(u32 i = 0; i < 20; i += 1) {
@@ -139,7 +139,7 @@ fn i32 entries_intact_across_growth(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 msgs_intact_across_growth(arena::Arena* a, u8[] m) {
+fn i32 msgs_intact_across_growth(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 0, "first");
@@ -152,7 +152,7 @@ fn i32 msgs_intact_across_growth(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 is_warning_intact_across_growth(arena::Arena* a, u8[] m) {
+fn i32 is_warning_intact_across_growth(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     for(u32 i = 0; i < 20; i += 1) {
@@ -169,7 +169,7 @@ fn i32 is_warning_intact_across_growth(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 mixed_error_and_warning_no_growth(arena::Arena* a, u8[] m) {
+fn i32 mixed_error_and_warning_no_growth(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 0, "e0");
@@ -183,7 +183,7 @@ fn i32 mixed_error_and_warning_no_growth(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 reset_clears_len(arena::Arena* a, u8[] m) {
+fn i32 reset_clears_len(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 0, "x");
@@ -194,7 +194,7 @@ fn i32 reset_clears_len(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 reset_preserves_cap(arena::Arena* a, u8[] m) {
+fn i32 reset_preserves_cap(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 0, "x");
@@ -205,7 +205,7 @@ fn i32 reset_preserves_cap(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 reset_preserves_ptr(arena::Arena* a, u8[] m) {
+fn i32 reset_preserves_ptr(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 0, "x");
@@ -215,7 +215,7 @@ fn i32 reset_preserves_ptr(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 reset_then_report_appends_at_zero(arena::Arena* a, u8[] m) {
+fn i32 reset_then_report_appends_at_zero(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 100, "before");
@@ -227,7 +227,7 @@ fn i32 reset_then_report_appends_at_zero(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 reset_then_refill_within_cap(arena::Arena* a, u8[] m) {
+fn i32 reset_then_refill_within_cap(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     for(u32 i = 0; i < 12; i += 1) {
@@ -245,7 +245,7 @@ fn i32 reset_then_refill_within_cap(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 reset_then_grow_past_cap(arena::Arena* a, u8[] m) {
+fn i32 reset_then_grow_past_cap(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     for(u32 i = 0; i < 8; i += 1) {
@@ -261,7 +261,7 @@ fn i32 reset_then_grow_past_cap(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 reset_on_empty_is_noop(arena::Arena* a, u8[] m) {
+fn i32 reset_on_empty_is_noop(arena::Arena* a, const u8[]m) {
     diag::DiagBuf d = make_empty_buf();
     diag::reset(&d);
     if(!testing::expect_eq(d.entries.len, (u64)0, m)) { return -1; }
@@ -270,7 +270,7 @@ fn i32 reset_on_empty_is_noop(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 empty_msg_handled(arena::Arena* a, u8[] m) {
+fn i32 empty_msg_handled(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     u8[] empty = {null, 0};
@@ -281,7 +281,7 @@ fn i32 empty_msg_handled(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 src_pos_zero(arena::Arena* a, u8[] m) {
+fn i32 src_pos_zero(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 0, "at start");
@@ -289,7 +289,7 @@ fn i32 src_pos_zero(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 src_pos_max_u32(arena::Arena* a, u8[] m) {
+fn i32 src_pos_max_u32(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     u32 huge = (u32)0xFFFFFFFF;
@@ -298,7 +298,7 @@ fn i32 src_pos_max_u32(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 duplicate_src_pos_appends_twice(arena::Arena* a, u8[] m) {
+fn i32 duplicate_src_pos_appends_twice(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 7, "first");
@@ -311,7 +311,7 @@ fn i32 duplicate_src_pos_appends_twice(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 duplicate_msg_appends_twice(arena::Arena* a, u8[] m) {
+fn i32 duplicate_msg_appends_twice(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
     diag::report(&d, &local, 1, "same");
@@ -322,20 +322,20 @@ fn i32 duplicate_msg_appends_twice(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 long_msg_handled(arena::Arena* a, u8[] m) {
+fn i32 long_msg_handled(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
-    u8[] long_msg = "the quick brown fox jumps over the lazy dog 0123456789 the quick brown fox jumps over the lazy dog";
+    const u8[] long_msg = "the quick brown fox jumps over the lazy dog 0123456789 the quick brown fox jumps over the lazy dog";
     diag::report(&d, &local, 1, long_msg);
     if(!testing::expect_eq(d.entries[0].msg, long_msg, m)) { return -1; }
     if(!testing::expect_eq(d.entries[0].msg.len, long_msg.len, m)) { return -2; }
     return 0;
 }
 
-fn i32 msg_bytes_copied_into_arena(arena::Arena* a, u8[] m) {
+fn i32 msg_bytes_copied_into_arena(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
-    u8[] src = "shared";
+    const u8[] src = "shared";
     diag::report(&d, &local, 0, src);
     if(!testing::expect_ne((void*)d.entries[0].msg.ptr, (void*)src.ptr, m)) { return -1; }
     if(!testing::expect_eq(d.entries[0].msg.len, src.len, m)) { return -2; }
@@ -343,7 +343,7 @@ fn i32 msg_bytes_copied_into_arena(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 independent_buffers_are_independent(arena::Arena* a, u8[] m) {
+fn i32 independent_buffers_are_independent(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d1 = make_empty_buf();
     diag::DiagBuf d2 = make_empty_buf();
@@ -360,7 +360,7 @@ fn i32 independent_buffers_are_independent(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "Diag Tests";
+    const u8[] suite = "Diag Tests";
     testing::add(suite, "empty_buf_zero_state", &empty_buf_zero_state);
     testing::add(suite, "report_single_appends_one_entry", &report_single_appends_one_entry);
     testing::add(suite, "report_first_push_allocates_buffer", &report_first_push_allocates_buffer);

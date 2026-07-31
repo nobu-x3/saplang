@@ -24,8 +24,8 @@ export fn LinkPaths resolve(mem::Allocator allocator) {
     LinkPaths paths;
     sys::memset(&paths, 0, sizeof(LinkPaths));
 
-    u8[] linker = find_dynamic_linker();
-    u8[] crt_dir = find_crt_dir(allocator);
+    const u8[] linker = find_dynamic_linker();
+    const u8[] crt_dir = find_crt_dir(allocator);
     paths.found_crt = linker.len > 0 && crt_dir.len > 0;
     if(linker.len > 0) { paths.dynamic_linker = cstr(allocator, linker); }
     if(crt_dir.len > 0) {
@@ -35,8 +35,8 @@ export fn LinkPaths resolve(mem::Allocator allocator) {
         paths.lib_dir   = cstr(allocator, join(allocator, "-L", crt_dir));
     }
 
-    u8[] clang_dir = find_clang_runtime_dir(allocator);
-    u8[] unwind = find_unwind_runtime();
+    const u8[] clang_dir = find_clang_runtime_dir(allocator);
+    const u8[] unwind = find_unwind_runtime();
     paths.found_asan = clang_dir.len > 0 && unwind.len > 0;
     if(clang_dir.len > 0) {
         paths.asan_runtime        = cstr(allocator, join(allocator, clang_dir, "libclang_rt.asan-x86_64.a"));
@@ -53,7 +53,7 @@ export fn LinkPaths resolve(mem::Allocator allocator) {
 }
 
 // An unknown key is ignored so a config file can outlive a field.
-export fn bool apply_override(LinkPaths* paths, mem::Allocator allocator, u8[] config_path) {
+export fn bool apply_override(LinkPaths* paths, mem::Allocator allocator, const u8[] config_path) {
     io::File config_file = io::open(config_path, "r");
     if(config_file.fp == null) { return false; }
     u8[] text = io::read_all(&config_file, allocator);
@@ -91,12 +91,8 @@ fn void assign_entry(LinkPaths* paths, mem::Allocator allocator, u8[] key, u8[] 
 }
 
 // Scrt1.o, crti.o and crtn.o ship together, so one probe locates all three.
-fn u8[] find_crt_dir(mem::Allocator allocator) {
-    u8[][4] candidates;
-    candidates[0] = "/usr/lib";
-    candidates[1] = "/usr/lib/x86_64-linux-gnu";
-    candidates[2] = "/usr/lib64";
-    candidates[3] = "/lib/x86_64-linux-gnu";
+fn const u8[] find_crt_dir(mem::Allocator allocator) {
+    const u8[][4] candidates = ["/usr/lib", "/usr/lib/x86_64-linux-gnu", "/usr/lib64", "/lib/x86_64-linux-gnu"];
     for(u64 candidate_index = 0; candidate_index < 4; candidate_index += 1) {
         if(file_exists(join(allocator, candidates[candidate_index], "/Scrt1.o"))) { return candidates[candidate_index]; }
     }
@@ -104,11 +100,8 @@ fn u8[] find_crt_dir(mem::Allocator allocator) {
     return none;
 }
 
-fn u8[] find_dynamic_linker() {
-    u8[][3] candidates;
-    candidates[0] = "/lib64/ld-linux-x86-64.so.2";
-    candidates[1] = "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2";
-    candidates[2] = "/usr/lib/ld-linux-x86-64.so.2";
+fn const u8[] find_dynamic_linker() {
+    const u8[][3] candidates = ["/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", "/usr/lib/ld-linux-x86-64.so.2"];
     for(u64 candidate_index = 0; candidate_index < 3; candidate_index += 1) {
         if(file_exists(candidates[candidate_index])) { return candidates[candidate_index]; }
     }
@@ -116,12 +109,8 @@ fn u8[] find_dynamic_linker() {
     return none;
 }
 
-fn u8[] find_unwind_runtime() {
-    u8[][4] candidates;
-    candidates[0] = "/usr/lib/libgcc_s.so.1";
-    candidates[1] = "/usr/lib/x86_64-linux-gnu/libgcc_s.so.1";
-    candidates[2] = "/lib/x86_64-linux-gnu/libgcc_s.so.1";
-    candidates[3] = "/usr/lib64/libgcc_s.so.1";
+fn const u8[] find_unwind_runtime() {
+    const u8[][4] candidates = ["/usr/lib/libgcc_s.so.1", "/usr/lib/x86_64-linux-gnu/libgcc_s.so.1", "/lib/x86_64-linux-gnu/libgcc_s.so.1", "/usr/lib64/libgcc_s.so.1"];
     for(u64 candidate_index = 0; candidate_index < 4; candidate_index += 1) {
         if(file_exists(candidates[candidate_index])) { return candidates[candidate_index]; }
     }
@@ -130,7 +119,7 @@ fn u8[] find_unwind_runtime() {
 }
 
 // Newest major version wins; Arch and Debian nest the runtime differently.
-fn u8[] find_clang_runtime_dir(mem::Allocator allocator) {
+fn const u8[] find_clang_runtime_dir(mem::Allocator allocator) {
     u64 major_version = 40;
     while(major_version >= 14) {
         u8[] arch_dir = clang_dir_arch(allocator, "/usr/lib/clang/", major_version);
@@ -145,7 +134,7 @@ fn u8[] find_clang_runtime_dir(mem::Allocator allocator) {
     return none;
 }
 
-fn u8[] clang_dir_arch(mem::Allocator allocator, u8[] root, u64 major_version) {
+fn u8[] clang_dir_arch(mem::Allocator allocator, const u8[] root, u64 major_version) {
     io::OutBuf buf;
     io::outbuf_init(&buf, allocator, 64);
     io::outbuf_write(&buf, root);
@@ -165,14 +154,14 @@ fn u8[] clang_dir_debian(mem::Allocator allocator, u64 major_version) {
     return io::outbuf_bytes(&buf);
 }
 
-fn bool file_exists(u8[] path) {
+fn bool file_exists(const u8[] path) {
     io::File probe = io::open(path, "r");
     if(probe.fp == null) { return false; }
     io::close(&probe);
     return true;
 }
 
-fn u8[] join(mem::Allocator allocator, u8[] prefix, u8[] suffix) {
+fn u8[] join(mem::Allocator allocator, const u8[] prefix, const u8[] suffix) {
     io::OutBuf buf;
     io::outbuf_init(&buf, allocator, prefix.len + suffix.len + 1);
     io::outbuf_write(&buf, prefix);
@@ -180,14 +169,14 @@ fn u8[] join(mem::Allocator allocator, u8[] prefix, u8[] suffix) {
     return io::outbuf_bytes(&buf);
 }
 
-fn i8* cstr(mem::Allocator allocator, u8[] bytes) {
+fn i8* cstr(mem::Allocator allocator, const u8[] bytes) {
     i8* out = (i8*)mem::alloc(allocator, bytes.len + 1);
     for(u64 char_index = 0; char_index < bytes.len; char_index += 1) { out[char_index] = (i8)bytes[char_index]; }
     out[bytes.len] = 0;
     return out;
 }
 
-fn bool slice_eq(u8[] left, u8[] right) {
+fn bool slice_eq(const u8[] left, const u8[] right) {
     if(left.len != right.len) { return false; }
     for(u64 char_index = 0; char_index < left.len; char_index += 1) {
         if(left[char_index] != right[char_index]) { return false; }

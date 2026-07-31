@@ -16,7 +16,7 @@ export struct File {
     sys::FILE* fp;
 }
 
-export fn File open(u8[] path, u8[] mode) {
+export fn File open(const u8[] path, const u8[] mode) {
     File f = {null};
     u8[4096] path_buf;
     u8[16] mode_buf;
@@ -60,7 +60,7 @@ export fn u64 read(File* f, u8[] dst) {
     return sys::fread(dst.ptr, 1, dst.len, f.fp);
 }
 
-export fn u64 write(File* f, u8[] src) {
+export fn u64 write(File* f, const u8[] src) {
     if(!f || !f.fp || !src.ptr) {
         return 0;
     }
@@ -148,11 +148,11 @@ export fn u8[] read_all(File* f, mem::Allocator a) {
     return read_growing(f, a);
 }
 
-export fn bool write_string(File* f, u8[] src) {
+export fn bool write_string(File* f, const u8[] src) {
     return write(f, src) == src.len;
 }
 
-export fn bool write_line(File* f, u8[] src) {
+export fn bool write_line(File* f, const u8[] src) {
     if(write(f, src) != src.len) {
         return false;
     }
@@ -162,7 +162,7 @@ export fn bool write_line(File* f, u8[] src) {
 }
 
 // Writes through and including the first delim; all of src if delim is absent.
-export fn u64 write_until(File* f, u8[] src, u8 delim) {
+export fn u64 write_until(File* f, const u8[] src, u8 delim) {
     if(!f || !f.fp || !src.ptr) {
         return 0;
     }
@@ -173,11 +173,11 @@ export fn u64 write_until(File* f, u8[] src, u8 delim) {
             break;
         }
     }
-    u8[] cut = {src.ptr, limit};
+    const u8[] cut = {src.ptr, limit};
     return write(f, cut);
 }
 
-export fn bool unlink(u8[] path) {
+export fn bool unlink(const u8[] path) {
     u8[4096] path_buf;
     if(!cstr_into(path, &path_buf[0], 4096)) {
         return false;
@@ -211,7 +211,7 @@ export fn u8[] outbuf_bytes(OutBuf* b) {
     return b.data;
 }
 
-export fn void outbuf_write(OutBuf* b, u8[] s) {
+export fn void outbuf_write(OutBuf* b, const u8[] s) {
     if(s.len == 0) { return; }
     outbuf_ensure(b, s.len);
     sys::memcpy(&b.data[b.data.len], s.ptr, s.len);
@@ -281,7 +281,7 @@ fn u8[] read_growing(File* f, mem::Allocator a) {
     return out;
 }
 
-fn bool cstr_into(u8[] src, u8* dst, u64 cap) {
+fn bool cstr_into(const u8[] src, u8* dst, u64 cap) {
     if(src.len + 1 > cap) {
         return false;
     }

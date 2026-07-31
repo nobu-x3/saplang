@@ -4,7 +4,7 @@ import threads;
 import mutex;
 import condvar;
 
-fn i32 mutex_create_and_destroy(arena::Arena* a, u8[] m) {
+fn i32 mutex_create_and_destroy(arena::Arena* a, const u8[]m) {
     mutex::Mutex mu;
     if (!testing::expect_eq(mutex::create(&mu), 0, m)) { return -1; }
     if (!testing::expect_eq(mutex::lock(&mu), 0, m)) { return -2; }
@@ -19,7 +19,7 @@ fn void* set_one(void* arg) {
     return null;
 }
 
-fn i32 thread_spawn_join_runs_proc(arena::Arena* a, u8[] m) {
+fn i32 thread_spawn_join_runs_proc(arena::Arena* a, const u8[]m) {
     threads::Thread t;
     i32 flag = 0;
     if (!testing::expect_eq(threads::spawn(&t, &set_one, (void*)&flag), 0, m)) { return -1; }
@@ -33,7 +33,7 @@ fn void* return_sentinel(void* arg) {
 }
 
 // Exercises the Windows trampoline's result-passing path.
-fn i32 thread_join_propagates_return_value(arena::Arena* a, u8[] m) {
+fn i32 thread_join_propagates_return_value(arena::Arena* a, const u8[]m) {
     threads::Thread t;
     threads::spawn(&t, &return_sentinel, null);
     void* result = null;
@@ -58,7 +58,7 @@ fn void* condvar_waiter(void* arg) {
     return null;
 }
 
-fn i32 condvar_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 condvar_roundtrip(arena::Arena* a, const u8[]m) {
     CondvarCtx ctx;
     ctx.ready = 0;
     if (!testing::expect_eq(mutex::create(&ctx.mu), 0, m)) { return -1; }
@@ -81,7 +81,7 @@ fn i32 condvar_roundtrip(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "Threads Tests";
+    const u8[] suite = "Threads Tests";
     testing::add(suite, "mutex_create_and_destroy", &mutex_create_and_destroy);
     testing::add(suite, "thread_spawn_join_runs_proc", &thread_spawn_join_runs_proc);
     testing::add(suite, "thread_join_propagates_return_value", &thread_join_propagates_return_value);

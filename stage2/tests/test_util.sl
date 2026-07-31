@@ -68,7 +68,7 @@ export fn void boot(arena::Arena* a) {
     comptime_interp::install_hooks();
 }
 
-export fn module::Module* mk_module(arena::Arena* a, u8[] name, u8[] src) {
+export fn module::Module* mk_module(arena::Arena* a, const u8[] name, const u8[] src) {
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
     module::set_arena(m, sub_arena(a));
@@ -109,7 +109,7 @@ export fn void wire_imports(arena::Arena* a, module::Module* m, module::Module*[
 
 // Runs the single-module frontend (scan → parse → sema → cfg) with driver-style bail between phases.
 // Diagnostics stay in m.diag (not drained), so tests can pin exact messages + src_pos.
-export fn module::Module* frontend(arena::Arena* a, u8[] src) {
+export fn module::Module* frontend(arena::Arena* a, const u8[]src) {
     return frontend_build(a, src, host_build());
 }
 
@@ -122,7 +122,7 @@ export fn module::BuildInfo host_build() {
     return build;
 }
 
-export fn module::Module* frontend_build(arena::Arena* a, u8[] src, module::BuildInfo build) {
+export fn module::Module* frontend_build(arena::Arena* a, const u8[]src, module::BuildInfo build) {
     interner::init(a, E2E_BUCKETS);
     token::load_keywords();
     types::typer_init(a, E2E_BUCKETS);

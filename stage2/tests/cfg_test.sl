@@ -131,7 +131,7 @@ fn void set_arm(ast::SwitchArm* arm, ast::AstNode** labels, u64 label_count, ast
     arm.src_pos = 0;
 }
 
-fn i32 straight_line_void(arena::Arena* a, u8[] m) {
+fn i32 straight_line_void(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[2] stmts;
     stmts[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -147,7 +147,7 @@ fn i32 straight_line_void(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 non_void_no_return_is_unreachable(arena::Arena* a, u8[] m) {
+fn i32 non_void_no_return_is_unreachable(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] stmts;
     stmts[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -165,7 +165,7 @@ fn ast::AstNode* mk_kind(arena::Arena* a, ast::AstKind kind) {
     return (ast::AstNode*)n;
 }
 
-fn i32 mixed_leaf_kinds_referenced(arena::Arena* a, u8[] m) {
+fn i32 mixed_leaf_kinds_referenced(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[3] stmts;
     stmts[0] = mk_kind(a, ast::AstKind::VarDecl);
@@ -179,7 +179,7 @@ fn i32 mixed_leaf_kinds_referenced(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 predecessors_and_exit_finalized(arena::Arena* a, u8[] m) {
+fn i32 predecessors_and_exit_finalized(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] stmts;
     stmts[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -192,7 +192,7 @@ fn i32 predecessors_and_exit_finalized(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 empty_void_body(arena::Arena* a, u8[] m) {
+fn i32 empty_void_body(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::FnDeclNode* func = mk_fn(a, null, mk_block(a, null, 0));
     cfg::Cfg* g = cfg::build_cfg(mm, func);
@@ -201,7 +201,7 @@ fn i32 empty_void_body(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 nested_blocks_flatten(arena::Arena* a, u8[] m) {
+fn i32 nested_blocks_flatten(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] inner_stmts;
     inner_stmts[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -216,7 +216,7 @@ fn i32 nested_blocks_flatten(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 haderror_stmt_skipped(arena::Arena* a, u8[] m) {
+fn i32 haderror_stmt_skipped(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* bad = mk_expr_stmt(a, mk_int_lit(a));
     bad.h.flags = ast::AstFlags::HadError;
@@ -228,7 +228,7 @@ fn i32 haderror_stmt_skipped(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 if_else_merge(arena::Arena* a, u8[] m) {
+fn i32 if_else_merge(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
     then_s[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -249,7 +249,7 @@ fn i32 if_else_merge(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 if_no_else(arena::Arena* a, u8[] m) {
+fn i32 if_no_else(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
     then_s[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -264,7 +264,7 @@ fn i32 if_no_else(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 if_both_return_after_unreachable(arena::Arena* a, u8[] m) {
+fn i32 if_both_return_after_unreachable(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
     then_s[0] = mk_return(a, null);
@@ -280,7 +280,7 @@ fn i32 if_both_return_after_unreachable(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 while_loop_edges(arena::Arena* a, u8[] m) {
+fn i32 while_loop_edges(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] wbody;
     wbody[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -299,7 +299,7 @@ fn i32 while_loop_edges(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 while_break(arena::Arena* a, u8[] m) {
+fn i32 while_break(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] wbody;
     wbody[0] = mk_break(a);
@@ -314,7 +314,7 @@ fn i32 while_break(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 while_continue(arena::Arena* a, u8[] m) {
+fn i32 while_continue(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] wbody;
     wbody[0] = mk_continue(a);
@@ -328,7 +328,7 @@ fn i32 while_continue(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 for_loop_edges(arena::Arena* a, u8[] m) {
+fn i32 for_loop_edges(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] fbody;
     fbody[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -347,7 +347,7 @@ fn i32 for_loop_edges(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 for_no_cond(arena::Arena* a, u8[] m) {
+fn i32 for_no_cond(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] fbody;
     fbody[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -361,7 +361,7 @@ fn i32 for_no_cond(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 for_continue_targets_post(arena::Arena* a, u8[] m) {
+fn i32 for_continue_targets_post(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] fbody;
     fbody[0] = mk_continue(a);
@@ -373,7 +373,7 @@ fn i32 for_continue_targets_post(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 switch_arms_dispatch(arena::Arena* a, u8[] m) {
+fn i32 switch_arms_dispatch(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] a0;
     a0[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -403,7 +403,7 @@ fn i32 switch_arms_dispatch(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 switch_no_else_default_falls_through(arena::Arena* a, u8[] m) {
+fn i32 switch_no_else_default_falls_through(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] a0;
     a0[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -424,7 +424,7 @@ fn i32 switch_no_else_default_falls_through(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 switch_break_fresh_continuation(arena::Arena* a, u8[] m) {
+fn i32 switch_break_fresh_continuation(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] a0;
     a0[0] = mk_break(a);
@@ -443,7 +443,7 @@ fn i32 switch_break_fresh_continuation(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 return_fresh_unreachable(arena::Arena* a, u8[] m) {
+fn i32 return_fresh_unreachable(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] body;
     body[0] = mk_return(a, null);
@@ -455,7 +455,7 @@ fn i32 return_fresh_unreachable(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 return_value_recorded(arena::Arena* a, u8[] m) {
+fn i32 return_value_recorded(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* val = mk_int_lit(a);
     ast::AstNode*[1] body;
@@ -466,7 +466,7 @@ fn i32 return_value_recorded(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 defer_fallthrough(arena::Arena* a, u8[] m) {
+fn i32 defer_fallthrough(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* s = mk_expr_stmt(a, mk_int_lit(a));
     ast::AstNode*[1] dbody;
@@ -480,7 +480,7 @@ fn i32 defer_fallthrough(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 defer_reverse_order(arena::Arena* a, u8[] m) {
+fn i32 defer_reverse_order(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* sa = mk_expr_stmt(a, mk_int_lit(a));
     ast::AstNode* sb = mk_expr_stmt(a, mk_int_lit(a));
@@ -498,7 +498,7 @@ fn i32 defer_reverse_order(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 defer_on_return(arena::Arena* a, u8[] m) {
+fn i32 defer_on_return(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* s = mk_expr_stmt(a, mk_int_lit(a));
     ast::AstNode*[1] dbody;
@@ -513,7 +513,7 @@ fn i32 defer_on_return(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 defer_on_break(arena::Arena* a, u8[] m) {
+fn i32 defer_on_break(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* s = mk_expr_stmt(a, mk_int_lit(a));
     ast::AstNode*[1] dbody;
@@ -531,7 +531,7 @@ fn i32 defer_on_break(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 nested_if_in_while(arena::Arena* a, u8[] m) {
+fn i32 nested_if_in_while(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
     then_s[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -548,7 +548,7 @@ fn i32 nested_if_in_while(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 continue_through_switch(arena::Arena* a, u8[] m) {
+fn i32 continue_through_switch(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] arm_body;
     arm_body[0] = mk_continue(a);
@@ -569,7 +569,7 @@ fn i32 continue_through_switch(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 switch_fallthrough(arena::Arena* a, u8[] m) {
+fn i32 switch_fallthrough(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] a1;
     a1[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -593,7 +593,7 @@ fn i32 switch_fallthrough(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 if_else_if_chain(arena::Arena* a, u8[] m) {
+fn i32 if_else_if_chain(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] a_s;
     a_s[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -614,7 +614,7 @@ fn i32 if_else_if_chain(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 for_break(arena::Arena* a, u8[] m) {
+fn i32 for_break(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] fbody;
     fbody[0] = mk_break(a);
@@ -626,7 +626,7 @@ fn i32 for_break(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 defer_on_continue(arena::Arena* a, u8[] m) {
+fn i32 defer_on_continue(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* s = mk_expr_stmt(a, mk_int_lit(a));
     ast::AstNode*[1] dbody;
@@ -644,7 +644,7 @@ fn i32 defer_on_continue(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 nested_block_defers(arena::Arena* a, u8[] m) {
+fn i32 nested_block_defers(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* sa = mk_expr_stmt(a, mk_int_lit(a));
     ast::AstNode* sb = mk_expr_stmt(a, mk_int_lit(a));
@@ -665,7 +665,7 @@ fn i32 nested_block_defers(arena::Arena* a, u8[] m) {
 }
 
 // A defer body with control flow builds real blocks (a CondBranch), not the if appended as a leaf statement.
-fn i32 defer_with_control_flow(arena::Arena* a, u8[] m) {
+fn i32 defer_with_control_flow(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
     then_s[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -687,7 +687,7 @@ fn i32 defer_with_control_flow(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 if_then_returns_else_falls(arena::Arena* a, u8[] m) {
+fn i32 if_then_returns_else_falls(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
     then_s[0] = mk_return(a, null);
@@ -704,7 +704,7 @@ fn i32 if_then_returns_else_falls(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 comp_stmt_emits_nothing(arena::Arena* a, u8[] m) {
+fn i32 comp_stmt_emits_nothing(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* s = mk_expr_stmt(a, mk_int_lit(a));
     ast::AstNode*[2] body;
@@ -716,7 +716,7 @@ fn i32 comp_stmt_emits_nothing(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 non_void_missing_return_errors(arena::Arena* a, u8[] m) {
+fn i32 non_void_missing_return_errors(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] body;
     body[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -731,7 +731,7 @@ fn i32 non_void_missing_return_errors(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 non_void_all_paths_return_ok(arena::Arena* a, u8[] m) {
+fn i32 non_void_all_paths_return_ok(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
     then_s[0] = mk_return(a, mk_int_lit(a));
@@ -750,7 +750,7 @@ fn i32 non_void_all_paths_return_ok(arena::Arena* a, u8[] m) {
 }
 
 // An else-less switch's unmatched path falls through to the following return, so all paths return.
-fn i32 switch_no_else_then_return_ok(arena::Arena* a, u8[] m) {
+fn i32 switch_no_else_then_return_ok(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] arm_body;
     arm_body[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -772,7 +772,7 @@ fn i32 switch_no_else_then_return_ok(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 void_skips_return_check(arena::Arena* a, u8[] m) {
+fn i32 void_skips_return_check(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] body;
     body[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -784,7 +784,7 @@ fn i32 void_skips_return_check(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 unreachable_after_both_return_warns(arena::Arena* a, u8[] m) {
+fn i32 unreachable_after_both_return_warns(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
     then_s[0] = mk_return(a, null);
@@ -806,7 +806,7 @@ fn i32 unreachable_after_both_return_warns(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 no_unreachable_clean(arena::Arena* a, u8[] m) {
+fn i32 no_unreachable_clean(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] body;
     body[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -817,7 +817,7 @@ fn i32 no_unreachable_clean(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 build_all_functions_reports(arena::Arena* a, u8[] m) {
+fn i32 build_all_functions_reports(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] fbody;
     fbody[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -833,7 +833,7 @@ fn i32 build_all_functions_reports(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 switch_all_arms_return_ok(arena::Arena* a, u8[] m) {
+fn i32 switch_all_arms_return_ok(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] arm_s;
     arm_s[0] = mk_return(a, mk_int_lit(a));
@@ -856,7 +856,7 @@ fn i32 switch_all_arms_return_ok(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 switch_no_else_missing_return_errors(arena::Arena* a, u8[] m) {
+fn i32 switch_no_else_missing_return_errors(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] arm_s;
     arm_s[0] = mk_return(a, mk_int_lit(a));
@@ -878,7 +878,7 @@ fn i32 switch_no_else_missing_return_errors(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 build_all_functions_multiple(arena::Arena* a, u8[] m) {
+fn i32 build_all_functions_multiple(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] good_b;
     good_b[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -898,7 +898,7 @@ fn i32 build_all_functions_multiple(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 code_after_return_warns(arena::Arena* a, u8[] m) {
+fn i32 code_after_return_warns(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* dead = mk_expr_stmt(a, mk_int_lit(a));
     dead.h.src_pos = 777;
@@ -914,7 +914,7 @@ fn i32 code_after_return_warns(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 code_after_break_warns(arena::Arena* a, u8[] m) {
+fn i32 code_after_break_warns(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* dead = mk_expr_stmt(a, mk_int_lit(a));
     dead.h.src_pos = 888;
@@ -931,7 +931,7 @@ fn i32 code_after_break_warns(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 code_after_continue_warns(arena::Arena* a, u8[] m) {
+fn i32 code_after_continue_warns(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* dead = mk_expr_stmt(a, mk_int_lit(a));
     dead.h.src_pos = 999;
@@ -948,7 +948,7 @@ fn i32 code_after_continue_warns(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 code_after_return_single_warning(arena::Arena* a, u8[] m) {
+fn i32 code_after_return_single_warning(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode* first_dead = mk_expr_stmt(a, mk_int_lit(a));
     first_dead.h.src_pos = 500;
@@ -963,7 +963,7 @@ fn i32 code_after_return_single_warning(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 return_at_block_end_no_warning(arena::Arena* a, u8[] m) {
+fn i32 return_at_block_end_no_warning(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[2] body;
     body[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -974,7 +974,7 @@ fn i32 return_at_block_end_no_warning(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 print_straight_line(arena::Arena* a, u8[] m) {
+fn i32 print_straight_line(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] body;
     body[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -989,7 +989,7 @@ fn i32 print_straight_line(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 print_if_terminators(arena::Arena* a, u8[] m) {
+fn i32 print_if_terminators(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] then_s;
     then_s[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -1008,7 +1008,7 @@ fn i32 print_if_terminators(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 print_switch_terminator(arena::Arena* a, u8[] m) {
+fn i32 print_switch_terminator(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] a0;
     a0[0] = mk_expr_stmt(a, mk_int_lit(a));
@@ -1029,7 +1029,7 @@ fn i32 print_switch_terminator(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 print_unreachable_role(arena::Arena* a, u8[] m) {
+fn i32 print_unreachable_role(arena::Arena* a, const u8[]m) {
     module::Module* mm = mk_module(a);
     ast::AstNode*[1] body;
     body[0] = mk_return(a, null);
@@ -1044,7 +1044,7 @@ fn i32 print_unreachable_role(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "CFG Construction Tests";
+    const u8[] suite = "CFG Construction Tests";
     testing::add(suite, "straight_line_void",              &straight_line_void);
     testing::add(suite, "non_void_no_return_is_unreachable", &non_void_no_return_is_unreachable);
     testing::add(suite, "empty_void_body",                 &empty_void_body);

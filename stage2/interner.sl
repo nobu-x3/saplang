@@ -38,14 +38,14 @@ export fn void release() {
     mutex::unlock(&GLOBAL.lock);
 }
 
-export fn symbol::Symbol* intern(u8[] bytes) {
+export fn symbol::Symbol* intern(const u8[] bytes) {
     Interner* it = interner::acquire();
     symbol::Symbol* result = _intern(it, bytes);
     interner::release();
     return result;
 }
 
-fn symbol::Symbol* _intern(Interner* it, u8[] bytes) {
+fn symbol::Symbol* _intern(Interner* it, const u8[] bytes) {
     u32 hash = hash::fnv1a_32(bytes);
     u64 idx = (u64)hash & (it.buckets.len - 1);
     // walk the chain at this bucket
@@ -76,7 +76,7 @@ export fn u8[] symbol_str(symbol::Symbol* s) {
 }
 
 // PRIVATE
-fn u64 slab_append(Interner* it, u8[] bytes) {
+fn u64 slab_append(Interner* it, const u8[] bytes) {
     u64 length_needed = it.slab.len + bytes.len;
     if(length_needed >= it.slab_cap) {
         u64 new_cap = it.slab_cap * 2;

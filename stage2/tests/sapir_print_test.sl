@@ -16,7 +16,7 @@ fn u32 emit(arena::Arena* a, sapir::SapirFn* func, sapir::Opcode op, types::Ty* 
 
 // Hand-assembles __demo_pick(bool, u64, u64) -> u64 with a diamond and a loop-free phi,
 // then pins the rendered text so the printer's format is locked.
-fn i32 golden_pick(arena::Arena* a, u8[] msg) {
+fn i32 golden_pick(arena::Arena* a, const u8[]msg) {
     types::Ty** param_mem = (types::Ty**)arena::alloc(a, 3 * sizeof(types::Ty*));
     param_mem[0] = types::prim_bool();
     param_mem[1] = types::prim_u64();
@@ -126,7 +126,7 @@ fn i32 golden_pick(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn u32 fn_decl(arena::Arena* a, sapir::SapirModule* m, u8[] name, types::Ty* ty, sapir::SapirLinkage linkage) {
+fn u32 fn_decl(arena::Arena* a, sapir::SapirModule* m, const u8[] name, types::Ty* ty, sapir::SapirLinkage linkage) {
     sapir::SapirDecl decl;
     sys::memset(&decl, 0, sizeof(sapir::SapirDecl));
     decl.kind = sapir::SapirDeclKind::Fn;
@@ -138,7 +138,7 @@ fn u32 fn_decl(arena::Arena* a, sapir::SapirModule* m, u8[] name, types::Ty* ty,
     return sapir::add_decl(a, m, decl);
 }
 
-fn u32 global_decl(arena::Arena* a, sapir::SapirModule* m, u8[] name, types::Ty* ty) {
+fn u32 global_decl(arena::Arena* a, sapir::SapirModule* m, const u8[] name, types::Ty* ty) {
     sapir::SapirDecl decl;
     sys::memset(&decl, 0, sizeof(sapir::SapirDecl));
     decl.kind = sapir::SapirDeclKind::Global;
@@ -151,7 +151,7 @@ fn u32 global_decl(arena::Arena* a, sapir::SapirModule* m, u8[] name, types::Ty*
 }
 
 // Straight-line body pinning the arithmetic / compare / call / cast / memory renderings.
-fn i32 golden_ops(arena::Arena* a, u8[] msg) {
+fn i32 golden_ops(arena::Arena* a, const u8[]msg) {
     types::Ty** ops_params = (types::Ty**)arena::alloc(a, 2 * sizeof(types::Ty*));
     ops_params[0] = types::prim_i32();
     ops_params[1] = types::prim_i32();
@@ -216,7 +216,7 @@ fn i32 golden_ops(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 golden_switch(arena::Arena* a, u8[] msg) {
+fn i32 golden_switch(arena::Arena* a, const u8[]msg) {
     types::Ty** sw_params = (types::Ty**)arena::alloc(a, sizeof(types::Ty*));
     sw_params[0] = types::prim_i32();
     types::Ty*[] sw_params_slice = {sw_params, 1};
@@ -274,7 +274,7 @@ fn i32 golden_switch(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 golden_const_inits(arena::Arena* a, u8[] msg) {
+fn i32 golden_const_inits(arena::Arena* a, const u8[]msg) {
     types::Ty* int_ptr = types::intern_pointer(types::prim_i32(), false);
     types::Ty* int_array = types::intern_array(types::prim_i32(), 2);
     types::Ty*[] no_params = {null, 0};
@@ -356,7 +356,7 @@ fn i32 main() {
     interner::init(&setup_arena, 64);
     types::typer_init(&setup_arena, 64);
 
-    u8[] suite = "Sapir Print Tests";
+    const u8[] suite = "Sapir Print Tests";
     testing::add(suite, "golden_pick",        &golden_pick);
     testing::add(suite, "golden_ops",         &golden_ops);
     testing::add(suite, "golden_switch",      &golden_switch);

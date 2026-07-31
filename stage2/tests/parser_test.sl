@@ -15,7 +15,7 @@ import token;
 // IMPORTS
 // ============================================================================
 
-fn i32 import_single(arena::Arena* a, u8[] msg) {
+fn i32 import_single(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import io;", &m);
@@ -27,7 +27,7 @@ fn i32 import_single(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_src_pos_on_import_keyword(arena::Arena* a, u8[] msg) {
+fn i32 import_src_pos_on_import_keyword(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "   import io;", &m);
@@ -37,7 +37,7 @@ fn i32 import_src_pos_on_import_keyword(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_underscore_identifier(arena::Arena* a, u8[] msg) {
+fn i32 import_underscore_identifier(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import abc_def;", &m);
@@ -46,7 +46,7 @@ fn i32 import_underscore_identifier(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_multiple_in_sequence(arena::Arena* a, u8[] msg) {
+fn i32 import_multiple_in_sequence(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import a; import b; import c;", &m);
@@ -59,7 +59,7 @@ fn i32 import_multiple_in_sequence(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_with_trailing_whitespace(arena::Arena* a, u8[] msg) {
+fn i32 import_with_trailing_whitespace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import io;\n   \t  ", &m);
@@ -70,7 +70,7 @@ fn i32 import_with_trailing_whitespace(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_with_line_comment_before(arena::Arena* a, u8[] msg) {
+fn i32 import_with_line_comment_before(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "// hi\nimport io;", &m);
@@ -81,7 +81,7 @@ fn i32 import_with_line_comment_before(arena::Arena* a, u8[] msg) {
 
 // --- import error paths ---
 
-fn i32 import_missing_module_name_int_literal(arena::Arena* a, u8[] msg) {
+fn i32 import_missing_module_name_int_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import 123;", &m);
@@ -91,7 +91,7 @@ fn i32 import_missing_module_name_int_literal(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_missing_module_name_semi(arena::Arena* a, u8[] msg) {
+fn i32 import_missing_module_name_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import ;", &m);
@@ -101,7 +101,7 @@ fn i32 import_missing_module_name_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 import_missing_semi_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import io", &m);
@@ -111,7 +111,7 @@ fn i32 import_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_missing_semi_extra_token(arena::Arena* a, u8[] msg) {
+fn i32 import_missing_semi_extra_token(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import io io;", &m);
@@ -121,7 +121,7 @@ fn i32 import_missing_semi_extra_token(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_bare_keyword_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 import_bare_keyword_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import", &m);
@@ -131,7 +131,7 @@ fn i32 import_bare_keyword_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_module_name_is_keyword(arena::Arena* a, u8[] msg) {
+fn i32 import_module_name_is_keyword(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import struct;", &m);
@@ -141,7 +141,7 @@ fn i32 import_module_name_is_keyword(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_qualified_name_rejected(arena::Arena* a, u8[] msg) {
+fn i32 import_qualified_name_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import io::file;", &m);
@@ -151,7 +151,7 @@ fn i32 import_qualified_name_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_error_then_valid_recovers(arena::Arena* a, u8[] msg) {
+fn i32 import_error_then_valid_recovers(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import 123; import io;", &m);
@@ -168,14 +168,14 @@ fn i32 import_error_then_valid_recovers(arena::Arena* a, u8[] msg) {
     if(!(testing::expect_true(found_io, msg))) { return -1; } return 0;
 }
 
-fn i32 import_error_does_not_loop_forever(arena::Arena* a, u8[] msg) {
+fn i32 import_error_does_not_loop_forever(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import import import import import", &m);
     if(!(testing::expect_not_null((void*)root, msg))) { return -1; } return 0;
 }
 
-fn i32 import_parses_plain(arena::Arena* a, u8[] msg) {
+fn i32 import_parses_plain(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import io;", &m);
@@ -186,7 +186,7 @@ fn i32 import_parses_plain(arena::Arena* a, u8[] msg) {
 }
 
 // `export import` is not a language feature; every module states its own imports.
-fn i32 import_export_rejected(arena::Arena* a, u8[] msg) {
+fn i32 import_export_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     compiler_testing::parse_src(&local, "export import io;", &m);
@@ -196,7 +196,7 @@ fn i32 import_export_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_export_then_plain_import(arena::Arena* a, u8[] msg) {
+fn i32 import_export_then_plain_import(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export import a; import b;", &m);
@@ -208,7 +208,7 @@ fn i32 import_export_then_plain_import(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_export_with_bad_module_name_recovers(arena::Arena* a, u8[] msg) {
+fn i32 import_export_with_bad_module_name_recovers(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export import 123; import io;", &m);
@@ -226,7 +226,7 @@ fn i32 import_export_with_bad_module_name_recovers(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 import_export_with_keyword_module_name_recovers(arena::Arena* a, u8[] msg) {
+fn i32 import_export_with_keyword_module_name_recovers(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export import const; import io;", &m);
@@ -248,7 +248,7 @@ fn i32 import_export_with_keyword_module_name_recovers(arena::Arena* a, u8[] msg
 // VAR DECLS
 // ============================================================================
 
-fn i32 var_decl_basic_int_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_basic_int_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 5;", &m);
@@ -260,7 +260,7 @@ fn i32 var_decl_basic_int_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_no_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_no_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x;", &m);
@@ -272,7 +272,7 @@ fn i32 var_decl_no_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_const(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_const(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const i32 PI_X3 = 9;", &m);
@@ -282,7 +282,7 @@ fn i32 var_decl_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_export(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_export(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export i32 g = 1;", &m);
@@ -292,7 +292,7 @@ fn i32 var_decl_export(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_export_const(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_export_const(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export const i32 K = 42;", &m);
@@ -302,7 +302,7 @@ fn i32 var_decl_export_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined;", &m);
@@ -312,7 +312,7 @@ fn i32 var_decl_undefined_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_const_undefined_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_const_undefined_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const f32 y = undefined;", &m);
@@ -323,7 +323,7 @@ fn i32 var_decl_const_undefined_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_slice_undefined_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_slice_undefined_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Foo[] arr = undefined;", &m);
@@ -334,7 +334,7 @@ fn i32 var_decl_slice_undefined_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_pointer_undefined_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_pointer_undefined_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p = undefined;", &m);
@@ -345,7 +345,7 @@ fn i32 var_decl_pointer_undefined_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_then_normal(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_then_normal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined; i32 y = 5;", &m);
@@ -359,7 +359,7 @@ fn i32 var_decl_undefined_then_normal(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_call_arg(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_call_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = foo(undefined);", &m);
@@ -369,7 +369,7 @@ fn i32 var_decl_undefined_in_call_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_binop(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_binop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined + 1;", &m);
@@ -379,7 +379,7 @@ fn i32 var_decl_undefined_in_binop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_paren(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_paren(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (undefined);", &m);
@@ -389,7 +389,7 @@ fn i32 var_decl_undefined_in_paren(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_index(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_index(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = arr[undefined];", &m);
@@ -399,7 +399,7 @@ fn i32 var_decl_undefined_in_index(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_unary(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_unary(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -undefined;", &m);
@@ -409,7 +409,7 @@ fn i32 var_decl_undefined_in_unary(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_struct_lit(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_struct_lit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Foo f = { .x = undefined };", &m);
@@ -419,7 +419,7 @@ fn i32 var_decl_undefined_in_struct_lit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_bare_stmt(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_bare_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { undefined; }", &m);
@@ -429,7 +429,7 @@ fn i32 var_decl_undefined_bare_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_assign_rhs(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_assign_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x = undefined; }", &m);
@@ -439,7 +439,7 @@ fn i32 var_decl_undefined_assign_rhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_if_cond(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_if_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if(undefined) {} }", &m);
@@ -449,7 +449,7 @@ fn i32 var_decl_undefined_in_if_cond(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_switch_scrut(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_switch_scrut(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch(undefined) { else { } } }", &m);
@@ -459,7 +459,7 @@ fn i32 var_decl_undefined_in_switch_scrut(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_as_callee(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_as_callee(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined();", &m);
@@ -469,7 +469,7 @@ fn i32 var_decl_undefined_as_callee(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_as_member_base(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_as_member_base(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = undefined.field;", &m);
@@ -479,7 +479,7 @@ fn i32 var_decl_undefined_as_member_base(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_array_lit(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_array_lit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[2] xs = [1, undefined];", &m);
@@ -489,7 +489,7 @@ fn i32 var_decl_undefined_in_array_lit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_slice_range(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_slice_range(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = arr[undefined..5];", &m);
@@ -499,7 +499,7 @@ fn i32 var_decl_undefined_in_slice_range(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_undefined_in_cast(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_undefined_in_cast(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (i32)undefined;", &m);
@@ -509,7 +509,7 @@ fn i32 var_decl_undefined_in_cast(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_named_type_undefined(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_named_type_undefined(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Foo x = undefined;", &m);
@@ -520,7 +520,7 @@ fn i32 var_decl_named_type_undefined(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_src_pos_on_type(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_src_pos_on_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "  i32 x = 5;", &m);
@@ -530,7 +530,7 @@ fn i32 var_decl_src_pos_on_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_src_pos_on_const(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_src_pos_on_const(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "  const i32 x = 5;", &m);
@@ -540,7 +540,7 @@ fn i32 var_decl_src_pos_on_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_multiple_decls(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_multiple_decls(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 a = 1; i32 b = 2; i32 c = 3;", &m);
@@ -557,7 +557,7 @@ fn i32 var_decl_multiple_decls(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_named_type_decl(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_named_type_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "MyType x;", &m);
@@ -569,7 +569,7 @@ fn i32 var_decl_named_type_decl(arena::Arena* a, u8[] msg) {
 
 // --- VarDecl error paths ---
 
-fn i32 var_decl_missing_ident(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_missing_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 = 5;", &m);
@@ -579,7 +579,7 @@ fn i32 var_decl_missing_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_missing_semi_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 5", &m);
@@ -589,7 +589,7 @@ fn i32 var_decl_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_missing_semi_no_init(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_missing_semi_no_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x", &m);
@@ -600,7 +600,7 @@ fn i32 var_decl_missing_semi_no_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 var_decl_missing_init_expr(arena::Arena* a, u8[] msg) {
+fn i32 var_decl_missing_init_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = ;", &m);
@@ -615,28 +615,28 @@ fn i32 var_decl_missing_init_expr(arena::Arena* a, u8[] msg) {
 // TYPES
 // ============================================================================
 
-fn i32 ty_primitive_i32(arena::Arena* a, u8[] msg) {
+fn i32 ty_primitive_i32(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x;", &m);
     if(!(compiler_testing::expect_ty_prim(compiler_testing::var_type(root, 0), token::TokenKind::I32, msg))) { return -1; } return 0;
 }
 
-fn i32 ty_primitive_bool(arena::Arena* a, u8[] msg) {
+fn i32 ty_primitive_bool(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "bool b;", &m);
     if(!(compiler_testing::expect_ty_prim(compiler_testing::var_type(root, 0), token::TokenKind::BOOL, msg))) { return -1; } return 0;
 }
 
-fn i32 ty_primitive_f64(arena::Arena* a, u8[] msg) {
+fn i32 ty_primitive_f64(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "f64 x;", &m);
     if(!(compiler_testing::expect_ty_prim(compiler_testing::var_type(root, 0), token::TokenKind::F64, msg))) { return -1; } return 0;
 }
 
-fn i32 ty_primitive_void(arena::Arena* a, u8[] msg) {
+fn i32 ty_primitive_void(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "void* p;", &m);
@@ -645,7 +645,7 @@ fn i32 ty_primitive_void(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::VOID, msg))) { return -2; } return 0;
 }
 
-fn i32 ty_pointer(arena::Arena* a, u8[] msg) {
+fn i32 ty_pointer(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p;", &m);
@@ -655,7 +655,7 @@ fn i32 ty_pointer(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg))) { return -3; } return 0;
 }
 
-fn i32 ty_pointer_to_pointer(arena::Arena* a, u8[] msg) {
+fn i32 ty_pointer_to_pointer(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32** pp;", &m);
@@ -666,7 +666,7 @@ fn i32 ty_pointer_to_pointer(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ty_prim(inner.pointee, token::TokenKind::I32, msg))) { return -3; } return 0;
 }
 
-fn i32 ty_slice(arena::Arena* a, u8[] msg) {
+fn i32 ty_slice(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] s;", &m);
@@ -675,7 +675,7 @@ fn i32 ty_slice(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ty_prim(ts.element, token::TokenKind::I32, msg))) { return -2; } return 0;
 }
 
-fn i32 ty_array(arena::Arena* a, u8[] msg) {
+fn i32 ty_array(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[4] arr;", &m);
@@ -685,21 +685,21 @@ fn i32 ty_array(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_intlit(ta.size_expr, 4, msg))) { return -3; } return 0;
 }
 
-fn i32 ty_named(arena::Arena* a, u8[] msg) {
+fn i32 ty_named(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Foo x;", &m);
     if(!(compiler_testing::expect_ty_named(compiler_testing::var_type(root, 0), null, compiler_testing::sym(m, "Foo"), msg))) { return -1; } return 0;
 }
 
-fn i32 ty_named_qualified(arena::Arena* a, u8[] msg) {
+fn i32 ty_named_qualified(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "mod::Foo x;", &m);
     if(!(compiler_testing::expect_ty_named(compiler_testing::var_type(root, 0), compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "Foo"), msg))) { return -1; } return 0;
 }
 
-fn i32 ty_fn_ptr_two_params(arena::Arena* a, u8[] msg) {
+fn i32 ty_fn_ptr_two_params(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn* i32(i32, i32) f;", &m);
@@ -711,7 +711,7 @@ fn i32 ty_fn_ptr_two_params(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 ty_fn_ptr_zero_params(arena::Arena* a, u8[] msg) {
+fn i32 ty_fn_ptr_zero_params(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn* void() cb;", &m);
@@ -720,7 +720,7 @@ fn i32 ty_fn_ptr_zero_params(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ty_prim(fp.return_type, token::TokenKind::VOID, msg))) { return -2; } return 0;
 }
 
-fn i32 ty_ptr_slice_chain(arena::Arena* a, u8[] msg) {
+fn i32 ty_ptr_slice_chain(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32*[] s;", &m);
@@ -731,7 +731,7 @@ fn i32 ty_ptr_slice_chain(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg))) { return -3; } return 0;
 }
 
-fn i32 ty_array_of_ptr(arena::Arena* a, u8[] msg) {
+fn i32 ty_array_of_ptr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     // i32*[4] — parsed as ArrayType(elem=PointerType(i32), size=4)
@@ -748,7 +748,7 @@ fn i32 ty_array_of_ptr(arena::Arena* a, u8[] msg) {
 // FN DECLS / PARAMS
 // ============================================================================
 
-fn i32 fn_empty_params(arena::Arena* a, u8[] msg) {
+fn i32 fn_empty_params(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() {}", &m);
@@ -759,7 +759,7 @@ fn i32 fn_empty_params(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_single_param(arena::Arena* a, u8[] msg) {
+fn i32 fn_single_param(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 x) {}", &m);
@@ -772,7 +772,7 @@ fn i32 fn_single_param(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_two_params(arena::Arena* a, u8[] msg) {
+fn i32 fn_two_params(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 add(i32 a, i32 b) {}", &m);
@@ -789,7 +789,7 @@ fn i32 fn_two_params(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_const(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_const(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const i32 x) {}", &m);
@@ -802,7 +802,7 @@ fn i32 fn_param_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_comptime(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_comptime(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime Type T) {}", &m);
@@ -815,7 +815,7 @@ fn i32 fn_param_comptime(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_comptime_const(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_comptime_const(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime const i32 N) {}", &m);
@@ -828,7 +828,7 @@ fn i32 fn_param_comptime_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_pointer_type(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_pointer_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32* p) {}", &m);
@@ -843,7 +843,7 @@ fn i32 fn_param_pointer_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_slice_type(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_slice_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32[] s) {}", &m);
@@ -857,7 +857,7 @@ fn i32 fn_param_slice_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_named_type(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(Foo x) {}", &m);
@@ -869,7 +869,7 @@ fn i32 fn_param_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_qualified_named_type(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_qualified_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(io::FILE* p) {}", &m);
@@ -883,7 +883,7 @@ fn i32 fn_param_qualified_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_params_mixed_modifiers(arena::Arena* a, u8[] msg) {
+fn i32 fn_params_mixed_modifiers(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const i32 a, i32 b, comptime Type T) {}", &m);
@@ -896,7 +896,7 @@ fn i32 fn_params_mixed_modifiers(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_trailing_comma(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_trailing_comma(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 a, i32 b,) {}", &m);
@@ -908,7 +908,7 @@ fn i32 fn_param_trailing_comma(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_exported(arena::Arena* a, u8[] msg) {
+fn i32 fn_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export fn void f(i32 x) {}", &m);
@@ -920,7 +920,7 @@ fn i32 fn_exported(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f(const i32 x) {}` — `const` starts at byte 10
-fn i32 fn_param_src_pos_on_const(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_src_pos_on_const(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const i32 x) {}", &m);
@@ -931,7 +931,7 @@ fn i32 fn_param_src_pos_on_const(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f(i32 x) {}` — `i32` starts at byte 10
-fn i32 fn_param_src_pos_on_type_when_no_modifier(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_src_pos_on_type_when_no_modifier(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 x) {}", &m);
@@ -942,7 +942,7 @@ fn i32 fn_param_src_pos_on_type_when_no_modifier(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f(comptime Type T) {}` — `comptime` starts at byte 10
-fn i32 fn_param_src_pos_on_comptime(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_src_pos_on_comptime(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime Type T) {}", &m);
@@ -952,7 +952,7 @@ fn i32 fn_param_src_pos_on_comptime(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_missing_param_name(arena::Arena* a, u8[] msg) {
+fn i32 fn_missing_param_name(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32) {}", &m);
@@ -964,7 +964,7 @@ fn i32 fn_missing_param_name(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 fn_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 x {}", &m);
@@ -976,7 +976,7 @@ fn i32 fn_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_missing_fn_name(arena::Arena* a, u8[] msg) {
+fn i32 fn_missing_fn_name(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void (i32 x) {}", &m);
@@ -989,7 +989,7 @@ fn i32 fn_missing_fn_name(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_src_pos_on_fn_keyword(arena::Arena* a, u8[] msg) {
+fn i32 fn_src_pos_on_fn_keyword(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "   fn void f() {}", &m);
@@ -999,7 +999,7 @@ fn i32 fn_src_pos_on_fn_keyword(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_export_src_pos_on_export(arena::Arena* a, u8[] msg) {
+fn i32 fn_export_src_pos_on_export(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export fn void f() {}", &m);
@@ -1009,7 +1009,7 @@ fn i32 fn_export_src_pos_on_export(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_multiple_decls(arena::Arena* a, u8[] msg) {
+fn i32 fn_multiple_decls(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() {} fn i32 g(i32 x) {}", &m);
@@ -1021,7 +1021,7 @@ fn i32 fn_multiple_decls(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_fn_ptr_return_type(arena::Arena* a, u8[] msg) {
+fn i32 fn_fn_ptr_return_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn fn* void(i32) make() {}", &m);
@@ -1032,7 +1032,7 @@ fn i32 fn_fn_ptr_return_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_fn_ptr_type(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_fn_ptr_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(fn* void(i32) cb) {}", &m);
@@ -1045,7 +1045,7 @@ fn i32 fn_param_fn_ptr_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 fn_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f i32 x) {}", &m);
@@ -1057,7 +1057,7 @@ fn i32 fn_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_missing_return_type(arena::Arena* a, u8[] msg) {
+fn i32 fn_missing_return_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn f() {}", &m);
@@ -1069,7 +1069,7 @@ fn i32 fn_missing_return_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_missing_param_comma(arena::Arena* a, u8[] msg) {
+fn i32 fn_missing_param_comma(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 a i32 b) {}", &m);
@@ -1081,7 +1081,7 @@ fn i32 fn_missing_param_comma(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_modifier_only(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_modifier_only(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const) {}", &m);
@@ -1093,7 +1093,7 @@ fn i32 fn_param_modifier_only(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_wrong_modifier_order(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_wrong_modifier_order(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime i32 x) {}", &m);
@@ -1109,7 +1109,7 @@ fn i32 fn_param_wrong_modifier_order(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_wrong_order_with_pointer_type(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_wrong_order_with_pointer_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime i32* x) {}", &m);
@@ -1117,14 +1117,16 @@ fn i32 fn_param_wrong_order_with_pointer_type(arena::Arena* a, u8[] msg) {
     if(!f) { return -1; }
     if(!testing::expect_eq(m.diag.entries.len, (u64)1, msg)) { return -2; }
     ast::Param* p0 = &f.params[0];
-    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "x"), true, true, msg)) { return -3; }
+    // The pointer absorbs the qualifier, so the pointee is const and the binding is not.
+    if(!compiler_testing::expect_param(p0, compiler_testing::sym(m, "x"), false, true, msg)) { return -3; }
     ast::TypePointerNode* tp = compiler_testing::expect_ty_ptr(p0.type_expr, msg);
     if(!tp) { return -4; }
+    if(!testing::expect_true(tp.is_const, msg)) { return -6; }
     if(!compiler_testing::expect_ty_prim(tp.pointee, token::TokenKind::I32, msg)) { return -5; }
     return 0;
 }
 
-fn i32 fn_param_wrong_order_with_qualified_type(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_wrong_order_with_qualified_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime mod::Foo x) {}", &m);
@@ -1137,7 +1139,7 @@ fn i32 fn_param_wrong_order_with_qualified_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_wrong_order_one_of_many_recovers(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_wrong_order_one_of_many_recovers(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(i32 a, const comptime i32 b, i32 c) {}", &m);
@@ -1150,7 +1152,7 @@ fn i32 fn_param_wrong_order_one_of_many_recovers(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_comptime_only_no_diag(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_comptime_only_no_diag(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(comptime Type T) {}", &m);
@@ -1161,7 +1163,7 @@ fn i32 fn_param_comptime_only_no_diag(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_const_only_no_diag(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_const_only_no_diag(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const i32 x) {}", &m);
@@ -1172,7 +1174,7 @@ fn i32 fn_param_const_only_no_diag(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_param_two_wrong_order_two_diags(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_two_wrong_order_two_diags(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(const comptime i32 a, const comptime i32 b) {}", &m);
@@ -1186,7 +1188,7 @@ fn i32 fn_param_two_wrong_order_two_diags(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_param_wrong_modifier_order(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_param_wrong_modifier_order(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void g(const comptime i32 x); }", &m);
@@ -1204,7 +1206,7 @@ fn i32 extern_fn_param_wrong_modifier_order(arena::Arena* a, u8[] msg) {
 // LOCAL VAR DECLS
 // ============================================================================
 
-fn i32 local_var_decl_basic(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_basic(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 5; }", &m);
@@ -1220,7 +1222,7 @@ fn i32 local_var_decl_basic(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_const(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_const(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { const i32 x = 5; }", &m);
@@ -1234,7 +1236,7 @@ fn i32 local_var_decl_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_no_init(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_no_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x; }", &m);
@@ -1248,7 +1250,7 @@ fn i32 local_var_decl_no_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_pointer_type(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_pointer_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32* p = null; }", &m);
@@ -1264,7 +1266,7 @@ fn i32 local_var_decl_pointer_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_named_type(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Foo x; }", &m);
@@ -1277,7 +1279,7 @@ fn i32 local_var_decl_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_qualified_named_type(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_qualified_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { io::FILE* p; }", &m);
@@ -1292,7 +1294,7 @@ fn i32 local_var_decl_qualified_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_qualified_type_too_deep(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_qualified_type_too_deep(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { mod::Foo::Bar x; }", &m);
@@ -1309,7 +1311,7 @@ fn i32 local_var_decl_qualified_type_too_deep(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_qualified_type_four_levels_one_diag(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_qualified_type_four_levels_one_diag(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { mod::A::B::C x; }", &m);
@@ -1323,7 +1325,7 @@ fn i32 local_var_decl_qualified_type_four_levels_one_diag(arena::Arena* a, u8[] 
     return 0;
 }
 
-fn i32 fn_param_qualified_type_too_deep_recovers(arena::Arena* a, u8[] msg) {
+fn i32 fn_param_qualified_type_too_deep_recovers(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(mod::A::B x, i32 y) { }", &m);
@@ -1335,7 +1337,7 @@ fn i32 fn_param_qualified_type_too_deep_recovers(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_multiple(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_multiple(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 a = 1; i32 b = 2; }", &m);
@@ -1349,7 +1351,7 @@ fn i32 local_var_decl_multiple(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_complex_init_expr(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_complex_init_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 1 + 2 * 3; }", &m);
@@ -1367,7 +1369,7 @@ fn i32 local_var_decl_complex_init_expr(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 5 }", &m);
@@ -1380,7 +1382,7 @@ fn i32 local_var_decl_missing_semi(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f() { i32 x = 5; }` — `i32` starts at byte 14
-fn i32 local_var_decl_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 5; }", &m);
@@ -1393,7 +1395,7 @@ fn i32 local_var_decl_src_pos(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f() { const i32 x = 5; }` — `const` starts at byte 14
-fn i32 local_var_decl_src_pos_on_const(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_src_pos_on_const(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { const i32 x = 5; }", &m);
@@ -1405,7 +1407,7 @@ fn i32 local_var_decl_src_pos_on_const(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_empty_body(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_empty_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { }", &m);
@@ -1417,7 +1419,7 @@ fn i32 local_var_decl_empty_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_fn_ptr_type(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_fn_ptr_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { fn* i32(i32) cb = null; }", &m);
@@ -1434,7 +1436,7 @@ fn i32 local_var_decl_fn_ptr_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_slice_type(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_slice_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32[] s; }", &m);
@@ -1449,7 +1451,7 @@ fn i32 local_var_decl_slice_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_array_type(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_array_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32[3] arr; }", &m);
@@ -1465,7 +1467,7 @@ fn i32 local_var_decl_array_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_struct_lit_init(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_struct_lit_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Foo x = { 1, 2 }; }", &m);
@@ -1484,7 +1486,7 @@ fn i32 local_var_decl_struct_lit_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_struct_lit_designated_init(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_struct_lit_designated_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Foo x = { .a = 1, .b = 2 }; }", &m);
@@ -1502,7 +1504,7 @@ fn i32 local_var_decl_struct_lit_designated_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_array_lit_init(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_array_lit_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32[3] arr = [1, 2, 3]; }", &m);
@@ -1519,7 +1521,7 @@ fn i32 local_var_decl_array_lit_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_cast_init(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_cast_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = (i32)y; }", &m);
@@ -1535,7 +1537,7 @@ fn i32 local_var_decl_cast_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_call_init(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_call_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = foo(1, 2); }", &m);
@@ -1552,7 +1554,7 @@ fn i32 local_var_decl_call_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 local_var_decl_undefined_init(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_undefined_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = undefined; }", &m);
@@ -1568,7 +1570,7 @@ fn i32 local_var_decl_undefined_init(arena::Arena* a, u8[] msg) {
 
 // `i32 = 5;` at stmt position: `looks_like_var_decl` rewinds (no Ident after type),
 // falls through to the stubbed expr_stmt path → error stmt, not a malformed var decl.
-fn i32 local_var_decl_dispatch_falls_through_on_no_ident(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_dispatch_falls_through_on_no_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 = 5; }", &m);
@@ -1583,7 +1585,7 @@ fn i32 local_var_decl_dispatch_falls_through_on_no_ident(arena::Arena* a, u8[] m
     return 0;
 }
 
-fn i32 local_var_decl_export_rejected(arena::Arena* a, u8[] msg) {
+fn i32 local_var_decl_export_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { export i32 x = 5; }", &m);
@@ -1599,7 +1601,7 @@ fn i32 local_var_decl_export_rejected(arena::Arena* a, u8[] msg) {
 // EXPRESSION / ASSIGNMENT STATEMENTS
 // ============================================================================
 
-fn i32 expr_stmt_bare_call(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_bare_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo(); }", &m);
@@ -1614,7 +1616,7 @@ fn i32 expr_stmt_bare_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_call_with_args(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_call_with_args(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo(1, x); }", &m);
@@ -1630,7 +1632,7 @@ fn i32 expr_stmt_call_with_args(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_method_chain_call(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_method_chain_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { a.b.c(); }", &m);
@@ -1643,7 +1645,7 @@ fn i32 expr_stmt_method_chain_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_plain(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_plain(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x = 1; }", &m);
@@ -1657,7 +1659,7 @@ fn i32 expr_stmt_assignment_plain(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_compound_plus_eq(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_compound_plus_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x += 2; }", &m);
@@ -1668,7 +1670,7 @@ fn i32 expr_stmt_assignment_compound_plus_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_compound_star_eq(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_compound_star_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x *= 2; }", &m);
@@ -1679,7 +1681,7 @@ fn i32 expr_stmt_assignment_compound_star_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_compound_amp_eq(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_compound_amp_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x &= 3; }", &m);
@@ -1690,7 +1692,7 @@ fn i32 expr_stmt_assignment_compound_amp_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_compound_minus_eq(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_compound_minus_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x -= 2; }", &m);
@@ -1701,7 +1703,7 @@ fn i32 expr_stmt_assignment_compound_minus_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_compound_slash_eq(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_compound_slash_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x /= 2; }", &m);
@@ -1712,7 +1714,7 @@ fn i32 expr_stmt_assignment_compound_slash_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_compound_percent_eq(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_compound_percent_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x %= 2; }", &m);
@@ -1723,7 +1725,7 @@ fn i32 expr_stmt_assignment_compound_percent_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_compound_pipe_eq(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_compound_pipe_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x |= 3; }", &m);
@@ -1734,7 +1736,7 @@ fn i32 expr_stmt_assignment_compound_pipe_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_compound_caret_eq(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_compound_caret_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x ^= 3; }", &m);
@@ -1745,7 +1747,7 @@ fn i32 expr_stmt_assignment_compound_caret_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_bare_deref(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_bare_deref(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { *p; }", &m);
@@ -1760,7 +1762,7 @@ fn i32 expr_stmt_bare_deref(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_capitalized_call(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_capitalized_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Foo(); }", &m);
@@ -1775,7 +1777,7 @@ fn i32 expr_stmt_capitalized_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_call_canonical(arena::Arena* a, u8[] msg) {
+fn i32 defer_call_canonical(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer fclose(file); }", &m);
@@ -1795,7 +1797,7 @@ fn i32 defer_call_canonical(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_index_lhs(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_index_lhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { arr[i] = v; }", &m);
@@ -1808,7 +1810,7 @@ fn i32 expr_stmt_assignment_index_lhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_deref_lhs(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_deref_lhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { *p = v; }", &m);
@@ -1821,7 +1823,7 @@ fn i32 expr_stmt_assignment_deref_lhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_member_lhs(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_member_lhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { s.field = v; }", &m);
@@ -1834,7 +1836,7 @@ fn i32 expr_stmt_assignment_member_lhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_bare_literal(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_bare_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { 5; }", &m);
@@ -1847,7 +1849,7 @@ fn i32 expr_stmt_bare_literal(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_bare_ident(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_bare_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { x; }", &m);
@@ -1860,7 +1862,7 @@ fn i32 expr_stmt_bare_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo() }", &m);
@@ -1875,7 +1877,7 @@ fn i32 expr_stmt_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_two_consecutive_calls(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_two_consecutive_calls(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo(); bar(); }", &m);
@@ -1889,7 +1891,7 @@ fn i32 expr_stmt_two_consecutive_calls(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_mixed_with_var_decl_and_return(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_mixed_with_var_decl_and_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = 1; foo(x); return; }", &m);
@@ -1904,7 +1906,7 @@ fn i32 expr_stmt_mixed_with_var_decl_and_return(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_assignment_to_namespaced_lhs(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_assignment_to_namespaced_lhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { mod::counter = 0; }", &m);
@@ -1917,7 +1919,7 @@ fn i32 expr_stmt_assignment_to_namespaced_lhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_stmt_cast(arena::Arena* a, u8[] msg) {
+fn i32 expr_stmt_cast(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { (i32)x; }", &m);
@@ -1934,7 +1936,7 @@ fn i32 expr_stmt_cast(arena::Arena* a, u8[] msg) {
 // NESTED BLOCKS
 // ============================================================================
 
-fn i32 block_empty_inner(arena::Arena* a, u8[] msg) {
+fn i32 block_empty_inner(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { } }", &m);
@@ -1947,7 +1949,7 @@ fn i32 block_empty_inner(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_inner_single_stmt(arena::Arena* a, u8[] msg) {
+fn i32 block_inner_single_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { i32 x = 5; } }", &m);
@@ -1964,7 +1966,7 @@ fn i32 block_inner_single_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_two_sibling_inner_blocks(arena::Arena* a, u8[] msg) {
+fn i32 block_two_sibling_inner_blocks(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { i32 a = 1; } { i32 b = 2; } }", &m);
@@ -1982,7 +1984,7 @@ fn i32 block_two_sibling_inner_blocks(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_triple_nested(arena::Arena* a, u8[] msg) {
+fn i32 block_triple_nested(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { { } } }", &m);
@@ -1997,7 +1999,7 @@ fn i32 block_triple_nested(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_mixed_stmts_and_inner(arena::Arena* a, u8[] msg) {
+fn i32 block_mixed_stmts_and_inner(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 a = 1; { i32 b = 2; } i32 c = 3; }", &m);
@@ -2014,7 +2016,7 @@ fn i32 block_mixed_stmts_and_inner(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_inner_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 block_inner_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { i32 x = 5 } }", &m);
@@ -2029,7 +2031,7 @@ fn i32 block_inner_error_propagates(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_unclosed_inner(arena::Arena* a, u8[] msg) {
+fn i32 block_unclosed_inner(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { i32 x = 5; }", &m);
@@ -2043,7 +2045,7 @@ fn i32 block_unclosed_inner(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f() { { } }` — inner `{` at byte 14
-fn i32 block_src_pos_on_inner_lbrace(arena::Arena* a, u8[] msg) {
+fn i32 block_src_pos_on_inner_lbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { } }", &m);
@@ -2057,7 +2059,7 @@ fn i32 block_src_pos_on_inner_lbrace(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_deeply_nested_var(arena::Arena* a, u8[] msg) {
+fn i32 block_deeply_nested_var(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { { { i32 deep = 42; } } } }", &m);
@@ -2078,7 +2080,7 @@ fn i32 block_deeply_nested_var(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_clean_outer_no_error_flag(arena::Arena* a, u8[] msg) {
+fn i32 block_clean_outer_no_error_flag(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { i32 x = 5; } }", &m);
@@ -2092,7 +2094,7 @@ fn i32 block_clean_outer_no_error_flag(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_inner_multi_stmt(arena::Arena* a, u8[] msg) {
+fn i32 block_inner_multi_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { i32 a = 1; i32 b = 2; i32 c = 3; } }", &m);
@@ -2109,7 +2111,7 @@ fn i32 block_inner_multi_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_sibling_error_isolation(arena::Arena* a, u8[] msg) {
+fn i32 block_sibling_error_isolation(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { i32 x = 5 } { i32 y = 6; } }", &m);
@@ -2125,7 +2127,7 @@ fn i32 block_sibling_error_isolation(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f() { ... }` — outer `{` at byte 12
-fn i32 block_outer_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 block_outer_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x; }", &m);
@@ -2135,7 +2137,7 @@ fn i32 block_outer_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_recovery_resumes_outer(arena::Arena* a, u8[] msg) {
+fn i32 block_recovery_resumes_outer(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { i32 x = 5 } i32 y = 6; }", &m);
@@ -2153,7 +2155,7 @@ fn i32 block_recovery_resumes_outer(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_many_stmts_growth(arena::Arena* a, u8[] msg) {
+fn i32 block_many_stmts_growth(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {16384, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local,
@@ -2171,7 +2173,7 @@ fn i32 block_many_stmts_growth(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_multiple_garbage_tokens(arena::Arena* a, u8[] msg) {
+fn i32 block_multiple_garbage_tokens(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { ; ; ; }", &m);
@@ -2188,7 +2190,7 @@ fn i32 block_multiple_garbage_tokens(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_all_error_stmts(arena::Arena* a, u8[] msg) {
+fn i32 block_all_error_stmts(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 a = ; i32 b = ; }", &m);
@@ -2205,7 +2207,7 @@ fn i32 block_all_error_stmts(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_error_interleaved_with_valid(arena::Arena* a, u8[] msg) {
+fn i32 block_error_interleaved_with_valid(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 a = 1; ; i32 b = 2; ; }", &m);
@@ -2227,7 +2229,7 @@ fn i32 block_error_interleaved_with_valid(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_unrecognized_leading_token(arena::Arena* a, u8[] msg) {
+fn i32 block_unrecognized_leading_token(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { ; }", &m);
@@ -2242,7 +2244,7 @@ fn i32 block_unrecognized_leading_token(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_unclosed_inner_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 block_unclosed_inner_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { i32 x = 5;", &m);
@@ -2257,7 +2259,7 @@ fn i32 block_unclosed_inner_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_no_lbrace_returns_error(arena::Arena* a, u8[] msg) {
+fn i32 block_no_lbrace_returns_error(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f();", &m);
@@ -2275,7 +2277,7 @@ fn i32 block_no_lbrace_returns_error(arena::Arena* a, u8[] msg) {
 // RETURN STMTS
 // ============================================================================
 
-fn i32 return_bare(arena::Arena* a, u8[] msg) {
+fn i32 return_bare(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return; }", &m);
@@ -2290,7 +2292,7 @@ fn i32 return_bare(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_intlit(arena::Arena* a, u8[] msg) {
+fn i32 return_intlit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return 42; }", &m);
@@ -2303,7 +2305,7 @@ fn i32 return_intlit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_ident(arena::Arena* a, u8[] msg) {
+fn i32 return_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return x; }", &m);
@@ -2315,7 +2317,7 @@ fn i32 return_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_null(arena::Arena* a, u8[] msg) {
+fn i32 return_null(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32* f() { return null; }", &m);
@@ -2327,7 +2329,7 @@ fn i32 return_null(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_bool(arena::Arena* a, u8[] msg) {
+fn i32 return_bool(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn bool f() { return true; }", &m);
@@ -2339,7 +2341,7 @@ fn i32 return_bool(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_pratt_expr(arena::Arena* a, u8[] msg) {
+fn i32 return_pratt_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return 1 + 2 * 3; }", &m);
@@ -2357,7 +2359,7 @@ fn i32 return_pratt_expr(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_unary(arena::Arena* a, u8[] msg) {
+fn i32 return_unary(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return -x; }", &m);
@@ -2371,7 +2373,7 @@ fn i32 return_unary(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_deref(arena::Arena* a, u8[] msg) {
+fn i32 return_deref(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return *p; }", &m);
@@ -2385,7 +2387,7 @@ fn i32 return_deref(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_call(arena::Arena* a, u8[] msg) {
+fn i32 return_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return g(1, 2); }", &m);
@@ -2401,7 +2403,7 @@ fn i32 return_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_cast(arena::Arena* a, u8[] msg) {
+fn i32 return_cast(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return (i32)y; }", &m);
@@ -2416,7 +2418,7 @@ fn i32 return_cast(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_struct_lit(arena::Arena* a, u8[] msg) {
+fn i32 return_struct_lit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn Foo f() { return { 1, 2 }; }", &m);
@@ -2431,7 +2433,7 @@ fn i32 return_struct_lit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_array_lit(arena::Arena* a, u8[] msg) {
+fn i32 return_array_lit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32[3] f() { return [1, 2, 3]; }", &m);
@@ -2446,7 +2448,7 @@ fn i32 return_array_lit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_member_chain(arena::Arena* a, u8[] msg) {
+fn i32 return_member_chain(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return obj.field.sub; }", &m);
@@ -2462,7 +2464,7 @@ fn i32 return_member_chain(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_with_other_stmts(arena::Arena* a, u8[] msg) {
+fn i32 return_with_other_stmts(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 x = 5; return x; }", &m);
@@ -2477,7 +2479,7 @@ fn i32 return_with_other_stmts(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_inside_nested_block(arena::Arena* a, u8[] msg) {
+fn i32 return_inside_nested_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { { return 7; } }", &m);
@@ -2494,7 +2496,7 @@ fn i32 return_inside_nested_block(arena::Arena* a, u8[] msg) {
 }
 
 // `fn i32 f() { return 5; }` — `return` at byte 13
-fn i32 return_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 return_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return 5; }", &m);
@@ -2506,7 +2508,7 @@ fn i32 return_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 return_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return 5 }", &m);
@@ -2520,7 +2522,7 @@ fn i32 return_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_missing_expr_no_semi(arena::Arena* a, u8[] msg) {
+fn i32 return_missing_expr_no_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return }", &m);
@@ -2534,7 +2536,7 @@ fn i32 return_missing_expr_no_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_floatlit(arena::Arena* a, u8[] msg) {
+fn i32 return_floatlit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn f64 f() { return 3.14; }", &m);
@@ -2546,7 +2548,7 @@ fn i32 return_floatlit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_charlit(arena::Arena* a, u8[] msg) {
+fn i32 return_charlit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn u8 f() { return 'a'; }", &m);
@@ -2558,7 +2560,7 @@ fn i32 return_charlit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_strlit(arena::Arena* a, u8[] msg) {
+fn i32 return_strlit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn u8* f() { return \"hi\"; }", &m);
@@ -2571,7 +2573,7 @@ fn i32 return_strlit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_false(arena::Arena* a, u8[] msg) {
+fn i32 return_false(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn bool f() { return false; }", &m);
@@ -2583,7 +2585,7 @@ fn i32 return_false(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_undefined(arena::Arena* a, u8[] msg) {
+fn i32 return_undefined(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return undefined; }", &m);
@@ -2593,7 +2595,7 @@ fn i32 return_undefined(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_unary_bang(arena::Arena* a, u8[] msg) {
+fn i32 return_unary_bang(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn bool f() { return !x; }", &m);
@@ -2607,7 +2609,7 @@ fn i32 return_unary_bang(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_unary_tilde(arena::Arena* a, u8[] msg) {
+fn i32 return_unary_tilde(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return ~x; }", &m);
@@ -2621,7 +2623,7 @@ fn i32 return_unary_tilde(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_unary_addrof(arena::Arena* a, u8[] msg) {
+fn i32 return_unary_addrof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32* f() { return &x; }", &m);
@@ -2635,7 +2637,7 @@ fn i32 return_unary_addrof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_array_index(arena::Arena* a, u8[] msg) {
+fn i32 return_array_index(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return arr[0]; }", &m);
@@ -2650,7 +2652,7 @@ fn i32 return_array_index(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_slice_range(arena::Arena* a, u8[] msg) {
+fn i32 return_slice_range(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32[] f() { return arr[1..4]; }", &m);
@@ -2666,7 +2668,7 @@ fn i32 return_slice_range(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_paren(arena::Arena* a, u8[] msg) {
+fn i32 return_paren(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return (1 + 2); }", &m);
@@ -2682,7 +2684,7 @@ fn i32 return_paren(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_namespace_access(arena::Arena* a, u8[] msg) {
+fn i32 return_namespace_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return io::stdout; }", &m);
@@ -2694,7 +2696,7 @@ fn i32 return_namespace_access(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_namespace_access_three_levels(arena::Arena* a, u8[] msg) {
+fn i32 return_namespace_access_three_levels(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return mod::Color::Red; }", &m);
@@ -2710,7 +2712,7 @@ fn i32 return_namespace_access_three_levels(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_namespace_access_four_levels(arena::Arena* a, u8[] msg) {
+fn i32 return_namespace_access_four_levels(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return a::b::c::d; }", &m);
@@ -2729,7 +2731,7 @@ fn i32 return_namespace_access_four_levels(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_designated_struct_lit(arena::Arena* a, u8[] msg) {
+fn i32 return_designated_struct_lit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn Foo f() { return { .a = 1 }; }", &m);
@@ -2744,7 +2746,7 @@ fn i32 return_designated_struct_lit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_comparison(arena::Arena* a, u8[] msg) {
+fn i32 return_comparison(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn bool f() { return x == y; }", &m);
@@ -2759,7 +2761,7 @@ fn i32 return_comparison(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_logical_and(arena::Arena* a, u8[] msg) {
+fn i32 return_logical_and(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn bool f() { return a && b; }", &m);
@@ -2774,7 +2776,7 @@ fn i32 return_logical_and(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_two_consecutive(arena::Arena* a, u8[] msg) {
+fn i32 return_two_consecutive(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return 1; return 2; }", &m);
@@ -2791,7 +2793,7 @@ fn i32 return_two_consecutive(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_in_middle_of_block(arena::Arena* a, u8[] msg) {
+fn i32 return_in_middle_of_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 a = 1; return a; i32 b = 2; }", &m);
@@ -2808,7 +2810,7 @@ fn i32 return_in_middle_of_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_trailing_tokens_before_semi(arena::Arena* a, u8[] msg) {
+fn i32 return_trailing_tokens_before_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return 5 5; }", &m);
@@ -2823,7 +2825,7 @@ fn i32 return_trailing_tokens_before_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 return_missing_semi_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return 5", &m);
@@ -2837,7 +2839,7 @@ fn i32 return_missing_semi_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_unary_no_operand(arena::Arena* a, u8[] msg) {
+fn i32 return_unary_no_operand(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return *; }", &m);
@@ -2851,7 +2853,7 @@ fn i32 return_unary_no_operand(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_malformed_expr(arena::Arena* a, u8[] msg) {
+fn i32 return_malformed_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return = 5; }", &m);
@@ -2869,7 +2871,7 @@ fn i32 return_malformed_expr(arena::Arena* a, u8[] msg) {
 // IF STMTS
 // ============================================================================
 
-fn i32 if_basic_no_else(arena::Arena* a, u8[] msg) {
+fn i32 if_basic_no_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) { } }", &m);
@@ -2884,7 +2886,7 @@ fn i32 if_basic_no_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else(arena::Arena* a, u8[] msg) {
+fn i32 if_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { if (x) { return 1; } else { return 2; } }", &m);
@@ -2907,7 +2909,7 @@ fn i32 if_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_if(arena::Arena* a, u8[] msg) {
+fn i32 if_else_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) { } else if (y) { } }", &m);
@@ -2924,7 +2926,7 @@ fn i32 if_else_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_if_else(arena::Arena* a, u8[] msg) {
+fn i32 if_else_if_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) { } else if (y) { } else { } }", &m);
@@ -2941,7 +2943,7 @@ fn i32 if_else_if_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_chain_three(arena::Arena* a, u8[] msg) {
+fn i32 if_chain_three(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local,
@@ -2962,7 +2964,7 @@ fn i32 if_chain_three(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_chain_no_terminal_else(arena::Arena* a, u8[] msg) {
+fn i32 if_chain_no_terminal_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local,
@@ -2980,7 +2982,7 @@ fn i32 if_chain_no_terminal_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_cond_pratt(arena::Arena* a, u8[] msg) {
+fn i32 if_cond_pratt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a + b * 2 == 5) { } }", &m);
@@ -3001,7 +3003,7 @@ fn i32 if_cond_pratt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_cond_call(arena::Arena* a, u8[] msg) {
+fn i32 if_cond_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (foo(1)) { } }", &m);
@@ -3016,7 +3018,7 @@ fn i32 if_cond_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_cond_logical(arena::Arena* a, u8[] msg) {
+fn i32 if_cond_logical(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a && b) { } }", &m);
@@ -3031,7 +3033,7 @@ fn i32 if_cond_logical(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_cond_comparison(arena::Arena* a, u8[] msg) {
+fn i32 if_cond_comparison(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x > 0) { } }", &m);
@@ -3046,7 +3048,7 @@ fn i32 if_cond_comparison(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_cond_unary(arena::Arena* a, u8[] msg) {
+fn i32 if_cond_unary(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (!flag) { } }", &m);
@@ -3060,7 +3062,7 @@ fn i32 if_cond_unary(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_then_body_multi_stmts(arena::Arena* a, u8[] msg) {
+fn i32 if_then_body_multi_stmts(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { if (x) { i32 y = 1; return y; } }", &m);
@@ -3075,7 +3077,7 @@ fn i32 if_then_body_multi_stmts(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_nested(arena::Arena* a, u8[] msg) {
+fn i32 if_nested(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { if (b) { } } }", &m);
@@ -3092,7 +3094,7 @@ fn i32 if_nested(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
+fn i32 if_combined_with_var_and_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 x = 5; if (x) { return 1; } return 2; }", &m);
@@ -3111,7 +3113,7 @@ fn i32 if_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f() { if (x) { } }` — `if` at byte 14
-fn i32 if_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 if_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) { } }", &m);
@@ -3123,7 +3125,7 @@ fn i32 if_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 if_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if x) { } }", &m);
@@ -3137,7 +3139,7 @@ fn i32 if_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 if_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x { } }", &m);
@@ -3151,7 +3153,7 @@ fn i32 if_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_missing_then_block(arena::Arena* a, u8[] msg) {
+fn i32 if_missing_then_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) ; }", &m);
@@ -3165,7 +3167,7 @@ fn i32 if_missing_then_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_empty_cond(arena::Arena* a, u8[] msg) {
+fn i32 if_empty_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if () { } }", &m);
@@ -3179,7 +3181,7 @@ fn i32 if_empty_cond(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_missing_block(arena::Arena* a, u8[] msg) {
+fn i32 if_else_missing_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) { } else ; }", &m);
@@ -3193,7 +3195,7 @@ fn i32 if_else_missing_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_if_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 if_else_if_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) { } else if y) { } }", &m);
@@ -3207,7 +3209,7 @@ fn i32 if_else_if_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_body_multi_stmts(arena::Arena* a, u8[] msg) {
+fn i32 if_else_body_multi_stmts(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { if (x) {} else { i32 a = 1; return a; } }", &m);
@@ -3224,7 +3226,7 @@ fn i32 if_else_body_multi_stmts(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_in_then_body(arena::Arena* a, u8[] msg) {
+fn i32 if_else_in_then_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { if (b) {} else {} } }", &m);
@@ -3245,7 +3247,7 @@ fn i32 if_else_in_then_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 if_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) { return 5 5; } }", &m);
@@ -3260,7 +3262,7 @@ fn i32 if_body_error_propagates(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_without_if(arena::Arena* a, u8[] msg) {
+fn i32 if_else_without_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { else { } }", &m);
@@ -3275,7 +3277,7 @@ fn i32 if_else_without_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_double_else(arena::Arena* a, u8[] msg) {
+fn i32 if_double_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) {} else {} else {} }", &m);
@@ -3293,7 +3295,7 @@ fn i32 if_double_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_two_consecutive_at_same_level(arena::Arena* a, u8[] msg) {
+fn i32 if_two_consecutive_at_same_level(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) {} if (b) {} }", &m);
@@ -3313,7 +3315,7 @@ fn i32 if_two_consecutive_at_same_level(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_block_missing_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 if_else_block_missing_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) {} else", &m);
@@ -3329,7 +3331,7 @@ fn i32 if_else_block_missing_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_body_contains_nested_block(arena::Arena* a, u8[] msg) {
+fn i32 if_body_contains_nested_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) { { } } }", &m);
@@ -3344,7 +3346,7 @@ fn i32 if_body_contains_nested_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_body_with_nested_if(arena::Arena* a, u8[] msg) {
+fn i32 if_else_body_with_nested_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) {} else { if (b) {} } }", &m);
@@ -3363,7 +3365,7 @@ fn i32 if_else_body_with_nested_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_if_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 if_else_if_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) {} else if (y { } }", &m);
@@ -3380,7 +3382,7 @@ fn i32 if_else_if_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_if_missing_then_block(arena::Arena* a, u8[] msg) {
+fn i32 if_else_if_missing_then_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) {} else if (y); }", &m);
@@ -3397,7 +3399,7 @@ fn i32 if_else_if_missing_then_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 if_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (5 +) {} i32 x = 5; }", &m);
@@ -3415,7 +3417,7 @@ fn i32 if_recovery_continues(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_cond_bool_literal(arena::Arena* a, u8[] msg) {
+fn i32 if_cond_bool_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (true) { } }", &m);
@@ -3429,7 +3431,7 @@ fn i32 if_cond_bool_literal(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f() { if (x) {} else if (y) {} }` — second `if` at byte 29
-fn i32 if_else_if_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 if_else_if_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (x) {} else if (y) {} }", &m);
@@ -3444,7 +3446,7 @@ fn i32 if_else_if_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_malformed_cond(arena::Arena* a, u8[] msg) {
+fn i32 if_malformed_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (5 +) { } }", &m);
@@ -3462,7 +3464,7 @@ fn i32 if_malformed_cond(arena::Arena* a, u8[] msg) {
 // WHILE LOOPS
 // ============================================================================
 
-fn i32 while_basic(arena::Arena* a, u8[] msg) {
+fn i32 while_basic(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { } }", &m);
@@ -3476,7 +3478,7 @@ fn i32 while_basic(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_cond_pratt(arena::Arena* a, u8[] msg) {
+fn i32 while_cond_pratt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a + b * 2 == 5) { } }", &m);
@@ -3497,7 +3499,7 @@ fn i32 while_cond_pratt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_cond_call(arena::Arena* a, u8[] msg) {
+fn i32 while_cond_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (foo(1)) { } }", &m);
@@ -3512,7 +3514,7 @@ fn i32 while_cond_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_cond_logical(arena::Arena* a, u8[] msg) {
+fn i32 while_cond_logical(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a && b) { } }", &m);
@@ -3527,7 +3529,7 @@ fn i32 while_cond_logical(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_cond_comparison(arena::Arena* a, u8[] msg) {
+fn i32 while_cond_comparison(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (i < 10) { } }", &m);
@@ -3542,7 +3544,7 @@ fn i32 while_cond_comparison(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_cond_unary(arena::Arena* a, u8[] msg) {
+fn i32 while_cond_unary(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (!flag) { } }", &m);
@@ -3556,7 +3558,7 @@ fn i32 while_cond_unary(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_cond_bool_literal(arena::Arena* a, u8[] msg) {
+fn i32 while_cond_bool_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (true) { } }", &m);
@@ -3568,7 +3570,7 @@ fn i32 while_cond_bool_literal(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_body_multi_stmts(arena::Arena* a, u8[] msg) {
+fn i32 while_body_multi_stmts(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { while (x) { i32 y = 1; return y; } }", &m);
@@ -3583,7 +3585,7 @@ fn i32 while_body_multi_stmts(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_body_contains_nested_block(arena::Arena* a, u8[] msg) {
+fn i32 while_body_contains_nested_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { { } } }", &m);
@@ -3597,7 +3599,7 @@ fn i32 while_body_contains_nested_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_body_contains_if(arena::Arena* a, u8[] msg) {
+fn i32 while_body_contains_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { if (y) { } } }", &m);
@@ -3613,7 +3615,7 @@ fn i32 while_body_contains_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_body_contains_return(arena::Arena* a, u8[] msg) {
+fn i32 while_body_contains_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { while (x) { return 5; } }", &m);
@@ -3629,7 +3631,7 @@ fn i32 while_body_contains_return(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_nested(arena::Arena* a, u8[] msg) {
+fn i32 while_nested(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) { while (b) { } } }", &m);
@@ -3646,7 +3648,7 @@ fn i32 while_nested(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
+fn i32 while_combined_with_var_and_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 i = 0; while (i < 10) { } return i; }", &m);
@@ -3665,7 +3667,7 @@ fn i32 while_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_two_consecutive_at_same_level(arena::Arena* a, u8[] msg) {
+fn i32 while_two_consecutive_at_same_level(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) {} while (b) {} }", &m);
@@ -3683,7 +3685,7 @@ fn i32 while_two_consecutive_at_same_level(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f() { while (x) { } }` — `while` at byte 14
-fn i32 while_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 while_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { } }", &m);
@@ -3695,7 +3697,7 @@ fn i32 while_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 while_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while x) { } }", &m);
@@ -3709,7 +3711,7 @@ fn i32 while_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 while_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x { } }", &m);
@@ -3723,7 +3725,7 @@ fn i32 while_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_missing_body(arena::Arena* a, u8[] msg) {
+fn i32 while_missing_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x); }", &m);
@@ -3737,7 +3739,7 @@ fn i32 while_missing_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_empty_cond(arena::Arena* a, u8[] msg) {
+fn i32 while_empty_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while () { } }", &m);
@@ -3751,7 +3753,7 @@ fn i32 while_empty_cond(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_malformed_cond(arena::Arena* a, u8[] msg) {
+fn i32 while_malformed_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (5 +) { } }", &m);
@@ -3765,7 +3767,7 @@ fn i32 while_malformed_cond(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_inside_if_body(arena::Arena* a, u8[] msg) {
+fn i32 while_inside_if_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { while (b) { } } }", &m);
@@ -3782,7 +3784,7 @@ fn i32 while_inside_if_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 while_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (5 +) {} i32 x = 5; }", &m);
@@ -3800,7 +3802,7 @@ fn i32 while_recovery_continues(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_else_not_consumed(arena::Arena* a, u8[] msg) {
+fn i32 while_else_not_consumed(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) {} else {} }", &m);
@@ -3818,7 +3820,7 @@ fn i32 while_else_not_consumed(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 while_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { return 5 5; } }", &m);
@@ -3838,7 +3840,7 @@ fn i32 while_body_error_propagates(arena::Arena* a, u8[] msg) {
 // ============================================================================
 
 // SHAPES — which of init/cond/post are present
-fn i32 for_basic_full(arena::Arena* a, u8[] msg) {
+fn i32 for_basic_full(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 i = 0; i < 10; i += 1) { } }", &m);
@@ -3863,7 +3865,7 @@ fn i32 for_basic_full(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_empty_all(arena::Arena* a, u8[] msg) {
+fn i32 for_empty_all(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { } }", &m);
@@ -3879,7 +3881,7 @@ fn i32 for_empty_all(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_empty_init(arena::Arena* a, u8[] msg) {
+fn i32 for_empty_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (; i < 10; i += 1) { } }", &m);
@@ -3894,7 +3896,7 @@ fn i32 for_empty_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_empty_cond(arena::Arena* a, u8[] msg) {
+fn i32 for_empty_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 i = 0; ; i += 1) { } }", &m);
@@ -3909,7 +3911,7 @@ fn i32 for_empty_cond(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_empty_post(arena::Arena* a, u8[] msg) {
+fn i32 for_empty_post(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 i = 0; i < 10;) { } }", &m);
@@ -3924,7 +3926,7 @@ fn i32 for_empty_post(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_empty_init_cond(arena::Arena* a, u8[] msg) {
+fn i32 for_empty_init_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;; i += 1) { } }", &m);
@@ -3939,7 +3941,7 @@ fn i32 for_empty_init_cond(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_empty_init_post(arena::Arena* a, u8[] msg) {
+fn i32 for_empty_init_post(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (; i < 10;) { } }", &m);
@@ -3954,7 +3956,7 @@ fn i32 for_empty_init_post(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_empty_cond_post(arena::Arena* a, u8[] msg) {
+fn i32 for_empty_cond_post(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 i = 0;;) { } }", &m);
@@ -3970,7 +3972,7 @@ fn i32 for_empty_cond_post(arena::Arena* a, u8[] msg) {
 }
 
 // INIT: var-decl forms exercising old features
-fn i32 for_init_var_decl_no_init_expr(arena::Arena* a, u8[] msg) {
+fn i32 for_init_var_decl_no_init_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 i; ;) { } }", &m);
@@ -3986,7 +3988,7 @@ fn i32 for_init_var_decl_no_init_expr(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_const_var_decl(arena::Arena* a, u8[] msg) {
+fn i32 for_init_const_var_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (const i32 i = 0; i < 10; i += 1) { } }", &m);
@@ -3999,7 +4001,7 @@ fn i32 for_init_const_var_decl(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_pointer_type(arena::Arena* a, u8[] msg) {
+fn i32 for_init_pointer_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32* p = &x; p < end; p += 1) { } }", &m);
@@ -4016,7 +4018,7 @@ fn i32 for_init_pointer_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_slice_type(arena::Arena* a, u8[] msg) {
+fn i32 for_init_slice_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32[] s = arr;;) { } }", &m);
@@ -4033,7 +4035,7 @@ fn i32 for_init_slice_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_array_type(arena::Arena* a, u8[] msg) {
+fn i32 for_init_array_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32[5] arr = undefined;;) { } }", &m);
@@ -4052,7 +4054,7 @@ fn i32 for_init_array_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_named_type(arena::Arena* a, u8[] msg) {
+fn i32 for_init_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (Foo bar = baz;;) { } }", &m);
@@ -4068,7 +4070,7 @@ fn i32 for_init_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_qualified_named_type(arena::Arena* a, u8[] msg) {
+fn i32 for_init_qualified_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (mod::Foo x = y;;) { } }", &m);
@@ -4083,7 +4085,7 @@ fn i32 for_init_qualified_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_fn_ptr_type(arena::Arena* a, u8[] msg) {
+fn i32 for_init_fn_ptr_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (fn* void() fp = g;;) { } }", &m);
@@ -4098,7 +4100,7 @@ fn i32 for_init_fn_ptr_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_var_decl_struct_lit_init(arena::Arena* a, u8[] msg) {
+fn i32 for_init_var_decl_struct_lit_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (Foo p = {1, 2};;) { } }", &m);
@@ -4114,7 +4116,7 @@ fn i32 for_init_var_decl_struct_lit_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_var_decl_array_lit_init(arena::Arena* a, u8[] msg) {
+fn i32 for_init_var_decl_array_lit_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32[3] arr = [1, 2, 3];;) { } }", &m);
@@ -4129,7 +4131,7 @@ fn i32 for_init_var_decl_array_lit_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_var_decl_cast_init(arena::Arena* a, u8[] msg) {
+fn i32 for_init_var_decl_cast_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 x = (i32)y;;) { } }", &m);
@@ -4144,7 +4146,7 @@ fn i32 for_init_var_decl_cast_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_var_decl_call_init(arena::Arena* a, u8[] msg) {
+fn i32 for_init_var_decl_call_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 x = foo(1, 2);;) { } }", &m);
@@ -4159,7 +4161,7 @@ fn i32 for_init_var_decl_call_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_var_decl_undefined(arena::Arena* a, u8[] msg) {
+fn i32 for_init_var_decl_undefined(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 x = undefined;;) { } }", &m);
@@ -4175,7 +4177,7 @@ fn i32 for_init_var_decl_undefined(arena::Arena* a, u8[] msg) {
 }
 
 // INIT: assignment / expression forms — exhaustive op coverage
-fn i32 for_init_assign_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i = 0;;) { } }", &m);
@@ -4191,7 +4193,7 @@ fn i32 for_init_assign_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_plus_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_plus_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i += 1;;) { } }", &m);
@@ -4204,7 +4206,7 @@ fn i32 for_init_assign_plus_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_minus_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_minus_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i -= 1;;) { } }", &m);
@@ -4217,7 +4219,7 @@ fn i32 for_init_assign_minus_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_star_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_star_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i *= 2;;) { } }", &m);
@@ -4230,7 +4232,7 @@ fn i32 for_init_assign_star_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_slash_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_slash_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i /= 2;;) { } }", &m);
@@ -4243,7 +4245,7 @@ fn i32 for_init_assign_slash_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_percent_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_percent_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i %= 2;;) { } }", &m);
@@ -4256,7 +4258,7 @@ fn i32 for_init_assign_percent_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_amp_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_amp_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i &= 3;;) { } }", &m);
@@ -4269,7 +4271,7 @@ fn i32 for_init_assign_amp_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_pipe_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_pipe_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i |= 3;;) { } }", &m);
@@ -4282,7 +4284,7 @@ fn i32 for_init_assign_pipe_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_caret_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_caret_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i ^= 3;;) { } }", &m);
@@ -4295,7 +4297,7 @@ fn i32 for_init_assign_caret_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_member_lhs(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_member_lhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (obj.field = 0;;) { } }", &m);
@@ -4310,7 +4312,7 @@ fn i32 for_init_assign_member_lhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_index_lhs(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_index_lhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (arr[0] = 5;;) { } }", &m);
@@ -4325,7 +4327,7 @@ fn i32 for_init_assign_index_lhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_deref_lhs(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_deref_lhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (*p = 5;;) { } }", &m);
@@ -4340,7 +4342,7 @@ fn i32 for_init_assign_deref_lhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_assign_complex_rhs(arena::Arena* a, u8[] msg) {
+fn i32 for_init_assign_complex_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i = a + b * c;;) { } }", &m);
@@ -4357,7 +4359,7 @@ fn i32 for_init_assign_complex_rhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_bare_call_expr(arena::Arena* a, u8[] msg) {
+fn i32 for_init_bare_call_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (foo();;) { } }", &m);
@@ -4370,7 +4372,7 @@ fn i32 for_init_bare_call_expr(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_bare_ident(arena::Arena* a, u8[] msg) {
+fn i32 for_init_bare_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (x;;) { } }", &m);
@@ -4384,7 +4386,7 @@ fn i32 for_init_bare_ident(arena::Arena* a, u8[] msg) {
 }
 
 // COND: every expression form
-fn i32 for_cond_ident(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;x;) { } }", &m);
@@ -4397,7 +4399,7 @@ fn i32 for_cond_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_bool_literal(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_bool_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;true;) { } }", &m);
@@ -4410,7 +4412,7 @@ fn i32 for_cond_bool_literal(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_pratt(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_pratt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;a + b * 2 == 5;) { } }", &m);
@@ -4427,7 +4429,7 @@ fn i32 for_cond_pratt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_comparison(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_comparison(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;i < 10;) { } }", &m);
@@ -4440,7 +4442,7 @@ fn i32 for_cond_comparison(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_logical(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_logical(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;a && b;) { } }", &m);
@@ -4453,7 +4455,7 @@ fn i32 for_cond_logical(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_call(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;foo(1);) { } }", &m);
@@ -4466,7 +4468,7 @@ fn i32 for_cond_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_unary(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_unary(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;!flag;) { } }", &m);
@@ -4479,7 +4481,7 @@ fn i32 for_cond_unary(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_member_access(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_member_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;obj.flag;) { } }", &m);
@@ -4493,7 +4495,7 @@ fn i32 for_cond_member_access(arena::Arena* a, u8[] msg) {
 }
 
 // POST: every assignment op + complex lhs
-fn i32 for_post_assign_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_post_assign_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i = 0) { } }", &m);
@@ -4509,7 +4511,7 @@ fn i32 for_post_assign_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_assign_plus_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_post_assign_plus_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i += 1) { } }", &m);
@@ -4522,7 +4524,7 @@ fn i32 for_post_assign_plus_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_assign_minus_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_post_assign_minus_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i -= 1) { } }", &m);
@@ -4535,7 +4537,7 @@ fn i32 for_post_assign_minus_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_assign_star_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_post_assign_star_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i *= 2) { } }", &m);
@@ -4548,7 +4550,7 @@ fn i32 for_post_assign_star_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_assign_slash_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_post_assign_slash_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i /= 2) { } }", &m);
@@ -4561,7 +4563,7 @@ fn i32 for_post_assign_slash_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_assign_percent_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_post_assign_percent_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i %= 2) { } }", &m);
@@ -4574,7 +4576,7 @@ fn i32 for_post_assign_percent_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_assign_amp_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_post_assign_amp_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i &= 3) { } }", &m);
@@ -4587,7 +4589,7 @@ fn i32 for_post_assign_amp_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_assign_pipe_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_post_assign_pipe_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i |= 3) { } }", &m);
@@ -4600,7 +4602,7 @@ fn i32 for_post_assign_pipe_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_assign_caret_eq(arena::Arena* a, u8[] msg) {
+fn i32 for_post_assign_caret_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i ^= 3) { } }", &m);
@@ -4613,7 +4615,7 @@ fn i32 for_post_assign_caret_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_member_assign(arena::Arena* a, u8[] msg) {
+fn i32 for_post_member_assign(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;obj.f = 5) { } }", &m);
@@ -4628,7 +4630,7 @@ fn i32 for_post_member_assign(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_index_assign(arena::Arena* a, u8[] msg) {
+fn i32 for_post_index_assign(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;arr[0] = 5) { } }", &m);
@@ -4643,7 +4645,7 @@ fn i32 for_post_index_assign(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_deref_assign(arena::Arena* a, u8[] msg) {
+fn i32 for_post_deref_assign(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;*p = 5) { } }", &m);
@@ -4658,7 +4660,7 @@ fn i32 for_post_deref_assign(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_bare_call(arena::Arena* a, u8[] msg) {
+fn i32 for_post_bare_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;foo()) { } }", &m);
@@ -4671,7 +4673,7 @@ fn i32 for_post_bare_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_complex_rhs(arena::Arena* a, u8[] msg) {
+fn i32 for_post_complex_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;i = a + b * c) { } }", &m);
@@ -4689,7 +4691,7 @@ fn i32 for_post_complex_rhs(arena::Arena* a, u8[] msg) {
 }
 
 // BODY: assorted statements inside
-fn i32 for_body_multi_stmts(arena::Arena* a, u8[] msg) {
+fn i32 for_body_multi_stmts(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { for (;;) { i32 y = 1; return y; } }", &m);
@@ -4705,7 +4707,7 @@ fn i32 for_body_multi_stmts(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_body_nested_block(arena::Arena* a, u8[] msg) {
+fn i32 for_body_nested_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { { } } }", &m);
@@ -4719,7 +4721,7 @@ fn i32 for_body_nested_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_body_with_if(arena::Arena* a, u8[] msg) {
+fn i32 for_body_with_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { if (y) { } } }", &m);
@@ -4733,7 +4735,7 @@ fn i32 for_body_with_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_body_with_while(arena::Arena* a, u8[] msg) {
+fn i32 for_body_with_while(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { while (x) { } } }", &m);
@@ -4747,7 +4749,7 @@ fn i32 for_body_with_while(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_body_with_return(arena::Arena* a, u8[] msg) {
+fn i32 for_body_with_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { for (;;) { return 5; } }", &m);
@@ -4764,7 +4766,7 @@ fn i32 for_body_with_return(arena::Arena* a, u8[] msg) {
 }
 
 // NESTING / SEQUENCING
-fn i32 for_nested(arena::Arena* a, u8[] msg) {
+fn i32 for_nested(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 i = 0; i < 5; i += 1) { for (i32 j = 0; j < 5; j += 1) { } } }", &m);
@@ -4781,7 +4783,7 @@ fn i32 for_nested(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_inside_if(arena::Arena* a, u8[] msg) {
+fn i32 for_inside_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { for (;;) { } } }", &m);
@@ -4795,7 +4797,7 @@ fn i32 for_inside_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_inside_while(arena::Arena* a, u8[] msg) {
+fn i32 for_inside_while(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) { for (;;) { } } }", &m);
@@ -4809,7 +4811,7 @@ fn i32 for_inside_while(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_two_consecutive(arena::Arena* a, u8[] msg) {
+fn i32 for_two_consecutive(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { } for (;;) { } }", &m);
@@ -4823,7 +4825,7 @@ fn i32 for_two_consecutive(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
+fn i32 for_combined_with_var_and_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 i = 0; for (;;) { } return i; }", &m);
@@ -4839,7 +4841,7 @@ fn i32 for_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
 }
 
 // SRC POS
-fn i32 for_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 for_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { } }", &m);
@@ -4851,7 +4853,7 @@ fn i32 for_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_src_pos_var_decl(arena::Arena* a, u8[] msg) {
+fn i32 for_init_src_pos_var_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 i = 0;;) { } }", &m);
@@ -4863,7 +4865,7 @@ fn i32 for_init_src_pos_var_decl(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_src_pos_assign(arena::Arena* a, u8[] msg) {
+fn i32 for_init_src_pos_assign(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i = 0;;) { } }", &m);
@@ -4875,7 +4877,7 @@ fn i32 for_init_src_pos_assign(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_body_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 for_body_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { } }", &m);
@@ -4888,7 +4890,7 @@ fn i32 for_body_src_pos(arena::Arena* a, u8[] msg) {
 }
 
 // NEGATIVE — every error mode with pinned diag msg + src_pos
-fn i32 for_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 for_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for x;;) { } }", &m);
@@ -4902,7 +4904,7 @@ fn i32 for_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_missing_first_semi_var_decl(arena::Arena* a, u8[] msg) {
+fn i32 for_missing_first_semi_var_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32 i = 0) { } }", &m);
@@ -4916,7 +4918,7 @@ fn i32 for_missing_first_semi_var_decl(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_missing_first_semi_assign(arena::Arena* a, u8[] msg) {
+fn i32 for_missing_first_semi_assign(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i = 0) { } }", &m);
@@ -4930,7 +4932,7 @@ fn i32 for_missing_first_semi_assign(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_missing_first_semi_bare_expr(arena::Arena* a, u8[] msg) {
+fn i32 for_missing_first_semi_bare_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (x) { } }", &m);
@@ -4944,7 +4946,7 @@ fn i32 for_missing_first_semi_bare_expr(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_missing_second_semi(arena::Arena* a, u8[] msg) {
+fn i32 for_missing_second_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;) { } }", &m);
@@ -4960,7 +4962,7 @@ fn i32 for_missing_second_semi(arena::Arena* a, u8[] msg) {
 
 // Post must NOT be `{`-led — that would be eaten as a struct literal. Use a
 // bare ident post so `expect(RParen)` actually sees `{` at the body LBrace.
-fn i32 for_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 for_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;a { } }", &m);
@@ -4974,7 +4976,7 @@ fn i32 for_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_missing_body(arena::Arena* a, u8[] msg) {
+fn i32 for_missing_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;); }", &m);
@@ -4988,7 +4990,7 @@ fn i32 for_missing_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_malformed_init_expr(arena::Arena* a, u8[] msg) {
+fn i32 for_malformed_init_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (5 +;;) { } }", &m);
@@ -5002,7 +5004,7 @@ fn i32 for_malformed_init_expr(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_malformed_cond(arena::Arena* a, u8[] msg) {
+fn i32 for_malformed_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;5 +;) { } }", &m);
@@ -5016,7 +5018,7 @@ fn i32 for_malformed_cond(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_malformed_post(arena::Arena* a, u8[] msg) {
+fn i32 for_malformed_post(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;5 +) { } }", &m);
@@ -5030,7 +5032,7 @@ fn i32 for_malformed_post(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 for_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { return 5 5; } }", &m);
@@ -5045,7 +5047,7 @@ fn i32 for_body_error_propagates(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 for_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) {} i32 x = 5; }", &m);
@@ -5062,7 +5064,7 @@ fn i32 for_recovery_continues(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_recovery_continues_after_error(arena::Arena* a, u8[] msg) {
+fn i32 for_recovery_continues_after_error(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (5 +;;) {} i32 x = 5; }", &m);
@@ -5080,7 +5082,7 @@ fn i32 for_recovery_continues_after_error(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_else_not_consumed(arena::Arena* a, u8[] msg) {
+fn i32 for_else_not_consumed(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) {} else {} }", &m);
@@ -5098,7 +5100,7 @@ fn i32 for_else_not_consumed(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_bare_keyword_only(arena::Arena* a, u8[] msg) {
+fn i32 for_bare_keyword_only(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for }", &m);
@@ -5114,7 +5116,7 @@ fn i32 for_bare_keyword_only(arena::Arena* a, u8[] msg) {
 
 // GAP FILL — additional coverage
 
-fn i32 for_cond_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;x;) { } }", &m);
@@ -5126,7 +5128,7 @@ fn i32 for_cond_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 for_post_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;x) { } }", &m);
@@ -5139,7 +5141,7 @@ fn i32 for_post_src_pos(arena::Arena* a, u8[] msg) {
 }
 
 // Non-assignment expression in init must not be wrapped in an AssignmentNode.
-fn i32 for_init_bare_binop(arena::Arena* a, u8[] msg) {
+fn i32 for_init_bare_binop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (a + b;;) { } }", &m);
@@ -5154,7 +5156,7 @@ fn i32 for_init_bare_binop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_bare_member_access(arena::Arena* a, u8[] msg) {
+fn i32 for_init_bare_member_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (obj.f;;) { } }", &m);
@@ -5168,7 +5170,7 @@ fn i32 for_init_bare_member_access(arena::Arena* a, u8[] msg) {
 }
 
 // (i + 1) = 2 — parser MUST accept; lvalue rules deferred to sema.
-fn i32 for_init_paren_lhs_assign(arena::Arena* a, u8[] msg) {
+fn i32 for_init_paren_lhs_assign(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for ((i + 1) = 2;;) { } }", &m);
@@ -5186,7 +5188,7 @@ fn i32 for_init_paren_lhs_assign(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_namespace_access(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_namespace_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;mod::flag;) { } }", &m);
@@ -5199,7 +5201,7 @@ fn i32 for_cond_namespace_access(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_cast(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_cast(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;(bool)x;) { } }", &m);
@@ -5212,7 +5214,7 @@ fn i32 for_cond_cast(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_paren_ident(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_paren_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;(x);) { } }", &m);
@@ -5226,7 +5228,7 @@ fn i32 for_cond_paren_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 paren_ident_in_return(arena::Arena* a, u8[] msg) {
+fn i32 paren_ident_in_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { return (x); }", &m);
@@ -5240,7 +5242,7 @@ fn i32 paren_ident_in_return(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 paren_ident_in_var_init(arena::Arena* a, u8[] msg) {
+fn i32 paren_ident_in_var_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = (x);", &m);
@@ -5252,7 +5254,7 @@ fn i32 paren_ident_in_var_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 paren_ident_lhs_of_binop(arena::Arena* a, u8[] msg) {
+fn i32 paren_ident_lhs_of_binop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = (x) + 1;", &m);
@@ -5267,7 +5269,7 @@ fn i32 paren_ident_lhs_of_binop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 paren_ident_bare_expr_stmt(arena::Arena* a, u8[] msg) {
+fn i32 paren_ident_bare_expr_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { (x); }", &m);
@@ -5282,7 +5284,7 @@ fn i32 paren_ident_bare_expr_stmt(arena::Arena* a, u8[] msg) {
 }
 
 // A `const` qualifier in cast type position is accepted (and reduces to the unqualified type).
-fn i32 cast_const_qualified_type(arena::Arena* a, u8[] msg) {
+fn i32 cast_const_qualified_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i8* y = (const i8*)x;", &m);
@@ -5294,7 +5296,7 @@ fn i32 cast_const_qualified_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_primitive_ident_operand(arena::Arena* a, u8[] msg) {
+fn i32 cast_primitive_ident_operand(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = (i32)x;", &m);
@@ -5307,7 +5309,7 @@ fn i32 cast_primitive_ident_operand(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_with_unary_operand(arena::Arena* a, u8[] msg) {
+fn i32 cast_with_unary_operand(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = (i32)-x;", &m);
@@ -5319,7 +5321,7 @@ fn i32 cast_with_unary_operand(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_with_paren_operand(arena::Arena* a, u8[] msg) {
+fn i32 cast_with_paren_operand(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = (i32)(z + 1);", &m);
@@ -5331,7 +5333,7 @@ fn i32 cast_with_paren_operand(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_with_call_operand(arena::Arena* a, u8[] msg) {
+fn i32 cast_with_call_operand(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = (i32)foo();", &m);
@@ -5343,7 +5345,7 @@ fn i32 cast_with_call_operand(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_with_literal_operand(arena::Arena* a, u8[] msg) {
+fn i32 cast_with_literal_operand(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = (i32)5;", &m);
@@ -5356,7 +5358,7 @@ fn i32 cast_with_literal_operand(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_named_type_ident_operand(arena::Arena* a, u8[] msg) {
+fn i32 cast_named_type_ident_operand(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Foo y = (Foo)x;", &m);
@@ -5369,7 +5371,7 @@ fn i32 cast_named_type_ident_operand(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 paren_named_ident_then_semi(arena::Arena* a, u8[] msg) {
+fn i32 paren_named_ident_then_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Foo y = (Foo);", &m);
@@ -5381,7 +5383,7 @@ fn i32 paren_named_ident_then_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 nested_paren_around_cast(arena::Arena* a, u8[] msg) {
+fn i32 nested_paren_around_cast(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = ((i32)x);", &m);
@@ -5395,7 +5397,7 @@ fn i32 nested_paren_around_cast(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_then_binop(arena::Arena* a, u8[] msg) {
+fn i32 cast_then_binop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = (i32)x + 1;", &m);
@@ -5410,7 +5412,7 @@ fn i32 cast_then_binop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 paren_ident_then_rparen_followed_by_semi(arena::Arena* a, u8[] msg) {
+fn i32 paren_ident_then_rparen_followed_by_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo((x)); }", &m);
@@ -5422,7 +5424,7 @@ fn i32 paren_ident_then_rparen_followed_by_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 paren_ident_followed_by_comma(arena::Arena* a, u8[] msg) {
+fn i32 paren_ident_followed_by_comma(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { foo((x), y); }", &m);
@@ -5432,7 +5434,7 @@ fn i32 paren_ident_followed_by_comma(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 paren_ident_followed_by_rbracket(arena::Arena* a, u8[] msg) {
+fn i32 paren_ident_followed_by_rbracket(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 y = arr[(x)];", &m);
@@ -5442,7 +5444,7 @@ fn i32 paren_ident_followed_by_rbracket(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 paren_ident_followed_by_eqeq(arena::Arena* a, u8[] msg) {
+fn i32 paren_ident_followed_by_eqeq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "bool b = (x) == 1;", &m);
@@ -5456,7 +5458,7 @@ fn i32 paren_ident_followed_by_eqeq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_with_struct_lit_operand(arena::Arena* a, u8[] msg) {
+fn i32 cast_with_struct_lit_operand(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Foo y = (Foo){.x = 1};", &m);
@@ -5468,7 +5470,7 @@ fn i32 cast_with_struct_lit_operand(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_with_array_lit_operand(arena::Arena* a, u8[] msg) {
+fn i32 cast_with_array_lit_operand(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32* y = (i32*)[5, 6];", &m);
@@ -5480,7 +5482,7 @@ fn i32 cast_with_array_lit_operand(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_array_index(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_array_index(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;arr[0] < 10;) { } }", &m);
@@ -5495,7 +5497,7 @@ fn i32 for_cond_array_index(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_cond_chained_postfix(arena::Arena* a, u8[] msg) {
+fn i32 for_cond_chained_postfix(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;obj.arr[0] < 10;) { } }", &m);
@@ -5512,7 +5514,7 @@ fn i32 for_cond_chained_postfix(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_bare_binop(arena::Arena* a, u8[] msg) {
+fn i32 for_post_bare_binop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;a + b) { } }", &m);
@@ -5525,7 +5527,7 @@ fn i32 for_post_bare_binop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_post_bare_ident(arena::Arena* a, u8[] msg) {
+fn i32 for_post_bare_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;x) { } }", &m);
@@ -5539,7 +5541,7 @@ fn i32 for_post_bare_ident(arena::Arena* a, u8[] msg) {
 }
 
 // `for (i32* p = ; x; ;)` — multiple errors in same for; both should be reported separately.
-fn i32 for_multi_errors(arena::Arena* a, u8[] msg) {
+fn i32 for_multi_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (5 +;;5 +) { } }", &m);
@@ -5556,7 +5558,7 @@ fn i32 for_multi_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_unclosed_body_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 for_unclosed_body_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) {", &m);
@@ -5569,7 +5571,7 @@ fn i32 for_unclosed_body_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 for_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for", &m);
@@ -5582,7 +5584,7 @@ fn i32 for_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_init_var_decl_pointer_to_pointer(arena::Arena* a, u8[] msg) {
+fn i32 for_init_var_decl_pointer_to_pointer(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (i32** pp = null;;) { } }", &m);
@@ -5605,7 +5607,7 @@ fn i32 for_init_var_decl_pointer_to_pointer(arena::Arena* a, u8[] msg) {
 // BREAK / CONTINUE
 // ============================================================================
 
-fn i32 break_basic(arena::Arena* a, u8[] msg) {
+fn i32 break_basic(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break; }", &m);
@@ -5618,7 +5620,7 @@ fn i32 break_basic(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_basic(arena::Arena* a, u8[] msg) {
+fn i32 continue_basic(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue; }", &m);
@@ -5631,7 +5633,7 @@ fn i32 continue_basic(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_in_while(arena::Arena* a, u8[] msg) {
+fn i32 break_in_while(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { break; } }", &m);
@@ -5646,7 +5648,7 @@ fn i32 break_in_while(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_in_for(arena::Arena* a, u8[] msg) {
+fn i32 break_in_for(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { break; } }", &m);
@@ -5661,7 +5663,7 @@ fn i32 break_in_for(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_in_while(arena::Arena* a, u8[] msg) {
+fn i32 continue_in_while(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { continue; } }", &m);
@@ -5676,7 +5678,7 @@ fn i32 continue_in_while(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_in_for(arena::Arena* a, u8[] msg) {
+fn i32 continue_in_for(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { continue; } }", &m);
@@ -5691,7 +5693,7 @@ fn i32 continue_in_for(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_in_nested_if(arena::Arena* a, u8[] msg) {
+fn i32 break_in_nested_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { if (y) { break; } } }", &m);
@@ -5710,7 +5712,7 @@ fn i32 break_in_nested_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_in_nested_if(arena::Arena* a, u8[] msg) {
+fn i32 continue_in_nested_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { if (y) { continue; } } }", &m);
@@ -5729,7 +5731,7 @@ fn i32 continue_in_nested_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_in_nested_loop(arena::Arena* a, u8[] msg) {
+fn i32 break_in_nested_loop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { for (;;) { break; } } }", &m);
@@ -5748,7 +5750,7 @@ fn i32 break_in_nested_loop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_in_bare_block(arena::Arena* a, u8[] msg) {
+fn i32 break_in_bare_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { break; } }", &m);
@@ -5761,7 +5763,7 @@ fn i32 break_in_bare_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_then_other_stmt(arena::Arena* a, u8[] msg) {
+fn i32 break_then_other_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { break; i32 y = 5; } }", &m);
@@ -5777,7 +5779,7 @@ fn i32 break_then_other_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 multiple_breaks(arena::Arena* a, u8[] msg) {
+fn i32 multiple_breaks(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { break; break; } }", &m);
@@ -5793,7 +5795,7 @@ fn i32 multiple_breaks(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_continue_sequence(arena::Arena* a, u8[] msg) {
+fn i32 break_continue_sequence(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { break; continue; break; } }", &m);
@@ -5811,7 +5813,7 @@ fn i32 break_continue_sequence(arena::Arena* a, u8[] msg) {
 }
 
 // `fn void f() { break; }` — `break` at byte 14
-fn i32 break_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 break_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break; }", &m);
@@ -5823,7 +5825,7 @@ fn i32 break_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 continue_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue; }", &m);
@@ -5835,7 +5837,7 @@ fn i32 continue_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 break_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break }", &m);
@@ -5849,7 +5851,7 @@ fn i32 break_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 continue_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue }", &m);
@@ -5863,7 +5865,7 @@ fn i32 continue_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_extra_token(arena::Arena* a, u8[] msg) {
+fn i32 break_extra_token(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break x; }", &m);
@@ -5877,7 +5879,7 @@ fn i32 break_extra_token(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 break_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break", &m);
@@ -5890,7 +5892,7 @@ fn i32 break_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 continue_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue", &m);
@@ -5903,7 +5905,7 @@ fn i32 continue_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 break_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 break_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { break i32 x = 5; }", &m);
@@ -5922,7 +5924,7 @@ fn i32 break_recovery_continues(arena::Arena* a, u8[] msg) {
 }
 
 // continue mirrors of break-specific tests
-fn i32 continue_in_bare_block(arena::Arena* a, u8[] msg) {
+fn i32 continue_in_bare_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { continue; } }", &m);
@@ -5935,7 +5937,7 @@ fn i32 continue_in_bare_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_in_nested_loop(arena::Arena* a, u8[] msg) {
+fn i32 continue_in_nested_loop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { for (;;) { continue; } } }", &m);
@@ -5954,7 +5956,7 @@ fn i32 continue_in_nested_loop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_then_other_stmt(arena::Arena* a, u8[] msg) {
+fn i32 continue_then_other_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { continue; i32 y = 5; } }", &m);
@@ -5970,7 +5972,7 @@ fn i32 continue_then_other_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 multiple_continues(arena::Arena* a, u8[] msg) {
+fn i32 multiple_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (x) { continue; continue; } }", &m);
@@ -5986,7 +5988,7 @@ fn i32 multiple_continues(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_extra_token(arena::Arena* a, u8[] msg) {
+fn i32 continue_extra_token(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue x; }", &m);
@@ -6000,7 +6002,7 @@ fn i32 continue_extra_token(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 continue_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { continue i32 x = 5; }", &m);
@@ -6020,7 +6022,7 @@ fn i32 continue_recovery_continues(arena::Arena* a, u8[] msg) {
 
 // Else-branch coverage — exercises the parse_if else_block path, which is a
 // distinct parent from the then-branch tests above.
-fn i32 break_in_else_branch(arena::Arena* a, u8[] msg) {
+fn i32 break_in_else_branch(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) { if (b) { } else { break; } } }", &m);
@@ -6039,7 +6041,7 @@ fn i32 break_in_else_branch(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 continue_in_else_branch(arena::Arena* a, u8[] msg) {
+fn i32 continue_in_else_branch(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { if (b) { } else { continue; } } }", &m);
@@ -6062,7 +6064,7 @@ fn i32 continue_in_else_branch(arena::Arena* a, u8[] msg) {
 // UNION
 // ============================================================================
 
-fn i32 union_empty(arena::Arena* a, u8[] msg) {
+fn i32 union_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { }", &m);
@@ -6073,7 +6075,7 @@ fn i32 union_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_single_field(arena::Arena* a, u8[] msg) {
+fn i32 union_single_field(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Tagged { i32 i; }", &m);
@@ -6084,7 +6086,7 @@ fn i32 union_single_field(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_multi_field(arena::Arena* a, u8[] msg) {
+fn i32 union_multi_field(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Tagged { i32 i; f64 f; bool b; }", &m);
@@ -6099,7 +6101,7 @@ fn i32 union_multi_field(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_pointer_type(arena::Arena* a, u8[] msg) {
+fn i32 union_field_pointer_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { i32* p; }", &m);
@@ -6109,7 +6111,7 @@ fn i32 union_field_pointer_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_array_type(arena::Arena* a, u8[] msg) {
+fn i32 union_field_array_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { i32[8] arr; }", &m);
@@ -6121,7 +6123,7 @@ fn i32 union_field_array_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_named_type(arena::Arena* a, u8[] msg) {
+fn i32 union_field_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { Bar b; }", &m);
@@ -6131,7 +6133,7 @@ fn i32 union_field_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_qualified_type(arena::Arena* a, u8[] msg) {
+fn i32 union_field_qualified_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { mod::Bar b; }", &m);
@@ -6141,7 +6143,7 @@ fn i32 union_field_qualified_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_fn_ptr_type(arena::Arena* a, u8[] msg) {
+fn i32 union_field_fn_ptr_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { fn* void(i32) cb; }", &m);
@@ -6151,7 +6153,7 @@ fn i32 union_field_fn_ptr_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_nested_anon_union_rejected(arena::Arena* a, u8[] msg) {
+fn i32 union_field_nested_anon_union_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { union { i32 x; } inner; }", &m);
@@ -6167,7 +6169,7 @@ fn i32 union_field_nested_anon_union_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_anon_struct_rejected(arena::Arena* a, u8[] msg) {
+fn i32 union_field_anon_struct_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { struct { i32 x; u8 y; } s; }", &m);
@@ -6183,7 +6185,7 @@ fn i32 union_field_anon_struct_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_exported(arena::Arena* a, u8[] msg) {
+fn i32 union_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export union U { i32 i; }", &m);
@@ -6192,7 +6194,7 @@ fn i32 union_exported(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_many_fields_growth(arena::Arena* a, u8[] msg) {
+fn i32 union_many_fields_growth(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union U { i32 a; i32 b; i32 c; i32 d; i32 e; i32 f; }", &m);
@@ -6202,7 +6204,7 @@ fn i32 union_many_fields_growth(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_union_in_alias(arena::Arena* a, u8[] msg) {
+fn i32 anon_union_in_alias(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = union { i32 i; f64 f; };", &m);
@@ -6215,7 +6217,7 @@ fn i32 anon_union_in_alias(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_union_in_var_decl_rejected(arena::Arena* a, u8[] msg) {
+fn i32 anon_union_in_var_decl_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { union { i32 i; } v; }", &m);
@@ -6231,7 +6233,7 @@ fn i32 anon_union_in_var_decl_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_union_in_fn_param_rejected(arena::Arena* a, u8[] msg) {
+fn i32 anon_union_in_fn_param_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void g(union { i32 i; } v) { }", &m);
@@ -6245,7 +6247,7 @@ fn i32 anon_union_in_fn_param_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_union_empty(arena::Arena* a, u8[] msg) {
+fn i32 anon_union_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = union { };", &m);
@@ -6256,7 +6258,7 @@ fn i32 anon_union_empty(arena::Arena* a, u8[] msg) {
 }
 
 // Union literals reuse parse_struct_lit — same AST shape, sema discriminates at use site.
-fn i32 union_lit_via_struct_lit_syntax(arena::Arena* a, u8[] msg) {
+fn i32 union_lit_via_struct_lit_syntax(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { Tagged t = { .i = 5 }; }", &m);
@@ -6272,7 +6274,7 @@ fn i32 union_lit_via_struct_lit_syntax(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 union_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { }", &m);
@@ -6282,7 +6284,7 @@ fn i32 union_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 union_field_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32 x; }", &m);
@@ -6292,7 +6294,7 @@ fn i32 union_field_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_missing_name(arena::Arena* a, u8[] msg) {
+fn i32 union_missing_name(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union { i32 i; }", &m);
@@ -6304,7 +6306,7 @@ fn i32 union_missing_name(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_missing_lbrace(arena::Arena* a, u8[] msg) {
+fn i32 union_missing_lbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo i32 x; }", &m);
@@ -6316,7 +6318,7 @@ fn i32 union_missing_lbrace(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 union_missing_rbrace_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32 x;", &m);
@@ -6327,7 +6329,7 @@ fn i32 union_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_missing_name(arena::Arena* a, u8[] msg) {
+fn i32 union_field_missing_name(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32; }", &m);
@@ -6338,7 +6340,7 @@ fn i32 union_field_missing_name(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_field_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 union_field_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32 x }", &m);
@@ -6350,7 +6352,7 @@ fn i32 union_field_missing_semi(arena::Arena* a, u8[] msg) {
 }
 
 // `union` at type position not followed by `{` — parse_base_type's UNION case reports "expected '{'".
-fn i32 anon_union_missing_lbrace_at_type_pos(arena::Arena* a, u8[] msg) {
+fn i32 anon_union_missing_lbrace_at_type_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = union x;", &m);
@@ -6362,7 +6364,7 @@ fn i32 anon_union_missing_lbrace_at_type_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 union_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 union_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "union Foo { i32; } union Bar { u8 y; }", &m);
@@ -6381,7 +6383,7 @@ fn i32 union_recovery_continues(arena::Arena* a, u8[] msg) {
 // STRUCT
 // ============================================================================
 
-fn i32 struct_empty(arena::Arena* a, u8[] msg) {
+fn i32 struct_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { }", &m);
@@ -6392,7 +6394,7 @@ fn i32 struct_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_single_field(arena::Arena* a, u8[] msg) {
+fn i32 struct_single_field(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x; }", &m);
@@ -6403,7 +6405,7 @@ fn i32 struct_single_field(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_multi_field(arena::Arena* a, u8[] msg) {
+fn i32 struct_multi_field(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x; u8 y; bool z; }", &m);
@@ -6418,7 +6420,7 @@ fn i32 struct_multi_field(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_pointer_type(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_pointer_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32* p; }", &m);
@@ -6428,7 +6430,7 @@ fn i32 struct_field_pointer_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_array_type(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_array_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32[8] arr; }", &m);
@@ -6440,7 +6442,7 @@ fn i32 struct_field_array_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_named_type(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { Bar b; }", &m);
@@ -6450,7 +6452,7 @@ fn i32 struct_field_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_qualified_type(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_qualified_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { mod::Bar b; }", &m);
@@ -6460,7 +6462,7 @@ fn i32 struct_field_qualified_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_fn_ptr_type(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_fn_ptr_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { fn* void(i32) cb; }", &m);
@@ -6470,7 +6472,7 @@ fn i32 struct_field_fn_ptr_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_nested_anon_struct_rejected(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_nested_anon_struct_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { struct { i32 x; } inner; }", &m);
@@ -6484,7 +6486,7 @@ fn i32 struct_field_nested_anon_struct_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_exported(arena::Arena* a, u8[] msg) {
+fn i32 struct_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export struct Foo { i32 x; }", &m);
@@ -6494,7 +6496,7 @@ fn i32 struct_exported(arena::Arena* a, u8[] msg) {
 }
 
 // 6 fields exercises the realloc-grow path (initial cap=4).
-fn i32 struct_many_fields_growth(arena::Arena* a, u8[] msg) {
+fn i32 struct_many_fields_growth(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 a; i32 b; i32 c; i32 d; i32 e; i32 f; }", &m);
@@ -6505,7 +6507,7 @@ fn i32 struct_many_fields_growth(arena::Arena* a, u8[] msg) {
 }
 
 // Anonymous struct in alias RHS: legacy `struct { ... }` form.
-fn i32 anon_struct_in_alias_legacy(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_alias_legacy(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias VecI32 = struct { i32 x; u64 len; };", &m);
@@ -6519,7 +6521,7 @@ fn i32 anon_struct_in_alias_legacy(arena::Arena* a, u8[] msg) {
 }
 
 // Anonymous struct in alias RHS: dot-prefix `.{ ... }` form.
-fn i32 anon_struct_in_alias_dot(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_alias_dot(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias VecI32 = .{ i32 x; u64 len; };", &m);
@@ -6532,7 +6534,7 @@ fn i32 anon_struct_in_alias_dot(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_in_var_decl_dot_rejected(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_var_decl_dot_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { .{ i32 x; } v; }", &m);
@@ -6548,7 +6550,7 @@ fn i32 anon_struct_in_var_decl_dot_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_empty_dot(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_empty_dot(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = .{ };", &m);
@@ -6558,7 +6560,7 @@ fn i32 anon_struct_empty_dot(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 struct_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { }", &m);
@@ -6568,7 +6570,7 @@ fn i32 struct_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x; }", &m);
@@ -6578,7 +6580,7 @@ fn i32 struct_field_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_missing_name(arena::Arena* a, u8[] msg) {
+fn i32 struct_missing_name(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct { i32 x; }", &m);
@@ -6590,7 +6592,7 @@ fn i32 struct_missing_name(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_missing_lbrace(arena::Arena* a, u8[] msg) {
+fn i32 struct_missing_lbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo i32 x; }", &m);
@@ -6602,7 +6604,7 @@ fn i32 struct_missing_lbrace(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 struct_missing_rbrace_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x;", &m);
@@ -6613,7 +6615,7 @@ fn i32 struct_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_missing_name(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_missing_name(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32; }", &m);
@@ -6624,7 +6626,7 @@ fn i32 struct_field_missing_name(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32 x }", &m);
@@ -6635,7 +6637,7 @@ fn i32 struct_field_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 struct_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { i32; } struct Bar { u8 y; }", &m);
@@ -6652,7 +6654,7 @@ fn i32 struct_recovery_continues(arena::Arena* a, u8[] msg) {
 
 // `struct Foo { 1 }` — `1` consumes no tokens via parse_type / expect chain;
 // the no-progress guard in parse_fields must force advance to avoid infinite loop.
-fn i32 struct_no_progress_safety(arena::Arena* a, u8[] msg) {
+fn i32 struct_no_progress_safety(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { 1 } struct Bar { }", &m);
@@ -6665,7 +6667,7 @@ fn i32 struct_no_progress_safety(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_in_alias_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_alias_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = struct { i32 ; };", &m);
@@ -6677,7 +6679,7 @@ fn i32 anon_struct_in_alias_body_error_propagates(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_in_alias_unclosed_brace_propagates(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_alias_unclosed_brace_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = struct { i32 x;", &m);
@@ -6689,7 +6691,7 @@ fn i32 anon_struct_in_alias_unclosed_brace_propagates(arena::Arena* a, u8[] msg)
     return 0;
 }
 
-fn i32 anon_union_in_alias_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 anon_union_in_alias_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = union { i32 ; };", &m);
@@ -6701,7 +6703,7 @@ fn i32 anon_union_in_alias_body_error_propagates(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_dot_in_alias_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_dot_in_alias_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = .{ i32 ; };", &m);
@@ -6713,7 +6715,7 @@ fn i32 anon_struct_dot_in_alias_body_error_propagates(arena::Arena* a, u8[] msg)
     return 0;
 }
 
-fn i32 anon_struct_nested_in_alias_rejected(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_nested_in_alias_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = struct { struct { i32 x; } y; };", &m);
@@ -6730,7 +6732,7 @@ fn i32 anon_struct_nested_in_alias_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_in_cast_target_rejected(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_cast_target_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 v = (struct { i32 x; })x;", &m);
@@ -6740,7 +6742,7 @@ fn i32 anon_struct_in_cast_target_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_behind_pointer_rejected(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_behind_pointer_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { struct { i32 x; }* p; }", &m);
@@ -6750,7 +6752,7 @@ fn i32 anon_struct_behind_pointer_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_in_extern_fn_return_rejected(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_extern_fn_return_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn struct { i32 x; } f(); }", &m);
@@ -6760,7 +6762,7 @@ fn i32 anon_struct_in_extern_fn_return_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_two_decls_two_diags(arena::Arena* a, u8[] msg) {
+fn i32 anon_two_decls_two_diags(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { struct { i32 a; } x; union { i32 b; } y; }", &m);
@@ -6772,7 +6774,7 @@ fn i32 anon_two_decls_two_diags(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_in_fn_return_type_rejected(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_fn_return_type_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn struct { i32 x; } g() { return { .x = 0 }; }", &m);
@@ -6786,7 +6788,7 @@ fn i32 anon_struct_in_fn_return_type_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 struct_field_nested_dot_anon_rejected(arena::Arena* a, u8[] msg) {
+fn i32 struct_field_nested_dot_anon_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct Foo { .{ i32 x; } inner; }", &m);
@@ -6800,7 +6802,7 @@ fn i32 struct_field_nested_dot_anon_rejected(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 anon_struct_in_fn_param_dot_rejected(arena::Arena* a, u8[] msg) {
+fn i32 anon_struct_in_fn_param_dot_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void g(.{ i32 x; } v) { }", &m);
@@ -6815,7 +6817,7 @@ fn i32 anon_struct_in_fn_param_dot_rejected(arena::Arena* a, u8[] msg) {
 }
 
 // `.` not followed by `{` at type position — parse_base_type's Dot case reports "expected '{'".
-fn i32 dot_struct_dot_not_followed_by_lbrace(arena::Arena* a, u8[] msg) {
+fn i32 dot_struct_dot_not_followed_by_lbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = .x;", &m);
@@ -6831,7 +6833,7 @@ fn i32 dot_struct_dot_not_followed_by_lbrace(arena::Arena* a, u8[] msg) {
 // ALIAS
 // ============================================================================
 
-fn i32 alias_primitive_rhs(arena::Arena* a, u8[] msg) {
+fn i32 alias_primitive_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 = u32;", &m);
@@ -6842,7 +6844,7 @@ fn i32 alias_primitive_rhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_named_rhs(arena::Arena* a, u8[] msg) {
+fn i32 alias_named_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias MyFoo = Foo;", &m);
@@ -6853,7 +6855,7 @@ fn i32 alias_named_rhs(arena::Arena* a, u8[] msg) {
 }
 
 // User-requested pattern: `alias TestCase = testing::TestCase;` — qualified RHS.
-fn i32 alias_qualified_named_rhs(arena::Arena* a, u8[] msg) {
+fn i32 alias_qualified_named_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import testing; alias TestCase = testing::TestCase;", &m);
@@ -6867,7 +6869,7 @@ fn i32 alias_qualified_named_rhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_pointer_rhs(arena::Arena* a, u8[] msg) {
+fn i32 alias_pointer_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias Ptr = i32*;", &m);
@@ -6879,7 +6881,7 @@ fn i32 alias_pointer_rhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_slice_rhs(arena::Arena* a, u8[] msg) {
+fn i32 alias_slice_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias Bytes = u8[];", &m);
@@ -6891,7 +6893,7 @@ fn i32 alias_slice_rhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_array_rhs(arena::Arena* a, u8[] msg) {
+fn i32 alias_array_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias Pair = i32[2];", &m);
@@ -6904,7 +6906,7 @@ fn i32 alias_array_rhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_fn_ptr_rhs(arena::Arena* a, u8[] msg) {
+fn i32 alias_fn_ptr_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias Cb = fn* void(i32);", &m);
@@ -6914,7 +6916,7 @@ fn i32 alias_fn_ptr_rhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_exported(arena::Arena* a, u8[] msg) {
+fn i32 alias_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export alias TokenId = u32;", &m);
@@ -6924,7 +6926,7 @@ fn i32 alias_exported(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_multiple_in_file(arena::Arena* a, u8[] msg) {
+fn i32 alias_multiple_in_file(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias A = u32; alias B = A; alias C = B;", &m);
@@ -6937,7 +6939,7 @@ fn i32 alias_multiple_in_file(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_mixed_with_other_decls(arena::Arena* a, u8[] msg) {
+fn i32 alias_mixed_with_other_decls(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import foo; alias A = u32; fn void f() { }", &m);
@@ -6949,7 +6951,7 @@ fn i32 alias_mixed_with_other_decls(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 alias_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 = u32;", &m);
@@ -6961,7 +6963,7 @@ fn i32 alias_src_pos(arena::Arena* a, u8[] msg) {
 
 // With `export`: alias.src_pos points at the `alias` keyword, NOT at `export`
 // (parse_top_decl consumes `export` before dispatching).
-fn i32 alias_exported_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 alias_exported_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export alias U32 = u32;", &m);
@@ -6971,7 +6973,7 @@ fn i32 alias_exported_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_missing_name(arena::Arena* a, u8[] msg) {
+fn i32 alias_missing_name(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias = u32;", &m);
@@ -6983,7 +6985,7 @@ fn i32 alias_missing_name(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_missing_eq(arena::Arena* a, u8[] msg) {
+fn i32 alias_missing_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 u32;", &m);
@@ -6995,7 +6997,7 @@ fn i32 alias_missing_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_missing_type(arena::Arena* a, u8[] msg) {
+fn i32 alias_missing_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 = ;", &m);
@@ -7007,7 +7009,7 @@ fn i32 alias_missing_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 alias_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias U32 = u32", &m);
@@ -7018,7 +7020,7 @@ fn i32 alias_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 alias_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias", &m);
@@ -7029,7 +7031,7 @@ fn i32 alias_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_export_preserved_through_error(arena::Arena* a, u8[] msg) {
+fn i32 alias_export_preserved_through_error(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export alias = u32;", &m);
@@ -7040,7 +7042,7 @@ fn i32 alias_export_preserved_through_error(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_exported_qualified_rhs(arena::Arena* a, u8[] msg) {
+fn i32 alias_exported_qualified_rhs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import testing; export alias TestCase = testing::TestCase;", &m);
@@ -7054,7 +7056,7 @@ fn i32 alias_exported_qualified_rhs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alias_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 alias_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias = u32; fn void f() { }", &m);
@@ -7071,7 +7073,7 @@ fn i32 alias_recovery_continues(arena::Arena* a, u8[] msg) {
 // COMPCODE  (expression: compcode { ... })
 // ============================================================================
 
-fn i32 compcode_in_var_decl_init(arena::Arena* a, u8[] msg) {
+fn i32 compcode_in_var_decl_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode { }; }", &m);
@@ -7086,7 +7088,7 @@ fn i32 compcode_in_var_decl_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_in_return(arena::Arena* a, u8[] msg) {
+fn i32 compcode_in_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { }; }", &m);
@@ -7098,7 +7100,7 @@ fn i32 compcode_in_return(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_in_compsplice_arg(arena::Arena* a, u8[] msg) {
+fn i32 compcode_in_compsplice_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice compcode { }; }", &m);
@@ -7111,7 +7113,7 @@ fn i32 compcode_in_compsplice_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_in_compinsert_arg(arena::Arena* a, u8[] msg) {
+fn i32 compcode_in_compinsert_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(compcode { }); }", &m);
@@ -7123,7 +7125,7 @@ fn i32 compcode_in_compinsert_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_in_call_arg(arena::Arena* a, u8[] msg) {
+fn i32 compcode_in_call_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return foo(compcode { }); }", &m);
@@ -7137,7 +7139,7 @@ fn i32 compcode_in_call_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_as_if_cond(arena::Arena* a, u8[] msg) {
+fn i32 compcode_as_if_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (compcode { }) { } }", &m);
@@ -7149,7 +7151,7 @@ fn i32 compcode_as_if_cond(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_as_switch_disc(arena::Arena* a, u8[] msg) {
+fn i32 compcode_as_switch_disc(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (compcode { }) { } }", &m);
@@ -7161,7 +7163,7 @@ fn i32 compcode_as_switch_disc(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_in_paren(arena::Arena* a, u8[] msg) {
+fn i32 compcode_in_paren(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return (compcode { }); }", &m);
@@ -7174,7 +7176,7 @@ fn i32 compcode_in_paren(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_empty_body(arena::Arena* a, u8[] msg) {
+fn i32 compcode_empty_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { }; }", &m);
@@ -7188,7 +7190,7 @@ fn i32 compcode_empty_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_multi_stmt_body(arena::Arena* a, u8[] msg) {
+fn i32 compcode_multi_stmt_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { i32 y = 5; return y; }; }", &m);
@@ -7205,7 +7207,7 @@ fn i32 compcode_multi_stmt_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_body_with_control_flow(arena::Arena* a, u8[] msg) {
+fn i32 compcode_body_with_control_flow(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { if (x) { } while (y) { } }; }", &m);
@@ -7222,7 +7224,7 @@ fn i32 compcode_body_with_control_flow(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_nested(arena::Arena* a, u8[] msg) {
+fn i32 compcode_nested(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { return compcode { return compcode { }; }; }", &m);
@@ -7240,7 +7242,7 @@ fn i32 compcode_nested(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 compcode_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode { }; }", &m);
@@ -7254,7 +7256,7 @@ fn i32 compcode_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_body_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 compcode_body_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode { }; }", &m);
@@ -7268,7 +7270,7 @@ fn i32 compcode_body_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_missing_lbrace(arena::Arena* a, u8[] msg) {
+fn i32 compcode_missing_lbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode; }", &m);
@@ -7284,7 +7286,7 @@ fn i32 compcode_missing_lbrace(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_unclosed_body_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 compcode_unclosed_body_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode {", &m);
@@ -7299,7 +7301,7 @@ fn i32 compcode_unclosed_body_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compcode_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 compcode_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { i32 x = compcode { return 5 5; }; }", &m);
@@ -7319,7 +7321,7 @@ fn i32 compcode_body_error_propagates(arena::Arena* a, u8[] msg) {
 // COMPSPLICE
 // ============================================================================
 
-fn i32 compsplice_ident_arg(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_ident_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice code; }", &m);
@@ -7333,7 +7335,7 @@ fn i32 compsplice_ident_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_call_arg(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_call_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice gen(); }", &m);
@@ -7345,7 +7347,7 @@ fn i32 compsplice_call_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_namespace_arg(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_namespace_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice mod::x; }", &m);
@@ -7357,7 +7359,7 @@ fn i32 compsplice_namespace_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_pratt_arg(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_pratt_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice a + b * 2; }", &m);
@@ -7371,7 +7373,7 @@ fn i32 compsplice_pratt_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_in_bare_block(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_in_bare_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { compsplice x; } }", &m);
@@ -7383,7 +7385,7 @@ fn i32 compsplice_in_bare_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_in_defer_single_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer compsplice x; }", &m);
@@ -7398,7 +7400,7 @@ fn i32 compsplice_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_full_comp_family_sequence(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_full_comp_family_sequence(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice x; compinsert(\"a\"); comperror(\"b\"); compwarning(\"c\"); }", &m);
@@ -7414,7 +7416,7 @@ fn i32 compsplice_full_comp_family_sequence(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice x; }", &m);
@@ -7426,7 +7428,7 @@ fn i32 compsplice_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_arg_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_arg_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice x; }", &m);
@@ -7438,7 +7440,7 @@ fn i32 compsplice_arg_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_just_semi(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_just_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice; }", &m);
@@ -7452,7 +7454,7 @@ fn i32 compsplice_just_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice", &m);
@@ -7465,7 +7467,7 @@ fn i32 compsplice_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice x }", &m);
@@ -7479,7 +7481,7 @@ fn i32 compsplice_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_malformed_expr(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_malformed_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice 5 +; }", &m);
@@ -7493,7 +7495,7 @@ fn i32 compsplice_malformed_expr(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compsplice_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 compsplice_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compsplice; i32 x = 5; }", &m);
@@ -7514,7 +7516,7 @@ fn i32 compsplice_recovery_continues(arena::Arena* a, u8[] msg) {
 // COMPINSERT
 // ============================================================================
 
-fn i32 compinsert_string_arg(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_string_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(\"src\"); }", &m);
@@ -7528,7 +7530,7 @@ fn i32 compinsert_string_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_intlit_arg(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_intlit_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(7); }", &m);
@@ -7540,7 +7542,7 @@ fn i32 compinsert_intlit_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_ident_arg(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_ident_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(SRC); }", &m);
@@ -7552,7 +7554,7 @@ fn i32 compinsert_ident_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_pratt_arg(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_pratt_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(a + b); }", &m);
@@ -7564,7 +7566,7 @@ fn i32 compinsert_pratt_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_call_arg(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_call_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(gen()); }", &m);
@@ -7576,7 +7578,7 @@ fn i32 compinsert_call_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_in_bare_block(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_in_bare_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { compinsert(\"x\"); } }", &m);
@@ -7588,7 +7590,7 @@ fn i32 compinsert_in_bare_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_in_defer_single_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer compinsert(\"x\"); }", &m);
@@ -7603,7 +7605,7 @@ fn i32 compinsert_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_comperror_compwarning_sequence(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_comperror_compwarning_sequence(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(\"a\"); comperror(\"b\"); compwarning(\"c\"); }", &m);
@@ -7618,7 +7620,7 @@ fn i32 compinsert_comperror_compwarning_sequence(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(\"x\"); }", &m);
@@ -7630,7 +7632,7 @@ fn i32 compinsert_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_arg_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_arg_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(\"x\"); }", &m);
@@ -7642,7 +7644,7 @@ fn i32 compinsert_arg_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert \"x\"); }", &m);
@@ -7656,7 +7658,7 @@ fn i32 compinsert_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(\"x\"; }", &m);
@@ -7670,7 +7672,7 @@ fn i32 compinsert_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(\"x\") }", &m);
@@ -7684,7 +7686,7 @@ fn i32 compinsert_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_empty_arg(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_empty_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(); }", &m);
@@ -7698,7 +7700,7 @@ fn i32 compinsert_empty_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert", &m);
@@ -7711,7 +7713,7 @@ fn i32 compinsert_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compinsert_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 compinsert_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compinsert(); i32 x = 5; }", &m);
@@ -7732,7 +7734,7 @@ fn i32 compinsert_recovery_continues(arena::Arena* a, u8[] msg) {
 // COMPRUN
 // ============================================================================
 
-fn i32 comprun_top_level_empty(arena::Arena* a, u8[] msg) {
+fn i32 comprun_top_level_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun { }", &m);
@@ -7744,7 +7746,7 @@ fn i32 comprun_top_level_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_top_level_with_stmts(arena::Arena* a, u8[] msg) {
+fn i32 comprun_top_level_with_stmts(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun { i32 x = 5; }", &m);
@@ -7756,7 +7758,7 @@ fn i32 comprun_top_level_with_stmts(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_top_level_mixed_with_decls(arena::Arena* a, u8[] msg) {
+fn i32 comprun_top_level_mixed_with_decls(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import foo; comprun { } fn void f() { }", &m);
@@ -7769,7 +7771,7 @@ fn i32 comprun_top_level_mixed_with_decls(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_export_is_error(arena::Arena* a, u8[] msg) {
+fn i32 comprun_export_is_error(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export comprun { i32 x = 5; }", &m);
@@ -7784,7 +7786,7 @@ fn i32 comprun_export_is_error(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_export_then_valid_decl_recovers(arena::Arena* a, u8[] msg) {
+fn i32 comprun_export_then_valid_decl_recovers(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export comprun { } export fn void f() { }", &m);
@@ -7796,7 +7798,7 @@ fn i32 comprun_export_then_valid_decl_recovers(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_two_exports_two_diags(arena::Arena* a, u8[] msg) {
+fn i32 comprun_two_exports_two_diags(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export comprun { } export comprun { }", &m);
@@ -7816,7 +7818,7 @@ fn i32 comprun_two_exports_two_diags(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_fn_empty(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_fn_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comprun { } }", &m);
@@ -7829,7 +7831,7 @@ fn i32 comprun_in_fn_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_fn_multi_stmt(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_fn_multi_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comprun { i32 y = 5; return; } }", &m);
@@ -7844,7 +7846,7 @@ fn i32 comprun_in_fn_multi_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_bare_block(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_bare_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { comprun { } } }", &m);
@@ -7856,7 +7858,7 @@ fn i32 comprun_in_bare_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_if_then(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_if_then(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { comprun { } } }", &m);
@@ -7870,7 +7872,7 @@ fn i32 comprun_in_if_then(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_if_else(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_if_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { } else { comprun { } } }", &m);
@@ -7884,7 +7886,7 @@ fn i32 comprun_in_if_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_while_body(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_while_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) { comprun { } } }", &m);
@@ -7898,7 +7900,7 @@ fn i32 comprun_in_while_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_for_body(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_for_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { comprun { } } }", &m);
@@ -7912,7 +7914,7 @@ fn i32 comprun_in_for_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_switch_arm(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_switch_arm(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { comprun { } } } }", &m);
@@ -7926,7 +7928,7 @@ fn i32 comprun_in_switch_arm(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_switch_else(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_switch_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { comprun { } } } }", &m);
@@ -7940,7 +7942,7 @@ fn i32 comprun_in_switch_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_defer_block(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_defer_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer { comprun { } } }", &m);
@@ -7954,7 +7956,7 @@ fn i32 comprun_in_defer_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
+fn i32 comprun_in_defer_single_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer comprun { } }", &m);
@@ -7969,7 +7971,7 @@ fn i32 comprun_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_two_consecutive_top_level(arena::Arena* a, u8[] msg) {
+fn i32 comprun_two_consecutive_top_level(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun { } comprun { }", &m);
@@ -7981,7 +7983,7 @@ fn i32 comprun_two_consecutive_top_level(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_two_consecutive_in_fn(arena::Arena* a, u8[] msg) {
+fn i32 comprun_two_consecutive_in_fn(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comprun { } comprun { } }", &m);
@@ -7994,7 +7996,7 @@ fn i32 comprun_two_consecutive_in_fn(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
+fn i32 comprun_combined_with_var_and_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 r = 0; comprun { } return r; }", &m);
@@ -8008,7 +8010,7 @@ fn i32 comprun_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_nested(arena::Arena* a, u8[] msg) {
+fn i32 comprun_nested(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun { comprun { } }", &m);
@@ -8023,7 +8025,7 @@ fn i32 comprun_nested(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_body_with_control_flow(arena::Arena* a, u8[] msg) {
+fn i32 comprun_body_with_control_flow(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun { if (x) { } while (y) { } }", &m);
@@ -8036,7 +8038,7 @@ fn i32 comprun_body_with_control_flow(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_src_pos_top_level(arena::Arena* a, u8[] msg) {
+fn i32 comprun_src_pos_top_level(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun { }", &m);
@@ -8046,7 +8048,7 @@ fn i32 comprun_src_pos_top_level(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_src_pos_in_fn(arena::Arena* a, u8[] msg) {
+fn i32 comprun_src_pos_in_fn(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comprun { } }", &m);
@@ -8058,7 +8060,7 @@ fn i32 comprun_src_pos_in_fn(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_body_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 comprun_body_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun { }", &m);
@@ -8068,7 +8070,7 @@ fn i32 comprun_body_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_missing_lbrace_top_level(arena::Arena* a, u8[] msg) {
+fn i32 comprun_missing_lbrace_top_level(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun }", &m);
@@ -8080,7 +8082,7 @@ fn i32 comprun_missing_lbrace_top_level(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_missing_lbrace_in_fn(arena::Arena* a, u8[] msg) {
+fn i32 comprun_missing_lbrace_in_fn(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comprun ; }", &m);
@@ -8094,7 +8096,7 @@ fn i32 comprun_missing_lbrace_in_fn(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_unclosed_body_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 comprun_unclosed_body_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun {", &m);
@@ -8105,7 +8107,7 @@ fn i32 comprun_unclosed_body_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 comprun_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun { return 5 5; }", &m);
@@ -8117,7 +8119,7 @@ fn i32 comprun_body_error_propagates(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 comprun_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun", &m);
@@ -8128,7 +8130,7 @@ fn i32 comprun_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_recovery_continues_top_level(arena::Arena* a, u8[] msg) {
+fn i32 comprun_recovery_continues_top_level(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "comprun { return 5 5; } fn void f() { }", &m);
@@ -8141,7 +8143,7 @@ fn i32 comprun_recovery_continues_top_level(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comprun_recovery_continues_in_fn(arena::Arena* a, u8[] msg) {
+fn i32 comprun_recovery_continues_in_fn(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comprun { return 5 5; } i32 x = 5; }", &m);
@@ -8162,7 +8164,7 @@ fn i32 comprun_recovery_continues_in_fn(arena::Arena* a, u8[] msg) {
 // COMPERROR / COMPWARNING
 // ============================================================================
 
-fn i32 comperror_string_arg(arena::Arena* a, u8[] msg) {
+fn i32 comperror_string_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(\"oops\"); }", &m);
@@ -8176,7 +8178,7 @@ fn i32 comperror_string_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_intlit_arg(arena::Arena* a, u8[] msg) {
+fn i32 comperror_intlit_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(42); }", &m);
@@ -8188,7 +8190,7 @@ fn i32 comperror_intlit_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_ident_arg(arena::Arena* a, u8[] msg) {
+fn i32 comperror_ident_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(MSG); }", &m);
@@ -8200,7 +8202,7 @@ fn i32 comperror_ident_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_namespace_arg(arena::Arena* a, u8[] msg) {
+fn i32 comperror_namespace_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(mod::MSG); }", &m);
@@ -8212,7 +8214,7 @@ fn i32 comperror_namespace_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_pratt_arg(arena::Arena* a, u8[] msg) {
+fn i32 comperror_pratt_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(a + b * 2); }", &m);
@@ -8226,7 +8228,7 @@ fn i32 comperror_pratt_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_call_arg(arena::Arena* a, u8[] msg) {
+fn i32 comperror_call_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(fmt(\"%d\", x)); }", &m);
@@ -8238,7 +8240,7 @@ fn i32 comperror_call_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_in_bare_block(arena::Arena* a, u8[] msg) {
+fn i32 comperror_in_bare_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { comperror(\"oops\"); } }", &m);
@@ -8250,7 +8252,7 @@ fn i32 comperror_in_bare_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_in_if_then(arena::Arena* a, u8[] msg) {
+fn i32 comperror_in_if_then(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { comperror(\"x\"); } }", &m);
@@ -8264,7 +8266,7 @@ fn i32 comperror_in_if_then(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_in_if_else(arena::Arena* a, u8[] msg) {
+fn i32 comperror_in_if_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { } else { comperror(\"x\"); } }", &m);
@@ -8278,7 +8280,7 @@ fn i32 comperror_in_if_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_in_while_body(arena::Arena* a, u8[] msg) {
+fn i32 comperror_in_while_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) { comperror(\"x\"); } }", &m);
@@ -8292,7 +8294,7 @@ fn i32 comperror_in_while_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_in_for_body(arena::Arena* a, u8[] msg) {
+fn i32 comperror_in_for_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { comperror(\"x\"); } }", &m);
@@ -8306,7 +8308,7 @@ fn i32 comperror_in_for_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_in_switch_arm(arena::Arena* a, u8[] msg) {
+fn i32 comperror_in_switch_arm(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { comperror(\"x\"); } } }", &m);
@@ -8320,7 +8322,7 @@ fn i32 comperror_in_switch_arm(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_in_switch_else(arena::Arena* a, u8[] msg) {
+fn i32 comperror_in_switch_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { comperror(\"x\"); } } }", &m);
@@ -8334,7 +8336,7 @@ fn i32 comperror_in_switch_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_in_defer_block(arena::Arena* a, u8[] msg) {
+fn i32 comperror_in_defer_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer { comperror(\"x\"); } }", &m);
@@ -8348,7 +8350,7 @@ fn i32 comperror_in_defer_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_two_consecutive(arena::Arena* a, u8[] msg) {
+fn i32 comperror_two_consecutive(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(\"a\"); comperror(\"b\"); }", &m);
@@ -8362,7 +8364,7 @@ fn i32 comperror_two_consecutive(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
+fn i32 comperror_combined_with_var_and_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 r = 0; comperror(\"x\"); return r; }", &m);
@@ -8376,7 +8378,7 @@ fn i32 comperror_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 comperror_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(\"x\"); }", &m);
@@ -8388,7 +8390,7 @@ fn i32 comperror_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_arg_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 comperror_arg_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(\"x\"); }", &m);
@@ -8400,7 +8402,7 @@ fn i32 comperror_arg_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 comperror_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror \"x\"); }", &m);
@@ -8414,7 +8416,7 @@ fn i32 comperror_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 comperror_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(\"x\"; }", &m);
@@ -8428,7 +8430,7 @@ fn i32 comperror_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_empty_arg(arena::Arena* a, u8[] msg) {
+fn i32 comperror_empty_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(); }", &m);
@@ -8442,7 +8444,7 @@ fn i32 comperror_empty_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 comperror_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(\"x\") }", &m);
@@ -8456,7 +8458,7 @@ fn i32 comperror_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 comperror_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror", &m);
@@ -8469,7 +8471,7 @@ fn i32 comperror_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 comperror_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(); i32 x = 5; }", &m);
@@ -8487,7 +8489,7 @@ fn i32 comperror_recovery_continues(arena::Arena* a, u8[] msg) {
 }
 
 // compwarning mirrors (structurally identical parser; sample coverage to verify dispatch)
-fn i32 compwarning_string_arg(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_string_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning(\"slow\"); }", &m);
@@ -8500,7 +8502,7 @@ fn i32 compwarning_string_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_intlit_arg(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_intlit_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning(7); }", &m);
@@ -8512,7 +8514,7 @@ fn i32 compwarning_intlit_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_pratt_arg(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_pratt_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning(a + b); }", &m);
@@ -8524,7 +8526,7 @@ fn i32 compwarning_pratt_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_in_block(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_in_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { compwarning(\"x\"); } }", &m);
@@ -8536,7 +8538,7 @@ fn i32 compwarning_in_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning(\"x\"); }", &m);
@@ -8548,7 +8550,7 @@ fn i32 compwarning_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning \"x\"); }", &m);
@@ -8562,7 +8564,7 @@ fn i32 compwarning_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_missing_semi(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_missing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning(\"x\") }", &m);
@@ -8576,7 +8578,7 @@ fn i32 compwarning_missing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_arg_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_arg_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning(\"x\"); }", &m);
@@ -8588,7 +8590,7 @@ fn i32 compwarning_arg_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning(\"x\"; }", &m);
@@ -8602,7 +8604,7 @@ fn i32 compwarning_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_empty_arg(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_empty_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning(); }", &m);
@@ -8616,7 +8618,7 @@ fn i32 compwarning_empty_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning", &m);
@@ -8629,7 +8631,7 @@ fn i32 compwarning_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { compwarning(); i32 x = 5; }", &m);
@@ -8646,7 +8648,7 @@ fn i32 compwarning_recovery_continues(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
+fn i32 comperror_in_defer_single_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer comperror(\"x\"); }", &m);
@@ -8661,7 +8663,7 @@ fn i32 comperror_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compwarning_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
+fn i32 compwarning_in_defer_single_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer compwarning(\"x\"); }", &m);
@@ -8676,7 +8678,7 @@ fn i32 compwarning_in_defer_single_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comperror_then_compwarning(arena::Arena* a, u8[] msg) {
+fn i32 comperror_then_compwarning(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { comperror(\"a\"); compwarning(\"b\"); }", &m);
@@ -8694,7 +8696,7 @@ fn i32 comperror_then_compwarning(arena::Arena* a, u8[] msg) {
 // DEFER
 // ============================================================================
 
-fn i32 defer_block_empty(arena::Arena* a, u8[] msg) {
+fn i32 defer_block_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer { } }", &m);
@@ -8707,7 +8709,7 @@ fn i32 defer_block_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_block_multi_stmt(arena::Arena* a, u8[] msg) {
+fn i32 defer_block_multi_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer { i32 x = 5; return; } }", &m);
@@ -8724,7 +8726,7 @@ fn i32 defer_block_multi_stmt(arena::Arena* a, u8[] msg) {
 }
 
 // Single-stmt body is wrapped in a synthetic BlockNode of length 1.
-fn i32 defer_single_body_is_synthetic_block(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_body_is_synthetic_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer break; }", &m);
@@ -8739,7 +8741,7 @@ fn i32 defer_single_body_is_synthetic_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_return(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer return; }", &m);
@@ -8753,7 +8755,7 @@ fn i32 defer_single_return(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_continue(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_continue(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer continue; }", &m);
@@ -8767,7 +8769,7 @@ fn i32 defer_single_continue(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_if(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer if (x) { } else { } }", &m);
@@ -8783,7 +8785,7 @@ fn i32 defer_single_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_while(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_while(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer while (x) { } }", &m);
@@ -8797,7 +8799,7 @@ fn i32 defer_single_while(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_for(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_for(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer for (;;) { } }", &m);
@@ -8811,7 +8813,7 @@ fn i32 defer_single_for(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_switch(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_switch(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer switch (x) { } }", &m);
@@ -8825,7 +8827,7 @@ fn i32 defer_single_switch(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_var_decl(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_var_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer i32 x = 5; }", &m);
@@ -8839,7 +8841,7 @@ fn i32 defer_single_var_decl(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_const_var_decl(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_const_var_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer const i32 x = 5; }", &m);
@@ -8854,7 +8856,7 @@ fn i32 defer_single_const_var_decl(arena::Arena* a, u8[] msg) {
 }
 
 // NESTING
-fn i32 defer_nested_block_in_block(arena::Arena* a, u8[] msg) {
+fn i32 defer_nested_block_in_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer { defer { } } }", &m);
@@ -8871,7 +8873,7 @@ fn i32 defer_nested_block_in_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_nested_single_in_single(arena::Arena* a, u8[] msg) {
+fn i32 defer_nested_single_in_single(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer defer break; }", &m);
@@ -8889,7 +8891,7 @@ fn i32 defer_nested_single_in_single(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_inside_block_body(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_inside_block_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer { defer break; } }", &m);
@@ -8908,7 +8910,7 @@ fn i32 defer_single_inside_block_body(arena::Arena* a, u8[] msg) {
 }
 
 // SURROUNDING CONTEXTS
-fn i32 defer_in_bare_block(arena::Arena* a, u8[] msg) {
+fn i32 defer_in_bare_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { { defer { } } }", &m);
@@ -8920,7 +8922,7 @@ fn i32 defer_in_bare_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_in_if_then(arena::Arena* a, u8[] msg) {
+fn i32 defer_in_if_then(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { defer { } } }", &m);
@@ -8934,7 +8936,7 @@ fn i32 defer_in_if_then(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_in_else_body(arena::Arena* a, u8[] msg) {
+fn i32 defer_in_else_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { } else { defer { } } }", &m);
@@ -8948,7 +8950,7 @@ fn i32 defer_in_else_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_in_while_body(arena::Arena* a, u8[] msg) {
+fn i32 defer_in_while_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) { defer { } } }", &m);
@@ -8962,7 +8964,7 @@ fn i32 defer_in_while_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_in_for_body(arena::Arena* a, u8[] msg) {
+fn i32 defer_in_for_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { defer { } } }", &m);
@@ -8976,7 +8978,7 @@ fn i32 defer_in_for_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_in_switch_arm(arena::Arena* a, u8[] msg) {
+fn i32 defer_in_switch_arm(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { defer { } } } }", &m);
@@ -8991,7 +8993,7 @@ fn i32 defer_in_switch_arm(arena::Arena* a, u8[] msg) {
 }
 
 // SEQUENCING
-fn i32 defer_two_consecutive(arena::Arena* a, u8[] msg) {
+fn i32 defer_two_consecutive(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer { } defer break; }", &m);
@@ -9005,7 +9007,7 @@ fn i32 defer_two_consecutive(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
+fn i32 defer_combined_with_var_and_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 r = 0; defer { } return r; }", &m);
@@ -9020,7 +9022,7 @@ fn i32 defer_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
 }
 
 // SRC POS
-fn i32 defer_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 defer_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer { } }", &m);
@@ -9033,7 +9035,7 @@ fn i32 defer_src_pos(arena::Arena* a, u8[] msg) {
 }
 
 // Synthetic block in single-stmt form must carry the inner stmt's src_pos.
-fn i32 defer_single_synthetic_block_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_synthetic_block_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer break; }", &m);
@@ -9047,7 +9049,7 @@ fn i32 defer_single_synthetic_block_src_pos(arena::Arena* a, u8[] msg) {
 }
 
 // NEGATIVE
-fn i32 defer_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 defer_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer", &m);
@@ -9059,7 +9061,7 @@ fn i32 defer_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_semicolon_body(arena::Arena* a, u8[] msg) {
+fn i32 defer_semicolon_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer ; }", &m);
@@ -9073,7 +9075,7 @@ fn i32 defer_semicolon_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_expr_stmt_body(arena::Arena* a, u8[] msg) {
+fn i32 defer_expr_stmt_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer 5; }", &m);
@@ -9089,7 +9091,7 @@ fn i32 defer_expr_stmt_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_block_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 defer_block_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer { return 5 5; } }", &m);
@@ -9103,7 +9105,7 @@ fn i32 defer_block_body_error_propagates(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_single_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 defer_single_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer return 5 5; }", &m);
@@ -9117,7 +9119,7 @@ fn i32 defer_single_body_error_propagates(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_in_switch_else(arena::Arena* a, u8[] msg) {
+fn i32 defer_in_switch_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { defer { } } } }", &m);
@@ -9132,7 +9134,7 @@ fn i32 defer_in_switch_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_unclosed_block_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 defer_unclosed_block_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer {", &m);
@@ -9146,7 +9148,7 @@ fn i32 defer_unclosed_block_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 defer_expr_stmt_then_var_decl(arena::Arena* a, u8[] msg) {
+fn i32 defer_expr_stmt_then_var_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { defer 5; i32 x = 5; }", &m);
@@ -9169,7 +9171,7 @@ fn i32 defer_expr_stmt_then_var_decl(arena::Arena* a, u8[] msg) {
 // ============================================================================
 
 // SHAPES
-fn i32 switch_empty(arena::Arena* a, u8[] msg) {
+fn i32 switch_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } }", &m);
@@ -9184,7 +9186,7 @@ fn i32 switch_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_single_arm_single_label(arena::Arena* a, u8[] msg) {
+fn i32 switch_single_arm_single_label(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } } }", &m);
@@ -9203,7 +9205,7 @@ fn i32 switch_single_arm_single_label(arena::Arena* a, u8[] msg) {
 
 // `case 1: case 2: { body }` — case 1 falls through to case 2's body, encoded
 // as two arms where arm[0].body is null.
-fn i32 switch_fallthrough_2_cases(arena::Arena* a, u8[] msg) {
+fn i32 switch_fallthrough_2_cases(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: { } } }", &m);
@@ -9222,7 +9224,7 @@ fn i32 switch_fallthrough_2_cases(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_fallthrough_3_cases(arena::Arena* a, u8[] msg) {
+fn i32 switch_fallthrough_3_cases(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: case 3: { } } }", &m);
@@ -9241,7 +9243,7 @@ fn i32 switch_fallthrough_3_cases(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_multiple_arms(arena::Arena* a, u8[] msg) {
+fn i32 switch_multiple_arms(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } case 2: { } } }", &m);
@@ -9258,7 +9260,7 @@ fn i32 switch_multiple_arms(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_else_only(arena::Arena* a, u8[] msg) {
+fn i32 switch_else_only(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { } } }", &m);
@@ -9272,7 +9274,7 @@ fn i32 switch_else_only(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_arm_and_else(arena::Arena* a, u8[] msg) {
+fn i32 switch_arm_and_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } else { } } }", &m);
@@ -9286,7 +9288,7 @@ fn i32 switch_arm_and_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_multi_arms_and_else(arena::Arena* a, u8[] msg) {
+fn i32 switch_multi_arms_and_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } case 2: { } else { } } }", &m);
@@ -9300,7 +9302,7 @@ fn i32 switch_multi_arms_and_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_mixed_fallthrough_and_standalone(arena::Arena* a, u8[] msg) {
+fn i32 switch_mixed_fallthrough_and_standalone(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: { } case 3: { } } }", &m);
@@ -9319,7 +9321,7 @@ fn i32 switch_mixed_fallthrough_and_standalone(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_fallthrough_to_else(arena::Arena* a, u8[] msg) {
+fn i32 switch_fallthrough_to_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: else { } } }", &m);
@@ -9336,7 +9338,7 @@ fn i32 switch_fallthrough_to_else(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_two_cases_fallthrough_to_else(arena::Arena* a, u8[] msg) {
+fn i32 switch_two_cases_fallthrough_to_else(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: else { } } }", &m);
@@ -9354,7 +9356,7 @@ fn i32 switch_two_cases_fallthrough_to_else(arena::Arena* a, u8[] msg) {
 }
 
 // Fallthrough between standalone arms: 1 has body, 2 falls through, 3 has body.
-fn i32 switch_fallthrough_in_middle(arena::Arena* a, u8[] msg) {
+fn i32 switch_fallthrough_in_middle(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } case 2: case 3: { } } }", &m);
@@ -9371,7 +9373,7 @@ fn i32 switch_fallthrough_in_middle(arena::Arena* a, u8[] msg) {
 }
 
 // DISCRIMINANT FORMS
-fn i32 switch_disc_intlit(arena::Arena* a, u8[] msg) {
+fn i32 switch_disc_intlit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (42) { } }", &m);
@@ -9383,7 +9385,7 @@ fn i32 switch_disc_intlit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_disc_member_access(arena::Arena* a, u8[] msg) {
+fn i32 switch_disc_member_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (obj.field) { } }", &m);
@@ -9395,7 +9397,7 @@ fn i32 switch_disc_member_access(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_disc_pratt(arena::Arena* a, u8[] msg) {
+fn i32 switch_disc_pratt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (a + b * 2) { } }", &m);
@@ -9409,7 +9411,7 @@ fn i32 switch_disc_pratt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_disc_call(arena::Arena* a, u8[] msg) {
+fn i32 switch_disc_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (foo(1)) { } }", &m);
@@ -9421,7 +9423,7 @@ fn i32 switch_disc_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_disc_namespace(arena::Arena* a, u8[] msg) {
+fn i32 switch_disc_namespace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (mod::x) { } }", &m);
@@ -9434,7 +9436,7 @@ fn i32 switch_disc_namespace(arena::Arena* a, u8[] msg) {
 }
 
 // LABEL FORMS
-fn i32 switch_label_charlit(arena::Arena* a, u8[] msg) {
+fn i32 switch_label_charlit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 'a': { } } }", &m);
@@ -9446,7 +9448,7 @@ fn i32 switch_label_charlit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_label_ident(arena::Arena* a, u8[] msg) {
+fn i32 switch_label_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case A: { } } }", &m);
@@ -9458,7 +9460,7 @@ fn i32 switch_label_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_label_namespace_access(arena::Arena* a, u8[] msg) {
+fn i32 switch_label_namespace_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case E::A: { } } }", &m);
@@ -9470,7 +9472,7 @@ fn i32 switch_label_namespace_access(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_label_namespace_access_three_levels(arena::Arena* a, u8[] msg) {
+fn i32 switch_label_namespace_access_three_levels(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case mod::Color::Red: { } } }", &m);
@@ -9486,7 +9488,7 @@ fn i32 switch_label_namespace_access_three_levels(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_disc_namespace_three_levels(arena::Arena* a, u8[] msg) {
+fn i32 switch_disc_namespace_three_levels(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (mod::E::V) { } }", &m);
@@ -9502,7 +9504,7 @@ fn i32 switch_disc_namespace_three_levels(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_label_negative(arena::Arena* a, u8[] msg) {
+fn i32 switch_label_negative(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case -1: { } } }", &m);
@@ -9516,7 +9518,7 @@ fn i32 switch_label_negative(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_label_pratt(arena::Arena* a, u8[] msg) {
+fn i32 switch_label_pratt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case a + b: { } } }", &m);
@@ -9529,7 +9531,7 @@ fn i32 switch_label_pratt(arena::Arena* a, u8[] msg) {
 }
 
 // BODY CONTENT
-fn i32 switch_body_multi_stmts(arena::Arena* a, u8[] msg) {
+fn i32 switch_body_multi_stmts(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { switch (x) { case 1: { i32 y = 5; return y; } } }", &m);
@@ -9544,7 +9546,7 @@ fn i32 switch_body_multi_stmts(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_body_with_break(arena::Arena* a, u8[] msg) {
+fn i32 switch_body_with_break(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { break; } } }", &m);
@@ -9558,7 +9560,7 @@ fn i32 switch_body_with_break(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_body_with_continue(arena::Arena* a, u8[] msg) {
+fn i32 switch_body_with_continue(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { continue; } } }", &m);
@@ -9572,7 +9574,7 @@ fn i32 switch_body_with_continue(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_body_with_if(arena::Arena* a, u8[] msg) {
+fn i32 switch_body_with_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { if (y) { } } } }", &m);
@@ -9586,7 +9588,7 @@ fn i32 switch_body_with_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_body_with_while(arena::Arena* a, u8[] msg) {
+fn i32 switch_body_with_while(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { while (y) { } } } }", &m);
@@ -9600,7 +9602,7 @@ fn i32 switch_body_with_while(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_body_with_for(arena::Arena* a, u8[] msg) {
+fn i32 switch_body_with_for(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { for (;;) { } } } }", &m);
@@ -9614,7 +9616,7 @@ fn i32 switch_body_with_for(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_body_with_nested_switch(arena::Arena* a, u8[] msg) {
+fn i32 switch_body_with_nested_switch(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { switch (y) { case 2: { } } } } }", &m);
@@ -9631,7 +9633,7 @@ fn i32 switch_body_with_nested_switch(arena::Arena* a, u8[] msg) {
 }
 
 // ELSE BLOCK
-fn i32 switch_else_body_multi_stmts(arena::Arena* a, u8[] msg) {
+fn i32 switch_else_body_multi_stmts(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { switch (x) { else { i32 y = 5; return y; } } }", &m);
@@ -9646,7 +9648,7 @@ fn i32 switch_else_body_multi_stmts(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_else_with_nested_switch(arena::Arena* a, u8[] msg) {
+fn i32 switch_else_with_nested_switch(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { switch (y) { } } } }", &m);
@@ -9661,7 +9663,7 @@ fn i32 switch_else_with_nested_switch(arena::Arena* a, u8[] msg) {
 }
 
 // NESTING / SEQUENCING
-fn i32 switch_inside_if(arena::Arena* a, u8[] msg) {
+fn i32 switch_inside_if(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { switch (x) { } } }", &m);
@@ -9675,7 +9677,7 @@ fn i32 switch_inside_if(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_inside_while(arena::Arena* a, u8[] msg) {
+fn i32 switch_inside_while(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { while (a) { switch (x) { } } }", &m);
@@ -9689,7 +9691,7 @@ fn i32 switch_inside_while(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_inside_for(arena::Arena* a, u8[] msg) {
+fn i32 switch_inside_for(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (;;) { switch (x) { } } }", &m);
@@ -9703,7 +9705,7 @@ fn i32 switch_inside_for(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_two_consecutive(arena::Arena* a, u8[] msg) {
+fn i32 switch_two_consecutive(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } switch (y) { } }", &m);
@@ -9717,7 +9719,7 @@ fn i32 switch_two_consecutive(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
+fn i32 switch_combined_with_var_and_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32 f() { i32 r = 0; switch (x) { } return r; }", &m);
@@ -9732,7 +9734,7 @@ fn i32 switch_combined_with_var_and_return(arena::Arena* a, u8[] msg) {
 }
 
 // SRC POS
-fn i32 switch_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 switch_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } }", &m);
@@ -9744,7 +9746,7 @@ fn i32 switch_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_disc_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 switch_disc_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } }", &m);
@@ -9756,7 +9758,7 @@ fn i32 switch_disc_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_arm_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 switch_arm_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } } }", &m);
@@ -9770,7 +9772,7 @@ fn i32 switch_arm_src_pos(arena::Arena* a, u8[] msg) {
 
 // Each arm's src_pos points at its own label, not the position of any earlier
 // fallthrough label.
-fn i32 switch_fallthrough_arm_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 switch_fallthrough_arm_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: { } } }", &m);
@@ -9784,7 +9786,7 @@ fn i32 switch_fallthrough_arm_src_pos(arena::Arena* a, u8[] msg) {
 }
 
 // NEGATIVE
-fn i32 switch_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 switch_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch x) { } }", &m);
@@ -9798,7 +9800,7 @@ fn i32 switch_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 switch_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x { } }", &m);
@@ -9812,7 +9814,7 @@ fn i32 switch_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_missing_lbrace(arena::Arena* a, u8[] msg) {
+fn i32 switch_missing_lbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) }", &m);
@@ -9826,7 +9828,7 @@ fn i32 switch_missing_lbrace(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 switch_missing_rbrace_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) {", &m);
@@ -9839,7 +9841,7 @@ fn i32 switch_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_missing_colon(arena::Arena* a, u8[] msg) {
+fn i32 switch_missing_colon(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1 { } } }", &m);
@@ -9853,7 +9855,7 @@ fn i32 switch_missing_colon(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_missing_label_expr(arena::Arena* a, u8[] msg) {
+fn i32 switch_missing_label_expr(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case : { } } }", &m);
@@ -9869,7 +9871,7 @@ fn i32 switch_missing_label_expr(arena::Arena* a, u8[] msg) {
 
 // `case 1:` with no body before `}` is a dangling fallthrough — parser accepts
 // it without diagnostic (sema's job to flag fallthrough with no successor).
-fn i32 switch_dangling_fallthrough_at_close(arena::Arena* a, u8[] msg) {
+fn i32 switch_dangling_fallthrough_at_close(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: } }", &m);
@@ -9885,7 +9887,7 @@ fn i32 switch_dangling_fallthrough_at_close(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_junk_token_in_body(arena::Arena* a, u8[] msg) {
+fn i32 switch_junk_token_in_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { foo; case 1: { } } }", &m);
@@ -9902,7 +9904,7 @@ fn i32 switch_junk_token_in_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 switch_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch", &m);
@@ -9915,7 +9917,7 @@ fn i32 switch_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_recovery_continues(arena::Arena* a, u8[] msg) {
+fn i32 switch_recovery_continues(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { } i32 y = 5; }", &m);
@@ -9931,7 +9933,7 @@ fn i32 switch_recovery_continues(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_malformed_disc(arena::Arena* a, u8[] msg) {
+fn i32 switch_malformed_disc(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (5 +) { } }", &m);
@@ -9946,7 +9948,7 @@ fn i32 switch_malformed_disc(arena::Arena* a, u8[] msg) {
 }
 
 // Second `else` is rejected with a diagnostic; the FIRST else's body is kept.
-fn i32 switch_double_else_first_wins(arena::Arena* a, u8[] msg) {
+fn i32 switch_double_else_first_wins(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { i32 a = 1; } else { i32 z = 5; } } }", &m);
@@ -9963,7 +9965,7 @@ fn i32 switch_double_else_first_wins(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_else_before_case(arena::Arena* a, u8[] msg) {
+fn i32 switch_else_before_case(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { } case 1: { } } }", &m);
@@ -9979,7 +9981,7 @@ fn i32 switch_else_before_case(arena::Arena* a, u8[] msg) {
 
 // GAP FILL
 
-fn i32 switch_case_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 switch_case_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { return 5 5; } } }", &m);
@@ -9994,7 +9996,7 @@ fn i32 switch_case_body_error_propagates(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_else_body_error_propagates(arena::Arena* a, u8[] msg) {
+fn i32 switch_else_body_error_propagates(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { else { return 5 5; } } }", &m);
@@ -10009,7 +10011,7 @@ fn i32 switch_else_body_error_propagates(arena::Arena* a, u8[] msg) {
 }
 
 // 6 arms exercises the realloc-grow path (arms_cap starts at 4).
-fn i32 switch_arms_growth_past_initial_cap(arena::Arena* a, u8[] msg) {
+fn i32 switch_arms_growth_past_initial_cap(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: { } case 2: { } case 3: { } case 4: { } case 5: { } case 6: { } } }", &m);
@@ -10024,7 +10026,7 @@ fn i32 switch_arms_growth_past_initial_cap(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_multi_errors(arena::Arena* a, u8[] msg) {
+fn i32 switch_multi_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (5 +) { case 1 { } } }", &m);
@@ -10039,7 +10041,7 @@ fn i32 switch_multi_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_label_bool_literal(arena::Arena* a, u8[] msg) {
+fn i32 switch_label_bool_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case true: { } } }", &m);
@@ -10054,7 +10056,7 @@ fn i32 switch_label_bool_literal(arena::Arena* a, u8[] msg) {
 
 // `;` between cases is illegal. Parser hits the else-branch on `;` and recovers
 // to the next `case`. Pins the diagnostic so the behavior is locked.
-fn i32 switch_semicolon_between_cases(arena::Arena* a, u8[] msg) {
+fn i32 switch_semicolon_between_cases(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: ; case 2: { } } }", &m);
@@ -10071,7 +10073,7 @@ fn i32 switch_semicolon_between_cases(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_inside_else_branch(arena::Arena* a, u8[] msg) {
+fn i32 switch_inside_else_branch(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if (a) { } else { switch (x) { } } }", &m);
@@ -10086,7 +10088,7 @@ fn i32 switch_inside_else_branch(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_disc_cast(arena::Arena* a, u8[] msg) {
+fn i32 switch_disc_cast(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch ((bool)x) { } }", &m);
@@ -10103,7 +10105,7 @@ fn i32 switch_disc_cast(arena::Arena* a, u8[] msg) {
 }
 
 // All arms fall through with no terminating body — sema flags, parser accepts.
-fn i32 switch_pure_fallthrough_no_terminator(arena::Arena* a, u8[] msg) {
+fn i32 switch_pure_fallthrough_no_terminator(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (x) { case 1: case 2: case 3: } }", &m);
@@ -10121,7 +10123,7 @@ fn i32 switch_pure_fallthrough_no_terminator(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_recovery_after_error(arena::Arena* a, u8[] msg) {
+fn i32 switch_recovery_after_error(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { switch (5 +) { } i32 y = 5; }", &m);
@@ -10143,77 +10145,77 @@ fn i32 switch_recovery_after_error(arena::Arena* a, u8[] msg) {
 // EXPRESSIONS: PRIMARY / LITERALS
 // ============================================================================
 
-fn i32 expr_int_literal(arena::Arena* a, u8[] msg) {
+fn i32 expr_int_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 42;", &m);
     if(!(compiler_testing::expect_intlit(compiler_testing::var_init(root, 0), 42, msg))) { return -1; } return 0;
 }
 
-fn i32 expr_int_literal_zero(arena::Arena* a, u8[] msg) {
+fn i32 expr_int_literal_zero(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 0;", &m);
     if(!(compiler_testing::expect_intlit(compiler_testing::var_init(root, 0), 0, msg))) { return -1; } return 0;
 }
 
-fn i32 expr_float_literal(arena::Arena* a, u8[] msg) {
+fn i32 expr_float_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "f64 x = 3.5;", &m);
     if(!(compiler_testing::expect_floatlit(compiler_testing::var_init(root, 0), 3.5, msg))) { return -1; } return 0;
 }
 
-fn i32 expr_char_literal(arena::Arena* a, u8[] msg) {
+fn i32 expr_char_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "u8 c = 'a';", &m);
     if(!(compiler_testing::expect_charlit(compiler_testing::var_init(root, 0), 'a', msg))) { return -1; } return 0;
 }
 
-fn i32 expr_string_literal(arena::Arena* a, u8[] msg) {
+fn i32 expr_string_literal(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "u8[] s = \"hi\";", &m);
     if(!(compiler_testing::expect_strlit(compiler_testing::var_init(root, 0), 0, 2, msg))) { return -1; } return 0;
 }
 
-fn i32 expr_bool_true(arena::Arena* a, u8[] msg) {
+fn i32 expr_bool_true(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = true;", &m);
     if(!(compiler_testing::expect_boollit(compiler_testing::var_init(root, 0), true, msg))) { return -1; } return 0;
 }
 
-fn i32 expr_bool_false(arena::Arena* a, u8[] msg) {
+fn i32 expr_bool_false(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = false;", &m);
     if(!(compiler_testing::expect_boollit(compiler_testing::var_init(root, 0), false, msg))) { return -1; } return 0;
 }
 
-fn i32 expr_null(arena::Arena* a, u8[] msg) {
+fn i32 expr_null(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p = null;", &m);
     if(!(compiler_testing::expect_nulllit(compiler_testing::var_init(root, 0), msg))) { return -1; } return 0;
 }
 
-fn i32 expr_ident(arena::Arena* a, u8[] msg) {
+fn i32 expr_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = y;", &m);
     if(!(compiler_testing::expect_ident(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "y"), msg))) { return -1; } return 0;
 }
 
-fn i32 expr_namespace_access(arena::Arena* a, u8[] msg) {
+fn i32 expr_namespace_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = mod::y;", &m);
     if(!(compiler_testing::expect_nsacc(compiler_testing::var_init(root, 0), compiler_testing::sym(m, "mod"), compiler_testing::sym(m, "y"), msg))) { return -1; } return 0;
 }
 
-fn i32 expr_namespace_three_levels_in_call_arg(arena::Arena* a, u8[] msg) {
+fn i32 expr_namespace_three_levels_in_call_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f(mod::E::V);", &m);
@@ -10227,7 +10229,7 @@ fn i32 expr_namespace_three_levels_in_call_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_namespace_three_levels_in_struct_lit(arena::Arena* a, u8[] msg) {
+fn i32 expr_namespace_three_levels_in_struct_lit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Foo x = { .field = mod::E::V };", &m);
@@ -10242,7 +10244,7 @@ fn i32 expr_namespace_three_levels_in_struct_lit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_namespace_three_levels_in_binop(arena::Arena* a, u8[] msg) {
+fn i32 expr_namespace_three_levels_in_binop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = mod::E::A + mod::E::B;", &m);
@@ -10260,7 +10262,7 @@ fn i32 expr_namespace_three_levels_in_binop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_namespace_three_levels_then_member_access(arena::Arena* a, u8[] msg) {
+fn i32 expr_namespace_three_levels_then_member_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = mod::Foo::Bar.field;", &m);
@@ -10279,7 +10281,7 @@ fn i32 expr_namespace_three_levels_then_member_access(arena::Arena* a, u8[] msg)
 // ============================================================================
 
 // 1 + 2  =>  Plus(1, 2)
-fn i32 expr_add(arena::Arena* a, u8[] msg) {
+fn i32 expr_add(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 + 2;", &m);
@@ -10290,7 +10292,7 @@ fn i32 expr_add(arena::Arena* a, u8[] msg) {
 }
 
 // 1 + 2 * 3  =>  Plus(1, Star(2, 3))
-fn i32 expr_precedence_plus_mul(arena::Arena* a, u8[] msg) {
+fn i32 expr_precedence_plus_mul(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 + 2 * 3;", &m);
@@ -10304,7 +10306,7 @@ fn i32 expr_precedence_plus_mul(arena::Arena* a, u8[] msg) {
 }
 
 // 1 * 2 + 3  =>  Plus(Star(1, 2), 3)
-fn i32 expr_precedence_mul_plus(arena::Arena* a, u8[] msg) {
+fn i32 expr_precedence_mul_plus(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 * 2 + 3;", &m);
@@ -10318,7 +10320,7 @@ fn i32 expr_precedence_mul_plus(arena::Arena* a, u8[] msg) {
 }
 
 // 1 - 2 - 3  =>  Minus(Minus(1, 2), 3)   (left-assoc)
-fn i32 expr_left_associativity(arena::Arena* a, u8[] msg) {
+fn i32 expr_left_associativity(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 - 2 - 3;", &m);
@@ -10332,7 +10334,7 @@ fn i32 expr_left_associativity(arena::Arena* a, u8[] msg) {
 }
 
 // a == b && c == d  =>  AmpAmp(EqEq(a,b), EqEq(c,d))
-fn i32 expr_eq_and_chain(arena::Arena* a, u8[] msg) {
+fn i32 expr_eq_and_chain(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = a == b && c == d;", &m);
@@ -10349,7 +10351,7 @@ fn i32 expr_eq_and_chain(arena::Arena* a, u8[] msg) {
 }
 
 // a | b & c  =>  Pipe(a, Amp(b, c))   (& tighter than |)
-fn i32 expr_pipe_amp_precedence(arena::Arena* a, u8[] msg) {
+fn i32 expr_pipe_amp_precedence(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a | b & c;", &m);
@@ -10363,7 +10365,7 @@ fn i32 expr_pipe_amp_precedence(arena::Arena* a, u8[] msg) {
 }
 
 // a < b << c  =>  LT(a, LShift(b, c))
-fn i32 expr_shift_lower_than_compare(arena::Arena* a, u8[] msg) {
+fn i32 expr_shift_lower_than_compare(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = a < b << c;", &m);
@@ -10377,7 +10379,7 @@ fn i32 expr_shift_lower_than_compare(arena::Arena* a, u8[] msg) {
 }
 
 // All operators reach Pratt: || && | ^ & == != < <= > >= << >> + - * / %
-fn i32 expr_ladder_all_ops(arena::Arena* a, u8[] msg) {
+fn i32 expr_ladder_all_ops(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     // a || b && c | d ^ e & f == g != h < i <= j > k >= l << m >> n + o - p * q / r % s
@@ -10394,7 +10396,7 @@ fn i32 expr_ladder_all_ops(arena::Arena* a, u8[] msg) {
 // EXPRESSIONS: UNARY
 // ============================================================================
 
-fn i32 expr_unary_minus(arena::Arena* a, u8[] msg) {
+fn i32 expr_unary_minus(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -y;", &m);
@@ -10403,7 +10405,7 @@ fn i32 expr_unary_minus(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "y"), msg))) { return -2; } return 0;
 }
 
-fn i32 expr_unary_bang(arena::Arena* a, u8[] msg) {
+fn i32 expr_unary_bang(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = !y;", &m);
@@ -10412,7 +10414,7 @@ fn i32 expr_unary_bang(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "y"), msg))) { return -2; } return 0;
 }
 
-fn i32 expr_unary_tilde(arena::Arena* a, u8[] msg) {
+fn i32 expr_unary_tilde(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = ~y;", &m);
@@ -10421,7 +10423,7 @@ fn i32 expr_unary_tilde(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "y"), msg))) { return -2; } return 0;
 }
 
-fn i32 expr_unary_addrof(arena::Arena* a, u8[] msg) {
+fn i32 expr_unary_addrof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p = &x;", &m);
@@ -10430,7 +10432,7 @@ fn i32 expr_unary_addrof(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ident(u.operand, compiler_testing::sym(m, "x"), msg))) { return -2; } return 0;
 }
 
-fn i32 expr_unary_deref(arena::Arena* a, u8[] msg) {
+fn i32 expr_unary_deref(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = *p;", &m);
@@ -10440,7 +10442,7 @@ fn i32 expr_unary_deref(arena::Arena* a, u8[] msg) {
 }
 
 // !-y  =>  Bang(Minus(y))
-fn i32 expr_unary_stacked(arena::Arena* a, u8[] msg) {
+fn i32 expr_unary_stacked(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "bool x = !-y;", &m);
@@ -10452,7 +10454,7 @@ fn i32 expr_unary_stacked(arena::Arena* a, u8[] msg) {
 }
 
 // **p  =>  Star(Star(p))
-fn i32 expr_unary_double_deref(arena::Arena* a, u8[] msg) {
+fn i32 expr_unary_double_deref(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = **p;", &m);
@@ -10464,7 +10466,7 @@ fn i32 expr_unary_double_deref(arena::Arena* a, u8[] msg) {
 }
 
 // -1 + 2  =>  Plus(Minus(1), 2)
-fn i32 expr_unary_binds_tighter_than_binary(arena::Arena* a, u8[] msg) {
+fn i32 expr_unary_binds_tighter_than_binary(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -1 + 2;", &m);
@@ -10480,7 +10482,7 @@ fn i32 expr_unary_binds_tighter_than_binary(arena::Arena* a, u8[] msg) {
 // EXPRESSIONS: POSTFIX
 // ============================================================================
 
-fn i32 expr_call_no_args(arena::Arena* a, u8[] msg) {
+fn i32 expr_call_no_args(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f();", &m);
@@ -10489,7 +10491,7 @@ fn i32 expr_call_no_args(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_ident(c.callee, compiler_testing::sym(m, "f"), msg))) { return -2; } return 0;
 }
 
-fn i32 expr_call_with_args(arena::Arena* a, u8[] msg) {
+fn i32 expr_call_with_args(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f(1, 2, 3);", &m);
@@ -10501,7 +10503,7 @@ fn i32 expr_call_with_args(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_intlit(c.args.ptr[2], 3, msg))) { return -5; } return 0;
 }
 
-fn i32 expr_call_nested(arena::Arena* a, u8[] msg) {
+fn i32 expr_call_nested(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     // f(g(1), 2)  =>  Call(f, [Call(g, [1]), 2])
@@ -10515,7 +10517,7 @@ fn i32 expr_call_nested(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_intlit(outer.args.ptr[1], 2, msg))) { return -5; } return 0;
 }
 
-fn i32 expr_array_index(arena::Arena* a, u8[] msg) {
+fn i32 expr_array_index(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a[0];", &m);
@@ -10525,7 +10527,7 @@ fn i32 expr_array_index(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_intlit(ai.index, 0, msg))) { return -3; } return 0;
 }
 
-fn i32 expr_slice_range(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[1..3];", &m);
@@ -10536,7 +10538,7 @@ fn i32 expr_slice_range(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_intlit(sr.hi, 3, msg))) { return -4; } return 0;
 }
 
-fn i32 expr_slice_range_lo_only(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_lo_only(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[2..];", &m);
@@ -10549,7 +10551,7 @@ fn i32 expr_slice_range_lo_only(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_slice_range_hi_only(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_hi_only(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[..5];", &m);
@@ -10562,7 +10564,7 @@ fn i32 expr_slice_range_hi_only(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_slice_range_both_missing_errors(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_both_missing_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[..];", &m);
@@ -10577,7 +10579,7 @@ fn i32 expr_slice_range_both_missing_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_slice_range_complex_bounds(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_complex_bounds(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[i + 1..n - 1];", &m);
@@ -10591,7 +10593,7 @@ fn i32 expr_slice_range_complex_bounds(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_slice_range_hi_only_then_member_access(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_hi_only_then_member_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "u64 x = a[..n].len;", &m);
@@ -10605,7 +10607,7 @@ fn i32 expr_slice_range_hi_only_then_member_access(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_slice_range_lo_only_after_call(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_lo_only_after_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = f()[2..];", &m);
@@ -10619,7 +10621,7 @@ fn i32 expr_slice_range_lo_only_after_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_slice_range_hi_only_in_call_arg(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_hi_only_in_call_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = g(a[..n]);", &m);
@@ -10633,7 +10635,7 @@ fn i32 expr_slice_range_hi_only_in_call_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_slice_range_lo_only(arena::Arena* a, u8[] msg) {
+fn i32 return_slice_range_lo_only(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32[] f() { return arr[3..]; }", &m);
@@ -10649,7 +10651,7 @@ fn i32 return_slice_range_lo_only(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 return_slice_range_hi_only(arena::Arena* a, u8[] msg) {
+fn i32 return_slice_range_hi_only(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn i32[] f() { return arr[..4]; }", &m);
@@ -10665,7 +10667,7 @@ fn i32 return_slice_range_hi_only(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_slice_range_lo_only_identifier(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_lo_only_identifier(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[start..];", &m);
@@ -10677,7 +10679,7 @@ fn i32 expr_slice_range_lo_only_identifier(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_slice_range_chained(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_chained(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = a[..n][m..];", &m);
@@ -10694,7 +10696,7 @@ fn i32 expr_slice_range_chained(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_slice_range_hi_only_on_namespace_base(arena::Arena* a, u8[] msg) {
+fn i32 expr_slice_range_hi_only_on_namespace_base(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] x = mod::arr[..n];", &m);
@@ -10707,7 +10709,7 @@ fn i32 expr_slice_range_hi_only_on_namespace_base(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_member_access(arena::Arena* a, u8[] msg) {
+fn i32 expr_member_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = s.field;", &m);
@@ -10717,7 +10719,7 @@ fn i32 expr_member_access(arena::Arena* a, u8[] msg) {
 }
 
 // a.b[0]  =>  ArrayIndex(MemberAccess(a, b), 0)
-fn i32 expr_chained_postfix(arena::Arena* a, u8[] msg) {
+fn i32 expr_chained_postfix(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a.b[0];", &m);
@@ -10730,7 +10732,7 @@ fn i32 expr_chained_postfix(arena::Arena* a, u8[] msg) {
 }
 
 // f(1).x  =>  MemberAccess(Call(f, [1]), x)
-fn i32 expr_chained_postfix_call_member(arena::Arena* a, u8[] msg) {
+fn i32 expr_chained_postfix_call_member(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f(1).x;", &m);
@@ -10743,7 +10745,7 @@ fn i32 expr_chained_postfix_call_member(arena::Arena* a, u8[] msg) {
 }
 
 // a.b.c  =>  MemberAccess(MemberAccess(a, b), c)
-fn i32 expr_member_chain_three(arena::Arena* a, u8[] msg) {
+fn i32 expr_member_chain_three(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a.b.c;", &m);
@@ -10759,7 +10761,7 @@ fn i32 expr_member_chain_three(arena::Arena* a, u8[] msg) {
 // ============================================================================
 
 // (1 + 2) * 3  =>  Star(Plus(1, 2)[paren], 3)
-fn i32 expr_paren_grouping(arena::Arena* a, u8[] msg) {
+fn i32 expr_paren_grouping(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (1 + 2) * 3;", &m);
@@ -10774,7 +10776,7 @@ fn i32 expr_paren_grouping(arena::Arena* a, u8[] msg) {
 }
 
 // (i32)y  =>  Cast(i32, Ident(y))
-fn i32 expr_cast_primitive(arena::Arena* a, u8[] msg) {
+fn i32 expr_cast_primitive(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (i32)y;", &m);
@@ -10785,7 +10787,7 @@ fn i32 expr_cast_primitive(arena::Arena* a, u8[] msg) {
 }
 
 // (i32*)q  =>  Cast(PointerType(i32), Ident(q))
-fn i32 expr_cast_pointer(arena::Arena* a, u8[] msg) {
+fn i32 expr_cast_pointer(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32* p = (i32*)q;", &m);
@@ -10798,7 +10800,7 @@ fn i32 expr_cast_pointer(arena::Arena* a, u8[] msg) {
 }
 
 // (i32)-y  =>  Cast(i32, UnaryOp(Minus, y))
-fn i32 expr_cast_then_unary(arena::Arena* a, u8[] msg) {
+fn i32 expr_cast_then_unary(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (i32)-y;", &m);
@@ -10811,7 +10813,7 @@ fn i32 expr_cast_then_unary(arena::Arena* a, u8[] msg) {
 }
 
 // (1 + 2) — parse_type tries 1, fails, rewinds; diag must stay clean.
-fn i32 expr_paren_arith_rewinds(arena::Arena* a, u8[] msg) {
+fn i32 expr_paren_arith_rewinds(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (1 + 2);", &m);
@@ -10826,7 +10828,7 @@ fn i32 expr_paren_arith_rewinds(arena::Arena* a, u8[] msg) {
 // EXPRESSIONS: STRUCT / ARRAY LITERALS
 // ============================================================================
 
-fn i32 expr_struct_lit_positional(arena::Arena* a, u8[] msg) {
+fn i32 expr_struct_lit_positional(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {1, 2};", &m);
@@ -10838,7 +10840,7 @@ fn i32 expr_struct_lit_positional(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_intlit(sl.inits[1].value, 2, msg))) { return -5; } return 0;
 }
 
-fn i32 expr_struct_lit_designated(arena::Arena* a, u8[] msg) {
+fn i32 expr_struct_lit_designated(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {.a = 1, .b = 2};", &m);
@@ -10850,7 +10852,7 @@ fn i32 expr_struct_lit_designated(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_intlit(sl.inits[1].value, 2, msg))) { return -5; } return 0;
 }
 
-fn i32 expr_struct_lit_mixed_pos_designated(arena::Arena* a, u8[] msg) {
+fn i32 expr_struct_lit_mixed_pos_designated(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {1, .b = 2};", &m);
@@ -10861,7 +10863,7 @@ fn i32 expr_struct_lit_mixed_pos_designated(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 expr_struct_lit_trailing_comma(arena::Arena* a, u8[] msg) {
+fn i32 expr_struct_lit_trailing_comma(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {1, 2,};", &m);
@@ -10870,7 +10872,7 @@ fn i32 expr_struct_lit_trailing_comma(arena::Arena* a, u8[] msg) {
     if(!(testing::expect_eq(m.diag.entries.len, 0, msg))) { return -2; } return 0;
 }
 
-fn i32 expr_struct_lit_empty(arena::Arena* a, u8[] msg) {
+fn i32 expr_struct_lit_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "Point p = {};", &m);
@@ -10879,7 +10881,7 @@ fn i32 expr_struct_lit_empty(arena::Arena* a, u8[] msg) {
     if(!(testing::expect_eq(m.diag.entries.len, 0, msg))) { return -2; } return 0;
 }
 
-fn i32 expr_array_lit(arena::Arena* a, u8[] msg) {
+fn i32 expr_array_lit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[3] arr = [1, 2, 3];", &m);
@@ -10890,7 +10892,7 @@ fn i32 expr_array_lit(arena::Arena* a, u8[] msg) {
     if(!(compiler_testing::expect_intlit(al.elems.ptr[2], 3, msg))) { return -4; } return 0;
 }
 
-fn i32 expr_array_lit_empty(arena::Arena* a, u8[] msg) {
+fn i32 expr_array_lit_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32[] s = [];", &m);
@@ -10904,7 +10906,7 @@ fn i32 expr_array_lit_empty(arena::Arena* a, u8[] msg) {
 // ============================================================================
 
 // (a + b) * (c - d)  =>  Star(Plus(a,b), Minus(c,d))
-fn i32 expr_combo_paren_mul(arena::Arena* a, u8[] msg) {
+fn i32 expr_combo_paren_mul(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (a + b) * (c - d);", &m);
@@ -10921,7 +10923,7 @@ fn i32 expr_combo_paren_mul(arena::Arena* a, u8[] msg) {
 }
 
 // f(a, b) + g(c)  =>  Plus(Call(f, [a, b]), Call(g, [c]))
-fn i32 expr_combo_call_plus_call(arena::Arena* a, u8[] msg) {
+fn i32 expr_combo_call_plus_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = f(a, b) + g(c);", &m);
@@ -10936,7 +10938,7 @@ fn i32 expr_combo_call_plus_call(arena::Arena* a, u8[] msg) {
 }
 
 // -a.b  =>  Minus(MemberAccess(a, b))
-fn i32 expr_combo_unary_member(arena::Arena* a, u8[] msg) {
+fn i32 expr_combo_unary_member(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -a.b;", &m);
@@ -10948,7 +10950,7 @@ fn i32 expr_combo_unary_member(arena::Arena* a, u8[] msg) {
 }
 
 // a[0] + b[1]  =>  Plus(ArrayIndex(a, 0), ArrayIndex(b, 1))
-fn i32 expr_combo_index_plus_index(arena::Arena* a, u8[] msg) {
+fn i32 expr_combo_index_plus_index(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = a[0] + b[1];", &m);
@@ -10965,7 +10967,7 @@ fn i32 expr_combo_index_plus_index(arena::Arena* a, u8[] msg) {
 }
 
 // (i32)x + y  =>  Plus(Cast(i32, x), y)   (cast binds like a unary, tighter than +)
-fn i32 expr_combo_cast_then_binary(arena::Arena* a, u8[] msg) {
+fn i32 expr_combo_cast_then_binary(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = (i32)y + z;", &m);
@@ -10983,7 +10985,7 @@ fn i32 expr_combo_cast_then_binary(arena::Arena* a, u8[] msg) {
 // ============================================================================
 
 // `i32 x = 1 + 2;` — `+` lives at byte 10
-fn i32 expr_binop_src_pos_on_operator(arena::Arena* a, u8[] msg) {
+fn i32 expr_binop_src_pos_on_operator(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = 1 + 2;", &m);
@@ -10993,7 +10995,7 @@ fn i32 expr_binop_src_pos_on_operator(arena::Arena* a, u8[] msg) {
 }
 
 // `i32 x = -y;` — `-` lives at byte 8
-fn i32 expr_unop_src_pos_on_operator(arena::Arena* a, u8[] msg) {
+fn i32 expr_unop_src_pos_on_operator(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "i32 x = -y;", &m);
@@ -11004,7 +11006,7 @@ fn i32 expr_unop_src_pos_on_operator(arena::Arena* a, u8[] msg) {
 
 // ---- extern blocks ----
 
-fn i32 extern_block_empty(arena::Arena* a, u8[] msg) {
+fn i32 extern_block_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { }", &m);
@@ -11014,7 +11016,7 @@ fn i32 extern_block_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_block_named_lib(arena::Arena* a, u8[] msg) {
+fn i32 extern_block_named_lib(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern \"mylib\" { }", &m);
@@ -11024,7 +11026,7 @@ fn i32 extern_block_named_lib(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_block_lib_c_explicit(arena::Arena* a, u8[] msg) {
+fn i32 extern_block_lib_c_explicit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern \"c\" { }", &m);
@@ -11033,7 +11035,7 @@ fn i32 extern_block_lib_c_explicit(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_block_src_pos_on_extern_kw(arena::Arena* a, u8[] msg) {
+fn i32 extern_block_src_pos_on_extern_kw(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { }", &m);
@@ -11043,7 +11045,7 @@ fn i32 extern_block_src_pos_on_extern_kw(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_no_params(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_no_params(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f(); }", &m);
@@ -11056,7 +11058,7 @@ fn i32 extern_fn_no_params(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_with_params(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_with_params(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn i32 puts(u8* s); }", &m);
@@ -11072,7 +11074,7 @@ fn i32 extern_fn_with_params(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_variadic(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_variadic(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn i32 printf(u8* fmt, ...); }", &m);
@@ -11084,7 +11086,7 @@ fn i32 extern_fn_variadic(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_variadic_only(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_variadic_only(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f(...); }", &m);
@@ -11095,7 +11097,7 @@ fn i32 extern_fn_variadic_only(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_multi_param_variadic(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_multi_param_variadic(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn i32 f(i32 a, u8* b, ...); }", &m);
@@ -11110,7 +11112,7 @@ fn i32 extern_fn_multi_param_variadic(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_exported(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export fn void f(); }", &m);
@@ -11121,7 +11123,7 @@ fn i32 extern_fn_exported(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_comptime_safe_is_unsafe(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_comptime_safe_is_unsafe(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f(); }", &m);
@@ -11133,7 +11135,7 @@ fn i32 extern_fn_comptime_safe_is_unsafe(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_opaque(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_opaque(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque struct FILE; }", &m);
@@ -11145,7 +11147,7 @@ fn i32 extern_struct_opaque(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_opaque_exported(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_opaque_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export opaque struct FILE; }", &m);
@@ -11156,7 +11158,7 @@ fn i32 extern_struct_opaque_exported(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_full(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_full(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct Point { i32 x; i32 y; }; }", &m);
@@ -11172,7 +11174,7 @@ fn i32 extern_struct_full(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_body_no_trailing_semi(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_body_no_trailing_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct FILE { i8 _; } fn i32 fclose(FILE* s); }", &m);
@@ -11185,7 +11187,7 @@ fn i32 extern_struct_body_no_trailing_semi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_full_empty_body(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_full_empty_body(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct E { }; }", &m);
@@ -11196,7 +11198,7 @@ fn i32 extern_struct_full_empty_body(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_full_exported(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_full_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export struct Point { i32 x; }; }", &m);
@@ -11207,7 +11209,7 @@ fn i32 extern_struct_full_exported(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_no_body_no_opaque_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_no_body_no_opaque_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct Foo; }", &m);
@@ -11221,7 +11223,7 @@ fn i32 extern_struct_no_body_no_opaque_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_opaque_with_body_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_opaque_with_body_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque struct Foo { i32 x; }; }", &m);
@@ -11235,7 +11237,7 @@ fn i32 extern_struct_opaque_with_body_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_union_opaque(arena::Arena* a, u8[] msg) {
+fn i32 extern_union_opaque(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque union V; }", &m);
@@ -11247,7 +11249,7 @@ fn i32 extern_union_opaque(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_union_opaque_exported(arena::Arena* a, u8[] msg) {
+fn i32 extern_union_opaque_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export opaque union V; }", &m);
@@ -11258,7 +11260,7 @@ fn i32 extern_union_opaque_exported(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_union_full(arena::Arena* a, u8[] msg) {
+fn i32 extern_union_full(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { union U { i32 i; f32 f; }; }", &m);
@@ -11273,7 +11275,7 @@ fn i32 extern_union_full(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_union_full_exported(arena::Arena* a, u8[] msg) {
+fn i32 extern_union_full_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export union U { i32 i; }; }", &m);
@@ -11284,7 +11286,7 @@ fn i32 extern_union_full_exported(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_union_no_body_no_opaque_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_union_no_body_no_opaque_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { union Foo; }", &m);
@@ -11298,7 +11300,7 @@ fn i32 extern_union_no_body_no_opaque_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_union_opaque_with_body_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_union_opaque_with_body_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque union Foo { i32 x; }; }", &m);
@@ -11312,7 +11314,7 @@ fn i32 extern_union_opaque_with_body_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_opaque_on_fn_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_opaque_on_fn_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque fn void f(); }", &m);
@@ -11326,7 +11328,7 @@ fn i32 extern_opaque_on_fn_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_block_multi_item(arena::Arena* a, u8[] msg) {
+fn i32 extern_block_multi_item(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local,
@@ -11343,7 +11345,7 @@ fn i32 extern_block_multi_item(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_block_mixed_export(arena::Arena* a, u8[] msg) {
+fn i32 extern_block_mixed_export(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local,
@@ -11356,7 +11358,7 @@ fn i32 extern_block_mixed_export(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_block_after_import(arena::Arena* a, u8[] msg) {
+fn i32 extern_block_after_import(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import io; extern { fn void f(); }", &m);
@@ -11366,7 +11368,7 @@ fn i32 extern_block_after_import(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_bare_var_decl(arena::Arena* a, u8[] msg) {
+fn i32 extern_bare_var_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { i32 x; }", &m);
@@ -11380,7 +11382,7 @@ fn i32 extern_bare_var_decl(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
+fn i32 extern_missing_rbrace_at_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f();", &m);
@@ -11390,7 +11392,7 @@ fn i32 extern_missing_rbrace_at_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_named_lib_with_items(arena::Arena* a, u8[] msg) {
+fn i32 extern_named_lib_with_items(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local,
@@ -11402,7 +11404,7 @@ fn i32 extern_named_lib_with_items(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_full_with_pointer_field(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_full_with_pointer_field(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct Node { Node* next; i32 value; }; }", &m);
@@ -11415,7 +11417,7 @@ fn i32 extern_struct_full_with_pointer_field(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_returns_pointer(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_returns_pointer(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn u8* malloc(u64 size); }", &m);
@@ -11430,7 +11432,7 @@ fn i32 extern_fn_returns_pointer(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_takes_opaque_pointer(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_takes_opaque_pointer(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local,
@@ -11446,7 +11448,7 @@ fn i32 extern_fn_takes_opaque_pointer(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_two_blocks(arena::Arena* a, u8[] msg) {
+fn i32 extern_two_blocks(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local,
@@ -11458,7 +11460,7 @@ fn i32 extern_two_blocks(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f(); }", &m);
@@ -11470,7 +11472,7 @@ fn i32 extern_fn_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_src_pos_at_start(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_src_pos_at_start(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque struct FILE; }", &m);
@@ -11482,7 +11484,7 @@ fn i32 extern_struct_src_pos_at_start(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_export_struct_src_pos_includes_export(arena::Arena* a, u8[] msg) {
+fn i32 extern_export_struct_src_pos_includes_export(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export opaque struct FILE; }", &m);
@@ -11494,7 +11496,7 @@ fn i32 extern_export_struct_src_pos_includes_export(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 fn_variadic_at_top_level_errors(arena::Arena* a, u8[] msg) {
+fn i32 fn_variadic_at_top_level_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(...) { }", &m);
@@ -11502,7 +11504,7 @@ fn i32 fn_variadic_at_top_level_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_bare_no_brace_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_bare_no_brace_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern;", &m);
@@ -11515,7 +11517,7 @@ fn i32 extern_bare_no_brace_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_non_string_lib_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_non_string_lib_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern foo { }", &m);
@@ -11529,7 +11531,7 @@ fn i32 extern_non_string_lib_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_wrong_modifier_order_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_wrong_modifier_order_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque export struct X; }", &m);
@@ -11542,7 +11544,7 @@ fn i32 extern_wrong_modifier_order_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_missing_semi_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_missing_semi_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f() }", &m);
@@ -11555,7 +11557,7 @@ fn i32 extern_fn_missing_semi_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_struct_no_body_no_opaque_src_pos_at_semi(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_no_body_no_opaque_src_pos_at_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { struct Foo; }", &m);
@@ -11566,7 +11568,7 @@ fn i32 extern_struct_no_body_no_opaque_src_pos_at_semi(arena::Arena* a, u8[] msg
     return 0;
 }
 
-fn i32 extern_struct_opaque_with_body_src_pos_at_lbrace(arena::Arena* a, u8[] msg) {
+fn i32 extern_struct_opaque_with_body_src_pos_at_lbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque struct Foo { i32 x; }; }", &m);
@@ -11577,7 +11579,7 @@ fn i32 extern_struct_opaque_with_body_src_pos_at_lbrace(arena::Arena* a, u8[] ms
     return 0;
 }
 
-fn i32 extern_union_no_body_no_opaque_src_pos_at_semi(arena::Arena* a, u8[] msg) {
+fn i32 extern_union_no_body_no_opaque_src_pos_at_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { union Foo; }", &m);
@@ -11588,7 +11590,7 @@ fn i32 extern_union_no_body_no_opaque_src_pos_at_semi(arena::Arena* a, u8[] msg)
     return 0;
 }
 
-fn i32 extern_union_opaque_with_body_src_pos_at_lbrace(arena::Arena* a, u8[] msg) {
+fn i32 extern_union_opaque_with_body_src_pos_at_lbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque union Foo { i32 x; }; }", &m);
@@ -11599,7 +11601,7 @@ fn i32 extern_union_opaque_with_body_src_pos_at_lbrace(arena::Arena* a, u8[] msg
     return 0;
 }
 
-fn i32 extern_opaque_on_fn_src_pos_at_opaque(arena::Arena* a, u8[] msg) {
+fn i32 extern_opaque_on_fn_src_pos_at_opaque(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque fn void f(); }", &m);
@@ -11610,7 +11612,7 @@ fn i32 extern_opaque_on_fn_src_pos_at_opaque(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_double_export_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_double_export_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export export fn void f(); }", &m);
@@ -11623,7 +11625,7 @@ fn i32 extern_double_export_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 opaque_at_top_level_errors(arena::Arena* a, u8[] msg) {
+fn i32 opaque_at_top_level_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "opaque struct Foo;", &m);
@@ -11631,7 +11633,7 @@ fn i32 opaque_at_top_level_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_opaque_on_var_decl_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_opaque_on_var_decl_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { opaque i32 x; }", &m);
@@ -11644,7 +11646,7 @@ fn i32 extern_opaque_on_var_decl_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_const_global(arena::Arena* a, u8[] msg) {
+fn i32 extern_const_global(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { export const i32 EOF = -1; }", &m);
@@ -11659,7 +11661,7 @@ fn i32 extern_const_global(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_enum_and_fn(arena::Arena* a, u8[] msg) {
+fn i32 extern_enum_and_fn(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { enum Color : i32 { Red, Green } fn void use(Color c); }", &m);
@@ -11671,7 +11673,7 @@ fn i32 extern_enum_and_fn(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_junk_item_rejected(arena::Arena* a, u8[] msg) {
+fn i32 extern_junk_item_rejected(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { 42 }", &m);
@@ -11684,7 +11686,7 @@ fn i32 extern_junk_item_rejected(arena::Arena* a, u8[] msg) {
 
 // ---- enum decls ----
 
-fn i32 enum_empty(arena::Arena* a, u8[] msg) {
+fn i32 enum_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { }", &m);
@@ -11694,7 +11696,7 @@ fn i32 enum_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_single_member(arena::Arena* a, u8[] msg) {
+fn i32 enum_single_member(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A }", &m);
@@ -11705,7 +11707,7 @@ fn i32 enum_single_member(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_multi_member(arena::Arena* a, u8[] msg) {
+fn i32 enum_multi_member(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum Color { Red, Green, Blue }", &m);
@@ -11717,7 +11719,7 @@ fn i32 enum_multi_member(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_explicit_base_type(arena::Arena* a, u8[] msg) {
+fn i32 enum_explicit_base_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E : u8 { A, B }", &m);
@@ -11726,7 +11728,7 @@ fn i32 enum_explicit_base_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_all_int_base_types(arena::Arena* a, u8[] msg) {
+fn i32 enum_all_int_base_types(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local,
@@ -11742,7 +11744,7 @@ fn i32 enum_all_int_base_types(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_explicit_int_value(arena::Arena* a, u8[] msg) {
+fn i32 enum_explicit_int_value(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = 42 }", &m);
@@ -11753,7 +11755,7 @@ fn i32 enum_explicit_int_value(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_mixed_explicit_and_auto(arena::Arena* a, u8[] msg) {
+fn i32 enum_mixed_explicit_and_auto(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, B = 10, C }", &m);
@@ -11766,7 +11768,7 @@ fn i32 enum_mixed_explicit_and_auto(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_symbolic_value(arena::Arena* a, u8[] msg) {
+fn i32 enum_symbolic_value(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = 10, B = A }", &m);
@@ -11777,7 +11779,7 @@ fn i32 enum_symbolic_value(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_negative_value(arena::Arena* a, u8[] msg) {
+fn i32 enum_negative_value(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = -1 }", &m);
@@ -11788,7 +11790,7 @@ fn i32 enum_negative_value(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_expression_value(arena::Arena* a, u8[] msg) {
+fn i32 enum_expression_value(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = 1 + 2 }", &m);
@@ -11798,7 +11800,7 @@ fn i32 enum_expression_value(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_trailing_comma(arena::Arena* a, u8[] msg) {
+fn i32 enum_trailing_comma(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, B, }", &m);
@@ -11808,7 +11810,7 @@ fn i32 enum_trailing_comma(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_exported(arena::Arena* a, u8[] msg) {
+fn i32 enum_exported(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export enum Color { Red }", &m);
@@ -11817,7 +11819,7 @@ fn i32 enum_exported(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_exported_with_base_type(arena::Arena* a, u8[] msg) {
+fn i32 enum_exported_with_base_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "export enum Status : u8 { Ok, Err }", &m);
@@ -11826,7 +11828,7 @@ fn i32 enum_exported_with_base_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_spec_example(arena::Arena* a, u8[] msg) {
+fn i32 enum_spec_example(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum Status : u8 { Ok, Err = 234, Warn, Same = Err }", &m);
@@ -11841,7 +11843,7 @@ fn i32 enum_spec_example(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_src_pos_at_enum_kw(arena::Arena* a, u8[] msg) {
+fn i32 enum_src_pos_at_enum_kw(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A }", &m);
@@ -11851,7 +11853,7 @@ fn i32 enum_src_pos_at_enum_kw(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_member_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 enum_member_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, B }", &m);
@@ -11862,7 +11864,7 @@ fn i32 enum_member_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_missing_name_errors(arena::Arena* a, u8[] msg) {
+fn i32 enum_missing_name_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum { A }", &m);
@@ -11875,7 +11877,7 @@ fn i32 enum_missing_name_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_missing_lbrace_errors(arena::Arena* a, u8[] msg) {
+fn i32 enum_missing_lbrace_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E A, B }", &m);
@@ -11888,7 +11890,7 @@ fn i32 enum_missing_lbrace_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_missing_rbrace_errors(arena::Arena* a, u8[] msg) {
+fn i32 enum_missing_rbrace_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A", &m);
@@ -11900,7 +11902,7 @@ fn i32 enum_missing_rbrace_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_missing_member_after_comma_errors(arena::Arena* a, u8[] msg) {
+fn i32 enum_missing_member_after_comma_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, , B }", &m);
@@ -11913,7 +11915,7 @@ fn i32 enum_missing_member_after_comma_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_missing_value_after_eq_errors(arena::Arena* a, u8[] msg) {
+fn i32 enum_missing_value_after_eq_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = , B }", &m);
@@ -11925,7 +11927,7 @@ fn i32 enum_missing_value_after_eq_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_member_is_keyword_errors(arena::Arena* a, u8[] msg) {
+fn i32 enum_member_is_keyword_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { fn }", &m);
@@ -11938,7 +11940,7 @@ fn i32 enum_member_is_keyword_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_base_type_missing_after_colon_errors(arena::Arena* a, u8[] msg) {
+fn i32 enum_base_type_missing_after_colon_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E : { A }", &m);
@@ -11951,7 +11953,7 @@ fn i32 enum_base_type_missing_after_colon_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_missing_comma_between_members(arena::Arena* a, u8[] msg) {
+fn i32 enum_missing_comma_between_members(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A B C }", &m);
@@ -11963,7 +11965,7 @@ fn i32 enum_missing_comma_between_members(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_trailing_comma_single_member(arena::Arena* a, u8[] msg) {
+fn i32 enum_trailing_comma_single_member(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A, }", &m);
@@ -11973,7 +11975,7 @@ fn i32 enum_trailing_comma_single_member(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_complex_expression_value(arena::Arena* a, u8[] msg) {
+fn i32 enum_complex_expression_value(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = (1 + 2) * 3 }", &m);
@@ -11984,7 +11986,7 @@ fn i32 enum_complex_expression_value(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_zero_value(arena::Arena* a, u8[] msg) {
+fn i32 enum_zero_value(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "enum E { A = 0 }", &m);
@@ -11995,7 +11997,7 @@ fn i32 enum_zero_value(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 enum_after_other_decls(arena::Arena* a, u8[] msg) {
+fn i32 enum_after_other_decls(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "import io; enum E { A } struct S { i32 x; }", &m);
@@ -12005,7 +12007,7 @@ fn i32 enum_after_other_decls(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 extern_fn_with_body_errors(arena::Arena* a, u8[] msg) {
+fn i32 extern_fn_with_body_errors(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "extern { fn void f() { } }", &m);
@@ -12021,7 +12023,7 @@ fn i32 extern_fn_with_body_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_primitive_type(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_primitive_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(i32);", &m);
@@ -12034,7 +12036,7 @@ fn i32 sizeof_primitive_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_named_type(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(Point);", &m);
@@ -12045,7 +12047,7 @@ fn i32 sizeof_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_pointer_type(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_pointer_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(i32*);", &m);
@@ -12056,7 +12058,7 @@ fn i32 sizeof_pointer_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_slice_type(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_slice_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(i32[]);", &m);
@@ -12067,7 +12069,7 @@ fn i32 sizeof_slice_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_expr_ident(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_expr_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(x);", &m);
@@ -12080,7 +12082,7 @@ fn i32 sizeof_expr_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_expr_binop(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_expr_binop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(x + 1);", &m);
@@ -12094,7 +12096,7 @@ fn i32 sizeof_expr_binop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_expr_call(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_expr_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(foo());", &m);
@@ -12105,7 +12107,7 @@ fn i32 sizeof_expr_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_in_binop(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_in_binop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(i32) + 4;", &m);
@@ -12119,7 +12121,7 @@ fn i32 sizeof_in_binop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_in_if_cond(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_in_if_cond(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { if(sizeof(T) == 8) { } }", &m);
@@ -12129,7 +12131,7 @@ fn i32 sizeof_in_if_cond(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_nested(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_nested(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(sizeof(i32));", &m);
@@ -12144,7 +12146,7 @@ fn i32 sizeof_nested(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_in_cast(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_in_cast(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "u64 y = (u64)sizeof(T);", &m);
@@ -12157,7 +12159,7 @@ fn i32 sizeof_in_cast(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(i32);", &m);
@@ -12169,7 +12171,7 @@ fn i32 sizeof_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof i32);", &m);
@@ -12177,7 +12179,7 @@ fn i32 sizeof_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(i32;", &m);
@@ -12185,7 +12187,7 @@ fn i32 sizeof_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alignof_primitive_type(arena::Arena* a, u8[] msg) {
+fn i32 alignof_primitive_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 AL = alignof(f64);", &m);
@@ -12198,7 +12200,7 @@ fn i32 alignof_primitive_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alignof_named_type(arena::Arena* a, u8[] msg) {
+fn i32 alignof_named_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 AL = alignof(Foo);", &m);
@@ -12209,7 +12211,7 @@ fn i32 alignof_named_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alignof_expr_ident(arena::Arena* a, u8[] msg) {
+fn i32 alignof_expr_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 AL = alignof(x);", &m);
@@ -12222,7 +12224,7 @@ fn i32 alignof_expr_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alignof_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 alignof_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 AL = alignof(Foo;", &m);
@@ -12230,7 +12232,7 @@ fn i32 alignof_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_ident(arena::Arena* a, u8[] msg) {
+fn i32 typeof_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T_X = typeof(x);", &m);
@@ -12243,7 +12245,7 @@ fn i32 typeof_ident(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_binop(arena::Arena* a, u8[] msg) {
+fn i32 typeof_binop(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T_X = typeof(x + 1);", &m);
@@ -12257,7 +12259,7 @@ fn i32 typeof_binop(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_call(arena::Arena* a, u8[] msg) {
+fn i32 typeof_call(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T_X = typeof(foo());", &m);
@@ -12268,7 +12270,7 @@ fn i32 typeof_call(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 typeof_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T_X = typeof(x;", &m);
@@ -12276,7 +12278,7 @@ fn i32 typeof_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_primitive(arena::Arena* a, u8[] msg) {
+fn i32 type_info_primitive(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { TypeInfo ti = type_info(i32); }", &m);
@@ -12286,7 +12288,7 @@ fn i32 type_info_primitive(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_named(arena::Arena* a, u8[] msg) {
+fn i32 type_info_named(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { TypeInfo ti = type_info(Point); }", &m);
@@ -12294,7 +12296,7 @@ fn i32 type_info_named(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_pointer(arena::Arena* a, u8[] msg) {
+fn i32 type_info_pointer(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { TypeInfo ti = type_info(Foo*); }", &m);
@@ -12302,7 +12304,7 @@ fn i32 type_info_pointer(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_missing_rparen(arena::Arena* a, u8[] msg) {
+fn i32 type_info_missing_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { TypeInfo ti = type_info(Foo; }", &m);
@@ -12310,7 +12312,7 @@ fn i32 type_info_missing_rparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alignof_in_sizeof_arg(arena::Arena* a, u8[] msg) {
+fn i32 alignof_in_sizeof_arg(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(alignof(i32));", &m);
@@ -12323,7 +12325,7 @@ fn i32 alignof_in_sizeof_arg(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_inside_alignof(arena::Arena* a, u8[] msg) {
+fn i32 typeof_inside_alignof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 AL = alignof(typeof(x));", &m);
@@ -12336,7 +12338,7 @@ fn i32 typeof_inside_alignof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_array_type(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_array_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(i32[5]);", &m);
@@ -12347,7 +12349,7 @@ fn i32 sizeof_array_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_fn_ptr_type(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_fn_ptr_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(fn* void(i32));", &m);
@@ -12358,7 +12360,7 @@ fn i32 sizeof_fn_ptr_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_qualified_type(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_qualified_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(mod::Foo);", &m);
@@ -12371,7 +12373,7 @@ fn i32 sizeof_qualified_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alignof_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 alignof_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 AL = alignof Foo);", &m);
@@ -12379,7 +12381,7 @@ fn i32 alignof_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 typeof_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T_X = typeof x);", &m);
@@ -12387,7 +12389,7 @@ fn i32 typeof_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_missing_lparen(arena::Arena* a, u8[] msg) {
+fn i32 type_info_missing_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { TypeInfo ti = type_info Foo); }", &m);
@@ -12395,7 +12397,7 @@ fn i32 type_info_missing_lparen(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_in_var_decl_type(arena::Arena* a, u8[] msg) {
+fn i32 typeof_in_var_decl_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "typeof(x) y = 5;", &m);
@@ -12407,7 +12409,7 @@ fn i32 typeof_in_var_decl_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_in_param_type(arena::Arena* a, u8[] msg) {
+fn i32 typeof_in_param_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f(typeof(x) p) { }", &m);
@@ -12418,7 +12420,7 @@ fn i32 typeof_in_param_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_in_return_type(arena::Arena* a, u8[] msg) {
+fn i32 typeof_in_return_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn typeof(x) f() { }", &m);
@@ -12429,7 +12431,7 @@ fn i32 typeof_in_return_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_in_struct_field(arena::Arena* a, u8[] msg) {
+fn i32 typeof_in_struct_field(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "struct S { typeof(x) f; }", &m);
@@ -12437,7 +12439,7 @@ fn i32 typeof_in_struct_field(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_pointer_postfix(arena::Arena* a, u8[] msg) {
+fn i32 typeof_pointer_postfix(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "typeof(x)* p = null;", &m);
@@ -12448,7 +12450,7 @@ fn i32 typeof_pointer_postfix(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_slice_postfix(arena::Arena* a, u8[] msg) {
+fn i32 typeof_slice_postfix(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "typeof(x)[] xs = undefined;", &m);
@@ -12459,7 +12461,7 @@ fn i32 typeof_slice_postfix(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_slice(arena::Arena* a, u8[] msg) {
+fn i32 type_info_slice(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { TypeInfo ti = type_info(i32[]); }", &m);
@@ -12467,7 +12469,7 @@ fn i32 type_info_slice(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_array(arena::Arena* a, u8[] msg) {
+fn i32 type_info_array(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { TypeInfo ti = type_info(i32[5]); }", &m);
@@ -12475,7 +12477,7 @@ fn i32 type_info_array(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_member_access(arena::Arena* a, u8[] msg) {
+fn i32 type_info_member_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { TypeKind k = type_info(Point).kind; }", &m);
@@ -12483,7 +12485,7 @@ fn i32 type_info_member_access(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_to_typeof_type(arena::Arena* a, u8[] msg) {
+fn i32 cast_to_typeof_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { y = (typeof(x))z; }", &m);
@@ -12493,7 +12495,7 @@ fn i32 cast_to_typeof_type(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alignof_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 alignof_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 AL = alignof(i32);", &m);
@@ -12505,7 +12507,7 @@ fn i32 alignof_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 typeof_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = typeof(x);", &m);
@@ -12517,7 +12519,7 @@ fn i32 typeof_src_pos(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_in_local_var_decl(arena::Arena* a, u8[] msg) {
+fn i32 typeof_in_local_var_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { typeof(x) y = 5; }", &m);
@@ -12531,7 +12533,7 @@ fn i32 typeof_in_local_var_decl(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_in_for_init(arena::Arena* a, u8[] msg) {
+fn i32 typeof_in_for_init(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { for (typeof(x) i = 0;;) { } }", &m);
@@ -12546,7 +12548,7 @@ fn i32 typeof_in_for_init(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_bare_expr_stmt(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_bare_expr_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { sizeof(i32); }", &m);
@@ -12559,7 +12561,7 @@ fn i32 sizeof_bare_expr_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 alignof_bare_expr_stmt(arena::Arena* a, u8[] msg) {
+fn i32 alignof_bare_expr_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { alignof(i32); }", &m);
@@ -12572,7 +12574,7 @@ fn i32 alignof_bare_expr_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_bare_expr_stmt(arena::Arena* a, u8[] msg) {
+fn i32 type_info_bare_expr_stmt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { type_info(i32); }", &m);
@@ -12585,7 +12587,7 @@ fn i32 type_info_bare_expr_stmt(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sizeof_speculation_rewind_partial(arena::Arena* a, u8[] msg) {
+fn i32 sizeof_speculation_rewind_partial(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "const u64 SZ = sizeof(i32 + 1);", &m);
@@ -12598,7 +12600,7 @@ fn i32 sizeof_speculation_rewind_partial(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 typeof_qualified_namespace(arena::Arena* a, u8[] msg) {
+fn i32 typeof_qualified_namespace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "alias T = typeof(mod::sym);", &m);
@@ -12609,7 +12611,7 @@ fn i32 typeof_qualified_namespace(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 type_info_qualified_type(arena::Arena* a, u8[] msg) {
+fn i32 type_info_qualified_type(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
     ast::AstNode* root = compiler_testing::parse_src(&local, "fn void f() { TypeInfo ti = type_info(mod::Foo); }", &m);
@@ -12620,7 +12622,7 @@ fn i32 type_info_qualified_type(arena::Arena* a, u8[] msg) {
 fn i32 main() {
     testing::init();
 
-    u8[] s_imp = "Parser Imports";
+    const u8[] s_imp = "Parser Imports";
     testing::add(s_imp, "import_single", &import_single);
     testing::add(s_imp, "import_src_pos_on_import_keyword", &import_src_pos_on_import_keyword);
     testing::add(s_imp, "import_underscore_identifier", &import_underscore_identifier);
@@ -12642,7 +12644,7 @@ fn i32 main() {
     testing::add(s_imp, "import_export_with_bad_module_name_recovers", &import_export_with_bad_module_name_recovers);
     testing::add(s_imp, "import_export_with_keyword_module_name_recovers", &import_export_with_keyword_module_name_recovers);
 
-    u8[] s_var_decl = "Parser VarDecls";
+    const u8[] s_var_decl = "Parser VarDecls";
     testing::add(s_var_decl, "var_decl_basic_int_init", &var_decl_basic_int_init);
     testing::add(s_var_decl, "var_decl_no_init", &var_decl_no_init);
     testing::add(s_var_decl, "var_decl_const", &var_decl_const);
@@ -12678,7 +12680,7 @@ fn i32 main() {
     testing::add(s_var_decl, "var_decl_missing_semi_no_init", &var_decl_missing_semi_no_init);
     testing::add(s_var_decl, "var_decl_missing_init_expr", &var_decl_missing_init_expr);
 
-    u8[] s_ty = "Parser Types";
+    const u8[] s_ty = "Parser Types";
     testing::add(s_ty, "ty_primitive_i32", &ty_primitive_i32);
     testing::add(s_ty, "ty_primitive_bool", &ty_primitive_bool);
     testing::add(s_ty, "ty_primitive_f64", &ty_primitive_f64);
@@ -12694,7 +12696,7 @@ fn i32 main() {
     testing::add(s_ty, "ty_ptr_slice_chain", &ty_ptr_slice_chain);
     testing::add(s_ty, "ty_array_of_ptr", &ty_array_of_ptr);
 
-    u8[] s_fn = "Parser FnDecls";
+    const u8[] s_fn = "Parser FnDecls";
     testing::add(s_fn, "fn_empty_params", &fn_empty_params);
     testing::add(s_fn, "fn_single_param", &fn_single_param);
     testing::add(s_fn, "fn_two_params", &fn_two_params);
@@ -12731,7 +12733,7 @@ fn i32 main() {
     testing::add(s_fn, "fn_param_const_only_no_diag", &fn_param_const_only_no_diag);
     testing::add(s_fn, "fn_param_two_wrong_order_two_diags", &fn_param_two_wrong_order_two_diags);
 
-    u8[] s_local_var_decl = "Parser Local VarDecls";
+    const u8[] s_local_var_decl = "Parser Local VarDecls";
     testing::add(s_local_var_decl, "local_var_decl_basic", &local_var_decl_basic);
     testing::add(s_local_var_decl, "local_var_decl_const", &local_var_decl_const);
     testing::add(s_local_var_decl, "local_var_decl_no_init", &local_var_decl_no_init);
@@ -12759,7 +12761,7 @@ fn i32 main() {
     testing::add(s_local_var_decl, "local_var_decl_dispatch_falls_through_on_no_ident", &local_var_decl_dispatch_falls_through_on_no_ident);
     testing::add(s_local_var_decl, "local_var_decl_export_rejected", &local_var_decl_export_rejected);
 
-    u8[] s_es = "Parser ExprStmts";
+    const u8[] s_es = "Parser ExprStmts";
     testing::add(s_es, "expr_stmt_bare_call", &expr_stmt_bare_call);
     testing::add(s_es, "expr_stmt_call_with_args", &expr_stmt_call_with_args);
     testing::add(s_es, "expr_stmt_method_chain_call", &expr_stmt_method_chain_call);
@@ -12785,7 +12787,7 @@ fn i32 main() {
     testing::add(s_es, "expr_stmt_assignment_to_namespaced_lhs", &expr_stmt_assignment_to_namespaced_lhs);
     testing::add(s_es, "expr_stmt_cast", &expr_stmt_cast);
 
-    u8[] s_block = "Parser Blocks";
+    const u8[] s_block = "Parser Blocks";
     testing::add(s_block, "block_empty_inner", &block_empty_inner);
     testing::add(s_block, "block_inner_single_stmt", &block_inner_single_stmt);
     testing::add(s_block, "block_two_sibling_inner_blocks", &block_two_sibling_inner_blocks);
@@ -12808,7 +12810,7 @@ fn i32 main() {
     testing::add(s_block, "block_unclosed_inner_at_eof", &block_unclosed_inner_at_eof);
     testing::add(s_block, "block_no_lbrace_returns_error", &block_no_lbrace_returns_error);
 
-    u8[] s_ret = "Parser Returns";
+    const u8[] s_ret = "Parser Returns";
     testing::add(s_ret, "return_bare", &return_bare);
     testing::add(s_ret, "return_intlit", &return_intlit);
     testing::add(s_ret, "return_ident", &return_ident);
@@ -12853,7 +12855,7 @@ fn i32 main() {
     testing::add(s_ret, "return_unary_no_operand", &return_unary_no_operand);
     testing::add(s_ret, "return_malformed_expr", &return_malformed_expr);
 
-    u8[] s_if = "Parser Ifs";
+    const u8[] s_if = "Parser Ifs";
     testing::add(s_if, "if_basic_no_else", &if_basic_no_else);
     testing::add(s_if, "if_else", &if_else);
     testing::add(s_if, "if_else_if", &if_else_if);
@@ -12891,7 +12893,7 @@ fn i32 main() {
     testing::add(s_if, "if_double_else", &if_double_else);
     testing::add(s_if, "if_malformed_cond", &if_malformed_cond);
 
-    u8[] s_while = "Parser Whiles";
+    const u8[] s_while = "Parser Whiles";
     testing::add(s_while, "while_basic", &while_basic);
     testing::add(s_while, "while_cond_pratt", &while_cond_pratt);
     testing::add(s_while, "while_cond_call", &while_cond_call);
@@ -12917,7 +12919,7 @@ fn i32 main() {
     testing::add(s_while, "while_else_not_consumed", &while_else_not_consumed);
     testing::add(s_while, "while_body_error_propagates", &while_body_error_propagates);
 
-    u8[] s_for = "Parser Fors";
+    const u8[] s_for = "Parser Fors";
     testing::add(s_for, "for_basic_full", &for_basic_full);
     testing::add(s_for, "for_empty_all", &for_empty_all);
     testing::add(s_for, "for_empty_init", &for_empty_init);
@@ -13022,7 +13024,7 @@ fn i32 main() {
     testing::add(s_for, "for_at_eof", &for_at_eof);
     testing::add(s_for, "for_init_var_decl_pointer_to_pointer", &for_init_var_decl_pointer_to_pointer);
 
-    u8[] s_bc = "Parser Break/Continue";
+    const u8[] s_bc = "Parser Break/Continue";
     testing::add(s_bc, "break_basic", &break_basic);
     testing::add(s_bc, "continue_basic", &continue_basic);
     testing::add(s_bc, "break_in_while", &break_in_while);
@@ -13053,7 +13055,7 @@ fn i32 main() {
     testing::add(s_bc, "break_in_else_branch", &break_in_else_branch);
     testing::add(s_bc, "continue_in_else_branch", &continue_in_else_branch);
 
-    u8[] s_un = "Parser Unions";
+    const u8[] s_un = "Parser Unions";
     testing::add(s_un, "union_empty", &union_empty);
     testing::add(s_un, "union_single_field", &union_single_field);
     testing::add(s_un, "union_multi_field", &union_multi_field);
@@ -13082,7 +13084,7 @@ fn i32 main() {
     testing::add(s_un, "anon_union_missing_lbrace_at_type_pos", &anon_union_missing_lbrace_at_type_pos);
     testing::add(s_un, "union_recovery_continues", &union_recovery_continues);
 
-    u8[] s_st = "Parser Structs";
+    const u8[] s_st = "Parser Structs";
     testing::add(s_st, "struct_empty", &struct_empty);
     testing::add(s_st, "struct_single_field", &struct_single_field);
     testing::add(s_st, "struct_multi_field", &struct_multi_field);
@@ -13120,7 +13122,7 @@ fn i32 main() {
     testing::add(s_st, "struct_no_progress_safety", &struct_no_progress_safety);
     testing::add(s_st, "dot_struct_dot_not_followed_by_lbrace", &dot_struct_dot_not_followed_by_lbrace);
 
-    u8[] s_al = "Parser Aliases";
+    const u8[] s_al = "Parser Aliases";
     testing::add(s_al, "alias_primitive_rhs", &alias_primitive_rhs);
     testing::add(s_al, "alias_named_rhs", &alias_named_rhs);
     testing::add(s_al, "alias_qualified_named_rhs", &alias_qualified_named_rhs);
@@ -13142,7 +13144,7 @@ fn i32 main() {
     testing::add(s_al, "alias_exported_qualified_rhs", &alias_exported_qualified_rhs);
     testing::add(s_al, "alias_recovery_continues", &alias_recovery_continues);
 
-    u8[] s_cc = "Parser Compcode";
+    const u8[] s_cc = "Parser Compcode";
     testing::add(s_cc, "compcode_in_var_decl_init", &compcode_in_var_decl_init);
     testing::add(s_cc, "compcode_in_return", &compcode_in_return);
     testing::add(s_cc, "compcode_in_compsplice_arg", &compcode_in_compsplice_arg);
@@ -13161,7 +13163,7 @@ fn i32 main() {
     testing::add(s_cc, "compcode_unclosed_body_at_eof", &compcode_unclosed_body_at_eof);
     testing::add(s_cc, "compcode_body_error_propagates", &compcode_body_error_propagates);
 
-    u8[] s_cs = "Parser Compsplice";
+    const u8[] s_cs = "Parser Compsplice";
     testing::add(s_cs, "compsplice_ident_arg", &compsplice_ident_arg);
     testing::add(s_cs, "compsplice_call_arg", &compsplice_call_arg);
     testing::add(s_cs, "compsplice_namespace_arg", &compsplice_namespace_arg);
@@ -13177,7 +13179,7 @@ fn i32 main() {
     testing::add(s_cs, "compsplice_malformed_expr", &compsplice_malformed_expr);
     testing::add(s_cs, "compsplice_recovery_continues", &compsplice_recovery_continues);
 
-    u8[] s_ci = "Parser Compinsert";
+    const u8[] s_ci = "Parser Compinsert";
     testing::add(s_ci, "compinsert_string_arg", &compinsert_string_arg);
     testing::add(s_ci, "compinsert_intlit_arg", &compinsert_intlit_arg);
     testing::add(s_ci, "compinsert_ident_arg", &compinsert_ident_arg);
@@ -13195,7 +13197,7 @@ fn i32 main() {
     testing::add(s_ci, "compinsert_at_eof", &compinsert_at_eof);
     testing::add(s_ci, "compinsert_recovery_continues", &compinsert_recovery_continues);
 
-    u8[] s_cr = "Parser Comprun";
+    const u8[] s_cr = "Parser Comprun";
     testing::add(s_cr, "comprun_top_level_empty", &comprun_top_level_empty);
     testing::add(s_cr, "comprun_top_level_with_stmts", &comprun_top_level_with_stmts);
     testing::add(s_cr, "comprun_top_level_mixed_with_decls", &comprun_top_level_mixed_with_decls);
@@ -13229,7 +13231,7 @@ fn i32 main() {
     testing::add(s_cr, "comprun_recovery_continues_top_level", &comprun_recovery_continues_top_level);
     testing::add(s_cr, "comprun_recovery_continues_in_fn", &comprun_recovery_continues_in_fn);
 
-    u8[] s_ce = "Parser Comperror/Compwarning";
+    const u8[] s_ce = "Parser Comperror/Compwarning";
     testing::add(s_ce, "comperror_string_arg", &comperror_string_arg);
     testing::add(s_ce, "comperror_intlit_arg", &comperror_intlit_arg);
     testing::add(s_ce, "comperror_ident_arg", &comperror_ident_arg);
@@ -13270,7 +13272,7 @@ fn i32 main() {
     testing::add(s_ce, "compwarning_in_defer_single_stmt", &compwarning_in_defer_single_stmt);
     testing::add(s_ce, "comperror_then_compwarning", &comperror_then_compwarning);
 
-    u8[] s_df = "Parser Defers";
+    const u8[] s_df = "Parser Defers";
     testing::add(s_df, "defer_block_empty", &defer_block_empty);
     testing::add(s_df, "defer_block_multi_stmt", &defer_block_multi_stmt);
     testing::add(s_df, "defer_single_body_is_synthetic_block", &defer_single_body_is_synthetic_block);
@@ -13305,7 +13307,7 @@ fn i32 main() {
     testing::add(s_df, "defer_expr_stmt_then_var_decl", &defer_expr_stmt_then_var_decl);
     testing::add(s_df, "defer_call_canonical", &defer_call_canonical);
 
-    u8[] s_sw = "Parser Switches";
+    const u8[] s_sw = "Parser Switches";
     testing::add(s_sw, "switch_empty", &switch_empty);
     testing::add(s_sw, "switch_single_arm_single_label", &switch_single_arm_single_label);
     testing::add(s_sw, "switch_fallthrough_2_cases", &switch_fallthrough_2_cases);
@@ -13372,7 +13374,7 @@ fn i32 main() {
     testing::add(s_sw, "switch_pure_fallthrough_no_terminator", &switch_pure_fallthrough_no_terminator);
     testing::add(s_sw, "switch_recovery_after_error", &switch_recovery_after_error);
 
-    u8[] s_e = "Parser Expressions";
+    const u8[] s_e = "Parser Expressions";
     testing::add(s_e, "expr_int_literal", &expr_int_literal);
     testing::add(s_e, "expr_int_literal_zero", &expr_int_literal_zero);
     testing::add(s_e, "expr_float_literal", &expr_float_literal);
@@ -13462,7 +13464,7 @@ fn i32 main() {
     testing::add(s_e, "cast_with_struct_lit_operand", &cast_with_struct_lit_operand);
     testing::add(s_e, "cast_with_array_lit_operand", &cast_with_array_lit_operand);
 
-    u8[] s_ext = "Parser Extern";
+    const u8[] s_ext = "Parser Extern";
     testing::add(s_ext, "extern_block_empty", &extern_block_empty);
     testing::add(s_ext, "extern_block_named_lib", &extern_block_named_lib);
     testing::add(s_ext, "extern_block_lib_c_explicit", &extern_block_lib_c_explicit);
@@ -13521,7 +13523,7 @@ fn i32 main() {
     testing::add(s_ext, "extern_junk_item_rejected", &extern_junk_item_rejected);
     testing::add(s_ext, "extern_fn_with_body_errors", &extern_fn_with_body_errors);
 
-    u8[] s_en = "Parser Enum";
+    const u8[] s_en = "Parser Enum";
     testing::add(s_en, "enum_empty", &enum_empty);
     testing::add(s_en, "enum_single_member", &enum_single_member);
     testing::add(s_en, "enum_multi_member", &enum_multi_member);
@@ -13551,7 +13553,7 @@ fn i32 main() {
     testing::add(s_en, "enum_zero_value", &enum_zero_value);
     testing::add(s_en, "enum_after_other_decls", &enum_after_other_decls);
 
-    u8[] s_tq = "Parser Type Queries";
+    const u8[] s_tq = "Parser Type Queries";
     testing::add(s_tq, "sizeof_primitive_type", &sizeof_primitive_type);
     testing::add(s_tq, "sizeof_named_type", &sizeof_named_type);
     testing::add(s_tq, "sizeof_pointer_type", &sizeof_pointer_type);

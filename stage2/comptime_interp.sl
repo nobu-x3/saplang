@@ -203,7 +203,7 @@ fn value::Value eval_decl_value(Interp* ip, sema::Decl* d, u32 pos) {
     if(d.kind == sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::FnDecl) {
         return value::val_fn((ast::FnDeclNode*)d.data.node, d.ty);
     }
-    u8[] msg = "identifier is not a comptime value";
+    const u8[] msg = "identifier is not a comptime value";
     diag::report(&ip.m.diag, ip.m.arena, pos, msg);
     return value::val_error();
 }
@@ -291,13 +291,13 @@ fn value::Value eval_cond(Interp* ip, ast::AstNode* cond) {
     if(v.kind == value::ValueKind::Int) { return value::val_bool(v.data.i != 0); }
     if(v.kind == value::ValueKind::Null) { return value::val_bool(false); }
     if(v.kind == value::ValueKind::Bytes) { return value::val_bool(v.data.bytes.ptr != null); }
-    u8[] msg = "comptime condition is not convertible to bool";
+    const u8[] msg = "comptime condition is not convertible to bool";
     diag::report(&ip.m.diag, ip.m.arena, cond.h.src_pos, msg);
     return value::val_error();
 }
 
 fn value::Value iteration_limit_error(Interp* ip, u32 pos) {
-    u8[] msg = "comptime loop exceeded iteration limit";
+    const u8[] msg = "comptime loop exceeded iteration limit";
     diag::report(&ip.m.diag, ip.m.arena, pos, msg);
     return value::val_error();
 }
@@ -460,7 +460,7 @@ fn value::Value* eval_lvalue(Interp* ip, ast::AstNode* node) {
 fn value::Value eval_assignment(Interp* ip, ast::AssignmentNode* n) {
     value::Value* slot = eval_lvalue(ip, n.lhs);
     if(slot == null) {
-        u8[] msg = "comptime assignment target is not an assignable comptime location";
+        const u8[] msg = "comptime assignment target is not an assignable comptime location";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
@@ -725,7 +725,7 @@ fn value::Value eval_sizeof(Interp* ip, ast::SizeofNode* n) {
     types::Ty* t = null;
     if(n.arg != null) { t = (types::Ty*)n.arg.h.ty; }
     if(t == null) {
-        u8[] msg = "sizeof operand type is unresolved";
+        const u8[] msg = "sizeof operand type is unresolved";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
@@ -736,7 +736,7 @@ fn value::Value eval_alignof(Interp* ip, ast::AlignofNode* n) {
     types::Ty* t = null;
     if(n.arg != null) { t = (types::Ty*)n.arg.h.ty; }
     if(t == null) {
-        u8[] msg = "alignof operand type is unresolved";
+        const u8[] msg = "alignof operand type is unresolved";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
@@ -764,7 +764,7 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
         return value::val_error();
     }
     if(ip.depth >= ip.max_depth) {
-        u8[] msg = "comptime recursion limit exceeded";
+        const u8[] msg = "comptime recursion limit exceeded";
         diag::report(&ip.m.diag, ip.m.arena, call_site_pos, msg);
         return value::val_error();
     }
@@ -819,7 +819,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
     }
     sema::Decl* d = resolved_decl(n.callee);
     if(d != null && d.kind == sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::ExternFnDecl) {
-        u8[] msg = "cannot call an extern function at comptime";
+        const u8[] msg = "cannot call an extern function at comptime";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
@@ -830,7 +830,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
         value::Value callee_val = eval(ip, n.callee);       // fn-pointer / indirect call: the callee evaluates to a fn value
         if(callee_val.kind == value::ValueKind::Error) { return callee_val; }
         if(callee_val.kind != value::ValueKind::FnRef || callee_val.data.fn_ref == null) {
-            u8[] msg = "comptime call target is not a function";
+            const u8[] msg = "comptime call target is not a function";
             diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
             return value::val_error();
         }
@@ -840,7 +840,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
         sema::ensure_body_checked(fn_home, func, ip.m);          // body-check the target in its own module, like the direct path
     }
     if(!ensure_comptime_safe(ip, func)) {
-        u8[] msg = "cannot call a non-comptime-safe function at comptime";
+        const u8[] msg = "cannot call a non-comptime-safe function at comptime";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
@@ -863,7 +863,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
                 if(!func.params[param_index].is_comptime) { runtime_count += 1; }
             }
             if(n.args.len != runtime_count) {
-                u8[] msg = "wrong number of arguments for a generic call at comptime";
+                const u8[] msg = "wrong number of arguments for a generic call at comptime";
                 diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
                 return value::val_error();
             }
@@ -873,7 +873,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
             for(u64 arg_index = 0; arg_index < args.len; arg_index += 1) { arg_types[arg_index] = args[arg_index].ty; }
             ast::FnDeclNode* inferred = resolve_generic_call(ip.m, func, arg_types);
             if(inferred == null) {
-                u8[] msg = "cannot infer comptime arguments; pass them explicitly";
+                const u8[] msg = "cannot infer comptime arguments; pass them explicitly";
                 diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
                 return value::val_error();
             }
@@ -901,7 +901,7 @@ fn value::Value eval_comperror(Interp* ip, ast::CompErrorNode* n) {
     value::Value msg = eval(ip, n.msg_expr);
     if(msg.kind == value::ValueKind::Error) { return msg; }
     if(msg.kind != value::ValueKind::Bytes) {
-        u8[] bad = "comperror message must be a string";
+        const u8[] bad = "comperror message must be a string";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, bad);
         return value::val_error();
     }
@@ -913,7 +913,7 @@ fn value::Value eval_compwarning(Interp* ip, ast::CompWarningNode* n) {
     value::Value msg = eval(ip, n.msg_expr);
     if(msg.kind == value::ValueKind::Error) { return msg; }
     if(msg.kind != value::ValueKind::Bytes) {
-        u8[] bad = "compwarning message must be a string";
+        const u8[] bad = "compwarning message must be a string";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, bad);
         return value::val_error();
     }
@@ -922,7 +922,7 @@ fn value::Value eval_compwarning(Interp* ip, ast::CompWarningNode* n) {
 }
 
 // The fragment shares the module's literal pool so generated string offsets stay valid after the splice.
-fn ast::AstNode* compile_fragment(module::Module* m, u8[] bytes, bool as_stmts, u32 generator_pos) {
+fn ast::AstNode* compile_fragment(module::Module* m, const u8[] bytes, bool as_stmts, u32 generator_pos) {
     module::Module* frag = (module::Module*)arena::alloc(m.arena, sizeof(module::Module));
     sys::memset(frag, 0, sizeof(module::Module));
     module::set_arena(frag, m.arena);
@@ -949,7 +949,7 @@ fn value::Value eval_compinsert(Interp* ip, ast::CompInsertNode* n) {
     value::Value src = eval(ip, n.source_expr);
     if(src.kind == value::ValueKind::Error) { return src; }
     if(src.kind != value::ValueKind::Bytes) {
-        u8[] msg = "compinsert argument must be a string";
+        const u8[] msg = "compinsert argument must be a string";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
@@ -991,7 +991,7 @@ fn value::Value eval_comprun(Interp* ip, ast::CompRunNode* n) {
 
 fn value::Value eval_type_expr(Interp* ip, ast::AstNode* e) {
     if(e.h.ty == null) {
-        u8[] msg = "type expression is unresolved at comptime";
+        const u8[] msg = "type expression is unresolved at comptime";
         diag::report(&ip.m.diag, ip.m.arena, e.h.src_pos, msg);
         return value::val_error();
     }
@@ -1002,7 +1002,7 @@ fn value::Value eval_typeof(Interp* ip, ast::TypeofNode* n) {
     types::Ty* t = null;
     if(n.expr != null) { t = (types::Ty*)n.expr.h.ty; }
     if(t == null) {
-        u8[] msg = "typeof operand type is unresolved";
+        const u8[] msg = "typeof operand type is unresolved";
         diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
         return value::val_error();
     }
@@ -1148,7 +1148,7 @@ fn value::Value eval_string_lit(Interp* ip, ast::StringLitNode* n) {
 }
 
 fn void diag_unsupported(Interp* ip, u32 pos) {
-    u8[] msg = "not supported at comptime";
+    const u8[] msg = "not supported at comptime";
     diag::report(&ip.m.diag, ip.m.arena, pos, msg);
 }
 
@@ -2063,7 +2063,8 @@ fn symbol::Symbol* qualifier_symbol(ast::AstNode* base) {
 }
 
 fn bool unify_type(ast::FnDeclNode* generic, symbol::Symbol*[] names, value::Value[] binds, ast::AstNode* pattern, types::Ty* concrete) {
-    if(pattern == null || concrete == null) { return false; }
+    if(pattern == null) { return false; }
+    if(concrete == null) { return true; }   // an argument that carries no type of its own contributes nothing
     switch(pattern.h.kind) {
     case ast::AstKind::NamedType: {
         ast::TypeNamedNode* tn = (ast::TypeNamedNode*)pattern;

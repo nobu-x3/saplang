@@ -431,7 +431,7 @@ fn void write_ns_chain(io::OutBuf* out, ast::AstNode* n) {
     io::outbuf_write(out, "<bad-ns-base>");
 }
 
-fn void write_labeled_child(io::OutBuf* out, i32 indent, u8[] label, ast::AstNode* child) {
+fn void write_labeled_child(io::OutBuf* out, i32 indent, const u8[] label, ast::AstNode* child) {
     write_indent(out, indent);
     io::outbuf_write(out, label);
     if(!child) {

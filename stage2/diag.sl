@@ -13,11 +13,11 @@ export struct DiagBuf {
 }
 
 // DiagBuf*+Arena* not Module*, avoids diag<->module cycle.
-export fn void report(DiagBuf* d, arena::Arena* a, u32 src_pos, u8[] msg) {
+export fn void report(DiagBuf* d, arena::Arena* a, u32 src_pos, const u8[] msg) {
     append(d, a, src_pos, msg, false);
 }
 
-export fn void report_warning(DiagBuf* d, arena::Arena* a, u32 src_pos, u8[] msg) {
+export fn void report_warning(DiagBuf* d, arena::Arena* a, u32 src_pos, const u8[] msg) {
     append(d, a, src_pos, msg, true);
 }
 
@@ -25,7 +25,7 @@ export fn void reset(DiagBuf* d) {
     d.entries.len = 0;
 }
 
-fn void append(DiagBuf* d, arena::Arena* a, u32 src_pos, u8[] msg, bool is_warning) {
+fn void append(DiagBuf* d, arena::Arena* a, u32 src_pos, const u8[] msg, bool is_warning) {
     if(d.entries.len == d.entries_cap) {
         u64 new_cap = 8;
         if(d.entries_cap > 0) {

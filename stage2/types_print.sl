@@ -30,6 +30,7 @@ export fn void print(types::Ty* t, io::OutBuf* out) {
             }
         }
         case types::TypeKind::Slice: {
+            if(((u8)t.flags & (u8)types::LayoutFlags::Const) != 0) { io::outbuf_write(out, "const "); }
             print(t.data.slice_elem, out);
             io::outbuf_write(out, "[]");
         }
@@ -70,7 +71,7 @@ export fn u8[] print_to_arena(types::Ty* t, arena::Arena* a) {
     return io::outbuf_bytes(&b);
 }
 
-export fn u8[] prim_name(types::PrimitiveKind p) {
+export fn const u8[] prim_name(types::PrimitiveKind p) {
     switch(p) {
         case types::PrimitiveKind::I8:   { return "i8"; }
         case types::PrimitiveKind::I16:  { return "i16"; }

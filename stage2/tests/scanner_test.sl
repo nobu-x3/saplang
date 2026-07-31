@@ -19,7 +19,7 @@ fn void load_kw_local() {
     }
 }
 
-fn module::Module* prepare(arena::Arena* a, u8[] src) {
+fn module::Module* prepare(arena::Arena* a, const u8[]src) {
     interner::init(a, BUCKET_COUNT);
     load_kw_local();
 
@@ -37,13 +37,13 @@ fn module::Module* prepare(arena::Arena* a, u8[] src) {
     return m;
 }
 
-fn module::Module* scan_src(arena::Arena* a, u8[] src) {
+fn module::Module* scan_src(arena::Arena* a, const u8[]src) {
     module::Module* m = prepare(a, src);
     scanner::scan(m);
     return m;
 }
 
-fn bool kind_eq(module::Module* m, u64 i, token::TokenKind want, u8[] msg) {
+fn bool kind_eq(module::Module* m, u64 i, token::TokenKind want, const u8[] msg) {
     return testing::expect_eq((u16)m.tokens[i].kind, (u16)want, msg);
 }
 
@@ -59,7 +59,7 @@ fn u8[] ident_text(module::Module* m, u64 i) {
 
 // ---------- empty / whitespace / comments ----------
 
-fn i32 empty_source_emits_only_eof(arena::Arena* a, u8[] msg) {
+fn i32 empty_source_emits_only_eof(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     u8[] empty = {null, 0};
     module::Module* m = scan_src(&local, empty);
@@ -68,7 +68,7 @@ fn i32 empty_source_emits_only_eof(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 only_spaces(arena::Arena* a, u8[] msg) {
+fn i32 only_spaces(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "     ");
     if(!testing::expect_eq(m.tokens.len, (u64)1, msg)) { return -1; }
@@ -76,49 +76,49 @@ fn i32 only_spaces(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 only_tabs(arena::Arena* a, u8[] msg) {
+fn i32 only_tabs(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\t\t\t");
     if(!testing::expect_eq(m.tokens.len, (u64)1, msg)) { return -1; }
     return 0;
 }
 
-fn i32 only_newlines(arena::Arena* a, u8[] msg) {
+fn i32 only_newlines(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\n\n\n");
     if(!testing::expect_eq(m.tokens.len, (u64)1, msg)) { return -1; }
     return 0;
 }
 
-fn i32 only_carriage_returns(arena::Arena* a, u8[] msg) {
+fn i32 only_carriage_returns(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\r\r");
     if(!testing::expect_eq(m.tokens.len, (u64)1, msg)) { return -1; }
     return 0;
 }
 
-fn i32 mixed_whitespace(arena::Arena* a, u8[] msg) {
+fn i32 mixed_whitespace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, " \t \r \n ");
     if(!testing::expect_eq(m.tokens.len, (u64)1, msg)) { return -1; }
     return 0;
 }
 
-fn i32 line_comment_to_newline(arena::Arena* a, u8[] msg) {
+fn i32 line_comment_to_newline(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "// hello world\n");
     if(!testing::expect_eq(m.tokens.len, (u64)1, msg)) { return -1; }
     return 0;
 }
 
-fn i32 line_comment_to_eof_no_newline(arena::Arena* a, u8[] msg) {
+fn i32 line_comment_to_eof_no_newline(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "// no newline at end");
     if(!testing::expect_eq(m.tokens.len, (u64)1, msg)) { return -1; }
     return 0;
 }
 
-fn i32 token_after_line_comment(arena::Arena* a, u8[] msg) {
+fn i32 token_after_line_comment(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "// foo\nbar");
     if(!testing::expect_eq(m.tokens.len, (u64)2, msg)) { return -1; }
@@ -127,7 +127,7 @@ fn i32 token_after_line_comment(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 comment_between_tokens(arena::Arena* a, u8[] msg) {
+fn i32 comment_between_tokens(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "foo // mid-line\nbar");
     if(!testing::expect_eq(m.tokens.len, (u64)3, msg)) { return -1; }
@@ -137,7 +137,7 @@ fn i32 comment_between_tokens(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 multiple_comments_in_a_row(arena::Arena* a, u8[] msg) {
+fn i32 multiple_comments_in_a_row(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "// one\n// two\n// three\nx");
     if(!testing::expect_eq(m.tokens.len, (u64)2, msg)) { return -1; }
@@ -147,7 +147,7 @@ fn i32 multiple_comments_in_a_row(arena::Arena* a, u8[] msg) {
 
 // ---------- identifiers ----------
 
-fn i32 ident_single_letter(arena::Arena* a, u8[] msg) {
+fn i32 ident_single_letter(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "x");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -155,7 +155,7 @@ fn i32 ident_single_letter(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 ident_single_uppercase(arena::Arena* a, u8[] msg) {
+fn i32 ident_single_uppercase(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "X");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -163,7 +163,7 @@ fn i32 ident_single_uppercase(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 ident_starts_with_underscore(arena::Arena* a, u8[] msg) {
+fn i32 ident_starts_with_underscore(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "_foo");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -171,7 +171,7 @@ fn i32 ident_starts_with_underscore(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 ident_lone_underscore(arena::Arena* a, u8[] msg) {
+fn i32 ident_lone_underscore(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "_");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -179,7 +179,7 @@ fn i32 ident_lone_underscore(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 ident_with_digits(arena::Arena* a, u8[] msg) {
+fn i32 ident_with_digits(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "foo123");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -187,7 +187,7 @@ fn i32 ident_with_digits(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 ident_camelcase(arena::Arena* a, u8[] msg) {
+fn i32 ident_camelcase(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "FooBarBaz");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -195,7 +195,7 @@ fn i32 ident_camelcase(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 ident_with_inner_underscore(arena::Arena* a, u8[] msg) {
+fn i32 ident_with_inner_underscore(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "foo_bar_baz");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -203,7 +203,7 @@ fn i32 ident_with_inner_underscore(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 ident_double_underscore(arena::Arena* a, u8[] msg) {
+fn i32 ident_double_underscore(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "__init__");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -211,7 +211,7 @@ fn i32 ident_double_underscore(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 ident_long_no_truncation(arena::Arena* a, u8[] msg) {
+fn i32 ident_long_no_truncation(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     u8[1024] buf;
     for(u64 i = 0; i < 1024; i += 1) { buf[i] = 'a'; }
@@ -222,7 +222,7 @@ fn i32 ident_long_no_truncation(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 two_adjacent_idents_separated_by_space(arena::Arena* a, u8[] msg) {
+fn i32 two_adjacent_idents_separated_by_space(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "foo bar");
     if(!testing::expect_eq(m.tokens.len, (u64)3, msg)) { return -1; }
@@ -231,7 +231,7 @@ fn i32 two_adjacent_idents_separated_by_space(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 same_ident_interned_once(arena::Arena* a, u8[] msg) {
+fn i32 same_ident_interned_once(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "foo foo");
     if(!testing::expect_eq((void*)m.tokens[0].data.sym, (void*)m.tokens[1].data.sym, msg)) { return -1; }
@@ -240,7 +240,7 @@ fn i32 same_ident_interned_once(arena::Arena* a, u8[] msg) {
 
 // ---------- keywords (all of them) ----------
 
-fn i32 all_keywords_recognized(arena::Arena* a, u8[] msg) {
+fn i32 all_keywords_recognized(arena::Arena* a, const u8[]msg) {
     for(u64 i = 0; i < token::KEYWORDS.len; i += 1) {
         arena::Arena local = {4096, null};
         module::Module* m = scan_src(&local, token::KEYWORDS[i].bytes);
@@ -257,56 +257,56 @@ fn i32 all_keywords_recognized(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 keyword_prefix_iffy_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_prefix_iffy_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "iffy");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_prefix_nullable_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_prefix_nullable_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "nullable");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_prefix_sizeofx_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_prefix_sizeofx_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "sizeofx");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_prefix_fnx_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_prefix_fnx_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "fnx");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_prefix_comptimex_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_prefix_comptimex_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "comptimex");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_with_trailing_digit_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_with_trailing_digit_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "if2");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_with_leading_underscore_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_with_leading_underscore_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "_if");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_opaque_recognized(arena::Arena* a, u8[] msg) {
+fn i32 keyword_opaque_recognized(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "opaque");
     if(!kind_eq(m, 0, token::TokenKind::OPAQUE, msg)) { return -1; }
@@ -314,7 +314,7 @@ fn i32 keyword_opaque_recognized(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 keyword_opaque_in_extern_block(arena::Arena* a, u8[] msg) {
+fn i32 keyword_opaque_in_extern_block(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "extern { opaque struct FILE; }");
     if(!kind_eq(m, 0, token::TokenKind::EXTERN, msg)) { return -1; }
@@ -327,35 +327,35 @@ fn i32 keyword_opaque_in_extern_block(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 keyword_opaque_prefix_opaquex_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_opaque_prefix_opaquex_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "opaquex");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_opaque_suffix_xopaque_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_opaque_suffix_xopaque_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "xopaque");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_opaque_with_trailing_digit_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_opaque_with_trailing_digit_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "opaque1");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_opaque_with_leading_underscore_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_opaque_with_leading_underscore_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "_opaque");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
     return 0;
 }
 
-fn i32 keyword_opaque_uppercase_is_ident(arena::Arena* a, u8[] msg) {
+fn i32 keyword_opaque_uppercase_is_ident(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "OPAQUE");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -364,7 +364,7 @@ fn i32 keyword_opaque_uppercase_is_ident(arena::Arena* a, u8[] msg) {
 
 // ---------- integer literals ----------
 
-fn i32 int_zero(arena::Arena* a, u8[] msg) {
+fn i32 int_zero(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0");
     if(!kind_eq(m, 0, token::TokenKind::IntLit, msg)) { return -1; }
@@ -372,105 +372,105 @@ fn i32 int_zero(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 int_one(arena::Arena* a, u8[] msg) {
+fn i32 int_one(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "1");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)1, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_nine(arena::Arena* a, u8[] msg) {
+fn i32 int_nine(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "9");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)9, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_multi_digit(arena::Arena* a, u8[] msg) {
+fn i32 int_multi_digit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "12345");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)12345, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_with_underscores(arena::Arena* a, u8[] msg) {
+fn i32 int_with_underscores(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "1_000_000");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)1000000, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_consecutive_underscores(arena::Arena* a, u8[] msg) {
+fn i32 int_consecutive_underscores(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "1__2");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)12, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_hex_lower(arena::Arena* a, u8[] msg) {
+fn i32 int_hex_lower(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0x1a3f");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)0x1a3f, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_hex_upper(arena::Arena* a, u8[] msg) {
+fn i32 int_hex_upper(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0XDEAD");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)0xdead, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_hex_zero(arena::Arena* a, u8[] msg) {
+fn i32 int_hex_zero(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0x0");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)0, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_hex_with_underscores(arena::Arena* a, u8[] msg) {
+fn i32 int_hex_with_underscores(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0xDE_AD_BE_EF");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)0xdeadbeef, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_hex_mixed_case(arena::Arena* a, u8[] msg) {
+fn i32 int_hex_mixed_case(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0xAbCdEf");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)0xabcdef, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_binary_lower(arena::Arena* a, u8[] msg) {
+fn i32 int_binary_lower(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0b0101");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)5, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_binary_upper(arena::Arena* a, u8[] msg) {
+fn i32 int_binary_upper(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0B1111");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)15, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_binary_zero(arena::Arena* a, u8[] msg) {
+fn i32 int_binary_zero(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0b0");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)0, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_binary_with_underscores(arena::Arena* a, u8[] msg) {
+fn i32 int_binary_with_underscores(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0b0101_0000");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)80, msg)) { return -1; }
     return 0;
 }
 
-fn i32 int_max_u64(arena::Arena* a, u8[] msg) {
+fn i32 int_max_u64(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0xFFFFFFFFFFFFFFFF");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)0xFFFFFFFFFFFFFFFF, msg)) { return -1; }
@@ -478,7 +478,7 @@ fn i32 int_max_u64(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 int_overflow_reports_diag(arena::Arena* a, u8[] msg) {
+fn i32 int_overflow_reports_diag(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "99999999999999999999999");
     if(!kind_eq(m, 0, token::TokenKind::IntLit, msg)) { return -1; }
@@ -486,7 +486,7 @@ fn i32 int_overflow_reports_diag(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 int_range_lexes_as_three_tokens(arena::Arena* a, u8[] msg) {
+fn i32 int_range_lexes_as_three_tokens(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "1..4");
     if(!testing::expect_eq(m.tokens.len, (u64)4, msg)) { return -1; }
@@ -498,7 +498,7 @@ fn i32 int_range_lexes_as_three_tokens(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 int_followed_by_dotdotdot(arena::Arena* a, u8[] msg) {
+fn i32 int_followed_by_dotdotdot(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "3...");
     if(!kind_eq(m, 0, token::TokenKind::IntLit, msg)) { return -1; }
@@ -508,7 +508,7 @@ fn i32 int_followed_by_dotdotdot(arena::Arena* a, u8[] msg) {
 
 // ---------- float literals ----------
 
-fn i32 float_pi(arena::Arena* a, u8[] msg) {
+fn i32 float_pi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "3.14");
     if(!kind_eq(m, 0, token::TokenKind::FloatLit, msg)) { return -1; }
@@ -516,7 +516,7 @@ fn i32 float_pi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 float_zero_point_zero(arena::Arena* a, u8[] msg) {
+fn i32 float_zero_point_zero(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0.0");
     if(!kind_eq(m, 0, token::TokenKind::FloatLit, msg)) { return -1; }
@@ -524,7 +524,7 @@ fn i32 float_zero_point_zero(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 float_half(arena::Arena* a, u8[] msg) {
+fn i32 float_half(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "0.5");
     if(!kind_eq(m, 0, token::TokenKind::FloatLit, msg)) { return -1; }
@@ -532,7 +532,7 @@ fn i32 float_half(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 float_many_decimals(arena::Arena* a, u8[] msg) {
+fn i32 float_many_decimals(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "123.456789");
     if(!kind_eq(m, 0, token::TokenKind::FloatLit, msg)) { return -1; }
@@ -540,7 +540,7 @@ fn i32 float_many_decimals(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 float_underscores_in_int_part(arena::Arena* a, u8[] msg) {
+fn i32 float_underscores_in_int_part(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "1_000.5");
     if(!kind_eq(m, 0, token::TokenKind::FloatLit, msg)) { return -1; }
@@ -548,7 +548,7 @@ fn i32 float_underscores_in_int_part(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 float_underscores_in_frac_part(arena::Arena* a, u8[] msg) {
+fn i32 float_underscores_in_frac_part(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "3.14_159");
     if(!kind_eq(m, 0, token::TokenKind::FloatLit, msg)) { return -1; }
@@ -556,7 +556,7 @@ fn i32 float_underscores_in_frac_part(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 float_trailing_dot(arena::Arena* a, u8[] msg) {
+fn i32 float_trailing_dot(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "3.");
     if(!kind_eq(m, 0, token::TokenKind::FloatLit, msg)) { return -1; }
@@ -564,7 +564,7 @@ fn i32 float_trailing_dot(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 leading_dot_then_digit_is_not_float(arena::Arena* a, u8[] msg) {
+fn i32 leading_dot_then_digit_is_not_float(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ".5");
     if(!kind_eq(m, 0, token::TokenKind::Dot, msg)) { return -1; }
@@ -574,7 +574,7 @@ fn i32 leading_dot_then_digit_is_not_float(arena::Arena* a, u8[] msg) {
 
 // ---------- char literals ----------
 
-fn i32 char_simple_lowercase(arena::Arena* a, u8[] msg) {
+fn i32 char_simple_lowercase(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'a'");
     if(!kind_eq(m, 0, token::TokenKind::CharLit, msg)) { return -1; }
@@ -582,77 +582,77 @@ fn i32 char_simple_lowercase(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 char_simple_digit(arena::Arena* a, u8[] msg) {
+fn i32 char_simple_digit(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'5'");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)'5', msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_space(arena::Arena* a, u8[] msg) {
+fn i32 char_space(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "' '");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)32, msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_escape_newline(arena::Arena* a, u8[] msg) {
+fn i32 char_escape_newline(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'\\n'");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)10, msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_escape_tab(arena::Arena* a, u8[] msg) {
+fn i32 char_escape_tab(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'\\t'");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)9, msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_escape_return(arena::Arena* a, u8[] msg) {
+fn i32 char_escape_return(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'\\r'");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)13, msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_escape_backslash(arena::Arena* a, u8[] msg) {
+fn i32 char_escape_backslash(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'\\\\'");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)92, msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_escape_dquote(arena::Arena* a, u8[] msg) {
+fn i32 char_escape_dquote(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'\\\"'");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)34, msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_escape_squote(arena::Arena* a, u8[] msg) {
+fn i32 char_escape_squote(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'\\''");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)39, msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_escape_null(arena::Arena* a, u8[] msg) {
+fn i32 char_escape_null(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'\\0'");
     if(!testing::expect_eq(m.tokens[0].data.ival, (u64)0, msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_unknown_escape_reports_diag(arena::Arena* a, u8[] msg) {
+fn i32 char_unknown_escape_reports_diag(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'\\q'");
     if(!testing::expect_gt(m.diag.entries.len, (u64)0, msg)) { return -1; }
     return 0;
 }
 
-fn i32 char_multi_emits_error(arena::Arena* a, u8[] msg) {
+fn i32 char_multi_emits_error(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'ab'");
     if(!kind_eq(m, 0, token::TokenKind::ERROR, msg)) { return -1; }
@@ -660,7 +660,7 @@ fn i32 char_multi_emits_error(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 char_unterminated_emits_error(arena::Arena* a, u8[] msg) {
+fn i32 char_unterminated_emits_error(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'a");
     if(!kind_eq(m, 0, token::TokenKind::ERROR, msg)) { return -1; }
@@ -668,7 +668,7 @@ fn i32 char_unterminated_emits_error(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 char_eof_after_open_quote(arena::Arena* a, u8[] msg) {
+fn i32 char_eof_after_open_quote(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "'");
     if(!kind_eq(m, 0, token::TokenKind::ERROR, msg)) { return -1; }
@@ -678,7 +678,7 @@ fn i32 char_eof_after_open_quote(arena::Arena* a, u8[] msg) {
 
 // ---------- string literals ----------
 
-fn i32 string_empty(arena::Arena* a, u8[] msg) {
+fn i32 string_empty(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"\"");
     if(!kind_eq(m, 0, token::TokenKind::StringLit, msg)) { return -1; }
@@ -686,7 +686,7 @@ fn i32 string_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 string_hello(arena::Arena* a, u8[] msg) {
+fn i32 string_hello(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"hello\"");
     if(!kind_eq(m, 0, token::TokenKind::StringLit, msg)) { return -1; }
@@ -694,55 +694,55 @@ fn i32 string_hello(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 string_with_newline_escape(arena::Arena* a, u8[] msg) {
+fn i32 string_with_newline_escape(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"a\\nb\"");
-    u8[] want = "a\nb";
+    const u8[] want = "a\nb";
     if(!testing::expect_eq(string_bytes(m, 0), want, msg)) { return -1; }
     return 0;
 }
 
-fn i32 string_with_tab_escape(arena::Arena* a, u8[] msg) {
+fn i32 string_with_tab_escape(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"x\\ty\"");
-    u8[] want = "x\ty";
+    const u8[] want = "x\ty";
     if(!testing::expect_eq(string_bytes(m, 0), want, msg)) { return -1; }
     return 0;
 }
 
-fn i32 string_with_return_escape(arena::Arena* a, u8[] msg) {
+fn i32 string_with_return_escape(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"x\\ry\"");
-    u8[] want = "x\ry";
+    const u8[] want = "x\ry";
     if(!testing::expect_eq(string_bytes(m, 0), want, msg)) { return -1; }
     return 0;
 }
 
-fn i32 string_with_backslash_escape(arena::Arena* a, u8[] msg) {
+fn i32 string_with_backslash_escape(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"x\\\\y\"");
-    u8[] want = "x\\y";
+    const u8[] want = "x\\y";
     if(!testing::expect_eq(string_bytes(m, 0), want, msg)) { return -1; }
     return 0;
 }
 
-fn i32 string_with_dquote_escape(arena::Arena* a, u8[] msg) {
+fn i32 string_with_dquote_escape(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"x\\\"y\"");
-    u8[] want = "x\"y";
+    const u8[] want = "x\"y";
     if(!testing::expect_eq(string_bytes(m, 0), want, msg)) { return -1; }
     return 0;
 }
 
-fn i32 string_with_squote_escape(arena::Arena* a, u8[] msg) {
+fn i32 string_with_squote_escape(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"x\\'y\"");
-    u8[] want = "x'y";
+    const u8[] want = "x'y";
     if(!testing::expect_eq(string_bytes(m, 0), want, msg)) { return -1; }
     return 0;
 }
 
-fn i32 string_with_embedded_null(arena::Arena* a, u8[] msg) {
+fn i32 string_with_embedded_null(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"a\\0b\"");
     if(!testing::expect_eq((u64)m.tokens[0].data.bytes.len, (u64)3, msg)) { return -1; }
@@ -753,21 +753,21 @@ fn i32 string_with_embedded_null(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 string_unterminated_reports_diag(arena::Arena* a, u8[] msg) {
+fn i32 string_unterminated_reports_diag(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"hello");
     if(!testing::expect_gt(m.diag.entries.len, (u64)0, msg)) { return -1; }
     return 0;
 }
 
-fn i32 string_unknown_escape_reports_diag(arena::Arena* a, u8[] msg) {
+fn i32 string_unknown_escape_reports_diag(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"x\\qy\"");
     if(!testing::expect_gt(m.diag.entries.len, (u64)0, msg)) { return -1; }
     return 0;
 }
 
-fn i32 string_two_in_a_row_use_distinct_pool_offsets(arena::Arena* a, u8[] msg) {
+fn i32 string_two_in_a_row_use_distinct_pool_offsets(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "\"hi\" \"there\"");
     if(!testing::expect_eq((u32)m.tokens[0].data.bytes.off, (u32)0, msg)) { return -1; }
@@ -781,70 +781,70 @@ fn i32 string_two_in_a_row_use_distinct_pool_offsets(arena::Arena* a, u8[] msg) 
 
 // ---------- punctuation ----------
 
-fn i32 punct_lparen(arena::Arena* a, u8[] msg) {
+fn i32 punct_lparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "(");
     if(!kind_eq(m, 0, token::TokenKind::LParen, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_rparen(arena::Arena* a, u8[] msg) {
+fn i32 punct_rparen(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ")");
     if(!kind_eq(m, 0, token::TokenKind::RParen, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_lbrace(arena::Arena* a, u8[] msg) {
+fn i32 punct_lbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "{");
     if(!kind_eq(m, 0, token::TokenKind::LBrace, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_rbrace(arena::Arena* a, u8[] msg) {
+fn i32 punct_rbrace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "}");
     if(!kind_eq(m, 0, token::TokenKind::RBrace, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_lbracket(arena::Arena* a, u8[] msg) {
+fn i32 punct_lbracket(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "[");
     if(!kind_eq(m, 0, token::TokenKind::LBracket, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_rbracket(arena::Arena* a, u8[] msg) {
+fn i32 punct_rbracket(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "]");
     if(!kind_eq(m, 0, token::TokenKind::RBracket, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_comma(arena::Arena* a, u8[] msg) {
+fn i32 punct_comma(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ",");
     if(!kind_eq(m, 0, token::TokenKind::Comma, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_semi(arena::Arena* a, u8[] msg) {
+fn i32 punct_semi(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ";");
     if(!kind_eq(m, 0, token::TokenKind::Semi, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_colon_single(arena::Arena* a, u8[] msg) {
+fn i32 punct_colon_single(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ":");
     if(!kind_eq(m, 0, token::TokenKind::Colon, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_colon_colon(arena::Arena* a, u8[] msg) {
+fn i32 punct_colon_colon(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "::");
     if(!testing::expect_eq(m.tokens.len, (u64)2, msg)) { return -1; }
@@ -852,14 +852,14 @@ fn i32 punct_colon_colon(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 punct_dot_single(arena::Arena* a, u8[] msg) {
+fn i32 punct_dot_single(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ".");
     if(!kind_eq(m, 0, token::TokenKind::Dot, msg)) { return -1; }
     return 0;
 }
 
-fn i32 punct_dot_dot(arena::Arena* a, u8[] msg) {
+fn i32 punct_dot_dot(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "..");
     if(!testing::expect_eq(m.tokens.len, (u64)2, msg)) { return -1; }
@@ -867,7 +867,7 @@ fn i32 punct_dot_dot(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 punct_dot_dot_dot(arena::Arena* a, u8[] msg) {
+fn i32 punct_dot_dot_dot(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "...");
     if(!testing::expect_eq(m.tokens.len, (u64)2, msg)) { return -1; }
@@ -875,7 +875,7 @@ fn i32 punct_dot_dot_dot(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 punct_tilde(arena::Arena* a, u8[] msg) {
+fn i32 punct_tilde(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "~");
     if(!kind_eq(m, 0, token::TokenKind::Tilde, msg)) { return -1; }
@@ -884,196 +884,196 @@ fn i32 punct_tilde(arena::Arena* a, u8[] msg) {
 
 // ---------- operators (plain + compound) ----------
 
-fn i32 op_plus(arena::Arena* a, u8[] msg) {
+fn i32 op_plus(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "+");
     if(!kind_eq(m, 0, token::TokenKind::Plus, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_plus_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_plus_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "+=");
     if(!kind_eq(m, 0, token::TokenKind::PlusEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_minus(arena::Arena* a, u8[] msg) {
+fn i32 op_minus(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "-");
     if(!kind_eq(m, 0, token::TokenKind::Minus, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_minus_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_minus_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "-=");
     if(!kind_eq(m, 0, token::TokenKind::MinusEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_star(arena::Arena* a, u8[] msg) {
+fn i32 op_star(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "*");
     if(!kind_eq(m, 0, token::TokenKind::Star, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_star_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_star_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "*=");
     if(!kind_eq(m, 0, token::TokenKind::StarEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_slash(arena::Arena* a, u8[] msg) {
+fn i32 op_slash(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "/");
     if(!kind_eq(m, 0, token::TokenKind::Slash, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_slash_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_slash_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "/=");
     if(!kind_eq(m, 0, token::TokenKind::SlashEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_percent(arena::Arena* a, u8[] msg) {
+fn i32 op_percent(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "%");
     if(!kind_eq(m, 0, token::TokenKind::Percent, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_percent_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_percent_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "%=");
     if(!kind_eq(m, 0, token::TokenKind::PercentEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_caret(arena::Arena* a, u8[] msg) {
+fn i32 op_caret(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "^");
     if(!kind_eq(m, 0, token::TokenKind::Caret, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_caret_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_caret_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "^=");
     if(!kind_eq(m, 0, token::TokenKind::CaretEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "=");
     if(!kind_eq(m, 0, token::TokenKind::Eq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_eq_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_eq_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "==");
     if(!kind_eq(m, 0, token::TokenKind::EqEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_bang(arena::Arena* a, u8[] msg) {
+fn i32 op_bang(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "!");
     if(!kind_eq(m, 0, token::TokenKind::Bang, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_bang_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_bang_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "!=");
     if(!kind_eq(m, 0, token::TokenKind::BangEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_amp(arena::Arena* a, u8[] msg) {
+fn i32 op_amp(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "&");
     if(!kind_eq(m, 0, token::TokenKind::Amp, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_amp_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_amp_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "&=");
     if(!kind_eq(m, 0, token::TokenKind::AmpEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_amp_amp(arena::Arena* a, u8[] msg) {
+fn i32 op_amp_amp(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "&&");
     if(!kind_eq(m, 0, token::TokenKind::AmpAmp, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_pipe(arena::Arena* a, u8[] msg) {
+fn i32 op_pipe(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "|");
     if(!kind_eq(m, 0, token::TokenKind::Pipe, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_pipe_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_pipe_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "|=");
     if(!kind_eq(m, 0, token::TokenKind::PipeEq, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_pipe_pipe(arena::Arena* a, u8[] msg) {
+fn i32 op_pipe_pipe(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "||");
     if(!kind_eq(m, 0, token::TokenKind::PipePipe, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_lt(arena::Arena* a, u8[] msg) {
+fn i32 op_lt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "<");
     if(!kind_eq(m, 0, token::TokenKind::LT, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_lt_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_lt_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "<=");
     if(!kind_eq(m, 0, token::TokenKind::LTEQ, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_lshift(arena::Arena* a, u8[] msg) {
+fn i32 op_lshift(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "<<");
     if(!kind_eq(m, 0, token::TokenKind::LShift, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_gt(arena::Arena* a, u8[] msg) {
+fn i32 op_gt(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ">");
     if(!kind_eq(m, 0, token::TokenKind::GT, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_gt_eq(arena::Arena* a, u8[] msg) {
+fn i32 op_gt_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ">=");
     if(!kind_eq(m, 0, token::TokenKind::GTEQ, msg)) { return -1; }
     return 0;
 }
 
-fn i32 op_rshift(arena::Arena* a, u8[] msg) {
+fn i32 op_rshift(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ">>");
     if(!kind_eq(m, 0, token::TokenKind::RShift, msg)) { return -1; }
@@ -1082,7 +1082,7 @@ fn i32 op_rshift(arena::Arena* a, u8[] msg) {
 
 // ---------- operator disambiguation / greediness ----------
 
-fn i32 plus_space_eq_lexes_as_two(arena::Arena* a, u8[] msg) {
+fn i32 plus_space_eq_lexes_as_two(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "+ =");
     if(!kind_eq(m, 0, token::TokenKind::Plus, msg)) { return -1; }
@@ -1090,7 +1090,7 @@ fn i32 plus_space_eq_lexes_as_two(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 amp_amp_amp_lexes_as_two(arena::Arena* a, u8[] msg) {
+fn i32 amp_amp_amp_lexes_as_two(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "&&&");
     if(!kind_eq(m, 0, token::TokenKind::AmpAmp, msg)) { return -1; }
@@ -1098,7 +1098,7 @@ fn i32 amp_amp_amp_lexes_as_two(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 triple_eq_lexes_as_eqeq_then_eq(arena::Arena* a, u8[] msg) {
+fn i32 triple_eq_lexes_as_eqeq_then_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "===");
     if(!kind_eq(m, 0, token::TokenKind::EqEq, msg)) { return -1; }
@@ -1106,7 +1106,7 @@ fn i32 triple_eq_lexes_as_eqeq_then_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 lshift_eq_lexes_as_lshift_then_eq(arena::Arena* a, u8[] msg) {
+fn i32 lshift_eq_lexes_as_lshift_then_eq(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "<<=");
     if(!kind_eq(m, 0, token::TokenKind::LShift, msg)) { return -1; }
@@ -1114,7 +1114,7 @@ fn i32 lshift_eq_lexes_as_lshift_then_eq(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 colon_then_colon_only_in_pair(arena::Arena* a, u8[] msg) {
+fn i32 colon_then_colon_only_in_pair(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, ": :");
     if(!kind_eq(m, 0, token::TokenKind::Colon, msg)) { return -1; }
@@ -1122,7 +1122,7 @@ fn i32 colon_then_colon_only_in_pair(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 four_dots_lexes_as_three_then_one(arena::Arena* a, u8[] msg) {
+fn i32 four_dots_lexes_as_three_then_one(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "....");
     if(!kind_eq(m, 0, token::TokenKind::DotDotDot, msg)) { return -1; }
@@ -1132,21 +1132,21 @@ fn i32 four_dots_lexes_as_three_then_one(arena::Arena* a, u8[] msg) {
 
 // ---------- position tracking ----------
 
-fn i32 src_pos_at_zero(arena::Arena* a, u8[] msg) {
+fn i32 src_pos_at_zero(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "x");
     if(!testing::expect_eq((u32)m.tokens[0].src_pos, (u32)0, msg)) { return -1; }
     return 0;
 }
 
-fn i32 src_pos_after_leading_whitespace(arena::Arena* a, u8[] msg) {
+fn i32 src_pos_after_leading_whitespace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "   x");
     if(!testing::expect_eq((u32)m.tokens[0].src_pos, (u32)3, msg)) { return -1; }
     return 0;
 }
 
-fn i32 src_pos_eof_at_end(arena::Arena* a, u8[] msg) {
+fn i32 src_pos_eof_at_end(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "foo");
     u64 last = m.tokens.len - 1;
@@ -1155,7 +1155,7 @@ fn i32 src_pos_eof_at_end(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 src_pos_each_token_in_sequence(arena::Arena* a, u8[] msg) {
+fn i32 src_pos_each_token_in_sequence(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "ab cd ef");
     if(!testing::expect_eq((u32)m.tokens[0].src_pos, (u32)0, msg)) { return -1; }
@@ -1164,7 +1164,7 @@ fn i32 src_pos_each_token_in_sequence(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 src_pos_across_newline(arena::Arena* a, u8[] msg) {
+fn i32 src_pos_across_newline(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "x\ny");
     if(!testing::expect_eq((u32)m.tokens[0].src_pos, (u32)0, msg)) { return -1; }
@@ -1174,7 +1174,7 @@ fn i32 src_pos_across_newline(arena::Arena* a, u8[] msg) {
 
 // ---------- line_starts ----------
 
-fn i32 line_starts_single_line(arena::Arena* a, u8[] msg) {
+fn i32 line_starts_single_line(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "abc");
     if(!testing::expect_eq(m.line_starts.len, (u64)1, msg)) { return -1; }
@@ -1182,7 +1182,7 @@ fn i32 line_starts_single_line(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 line_starts_two_lines(arena::Arena* a, u8[] msg) {
+fn i32 line_starts_two_lines(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "ab\ncd");
     if(!testing::expect_eq(m.line_starts.len, (u64)2, msg)) { return -1; }
@@ -1191,14 +1191,14 @@ fn i32 line_starts_two_lines(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 line_starts_trailing_newline(arena::Arena* a, u8[] msg) {
+fn i32 line_starts_trailing_newline(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "ab\n");
     if(!testing::expect_eq(m.line_starts.len, (u64)2, msg)) { return -1; }
     return 0;
 }
 
-fn i32 line_starts_empty_source(arena::Arena* a, u8[] msg) {
+fn i32 line_starts_empty_source(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     u8[] empty = {null, 0};
     module::Module* m = scan_src(&local, empty);
@@ -1207,7 +1207,7 @@ fn i32 line_starts_empty_source(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 line_starts_many_lines(arena::Arena* a, u8[] msg) {
+fn i32 line_starts_many_lines(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "a\nb\nc\nd");
     if(!testing::expect_eq(m.line_starts.len, (u64)4, msg)) { return -1; }
@@ -1219,14 +1219,14 @@ fn i32 line_starts_many_lines(arena::Arena* a, u8[] msg) {
 
 // ---------- error tokens / recovery ----------
 
-fn i32 unknown_char_emits_diag(arena::Arena* a, u8[] msg) {
+fn i32 unknown_char_emits_diag(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "@");
     if(!testing::expect_gt(m.diag.entries.len, (u64)0, msg)) { return -1; }
     return 0;
 }
 
-fn i32 unknown_char_advances_position(arena::Arena* a, u8[] msg) {
+fn i32 unknown_char_advances_position(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "@ x");
     if(!testing::expect_ge(m.tokens.len, (u64)2, msg)) { return -1; }
@@ -1235,7 +1235,7 @@ fn i32 unknown_char_advances_position(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 scanner_does_not_loop_forever_on_bad_input(arena::Arena* a, u8[] msg) {
+fn i32 scanner_does_not_loop_forever_on_bad_input(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "@@@");
     u64 last = m.tokens.len - 1;
@@ -1243,7 +1243,7 @@ fn i32 scanner_does_not_loop_forever_on_bad_input(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 diag_carries_src_pos(arena::Arena* a, u8[] msg) {
+fn i32 diag_carries_src_pos(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "    @");
     if(!testing::expect_gt(m.diag.entries.len, (u64)0, msg)) { return -1; }
@@ -1253,7 +1253,7 @@ fn i32 diag_carries_src_pos(arena::Arena* a, u8[] msg) {
 
 // ---------- token vector grows past initial cap ----------
 
-fn i32 many_tokens_grow_buffer(arena::Arena* a, u8[] msg) {
+fn i32 many_tokens_grow_buffer(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {16384, null};
     u8[2048] buf;
     for(u64 i = 0; i < 1024; i += 1) {
@@ -1269,7 +1269,7 @@ fn i32 many_tokens_grow_buffer(arena::Arena* a, u8[] msg) {
 
 // ---------- integration: realistic snippets ----------
 
-fn i32 snippet_simple_decl(arena::Arena* a, u8[] msg) {
+fn i32 snippet_simple_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "i32 x = 0;");
     if(!kind_eq(m, 0, token::TokenKind::I32, msg)) { return -1; }
@@ -1281,7 +1281,7 @@ fn i32 snippet_simple_decl(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 snippet_fn_decl(arena::Arena* a, u8[] msg) {
+fn i32 snippet_fn_decl(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "fn i32 main() { return 0; }");
     if(!kind_eq(m, 0, token::TokenKind::FN, msg)) { return -1; }
@@ -1298,7 +1298,7 @@ fn i32 snippet_fn_decl(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 snippet_import(arena::Arena* a, u8[] msg) {
+fn i32 snippet_import(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "import foo;");
     if(!kind_eq(m, 0, token::TokenKind::IMPORT, msg)) { return -1; }
@@ -1308,7 +1308,7 @@ fn i32 snippet_import(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 snippet_slice_range(arena::Arena* a, u8[] msg) {
+fn i32 snippet_slice_range(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "arr[1..4]");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -1320,7 +1320,7 @@ fn i32 snippet_slice_range(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 snippet_qualified_access(arena::Arena* a, u8[] msg) {
+fn i32 snippet_qualified_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "foo::bar");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -1329,7 +1329,7 @@ fn i32 snippet_qualified_access(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 snippet_member_access(arena::Arena* a, u8[] msg) {
+fn i32 snippet_member_access(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "p.x");
     if(!kind_eq(m, 0, token::TokenKind::Ident, msg)) { return -1; }
@@ -1338,7 +1338,7 @@ fn i32 snippet_member_access(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 snippet_const_float(arena::Arena* a, u8[] msg) {
+fn i32 snippet_const_float(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "const f64 PI = 3.14;");
     if(!kind_eq(m, 0, token::TokenKind::CONST, msg)) { return -1; }
@@ -1350,7 +1350,7 @@ fn i32 snippet_const_float(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 snippet_bool_literals(arena::Arena* a, u8[] msg) {
+fn i32 snippet_bool_literals(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "true false");
     if(!kind_eq(m, 0, token::TokenKind::TRUE, msg)) { return -1; }
@@ -1358,7 +1358,7 @@ fn i32 snippet_bool_literals(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 snippet_null_undefined(arena::Arena* a, u8[] msg) {
+fn i32 snippet_null_undefined(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "null undefined");
     if(!kind_eq(m, 0, token::TokenKind::NULL, msg)) { return -1; }
@@ -1366,7 +1366,7 @@ fn i32 snippet_null_undefined(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 snippet_dense_no_whitespace(arena::Arena* a, u8[] msg) {
+fn i32 snippet_dense_no_whitespace(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     module::Module* m = scan_src(&local, "1+2*3");
     if(!kind_eq(m, 0, token::TokenKind::IntLit, msg)) { return -1; }
@@ -1381,7 +1381,7 @@ fn i32 snippet_dense_no_whitespace(arena::Arena* a, u8[] msg) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "Scanner Tests";
+    const u8[] suite = "Scanner Tests";
 
     // empty / whitespace / comments
     testing::add(suite, "empty_source_emits_only_eof", &empty_source_emits_only_eof);

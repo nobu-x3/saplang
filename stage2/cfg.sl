@@ -126,7 +126,7 @@ fn void build_block(CfgBuilder* b, ast::BlockNode* blk) {
         build_stmt(b, blk.stmts.ptr[stmt_index]);
         if(block_terminated(b, b.current)) {
             if(stmt_index + 1 < blk.stmts.len) {
-                u8[] msg = "unreachable code";
+                const u8[] msg = "unreachable code";
                 diag::report_warning(&b.m.diag, b.m.arena, blk.stmts.ptr[stmt_index + 1].h.src_pos, msg);
             }
             break;
@@ -552,7 +552,7 @@ export fn bool check_return_paths(module::Module* m, ast::FnDeclNode* func) {
     for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
         if(!reachable[block_index]) { continue; }
         if(g.blocks.ptr[block_index].term.kind == TermKind::Unreachable) {
-            u8[] msg = "function may exit without a return statement";
+            const u8[] msg = "function may exit without a return statement";
             diag::report(&m.diag, m.arena, func.h.src_pos, msg);
             return false;
         }
@@ -568,7 +568,7 @@ export fn void check_unreachable(module::Module* m, ast::FnDeclNode* func) {
         if(reachable[block_index]) { continue; }
         if(g.blocks.ptr[block_index].stmts.len == 0) { continue; }      // synthetic post-terminator continuation
         u32 pos = g.blocks.ptr[block_index].stmts.ptr[0].h.src_pos;
-        u8[] msg = "unreachable code";
+        const u8[] msg = "unreachable code";
         diag::report_warning(&m.diag, m.arena, pos, msg);
     }
 }

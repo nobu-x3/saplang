@@ -9,7 +9,7 @@ import sys;
 // test_util::Counting is defined outside std, so driving std through it proves the interface is the seam.
 test_util::Counting g_counting;
 
-fn i32 arena_allocator_allocates(arena::Arena* a, u8[] m) {
+fn i32 arena_allocator_allocates(arena::Arena* a, const u8[]m) {
     mem::Allocator alloc = arena::allocator(a);
     u8* first = (u8*)mem::alloc(alloc, 8);
     u8* second = (u8*)mem::alloc(alloc, 8);
@@ -22,7 +22,7 @@ fn i32 arena_allocator_allocates(arena::Arena* a, u8[] m) {
 }
 
 // An arena releases in bulk, so free must not disturb what was handed out.
-fn i32 arena_free_is_a_no_op(arena::Arena* a, u8[] m) {
+fn i32 arena_free_is_a_no_op(arena::Arena* a, const u8[]m) {
     mem::Allocator alloc = arena::allocator(a);
     u8* p = (u8*)mem::alloc(alloc, 16);
     p[0] = 9;
@@ -31,7 +31,7 @@ fn i32 arena_free_is_a_no_op(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 libc_allocator_round_trips(arena::Arena* a, u8[] m) {
+fn i32 libc_allocator_round_trips(arena::Arena* a, const u8[]m) {
     mem::Allocator alloc = mem::libc_allocator();
     u8* p = (u8*)mem::alloc(alloc, 32);
     if(!testing::expect_not_null((void*)p, m)) { return -1; }
@@ -44,7 +44,7 @@ fn i32 libc_allocator_round_trips(arena::Arena* a, u8[] m) {
 }
 
 // A zeroed Allocator has null thunks; every entry point has to tolerate it rather than jump to null.
-fn i32 null_allocator_is_inert(arena::Arena* a, u8[] m) {
+fn i32 null_allocator_is_inert(arena::Arena* a, const u8[]m) {
     mem::Allocator empty;
     sys::memset(&empty, 0, sizeof(mem::Allocator));
     if(!testing::expect_null(mem::alloc(empty, 16), m)) { return -1; }
@@ -53,7 +53,7 @@ fn i32 null_allocator_is_inert(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 list_grows_through_any_allocator(arena::Arena* a, u8[] m) {
+fn i32 list_grows_through_any_allocator(arena::Arena* a, const u8[]m) {
     sys::memset(&g_counting, 0, sizeof(test_util::Counting));
     g_counting.inner = arena::allocator(a);
     mem::Allocator alloc = test_util::counting_allocator(&g_counting);
@@ -71,7 +71,7 @@ fn i32 list_grows_through_any_allocator(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 outbuf_writes_through_any_allocator(arena::Arena* a, u8[] m) {
+fn i32 outbuf_writes_through_any_allocator(arena::Arena* a, const u8[]m) {
     sys::memset(&g_counting, 0, sizeof(test_util::Counting));
     g_counting.inner = arena::allocator(a);
     mem::Allocator alloc = test_util::counting_allocator(&g_counting);
@@ -86,7 +86,7 @@ fn i32 outbuf_writes_through_any_allocator(arena::Arena* a, u8[] m) {
 }
 
 // The arena overload still exists, so the 100+ call sites that pass an arena keep working.
-fn i32 outbuf_arena_overload(arena::Arena* a, u8[] m) {
+fn i32 outbuf_arena_overload(arena::Arena* a, const u8[]m) {
     io::OutBuf buf;
     io::outbuf_init(&buf, a, 8);
     io::outbuf_write(&buf, "arena");
@@ -96,7 +96,7 @@ fn i32 outbuf_arena_overload(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "Allocator Tests";
+    const u8[] suite = "Allocator Tests";
     testing::add(suite, "arena_allocator_allocates",         &arena_allocator_allocates);
     testing::add(suite, "arena_free_is_a_no_op",             &arena_free_is_a_no_op);
     testing::add(suite, "libc_allocator_round_trips",        &libc_allocator_round_trips);

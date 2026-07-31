@@ -23,12 +23,15 @@ import symbol;
 import token;
 import pool;
 
+// The seed cannot parse `const u8[]` as a generic argument, but it can behind an alias.
+alias Bytes = const u8[];
+
 export struct Compiler {
     mem::Allocator       allocator;
     list::List(module::Module*) modules;  // flat, indexed by ModuleId (the array index)
-    list::List(u8[])     entry_sources;   // user-supplied source file paths
-    list::List(u8[])     import_paths;    // -i search list
-    u8[]                 target;          // conditional-compilation infix; empty = none
+    list::List(Bytes)    entry_sources;   // user-supplied source file paths
+    list::List(Bytes)    import_paths;    // -i search list
+    const u8[]           target;          // conditional-compilation infix; empty = none
     bool                 is_multithreaded; // run phases on a thread pool sized to cpu_count
     bool                 cfg_dump;         // -cfg-dump: print each function's CFG to stdout
     bool                 sapir_dump;       // -sapir-dump: print each module's lowered sapir to stdout
@@ -40,13 +43,13 @@ export struct Compiler {
     u64                  comptime_iterations; // -comptime-iterations: interpreter per-loop cap; 0 = default
     pool::ThreadPool*    pool;            // non-null only while multithreaded
     i64                  error_count;
-    u8[]                 output_path;     // -o; empty defaults to "a.out"
-    list::List(u8[])     extern_libs;     // -l names, passed to the linker as -l<name>
-    list::List(u8[])     lib_dirs;        // -L paths, passed to the linker as -L<path>
+    const u8[]           output_path;     // -o; empty defaults to "a.out"
+    list::List(Bytes)    extern_libs;     // -l names, passed to the linker as -l<name>
+    list::List(Bytes)    lib_dirs;        // -L paths, passed to the linker as -L<path>
     codegen::BuildConfig config;          // -config: optimization / instrumentation pipeline; default Debug
-    u8[]                 deps_path;       // -deps: write every discovered source path here (for build-system caching)
+    const u8[]           deps_path;       // -deps: write every discovered source path here (for build-system caching)
     bool                 wants_exit;      // --help / --version handled; the driver should stop before compiling
-    u8[]                 link_config;     // -link-config: file overriding the probed link paths
+    const u8[]           link_config;     // -link-config: file overriding the probed link paths
     bool                 compile_only;    // -c: emit one object per module and skip the link step
     list::List(module::Define) defines;   // -D<name>[=<value>]: readable from `comprun if (build::defined(...))`
 }
@@ -91,11 +94,11 @@ export fn void add_module(Compiler* c, module::Module* m) {
     list::push(&c.modules, c.allocator, m);
 }
 
-export fn void add_source(Compiler* c, u8[] path) {
+export fn void add_source(Compiler* c, const u8[] path) {
     list::push(&c.entry_sources, c.allocator, path);
 }
 
-fn bool parse_config(Compiler* c, u8[] name) {
+fn bool parse_config(Compiler* c, const u8[] name) {
     if(slice_eq(name, "Debug"))            { c.config = codegen::BuildConfig::Debug; return true; }
     if(slice_eq(name, "Release"))          { c.config = codegen::BuildConfig::Release; return true; }
     if(slice_eq(name, "ReleaseDebug"))     { c.config = codegen::BuildConfig::ReleaseDebug; return true; }
@@ -105,16 +108,16 @@ fn bool parse_config(Compiler* c, u8[] name) {
     return false;
 }
 
-export fn void add_extern_lib(Compiler* c, u8[] name) {
+export fn void add_extern_lib(Compiler* c, const u8[] name) {
     list::push(&c.extern_libs, c.allocator, name);
 }
 
-export fn void add_lib_dir(Compiler* c, u8[] path) {
+export fn void add_lib_dir(Compiler* c, const u8[] path) {
     list::push(&c.lib_dirs, c.allocator, path);
 }
 
 // `-Dname` or `-Dname=value`; a bare name carries an empty value and is still "defined".
-export fn void add_define(Compiler* c, u8[] arg) {
+export fn void add_define(Compiler* c, const u8[] arg) {
     u8[] body = {&arg.ptr[2], arg.len - 2};
     u64 separator = body.len;
     for(u64 char_index = 0; char_index < body.len; char_index += 1) {
@@ -130,16 +133,16 @@ export fn void add_define(Compiler* c, u8[] arg) {
     list::push(&c.defines, c.allocator, entry);
 }
 
-export fn void add_import_path(Compiler* c, u8[] path) {
+export fn void add_import_path(Compiler* c, const u8[] path) {
     list::push(&c.import_paths, c.allocator, path);
 }
 
-export fn void set_target(Compiler* c, u8[] t) {
+export fn void set_target(Compiler* c, const u8[] t) {
     c.target = t;
 }
 
 // Only Linux links today: link_paths is Linux-only, so any other target would silently emit an ELF.
-export fn bool set_validated_target(Compiler* c, u8[] t) {
+export fn bool set_validated_target(Compiler* c, const u8[] t) {
     if(slice_eq(t, "linux")) {
         c.target = t;
         return true;
@@ -153,11 +156,11 @@ export fn void set_multithreaded(Compiler* c, bool on) {
 }
 
 // Recognizes <file>.sl, -i <;-list>, -target <name>, -mt, -cfg-dump; false on anything else.
-export fn bool parse_argv(Compiler* c, u8[][] args) {
+export fn bool parse_argv(Compiler* c, const u8[][] args) {
     bool ok = true;
     u64 arg_index = 0;
     while(arg_index < args.len) {
-        u8[] arg = args[arg_index];
+        const u8[] arg = args[arg_index];
         if(slice_eq(arg, "-i")) {
             arg_index += 1;
             if(arg_index < args.len) { add_import_path_list(c, args[arg_index]); } else { ok = false; }
@@ -227,7 +230,7 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
     return ok;
 }
 
-fn void add_import_path_list(Compiler* c, u8[] list) {
+fn void add_import_path_list(Compiler* c, const u8[] list) {
     u64 start = 0;
     for(u64 char_index = 0; char_index <= list.len; char_index += 1) {
         if(char_index == list.len || list[char_index] == ';') {
@@ -240,7 +243,7 @@ fn void add_import_path_list(Compiler* c, u8[] list) {
     }
 }
 
-fn bool slice_eq(u8[] a, u8[] b) {
+fn bool slice_eq(const u8[] a, const u8[] b) {
     if(a.len != b.len) { return false; }
     for(u64 char_index = 0; char_index < a.len; char_index += 1) {
         if(a[char_index] != b[char_index]) { return false; }
@@ -248,7 +251,7 @@ fn bool slice_eq(u8[] a, u8[] b) {
     return true;
 }
 
-fn u64 parse_u64(u8[] s) {
+fn u64 parse_u64(const u8[] s) {
     u64 value = 0;
     for(u64 i = 0; i < s.len; i += 1) {
         if(s[i] < '0' || s[i] > '9') { break; }
@@ -257,7 +260,7 @@ fn u64 parse_u64(u8[] s) {
     return value;
 }
 
-fn bool ends_with(u8[] s, u8[] suffix) {
+fn bool ends_with(const u8[] s, const u8[] suffix) {
     if(suffix.len > s.len) { return false; }
     u64 offset = s.len - suffix.len;
     for(u64 char_index = 0; char_index < suffix.len; char_index += 1) {
@@ -281,7 +284,7 @@ export fn void discover(Compiler* c) {
 }
 
 // Unreadable is an error; an empty file is valid (imports get their check in resolve_import_source).
-fn void add_entry_module(Compiler* c, u8[] path) {
+fn void add_entry_module(Compiler* c, const u8[] path) {
     u8[] empty = {null, 0};
     module::Module* m = new_source_module(c, interner::intern(path_stem(path)), path, empty);
     add_module(c, m);
@@ -294,7 +297,7 @@ fn void add_entry_module(Compiler* c, u8[] path) {
     io::close(&f);
 }
 
-fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, u8[] path, u8[] src) {
+fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, const u8[] path, const u8[] src) {
     module::Module* m = (module::Module*)mem::alloc(c.allocator, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
     arena::Arena* module_arena = (arena::Arena*)mem::alloc(c.allocator, sizeof(arena::Arena));
@@ -319,7 +322,7 @@ fn module::BuildInfo build_info(Compiler* c) {
     return info;
 }
 
-fn u8[] config_name(codegen::BuildConfig config) {
+fn const u8[] config_name(codegen::BuildConfig config) {
     switch(config) {
     case codegen::BuildConfig::Debug:            { return "Debug"; }
     case codegen::BuildConfig::Release:          { return "Release"; }
@@ -330,7 +333,7 @@ fn u8[] config_name(codegen::BuildConfig config) {
     }
 }
 
-fn bool starts_with(u8[] text, u8[] prefix) {
+fn bool starts_with(const u8[] text, const u8[] prefix) {
     if(prefix.len > text.len) { return false; }
     for(u64 char_index = 0; char_index < prefix.len; char_index += 1) {
         if(text[char_index] != prefix[char_index]) { return false; }
@@ -412,7 +415,7 @@ fn ResolvedSource resolve_import_source(Compiler* c, symbol::Symbol* name) {
     return result;
 }
 
-fn u8[] join_filename(Compiler* c, u8[] dir, u8[] name, u8[] target) {
+fn u8[] join_filename(Compiler* c, const u8[] dir, const u8[] name, const u8[] target) {
     u8[1024] buf;
     i32 written = 0;
     if(target.len > 0) {
@@ -440,7 +443,7 @@ fn u8[] open_and_read(Compiler* c, u8[] path, bool* found) {
     return bytes;
 }
 
-fn u8[] path_stem(u8[] path) {
+fn const u8[] path_stem(const u8[] path) {
     u64 start = 0;
     for(u64 char_index = 0; char_index < path.len; char_index += 1) {
         if(path[char_index] == '/') { start = char_index + 1; }
@@ -471,7 +474,7 @@ fn void write_depfile(Compiler* c) {
     io::File f = io::open(c.deps_path, "w");
     if(f.fp == null) { return; }
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        u8[] path = c.modules.ptr[module_index].path;
+        const u8[] path = c.modules.ptr[module_index].path;
         if(path.len == 0) { continue; }
         io::write_string(&f, path);
         io::write_string(&f, "\n");
@@ -482,36 +485,38 @@ fn void write_depfile(Compiler* c) {
 // sapir -> object files -> linked executable. Assumes the frontend already ran.
 export fn i32 run_backend(Compiler* c) {
     if(!c.compile_only) { sys::mkdir(cstr(c.allocator, ".tmp"), 493); }
-    u8[][] object_paths = run_codegen(c);
+    const u8[][] object_paths = run_codegen(c);
     if(bail_on_errors(c)) { return 1; }
     if(c.compile_only) { return 0; }
     return run_link(c, object_paths);
 }
 
 // Runs a produced executable and returns its exit code (or -1 on spawn failure).
-export fn i32 run_executable(mem::Allocator a, u8[] path) {
+export fn i32 run_executable(mem::Allocator a, const u8[] path) {
     i8** argv = (i8**)mem::alloc(a, 2 * sizeof(i8*));
     argv[0] = cstr(a, path);
     argv[1] = null;
     return spawn_and_wait(argv);
 }
 
-fn u8[][] run_codegen(Compiler* c) {
-    u8[][] paths;
-    paths.ptr = mem::alloc(c.allocator, (c.modules.len + 1) * sizeof(u8[]));
-    paths.len = 0;
+fn const u8[][] run_codegen(Compiler* c) {
+    // Filled through a raw pointer and frozen into the slice at the end: the seed still reads the
+    // leading `const` as freezing the binding, so `paths.len` cannot be advanced in place.
+    Bytes* buf = (Bytes*)mem::alloc(c.allocator, (c.modules.len + 1) * sizeof(Bytes));
+    u64 count = 0;
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
-        u8[] obj_path = object_path_for(c, m);
+        const u8[] obj_path = object_path_for(c, m);
         if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.allocator, cstr(c.allocator, obj_path), c.config) != 0) { c.error_count += 1; }
-        paths[paths.len] = obj_path;
-        paths.len += 1;
+        buf[count] = obj_path;
+        count += 1;
     }
+    const u8[][] paths = {buf, count};
     return paths;
 }
 
-fn i32 run_link(Compiler* c, u8[][] object_paths) {
+fn i32 run_link(Compiler* c, const u8[][] object_paths) {
     link_paths::LinkPaths paths = link_paths::resolve(c.allocator);
     if(c.link_config.len > 0) {
         if(!link_paths::apply_override(&paths, c.allocator, c.link_config)) {
@@ -539,7 +544,7 @@ fn i32 run_link(Compiler* c, u8[][] object_paths) {
     return 0;
 }
 
-fn i8** build_link_argv(Compiler* c, u8[][] object_paths, link_paths::LinkPaths* paths) {
+fn i8** build_link_argv(Compiler* c, const u8[][] object_paths, link_paths::LinkPaths* paths) {
     u64 cap = 24 + object_paths.len + c.extern_libs.len + c.lib_dirs.len;
     i8** argv = (i8**)mem::alloc(c.allocator, (cap + 1) * sizeof(i8*));
     u64 n = 0;
@@ -599,7 +604,7 @@ fn i32 spawn_and_wait(i8** argv) {
 
 // -c writes <module>.o beside the caller; -o renames only the entry module's object, since
 // discovered imports each get one too and cannot share the name.
-fn u8[] object_path_for(Compiler* c, module::Module* m) {
+fn const u8[] object_path_for(Compiler* c, module::Module* m) {
     if(!c.compile_only) { return tmp_object_path(c, m); }
     if(c.output_path.len > 0 && c.modules.len > 0 && c.modules.ptr[0] == m) { return c.output_path; }
     io::OutBuf buf;
@@ -623,7 +628,7 @@ fn i8* output_cstr(Compiler* c) {
     return cstr(c.allocator, c.output_path);
 }
 
-fn i8* lib_flag(Compiler* c, u8[] name) {
+fn i8* lib_flag(Compiler* c, const u8[] name) {
     io::OutBuf buf;
     io::outbuf_init(&buf, c.allocator, 16);
     io::outbuf_write(&buf, "-l");
@@ -631,7 +636,7 @@ fn i8* lib_flag(Compiler* c, u8[] name) {
     return cstr(c.allocator, io::outbuf_bytes(&buf));
 }
 
-fn i8* dir_flag(Compiler* c, u8[] path) {
+fn i8* dir_flag(Compiler* c, const u8[] path) {
     io::OutBuf buf;
     io::outbuf_init(&buf, c.allocator, 16);
     io::outbuf_write(&buf, "-L");
@@ -639,7 +644,7 @@ fn i8* dir_flag(Compiler* c, u8[] path) {
     return cstr(c.allocator, io::outbuf_bytes(&buf));
 }
 
-fn i8* cstr(mem::Allocator a, u8[] bytes) {
+fn i8* cstr(mem::Allocator a, const u8[] bytes) {
     i8* out = (i8*)mem::alloc(a, bytes.len + 1);
     for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
     out[bytes.len] = 0;
@@ -752,7 +757,7 @@ fn void lower_job(void* arg) {
 }
 
 // Returns the new mark so a caller can chain phases without repeating the now_ns() dance.
-fn u64 report_phase(Compiler* c, u8[] name, u64 started_ns) {
+fn u64 report_phase(Compiler* c, const u8[] name, u64 started_ns) {
     u64 now = bench::now_ns();
     if(c.show_timings) {
         sys::dprintf(2, "  %-8.*s %lu ms\n", (i32)name.len, (i8*)name.ptr, (now - started_ns) / 1000000);
@@ -803,7 +808,7 @@ fn void dump_llvm(Compiler* c) {
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
-        u8[] ir = codegen::codegen_ir_string((sapir::SapirModule*)m.sapir, c.allocator, c.config);
+        const u8[] ir = codegen::codegen_ir_string((sapir::SapirModule*)m.sapir, c.allocator, c.config);
         sys::dprintf(1, "%.*s", (i32)ir.len, (i8*)ir.ptr);
     }
 }

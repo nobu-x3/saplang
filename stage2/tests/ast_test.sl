@@ -7,58 +7,58 @@ import token;
 
 // ----- header / node layout -----
 
-fn i32 header_is_sixteen_bytes(arena::Arena* a, u8[] msg) {
+fn i32 header_is_sixteen_bytes(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq(sizeof(ast::AstHeader), (u64)16, msg)) { return -1; }
     return 0;
 }
 
-fn i32 astnode_alias_matches_header(arena::Arena* a, u8[] msg) {
+fn i32 astnode_alias_matches_header(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq(sizeof(ast::AstNode), sizeof(ast::AstHeader), msg)) { return -1; }
     return 0;
 }
 
-fn i32 intlit_header_plus_u64(arena::Arena* a, u8[] msg) {
+fn i32 intlit_header_plus_u64(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq(sizeof(ast::IntLitNode), (u64)24, msg)) { return -1; }
     return 0;
 }
 
-fn i32 floatlit_header_plus_f64(arena::Arena* a, u8[] msg) {
+fn i32 floatlit_header_plus_f64(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq(sizeof(ast::FloatLitNode), (u64)24, msg)) { return -1; }
     return 0;
 }
 
-fn i32 boollit_size(arena::Arena* a, u8[] msg) {
+fn i32 boollit_size(arena::Arena* a, const u8[]msg) {
     // header (8) + bool (1) + 7 trailing pad = 16; or 12, depending on align.
     // We don't pin the exact value — just assert it can hold the header.
     if(!testing::expect_ge(sizeof(ast::BoolLitNode), sizeof(ast::AstHeader), msg)) { return -1; }
     return 0;
 }
 
-fn i32 binop_layout(arena::Arena* a, u8[] msg) {
+fn i32 binop_layout(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq(sizeof(ast::BinaryOpNode), (u64)40, msg)) { return -1; }
     return 0;
 }
 
-fn i32 fndecl_layout_nonzero(arena::Arena* a, u8[] msg) {
+fn i32 fndecl_layout_nonzero(arena::Arena* a, const u8[]msg) {
     // We don't pin the exact value; just sanity-check it includes the
     // header plus the ptr/slice fields.
     if(!testing::expect_ge(sizeof(ast::FnDeclNode), (u64)48, msg)) { return -1; }
     return 0;
 }
 
-fn i32 astflags_is_u16(arena::Arena* a, u8[] msg) {
+fn i32 astflags_is_u16(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq(sizeof(ast::AstFlags), (u64)2, msg)) { return -1; }
     return 0;
 }
 
-fn i32 astkind_is_u16(arena::Arena* a, u8[] msg) {
+fn i32 astkind_is_u16(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq(sizeof(ast::AstKind), (u64)2, msg)) { return -1; }
     return 0;
 }
 
 // ----- header roundtrip -----
 
-fn i32 intlit_roundtrip(arena::Arena* a, u8[] msg) {
+fn i32 intlit_roundtrip(arena::Arena* a, const u8[]msg) {
     ast::IntLitNode lit;
     lit.h.kind = ast::AstKind::IntLit;
     lit.h.flags = ast::AstFlags::ConstExpr;
@@ -71,7 +71,7 @@ fn i32 intlit_roundtrip(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 binop_roundtrip(arena::Arena* a, u8[] msg) {
+fn i32 binop_roundtrip(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {4096, null};
     ast::IntLitNode* l = arena::alloc(&local, sizeof(ast::IntLitNode));
     l.h.kind = ast::AstKind::IntLit;
@@ -96,111 +96,111 @@ fn i32 binop_roundtrip(arena::Arena* a, u8[] msg) {
 
 // ----- kind range helpers -----
 
-fn i32 is_decl_first(arena::Arena* a, u8[] msg) {
+fn i32 is_decl_first(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_decl(ast::AstKind::ImportDecl), msg)) { return -1; }
     return 0;
 }
 
-fn i32 is_decl_last(arena::Arena* a, u8[] msg) {
+fn i32 is_decl_last(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_decl(ast::AstKind::ExternUnionDecl), msg)) { return -1; }
     if(!testing::expect_true(ast::is_decl(ast::AstKind::ExternFnDecl), msg)) { return -2; }
     if(!testing::expect_true(ast::is_decl(ast::AstKind::ExternStructDecl), msg)) { return -3; }
     return 0;
 }
 
-fn i32 is_decl_middle(arena::Arena* a, u8[] msg) {
+fn i32 is_decl_middle(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_decl(ast::AstKind::FnDecl), msg)) { return -1; }
     if(!testing::expect_true(ast::is_decl(ast::AstKind::StructDecl), msg)) { return -2; }
     if(!testing::expect_true(ast::is_decl(ast::AstKind::EnumDecl), msg)) { return -3; }
     return 0;
 }
 
-fn i32 is_decl_rejects_sentinels(arena::Arena* a, u8[] msg) {
+fn i32 is_decl_rejects_sentinels(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_false(ast::is_decl(ast::AstKind::INVALID), msg)) { return -1; }
     if(!testing::expect_false(ast::is_decl(ast::AstKind::ERROR), msg)) { return -2; }
     return 0;
 }
 
-fn i32 is_decl_rejects_other_ranges(arena::Arena* a, u8[] msg) {
+fn i32 is_decl_rejects_other_ranges(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_false(ast::is_decl(ast::AstKind::BlockStmt), msg)) { return -1; }
     if(!testing::expect_false(ast::is_decl(ast::AstKind::IntLit), msg)) { return -2; }
     if(!testing::expect_false(ast::is_decl(ast::AstKind::PrimitiveType), msg)) { return -3; }
     return 0;
 }
 
-fn i32 is_stmt_first(arena::Arena* a, u8[] msg) {
+fn i32 is_stmt_first(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_stmt(ast::AstKind::BlockStmt), msg)) { return -1; }
     return 0;
 }
 
-fn i32 is_stmt_last(arena::Arena* a, u8[] msg) {
+fn i32 is_stmt_last(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_stmt(ast::AstKind::CompwarningStmt), msg)) { return -1; }
     return 0;
 }
 
-fn i32 is_stmt_middle(arena::Arena* a, u8[] msg) {
+fn i32 is_stmt_middle(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_stmt(ast::AstKind::IfStmt), msg)) { return -1; }
     if(!testing::expect_true(ast::is_stmt(ast::AstKind::WhileStmt), msg)) { return -2; }
     if(!testing::expect_true(ast::is_stmt(ast::AstKind::ReturnStmt), msg)) { return -3; }
     return 0;
 }
 
-fn i32 is_stmt_rejects_other_ranges(arena::Arena* a, u8[] msg) {
+fn i32 is_stmt_rejects_other_ranges(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_false(ast::is_stmt(ast::AstKind::ExternFnDecl), msg)) { return -1; }
     if(!testing::expect_false(ast::is_stmt(ast::AstKind::IntLit), msg)) { return -2; }
     if(!testing::expect_false(ast::is_stmt(ast::AstKind::PrimitiveType), msg)) { return -3; }
     return 0;
 }
 
-fn i32 is_expr_first(arena::Arena* a, u8[] msg) {
+fn i32 is_expr_first(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_expr(ast::AstKind::IntLit), msg)) { return -1; }
     return 0;
 }
 
-fn i32 is_expr_last(arena::Arena* a, u8[] msg) {
+fn i32 is_expr_last(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_expr(ast::AstKind::Compcode), msg)) { return -1; }
     return 0;
 }
 
-fn i32 is_expr_middle(arena::Arena* a, u8[] msg) {
+fn i32 is_expr_middle(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_expr(ast::AstKind::Ident), msg)) { return -1; }
     if(!testing::expect_true(ast::is_expr(ast::AstKind::Call), msg)) { return -2; }
     if(!testing::expect_true(ast::is_expr(ast::AstKind::BinaryOp), msg)) { return -3; }
     return 0;
 }
 
-fn i32 is_expr_rejects_other_ranges(arena::Arena* a, u8[] msg) {
+fn i32 is_expr_rejects_other_ranges(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_false(ast::is_expr(ast::AstKind::CompwarningStmt), msg)) { return -1; }
     if(!testing::expect_false(ast::is_expr(ast::AstKind::PrimitiveType), msg)) { return -2; }
     if(!testing::expect_false(ast::is_expr(ast::AstKind::ImportDecl), msg)) { return -3; }
     return 0;
 }
 
-fn i32 is_type_first(arena::Arena* a, u8[] msg) {
+fn i32 is_type_first(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_type(ast::AstKind::PrimitiveType), msg)) { return -1; }
     return 0;
 }
 
-fn i32 is_type_last(arena::Arena* a, u8[] msg) {
+fn i32 is_type_last(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_type(ast::AstKind::UnionType), msg)) { return -1; }
     return 0;
 }
 
-fn i32 is_type_middle(arena::Arena* a, u8[] msg) {
+fn i32 is_type_middle(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_true(ast::is_type(ast::AstKind::PointerType), msg)) { return -1; }
     if(!testing::expect_true(ast::is_type(ast::AstKind::SliceType), msg)) { return -2; }
     if(!testing::expect_true(ast::is_type(ast::AstKind::FnPtrType), msg)) { return -3; }
     return 0;
 }
 
-fn i32 is_type_rejects_other_ranges(arena::Arena* a, u8[] msg) {
+fn i32 is_type_rejects_other_ranges(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_false(ast::is_type(ast::AstKind::Compcode), msg)) { return -1; }
     if(!testing::expect_false(ast::is_type(ast::AstKind::BlockStmt), msg)) { return -2; }
     if(!testing::expect_false(ast::is_type(ast::AstKind::ExternFnDecl), msg)) { return -3; }
     return 0;
 }
 
-fn i32 ranges_partition(arena::Arena* a, u8[] msg) {
+fn i32 ranges_partition(arena::Arena* a, const u8[]msg) {
     // For every kind whose value is in [INVALID..UnionType], at most one
     // of is_{decl,stmt,expr,type} returns true. INVALID and ERROR sit
     // outside every range — false from all four.
@@ -222,13 +222,13 @@ fn i32 ranges_partition(arena::Arena* a, u8[] msg) {
 // Casting a concrete node pointer to AstNode* and reading .h.kind round-trips
 // only if AstHeader sits at offset 0 in each struct.
 
-fn bool castback(void* p, ast::AstKind expected, u8[] m) {
+fn bool castback(void* p, ast::AstKind expected, const u8[] m) {
     ast::AstNode* n = (ast::AstNode*)p;
     return testing::expect_eq((u16)n.h.kind, (u16)expected, m);
 }
 
 // decls
-fn i32 hdr_import(arena::Arena* a, u8[] m) {
+fn i32 hdr_import(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ImportNode* n = arena::alloc(&lo, sizeof(ast::ImportNode));
     n.h.kind = ast::AstKind::ImportDecl;
@@ -236,7 +236,7 @@ fn i32 hdr_import(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_var_decl(arena::Arena* a, u8[] m) {
+fn i32 hdr_var_decl(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::VarDeclNode* n = arena::alloc(&lo, sizeof(ast::VarDeclNode));
     n.h.kind = ast::AstKind::VarDecl;
@@ -244,7 +244,7 @@ fn i32 hdr_var_decl(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_fn_decl(arena::Arena* a, u8[] m) {
+fn i32 hdr_fn_decl(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::FnDeclNode* n = arena::alloc(&lo, sizeof(ast::FnDeclNode));
     n.h.kind = ast::AstKind::FnDecl;
@@ -252,7 +252,7 @@ fn i32 hdr_fn_decl(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_struct_decl(arena::Arena* a, u8[] m) {
+fn i32 hdr_struct_decl(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::StructDeclNode* n = arena::alloc(&lo, sizeof(ast::StructDeclNode));
     n.h.kind = ast::AstKind::StructDecl;
@@ -260,7 +260,7 @@ fn i32 hdr_struct_decl(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_union_decl(arena::Arena* a, u8[] m) {
+fn i32 hdr_union_decl(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::UnionDeclNode* n = arena::alloc(&lo, sizeof(ast::UnionDeclNode));
     n.h.kind = ast::AstKind::UnionDecl;
@@ -268,7 +268,7 @@ fn i32 hdr_union_decl(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_enum_decl(arena::Arena* a, u8[] m) {
+fn i32 hdr_enum_decl(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::EnumDeclNode* n = arena::alloc(&lo, sizeof(ast::EnumDeclNode));
     n.h.kind = ast::AstKind::EnumDecl;
@@ -276,7 +276,7 @@ fn i32 hdr_enum_decl(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_alias_decl(arena::Arena* a, u8[] m) {
+fn i32 hdr_alias_decl(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::AliasDeclNode* n = arena::alloc(&lo, sizeof(ast::AliasDeclNode));
     n.h.kind = ast::AstKind::AliasDecl;
@@ -284,7 +284,7 @@ fn i32 hdr_alias_decl(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_extern_block(arena::Arena* a, u8[] m) {
+fn i32 hdr_extern_block(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ExternBlockNode* n = arena::alloc(&lo, sizeof(ast::ExternBlockNode));
     n.h.kind = ast::AstKind::ExternBlock;
@@ -292,7 +292,7 @@ fn i32 hdr_extern_block(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_extern_fn_decl(arena::Arena* a, u8[] m) {
+fn i32 hdr_extern_fn_decl(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ExternFnDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternFnDeclNode));
     n.h.kind = ast::AstKind::ExternFnDecl;
@@ -300,7 +300,7 @@ fn i32 hdr_extern_fn_decl(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_extern_struct_decl(arena::Arena* a, u8[] m) {
+fn i32 hdr_extern_struct_decl(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ExternStructDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternStructDeclNode));
     n.h.kind = ast::AstKind::ExternStructDecl;
@@ -308,7 +308,7 @@ fn i32 hdr_extern_struct_decl(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_extern_union_decl(arena::Arena* a, u8[] m) {
+fn i32 hdr_extern_union_decl(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ExternUnionDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternUnionDeclNode));
     n.h.kind = ast::AstKind::ExternUnionDecl;
@@ -317,7 +317,7 @@ fn i32 hdr_extern_union_decl(arena::Arena* a, u8[] m) {
 }
 
 // stmts
-fn i32 hdr_block(arena::Arena* a, u8[] m) {
+fn i32 hdr_block(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::BlockNode* n = arena::alloc(&lo, sizeof(ast::BlockNode));
     n.h.kind = ast::AstKind::BlockStmt;
@@ -325,7 +325,7 @@ fn i32 hdr_block(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_if(arena::Arena* a, u8[] m) {
+fn i32 hdr_if(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::IfNode* n = arena::alloc(&lo, sizeof(ast::IfNode));
     n.h.kind = ast::AstKind::IfStmt;
@@ -333,7 +333,7 @@ fn i32 hdr_if(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_while(arena::Arena* a, u8[] m) {
+fn i32 hdr_while(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::WhileNode* n = arena::alloc(&lo, sizeof(ast::WhileNode));
     n.h.kind = ast::AstKind::WhileStmt;
@@ -341,7 +341,7 @@ fn i32 hdr_while(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_for(arena::Arena* a, u8[] m) {
+fn i32 hdr_for(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ForNode* n = arena::alloc(&lo, sizeof(ast::ForNode));
     n.h.kind = ast::AstKind::ForStmt;
@@ -349,7 +349,7 @@ fn i32 hdr_for(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_switch(arena::Arena* a, u8[] m) {
+fn i32 hdr_switch(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::SwitchNode* n = arena::alloc(&lo, sizeof(ast::SwitchNode));
     n.h.kind = ast::AstKind::SwitchStmt;
@@ -357,7 +357,7 @@ fn i32 hdr_switch(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_return(arena::Arena* a, u8[] m) {
+fn i32 hdr_return(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ReturnNode* n = arena::alloc(&lo, sizeof(ast::ReturnNode));
     n.h.kind = ast::AstKind::ReturnStmt;
@@ -365,7 +365,7 @@ fn i32 hdr_return(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_break(arena::Arena* a, u8[] m) {
+fn i32 hdr_break(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::BreakNode* n = arena::alloc(&lo, sizeof(ast::BreakNode));
     n.h.kind = ast::AstKind::BreakStmt;
@@ -375,7 +375,7 @@ fn i32 hdr_break(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_continue(arena::Arena* a, u8[] m) {
+fn i32 hdr_continue(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ContinueNode* n = arena::alloc(&lo, sizeof(ast::ContinueNode));
     n.h.kind = ast::AstKind::ContinueStmt;
@@ -384,7 +384,7 @@ fn i32 hdr_continue(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_defer(arena::Arena* a, u8[] m) {
+fn i32 hdr_defer(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::DeferNode* n = arena::alloc(&lo, sizeof(ast::DeferNode));
     n.h.kind = ast::AstKind::DeferStmt;
@@ -392,7 +392,7 @@ fn i32 hdr_defer(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_assignment(arena::Arena* a, u8[] m) {
+fn i32 hdr_assignment(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::AssignmentNode* n = arena::alloc(&lo, sizeof(ast::AssignmentNode));
     n.h.kind = ast::AstKind::AssignmentStmt;
@@ -400,7 +400,7 @@ fn i32 hdr_assignment(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_expr_stmt(arena::Arena* a, u8[] m) {
+fn i32 hdr_expr_stmt(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ExprStmtNode* n = arena::alloc(&lo, sizeof(ast::ExprStmtNode));
     n.h.kind = ast::AstKind::ExprStmt;
@@ -408,7 +408,7 @@ fn i32 hdr_expr_stmt(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_comprun(arena::Arena* a, u8[] m) {
+fn i32 hdr_comprun(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::CompRunNode* n = arena::alloc(&lo, sizeof(ast::CompRunNode));
     n.h.kind = ast::AstKind::ComprunStmt;
@@ -416,7 +416,7 @@ fn i32 hdr_comprun(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_compinsert(arena::Arena* a, u8[] m) {
+fn i32 hdr_compinsert(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::CompInsertNode* n = arena::alloc(&lo, sizeof(ast::CompInsertNode));
     n.h.kind = ast::AstKind::CompinsertStmt;
@@ -424,7 +424,7 @@ fn i32 hdr_compinsert(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_compsplice(arena::Arena* a, u8[] m) {
+fn i32 hdr_compsplice(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::CompSpliceNode* n = arena::alloc(&lo, sizeof(ast::CompSpliceNode));
     n.h.kind = ast::AstKind::CompspliceStmt;
@@ -432,7 +432,7 @@ fn i32 hdr_compsplice(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_comperror(arena::Arena* a, u8[] m) {
+fn i32 hdr_comperror(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::CompErrorNode* n = arena::alloc(&lo, sizeof(ast::CompErrorNode));
     n.h.kind = ast::AstKind::ComperrorStmt;
@@ -440,7 +440,7 @@ fn i32 hdr_comperror(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_compwarning(arena::Arena* a, u8[] m) {
+fn i32 hdr_compwarning(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::CompWarningNode* n = arena::alloc(&lo, sizeof(ast::CompWarningNode));
     n.h.kind = ast::AstKind::CompwarningStmt;
@@ -449,7 +449,7 @@ fn i32 hdr_compwarning(arena::Arena* a, u8[] m) {
 }
 
 // exprs
-fn i32 hdr_intlit(arena::Arena* a, u8[] m) {
+fn i32 hdr_intlit(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::IntLitNode* n = arena::alloc(&lo, sizeof(ast::IntLitNode));
     n.h.kind = ast::AstKind::IntLit;
@@ -457,7 +457,7 @@ fn i32 hdr_intlit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_floatlit(arena::Arena* a, u8[] m) {
+fn i32 hdr_floatlit(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::FloatLitNode* n = arena::alloc(&lo, sizeof(ast::FloatLitNode));
     n.h.kind = ast::AstKind::FloatLit;
@@ -465,7 +465,7 @@ fn i32 hdr_floatlit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_boollit(arena::Arena* a, u8[] m) {
+fn i32 hdr_boollit(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::BoolLitNode* n = arena::alloc(&lo, sizeof(ast::BoolLitNode));
     n.h.kind = ast::AstKind::BoolLit;
@@ -473,7 +473,7 @@ fn i32 hdr_boollit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_charlit(arena::Arena* a, u8[] m) {
+fn i32 hdr_charlit(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::CharLitNode* n = arena::alloc(&lo, sizeof(ast::CharLitNode));
     n.h.kind = ast::AstKind::CharLit;
@@ -481,7 +481,7 @@ fn i32 hdr_charlit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_stringlit(arena::Arena* a, u8[] m) {
+fn i32 hdr_stringlit(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::StringLitNode* n = arena::alloc(&lo, sizeof(ast::StringLitNode));
     n.h.kind = ast::AstKind::StringLit;
@@ -489,7 +489,7 @@ fn i32 hdr_stringlit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_nulllit(arena::Arena* a, u8[] m) {
+fn i32 hdr_nulllit(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::NullLitNode* n = arena::alloc(&lo, sizeof(ast::NullLitNode));
     n.h.kind = ast::AstKind::NullLit;
@@ -498,7 +498,7 @@ fn i32 hdr_nulllit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_undefinedlit(arena::Arena* a, u8[] m) {
+fn i32 hdr_undefinedlit(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::UndefinedLitNode* n = arena::alloc(&lo, sizeof(ast::UndefinedLitNode));
     n.h.kind = ast::AstKind::UndefinedLit;
@@ -507,7 +507,7 @@ fn i32 hdr_undefinedlit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_ident(arena::Arena* a, u8[] m) {
+fn i32 hdr_ident(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::IdentNode* n = arena::alloc(&lo, sizeof(ast::IdentNode));
     n.h.kind = ast::AstKind::Ident;
@@ -515,7 +515,7 @@ fn i32 hdr_ident(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_namespace_access(arena::Arena* a, u8[] m) {
+fn i32 hdr_namespace_access(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::NamespaceAccessNode* n = arena::alloc(&lo, sizeof(ast::NamespaceAccessNode));
     n.h.kind = ast::AstKind::NamespaceAccess;
@@ -523,7 +523,7 @@ fn i32 hdr_namespace_access(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_member_access(arena::Arena* a, u8[] m) {
+fn i32 hdr_member_access(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::MemberAccessNode* n = arena::alloc(&lo, sizeof(ast::MemberAccessNode));
     n.h.kind = ast::AstKind::MemberAccess;
@@ -531,7 +531,7 @@ fn i32 hdr_member_access(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_array_index(arena::Arena* a, u8[] m) {
+fn i32 hdr_array_index(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ArrayIndexNode* n = arena::alloc(&lo, sizeof(ast::ArrayIndexNode));
     n.h.kind = ast::AstKind::ArrayIndex;
@@ -539,7 +539,7 @@ fn i32 hdr_array_index(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_slice_range(arena::Arena* a, u8[] m) {
+fn i32 hdr_slice_range(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::SliceRangeNode* n = arena::alloc(&lo, sizeof(ast::SliceRangeNode));
     n.h.kind = ast::AstKind::SliceRange;
@@ -547,7 +547,7 @@ fn i32 hdr_slice_range(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_call(arena::Arena* a, u8[] m) {
+fn i32 hdr_call(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::CallNode* n = arena::alloc(&lo, sizeof(ast::CallNode));
     n.h.kind = ast::AstKind::Call;
@@ -555,7 +555,7 @@ fn i32 hdr_call(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_cast(arena::Arena* a, u8[] m) {
+fn i32 hdr_cast(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::CastNode* n = arena::alloc(&lo, sizeof(ast::CastNode));
     n.h.kind = ast::AstKind::Cast;
@@ -563,7 +563,7 @@ fn i32 hdr_cast(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_unary_op(arena::Arena* a, u8[] m) {
+fn i32 hdr_unary_op(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::UnaryOpNode* n = arena::alloc(&lo, sizeof(ast::UnaryOpNode));
     n.h.kind = ast::AstKind::UnaryOp;
@@ -571,7 +571,7 @@ fn i32 hdr_unary_op(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_binary_op(arena::Arena* a, u8[] m) {
+fn i32 hdr_binary_op(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::BinaryOpNode* n = arena::alloc(&lo, sizeof(ast::BinaryOpNode));
     n.h.kind = ast::AstKind::BinaryOp;
@@ -579,7 +579,7 @@ fn i32 hdr_binary_op(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_struct_lit(arena::Arena* a, u8[] m) {
+fn i32 hdr_struct_lit(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::StructLitNode* n = arena::alloc(&lo, sizeof(ast::StructLitNode));
     n.h.kind = ast::AstKind::StructLit;
@@ -587,7 +587,7 @@ fn i32 hdr_struct_lit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_array_lit(arena::Arena* a, u8[] m) {
+fn i32 hdr_array_lit(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ArrayLitNode* n = arena::alloc(&lo, sizeof(ast::ArrayLitNode));
     n.h.kind = ast::AstKind::ArrayLit;
@@ -595,7 +595,7 @@ fn i32 hdr_array_lit(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_sizeof(arena::Arena* a, u8[] m) {
+fn i32 hdr_sizeof(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::SizeofNode* n = arena::alloc(&lo, sizeof(ast::SizeofNode));
     n.h.kind = ast::AstKind::Sizeof;
@@ -603,7 +603,7 @@ fn i32 hdr_sizeof(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_alignof(arena::Arena* a, u8[] m) {
+fn i32 hdr_alignof(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::AlignofNode* n = arena::alloc(&lo, sizeof(ast::AlignofNode));
     n.h.kind = ast::AstKind::Alignof;
@@ -611,7 +611,7 @@ fn i32 hdr_alignof(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_typeof(arena::Arena* a, u8[] m) {
+fn i32 hdr_typeof(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypeofNode* n = arena::alloc(&lo, sizeof(ast::TypeofNode));
     n.h.kind = ast::AstKind::Typeof;
@@ -619,7 +619,7 @@ fn i32 hdr_typeof(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_typeinfo(arena::Arena* a, u8[] m) {
+fn i32 hdr_typeinfo(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypeInfoNode* n = arena::alloc(&lo, sizeof(ast::TypeInfoNode));
     n.h.kind = ast::AstKind::Type_info;
@@ -627,7 +627,7 @@ fn i32 hdr_typeinfo(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_compcode(arena::Arena* a, u8[] m) {
+fn i32 hdr_compcode(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::CompCodeNode* n = arena::alloc(&lo, sizeof(ast::CompCodeNode));
     n.h.kind = ast::AstKind::Compcode;
@@ -636,7 +636,7 @@ fn i32 hdr_compcode(arena::Arena* a, u8[] m) {
 }
 
 // types
-fn i32 hdr_primitive_type(arena::Arena* a, u8[] m) {
+fn i32 hdr_primitive_type(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypePrimitiveNode* n = arena::alloc(&lo, sizeof(ast::TypePrimitiveNode));
     n.h.kind = ast::AstKind::PrimitiveType;
@@ -644,7 +644,7 @@ fn i32 hdr_primitive_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_named_type(arena::Arena* a, u8[] m) {
+fn i32 hdr_named_type(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypeNamedNode* n = arena::alloc(&lo, sizeof(ast::TypeNamedNode));
     n.h.kind = ast::AstKind::NamedType;
@@ -652,7 +652,7 @@ fn i32 hdr_named_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_pointer_type(arena::Arena* a, u8[] m) {
+fn i32 hdr_pointer_type(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypePointerNode* n = arena::alloc(&lo, sizeof(ast::TypePointerNode));
     n.h.kind = ast::AstKind::PointerType;
@@ -660,7 +660,7 @@ fn i32 hdr_pointer_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_array_type(arena::Arena* a, u8[] m) {
+fn i32 hdr_array_type(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypeArrayNode* n = arena::alloc(&lo, sizeof(ast::TypeArrayNode));
     n.h.kind = ast::AstKind::ArrayType;
@@ -668,7 +668,7 @@ fn i32 hdr_array_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_slice_type(arena::Arena* a, u8[] m) {
+fn i32 hdr_slice_type(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypeSliceNode* n = arena::alloc(&lo, sizeof(ast::TypeSliceNode));
     n.h.kind = ast::AstKind::SliceType;
@@ -676,7 +676,7 @@ fn i32 hdr_slice_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_fnptr_type(arena::Arena* a, u8[] m) {
+fn i32 hdr_fnptr_type(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypeFnPtrNode* n = arena::alloc(&lo, sizeof(ast::TypeFnPtrNode));
     n.h.kind = ast::AstKind::FnPtrType;
@@ -684,7 +684,7 @@ fn i32 hdr_fnptr_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_struct_type(arena::Arena* a, u8[] m) {
+fn i32 hdr_struct_type(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypeStructNode* n = arena::alloc(&lo, sizeof(ast::TypeStructNode));
     n.h.kind = ast::AstKind::StructType;
@@ -692,7 +692,7 @@ fn i32 hdr_struct_type(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 hdr_union_type(arena::Arena* a, u8[] m) {
+fn i32 hdr_union_type(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypeUnionNode* n = arena::alloc(&lo, sizeof(ast::TypeUnionNode));
     n.h.kind = ast::AstKind::UnionType;
@@ -702,7 +702,7 @@ fn i32 hdr_union_type(arena::Arena* a, u8[] m) {
 
 // ----- field roundtrip for non-trivial node shapes -----
 
-fn i32 boollit_value_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 boollit_value_roundtrip(arena::Arena* a, const u8[]m) {
     ast::BoolLitNode n;
     n.h.kind = ast::AstKind::BoolLit;
     n.value = true;
@@ -712,7 +712,7 @@ fn i32 boollit_value_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 charlit_value_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 charlit_value_roundtrip(arena::Arena* a, const u8[]m) {
     ast::CharLitNode n;
     n.h.kind = ast::AstKind::CharLit;
     n.value = 'Z';
@@ -720,7 +720,7 @@ fn i32 charlit_value_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 stringlit_fields_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 stringlit_fields_roundtrip(arena::Arena* a, const u8[]m) {
     ast::StringLitNode n;
     n.h.kind = ast::AstKind::StringLit;
     n.pool_off = (u32)100;
@@ -730,7 +730,7 @@ fn i32 stringlit_fields_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 floatlit_value_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 floatlit_value_roundtrip(arena::Arena* a, const u8[]m) {
     ast::FloatLitNode n;
     n.h.kind = ast::AstKind::FloatLit;
     n.value = 3.14;
@@ -738,7 +738,7 @@ fn i32 floatlit_value_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 ifnode_else_branch_can_be_null(arena::Arena* a, u8[] m) {
+fn i32 ifnode_else_branch_can_be_null(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::IfNode* n = arena::alloc(&lo, sizeof(ast::IfNode));
     n.h.kind = ast::AstKind::IfStmt;
@@ -749,7 +749,7 @@ fn i32 ifnode_else_branch_can_be_null(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 fornode_fields_can_be_null(arena::Arena* a, u8[] m) {
+fn i32 fornode_fields_can_be_null(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ForNode* n = arena::alloc(&lo, sizeof(ast::ForNode));
     n.h.kind = ast::AstKind::ForStmt;
@@ -763,7 +763,7 @@ fn i32 fornode_fields_can_be_null(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 ptrtype_const_flag_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 ptrtype_const_flag_roundtrip(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::TypePointerNode* n = arena::alloc(&lo, sizeof(ast::TypePointerNode));
     n.h.kind = ast::AstKind::PointerType;
@@ -774,7 +774,7 @@ fn i32 ptrtype_const_flag_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 externfn_variadic_flag_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 externfn_variadic_flag_roundtrip(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ExternFnDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternFnDeclNode));
     n.h.kind = ast::AstKind::ExternFnDecl;
@@ -784,7 +784,7 @@ fn i32 externfn_variadic_flag_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 externstruct_opaque_flag_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 externstruct_opaque_flag_roundtrip(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ExternStructDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternStructDeclNode));
     n.h.kind = ast::AstKind::ExternStructDecl;
@@ -797,7 +797,7 @@ fn i32 externstruct_opaque_flag_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 externunion_opaque_flag_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 externunion_opaque_flag_roundtrip(arena::Arena* a, const u8[]m) {
     arena::Arena lo = {1024, null};
     ast::ExternUnionDeclNode* n = arena::alloc(&lo, sizeof(ast::ExternUnionDeclNode));
     n.h.kind = ast::AstKind::ExternUnionDecl;
@@ -812,7 +812,7 @@ fn i32 externunion_opaque_flag_roundtrip(arena::Arena* a, u8[] m) {
 
 // ----- auxiliary structs -----
 
-fn i32 param_field_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 param_field_roundtrip(arena::Arena* a, const u8[]m) {
     ast::Param p;
     p.name = null;
     p.type_expr = null;
@@ -825,7 +825,7 @@ fn i32 param_field_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 fielddecl_field_roundtrip(arena::Arena* a, u8[] m) {
+fn i32 fielddecl_field_roundtrip(arena::Arena* a, const u8[]m) {
     ast::FieldDecl f;
     f.name = null;
     f.type_expr = null;
@@ -834,7 +834,7 @@ fn i32 fielddecl_field_roundtrip(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 enummember_value_expr_optional(arena::Arena* a, u8[] m) {
+fn i32 enummember_value_expr_optional(arena::Arena* a, const u8[]m) {
     ast::EnumMember em;
     em.name = null;
     em.value_expr = null;
@@ -843,7 +843,7 @@ fn i32 enummember_value_expr_optional(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 fieldinitializer_name_optional(arena::Arena* a, u8[] m) {
+fn i32 fieldinitializer_name_optional(arena::Arena* a, const u8[]m) {
     ast::FieldInitializer fi;
     fi.name = null;
     fi.value = null;
@@ -852,7 +852,7 @@ fn i32 fieldinitializer_name_optional(arena::Arena* a, u8[] m) {
     return 0;
 }
 
-fn i32 switcharm_layout(arena::Arena* a, u8[] m) {
+fn i32 switcharm_layout(arena::Arena* a, const u8[]m) {
     ast::SwitchArm sa;
     sa.labels = {null, 0};
     sa.body = null;
@@ -865,7 +865,7 @@ fn i32 switcharm_layout(arena::Arena* a, u8[] m) {
 
 // ----- AstFlags bit values -----
 
-fn i32 astflags_are_distinct_bits(arena::Arena* a, u8[] m) {
+fn i32 astflags_are_distinct_bits(arena::Arena* a, const u8[]m) {
     if(!testing::expect_eq((u16)ast::AstFlags::LValue,        (u16)1, m)) { return -1; }
     if(!testing::expect_eq((u16)ast::AstFlags::ConstExpr,     (u16)2, m)) { return -2; }
     if(!testing::expect_eq((u16)ast::AstFlags::HadError,      (u16)4, m)) { return -3; }
@@ -877,7 +877,7 @@ fn i32 astflags_are_distinct_bits(arena::Arena* a, u8[] m) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "AST Tests";
+    const u8[] suite = "AST Tests";
 
     // header / node layout
     testing::add(suite, "header_is_sixteen_bytes", &header_is_sixteen_bytes);

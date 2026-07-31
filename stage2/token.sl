@@ -77,7 +77,7 @@ export fn bool is_literal(TokenKind k)      { return k >= TokenKind::IntLit && k
 // Punctuation / operators / keywords are returned single-quoted so they
 // stand out from surrounding prose; category tokens (literals, identifiers)
 // are returned as plain noun phrases.
-export fn u8[] kind_name(TokenKind k) {
+export fn const u8[] kind_name(TokenKind k) {
 	switch(k) {
 	case TokenKind::EOF:          { return "end of file"; }
 	case TokenKind::ERROR:        { return "<error>"; }
@@ -187,7 +187,7 @@ export fn u8[] kind_name(TokenKind k) {
 	return "<unknown>";
 }
 
-export struct KeywordEntry { u8[] bytes; TokenKind kind; }
+export struct KeywordEntry { const u8[] bytes; TokenKind kind; }
 
 export const KeywordEntry[] KEYWORDS = [
     { "i8",  TokenKind::I8  }, { "i16", TokenKind::I16 }, { "i32", TokenKind::I32 }, { "i64", TokenKind::I64 },

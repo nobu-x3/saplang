@@ -5,7 +5,7 @@ import ast;
 import arena;
 import sys;
 
-fn i32 module_table(arena::Arena* a, u8[] msg) {
+fn i32 module_table(arena::Arena* a, const u8[]msg) {
     sapir::SapirModule* m = sapir::new_module(a, null);
     if(!testing::expect_eq((void*)m.name, null, msg)) { return -1; }
 
@@ -40,7 +40,7 @@ fn i32 module_table(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 inst_encoding(arena::Arena* a, u8[] msg) {
+fn i32 inst_encoding(arena::Arena* a, const u8[]msg) {
     sapir::SapirFn func;
     sys::memset(&func, 0, sizeof(sapir::SapirFn));
 
@@ -70,7 +70,7 @@ fn i32 inst_encoding(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 block_and_extra(arena::Arena* a, u8[] msg) {
+fn i32 block_and_extra(arena::Arena* a, const u8[]msg) {
     sapir::SapirFn func;
     sys::memset(&func, 0, sizeof(sapir::SapirFn));
 
@@ -106,7 +106,7 @@ fn i32 block_and_extra(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 terminator_classification(arena::Arena* a, u8[] msg) {
+fn i32 terminator_classification(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::Br), true, msg)) { return -1; }
     if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::CondBr), true, msg)) { return -2; }
     if(!testing::expect_eq(sapir::is_terminator(sapir::Opcode::SwitchBr), true, msg)) { return -3; }
@@ -118,7 +118,7 @@ fn i32 terminator_classification(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_int_matrix(arena::Arena* a, u8[] msg) {
+fn i32 cast_int_matrix(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_i32(), types::prim_i8()), (u32)sapir::CastOp::Trunc, msg)) { return -1; }
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_i8(), types::prim_i32()), (u32)sapir::CastOp::SExt, msg)) { return -2; }
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_u8(), types::prim_u32()), (u32)sapir::CastOp::ZExt, msg)) { return -3; }
@@ -128,7 +128,7 @@ fn i32 cast_int_matrix(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 decl_growth(arena::Arena* a, u8[] msg) {
+fn i32 decl_growth(arena::Arena* a, const u8[]msg) {
     sapir::SapirModule* m = sapir::new_module(a, null);
     const u32 count = 40;
     for(u32 entry_index = 0; entry_index < count; entry_index += 1) {
@@ -145,7 +145,7 @@ fn i32 decl_growth(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 inst_and_extra_growth(arena::Arena* a, u8[] msg) {
+fn i32 inst_and_extra_growth(arena::Arena* a, const u8[]msg) {
     sapir::SapirFn func;
     sys::memset(&func, 0, sizeof(sapir::SapirFn));
     const u32 count = 50;
@@ -167,7 +167,7 @@ fn i32 inst_and_extra_growth(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_enum_reduce(arena::Arena* a, u8[] msg) {
+fn i32 cast_enum_reduce(arena::Arena* a, const u8[]msg) {
     ast::AstNode base_node;
     sys::memset(&base_node, 0, sizeof(ast::AstNode));
     base_node.h.ty = (void*)types::prim_u8();
@@ -182,7 +182,7 @@ fn i32 cast_enum_reduce(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_structural(arena::Arena* a, u8[] msg) {
+fn i32 cast_structural(arena::Arena* a, const u8[]msg) {
     types::Ty* int_array = types::intern_array(types::prim_i32(), 4);
     types::Ty* int_slice = types::intern_slice(types::prim_i32());
     types::Ty* int_ptr = types::intern_pointer(types::prim_i32(), false);
@@ -195,7 +195,7 @@ fn i32 cast_structural(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cond_classification(arena::Arena* a, u8[] msg) {
+fn i32 cond_classification(arena::Arena* a, const u8[]msg) {
     types::Ty* int_ptr = types::intern_pointer(types::prim_i32(), false);
     types::Ty* int_slice = types::intern_slice(types::prim_i32());
     types::Ty*[] no_params = {null, 0};
@@ -209,7 +209,7 @@ fn i32 cond_classification(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cast_float_and_ptr(arena::Arena* a, u8[] msg) {
+fn i32 cast_float_and_ptr(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_i32(), types::prim_f64()), (u32)sapir::CastOp::SIToFP, msg)) { return -1; }
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_u32(), types::prim_f32()), (u32)sapir::CastOp::UIToFP, msg)) { return -2; }
     if(!testing::expect_eq((u32)sapir::cast_op(types::prim_f64(), types::prim_i32()), (u32)sapir::CastOp::FPToSI, msg)) { return -3; }
@@ -232,7 +232,7 @@ fn i32 main() {
     setup_arena.default_page_size = 65536;
     types::typer_init(&setup_arena, 64);
 
-    u8[] suite = "Sapir Tests";
+    const u8[] suite = "Sapir Tests";
     testing::add(suite, "module_table",               &module_table);
     testing::add(suite, "inst_encoding",              &inst_encoding);
     testing::add(suite, "block_and_extra",            &block_and_extra);

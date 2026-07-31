@@ -8,6 +8,9 @@ import sys;
 import io;
 import hash;
 
+// The seed cannot parse `const u8[]` as a generic argument, but it can behind an alias.
+alias Bytes = const u8[];
+
 export enum Optimize : u8 {
     Debug,
     Release,
@@ -16,7 +19,7 @@ export enum Optimize : u8 {
 }
 
 export struct Target {
-    u8[] name;   // conditional-compilation infix passed as -target; empty selects the host default
+    const u8[] name;   // conditional-compilation infix passed as -target; empty selects the host default
 }
 
 export enum StepKind : u8 {
@@ -27,8 +30,8 @@ export enum StepKind : u8 {
 
 export struct Step {
     StepKind          kind;
-    u8[]              name;         // Top: the selector; Compile/Run: informational
-    u8[]              description;  // Top: shown in --help
+    const u8[]        name;         // Top: the selector; Compile/Run: informational
+    const u8[]        description;  // Top: shown in --help
     list::List(Step*) deps;
     bool              done;         // executed already; dedups shared subgraphs during make
     bool              queued;       // visited already; dedups shared subgraphs during the compile gather
@@ -37,11 +40,11 @@ export struct Step {
 
 export struct CompileStep {
     Step             step;          // must stay first: &c.step aliases the CompileStep
-    u8[]             artifact_name;
-    u8[]             root_source;
-    list::List(u8[]) import_paths;
-    list::List(u8[]) libs;
-    list::List(u8[]) lib_dirs;
+    const u8[]       artifact_name;
+    const u8[]       root_source;
+    list::List(Bytes) import_paths;
+    list::List(Bytes) libs;
+    list::List(Bytes) lib_dirs;
     Target           target;
     Optimize         optimize;
     bool             installed;
@@ -56,20 +59,20 @@ export struct RunStep {
 }
 
 struct OptionInfo {
-    u8[] name;
-    u8[] description;
-    u8[] kind;      // "bool" | "string" | "enum"
+    const u8[] name;
+    const u8[] description;
+    const u8[] kind;      // "bool" | "string" | "enum"
 }
 
 struct CliArg {
-    u8[] key;
-    u8[] value;
+    const u8[] key;
+    const u8[] value;
     bool has_value;
 }
 
 export struct Build {
     mem::Allocator         allocator;
-    u8[]                   compiler_path;    // resolved from $SAPLANGC; the exe compile steps spawn
+    const u8[]             compiler_path;    // resolved from $SAPLANGC; the exe compile steps spawn
     Step*                  install_step;     // default top step; install_artifact hangs deps off it
     list::List(Step*)      top_steps;
     list::List(OptionInfo) options;          // declared via standard_*_options / option_*, for --help
@@ -89,7 +92,7 @@ export fn Build* new_build(arena::Arena* a) {
     return b;
 }
 
-export fn Step* step(Build* b, u8[] name, u8[] description) {
+export fn Step* step(Build* b, const u8[] name, const u8[] description) {
     Step* s = (Step*)mem::alloc(b.allocator, sizeof(Step));
     sys::memset(s, 0, sizeof(Step));
     s.kind = StepKind::Top;
@@ -104,7 +107,7 @@ export fn void depend_on(Step* s, Step* dep) {
     list::push(&s.deps, s.allocator, dep);
 }
 
-export fn CompileStep* add_executable(Build* b, u8[] name, u8[] root_source) {
+export fn CompileStep* add_executable(Build* b, const u8[] name, const u8[] root_source) {
     CompileStep* c = (CompileStep*)mem::alloc(b.allocator, sizeof(CompileStep));
     sys::memset(c, 0, sizeof(CompileStep));
     c.step.kind = StepKind::Compile;
@@ -118,15 +121,15 @@ export fn CompileStep* add_executable(Build* b, u8[] name, u8[] root_source) {
     return c;
 }
 
-export fn void add_import_path(CompileStep* c, u8[] path) {
+export fn void add_import_path(CompileStep* c, const u8[] path) {
     list::push(&c.import_paths, c.owner.allocator, path);
 }
 
-export fn void link_lib(CompileStep* c, u8[] name) {
+export fn void link_lib(CompileStep* c, const u8[] name) {
     list::push(&c.libs, c.owner.allocator, name);
 }
 
-export fn void link_lib_dir(CompileStep* c, u8[] path) {
+export fn void link_lib_dir(CompileStep* c, const u8[] path) {
     list::push(&c.lib_dirs, c.owner.allocator, path);
 }
 
@@ -161,7 +164,7 @@ export fn void run_arg(RunStep* r, u8[] arg) {
 
 // ---- options ----
 
-fn void declare_option(Build* b, u8[] name, u8[] description, u8[] kind) {
+fn void declare_option(Build* b, const u8[] name, const u8[] description, const u8[] kind) {
     OptionInfo o;
     o.name = name;
     o.description = description;
@@ -170,7 +173,7 @@ fn void declare_option(Build* b, u8[] name, u8[] description, u8[] kind) {
 }
 
 // Records a parsed CLI override; the runner calls this while scanning argv.
-export fn void define(Build* b, u8[] key, u8[] value, bool has_value) {
+export fn void define(Build* b, const u8[] key, const u8[] value, bool has_value) {
     CliArg a;
     a.key = key;
     a.value = value;
@@ -178,7 +181,7 @@ export fn void define(Build* b, u8[] key, u8[] value, bool has_value) {
     list::push(&b.cli_args, b.allocator, a);
 }
 
-fn CliArg* find_cli(Build* b, u8[] key) {
+fn CliArg* find_cli(Build* b, const u8[] key) {
     for(u64 arg_index = 0; arg_index < b.cli_args.len; arg_index += 1) {
         if(slice_eq(b.cli_args.ptr[arg_index].key, key)) { return &b.cli_args.ptr[arg_index]; }
     }
@@ -204,7 +207,7 @@ export fn Target standard_target_options(Build* b) {
     return t;
 }
 
-export fn bool option_bool(Build* b, u8[] name, u8[] description) {
+export fn bool option_bool(Build* b, const u8[] name, const u8[] description) {
     declare_option(b, name, description, "bool");
     CliArg* a = find_cli(b, name);
     if(a == null) { return false; }
@@ -212,14 +215,14 @@ export fn bool option_bool(Build* b, u8[] name, u8[] description) {
     return slice_eq(a.value, "true") || slice_eq(a.value, "1");
 }
 
-export fn u8[] option_string(Build* b, u8[] name, u8[] description) {
+export fn const u8[] option_string(Build* b, const u8[] name, const u8[] description) {
     declare_option(b, name, description, "string");
     CliArg* a = find_cli(b, name);
     if(a != null && a.has_value) { return a.value; }
     return empty_slice();
 }
 
-fn Optimize parse_optimize(u8[] name) {
+fn Optimize parse_optimize(const u8[] name) {
     if(slice_eq(name, "Debug"))            { return Optimize::Debug; }
     if(slice_eq(name, "Release"))          { return Optimize::Release; }
     if(slice_eq(name, "ReleaseDebug"))     { return Optimize::ReleaseDebug; }
@@ -228,7 +231,7 @@ fn Optimize parse_optimize(u8[] name) {
     return Optimize::Debug;
 }
 
-fn u8[] optimize_name(Optimize o) {
+fn const u8[] optimize_name(Optimize o) {
     switch(o) {
     case Optimize::Debug:            { return "Debug"; }
     case Optimize::Release:          { return "Release"; }
@@ -261,7 +264,7 @@ fn void ensure_output_dir(Build* b, CompileStep* c) {
 // command flags plus the contents of every source the last compile actually read (the `-deps`
 // depfile). Editing the root or any imported module changes that hash and forces a rebuild.
 
-fn u8[] cache_sidecar(Build* b, u8[] name, u8[] ext) {
+fn u8[] cache_sidecar(Build* b, const u8[] name, const u8[] ext) {
     io::OutBuf buf;
     io::outbuf_init(&buf, b.allocator, 32);
     io::outbuf_write(&buf, ".sap-cache/");
@@ -270,7 +273,7 @@ fn u8[] cache_sidecar(Build* b, u8[] name, u8[] ext) {
     return io::outbuf_bytes(&buf);
 }
 
-fn bool file_exists(u8[] path) {
+fn bool file_exists(const u8[] path) {
     io::File f = io::open(path, "r");
     if(f.fp == null) { return false; }
     io::close(&f);
@@ -279,7 +282,7 @@ fn bool file_exists(u8[] path) {
 
 // The stamp for the current on-disk inputs, or empty if the depfile is missing or a listed
 // source has since vanished (either case means "not fresh, must rebuild").
-fn u8[] compute_stamp(Build* b, CompileStep* c) {
+fn const u8[] compute_stamp(Build* b, CompileStep* c) {
     io::File df = io::open(cache_sidecar(b, c.artifact_name, ".dep"), "r");
     if(df.fp == null) { return empty_slice(); }
     u8[] listing = io::read_all(&df, b.allocator);
@@ -309,19 +312,19 @@ fn u8[] compute_stamp(Build* b, CompileStep* c) {
     return io::outbuf_bytes(&hb);
 }
 
-fn bool is_fresh(Build* b, CompileStep* c, u8[] out) {
+fn bool is_fresh(Build* b, CompileStep* c, const u8[] out) {
     if(!file_exists(out)) { return false; }
     io::File sf = io::open(cache_sidecar(b, c.artifact_name, ".stamp"), "r");
     if(sf.fp == null) { return false; }
     u8[] stored = io::read_all(&sf, b.allocator);
     io::close(&sf);
-    u8[] current = compute_stamp(b, c);
+    const u8[] current = compute_stamp(b, c);
     if(current.len == 0) { return false; }
     return slice_eq(stored, current);
 }
 
 fn void write_stamp(Build* b, CompileStep* c) {
-    u8[] current = compute_stamp(b, c);
+    const u8[] current = compute_stamp(b, c);
     if(current.len == 0) { return; }
     io::File f = io::open(cache_sidecar(b, c.artifact_name, ".stamp"), "w");
     if(f.fp == null) { return; }
@@ -557,7 +560,7 @@ fn i32 fork_compile(Build* b, CompileStep* c, u8[] out) {
     return pid;
 }
 
-export fn Step* resolve_step(Build* b, u8[] name) {
+export fn Step* resolve_step(Build* b, const u8[] name) {
     for(u64 step_index = 0; step_index < b.top_steps.len; step_index += 1) {
         if(slice_eq(b.top_steps.ptr[step_index].name, name)) { return b.top_steps.ptr[step_index]; }
     }
@@ -624,7 +627,7 @@ fn void print_help(Build* b) {
 
 // ---- small helpers ----
 
-fn void parse_define_arg(Build* b, u8[] arg) {
+fn void parse_define_arg(Build* b, const u8[] arg) {
     u8[] body = {&arg.ptr[2], arg.len - 2};   // strip -D
     u64 eq = body.len;
     for(u64 char_index = 0; char_index < body.len; char_index += 1) {
@@ -639,7 +642,7 @@ fn void parse_define_arg(Build* b, u8[] arg) {
     define(b, key, value, true);
 }
 
-fn u8[] resolve_compiler_path(mem::Allocator a) {
+fn const u8[] resolve_compiler_path(mem::Allocator a) {
     i8* raw = sys::getenv(cstr(a, "SAPLANGC"));
     if(raw == null) { return "saplangc"; }
     return cstr_slice((u8*)raw);
@@ -658,7 +661,7 @@ fn i32 spawn_and_wait(i8** argv) {
     return (status >> 8) & 255;
 }
 
-fn u8[] join_semicolons(mem::Allocator a, list::List(u8[])* parts) {
+fn u8[] join_semicolons(mem::Allocator a, list::List(Bytes)* parts) {
     io::OutBuf buf;
     io::outbuf_init(&buf, a, 64);
     for(u64 part_index = 0; part_index < parts.len; part_index += 1) {
@@ -668,7 +671,7 @@ fn u8[] join_semicolons(mem::Allocator a, list::List(u8[])* parts) {
     return io::outbuf_bytes(&buf);
 }
 
-fn u8[] join(mem::Allocator a, u8[] prefix, u8[] name) {
+fn u8[] join(mem::Allocator a, const u8[] prefix, const u8[] name) {
     io::OutBuf buf;
     io::outbuf_init(&buf, a, prefix.len + name.len + 1);
     io::outbuf_write(&buf, prefix);
@@ -676,7 +679,7 @@ fn u8[] join(mem::Allocator a, u8[] prefix, u8[] name) {
     return io::outbuf_bytes(&buf);
 }
 
-fn i8* cstr(mem::Allocator a, u8[] bytes) {
+fn i8* cstr(mem::Allocator a, const u8[] bytes) {
     i8* out = (i8*)mem::alloc(a, bytes.len + 1);
     for(u64 char_index = 0; char_index < bytes.len; char_index += 1) { out[char_index] = (i8)bytes[char_index]; }
     out[bytes.len] = 0;
@@ -690,12 +693,12 @@ fn u8[] cstr_slice(u8* s) {
     return out;
 }
 
-fn u8[] empty_slice() {
+fn const u8[] empty_slice() {
     u8[] e = {null, 0};
     return e;
 }
 
-fn bool slice_eq(u8[] a, u8[] b) {
+fn bool slice_eq(const u8[] a, const u8[] b) {
     if(a.len != b.len) { return false; }
     for(u64 char_index = 0; char_index < a.len; char_index += 1) {
         if(a[char_index] != b[char_index]) { return false; }
@@ -703,7 +706,7 @@ fn bool slice_eq(u8[] a, u8[] b) {
     return true;
 }
 
-fn bool starts_with(u8[] s, u8[] prefix) {
+fn bool starts_with(const u8[] s, const u8[] prefix) {
     if(prefix.len > s.len) { return false; }
     for(u64 char_index = 0; char_index < prefix.len; char_index += 1) {
         if(s[char_index] != prefix[char_index]) { return false; }

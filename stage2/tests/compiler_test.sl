@@ -27,7 +27,7 @@ fn void boot(arena::Arena* a) {
     token::load_keywords();
 }
 
-fn module::Module* mk_source_module(arena::Arena* a, u8[] name, u8[] src) {
+fn module::Module* mk_source_module(arena::Arena* a, const u8[]name, const u8[] src) {
     module::Module* m = (module::Module*)arena::alloc(a, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
     module::set_arena(m, sub_arena(a));
@@ -42,7 +42,7 @@ fn void wire_imports(arena::Arena* a, module::Module* m, module::Module* dep) {
     m.imports = {imps, 1};
 }
 
-fn i32 cross_module_generic_call(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_generic_call(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "export fn T id(comptime Type T, T x) { return x; }");
@@ -60,7 +60,7 @@ fn i32 cross_module_generic_call(arena::Arena* a, u8[] msg) {
 // A generic in `b` whose body uses b's own private type resolves that type against b (its defining module),
 // not the caller `a`, when monomorphized — the clone re-check uses the defining module's scope.
 // A type constructor is interned process-wide, so the same instantiation is one type in both modules.
-fn i32 cross_module_generic_type_identity(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_generic_type_identity(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "fn Type Box(comptime Type T) { return struct { T value; }; }\nexport alias BoxI32 = Box(i32);\nexport fn i32 unwrap(BoxI32 x) { return x.value; }");
@@ -74,7 +74,7 @@ fn i32 cross_module_generic_type_identity(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cross_module_generic_uses_home_type(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_generic_uses_home_type(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "struct Helper { i32 v; }\nexport fn T wrap(comptime Type T, T x) { Helper h; return x; }");
@@ -91,7 +91,7 @@ fn i32 cross_module_generic_uses_home_type(arena::Arena* a, u8[] msg) {
 
 // A comprun in module `a` calls `b::dbl(5)` at comptime; the callee is body-checked on demand in module b.
 // Positive: condition is false, so no comperror — proves the cross-module call evaluated without error.
-fn i32 cross_module_comptime_call_ok(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_comptime_call_ok(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "export fn i32 dbl(i32 n) { return n * 2; }");
@@ -106,7 +106,7 @@ fn i32 cross_module_comptime_call_ok(arena::Arena* a, u8[] msg) {
 }
 
 // Negative: condition is true (b::dbl(5) == 10), so the comperror fires — pins the returned comptime value.
-fn i32 cross_module_comptime_call_err(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_comptime_call_err(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "export fn i32 dbl(i32 n) { return n * 2; }");
@@ -121,7 +121,7 @@ fn i32 cross_module_comptime_call_err(arena::Arena* a, u8[] msg) {
 }
 
 // A comprun in module `a` reads a const exported by module `b` at comptime.
-fn i32 cross_module_const_read_ok(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_const_read_ok(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "export const i32 K = 9;");
@@ -135,7 +135,7 @@ fn i32 cross_module_const_read_ok(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cross_module_const_read_err(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_const_read_err(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "export const i32 K = 9;");
@@ -149,7 +149,7 @@ fn i32 cross_module_const_read_err(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 generic_call_frontend(arena::Arena* a, u8[] msg) {
+fn i32 generic_call_frontend(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     compiler::add_module(c, mk_source_module(a, "main", "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 main() { return id(5); }"));
@@ -159,7 +159,7 @@ fn i32 generic_call_frontend(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 generic_template_frontend(arena::Arena* a, u8[] msg) {
+fn i32 generic_template_frontend(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     compiler::add_module(c, mk_source_module(a, "main", "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 main() { return 0; }"));
@@ -169,7 +169,7 @@ fn i32 generic_template_frontend(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 single_module_ok(arena::Arena* a, u8[] msg) {
+fn i32 single_module_ok(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     compiler::add_module(c, mk_source_module(a, "main", "export fn i32 main() { return 0; }"));
@@ -179,7 +179,7 @@ fn i32 single_module_ok(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cross_module_ok(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_ok(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "export fn i32 foo() { return 5; }");
@@ -193,7 +193,7 @@ fn i32 cross_module_ok(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cross_module_overload(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_overload(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "export fn i32 pick(i32 x) { return x; }\nexport fn i32 pick(f32 x) { return 0; }");
@@ -207,7 +207,7 @@ fn i32 cross_module_overload(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 circular_imports_ok(arena::Arena* a, u8[] msg) {
+fn i32 circular_imports_ok(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 fa() { return b::fb(); }");
@@ -222,7 +222,7 @@ fn i32 circular_imports_ok(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 sema_error_bails(arena::Arena* a, u8[] msg) {
+fn i32 sema_error_bails(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     compiler::add_module(c, mk_source_module(a, "main", "export fn i32 main() { return undefined_thing; }"));
@@ -232,7 +232,7 @@ fn i32 sema_error_bails(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 cross_module_missing_export_errors(arena::Arena* a, u8[] msg) {
+fn i32 cross_module_missing_export_errors(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* b = mk_source_module(a, "b", "fn i32 hidden() { return 5; }");
@@ -246,7 +246,7 @@ fn i32 cross_module_missing_export_errors(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 parse_error_bails(arena::Arena* a, u8[] msg) {
+fn i32 parse_error_bails(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     compiler::add_module(c, mk_source_module(a, "main", "export fn i32 main() { return 1 + }"));
@@ -256,7 +256,7 @@ fn i32 parse_error_bails(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 drain_warning_not_counted(arena::Arena* a, u8[] msg) {
+fn i32 drain_warning_not_counted(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* m = mk_source_module(a, "main", "");
@@ -270,7 +270,7 @@ fn i32 drain_warning_not_counted(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 add_module_grows(arena::Arena* a, u8[] msg) {
+fn i32 add_module_grows(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     for(u64 i = 0; i < 10; i += 1) {
@@ -282,13 +282,13 @@ fn i32 add_module_grows(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn void write_file(u8[] path, u8[] content) {
+fn void write_file(const u8[] path, const u8[] content) {
     io::File f = io::open(path, "w");
     io::write_string(&f, content);
     io::close(&f);
 }
 
-fn i32 discover_multi(arena::Arena* a, u8[] msg) {
+fn i32 discover_multi(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdhelp.sl", "export fn i32 foo() { return 5; }");
     write_file("/tmp/sdmain.sl", "import sdhelp;\nexport fn i32 use() { return sdhelp::foo(); }");
@@ -306,7 +306,7 @@ fn i32 discover_multi(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 discover_transitive(arena::Arena* a, u8[] msg) {
+fn i32 discover_transitive(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdb.sl", "export fn i32 b() { return 1; }");
     write_file("/tmp/sda.sl", "import sdb;\nexport fn i32 a() { return sdb::b(); }");
@@ -324,7 +324,7 @@ fn i32 discover_transitive(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 discover_dedups_shared_import(arena::Arena* a, u8[] msg) {
+fn i32 discover_dedups_shared_import(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdb2.sl", "export fn i32 b() { return 1; }");
     write_file("/tmp/sda2.sl", "import sdb2;\nexport fn i32 a() { return sdb2::b(); }");
@@ -341,7 +341,7 @@ fn i32 discover_dedups_shared_import(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 discover_sets_path_and_line_col(arena::Arena* a, u8[] msg) {
+fn i32 discover_sets_path_and_line_col(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdpos.sl", "export fn i32 f() {\n    return 0;\n}");
     compiler::Compiler* c = compiler::new(a);
@@ -362,7 +362,7 @@ fn i32 discover_sets_path_and_line_col(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 discover_missing_reports(arena::Arena* a, u8[] msg) {
+fn i32 discover_missing_reports(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdmain5.sl", "import sdnope;\nexport fn i32 main() { return 0; }");
     compiler::Compiler* c = compiler::new(a);
@@ -377,7 +377,7 @@ fn i32 discover_missing_reports(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 discover_single_no_imports(arena::Arena* a, u8[] msg) {
+fn i32 discover_single_no_imports(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdsingle.sl", "export fn i32 main() { return 0; }");
     compiler::Compiler* c = compiler::new(a);
@@ -391,7 +391,7 @@ fn i32 discover_single_no_imports(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 discover_missing_entry_reports(arena::Arena* a, u8[] msg) {
+fn i32 discover_missing_entry_reports(arena::Arena* a, const u8[]msg) {
     boot(a);
     io::unlink("/tmp/sd_nonexistent_xyz.sl");
     compiler::Compiler* c = compiler::new(a);
@@ -404,7 +404,7 @@ fn i32 discover_missing_entry_reports(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 discover_conditional_compilation(arena::Arena* a, u8[] msg) {
+fn i32 discover_conditional_compilation(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdcc.sl", "export fn i32 x() { return 1; }");
     write_file("/tmp/sdcc.linux.sl", "export fn i32 x() { return 2; }");
@@ -423,7 +423,7 @@ fn i32 discover_conditional_compilation(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 discover_target_fallback(arena::Arena* a, u8[] msg) {
+fn i32 discover_target_fallback(arena::Arena* a, const u8[]msg) {
     boot(a);
     io::unlink("/tmp/sdfb.linux.sl");
     write_file("/tmp/sdfb.sl", "export fn i32 y() { return 7; }");
@@ -441,7 +441,7 @@ fn i32 discover_target_fallback(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 multithreaded_frontend(arena::Arena* a, u8[] msg) {
+fn i32 multithreaded_frontend(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     compiler::set_multithreaded(c, true);
@@ -456,7 +456,7 @@ fn i32 multithreaded_frontend(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 multithreaded_circular_stress(arena::Arena* a, u8[] msg) {
+fn i32 multithreaded_circular_stress(arena::Arena* a, const u8[]msg) {
     boot(a);
     for(u64 iter = 0; iter < 20; iter += 1) {
         compiler::Compiler* c = compiler::new(a);
@@ -473,7 +473,7 @@ fn i32 multithreaded_circular_stress(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 multithreaded_error_bails(arena::Arena* a, u8[] msg) {
+fn i32 multithreaded_error_bails(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     compiler::set_multithreaded(c, true);
@@ -484,7 +484,7 @@ fn i32 multithreaded_error_bails(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 run_file_ok(arena::Arena* a, u8[] msg) {
+fn i32 run_file_ok(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdrun_helper.sl", "export fn i32 foo() { return 5; }");
     write_file("/tmp/sdrun_main.sl", "import sdrun_helper;\nexport fn i32 main() { return sdrun_helper::foo(); }");
@@ -499,7 +499,7 @@ fn i32 run_file_ok(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 run_file_missing_import(arena::Arena* a, u8[] msg) {
+fn i32 run_file_missing_import(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdrun_bad.sl", "import sdrun_nope;\nexport fn i32 main() { return 0; }");
     compiler::Compiler* c = compiler::new(a);
@@ -512,7 +512,7 @@ fn i32 run_file_missing_import(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 run_file_sema_error(arena::Arena* a, u8[] msg) {
+fn i32 run_file_sema_error(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdrun_se.sl", "export fn i32 main() { return undefined_thing; }");
     compiler::Compiler* c = compiler::new(a);
@@ -525,7 +525,7 @@ fn i32 run_file_sema_error(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn i32 no_double_scan(arena::Arena* a, u8[] msg) {
+fn i32 no_double_scan(arena::Arena* a, const u8[]msg) {
     boot(a);
     write_file("/tmp/sdds_helper.sl", "export fn i32 foo() { return 5; }");
     write_file("/tmp/sdds_main.sl", "import sdds_helper;\nexport fn i32 main() { return sdds_helper::foo(); }");
@@ -543,17 +543,15 @@ fn i32 no_double_scan(arena::Arena* a, u8[] msg) {
     return result;
 }
 
-fn u8[][] mk_args(arena::Arena* a, u64 count) {
-    u8[][] args = {null, 0};
-    args.len = count;
-    args.ptr = arena::alloc(a, count * sizeof(u8[]));
+fn const u8[][] mk_args(arena::Arena* a, u64 count) {
+    const u8[][] args = {arena::alloc(a, count * sizeof(const u8[])), count};
     return args;
 }
 
-fn i32 argv_full(arena::Arena* a, u8[] msg) {
+fn i32 argv_full(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 6);
+    const u8[][] args = mk_args(a, 6);
     args[0] = "main.sl";
     args[1] = "-i";
     args[2] = "/tmp;/usr/lib";
@@ -571,10 +569,10 @@ fn i32 argv_full(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 argv_compile_only(arena::Arena* a, u8[] msg) {
+fn i32 argv_compile_only(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 2);
+    const u8[][] args = mk_args(a, 2);
     args[0] = "main.sl";
     args[1] = "-c";
     if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
@@ -582,10 +580,10 @@ fn i32 argv_compile_only(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 argv_dump_flags(arena::Arena* a, u8[] msg) {
+fn i32 argv_dump_flags(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 5);
+    const u8[][] args = mk_args(a, 5);
     args[0] = "main.sl";
     args[1] = "-token-dump";
     args[2] = "-ast-dump";
@@ -601,10 +599,10 @@ fn i32 argv_dump_flags(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 argv_link_config(arena::Arena* a, u8[] msg) {
+fn i32 argv_link_config(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 3);
+    const u8[][] args = mk_args(a, 3);
     args[0] = "main.sl";
     args[1] = "-link-config";
     args[2] = "paths.cfg";
@@ -614,7 +612,7 @@ fn i32 argv_link_config(arena::Arena* a, u8[] msg) {
 }
 
 // key=value lines override probed paths; comments and unknown keys are ignored.
-fn i32 link_config_override(arena::Arena* a, u8[] msg) {
+fn i32 link_config_override(arena::Arena* a, const u8[]msg) {
     io::File f = io::open("lp_test.cfg", "w");
     if(!testing::expect_true(f.fp != null, msg)) { return -1; }
     io::write_string(&f, "# comment
@@ -641,10 +639,10 @@ fn u8[] cstr_slice(u8* raw) {
     return out;
 }
 
-fn i32 argv_comptime_limits(arena::Arena* a, u8[] msg) {
+fn i32 argv_comptime_limits(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 5);
+    const u8[][] args = mk_args(a, 5);
     args[0] = "main.sl";
     args[1] = "-comptime-depth";
     args[2] = "64";
@@ -656,10 +654,10 @@ fn i32 argv_comptime_limits(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 argv_lib_dirs_and_libs(arena::Arena* a, u8[] msg) {
+fn i32 argv_lib_dirs_and_libs(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 5);
+    const u8[][] args = mk_args(a, 5);
     args[0] = "main.sl";
     args[1] = "-L";
     args[2] = "/opt/lib";
@@ -673,35 +671,35 @@ fn i32 argv_lib_dirs_and_libs(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 argv_dangling_L_fails(arena::Arena* a, u8[] msg) {
+fn i32 argv_dangling_L_fails(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 1);
+    const u8[][] args = mk_args(a, 1);
     args[0] = "-L";
     if(!testing::expect_true(!compiler::parse_argv(c, args), msg)) { return -1; }
     return 0;
 }
 
-fn i32 argv_unknown_fails(arena::Arena* a, u8[] msg) {
+fn i32 argv_unknown_fails(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 1);
+    const u8[][] args = mk_args(a, 1);
     args[0] = "--nonsense";
     if(!testing::expect_true(!compiler::parse_argv(c, args), msg)) { return -1; }
     return 0;
 }
 
-fn i32 argv_dangling_flag_fails(arena::Arena* a, u8[] msg) {
+fn i32 argv_dangling_flag_fails(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 1);
+    const u8[][] args = mk_args(a, 1);
     args[0] = "-i";
     if(!testing::expect_true(!compiler::parse_argv(c, args), msg)) { return -1; }
     return 0;
 }
 
 // E2E: run the real driver pipeline (discover-less, in-memory) through lowering and pin the sapir.
-fn i32 e2e_lower_single_fn(arena::Arena* a, u8[] msg) {
+fn i32 e2e_lower_single_fn(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* m = mk_source_module(a, "prog", "fn i32 add(i32 x, i32 y) { return x + y; }");
@@ -729,7 +727,7 @@ fn i32 e2e_lower_single_fn(arena::Arena* a, u8[] msg) {
 }
 
 // Each module lowers independently and mangles with its own module name.
-fn i32 e2e_lower_multi_module(arena::Arena* a, u8[] msg) {
+fn i32 e2e_lower_multi_module(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* dep = mk_source_module(a, "b", "export fn i32 helper() { return 7; }");
@@ -759,7 +757,7 @@ fn i32 e2e_lower_multi_module(arena::Arena* a, u8[] msg) {
 }
 
 // E2E: a call into an imported module resolves to a Foreign decl mangled off the callee's home module.
-fn i32 e2e_lower_cross_module_call(arena::Arena* a, u8[] msg) {
+fn i32 e2e_lower_cross_module_call(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* dep = mk_source_module(a, "b", "export fn i32 helper() { return 7; }");
@@ -788,7 +786,7 @@ fn i32 e2e_lower_cross_module_call(arena::Arena* a, u8[] msg) {
 }
 
 // E2E: source -> codegen -> ld.lld link -> run the produced executable, checking its exit code.
-fn i32 e2e_compile_link_run(arena::Arena* a, u8[] msg) {
+fn i32 e2e_compile_link_run(arena::Arena* a, const u8[]msg) {
     boot(a);
     arena::Arena* ca = sub_arena(a);
     compiler::Compiler* c = compiler::new(ca);
@@ -802,7 +800,7 @@ fn i32 e2e_compile_link_run(arena::Arena* a, u8[] msg) {
 }
 
 // E2E: a -L dir reaches the linker (build_link_argv emits -L<path>) and the program still links + runs.
-fn i32 e2e_lib_dir_flag(arena::Arena* a, u8[] msg) {
+fn i32 e2e_lib_dir_flag(arena::Arena* a, const u8[]msg) {
     boot(a);
     arena::Arena* ca = sub_arena(a);
     compiler::Compiler* c = compiler::new(ca);
@@ -817,7 +815,7 @@ fn i32 e2e_lib_dir_flag(arena::Arena* a, u8[] msg) {
 }
 
 // E2E: a -config Release build runs the -O2 pipeline and still produces a correct executable.
-fn i32 e2e_release_build(arena::Arena* a, u8[] msg) {
+fn i32 e2e_release_build(arena::Arena* a, const u8[]msg) {
     boot(a);
     arena::Arena* ca = sub_arena(a);
     compiler::Compiler* c = compiler::new(ca);
@@ -832,7 +830,7 @@ fn i32 e2e_release_build(arena::Arena* a, u8[] msg) {
 }
 
 // E2E: a -config AddressSanitizer build instruments, links the asan runtime, and a clean program still runs.
-fn i32 e2e_asan_build(arena::Arena* a, u8[] msg) {
+fn i32 e2e_asan_build(arena::Arena* a, const u8[]msg) {
     boot(a);
     arena::Arena* ca = sub_arena(a);
     compiler::Compiler* c = compiler::new(ca);
@@ -847,7 +845,7 @@ fn i32 e2e_asan_build(arena::Arena* a, u8[] msg) {
 }
 
 // E2E: two modules with a cross-module call -> two object files -> ld.lld -> run.
-fn i32 e2e_link_multi_module(arena::Arena* a, u8[] msg) {
+fn i32 e2e_link_multi_module(arena::Arena* a, const u8[]msg) {
     boot(a);
     arena::Arena* ca = sub_arena(a);
     compiler::Compiler* c = compiler::new(ca);
@@ -864,7 +862,7 @@ fn i32 e2e_link_multi_module(arena::Arena* a, u8[] msg) {
 }
 
 // E2E: an unresolved extern makes ld.lld fail; the backend surfaces a non-zero result rather than a bad binary.
-fn i32 e2e_link_failure_reported(arena::Arena* a, u8[] msg) {
+fn i32 e2e_link_failure_reported(arena::Arena* a, const u8[]msg) {
     boot(a);
     arena::Arena* ca = sub_arena(a);
     compiler::Compiler* c = compiler::new(ca);
@@ -877,7 +875,7 @@ fn i32 e2e_link_failure_reported(arena::Arena* a, u8[] msg) {
 }
 
 // A generic template is skipped by lowering (only monomorphized clones are emitted).
-fn i32 e2e_generic_template_skipped(arena::Arena* a, u8[] msg) {
+fn i32 e2e_generic_template_skipped(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* m = mk_source_module(a, "g", "export fn T id(comptime Type T, T x) { return x; }");
@@ -890,7 +888,7 @@ fn i32 e2e_generic_template_skipped(arena::Arena* a, u8[] msg) {
 }
 
 // E2E: control flow lowered through the real driver produces the expected phi'd sapir.
-fn i32 e2e_lower_control_flow(arena::Arena* a, u8[] msg) {
+fn i32 e2e_lower_control_flow(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* m = mk_source_module(a, "prog", "fn i32 f(bool c) { i32 x = 0; if(c) { x = 1; } else { x = 2; } return x; }");
@@ -926,7 +924,7 @@ fn i32 e2e_lower_control_flow(arena::Arena* a, u8[] msg) {
 }
 
 // A while loop lowered through the driver leaves a well-formed sapir module.
-fn i32 e2e_lower_loop(arena::Arena* a, u8[] msg) {
+fn i32 e2e_lower_loop(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* m = mk_source_module(a, "prog", "fn i32 f(i32 n) { i32 i = 0; while(i < n) { i = i + 1; } return i; }");
@@ -940,7 +938,7 @@ fn i32 e2e_lower_loop(arena::Arena* a, u8[] msg) {
 
 // The driver fails (rc != 0, error counted) on a not-yet-supported global reference.
 // E2E: a const global reads back through a GlobalAddr/Load, and the global itself is emitted, via the driver.
-fn i32 e2e_lower_global_ref(arena::Arena* a, u8[] msg) {
+fn i32 e2e_lower_global_ref(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* m = mk_source_module(a, "prog", "const i32 LIMIT = 10; fn i32 f() { return LIMIT; }");
@@ -968,7 +966,7 @@ fn i32 e2e_lower_global_ref(arena::Arena* a, u8[] msg) {
 }
 
 // E2E: a struct-through-pointer store lowers to alloca-free FieldAddr/Store through the driver.
-fn i32 e2e_lower_struct(arena::Arena* a, u8[] msg) {
+fn i32 e2e_lower_struct(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
     module::Module* m = mk_source_module(a, "prog", "struct P { i32 x; } fn void f(P* p) { p.x = 8; }");
@@ -994,10 +992,10 @@ fn i32 e2e_lower_struct(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 argv_sapir_dump(arena::Arena* a, u8[] msg) {
+fn i32 argv_sapir_dump(arena::Arena* a, const u8[]msg) {
     boot(a);
     compiler::Compiler* c = compiler::new(a);
-    u8[][] args = mk_args(a, 2);
+    const u8[][] args = mk_args(a, 2);
     args[0] = "main.sl";
     args[1] = "-sapir-dump";
     if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
@@ -1008,7 +1006,7 @@ fn i32 argv_sapir_dump(arena::Arena* a, u8[] msg) {
 fn i32 main() {
     testing::init();
 
-    u8[] fe = "Compiler Frontend Tests";
+    const u8[] fe = "Compiler Frontend Tests";
     testing::add(fe, "single_module_ok",       &single_module_ok);
     testing::add(fe, "generic_template_frontend", &generic_template_frontend);
     testing::add(fe, "generic_call_frontend",    &generic_call_frontend);
@@ -1031,7 +1029,7 @@ fn i32 main() {
     testing::add(fe, "multithreaded_circular_stress", &multithreaded_circular_stress);
     testing::add(fe, "multithreaded_error_bails", &multithreaded_error_bails);
 
-    u8[] dv = "Compiler Discovery Tests";
+    const u8[] dv = "Compiler Discovery Tests";
     testing::add(dv, "discover_multi",              &discover_multi);
     testing::add(dv, "discover_transitive",         &discover_transitive);
     testing::add(dv, "discover_dedups_shared_import", &discover_dedups_shared_import);
@@ -1042,13 +1040,13 @@ fn i32 main() {
     testing::add(dv, "discover_conditional_compilation", &discover_conditional_compilation);
     testing::add(dv, "discover_target_fallback",     &discover_target_fallback);
 
-    u8[] rn = "Compiler Run Tests";
+    const u8[] rn = "Compiler Run Tests";
     testing::add(rn, "run_file_ok",             &run_file_ok);
     testing::add(rn, "run_file_missing_import", &run_file_missing_import);
     testing::add(rn, "run_file_sema_error",     &run_file_sema_error);
     testing::add(rn, "no_double_scan",          &no_double_scan);
 
-    u8[] av = "Compiler Argv Tests";
+    const u8[] av = "Compiler Argv Tests";
     testing::add(av, "argv_full",               &argv_full);
     testing::add(av, "argv_compile_only",       &argv_compile_only);
     testing::add(av, "argv_dump_flags",         &argv_dump_flags);
@@ -1061,7 +1059,7 @@ fn i32 main() {
     testing::add(av, "argv_dangling_flag_fails", &argv_dangling_flag_fails);
     testing::add(av, "argv_sapir_dump",         &argv_sapir_dump);
 
-    u8[] e2e = "Compiler E2E Lower Tests";
+    const u8[] e2e = "Compiler E2E Lower Tests";
     testing::add(e2e, "e2e_lower_single_fn",         &e2e_lower_single_fn);
     testing::add(e2e, "e2e_lower_multi_module",      &e2e_lower_multi_module);
     testing::add(e2e, "e2e_lower_cross_module_call", &e2e_lower_cross_module_call);

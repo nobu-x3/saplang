@@ -131,7 +131,7 @@ fn void* make_target_machine() {
 }
 
 fn bool run_passes(CG* cg, void* tm) {
-    u8[] pipeline = pipeline_for(cg.config);
+    const u8[] pipeline = pipeline_for(cg.config);
     if(pipeline.len == 0) { return true; }
     void* opts = llvm::LLVMCreatePassBuilderOptions();
     void* err = llvm::LLVMRunPasses(cg.llvm_module, cstr(cg.allocator, pipeline), tm, opts);
@@ -144,7 +144,7 @@ fn bool run_passes(CG* cg, void* tm) {
     return true;
 }
 
-fn u8[] pipeline_for(BuildConfig config) {
+fn const u8[] pipeline_for(BuildConfig config) {
     switch(config) {
     case BuildConfig::Debug:            { return ""; }
     case BuildConfig::Release:          { return "default<O2>"; }
@@ -157,7 +157,7 @@ fn u8[] pipeline_for(BuildConfig config) {
 }
 
 // Builds the module, runs the config's pipeline, and returns its LLVM IR as text; used by tests.
-export fn u8[] codegen_ir_string(sapir::SapirModule* sm, mem::Allocator a, BuildConfig config) {
+export fn const u8[] codegen_ir_string(sapir::SapirModule* sm, mem::Allocator a, BuildConfig config) {
     CG cg;
     cg_init(&cg, sm, a, config);
     if(!build_module(&cg)) { return "<codegen failed>"; }
@@ -249,10 +249,15 @@ fn bool wants_debug_info(BuildConfig config) {
 
 // DEBUG INFO (DWARF) //////////////////////////////////////////////////////////////
 
+// Picked in one call because the seed still reads the leading `const` as freezing the binding.
+fn const u8[] di_source_path(CG* cg) {
+    if(cg.sm.src_path.len > 0) { return cg.sm.src_path; }
+    return interner::symbol_str(cg.sm.name);
+}
+
 fn void debug_info_init(CG* cg) {
     cg.di_builder = llvm::LLVMCreateDIBuilder(cg.llvm_module);
-    u8[] path = cg.sm.src_path;
-    if(path.len == 0) { path = interner::symbol_str(cg.sm.name); }
+    const u8[] path = di_source_path(cg);
     cg.di_file = llvm::LLVMDIBuilderCreateFile(cg.di_builder, cstr(cg.allocator, path), path.len, cstr(cg.allocator, "."), 1);
     bool optimized = cg.config != BuildConfig::Debug;
     i32 opt = 0;
@@ -276,7 +281,7 @@ fn void emit_di_subprogram(CG* cg, sapir::SapirFn* f) {
     u32 col = 0;
     src_pos_to_line_col(cg.sm, f.src_pos, &line, &col);
     u8[] name = interner::symbol_str(f.name);
-    u8[] link_name = cg.sm.decls[f.decl_index].link_name;
+    const u8[] link_name = cg.sm.decls[f.decl_index].link_name;
     i32 opt = 0;
     if(cg.config != BuildConfig::Debug) { opt = 1; }
     void* sp = llvm::LLVMDIBuilderCreateFunction(cg.di_builder, cg.di_file, (const i8*)name.ptr, name.len, (const i8*)link_name.ptr, link_name.len, cg.di_file, line, sub_ty, 0, 1, line, 0, opt);
@@ -306,7 +311,7 @@ fn u8[] sym_str_or_empty(symbol::Symbol* s) {
     return interner::symbol_str(s);
 }
 
-fn void* di_member(CG* cg, u8[] name, types::Ty* ft, u64 offset_bits) {
+fn void* di_member(CG* cg, const u8[] name, types::Ty* ft, u64 offset_bits) {
     u64 fbits = (u64)types::size_of(null, ft) * 8;
     u32 falign = types::align_of(null, ft) * 8;
     return llvm::LLVMDIBuilderCreateMemberType(cg.di_builder, cg.di_file, (const i8*)name.ptr, name.len, cg.di_file, 0, fbits, falign, offset_bits, 0, build_di_type(cg, ft));
@@ -364,11 +369,11 @@ fn void* di_basic_type(CG* cg, types::PrimitiveKind p) {
     case types::PrimitiveKind::BOOL: { bits = 8; enc = llvm::DW_ATE_boolean; }
     else { bits = 32; enc = llvm::DW_ATE_signed; }
     }
-    u8[] name = prim_name(p);
+    const u8[] name = prim_name(p);
     return llvm::LLVMDIBuilderCreateBasicType(cg.di_builder, (const i8*)name.ptr, name.len, bits, enc, 0);
 }
 
-fn u8[] prim_name(types::PrimitiveKind p) {
+fn const u8[] prim_name(types::PrimitiveKind p) {
     switch(p) {
     case types::PrimitiveKind::I8:   { return "i8"; }
     case types::PrimitiveKind::U8:   { return "u8"; }
@@ -517,7 +522,7 @@ fn void declare_decl(CG* cg, u32 index) {
     }
 }
 
-fn void add_sanitize_attr(CG* cg, void* fn_val, u8[] attr_name, u64 name_len) {
+fn void add_sanitize_attr(CG* cg, void* fn_val, const u8[] attr_name, u64 name_len) {
     u32 kind = llvm::LLVMGetEnumAttributeKindForName(cstr(cg.allocator, attr_name), name_len);
     void* attr = llvm::LLVMCreateEnumAttribute(cg.ctx, kind, 0);
     llvm::LLVMAddAttributeAtIndex(fn_val, llvm::AttributeFunctionIndex, attr);
@@ -933,14 +938,14 @@ fn void* emit_const_str(CG* cg, sapir::Inst* inst) {
 
 // HELPERS ////////////////////////////////////////////////////////////////////////////
 
-fn i8* cstr(mem::Allocator a, u8[] bytes) {
+fn i8* cstr(mem::Allocator a, const u8[] bytes) {
     i8* out = (i8*)mem::alloc(a, bytes.len + 1);
     for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
     out[bytes.len] = 0;
     return out;
 }
 
-fn bool slice_eq(u8[] a, u8[] b) {
+fn bool slice_eq(const u8[] a, const u8[] b) {
     if(a.len != b.len) { return false; }
     for(u64 i = 0; i < a.len; i += 1) {
         if(a[i] != b[i]) { return false; }

@@ -8,25 +8,25 @@ import io;
 import arena;
 import sys;
 
-fn u8[] lower_and_print(arena::Arena* a, u8[] src) {
+fn const u8[] lower_and_print(arena::Arena* a, const u8[]src) {
     module::Module* m = test_util::frontend(a, src);
     if(test_util::error_count(m) > 0) { return "<frontend errors>"; }
     sapir::SapirModule* sm = lower::lower_module(m);
     return sapir_print::print_module_to_arena(sm, a);
 }
 
-fn void wl(io::OutBuf* b, u8[] line) {
+fn void wl(io::OutBuf* b, const u8[] line) {
     io::outbuf_write(b, line);
     io::outbuf_write(b, "\n");
 }
 
-fn i32 golden(arena::Arena* a, u8[] src, io::OutBuf* want, u8[] msg) {
+fn i32 golden(arena::Arena* a, const u8[]src, io::OutBuf* want, const u8[] msg) {
     if(!testing::expect_eq(lower_and_print(a, src), io::outbuf_bytes(want), msg)) { return -1; }
     return 0;
 }
 
-fn i32 straight_line_add(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn i32 add(i32 x, i32 y) { i32 z = x + y; return z * 2; }");
+fn i32 straight_line_add(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn i32 add(i32 x, i32 y) { i32 z = x + y; return z * 2; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 512);
     io::outbuf_write(&want, "module main\n\n");
@@ -47,8 +47,8 @@ fn i32 straight_line_add(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 void_empty(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn void nothing() {}");
+fn i32 void_empty(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn void nothing() {}");
     io::OutBuf want;
     io::outbuf_init(&want, a, 256);
     io::outbuf_write(&want, "module main\n\n");
@@ -62,8 +62,8 @@ fn i32 void_empty(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 compound_assign(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn i32 f(i32 x) { x += 5; return x; }");
+fn i32 compound_assign(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn i32 f(i32 x) { x += 5; return x; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 256);
     io::outbuf_write(&want, "module main\n\n");
@@ -82,8 +82,8 @@ fn i32 compound_assign(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 unary_ops(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn i32 f(i32 a) { i32 c = ~a; return -c; }");
+fn i32 unary_ops(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn i32 f(i32 a) { i32 c = ~a; return -c; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 256);
     io::outbuf_write(&want, "module main\n\n");
@@ -102,8 +102,8 @@ fn i32 unary_ops(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 not_and_compare(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn bool f(i32 a, i32 b, bool c) { bool d = a < b; return !c; }");
+fn i32 not_and_compare(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn bool f(i32 a, i32 b, bool c) { bool d = a < b; return !c; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 256);
     io::outbuf_write(&want, "module main\n\n");
@@ -124,8 +124,8 @@ fn i32 not_and_compare(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 bitwise_and_shift(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn i32 f(i32 a, i32 b) { i32 c = a & b; i32 d = c ^ b; i32 e = d << 2; return e >> 1; }");
+fn i32 bitwise_and_shift(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn i32 f(i32 a, i32 b) { i32 c = a & b; i32 d = c ^ b; i32 e = d << 2; return e >> 1; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 512);
     io::outbuf_write(&want, "module main\n\n");
@@ -149,8 +149,8 @@ fn i32 bitwise_and_shift(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 div_and_rem(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn i32 f(i32 a, i32 b) { i32 q = a / b; return q % b; }");
+fn i32 div_and_rem(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn i32 f(i32 a, i32 b) { i32 q = a / b; return q % b; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 256);
     io::outbuf_write(&want, "module main\n\n");
@@ -170,8 +170,8 @@ fn i32 div_and_rem(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 literals_bool_char(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn u8 f() { bool b = true; return 'A'; }");
+fn i32 literals_bool_char(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn u8 f() { bool b = true; return 'A'; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 256);
     io::outbuf_write(&want, "module main\n\n");
@@ -190,8 +190,8 @@ fn i32 literals_bool_char(arena::Arena* a, u8[] msg) {
 }
 
 // main stays unmangled; a plain top-level fn is __main_<name> whether exported or not.
-fn i32 mangling(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "export fn i32 pub(i32 x) { return x; } fn i32 main() { return 0; }");
+fn i32 mangling(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "export fn i32 pub(i32 x) { return x; } fn i32 main() { return 0; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 512);
     io::outbuf_write(&want, "module main\n\n");
@@ -217,8 +217,8 @@ fn i32 mangling(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 if_else_phi(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn i32 f(bool c) { i32 x = 0; if(c) { x = 1; } else { x = 2; } return x; }");
+fn i32 if_else_phi(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn i32 f(bool c) { i32 x = 0; if(c) { x = 1; } else { x = 2; } return x; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 512);
     io::outbuf_write(&want, "module main\n\n");
@@ -245,8 +245,8 @@ fn i32 if_else_phi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 while_loop_phi(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn i32 f(i32 n) { i32 i = 0; while(i < n) { i = i + 1; } return i; }");
+fn i32 while_loop_phi(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn i32 f(i32 n) { i32 i = 0; while(i < n) { i = i + 1; } return i; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 512);
     io::outbuf_write(&want, "module main\n\n");
@@ -274,8 +274,8 @@ fn i32 while_loop_phi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 switch_phi(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn i32 f(i32 x) { i32 r = 0; switch(x) { case 1: { r = 10; } case 2: { r = 20; } else { r = 30; } } return r; }");
+fn i32 switch_phi(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn i32 f(i32 x) { i32 r = 0; switch(x) { case 1: { r = 10; } case 2: { r = 20; } else { r = 30; } } return r; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 512);
     io::outbuf_write(&want, "module main\n\n");
@@ -305,8 +305,8 @@ fn i32 switch_phi(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 short_circuit_and(arena::Arena* a, u8[] msg) {
-    u8[] got = lower_and_print(a, "fn bool f(bool a, bool b) { return a && b; }");
+fn i32 short_circuit_and(arena::Arena* a, const u8[]msg) {
+    const u8[] got = lower_and_print(a, "fn bool f(bool a, bool b) { return a && b; }");
     io::OutBuf want;
     io::outbuf_init(&want, a, 512);
     io::outbuf_write(&want, "module main\n\n");
@@ -330,7 +330,7 @@ fn i32 short_circuit_and(arena::Arena* a, u8[] msg) {
     return 0;
 }
 
-fn i32 for_loop(arena::Arena* a, u8[] msg) {
+fn i32 for_loop(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -362,7 +362,7 @@ fn i32 for_loop(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32 f(i32 n) { i32 s = 0; for(i32 i = 0; i < n; i = i + 1) { s = s + i; } return s; }", &w, msg);
 }
 
-fn i32 or_short_circuit(arena::Arena* a, u8[] msg) {
+fn i32 or_short_circuit(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -385,7 +385,7 @@ fn i32 or_short_circuit(arena::Arena* a, u8[] msg) {
     return golden(a, "fn bool f(bool a, bool b) { return a || b; }", &w, msg);
 }
 
-fn i32 partial_assign(arena::Arena* a, u8[] msg) {
+fn i32 partial_assign(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -410,7 +410,7 @@ fn i32 partial_assign(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32 f(bool c) { i32 x = 0; if(c) { x = 5; } return x; }", &w, msg);
 }
 
-fn i32 nested_if_in_while(arena::Arena* a, u8[] msg) {
+fn i32 nested_if_in_while(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 768);
     wl(&w, "module main"); wl(&w, "");
@@ -449,7 +449,7 @@ fn i32 nested_if_in_while(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32 f(i32 n) { i32 s = 0; i32 i = 0; while(i < n) { if(i > 2) { s = s + i; } i = i + 1; } return s; }", &w, msg);
 }
 
-fn i32 enum_switch(arena::Arena* a, u8[] msg) {
+fn i32 enum_switch(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -478,7 +478,7 @@ fn i32 enum_switch(arena::Arena* a, u8[] msg) {
     return golden(a, "enum E : i32 { A, B, C } fn i32 f(E e) { i32 r = 0; switch(e) { case E::A: { r = 1; } case E::B: { r = 2; } else { r = 9; } } return r; }", &w, msg);
 }
 
-fn i32 global_read(arena::Arena* a, u8[] msg) {
+fn i32 global_read(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -496,7 +496,7 @@ fn i32 global_read(arena::Arena* a, u8[] msg) {
     return golden(a, "const i32 LIMIT = 10; fn i32 f() { return LIMIT; }", &w, msg);
 }
 
-fn i32 global_write(arena::Arena* a, u8[] msg) {
+fn i32 global_write(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -513,7 +513,7 @@ fn i32 global_write(arena::Arena* a, u8[] msg) {
     return golden(a, "i32 g = 0; fn void f() { g = 5; }", &w, msg);
 }
 
-fn i32 addr_of(arena::Arena* a, u8[] msg) {
+fn i32 addr_of(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -534,7 +534,7 @@ fn i32 addr_of(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32 f() { i32 x = 5; i32* p = &x; *p = 9; return x; }", &w, msg);
 }
 
-fn i32 struct_field(arena::Arena* a, u8[] msg) {
+fn i32 struct_field(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 1024);
     wl(&w, "module main"); wl(&w, "");
@@ -565,7 +565,7 @@ fn i32 struct_field(arena::Arena* a, u8[] msg) {
     return golden(a, "struct P { i32 x; i32 y; } fn i32 f() { P p = {.x = 1, .y = 2}; p.y = 7; return p.x + p.y; }", &w, msg);
 }
 
-fn i32 array_index(arena::Arena* a, u8[] msg) {
+fn i32 array_index(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 1024);
     wl(&w, "module main"); wl(&w, "");
@@ -600,7 +600,7 @@ fn i32 array_index(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32 f() { i32[3] arr = [10, 20, 30]; arr[1] = 99; return arr[1]; }", &w, msg);
 }
 
-fn i32 aggregate_copy(arena::Arena* a, u8[] msg) {
+fn i32 aggregate_copy(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -624,7 +624,7 @@ fn i32 aggregate_copy(arena::Arena* a, u8[] msg) {
     return golden(a, "struct P { i32 x; } fn i32 f() { P a = {.x = 5}; P b = a; return b.x; }", &w, msg);
 }
 
-fn i32 struct_param(arena::Arena* a, u8[] msg) {
+fn i32 struct_param(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -647,7 +647,7 @@ fn i32 struct_param(arena::Arena* a, u8[] msg) {
     return golden(a, "struct P { i32 x; i32 y; } fn i32 f(P p) { return p.x + p.y; }", &w, msg);
 }
 
-fn i32 pointer_field(arena::Arena* a, u8[] msg) {
+fn i32 pointer_field(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -664,7 +664,7 @@ fn i32 pointer_field(arena::Arena* a, u8[] msg) {
     return golden(a, "struct P { i32 x; } fn void f(P* p) { p.x = 8; }", &w, msg);
 }
 
-fn i32 chained_field(arena::Arena* a, u8[] msg) {
+fn i32 chained_field(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 768);
     wl(&w, "module main"); wl(&w, "");
@@ -689,7 +689,7 @@ fn i32 chained_field(arena::Arena* a, u8[] msg) {
     return golden(a, "struct Inner { i32 v; } struct Outer { Inner in; } fn i32 f() { Outer o = {.in = {.v = 3}}; return o.in.v; }", &w, msg);
 }
 
-fn i32 compound_member(arena::Arena* a, u8[] msg) {
+fn i32 compound_member(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 768);
     wl(&w, "module main"); wl(&w, "");
@@ -716,7 +716,7 @@ fn i32 compound_member(arena::Arena* a, u8[] msg) {
     return golden(a, "struct P { i32 x; } fn i32 f() { P p = {.x = 1}; p.x += 5; return p.x; }", &w, msg);
 }
 
-fn i32 return_struct(arena::Arena* a, u8[] msg) {
+fn i32 return_struct(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -737,7 +737,7 @@ fn i32 return_struct(arena::Arena* a, u8[] msg) {
     return golden(a, "struct P { i32 x; } fn P f() { P p = {.x = 7}; return p; }", &w, msg);
 }
 
-fn i32 union_field(arena::Arena* a, u8[] msg) {
+fn i32 union_field(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -759,7 +759,7 @@ fn i32 union_field(arena::Arena* a, u8[] msg) {
     return golden(a, "union U { i32 i; f32 f; } fn i32 f() { U u; u.i = 5; return u.i; }", &w, msg);
 }
 
-fn i32 addr_global(arena::Arena* a, u8[] msg) {
+fn i32 addr_global(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -776,7 +776,7 @@ fn i32 addr_global(arena::Arena* a, u8[] msg) {
     return golden(a, "i32 g = 0; fn i32* f() { return &g; }", &w, msg);
 }
 
-fn i32 aggregate_call(arena::Arena* a, u8[] msg) {
+fn i32 aggregate_call(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 768);
     wl(&w, "module main"); wl(&w, "");
@@ -811,7 +811,7 @@ fn i32 aggregate_call(arena::Arena* a, u8[] msg) {
     return golden(a, "struct P { i32 x; } fn P make() { P p = {.x = 1}; return p; } fn i32 f() { P q = make(); return q.x; }", &w, msg);
 }
 
-fn i32 int_cast(arena::Arena* a, u8[] msg) {
+fn i32 int_cast(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -829,7 +829,7 @@ fn i32 int_cast(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i64 f(i32 x) { i8 a = (i8)x; i64 b = (i64)x; return b; }", &w, msg);
 }
 
-fn i32 float_cast(arena::Arena* a, u8[] msg) {
+fn i32 float_cast(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -848,7 +848,7 @@ fn i32 float_cast(arena::Arena* a, u8[] msg) {
     return golden(a, "fn f64 f(i32 x) { f64 d = (f64)x; return (f64)(f32)d; }", &w, msg);
 }
 
-fn i32 ptr_to_int_cast(arena::Arena* a, u8[] msg) {
+fn i32 ptr_to_int_cast(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -865,7 +865,7 @@ fn i32 ptr_to_int_cast(arena::Arena* a, u8[] msg) {
     return golden(a, "fn u64 f(i32* p) { return (u64)p; }", &w, msg);
 }
 
-fn i32 array_to_slice_cast(arena::Arena* a, u8[] msg) {
+fn i32 array_to_slice_cast(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 768);
     wl(&w, "module main"); wl(&w, "");
@@ -898,7 +898,7 @@ fn i32 array_to_slice_cast(arena::Arena* a, u8[] msg) {
 }
 
 // A redundant slice-to-slice cast forwards the slice unchanged: no instruction, not a null slice.
-fn i32 slice_noop_cast(arena::Arena* a, u8[] msg) {
+fn i32 slice_noop_cast(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -915,7 +915,7 @@ fn i32 slice_noop_cast(arena::Arena* a, u8[] msg) {
 }
 
 // defer runs at scope exit but the return value is captured first (Zig semantics): returns n, not 0.
-fn i32 defer_capture(arena::Arena* a, u8[] msg) {
+fn i32 defer_capture(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -933,7 +933,7 @@ fn i32 defer_capture(arena::Arena* a, u8[] msg) {
 }
 
 // Deferred blocks run in reverse (LIFO) order, after the return value is captured.
-fn i32 defer_lifo(arena::Arena* a, u8[] msg) {
+fn i32 defer_lifo(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -951,7 +951,7 @@ fn i32 defer_lifo(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32 f() { i32 x = 1; defer { x = 2; } defer { x = 3; } return x; }", &w, msg);
 }
 
-fn i32 direct_call(arena::Arena* a, u8[] msg) {
+fn i32 direct_call(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -979,7 +979,7 @@ fn i32 direct_call(arena::Arena* a, u8[] msg) {
 }
 
 // Extern C variadic: fixed args pass through, an i32 tail needs no default-argument promotion.
-fn i32 extern_variadic_call(arena::Arena* a, u8[] msg) {
+fn i32 extern_variadic_call(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -996,7 +996,7 @@ fn i32 extern_variadic_call(arena::Arena* a, u8[] msg) {
 }
 
 // A variadic-tail f32 widens to f64 per the C default argument promotions.
-fn i32 vararg_promote_f32(arena::Arena* a, u8[] msg) {
+fn i32 vararg_promote_f32(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1014,7 +1014,7 @@ fn i32 vararg_promote_f32(arena::Arena* a, u8[] msg) {
 }
 
 // A variadic-tail u8 promotes to i32 (integer promotion).
-fn i32 vararg_promote_int(arena::Arena* a, u8[] msg) {
+fn i32 vararg_promote_int(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1032,7 +1032,7 @@ fn i32 vararg_promote_int(arena::Arena* a, u8[] msg) {
 }
 
 // A call through a fn-pointer value is Indirect: the callee slot holds a value id, printed with %.
-fn i32 indirect_call(arena::Arena* a, u8[] msg) {
+fn i32 indirect_call(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -1061,7 +1061,7 @@ fn i32 indirect_call(arena::Arena* a, u8[] msg) {
 }
 
 // A generic call resolves to a monomorphized clone, mangled off its qualified name and lowered after the module functions.
-fn i32 generic_call(arena::Arena* a, u8[] msg) {
+fn i32 generic_call(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -1088,7 +1088,7 @@ fn i32 generic_call(arena::Arena* a, u8[] msg) {
     return golden(a, "fn T id(comptime Type T, T x) { return x; } fn i32 f() { return id(5); }", &w, msg);
 }
 
-fn i32 string_literal(arena::Arena* a, u8[] msg) {
+fn i32 string_literal(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1104,7 +1104,7 @@ fn i32 string_literal(arena::Arena* a, u8[] msg) {
     return golden(a, "fn const u8* f() { return \"hi\"; }", &w, msg);
 }
 
-fn i32 slice_index(arena::Arena* a, u8[] msg) {
+fn i32 slice_index(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1124,7 +1124,7 @@ fn i32 slice_index(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32 f(i32[] s) { return s[1]; }", &w, msg);
 }
 
-fn i32 sub_slice(arena::Arena* a, u8[] msg) {
+fn i32 sub_slice(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1149,7 +1149,7 @@ fn i32 sub_slice(arena::Arena* a, u8[] msg) {
 }
 
 // An omitted upper bound defaults to the base length, materialized as a slicelen.
-fn i32 range_from(arena::Arena* a, u8[] msg) {
+fn i32 range_from(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1172,7 +1172,7 @@ fn i32 range_from(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32[] f(i32[] s) { return s[2..]; }", &w, msg);
 }
 
-fn i32 global_scalar_init(arena::Arena* a, u8[] msg) {
+fn i32 global_scalar_init(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1191,7 +1191,7 @@ fn i32 global_scalar_init(arena::Arena* a, u8[] msg) {
 }
 
 // A function-pointer global initializer folds to a FnRef pointing at the mangled function decl.
-fn i32 global_fn_ptr_init(arena::Arena* a, u8[] msg) {
+fn i32 global_fn_ptr_init(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1208,7 +1208,7 @@ fn i32 global_fn_ptr_init(arena::Arena* a, u8[] msg) {
     return golden(a, "fn i32 g() { return 1; } fn* i32() gp = &g;", &w, msg);
 }
 
-fn i32 global_struct_init(arena::Arena* a, u8[] msg) {
+fn i32 global_struct_init(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 384);
     wl(&w, "module main"); wl(&w, "");
@@ -1217,7 +1217,7 @@ fn i32 global_struct_init(arena::Arena* a, u8[] msg) {
 }
 
 // A struct global with out-of-order named initializers folds to declaration order.
-fn i32 global_struct_reordered(arena::Arena* a, u8[] msg) {
+fn i32 global_struct_reordered(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 384);
     wl(&w, "module main"); wl(&w, "");
@@ -1225,7 +1225,7 @@ fn i32 global_struct_reordered(arena::Arena* a, u8[] msg) {
     return golden(a, "struct P { i32 x; i32 y; } const P pt = {.y = 2, .x = 1};", &w, msg);
 }
 
-fn i32 global_array_init(arena::Arena* a, u8[] msg) {
+fn i32 global_array_init(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 384);
     wl(&w, "module main"); wl(&w, "");
@@ -1234,34 +1234,34 @@ fn i32 global_array_init(arena::Arena* a, u8[] msg) {
 }
 
 // A const slice global from an array literal: the elements back a static array, the slice is {ptr, len}.
-fn i32 global_slice_from_array(arena::Arena* a, u8[] msg) {
+fn i32 global_slice_from_array(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 384);
     wl(&w, "module main"); wl(&w, "");
-    wl(&w, "global __main_nums: i32[] const = slice[ 1, 2, 3, 4 ]");
+    wl(&w, "global __main_nums: const i32[] = slice[ 1, 2, 3, 4 ]");
     return golden(a, "const i32[] nums = [1, 2, 3, 4];", &w, msg);
 }
 
 // A const u8[] global from a string literal lowers to a Bytes init.
-fn i32 global_bytes_slice(arena::Arena* a, u8[] msg) {
+fn i32 global_bytes_slice(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 384);
     wl(&w, "module main"); wl(&w, "");
-    wl(&w, "global __main_s: u8[] const = bytes[2]");
+    wl(&w, "global __main_s: const u8[] = bytes[2]");
     return golden(a, "const u8[] s = \"hi\";", &w, msg);
 }
 
 // A const slice of structs whose fields include a string slice — the table pattern.
-fn i32 global_struct_slice_table(arena::Arena* a, u8[] msg) {
+fn i32 global_struct_slice_table(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
-    wl(&w, "global __main_tbl: main::E[] const = slice[ { bytes[1], 1 }, { bytes[2], 2 } ]");
-    return golden(a, "struct E { u8[] name; i32 v; } const E[] tbl = [ {\"a\", 1}, {\"bb\", 2} ];", &w, msg);
+    wl(&w, "global __main_tbl: const main::E[] = slice[ { bytes[1], 1 }, { bytes[2], 2 } ]");
+    return golden(a, "struct E { const u8[] name; i32 v; } const E[] tbl = [ {\"a\", 1}, {\"bb\", 2} ];", &w, msg);
 }
 
 // A global compound assignment reads through GlobalAddr, combines, and stores back.
-fn i32 global_compound_assign(arena::Arena* a, u8[] msg) {
+fn i32 global_compound_assign(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1281,7 +1281,7 @@ fn i32 global_compound_assign(arena::Arena* a, u8[] msg) {
 }
 
 // A nested call lowers the inner call first; each Call gets a contiguous extra block.
-fn i32 nested_call(arena::Arena* a, u8[] msg) {
+fn i32 nested_call(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -1310,7 +1310,7 @@ fn i32 nested_call(arena::Arena* a, u8[] msg) {
 }
 
 // A call argument narrower than its parameter widens via an implicit conversion at the call site.
-fn i32 call_arg_widening(arena::Arena* a, u8[] msg) {
+fn i32 call_arg_widening(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -1339,7 +1339,7 @@ fn i32 call_arg_widening(arena::Arena* a, u8[] msg) {
 }
 
 // A qualified enum member used as a value folds to its integer constant, typed as the enum.
-fn i32 enum_member_value(arena::Arena* a, u8[] msg) {
+fn i32 enum_member_value(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1356,7 +1356,7 @@ fn i32 enum_member_value(arena::Arena* a, u8[] msg) {
 }
 
 // A store to a slice element addresses through the slice data pointer.
-fn i32 slice_store(arena::Arena* a, u8[] msg) {
+fn i32 slice_store(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 512);
     wl(&w, "module main"); wl(&w, "");
@@ -1376,7 +1376,7 @@ fn i32 slice_store(arena::Arena* a, u8[] msg) {
 }
 
 // A `{ptr, len}` brace literal targeting a slice field lowers to a SliceMake stored through the field address.
-fn i32 slice_literal_store(arena::Arena* a, u8[] msg) {
+fn i32 slice_literal_store(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -1403,7 +1403,7 @@ fn i32 slice_literal_store(arena::Arena* a, u8[] msg) {
 }
 
 // Named, reordered slice fields map by name, not position: `.ptr` still feeds SliceMake's pointer slot even when written second.
-fn i32 slice_literal_named(arena::Arena* a, u8[] msg) {
+fn i32 slice_literal_named(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 640);
     wl(&w, "module main"); wl(&w, "");
@@ -1430,7 +1430,7 @@ fn i32 slice_literal_named(arena::Arena* a, u8[] msg) {
 }
 
 // Overloaded functions get a "__<paramtypes>" suffix so each has a distinct symbol, and each call targets the right one.
-fn i32 overload_dispatch(arena::Arena* a, u8[] msg) {
+fn i32 overload_dispatch(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 896);
     wl(&w, "module main"); wl(&w, "");
@@ -1472,7 +1472,7 @@ fn i32 overload_dispatch(arena::Arena* a, u8[] msg) {
 }
 
 // The overload suffix encodes pointers as "Xp" and slices as "sl_X".
-fn i32 overload_ptr_slice(arena::Arena* a, u8[] msg) {
+fn i32 overload_ptr_slice(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 896);
     wl(&w, "module main"); wl(&w, "");
@@ -1516,7 +1516,7 @@ fn i32 overload_ptr_slice(arena::Arena* a, u8[] msg) {
 
 fn i32 main() {
     testing::init();
-    u8[] suite = "Lower Tests";
+    const u8[] suite = "Lower Tests";
     testing::add(suite, "straight_line_add",  &straight_line_add);
     testing::add(suite, "void_empty",         &void_empty);
     testing::add(suite, "compound_assign",    &compound_assign);

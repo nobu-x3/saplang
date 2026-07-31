@@ -3,9 +3,9 @@ import list;
 import sys;
 
 struct TestCase {
-    u8[]      suite;
-    u8[]      name;
-    fn* i32(arena::Arena*, u8[]) body;
+    const u8[] suite;
+    const u8[] name;
+    fn* i32(arena::Arena*, const u8[]) body;
 }
 
 struct Runner {
@@ -21,7 +21,7 @@ export fn void init() {
     runner.cases = {null, 0, 0};
 }
 
-export fn void add(u8[] suite, u8[] name, fn* i32(arena::Arena*, u8[]) body) {
+export fn void add(const u8[] suite, const u8[] name, fn* i32(arena::Arena*, const u8[]) body) {
     TestCase c;
     c.suite = suite;
     c.name = name;
@@ -43,7 +43,7 @@ export fn i32 run() {
             sys::printf("Test case %d's body is null.\n", i);
             return -1;
         }
-        u8[] msg = {null, 0};
+        const u8[] msg = {null, 0};
         sys::printf("[__RUN_______] %.*s:%.*s\n", (i32)test_case.suite.len, test_case.suite.ptr, (i32)test_case.name.len, test_case.name.ptr);
         i32 res = test_case.body(&runner.arena, msg);
         if(res != 0) {
@@ -63,63 +63,63 @@ export fn i32 run() {
 // early-return via `if (!expect_*(...)) return -1;`.
 
 // expect_eq
-export fn bool expect_eq(i32 actual, i32 expected, u8[] msg) {
+export fn bool expect_eq(i32 actual, i32 expected, const u8[] msg) {
     if(actual == expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %d, got %d\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_eq(i64 actual, i64 expected, u8[] msg) {
+export fn bool expect_eq(i64 actual, i64 expected, const u8[] msg) {
     if(actual == expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %ld, got %ld\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_eq(u16 actual, u16 expected, u8[] msg) {
+export fn bool expect_eq(u16 actual, u16 expected, const u8[] msg) {
     if(actual == expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %u, got %u\n", (i32)msg.len, msg.ptr, (u32)expected, (u32)actual);
     return false;
 }
-export fn bool expect_eq(u32 actual, u32 expected, u8[] msg) {
+export fn bool expect_eq(u32 actual, u32 expected, const u8[] msg) {
     if(actual == expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %u, got %u\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_eq(u64 actual, u64 expected, u8[] msg) {
+export fn bool expect_eq(u64 actual, u64 expected, const u8[] msg) {
     if(actual == expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %lu, got %lu\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_eq(f64 actual, f64 expected, u8[] msg) {
+export fn bool expect_eq(f64 actual, f64 expected, const u8[] msg) {
     if(actual == expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %g, got %g\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_eq(bool actual, bool expected, u8[] msg) {
+export fn bool expect_eq(bool actual, bool expected, const u8[] msg) {
     if(actual == expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %d, got %d\n", (i32)msg.len, msg.ptr, (i32)expected, (i32)actual);
     return false;
 }
-export fn bool expect_eq(u8[] actual, u8[] expected, u8[] msg) {
+export fn bool expect_eq(const u8[] actual, const u8[] expected, const u8[] msg) {
     if(equal(actual, expected)) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected \"%.*s\", got \"%.*s\"\n", (i32)msg.len, msg.ptr, (i32)expected.len, expected.ptr, (i32)actual.len, actual.ptr);
     return false;
 }
-export fn bool expect_eq(void* actual, void* expected, u8[] msg) {
+export fn bool expect_eq(void* actual, void* expected, const u8[] msg) {
     if(actual == expected) {
         return true;
     }
@@ -128,56 +128,56 @@ export fn bool expect_eq(void* actual, void* expected, u8[] msg) {
 }
 
 // expect_ne
-export fn bool expect_ne(i32 actual, i32 expected, u8[] msg) {
+export fn bool expect_ne(i32 actual, i32 expected, const u8[] msg) {
     if(actual != expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected != %d, got %d\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_ne(i64 actual, i64 expected, u8[] msg) {
+export fn bool expect_ne(i64 actual, i64 expected, const u8[] msg) {
     if(actual != expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected != %ld, got %ld\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_ne(u32 actual, u32 expected, u8[] msg) {
+export fn bool expect_ne(u32 actual, u32 expected, const u8[] msg) {
     if(actual != expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected != %u, got %u\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_ne(u64 actual, u64 expected, u8[] msg) {
+export fn bool expect_ne(u64 actual, u64 expected, const u8[] msg) {
     if(actual != expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected != %lu, got %lu\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_ne(f64 actual, f64 expected, u8[] msg) {
+export fn bool expect_ne(f64 actual, f64 expected, const u8[] msg) {
     if(actual != expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected != %g, got %g\n", (i32)msg.len, msg.ptr, expected, actual);
     return false;
 }
-export fn bool expect_ne(bool actual, bool expected, u8[] msg) {
+export fn bool expect_ne(bool actual, bool expected, const u8[] msg) {
     if(actual != expected) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected != %d, got %d\n", (i32)msg.len, msg.ptr, (i32)expected, (i32)actual);
     return false;
 }
-export fn bool expect_ne(u8[] actual, u8[] expected, u8[] msg) {
+export fn bool expect_ne(const u8[] actual, const u8[] expected, const u8[] msg) {
     if(!equal(actual, expected)) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected != \"%.*s\"\n", (i32)msg.len, msg.ptr, (i32)expected.len, expected.ptr);
     return false;
 }
-export fn bool expect_ne(void* actual, void* expected, u8[] msg) {
+export fn bool expect_ne(void* actual, void* expected, const u8[] msg) {
     if(actual != expected) {
         return true;
     }
@@ -186,35 +186,35 @@ export fn bool expect_ne(void* actual, void* expected, u8[] msg) {
 }
 
 // expect_lt
-export fn bool expect_lt(i32 a, i32 b, u8[] msg) {
+export fn bool expect_lt(i32 a, i32 b, const u8[] msg) {
     if(a < b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %d < %d\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_lt(i64 a, i64 b, u8[] msg) {
+export fn bool expect_lt(i64 a, i64 b, const u8[] msg) {
     if(a < b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %ld < %ld\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_lt(u32 a, u32 b, u8[] msg) {
+export fn bool expect_lt(u32 a, u32 b, const u8[] msg) {
     if(a < b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %u < %u\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_lt(u64 a, u64 b, u8[] msg) {
+export fn bool expect_lt(u64 a, u64 b, const u8[] msg) {
     if(a < b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %lu < %lu\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_lt(f64 a, f64 b, u8[] msg) {
+export fn bool expect_lt(f64 a, f64 b, const u8[] msg) {
     if(a < b) {
         return true;
     }
@@ -223,35 +223,35 @@ export fn bool expect_lt(f64 a, f64 b, u8[] msg) {
 }
 
 // expect_le
-export fn bool expect_le(i32 a, i32 b, u8[] msg) {
+export fn bool expect_le(i32 a, i32 b, const u8[] msg) {
     if(a <= b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %d <= %d\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_le(i64 a, i64 b, u8[] msg) {
+export fn bool expect_le(i64 a, i64 b, const u8[] msg) {
     if(a <= b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %ld <= %ld\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_le(u32 a, u32 b, u8[] msg) {
+export fn bool expect_le(u32 a, u32 b, const u8[] msg) {
     if(a <= b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %u <= %u\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_le(u64 a, u64 b, u8[] msg) {
+export fn bool expect_le(u64 a, u64 b, const u8[] msg) {
     if(a <= b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %lu <= %lu\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_le(f64 a, f64 b, u8[] msg) {
+export fn bool expect_le(f64 a, f64 b, const u8[] msg) {
     if(a <= b) {
         return true;
     }
@@ -260,35 +260,35 @@ export fn bool expect_le(f64 a, f64 b, u8[] msg) {
 }
 
 // expect_gt
-export fn bool expect_gt(i32 a, i32 b, u8[] msg) {
+export fn bool expect_gt(i32 a, i32 b, const u8[] msg) {
     if(a > b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %d > %d\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_gt(i64 a, i64 b, u8[] msg) {
+export fn bool expect_gt(i64 a, i64 b, const u8[] msg) {
     if(a > b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %ld > %ld\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_gt(u32 a, u32 b, u8[] msg) {
+export fn bool expect_gt(u32 a, u32 b, const u8[] msg) {
     if(a > b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %u > %u\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_gt(u64 a, u64 b, u8[] msg) {
+export fn bool expect_gt(u64 a, u64 b, const u8[] msg) {
     if(a > b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %lu > %lu\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_gt(f64 a, f64 b, u8[] msg) {
+export fn bool expect_gt(f64 a, f64 b, const u8[] msg) {
     if(a > b) {
         return true;
     }
@@ -297,35 +297,35 @@ export fn bool expect_gt(f64 a, f64 b, u8[] msg) {
 }
 
 // expect_ge
-export fn bool expect_ge(i32 a, i32 b, u8[] msg) {
+export fn bool expect_ge(i32 a, i32 b, const u8[] msg) {
     if(a >= b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %d >= %d\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_ge(i64 a, i64 b, u8[] msg) {
+export fn bool expect_ge(i64 a, i64 b, const u8[] msg) {
     if(a >= b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %ld >= %ld\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_ge(u32 a, u32 b, u8[] msg) {
+export fn bool expect_ge(u32 a, u32 b, const u8[] msg) {
     if(a >= b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %u >= %u\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_ge(u64 a, u64 b, u8[] msg) {
+export fn bool expect_ge(u64 a, u64 b, const u8[] msg) {
     if(a >= b) {
         return true;
     }
     sys::printf("[____FAIL____] %.*s: expected %lu >= %lu\n", (i32)msg.len, msg.ptr, a, b);
     return false;
 }
-export fn bool expect_ge(f64 a, f64 b, u8[] msg) {
+export fn bool expect_ge(f64 a, f64 b, const u8[] msg) {
     if(a >= b) {
         return true;
     }
@@ -333,7 +333,7 @@ export fn bool expect_ge(f64 a, f64 b, u8[] msg) {
     return false;
 }
 
-export fn bool expect_near(f64 actual, f64 expected, f64 tol, u8[] msg) {
+export fn bool expect_near(f64 actual, f64 expected, f64 tol, const u8[] msg) {
     f64 d = f_abs(actual - expected);
     if(d <= tol) {
         return true;
@@ -342,7 +342,7 @@ export fn bool expect_near(f64 actual, f64 expected, f64 tol, u8[] msg) {
     return false;
 }
 
-export fn bool expect_true(bool cond, u8[] msg) {
+export fn bool expect_true(bool cond, const u8[] msg) {
     if(cond) {
         return true;
     }
@@ -350,7 +350,7 @@ export fn bool expect_true(bool cond, u8[] msg) {
     return false;
 }
 
-export fn bool expect_false(bool cond, u8[] msg) {
+export fn bool expect_false(bool cond, const u8[] msg) {
     if(!cond) {
         return true;
     }
@@ -358,7 +358,7 @@ export fn bool expect_false(bool cond, u8[] msg) {
     return false;
 }
 
-export fn bool expect_null(void* p, u8[] msg) {
+export fn bool expect_null(void* p, const u8[] msg) {
     if(!p) {
         return true;
     }
@@ -366,7 +366,7 @@ export fn bool expect_null(void* p, u8[] msg) {
     return false;
 }
 
-export fn bool expect_not_null(void* p, u8[] msg) {
+export fn bool expect_not_null(void* p, const u8[] msg) {
     if(p) {
         return true;
     }
@@ -374,7 +374,7 @@ export fn bool expect_not_null(void* p, u8[] msg) {
     return false;
 }
 
-export fn bool expect_substr(u8[] haystack, u8[] needle, u8[] msg) {
+export fn bool expect_substr(const u8[] haystack, const u8[] needle, const u8[] msg) {
     if(find(haystack, needle)) {
         return true;
     }
@@ -382,7 +382,7 @@ export fn bool expect_substr(u8[] haystack, u8[] needle, u8[] msg) {
     return false;
 }
 
-fn bool equal(u8[] a, u8[] b) {
+fn bool equal(const u8[] a, const u8[] b) {
     if(a.len != b.len) {
         return false;
     }
@@ -394,7 +394,7 @@ fn bool equal(u8[] a, u8[] b) {
     return true;
 }
 
-fn bool find(u8[] hay, u8[] needle) {
+fn bool find(const u8[] hay, const u8[] needle) {
     if(needle.len == 0) {
         return true;
     }

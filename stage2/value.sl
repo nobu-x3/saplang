@@ -22,7 +22,7 @@ export union ValueData {
     i64               i;
     f64               f;
     bool              b;
-    u8[]              bytes;
+    const u8[]        bytes;
     types::Ty*      type_ref;
     Value[]           elems;
     ast::FnDeclNode*  fn_ref;
@@ -62,7 +62,7 @@ export fn Value val_bool(bool b) {
     return r;
 }
 
-export fn Value val_bytes(u8[] bytes, types::Ty* ty) {
+export fn Value val_bytes(const u8[] bytes, types::Ty* ty) {
     Value r;
     sys::memset(&r, 0, sizeof(Value));
     r.kind = ValueKind::Bytes;

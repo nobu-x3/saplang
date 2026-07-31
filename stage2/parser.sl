@@ -69,7 +69,7 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
     switch (t.kind) {
         case token::TokenKind::IMPORT:  {
             if(is_exported && !p.is_speculating) {
-                u8[] msg = "imports cannot be exported; each module states its own imports";
+                const u8[] msg = "imports cannot be exported; each module states its own imports";
                 diag::report(&p.m.diag, p.m.arena, t.src_pos, msg);
             }
             return parse_import(p);
@@ -80,7 +80,7 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
             ast::AstNode* cr = parse_comprun(p, true);
             if(is_exported) {
                 if(!p.is_speculating) {
-                    u8[] msg = "`export` is not valid on `comprun` (it does not declare a named symbol)";
+                    const u8[] msg = "`export` is not valid on `comprun` (it does not declare a named symbol)";
                     diag::report(&p.m.diag, p.m.arena, t.src_pos, msg);
                 }
                 if(cr) { cr.h.flags = (ast::AstFlags)((u16)cr.h.flags | (u16)ast::AstFlags::HadError); }
@@ -173,9 +173,13 @@ fn ast::AstNode* parse_import(Parser* p) {
 
 fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
     u32 start = peek(p, 0).src_pos;
-    bool is_const = peek(p, 0).kind == token::TokenKind::CONST;
-    if(is_const) { consume(p); }
-    ast::AstNode* type_expr = parse_type_qualified(p, is_const);
+    bool leading_const = peek(p, 0).kind == token::TokenKind::CONST;
+    if(leading_const) { consume(p); }
+    bool absorbed = false;
+    ast::AstNode* type_expr = parse_type_qualified(p, leading_const, &absorbed);
+    // A leading `const` freezes the pointee when the type has one, else the binding; a trailing one always freezes the binding.
+    bool is_const = leading_const && !absorbed;
+    if(peek(p, 0).kind == token::TokenKind::CONST) { consume(p); is_const = true; }
     bool had_err = !type_expr || had_error(type_expr);
     token::Token ident = expect(p, token::TokenKind::Ident);
     if(ident.kind == token::TokenKind::ERROR) { had_err = true; }
@@ -263,12 +267,15 @@ fn ast::Param[] parse_params(Parser* p, bool* had_err) {
                 is_comptime = true;
                 *had_err = true;
                 if(!p.is_speculating) {
-                    u8[] msg = "`comptime` must come before `const`";
+                    const u8[] msg = "`comptime` must come before `const`";
                     diag::report(&p.m.diag, p.m.arena, reverse_pos, msg);
                 }
             }
         }
-        ast::AstNode* type_expr = parse_type_qualified(p, is_const);
+        bool absorbed = false;
+        ast::AstNode* type_expr = parse_type_qualified(p, is_const, &absorbed);
+        if(absorbed) { is_const = false; }
+        if(peek(p, 0).kind == token::TokenKind::CONST) { consume(p); is_const = true; }
         if(!type_expr || had_error(type_expr)) { *had_err = true; }
         token::Token name = expect(p, token::TokenKind::Ident);
         if(name.kind == token::TokenKind::ERROR) { *had_err = true; }
@@ -501,16 +508,18 @@ fn bool parse_build_query(Parser* p, bool* had_err) {
         return build_defined(p, wanted);
     }
 
-    u8[] actual;
     if(slice_eq(field_name, "define")) {
         if(expect(p, token::TokenKind::LParen).kind == token::TokenKind::ERROR) { *had_err = true; return false; }
         u8[] name = parse_build_string(p, had_err);
         if(expect(p, token::TokenKind::RParen).kind == token::TokenKind::ERROR) { *had_err = true; }
-        actual = define_value(p, name);
-    } else {
-        actual = build_field(p, field_name, had_err, field.src_pos);
+        return build_compare(p, define_value(p, name), had_err);
     }
+    return build_compare(p, build_field(p, field_name, had_err, field.src_pos), had_err);
+}
 
+// Reads the `== "..."` / `!= "..."` tail and compares it against the operand already parsed.
+// Split out because the seed still reads the leading `const` as freezing the binding, so `actual` cannot be reassigned.
+fn bool build_compare(Parser* p, const u8[] actual, bool* had_err) {
     bool negated = peek(p, 0).kind == token::TokenKind::BangEq;
     if(!negated && expect(p, token::TokenKind::EqEq).kind == token::TokenKind::ERROR) { *had_err = true; return false; }
     if(negated) { consume(p); }
@@ -558,7 +567,7 @@ fn u8[] parse_build_string(Parser* p, bool* had_err) {
     return bytes;
 }
 
-fn u8[] build_field(Parser* p, u8[] field_name, bool* had_err, u32 src_pos) {
+fn const u8[] build_field(Parser* p, const u8[] field_name, bool* had_err, u32 src_pos) {
     if(slice_eq(field_name, "os"))     { return p.m.build.os; }
     if(slice_eq(field_name, "arch"))   { return p.m.build.arch; }
     if(slice_eq(field_name, "config")) { return p.m.build.config; }
@@ -576,7 +585,7 @@ fn bool build_defined(Parser* p, u8[] wanted) {
 }
 
 // An undefined name and a bare `-Dname` both read as the empty string.
-fn u8[] define_value(Parser* p, u8[] wanted) {
+fn const u8[] define_value(Parser* p, const u8[] wanted) {
     for(u64 define_index = 0; define_index < p.m.build.defines.len; define_index += 1) {
         if(slice_eq(p.m.build.defines[define_index].name, wanted)) { return p.m.build.defines[define_index].value; }
     }
@@ -586,11 +595,11 @@ fn u8[] define_value(Parser* p, u8[] wanted) {
 
 fn void report_build_cond_error(Parser* p, u32 src_pos) {
     if(p.is_speculating) { return; }
-    u8[] msg = "comprun if condition must use build::os, build::arch, build::config, build::define(\"name\"), or build::defined(\"name\")";
+    const u8[] msg = "comprun if condition must use build::os, build::arch, build::config, build::define(\"name\"), or build::defined(\"name\")";
     diag::report(&p.m.diag, p.m.arena, src_pos, msg);
 }
 
-fn bool slice_eq(u8[] a, u8[] b) {
+fn bool slice_eq(const u8[] a, const u8[] b) {
     if(a.len != b.len) { return false; }
     for(u64 char_index = 0; char_index < a.len; char_index += 1) {
         if(a[char_index] != b[char_index]) { return false; }
@@ -1480,6 +1489,7 @@ fn bool looks_like_var_decl(Parser* p) {
     bool prev_spec = p.is_speculating;
     p.is_speculating = true;
     ast::AstNode* ty = parse_type(p);
+    if(peek(p, 0).kind == token::TokenKind::CONST) { consume(p); }   // `T const name` freezes the binding
     // A declaration is `<type> <name> ;|=`; the name is followed by `;` or `=`. This rejects a bare
     // call statement like `mod::fn(a * b);` whose comptime-type-call speculation leaves a stray identifier.
     bool ok = ty && !had_error(ty) && peek(p, 0).kind == token::TokenKind::Ident
@@ -1532,8 +1542,14 @@ fn ast::AstNode* parse_type(Parser* p) {
     return parse_type_qualified(p, pointee_const);
 }
 
-// A declaration consumes its own leading `const` before the type, so it passes the qualifier in here.
 fn ast::AstNode* parse_type_qualified(Parser* p, bool pointee_const) {
+    bool absorbed = false;
+    return parse_type_qualified(p, pointee_const, &absorbed);
+}
+
+// A declaration consumes its own leading `const` before the type, so it passes the qualifier in here.
+// `absorbed` reports whether a pointer or slice took it; if none did, the declaration applies it to the binding.
+fn ast::AstNode* parse_type_qualified(Parser* p, bool pointee_const, bool* absorbed) {
     ast::AstNode* base = parse_base_type(p);
     if(!base) {
         if(!p.is_speculating) {
@@ -1572,7 +1588,7 @@ fn ast::AstNode* parse_type_qualified(Parser* p, bool pointee_const) {
         call.args = parse_call_args(p, true);
         base = (ast::AstNode*)call;
     }
-    return parse_type_suffix(p, base, pointee_const);
+    return parse_type_suffix(p, base, pointee_const, absorbed);
 }
 
 fn ast::AstNode* parse_base_type(Parser* p) {
@@ -1617,7 +1633,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         bool had_err = false;
         if(!p.allow_anon_type) {
             if(!p.is_speculating) { had_err = true; }
-            u8[] msg = "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`";
+            const u8[] msg = "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`";
             diag::report(&p.m.diag, p.m.arena, kw_pos, msg);
         }
         token::Token lbrace = expect(p, token::TokenKind::LBrace);
@@ -1639,7 +1655,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         bool had_err = false;
         if(!p.allow_anon_type) {
             if(!p.is_speculating) { had_err = true; }
-            u8[] msg = "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`";
+            const u8[] msg = "anonymous struct types are only allowed on the right-hand side of an `alias` declaration; use a named struct or wrap this in `alias`";
             diag::report(&p.m.diag, p.m.arena, kw_pos, msg);
         }
         token::Token lbrace = expect(p, token::TokenKind::LBrace);
@@ -1661,7 +1677,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         bool had_err = false;
         if(!p.allow_anon_type) {
             if(!p.is_speculating) { had_err = true; }
-            u8[] msg = "anonymous union types are only allowed on the right-hand side of an `alias` declaration; use a named union or wrap this in `alias`";
+            const u8[] msg = "anonymous union types are only allowed on the right-hand side of an `alias` declaration; use a named union or wrap this in `alias`";
             diag::report(&p.m.diag, p.m.arena, kw_pos, msg);
         }
         token::Token lbrace = expect(p, token::TokenKind::LBrace);
@@ -1696,7 +1712,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
             u32 colon_pos = peek(p, 0).src_pos;
             if(!p.is_speculating) {
                 had_err = true;
-                u8[] msg = "expected a type here, but this chain looks like an enum variant (a value); types max out at `module::Name`";
+                const u8[] msg = "expected a type here, but this chain looks like an enum variant (a value); types max out at `module::Name`";
                 diag::report(&p.m.diag, p.m.arena, colon_pos, msg);
             }
             while(peek(p, 0).kind == token::TokenKind::ColonColon) {
@@ -1719,7 +1735,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
     return null;
 }
 
-fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner, bool pointee_const) {
+fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner, bool pointee_const, bool* absorbed) {
     while(true) {
         token::Token t = peek(p, 0);
         if(t.kind == token::TokenKind::Star) {
@@ -1731,6 +1747,7 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner, bool pointee_
             n.pointee = inner;
             // `const u8**` qualifies the bytes, so only the pointer nearest the base type carries it.
             n.is_const = pointee_const;
+            if(pointee_const) { *absorbed = true; }
             pointee_const = false;
             inner = (ast::AstNode*)n;
         } else if(t.kind == token::TokenKind::LBracket) {
@@ -1742,6 +1759,10 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner, bool pointee_
                 n.h.flags = (ast::AstFlags)0;
                 n.h.src_pos = t.src_pos;
                 n.element = inner;
+                // `const u8[]` qualifies the elements, so the slice nearest the base type carries it.
+                n.is_const = pointee_const;
+                if(pointee_const) { *absorbed = true; }
+                pointee_const = false;
                 inner = (ast::AstNode*)n;
             } else {
                 // Nest a run of dimensions leftmost-outermost so i32[2][3] is 2 rows of 3 (C order).
@@ -1853,7 +1874,11 @@ fn ast::AstNode*[] parse_call_args(Parser* p, bool type_ctx) {
     while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* arg;
         token::TokenKind k = peek(p, 0).kind;
-        if(token::is_type_keyword(k) || k == token::TokenKind::FN || (type_ctx && k == token::TokenKind::Ident)) {
+        // `const` only ever opens a type here, so it also settles the type-vs-expression choice.
+        if(k == token::TokenKind::CONST) {
+            consume(p);
+            arg = parse_type_qualified(p, true);
+        } else if(token::is_type_keyword(k) || k == token::TokenKind::FN || (type_ctx && k == token::TokenKind::Ident)) {
             arg = parse_type(p);
         } else {
             arg = parse_expr(p, 0);
@@ -1890,7 +1915,7 @@ fn ast::AstNode* parse_postfix(Parser* p) {
                 if(peek(p, 0).kind == token::TokenKind::RBracket) {
                     had_err = true;
                     if(!p.is_speculating) {
-                        u8[] msg = "slice range `[..]` must have at least one bound; use `[lo..hi]`, `[lo..]`, or `[..hi]`";
+                        const u8[] msg = "slice range `[..]` must have at least one bound; use `[lo..hi]`, `[lo..]`, or `[..hi]`";
                         diag::report(&p.m.diag, p.m.arena, dotdot_pos, msg);
                     }
                 } else {
@@ -2016,7 +2041,7 @@ fn ast::AstNode* parse_primary(Parser* p) {
     case token::TokenKind::UNDEFINED: {
         consume(p);
         if(!p.is_speculating) {
-            u8[] msg = "`undefined` is only valid as a var-decl initializer";
+            const u8[] msg = "`undefined` is only valid as a var-decl initializer";
             diag::report(&p.m.diag, p.m.arena, t.src_pos, msg);
         }
         ast::UndefinedLitNode* n = node_alloc(p.m.arena, sizeof(ast::UndefinedLitNode));
@@ -2173,8 +2198,8 @@ fn token::Token expect(Parser* p, token::TokenKind kind) {
 
 fn void report_expected(Parser* p, token::Token tok, token::TokenKind kind_expected) {
     if(p.is_speculating) { return; }
-    u8[] expected_name = token::kind_name(kind_expected);
-    u8[] got_name = token::kind_name(tok.kind);
+    const u8[] expected_name = token::kind_name(kind_expected);
+    const u8[] got_name = token::kind_name(tok.kind);
     u8[256] scratch;
     i32 n = sys::snprintf((i8*)&scratch[0], 256, "expected %.*s, got %.*s",
                           (i32)expected_name.len, (i8*)expected_name.ptr,

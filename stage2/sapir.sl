@@ -24,7 +24,7 @@ export struct SapirDecl {
     SapirDeclKind   kind;
     SapirLinkage    linkage;
     bool            is_variadic;    // meaningful only for extern C fns
-    u8[]            link_name;      // final symbol bytes; mangling already applied
+    const u8[]      link_name;      // final symbol bytes; mangling already applied
     types::Ty*    ty;             // fn-pointer type for fns; value type for globals
     u32             fn_index;       // into SapirModule.fns for a local fn, else INVALID_ID
     u32             global_index;   // into SapirModule.globals for a local global, else INVALID_ID
@@ -32,7 +32,7 @@ export struct SapirDecl {
 
 export struct SapirModule {
     symbol::Symbol* name;
-    u8[]            src_path;
+    const u8[]      src_path;
     u32[]           line_starts;    // copied so codegen resolves src_pos without importing module
     SapirDecl[]     decls;
     u64             decls_cap;
@@ -64,7 +64,7 @@ export struct ConstInit {
     types::Ty*    ty;
     i64             i;              // Int / Bool
     f64             f;              // Float
-    u8[]            bytes;          // Bytes
+    const u8[]      bytes;          // Bytes
     ConstInit[]     elems;          // Struct (field order) / Array
     u32             decl_index;     // FnRef / GlobalRef — into SapirModule.decls
 }
