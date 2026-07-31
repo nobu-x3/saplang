@@ -8,9 +8,6 @@ import sys;
 import io;
 import hash;
 
-// The seed cannot parse `const u8[]` as a generic argument, but it can behind an alias.
-alias Bytes = const u8[];
-
 export enum Optimize : u8 {
     Debug,
     Release,
@@ -42,9 +39,9 @@ export struct CompileStep {
     Step             step;          // must stay first: &c.step aliases the CompileStep
     const u8[]       artifact_name;
     const u8[]       root_source;
-    list::List(Bytes) import_paths;
-    list::List(Bytes) libs;
-    list::List(Bytes) lib_dirs;
+    list::List(const u8[]) import_paths;
+    list::List(const u8[]) libs;
+    list::List(const u8[]) lib_dirs;
     Target           target;
     Optimize         optimize;
     bool             installed;
@@ -661,7 +658,7 @@ fn i32 spawn_and_wait(i8** argv) {
     return (status >> 8) & 255;
 }
 
-fn u8[] join_semicolons(mem::Allocator a, list::List(Bytes)* parts) {
+fn u8[] join_semicolons(mem::Allocator a, list::List(const u8[])* parts) {
     io::OutBuf buf;
     io::outbuf_init(&buf, a, 64);
     for(u64 part_index = 0; part_index < parts.len; part_index += 1) {

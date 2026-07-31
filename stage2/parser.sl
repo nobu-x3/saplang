@@ -508,18 +508,16 @@ fn bool parse_build_query(Parser* p, bool* had_err) {
         return build_defined(p, wanted);
     }
 
+    const u8[] actual;
     if(slice_eq(field_name, "define")) {
         if(expect(p, token::TokenKind::LParen).kind == token::TokenKind::ERROR) { *had_err = true; return false; }
         u8[] name = parse_build_string(p, had_err);
         if(expect(p, token::TokenKind::RParen).kind == token::TokenKind::ERROR) { *had_err = true; }
-        return build_compare(p, define_value(p, name), had_err);
+        actual = define_value(p, name);
+    } else {
+        actual = build_field(p, field_name, had_err, field.src_pos);
     }
-    return build_compare(p, build_field(p, field_name, had_err, field.src_pos), had_err);
-}
 
-// Reads the `== "..."` / `!= "..."` tail and compares it against the operand already parsed.
-// Split out because the seed still reads the leading `const` as freezing the binding, so `actual` cannot be reassigned.
-fn bool build_compare(Parser* p, const u8[] actual, bool* had_err) {
     bool negated = peek(p, 0).kind == token::TokenKind::BangEq;
     if(!negated && expect(p, token::TokenKind::EqEq).kind == token::TokenKind::ERROR) { *had_err = true; return false; }
     if(negated) { consume(p); }

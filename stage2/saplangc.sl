@@ -93,12 +93,13 @@ fn i32 main(i32 argc, u8** argv) {
 
     compiler::Compiler* c = compiler::new(&arena);
 
-    // Built in one initializer: the seed still reads the leading `const` as freezing the binding.
-    u64 arg_count = 0;
-    if(argc > 1) { arg_count = (u64)(argc - 1); }
-    const u8[][] args = {arena::alloc(&arena, arg_count * sizeof(const u8[])), arg_count};
-    for(i32 arg_index = 1; arg_index < argc; arg_index += 1) {
-        args[arg_index - 1] = cstr_slice(argv[arg_index]);
+    const u8[][] args = {null, 0};
+    if(argc > 1) {
+        args.len = (u64)(argc - 1);
+        args.ptr = arena::alloc(&arena, args.len * sizeof(const u8[]));
+        for(i32 arg_index = 1; arg_index < argc; arg_index += 1) {
+            args[arg_index - 1] = cstr_slice(argv[arg_index]);
+        }
     }
     if(!compiler::parse_argv(c, args)) { return 1; }
     u8[] std_dir = find_std_dir(&arena, argv);

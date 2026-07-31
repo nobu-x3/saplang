@@ -544,7 +544,9 @@ fn i32 no_double_scan(arena::Arena* a, const u8[]msg) {
 }
 
 fn const u8[][] mk_args(arena::Arena* a, u64 count) {
-    const u8[][] args = {arena::alloc(a, count * sizeof(const u8[])), count};
+    const u8[][] args = {null, 0};
+    args.len = count;
+    args.ptr = arena::alloc(a, count * sizeof(const u8[]));
     return args;
 }
 

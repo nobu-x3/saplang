@@ -23,14 +23,11 @@ import symbol;
 import token;
 import pool;
 
-// The seed cannot parse `const u8[]` as a generic argument, but it can behind an alias.
-alias Bytes = const u8[];
-
 export struct Compiler {
     mem::Allocator       allocator;
     list::List(module::Module*) modules;  // flat, indexed by ModuleId (the array index)
-    list::List(Bytes)    entry_sources;   // user-supplied source file paths
-    list::List(Bytes)    import_paths;    // -i search list
+    list::List(const u8[]) entry_sources; // user-supplied source file paths
+    list::List(const u8[]) import_paths;  // -i search list
     const u8[]           target;          // conditional-compilation infix; empty = none
     bool                 is_multithreaded; // run phases on a thread pool sized to cpu_count
     bool                 cfg_dump;         // -cfg-dump: print each function's CFG to stdout
@@ -44,8 +41,8 @@ export struct Compiler {
     pool::ThreadPool*    pool;            // non-null only while multithreaded
     i64                  error_count;
     const u8[]           output_path;     // -o; empty defaults to "a.out"
-    list::List(Bytes)    extern_libs;     // -l names, passed to the linker as -l<name>
-    list::List(Bytes)    lib_dirs;        // -L paths, passed to the linker as -L<path>
+    list::List(const u8[]) extern_libs;   // -l names, passed to the linker as -l<name>
+    list::List(const u8[]) lib_dirs;      // -L paths, passed to the linker as -L<path>
     codegen::BuildConfig config;          // -config: optimization / instrumentation pipeline; default Debug
     const u8[]           deps_path;       // -deps: write every discovered source path here (for build-system caching)
     bool                 wants_exit;      // --help / --version handled; the driver should stop before compiling
@@ -500,19 +497,17 @@ export fn i32 run_executable(mem::Allocator a, const u8[] path) {
 }
 
 fn const u8[][] run_codegen(Compiler* c) {
-    // Filled through a raw pointer and frozen into the slice at the end: the seed still reads the
-    // leading `const` as freezing the binding, so `paths.len` cannot be advanced in place.
-    Bytes* buf = (Bytes*)mem::alloc(c.allocator, (c.modules.len + 1) * sizeof(Bytes));
-    u64 count = 0;
+    const u8[][] paths;
+    paths.ptr = mem::alloc(c.allocator, (c.modules.len + 1) * sizeof(const u8[]));
+    paths.len = 0;
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
         const u8[] obj_path = object_path_for(c, m);
         if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.allocator, cstr(c.allocator, obj_path), c.config) != 0) { c.error_count += 1; }
-        buf[count] = obj_path;
-        count += 1;
+        paths[paths.len] = obj_path;
+        paths.len += 1;
     }
-    const u8[][] paths = {buf, count};
     return paths;
 }
 

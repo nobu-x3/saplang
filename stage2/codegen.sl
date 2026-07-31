@@ -249,15 +249,10 @@ fn bool wants_debug_info(BuildConfig config) {
 
 // DEBUG INFO (DWARF) //////////////////////////////////////////////////////////////
 
-// Picked in one call because the seed still reads the leading `const` as freezing the binding.
-fn const u8[] di_source_path(CG* cg) {
-    if(cg.sm.src_path.len > 0) { return cg.sm.src_path; }
-    return interner::symbol_str(cg.sm.name);
-}
-
 fn void debug_info_init(CG* cg) {
     cg.di_builder = llvm::LLVMCreateDIBuilder(cg.llvm_module);
-    const u8[] path = di_source_path(cg);
+    const u8[] path = cg.sm.src_path;
+    if(path.len == 0) { path = interner::symbol_str(cg.sm.name); }
     cg.di_file = llvm::LLVMDIBuilderCreateFile(cg.di_builder, cstr(cg.allocator, path), path.len, cstr(cg.allocator, "."), 1);
     bool optimized = cg.config != BuildConfig::Debug;
     i32 opt = 0;
