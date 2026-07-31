@@ -1189,7 +1189,10 @@ fn types::Ty* decl_to_type(Sema* s, module::Module* target, Decl* d) {
             return null;
         }
         stack_push(&s.resolution_stack, key);
+        module::Module* saved_lookup = s.lookup_module;
+        s.lookup_module = target;
         types::Ty* resolved = resolve_type(s, ((ast::AliasDeclNode*)node).target);
+        s.lookup_module = saved_lookup;
         stack_pop(&s.resolution_stack);
         d.ty = resolved;
         return resolved;
