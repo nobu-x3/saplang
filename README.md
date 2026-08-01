@@ -2,7 +2,7 @@
 
 A small C-family language with modules, comptime, and a self-hosted compiler.
 
-Please use the [Discord](https://discord.gg/8nqP7npDhV) to get in contact with me.
+Please use the [Discord](https://discord.gg/peAgk5kBh2) to get in contact with me.
 
 # !DISCLAIMER
 This is not a C-KILLER. I have no aspirations for this language to become popular or even used by other people. I'm developing it for my own projects and according to my tastes and needs. USE AT YOUR OWN RISK!
