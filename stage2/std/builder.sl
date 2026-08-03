@@ -75,6 +75,7 @@ export struct Build {
     list::List(OptionInfo) options;          // declared via standard_*_options / option_*, for --help
     list::List(CliArg)     cli_args;         // parsed -Dkey=value overrides
     list::List(u8[])       requested_steps;  // bare argv tokens: which top steps to run
+    list::List(const u8[]) compiler_flags;   // other -flags, passed straight through to every compile
     bool                   want_help;
     Optimize               optimize;         // resolved by standard_optimize_options
     Target                 target;           // resolved by standard_target_options
@@ -363,12 +364,23 @@ export fn u8[] compile_command_string(Build* b, CompileStep* c) {
             io::outbuf_write(&buf, define_arg(b, a));
         }
     }
+    for(u64 flag_index = 0; flag_index < b.compiler_flags.len; flag_index += 1) {
+        io::outbuf_write_byte(&buf, ' ');
+        io::outbuf_write(&buf, b.compiler_flags.ptr[flag_index]);
+    }
     return io::outbuf_bytes(&buf);
 }
 
 // `optimize` and `target` already reach the compiler as -config/-target.
 fn bool is_forwarded_define(CliArg* a) {
     return !slice_eq(a.key, "optimize") && !slice_eq(a.key, "target");
+}
+
+// These the build graph decides per step; taking one from argv would silently fight build.sl.
+// -config / -target are reachable as -Doptimize= / -Dtarget=.
+fn bool is_build_owned_flag(const u8[] arg) {
+    return slice_eq(arg, "-o") || slice_eq(arg, "-i") || slice_eq(arg, "-l") || slice_eq(arg, "-L")
+        || slice_eq(arg, "-c") || slice_eq(arg, "-deps") || slice_eq(arg, "-config") || slice_eq(arg, "-target");
 }
 
 fn u8[] define_arg(Build* b, CliArg* a) {
@@ -384,7 +396,7 @@ fn u8[] define_arg(Build* b, CliArg* a) {
 }
 
 fn i8** build_compile_argv(Build* b, CompileStep* c, u8[] out) {
-    u64 cap = 12 + c.libs.len * 2 + c.lib_dirs.len * 2 + b.cli_args.len;
+    u64 cap = 12 + c.libs.len * 2 + c.lib_dirs.len * 2 + b.cli_args.len + b.compiler_flags.len;
     i8** argv = (i8**)mem::alloc(b.allocator, (cap + 1) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(b.allocator, b.compiler_path); n += 1;
@@ -415,6 +427,9 @@ fn i8** build_compile_argv(Build* b, CompileStep* c, u8[] out) {
         CliArg* a = &b.cli_args.ptr[cli_index];
         if(is_forwarded_define(a)) { argv[n] = cstr(b.allocator, define_arg(b, a)); n += 1; }
     }
+    for(u64 flag_index = 0; flag_index < b.compiler_flags.len; flag_index += 1) {
+        argv[n] = cstr(b.allocator, b.compiler_flags.ptr[flag_index]); n += 1;
+    }
     argv[n] = null;
     return argv;
 }
@@ -436,6 +451,13 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
             b.want_help = true;
         } else if(starts_with(arg, "-D")) {
             parse_define_arg(b, arg);
+        } else if(starts_with(arg, "-")) {
+            if(is_build_owned_flag(arg)) {
+                sys::dprintf(2, "error: %.*s is set by build.sl, not on the command line\n", (i32)arg.len, (i8*)arg.ptr);
+                return 1;
+            }
+            const u8[] flag = arg;   // List(const u8[]) cannot infer its element from a u8[] argument
+            list::push(&b.compiler_flags, b.allocator, flag);
         } else {
             list::push(&b.requested_steps, b.allocator, arg);
         }
@@ -609,7 +631,8 @@ fn i32 make_run(Build* b, RunStep* r) {
 }
 
 fn void print_help(Build* b) {
-    sys::dprintf(1, "Usage: saplangc build [step]... [-Doption=value]...\n\n");
+    sys::dprintf(1, "Usage: saplangc build [step]... [-Doption=value]... [compiler flag]...\n");
+    sys::dprintf(1, "Any other -flag (e.g. -show-timings, -mt) is passed to every compile.\n\n");
     sys::dprintf(1, "Steps:\n");
     for(u64 step_index = 0; step_index < b.top_steps.len; step_index += 1) {
         Step* s = b.top_steps.ptr[step_index];

@@ -155,6 +155,21 @@ fn i32 defines_forwarded(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+// A -flag that is not -D and not build-owned rides along to every compile, after the defines.
+fn i32 compiler_flags_forwarded(arena::Arena* a, const u8[]m) {
+    builder::Build* b = builder::new_build(a);
+    b.compiler_path = "saplangc";
+    builder::define(b, "tracing", "", false);
+    list::push(&b.compiler_flags, b.allocator, "-show-timings");
+    list::push(&b.compiler_flags, b.allocator, "-mt");
+
+    builder::CompileStep* exe = builder::add_executable(b, "app", "main.sl");
+    u8[] cmd = builder::compile_command_string(b, exe);
+    const u8[] want = "saplangc main.sl -o .sap-cache/app -config Debug -Dtracing -show-timings -mt";
+    if(!testing::expect_eq(cmd, want, m)) { return -1; }
+    return 0;
+}
+
 // The parallel scheduler gathers every reachable compile once; a step shared by install and run
 // is not double-counted.
 fn i32 gather_compiles(arena::Arena* a, const u8[]m) {
@@ -190,6 +205,7 @@ fn i32 main() {
     testing::add(suite, "options", &options);
     testing::add(suite, "target_option", &target_option);
     testing::add(suite, "defines_forwarded", &defines_forwarded);
+    testing::add(suite, "compiler_flags_forwarded", &compiler_flags_forwarded);
     testing::add(suite, "gather_compiles", &gather_compiles);
     return testing::run();
 }
