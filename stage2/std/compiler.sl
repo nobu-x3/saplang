@@ -51,7 +51,7 @@ export struct Compiler {
     list::List(module::Define) defines;   // -D<name>[=<value>]: readable from `comprun if (build::defined(...))`
 }
 
-export const u8[] VERSION = "0.1.1 (stage2, self-hosted)";
+export const u8[] VERSION = "0.2.1 (stage2, self-hosted)";
 
 export fn void print_usage() {
     sys::dprintf(1, "Usage: saplangc <file.sl>... [options]\n");
