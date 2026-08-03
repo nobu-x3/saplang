@@ -440,6 +440,16 @@ fn u8[] open_and_read(Compiler* c, u8[] path, bool* found) {
     return bytes;
 }
 
+// Keeps the extension, so a per-target file still reports the name it really has (mutex.linux.sl).
+fn const u8[] path_basename(const u8[] path) {
+    u64 start = 0;
+    for(u64 char_index = 0; char_index < path.len; char_index += 1) {
+        if(path[char_index] == '/') { start = char_index + 1; }
+    }
+    const u8[] out = {&path.ptr[start], path.len - start};
+    return out;
+}
+
 fn const u8[] path_stem(const u8[] path) {
     u64 start = 0;
     for(u64 char_index = 0; char_index < path.len; char_index += 1) {
@@ -456,14 +466,17 @@ fn const u8[] path_stem(const u8[] path) {
 // Discover -> frontend -> codegen -> link. Returns 0 on success.
 export fn i32 run(Compiler* c) {
     if(c.wants_exit) { return 0; }
+    i32 rc = 1;
     discover(c);
     if(c.deps_path.len > 0) { write_depfile(c); }
     drain_diagnostics(c);
-    if(bail_on_errors(c)) { return 1; }
-    i32 rc = run_frontend(c);
-    if(rc != 0) { return rc; }
-    if(stops_before_backend(c)) { return 0; }
-    return run_backend(c);
+    if(!bail_on_errors(c)) {
+        rc = run_frontend(c);
+        if(rc == 0 && !stops_before_backend(c)) { rc = run_backend(c); }
+    }
+    if(rc == 0) { sys::dprintf(2, "Build success\n"); }
+    else { sys::dprintf(2, "Build failed\n"); }
+    return rc;
 }
 
 // One source path per line: the full transitive set discover() walked, for build-system caching.
@@ -503,6 +516,8 @@ fn const u8[][] run_codegen(Compiler* c) {
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
         if(m.sapir == null) { continue; }
+        const u8[] name = path_basename(m.path);
+        sys::dprintf(2, "Compiling module %.*s...\n", (i32)name.len, (i8*)name.ptr);
         const u8[] obj_path = object_path_for(c, m);
         if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.allocator, cstr(c.allocator, obj_path), c.config) != 0) { c.error_count += 1; }
         paths[paths.len] = obj_path;
