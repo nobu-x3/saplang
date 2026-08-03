@@ -51,7 +51,7 @@ export struct Compiler {
     list::List(module::Define) defines;   // -D<name>[=<value>]: readable from `comprun if (build::defined(...))`
 }
 
-export const u8[] VERSION = "0.1.0 (stage2, self-hosted)";
+export const u8[] VERSION = "0.1.1 (stage2, self-hosted)";
 
 export fn void print_usage() {
     sys::dprintf(1, "Usage: saplangc <file.sl>... [options]\n");
@@ -858,6 +858,7 @@ export fn void drain_diagnostics(Compiler* c) {
     }
 }
 
+const u32 PAD_MAX = 256;
 // "<path>:<line>:<col>: <msg>"; a compinsert-generated position resolves back to its (possibly nested) generator site.
 fn void print_diagnostic(module::Module* m, diag::DiagEntry* entry) {
     u32 pos = entry.src_pos;
@@ -877,9 +878,25 @@ fn void print_diagnostic(module::Module* m, diag::DiagEntry* entry) {
     module::line_col(m, pos, &line, &col);
     if(generated) {
         sys::dprintf(2, "%.*s:%u:%u: %.*s (in generated code at %u:%u)\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr, fragment_line, fragment_col);
-        return;
+    } else {
+        sys::dprintf(2, "%.*s:%u:%u: %.*s\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr);
     }
-    sys::dprintf(2, "%.*s:%u:%u: %.*s\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr);
+    // Print the actual line with the error
+    if(pos < (u32)m.source.len) {
+        if(line == 0 || (u64)line > m.line_starts.len) { return; }
+        u32 start = m.line_starts[line - 1];
+        u32 end = start;
+        while(end < (u32)m.source.len && m.source[end] != '\n') { end += 1; }
+        if(end > start && m.source[end - 1] == '\r') { end -= 1; }
+        sys::dprintf(2, "%.*s\n", (i32)(end - start), (i8*)(m.source.ptr + start));
+        u32 width = col - 1;
+        if(width > PAD_MAX) { width = PAD_MAX; }
+        u8[PAD_MAX] pad;
+        for(u32 i = 0; i < width; i += 1) {
+            if(start + i < end && m.source[start + i] == '\t') { pad[i] = '\t'; } else { pad[i] = ' '; }
+        }
+        sys::dprintf(2, "%.*s^\n", (i32)width, (i8*)&pad[0]);
+    }
 }
 
 fn void fragment_position(module::InsertedSource* src, u32 pos, u32* line, u32* col) {

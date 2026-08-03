@@ -14,6 +14,11 @@ INC="stage2/std;stage2;stage2/tests"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+# Skip the compiler's own progress chatter so the reason for the failure is what gets reported.
+first_error() {
+    grep -v -e '^Compiling module ' -e '^Build \(success\|failed\)$' "$1" | head -1
+}
+
 bok=0; bfail=0; rok=0; rfail=0
 for f in stage2/tests/*.sl; do
     base=$(basename "$f" .sl)
@@ -26,7 +31,7 @@ for f in stage2/tests/*.sl; do
             rfail=$((rfail + 1)); echo "  RUN-FAIL: $base"
         fi
     else
-        bfail=$((bfail + 1)); echo "  BUILD-FAIL: $base :: $(head -1 "$TMP/$base.log")"
+        bfail=$((bfail + 1)); echo "  BUILD-FAIL: $base :: $(first_error "$TMP/$base.log")"
     fi
 done
 
@@ -45,7 +50,7 @@ for f in stage2/tests/*.sl; do
         if "$SC" "$f" -o "$TMP/mt-$base" -i "$INC" -l "LLVM-19" -l "m" -target linux -mt > "$TMP/mt-$base.log" 2>&1; then
             "$TMP/mt-$base" > /dev/null 2>&1 || { mtfail=$((mtfail + 1)); echo "  MT-RUN-FAIL: $base (attempt $attempt)"; }
         else
-            mtfail=$((mtfail + 1)); echo "  MT-BUILD-FAIL: $base (attempt $attempt) :: $(head -1 "$TMP/mt-$base.log")"
+            mtfail=$((mtfail + 1)); echo "  MT-BUILD-FAIL: $base (attempt $attempt) :: $(first_error "$TMP/mt-$base.log")"
         fi
         attempt=$((attempt + 1))
     done

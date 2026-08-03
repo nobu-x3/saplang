@@ -23,6 +23,14 @@ extern {
     export fn i64  readlink(const i8* path, i8* buf, u64 size);
     export fn i32  setenv(const i8* name, const i8* value, i32 overwrite);
 
+    // Raw descriptors, so a caller can redirect one of the standard streams and put it back.
+    export fn i32  open(const i8* path, i32 flags, u32 mode);
+    export fn i32  close(i32 fd);
+    export fn i64  read(i32 fd, void* buf, u64 count);
+    export fn i32  dup(i32 fd);
+    export fn i32  dup2(i32 old_fd, i32 new_fd);
+    export fn i32  unlink(const i8* path);
+
     // stdio
     export struct FILE { i8 _opaque; }
 
@@ -60,6 +68,12 @@ extern {
     // numeric parsing
     export fn f64 strtod(const i8* nptr, i8** endptr);
 }
+
+// open(2) flags, x86-64 Linux
+export const i32 O_RDONLY = 0;
+export const i32 O_WRONLY = 1;
+export const i32 O_CREAT  = 64;
+export const i32 O_TRUNC  = 512;
 
 export const i32 SEEK_SET = 0;
 export const i32 SEEK_CUR = 1;
