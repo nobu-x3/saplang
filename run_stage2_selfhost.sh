@@ -18,7 +18,7 @@ bok=0; bfail=0; rok=0; rfail=0
 for f in stage2/tests/*.sl; do
     base=$(basename "$f" .sl)
     [ "$base" = "test_util" ] && continue
-    if "$SC" "$f" -o "$TMP/$base" -i "$INC" -l "LLVM-19" -target linux > "$TMP/$base.log" 2>&1; then
+    if "$SC" "$f" -o "$TMP/$base" -i "$INC" -l "LLVM-19" -l "m" -target linux > "$TMP/$base.log" 2>&1; then
         bok=$((bok + 1))
         if "$TMP/$base" > /dev/null 2>&1; then
             rok=$((rok + 1))
@@ -42,7 +42,7 @@ for f in stage2/tests/*.sl; do
     [ "$base" = "test_util" ] && continue
     attempt=1
     while [ "$attempt" -le "$MT_REPEATS" ]; do
-        if "$SC" "$f" -o "$TMP/mt-$base" -i "$INC" -l "LLVM-19" -target linux -mt > "$TMP/mt-$base.log" 2>&1; then
+        if "$SC" "$f" -o "$TMP/mt-$base" -i "$INC" -l "LLVM-19" -l "m" -target linux -mt > "$TMP/mt-$base.log" 2>&1; then
             "$TMP/mt-$base" > /dev/null 2>&1 || { mtfail=$((mtfail + 1)); echo "  MT-RUN-FAIL: $base (attempt $attempt)"; }
         else
             mtfail=$((mtfail + 1)); echo "  MT-BUILD-FAIL: $base (attempt $attempt) :: $(head -1 "$TMP/mt-$base.log")"
