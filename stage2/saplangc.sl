@@ -74,6 +74,10 @@ fn u8[] join_path(arena::Arena* arena_ptr, const u8[] prefix, const u8[] suffix)
 }
 
 fn i32 main(i32 argc, u8** argv) {
+    if(argc < 2) {
+        compiler::print_usage();
+        return 0;
+    }
     arena::Arena symbol_arena;
     arena::Arena type_arena;
     arena::Arena arena;
