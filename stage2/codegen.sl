@@ -9,6 +9,7 @@ import types;
 import interner;
 import symbol;
 import llvm;
+import abi;
 import mem;
 import list;
 import sys;
@@ -27,6 +28,11 @@ struct TypeMapEntry {
     void*        llvm;
 }
 
+struct FnAbiEntry {
+    types::Ty*   ty;
+    abi::FnAbi*  fn_abi;
+}
+
 struct CG {
     sapir::SapirModule* sm;
     mem::Allocator      allocator;
@@ -39,6 +45,7 @@ struct CG {
 
     void**              decl_map;       // decl index -> LLVMValueRef (function / global)
     list::List(TypeMapEntry) type_map;   // Type* -> LLVMTypeRef
+    list::List(FnAbiEntry)   fn_abi_map; // fn Type* -> its SysV classification
 
     // Debug info; di_builder is null unless the config wants DWARF.
     void*               di_builder;
@@ -52,6 +59,8 @@ struct CG {
     void*               current_block;  // LLVMBasicBlockRef currently being built
     void**              value_map;      // inst id -> LLVMValueRef
     void**              block_map;      // sapir block id -> LLVMBasicBlockRef
+    abi::FnAbi*         fn_abi;         // the current function's SysV classification
+    void**              param_values;   // runtime param index -> its reassembled LLVM value
 }
 
 // Builds the LLVM module, runs the config's pass pipeline, and emits obj_path. Returns 0 on success.
@@ -475,13 +484,152 @@ fn void* slice_struct_type(CG* cg) {
 }
 
 fn void* map_fn_type(CG* cg, types::Ty* fnty) {
+    abi::FnAbi* fn_abi = fn_abi_for(cg, fnty);
     types::Ty*[] params = fnty.data.fn_ptr.params;
-    void** llvm_params = (void**)mem::alloc(cg.allocator, (params.len + 1) * sizeof(void*));
-    for(u64 i = 0; i < params.len; i += 1) { llvm_params[i] = map_type(cg, params[i]); }
-    void* ret = map_type(cg, fnty.data.fn_ptr.ret);
+    void** llvm_params = (void**)mem::alloc(cg.allocator, ((u64)fn_abi.llvm_param_count + 1) * sizeof(void*));
+    void* ptr_ty = llvm::LLVMPointerTypeInContext(cg.ctx, 0);
+    u32 next = 0;
+    if(fn_abi.sret) {
+        llvm_params[next] = ptr_ty;
+        next += 1;
+    }
+    for(u64 i = 0; i < params.len; i += 1) {
+        abi::ArgInfo* info = &fn_abi.params[i];
+        switch(info.kind) {
+        case abi::ArgKind::Ignore: { }
+        case abi::ArgKind::Direct: {
+            llvm_params[next] = map_type(cg, params[i]);
+            next += 1;
+        }
+        case abi::ArgKind::Memory: {
+            llvm_params[next] = ptr_ty;
+            next += 1;
+        }
+        else {
+            for(u32 k = 0; k < (u32)info.count; k += 1) {
+                llvm_params[next] = eightbyte_type(cg, info.eightbytes[k], info.widths[k]);
+                next += 1;
+            }
+        }
+        }
+    }
+    void* ret = abi_return_type(cg, fn_abi, fnty.data.fn_ptr.ret);
     i32 variadic = 0;
     if(fnty.data.fn_ptr.is_variadic) { variadic = 1; }
-    return llvm::LLVMFunctionType(ret, llvm_params, (u32)params.len, variadic);
+    return llvm::LLVMFunctionType(ret, llvm_params, next, variadic);
+}
+
+// A single eightbyte returns bare; two ride home in an anonymous pair, one register each.
+fn void* abi_return_type(CG* cg, abi::FnAbi* fn_abi, types::Ty* ret_ty) {
+    switch(fn_abi.ret.kind) {
+    case abi::ArgKind::Direct: { return map_type(cg, ret_ty); }
+    case abi::ArgKind::Coerce: {
+        if(fn_abi.ret.count == 1) { return eightbyte_type(cg, fn_abi.ret.eightbytes[0], fn_abi.ret.widths[0]); }
+        void*[2] fields;
+        for(u32 k = 0; k < 2; k += 1) { fields[k] = eightbyte_type(cg, fn_abi.ret.eightbytes[k], fn_abi.ret.widths[k]); }
+        return llvm::LLVMStructTypeInContext(cg.ctx, &fields[0], 2, 0);
+    }
+    else { return llvm::LLVMVoidTypeInContext(cg.ctx); }
+    }
+    return llvm::LLVMVoidTypeInContext(cg.ctx);
+}
+
+fn void* eightbyte_type(CG* cg, abi::EightbyteKind kind, u8 width) {
+    switch(kind) {
+    case abi::EightbyteKind::Pointer: { return llvm::LLVMPointerTypeInContext(cg.ctx, 0); }
+    case abi::EightbyteKind::Float:   { return llvm::LLVMFloatTypeInContext(cg.ctx); }
+    case abi::EightbyteKind::Float2:  { return llvm::LLVMVectorType(llvm::LLVMFloatTypeInContext(cg.ctx), 2); }
+    case abi::EightbyteKind::Double:  { return llvm::LLVMDoubleTypeInContext(cg.ctx); }
+    else { return llvm::LLVMIntTypeInContext(cg.ctx, (u32)width * 8); }
+    }
+    return llvm::LLVMIntTypeInContext(cg.ctx, (u32)width * 8);
+}
+
+// Eightbyte loads and stores want 8-byte alignment even when the aggregate itself packs tighter.
+fn void* abi_slot(CG* cg, types::Ty* t) {
+    void* entry = cg.block_map[cg.f.entry];
+    void* first = llvm::LLVMGetFirstInstruction(entry);
+    if(first != null) { llvm::LLVMPositionBuilder(cg.builder, entry, first); }
+    else { llvm::LLVMPositionBuilderAtEnd(cg.builder, entry); }
+    void* slot = llvm::LLVMBuildAlloca(cg.builder, map_type(cg, t), cg.empty);
+    llvm::LLVMSetAlignment(slot, abi_slot_align(cg, t));
+    llvm::LLVMPositionBuilderAtEnd(cg.builder, cg.current_block);
+    return slot;
+}
+
+fn u32 abi_slot_align(CG* cg, types::Ty* t) {
+    u32 align = types::align_of(null, t);
+    if(align < abi::EIGHTBYTE) { return abi::EIGHTBYTE; }
+    return align;
+}
+
+fn void* abi_eightbyte_ptr(CG* cg, void* slot, u32 offset) {
+    if(offset == 0) { return slot; }
+    void*[1] indices;
+    indices[0] = llvm::LLVMConstInt(llvm::LLVMInt64TypeInContext(cg.ctx), (u64)offset, 0);
+    return llvm::LLVMBuildGEP2(cg.builder, llvm::LLVMInt8TypeInContext(cg.ctx), slot, &indices[0], 1, cg.empty);
+}
+
+// Each eightbyte type covers only bytes the aggregate really has, so these loads stay in bounds.
+fn void abi_split(CG* cg, abi::ArgInfo* info, types::Ty* t, void* value, void** out, u32* next) {
+    void* slot = abi_slot(cg, t);
+    llvm::LLVMBuildStore(cg.builder, value, slot);
+    for(u32 k = 0; k < (u32)info.count; k += 1) {
+        void* addr = abi_eightbyte_ptr(cg, slot, k * abi::EIGHTBYTE);
+        out[*next] = llvm::LLVMBuildLoad2(cg.builder, eightbyte_type(cg, info.eightbytes[k], info.widths[k]), addr, cg.empty);
+        *next += 1;
+    }
+}
+
+fn void* abi_join(CG* cg, abi::ArgInfo* info, types::Ty* t, void** parts) {
+    void* slot = abi_slot(cg, t);
+    for(u32 k = 0; k < (u32)info.count; k += 1) {
+        llvm::LLVMBuildStore(cg.builder, parts[k], abi_eightbyte_ptr(cg, slot, k * abi::EIGHTBYTE));
+    }
+    return llvm::LLVMBuildLoad2(cg.builder, map_type(cg, t), slot, cg.empty);
+}
+
+// byval and sret must be repeated on the call site: the backend lowers the call from these, not from the callee.
+fn void add_indirect_attr(CG* cg, void* target, u32 index, types::Ty* t, const u8[] name, u64 name_len, u32 alignment, bool is_call_site) {
+    void* attr = llvm::LLVMCreateTypeAttribute(cg.ctx, llvm::LLVMGetEnumAttributeKindForName(cstr(cg.allocator, name), name_len), map_type(cg, t));
+    void* align = llvm::LLVMCreateEnumAttribute(cg.ctx, llvm::LLVMGetEnumAttributeKindForName(cstr(cg.allocator, "align"), 5), (u64)alignment);
+    if(is_call_site) {
+        llvm::LLVMAddCallSiteAttribute(target, index, attr);
+        llvm::LLVMAddCallSiteAttribute(target, index, align);
+    } else {
+        llvm::LLVMAddAttributeAtIndex(target, index, attr);
+        llvm::LLVMAddAttributeAtIndex(target, index, align);
+    }
+}
+
+// A byval copy lands in the eightbyte-aligned outgoing argument area, so it over-aligns.
+fn void add_byval_attr(CG* cg, void* target, u32 index, types::Ty* t, bool is_call_site) {
+    add_indirect_attr(cg, target, index, t, "byval", 5, abi_slot_align(cg, t), is_call_site);
+}
+
+// Only what the type needs: a C caller may hand back a buffer aligned no better than that.
+fn void add_sret_attr(CG* cg, void* target, types::Ty* t, bool is_call_site) {
+    add_indirect_attr(cg, target, 1, t, "sret", 4, types::align_of(null, t), is_call_site);
+}
+
+fn void apply_abi_attrs(CG* cg, void* target, abi::FnAbi* fn_abi, types::Ty* fnty, bool is_call_site) {
+    if(fn_abi.sret) { add_sret_attr(cg, target, fnty.data.fn_ptr.ret, is_call_site); }
+    types::Ty*[] params = fnty.data.fn_ptr.params;
+    for(u64 i = 0; i < params.len; i += 1) {
+        if(fn_abi.params[i].kind != abi::ArgKind::Memory) { continue; }
+        add_byval_attr(cg, target, fn_abi.first_llvm_param[i] + 1, params[i], is_call_site);
+    }
+}
+
+fn abi::FnAbi* fn_abi_for(CG* cg, types::Ty* fnty) {
+    for(u64 i = 0; i < cg.fn_abi_map.len; i += 1) {
+        if(cg.fn_abi_map.ptr[i].ty == fnty) { return cg.fn_abi_map.ptr[i].fn_abi; }
+    }
+    FnAbiEntry e;
+    e.ty = fnty;
+    e.fn_abi = abi::classify_fn(fnty, cg.allocator);
+    list::push(&cg.fn_abi_map, cg.allocator, e);
+    return e.fn_abi;
 }
 
 fn void* type_map_lookup(CG* cg, types::Ty* t) {
@@ -505,6 +653,7 @@ fn void declare_decl(CG* cg, u32 index) {
     if(d.kind == sapir::SapirDeclKind::Fn) {
         void* fn_ty = map_fn_type(cg, d.ty);
         void* val = llvm::LLVMAddFunction(cg.llvm_module, cstr(cg.allocator, d.link_name), fn_ty);
+        apply_abi_attrs(cg, val, fn_abi_for(cg, d.ty), d.ty, false);
         llvm::LLVMSetLinkage(val, decl_linkage(d));
         if(cg.config == BuildConfig::AddressSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_attr(cg, val, "sanitize_address", 16); }
         if(cg.config == BuildConfig::ThreadSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_attr(cg, val, "sanitize_thread", 15); }
@@ -619,6 +768,8 @@ fn void emit_fn(CG* cg, sapir::SapirFn* f) {
     for(u64 i = 0; i < f.blocks.len; i += 1) {
         cg.block_map[i] = llvm::LLVMAppendBasicBlockInContext(cg.ctx, cg.current_fn, cg.empty);
     }
+    cg.fn_abi = fn_abi_for(cg, cg.sm.decls[f.decl_index].ty);
+    emit_abi_params(cg);
     // All phi nodes across all blocks first: a back-edge phi can be used by an instruction in an earlier-emitted block.
     for(u64 i = 0; i < f.blocks.len; i += 1) {
         sapir::SapirBlock* b = &f.blocks[i];
@@ -643,6 +794,32 @@ fn void emit_fn(CG* cg, sapir::SapirFn* f) {
         for(u64 p = 0; p < b.phis.len; p += 1) { fill_phi(cg, b.phis[p]); }
     }
     if(cg.di_builder != null) { emit_di_variables(cg, f); }
+}
+
+// Reassembles each declared param from the LLVM parameters the ABI spread it across, once per function.
+fn void emit_abi_params(CG* cg) {
+    u32 count = cg.f.param_count;
+    cg.param_values = (void**)mem::alloc(cg.allocator, ((u64)count + 1) * sizeof(void*));
+    if(count == 0) { return; }
+    cg.current_block = cg.block_map[cg.f.entry];
+    llvm::LLVMPositionBuilderAtEnd(cg.builder, cg.current_block);
+    set_debug_loc(cg, cg.f.src_pos);    // the builder still carries the previous function's location
+    types::Ty*[] declared = cg.sm.decls[cg.f.decl_index].ty.data.fn_ptr.params;
+    for(u32 i = 0; i < count; i += 1) {
+        abi::ArgInfo* info = &cg.fn_abi.params[i];
+        types::Ty* t = declared[i];
+        u32 base = cg.fn_abi.first_llvm_param[i];
+        switch(info.kind) {
+        case abi::ArgKind::Ignore: { cg.param_values[i] = llvm::LLVMGetUndef(map_type(cg, t)); }
+        case abi::ArgKind::Direct: { cg.param_values[i] = llvm::LLVMGetParam(cg.current_fn, base); }
+        case abi::ArgKind::Memory: { cg.param_values[i] = llvm::LLVMBuildLoad2(cg.builder, map_type(cg, t), llvm::LLVMGetParam(cg.current_fn, base), cg.empty); }
+        else {
+            void*[2] parts;
+            for(u32 k = 0; k < (u32)info.count; k += 1) { parts[k] = llvm::LLVMGetParam(cg.current_fn, base + k); }
+            cg.param_values[i] = abi_join(cg, info, t, &parts[0]);
+        }
+        }
+    }
 }
 
 // Params and memory-var locals get DWARF variables; scalar SSA locals (no recoverable storage) are left out for now.
@@ -675,7 +852,7 @@ fn void emit_di_variables(CG* cg, sapir::SapirFn* f) {
         if(v.alloca_id != sapir::INVALID_ID) {
             llvm::LLVMDIBuilderInsertDeclareRecordBefore(cg.di_builder, cg.value_map[v.alloca_id], di_var, empty_expr, loc, entry_term);
         } else if(is_param) {
-            llvm::LLVMDIBuilderInsertDbgValueRecordBefore(cg.di_builder, llvm::LLVMGetParam(cg.current_fn, (u32)i), di_var, empty_expr, loc, entry_term);
+            llvm::LLVMDIBuilderInsertDbgValueRecordBefore(cg.di_builder, cg.param_values[i], di_var, empty_expr, loc, entry_term);
         }
     }
     // Each recorded SSA-local write becomes a #dbg_value at the end of its block, so a debugger can read the value there.
@@ -716,7 +893,7 @@ fn void emit_inst(CG* cg, u32 id) {
     case sapir::Opcode::ConstNull:  { cg.value_map[id] = llvm::LLVMConstNull(map_type(cg, inst.ty)); }
     case sapir::Opcode::ConstStr:   { cg.value_map[id] = emit_const_str(cg, inst); }
     case sapir::Opcode::Undef:      { cg.value_map[id] = llvm::LLVMGetUndef(map_type(cg, inst.ty)); }
-    case sapir::Opcode::Param:      { cg.value_map[id] = llvm::LLVMGetParam(cg.current_fn, inst.a); }
+    case sapir::Opcode::Param:      { cg.value_map[id] = cg.param_values[inst.a]; }
 
     case sapir::Opcode::Alloca:     { cg.value_map[id] = emit_alloca(cg, inst); }
     case sapir::Opcode::Zero: {
@@ -775,10 +952,7 @@ fn void emit_inst(CG* cg, u32 id) {
     case sapir::Opcode::Cast: { cg.value_map[id] = emit_cast(cg, inst); }
     case sapir::Opcode::Call: { cg.value_map[id] = emit_call(cg, inst); }
 
-    case sapir::Opcode::Ret: {
-        if(inst.a == sapir::INVALID_ID) { llvm::LLVMBuildRetVoid(cg.builder); }
-        else { llvm::LLVMBuildRet(cg.builder, cg.value_map[inst.a]); }
-    }
+    case sapir::Opcode::Ret: { emit_ret(cg, inst); }
     case sapir::Opcode::Br:          { llvm::LLVMBuildBr(cg.builder, cg.block_map[inst.a]); }
     case sapir::Opcode::CondBr:      { llvm::LLVMBuildCondBr(cg.builder, cg.value_map[inst.a], cg.block_map[cg.f.extra[inst.b]], cg.block_map[cg.f.extra[inst.b + 1]]); }
     case sapir::Opcode::SwitchBr:    { emit_switch(cg, inst); }
@@ -879,19 +1053,105 @@ fn void* emit_cast(CG* cg, sapir::Inst* inst) {
 
 fn void* emit_call(CG* cg, sapir::Inst* inst) {
     u32 argc = cg.f.extra[inst.b];
-    void** args = (void**)mem::alloc(cg.allocator, ((u64)argc + 1) * sizeof(void*));
-    for(u32 k = 0; k < argc; k += 1) { args[k] = cg.value_map[cg.f.extra[inst.b + 1 + k]]; }
     bool indirect = ((u16)inst.flags & (u16)sapir::InstFlags::Indirect) != 0;
     void* callee;
-    void* fn_ty;
+    types::Ty* fnty;
     if(indirect) {
         callee = cg.value_map[inst.a];
-        fn_ty = map_fn_type(cg, cg.f.insts[inst.a].ty);
+        fnty = cg.f.insts[inst.a].ty;
     } else {
         callee = cg.decl_map[inst.a];
-        fn_ty = map_fn_type(cg, cg.sm.decls[inst.a].ty);
+        fnty = cg.sm.decls[inst.a].ty;
     }
-    return llvm::LLVMBuildCall2(cg.builder, fn_ty, callee, args, argc, cg.empty);
+    abi::FnAbi* fn_abi = fn_abi_for(cg, fnty);
+    void* fn_ty = map_fn_type(cg, fnty);
+    types::Ty* ret_ty = fnty.data.fn_ptr.ret;
+    u64 declared = fnty.data.fn_ptr.params.len;
+
+    void** args = (void**)mem::alloc(cg.allocator, ((u64)argc * 2 + 2) * sizeof(void*));
+    u32* byval_at = (u32*)mem::alloc(cg.allocator, ((u64)argc + 1) * sizeof(u32));
+    types::Ty** byval_ty = (types::Ty**)mem::alloc(cg.allocator, ((u64)argc + 1) * sizeof(types::Ty*));
+    u32 byval_count = 0;
+    u32 next = 0;
+    void* sret_slot = null;
+    if(fn_abi.sret) {
+        sret_slot = abi_slot(cg, ret_ty);
+        args[next] = sret_slot;
+        next += 1;
+    }
+    for(u32 k = 0; k < argc; k += 1) {
+        u32 arg_id = cg.f.extra[inst.b + 1 + k];
+        types::Ty* arg_ty = cg.f.insts[arg_id].ty;
+        abi::ArgInfo info;
+        if((u64)k < declared) { info = fn_abi.params[k]; }        // a variadic extra is not in the signature
+        else { info = abi::classify(arg_ty); }
+        if(info.kind == abi::ArgKind::Memory) {
+            byval_at[byval_count] = next + 1;
+            byval_ty[byval_count] = arg_ty;
+            byval_count += 1;
+        }
+        emit_call_arg(cg, &info, arg_ty, cg.value_map[arg_id], args, &next);
+    }
+    void* call = llvm::LLVMBuildCall2(cg.builder, fn_ty, callee, args, next, cg.empty);
+    if(fn_abi.sret) { add_sret_attr(cg, call, ret_ty, true); }
+    for(u32 k = 0; k < byval_count; k += 1) { add_byval_attr(cg, call, byval_at[k], byval_ty[k], true); }
+
+    switch(fn_abi.ret.kind) {
+    case abi::ArgKind::Memory: { return llvm::LLVMBuildLoad2(cg.builder, map_type(cg, ret_ty), sret_slot, cg.empty); }
+    case abi::ArgKind::Coerce: {
+        void*[2] parts;
+        if(fn_abi.ret.count == 1) { parts[0] = call; }
+        else { for(u32 k = 0; k < 2; k += 1) { parts[k] = llvm::LLVMBuildExtractValue(cg.builder, call, k, cg.empty); } }
+        return abi_join(cg, &fn_abi.ret, ret_ty, &parts[0]);
+    }
+    else { return call; }
+    }
+    return call;
+}
+
+fn void emit_ret(CG* cg, sapir::Inst* inst) {
+    if(inst.a == sapir::INVALID_ID || cg.fn_abi.ret.kind == abi::ArgKind::Ignore) {
+        llvm::LLVMBuildRetVoid(cg.builder);
+        return;
+    }
+    types::Ty* ret_ty = cg.sm.decls[cg.f.decl_index].ty.data.fn_ptr.ret;
+    void* value = cg.value_map[inst.a];
+    switch(cg.fn_abi.ret.kind) {
+    case abi::ArgKind::Memory: {
+        llvm::LLVMBuildStore(cg.builder, value, llvm::LLVMGetParam(cg.current_fn, 0));
+        llvm::LLVMBuildRetVoid(cg.builder);
+    }
+    case abi::ArgKind::Coerce: {
+        void*[2] parts;
+        u32 filled = 0;
+        abi_split(cg, &cg.fn_abi.ret, ret_ty, value, &parts[0], &filled);
+        if(cg.fn_abi.ret.count == 1) {
+            llvm::LLVMBuildRet(cg.builder, parts[0]);
+        } else {
+            void* pair = llvm::LLVMGetUndef(abi_return_type(cg, cg.fn_abi, ret_ty));
+            for(u32 k = 0; k < 2; k += 1) { pair = llvm::LLVMBuildInsertValue(cg.builder, pair, parts[k], k, cg.empty); }
+            llvm::LLVMBuildRet(cg.builder, pair);
+        }
+    }
+    else { llvm::LLVMBuildRet(cg.builder, value); }
+    }
+}
+
+fn void emit_call_arg(CG* cg, abi::ArgInfo* info, types::Ty* t, void* value, void** args, u32* next) {
+    switch(info.kind) {
+    case abi::ArgKind::Ignore: { }
+    case abi::ArgKind::Direct: {
+        args[*next] = value;
+        *next += 1;
+    }
+    case abi::ArgKind::Memory: {
+        void* slot = abi_slot(cg, t);
+        llvm::LLVMBuildStore(cg.builder, value, slot);
+        args[*next] = slot;
+        *next += 1;
+    }
+    else { abi_split(cg, info, t, value, args, next); }
+    }
 }
 
 fn void emit_switch(CG* cg, sapir::Inst* inst) {

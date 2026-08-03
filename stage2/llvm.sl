@@ -29,6 +29,8 @@ extern {
     export fn void* LLVMStructCreateNamed(void* ctx, const i8* name);
     export fn void  LLVMStructSetBody(void* struct_ty, void** element_types, u32 count, i32 packed);
     export fn void* LLVMFunctionType(void* ret, void** param_types, u32 param_count, i32 is_var_arg);
+    export fn void* LLVMVectorType(void* element, u32 count);
+    export fn void* LLVMIntTypeInContext(void* ctx, u32 num_bits);
 
     // values / globals / constants
     export fn void* LLVMAddFunction(void* m, const i8* name, void* fn_ty);
@@ -85,10 +87,12 @@ extern {
     export fn void* LLVMRunPasses(void* m, const i8* passes, void* tm, void* options);
     export fn void  LLVMConsumeError(void* err);
 
-    // attributes (for sanitize_address instrumentation)
+    // attributes (sanitizer instrumentation, and the ABI's byval / sret / align)
     export fn u32   LLVMGetEnumAttributeKindForName(const i8* name, u64 len);
     export fn void* LLVMCreateEnumAttribute(void* ctx, u32 kind_id, u64 val);
+    export fn void* LLVMCreateTypeAttribute(void* ctx, u32 kind_id, void* ty);
     export fn void  LLVMAddAttributeAtIndex(void* fn_val, u32 idx, void* attr);
+    export fn void  LLVMAddCallSiteAttribute(void* call, u32 idx, void* attr);
 
     // in-process execution (MCJIT) — runs a module without an external linker
     export fn void  LLVMLinkInMCJIT();
@@ -222,8 +226,9 @@ export const i32 RealONE = 6;
 // LLVMUnnamedAddr
 export const i32 GlobalUnnamedAddr = 2;
 
-// LLVMAttributeFunctionIndex (-1 as u32)
+// LLVMAttributeFunctionIndex (-1 as u32); parameters are indexed from 1
 export const u32 AttributeFunctionIndex = 4294967295;
+export const u32 AttributeReturnIndex = 0;
 
 // LLVMLinkage
 export const i32 ExternalLinkage    = 0;
