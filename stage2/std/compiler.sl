@@ -494,7 +494,10 @@ fn void write_depfile(Compiler* c) {
 
 // sapir -> object files -> linked executable. Assumes the frontend already ran.
 export fn i32 run_backend(Compiler* c) {
-    if(!c.compile_only) { sys::mkdir(cstr(c.allocator, ".tmp"), 493); }
+    if(!c.compile_only) {
+        sys::mkdir(cstr(c.allocator, ".tmp"), 493);
+        sys::mkdir(cstr(c.allocator, tmp_object_dir(c)), 493);
+    }
     const u8[][] object_paths = run_codegen(c);
     if(bail_on_errors(c)) { return 1; }
     if(c.compile_only) { return 0; }
@@ -624,10 +627,27 @@ fn const u8[] object_path_for(Compiler* c, module::Module* m) {
     return io::outbuf_bytes(&buf);
 }
 
-fn u8[] tmp_object_path(Compiler* c, module::Module* m) {
+// Objects are namespaced by output artifact: a build system compiling two artifacts in parallel shares modules,
+// and a single .tmp/<module>.o would have each invocation overwriting objects the other is about to link.
+fn u8[] tmp_object_dir(Compiler* c) {
     io::OutBuf buf;
     io::outbuf_init(&buf, c.allocator, 64);
     io::outbuf_write(&buf, ".tmp/");
+    const u8[] output = c.output_path;
+    u64 start = 0;
+    for(u64 index = 0; index < output.len; index += 1) {
+        if(output[index] == '/') { start = index + 1; }
+    }
+    if(start >= output.len) { io::outbuf_write(&buf, "a.out"); }
+    else { io::outbuf_write(&buf, output[start..output.len]); }
+    return io::outbuf_bytes(&buf);
+}
+
+fn u8[] tmp_object_path(Compiler* c, module::Module* m) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, c.allocator, 64);
+    io::outbuf_write(&buf, tmp_object_dir(c));
+    io::outbuf_write(&buf, "/");
     io::outbuf_write(&buf, interner::symbol_str(m.name));
     io::outbuf_write(&buf, ".o");
     return io::outbuf_bytes(&buf);
