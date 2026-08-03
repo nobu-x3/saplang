@@ -7,6 +7,7 @@ import types;
 import symbol;
 import token;
 import diag;
+import scanner;
 import codegen;
 import sapir;
 import sapir_print;
@@ -34,6 +35,45 @@ fn module::Module* mk_source_module(arena::Arena* a, const u8[]name, const u8[] 
     m.source = src;
     m.name = interner::intern(name);
     return m;
+}
+
+fn i8* cstr(arena::Arena* a, const u8[] bytes) {
+    i8* out = (i8*)arena::alloc(a, bytes.len + 1);
+    for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
+    out[bytes.len] = 0;
+    return out;
+}
+
+// Diagnostics go straight to fd 2 through unbuffered dprintf, so borrowing the descriptor is enough.
+fn const u8[] captured_diagnostics(arena::Arena* a, compiler::Compiler* c) {
+    i8* path = cstr(a, "diag_capture.tmp");
+    i32 saved = sys::dup(2);
+    i32 out_fd = sys::open(path, sys::O_WRONLY | sys::O_CREAT | sys::O_TRUNC, 420);
+    sys::dup2(out_fd, 2);
+    compiler::drain_diagnostics(c);
+    sys::close(out_fd);
+    sys::dup2(saved, 2);
+    sys::close(saved);
+
+    i32 in_fd = sys::open(path, sys::O_RDONLY, 0);
+    u8* buf = (u8*)arena::alloc(a, 4096);
+    i64 count = sys::read(in_fd, (void*)buf, 4095);
+    sys::close(in_fd);
+    sys::unlink(path);
+    if(count < 0) { count = 0; }
+    const u8[] text = {buf, (u64)count};
+    return text;
+}
+
+// One reported error at src_pos, drained and captured.
+fn const u8[] diagnostic_for(arena::Arena* a, const u8[] src, u32 src_pos, bool scan) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* m = mk_source_module(a, "main", src);
+    if(scan) { scanner::scan(m); }
+    compiler::add_module(c, m);
+    diag::report(&m.diag, m.arena, src_pos, "boom");
+    return captured_diagnostics(a, c);
 }
 
 fn void wire_imports(arena::Arena* a, module::Module* m, module::Module* dep) {
@@ -1005,6 +1045,70 @@ fn i32 argv_sapir_dump(arena::Arena* a, const u8[]msg) {
     return 0;
 }
 
+// ===== the offending source line, with a caret under the column =====
+// Byte offsets are spelled out per case; "aaa\nbbbb\ncc\n" puts 'b' at 4..7 and 'c' at 9..10.
+
+fn i32 diag_prints_source_line_and_caret(arena::Arena* a, const u8[] msg) {
+    const u8[] out = diagnostic_for(a, "aaa\nbbbb\ncc\n", 5, true);
+    if(!testing::expect_eq(out, ":2:2: boom\nbbbb\n ^\n", msg)) { return -1; }
+    return 0;
+}
+
+fn i32 diag_source_line_on_first_line(arena::Arena* a, const u8[] msg) {
+    const u8[] out = diagnostic_for(a, "aaa\nbbbb\n", 0, true);
+    if(!testing::expect_eq(out, ":1:1: boom\naaa\n^\n", msg)) { return -1; }
+    return 0;
+}
+
+// The last line has no following line_starts entry; deriving its end from one reads out of bounds.
+fn i32 diag_source_line_on_last_line_without_newline(arena::Arena* a, const u8[] msg) {
+    const u8[] out = diagnostic_for(a, "aaa\nbbbb\ncc", 10, true);
+    if(!testing::expect_eq(out, ":3:2: boom\ncc\n ^\n", msg)) { return -1; }
+    return 0;
+}
+
+fn i32 diag_source_line_on_last_line_with_newline(arena::Arena* a, const u8[] msg) {
+    const u8[] out = diagnostic_for(a, "aaa\nbbbb\ncc\n", 10, true);
+    if(!testing::expect_eq(out, ":3:2: boom\ncc\n ^\n", msg)) { return -1; }
+    return 0;
+}
+
+fn i32 diag_caret_mirrors_tabs(arena::Arena* a, const u8[] msg) {
+    const u8[] out = diagnostic_for(a, "\tif(x)\n", 4, true);
+    if(!testing::expect_eq(out, ":1:5: boom\n\tif(x)\n\t   ^\n", msg)) { return -1; }
+    return 0;
+}
+
+fn i32 diag_source_line_drops_carriage_return(arena::Arena* a, const u8[] msg) {
+    const u8[] out = diagnostic_for(a, "aaa\r\nbbb\r\n", 1, true);
+    if(!testing::expect_eq(out, ":1:2: boom\naaa\n ^\n", msg)) { return -1; }
+    return 0;
+}
+
+// A position at or past the end of source has no line to show; the message still prints.
+fn i32 diag_empty_source_prints_message_only(arena::Arena* a, const u8[] msg) {
+    const u8[] out = diagnostic_for(a, "", 0, true);
+    if(!testing::expect_eq(out, ":1:1: boom\n", msg)) { return -1; }
+    return 0;
+}
+
+// A module the scanner never reached has no line table at all; the guard must hold.
+fn i32 diag_unscanned_module_prints_message_only(arena::Arena* a, const u8[] msg) {
+    const u8[] out = diagnostic_for(a, "aaa\nbbbb\n", 5, false);
+    if(!testing::expect_eq(out, ":1:6: boom\n", msg)) { return -1; }
+    return 0;
+}
+
+// Editors and the test harness both read the first line; the coordinates have to lead.
+fn i32 diag_message_line_comes_first(arena::Arena* a, const u8[] msg) {
+    const u8[] out = diagnostic_for(a, "aaa\nbbbb\ncc\n", 5, true);
+    u64 first_newline = 0;
+    while(first_newline < out.len && out[first_newline] != '\n') { first_newline += 1; }
+    const u8[] head = {out.ptr, first_newline};
+    if(!testing::expect_eq(head, ":2:2: boom", msg)) { return -1; }
+    return 0;
+}
+
 fn i32 main() {
     testing::init();
 
@@ -1076,6 +1180,17 @@ fn i32 main() {
     testing::add(e2e, "e2e_lower_loop",              &e2e_lower_loop);
     testing::add(e2e, "e2e_lower_global_ref",       &e2e_lower_global_ref);
     testing::add(e2e, "e2e_lower_struct",            &e2e_lower_struct);
+
+    const u8[] snippet = "Diagnostic Snippet Tests";
+    testing::add(snippet, "diag_prints_source_line_and_caret",             &diag_prints_source_line_and_caret);
+    testing::add(snippet, "diag_source_line_on_first_line",                &diag_source_line_on_first_line);
+    testing::add(snippet, "diag_source_line_on_last_line_without_newline", &diag_source_line_on_last_line_without_newline);
+    testing::add(snippet, "diag_source_line_on_last_line_with_newline",    &diag_source_line_on_last_line_with_newline);
+    testing::add(snippet, "diag_caret_mirrors_tabs",                       &diag_caret_mirrors_tabs);
+    testing::add(snippet, "diag_source_line_drops_carriage_return",        &diag_source_line_drops_carriage_return);
+    testing::add(snippet, "diag_empty_source_prints_message_only",         &diag_empty_source_prints_message_only);
+    testing::add(snippet, "diag_unscanned_module_prints_message_only",     &diag_unscanned_module_prints_message_only);
+    testing::add(snippet, "diag_message_line_comes_first",                 &diag_message_line_comes_first);
 
     return testing::run();
 }
