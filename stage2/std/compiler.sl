@@ -498,10 +498,14 @@ export fn i32 run_backend(Compiler* c) {
         sys::mkdir(cstr(c.allocator, ".tmp"), 493);
         sys::mkdir(cstr(c.allocator, tmp_object_dir(c)), 493);
     }
+    u64 phase_start = bench::now_ns();
     const u8[][] object_paths = run_codegen(c);
+    phase_start = report_phase(c, "codegen", phase_start);
     if(bail_on_errors(c)) { return 1; }
     if(c.compile_only) { return 0; }
-    return run_link(c, object_paths);
+    i32 link_res = run_link(c, object_paths);
+    report_phase(c, "link", phase_start);
+    return link_res;
 }
 
 // Runs a produced executable and returns its exit code (or -1 on spawn failure).
