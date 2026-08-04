@@ -23,6 +23,7 @@ export enum StepKind : u8 {
     Top,       // a named `saplangc build <name>` selector; work happens in its deps
     Compile,
     Run,
+    Clean,
 }
 
 export struct Step {
@@ -67,6 +68,11 @@ struct CliArg {
     bool has_value;
 }
 
+export const u8[] DEFAULT_OUT_DIR = "sap-out";
+
+// Must stay in step with compiler::CACHE_DIR; builder reaches the compiler by subprocess, not by import.
+export const u8[] CACHE_DIR = ".sap-cache";
+
 export struct Build {
     mem::Allocator         allocator;
     const u8[]             compiler_path;    // resolved from $SAPLANGC; the exe compile steps spawn
@@ -79,6 +85,8 @@ export struct Build {
     bool                   want_help;
     Optimize               optimize;         // resolved by standard_optimize_options
     Target                 target;           // resolved by standard_target_options
+    const u8[]             out_dir;          // root for build output; set_out_dir, or -out-dir on the CLI
+    bool                   out_dir_pinned;   // -out-dir was given, so set_out_dir must not override it
 }
 
 // ---- graph construction API ----
@@ -87,7 +95,14 @@ export fn Build* new_build(arena::Arena* a) {
     Build* b = (Build*)arena::alloc(a, sizeof(Build));
     sys::memset(b, 0, sizeof(Build));
     b.allocator = arena::allocator(a);
+    b.out_dir = DEFAULT_OUT_DIR;
     return b;
+}
+
+// The CLI wins: -out-dir is a per-checkout choice, so it overrides whatever build.sl asks for.
+export fn void set_out_dir(Build* b, const u8[] dir) {
+    if(b.out_dir_pinned || dir.len == 0) { return; }
+    b.out_dir = dir;
 }
 
 export fn Step* step(Build* b, const u8[] name, const u8[] description) {
@@ -241,19 +256,15 @@ fn const u8[] optimize_name(Optimize o) {
 
 // ---- path resolution ----
 
-// Installed artifacts land in sap-out/bin/; transient ones (run-only) in .sap-cache/.
+// Installed artifacts land in <out>/bin/; transient ones (run-only) are cache, so they stay in .sap-cache/.
 export fn u8[] artifact_path(Build* b, CompileStep* c) {
-    if(c.installed) { return join(b.allocator, "sap-out/bin/", c.artifact_name); }
-    return join(b.allocator, ".sap-cache/", c.artifact_name);
+    if(c.installed) { return join(b.allocator, join(b.allocator, b.out_dir, "/bin/"), c.artifact_name); }
+    return join(b.allocator, join(b.allocator, CACHE_DIR, "/"), c.artifact_name);
 }
 
 fn void ensure_output_dir(Build* b, CompileStep* c) {
-    if(c.installed) {
-        sys::mkdir(cstr(b.allocator, "sap-out"), 493);
-        sys::mkdir(cstr(b.allocator, "sap-out/bin"), 493);
-    } else {
-        sys::mkdir(cstr(b.allocator, ".sap-cache"), 493);
-    }
+    io::ensure_directory_exists(CACHE_DIR, 493);
+    if(c.installed) { io::ensure_directory_exists(join(b.allocator, b.out_dir, "/bin"), 493); }
 }
 
 // ---- content-hash caching ----
@@ -265,7 +276,8 @@ fn void ensure_output_dir(Build* b, CompileStep* c) {
 fn u8[] cache_sidecar(Build* b, const u8[] name, const u8[] ext) {
     io::OutBuf buf;
     io::outbuf_init(&buf, b.allocator, 32);
-    io::outbuf_write(&buf, ".sap-cache/");
+    io::outbuf_write(&buf, CACHE_DIR);
+    io::outbuf_write_byte(&buf, '/');
     io::outbuf_write(&buf, name);
     io::outbuf_write(&buf, ext);
     return io::outbuf_bytes(&buf);
@@ -443,12 +455,21 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
 
     Build* b = new_build(&arena);
     b.compiler_path = resolve_compiler_path(b.allocator);
-    b.install_step = step(b, "install", "Copy build artifacts into sap-out/");
+    b.install_step = step(b, "install", "Copy build artifacts into the output directory");
+    step(b, "clean", "Remove the output directory and .sap-cache/").kind = StepKind::Clean;
 
     for(i32 arg_index = 1; arg_index < argc; arg_index += 1) {
         u8[] arg = cstr_slice(argv[arg_index]);
         if(slice_eq(arg, "--help") || slice_eq(arg, "-h")) {
             b.want_help = true;
+        } else if(slice_eq(arg, "-out-dir")) {
+            if(arg_index + 1 >= argc || cstr_slice(argv[arg_index + 1]).len == 0) {
+                sys::dprintf(2, "error: -out-dir needs a directory\n");
+                return 1;
+            }
+            arg_index += 1;
+            b.out_dir = cstr_slice(argv[arg_index]);
+            b.out_dir_pinned = true;
         } else if(starts_with(arg, "-D")) {
             parse_define_arg(b, arg);
         } else if(starts_with(arg, "-")) {
@@ -527,7 +548,6 @@ fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
             next += 1;
             u8[] out = artifact_path(b, c);
             ensure_output_dir(b, c);
-            sys::mkdir(cstr(b.allocator, ".sap-cache"), 493);
             if(is_fresh(b, c, out)) {
                 sys::dprintf(1, "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
                 c.step.done = true;
@@ -596,14 +616,46 @@ fn i32 make(Build* b, Step* s) {
     switch(s.kind) {
     case StepKind::Compile: { return make_compile(b, (CompileStep*)s); }
     case StepKind::Run:     { return make_run(b, (RunStep*)s); }
+    case StepKind::Clean:   { return make_clean(b); }
     else                    { return 0; }   // Top: its deps did the work
     }
+}
+
+// Deletes the running build runner along with the rest of the cache; the next build recompiles it.
+fn i32 make_clean(Build* b) {
+    i32 rc = remove_tree(b, CACHE_DIR);
+    if(rc != 0) { return rc; }
+    return remove_tree(b, b.out_dir);
+}
+
+fn i32 remove_tree(Build* b, const u8[] dir) {
+    if(!file_exists(dir)) { return 0; }
+    sys::dprintf(1, "  RM   %.*s\n", (i32)dir.len, (i8*)dir.ptr);
+    i8** argv = (i8**)mem::alloc(b.allocator, 4 * sizeof(i8*));
+    argv[0] = cstr(b.allocator, "rm");
+    argv[1] = cstr(b.allocator, "-rf");
+    argv[2] = cstr(b.allocator, dir);
+    argv[3] = null;
+    i32 rc = spawn_and_wait(argv);
+    if(rc != 0) {
+        sys::dprintf(2, "error: could not remove '%.*s'\n", (i32)dir.len, (i8*)dir.ptr);
+        return rc;
+    }
+
+    // rmdir stops at the first non-empty parent, so a nested build/debug leaves no empty build/.
+    u64 end = dir.len;
+    while(end > 0) {
+        end -= 1;
+        if(dir[end] != '/') { continue; }
+        const u8[] parent = {dir.ptr, end};
+        if(sys::remove(cstr(b.allocator, parent)) != 0) { return 0; }
+    }
+    return 0;
 }
 
 fn i32 make_compile(Build* b, CompileStep* c) {
     u8[] out = artifact_path(b, c);
     ensure_output_dir(b, c);
-    sys::mkdir(cstr(b.allocator, ".sap-cache"), 493);
     if(is_fresh(b, c, out)) {
         sys::dprintf(1, "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
         return 0;
@@ -633,6 +685,7 @@ fn i32 make_run(Build* b, RunStep* r) {
 fn void print_help(Build* b) {
     sys::dprintf(1, "Usage: saplangc build [step]... [-Doption=value]... [compiler flag]...\n");
     sys::dprintf(1, "Any other -flag (e.g. -show-timings, -mt) is passed to every compile.\n\n");
+    sys::dprintf(1, "  -out-dir <dir>  root for build output, overriding build.sl (currently %.*s)\n\n", (i32)b.out_dir.len, (i8*)b.out_dir.ptr);
     sys::dprintf(1, "Steps:\n");
     for(u64 step_index = 0; step_index < b.top_steps.len; step_index += 1) {
         Step* s = b.top_steps.ptr[step_index];

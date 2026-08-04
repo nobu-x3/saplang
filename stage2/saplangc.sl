@@ -120,35 +120,36 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
     }
     io::close(&bf);
 
-    sys::mkdir(cstr(arena_ptr, ".sap-cache"), 493);
-    const u8[] runner_path = ".sap-cache/__build_runner.sl";
+    const u8[] cache_dir = compiler::CACHE_DIR;
+    io::ensure_directory_exists(cache_dir, 493);
+    const u8[] runner_path = join_path(arena_ptr, cache_dir, "/__build_runner.sl");
     if(!write_runner(runner_path)) {
         sys::dprintf(2, "error: could not write build runner\n");
         return 1;
     }
 
     // The runner recompile is skipped when build.sl and everything it pulls in are unchanged.
-    if(!runner_fresh(arena_ptr)) {
+    if(!runner_fresh(arena_ptr, cache_dir)) {
         compiler::Compiler* c = compiler::new(arena_ptr);
         compiler::add_source(c, runner_path);
         compiler::add_import_path(c, ".");
         add_passthrough_import_paths(c, argc, argv);
         u8[] std_dir = find_std_dir(arena_ptr, argv);
         if(std_dir.len > 0) { compiler::add_import_path(c, std_dir); }
-        c.deps_path = ".sap-cache/build.dep";
-        c.output_path = ".sap-cache/build";
+        c.deps_path = join_path(arena_ptr, cache_dir, "/build.dep");
+        c.output_path = join_path(arena_ptr, cache_dir, "/build");
         if(compiler::run(c) != 0) {
             sys::dprintf(2, "error: could not compile build.sl (is `builder` reachable? std/ must sit beside saplangc, or set SAPLANG_STD)\n");
             return 1;
         }
-        write_runner_stamp(arena_ptr);
+        write_runner_stamp(arena_ptr, cache_dir);
     }
 
     sys::setenv(cstr(arena_ptr, "SAPLANGC"), (const i8*)argv[0], 1);
     // Drop the driver-only `-i` pairs; the runner has build.sl baked in and wants only steps / -D.
     i8** rargv = (i8**)arena::alloc(arena_ptr, (u64)argc * sizeof(i8*));
     u64 forwarded = 0;
-    rargv[forwarded] = cstr(arena_ptr, ".sap-cache/build"); forwarded += 1;
+    rargv[forwarded] = cstr(arena_ptr, join_path(arena_ptr, cache_dir, "/build")); forwarded += 1;
     for(i32 arg_index = 2; arg_index < argc; arg_index += 1) {
         if(cstr_eq(argv[arg_index], "-i")) { arg_index += 1; continue; }
         rargv[forwarded] = (i8*)argv[arg_index]; forwarded += 1;
@@ -179,8 +180,8 @@ fn bool file_exists(const u8[] path) {
 }
 
 // Content hash over every source the last runner compile read; empty when anything is missing.
-fn u8[] runner_stamp(arena::Arena* arena_ptr) {
-    io::File df = io::open(".sap-cache/build.dep", "r");
+fn u8[] runner_stamp(arena::Arena* arena_ptr, const u8[] cache_dir) {
+    io::File df = io::open(join_path(arena_ptr, cache_dir, "/build.dep"), "r");
     if(df.fp == null) { u8[] e = {null, 0}; return e; }
     u8[] listing = io::read_all(&df, arena_ptr);
     io::close(&df);
@@ -206,21 +207,21 @@ fn u8[] runner_stamp(arena::Arena* arena_ptr) {
     return io::outbuf_bytes(&hb);
 }
 
-fn bool runner_fresh(arena::Arena* arena_ptr) {
-    if(!file_exists(".sap-cache/build")) { return false; }
-    io::File sf = io::open(".sap-cache/build.stamp", "r");
+fn bool runner_fresh(arena::Arena* arena_ptr, const u8[] cache_dir) {
+    if(!file_exists(join_path(arena_ptr, cache_dir, "/build"))) { return false; }
+    io::File sf = io::open(join_path(arena_ptr, cache_dir, "/build.stamp"), "r");
     if(sf.fp == null) { return false; }
     u8[] stored = io::read_all(&sf, arena_ptr);
     io::close(&sf);
-    u8[] current = runner_stamp(arena_ptr);
+    u8[] current = runner_stamp(arena_ptr, cache_dir);
     if(current.len == 0) { return false; }
     return slice_eq(stored, current);
 }
 
-fn void write_runner_stamp(arena::Arena* arena_ptr) {
-    u8[] current = runner_stamp(arena_ptr);
+fn void write_runner_stamp(arena::Arena* arena_ptr, const u8[] cache_dir) {
+    u8[] current = runner_stamp(arena_ptr, cache_dir);
     if(current.len == 0) { return; }
-    io::File f = io::open(".sap-cache/build.stamp", "w");
+    io::File f = io::open(join_path(arena_ptr, cache_dir, "/build.stamp"), "w");
     if(f.fp == null) { return; }
     io::write_string(&f, current);
     io::close(&f);

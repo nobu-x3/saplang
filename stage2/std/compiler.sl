@@ -51,6 +51,9 @@ export struct Compiler {
     list::List(module::Define) defines;   // -D<name>[=<value>]: readable from `comprun if (build::defined(...))`
 }
 
+// Intermediates are cache, not output: they stay put regardless of where artifacts are sent.
+export const u8[] CACHE_DIR = ".sap-cache";
+
 export const u8[] VERSION = "0.2.1 (stage2, self-hosted)";
 
 export fn void print_usage() {
@@ -495,8 +498,7 @@ fn void write_depfile(Compiler* c) {
 // sapir -> object files -> linked executable. Assumes the frontend already ran.
 export fn i32 run_backend(Compiler* c) {
     if(!c.compile_only) {
-        sys::mkdir(cstr(c.allocator, ".tmp"), 493);
-        sys::mkdir(cstr(c.allocator, tmp_object_dir(c)), 493);
+        io::ensure_directory_exists(tmp_object_dir(c), 493);
     }
     u64 phase_start = bench::now_ns();
     const u8[][] object_paths = run_codegen(c);
@@ -632,11 +634,12 @@ fn const u8[] object_path_for(Compiler* c, module::Module* m) {
 }
 
 // Objects are namespaced by output artifact: a build system compiling two artifacts in parallel shares modules,
-// and a single .tmp/<module>.o would have each invocation overwriting objects the other is about to link.
+// and a single tmp/<module>.o would have each invocation overwriting objects the other is about to link.
 fn u8[] tmp_object_dir(Compiler* c) {
     io::OutBuf buf;
     io::outbuf_init(&buf, c.allocator, 64);
-    io::outbuf_write(&buf, ".tmp/");
+    io::outbuf_write(&buf, CACHE_DIR);
+    io::outbuf_write(&buf, "/tmp/");
     const u8[] output = c.output_path;
     u64 start = 0;
     for(u64 index = 0; index < output.len; index += 1) {

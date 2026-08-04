@@ -71,6 +71,52 @@ fn i32 artifact_paths(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+// set_out_dir moves installed artifacts; the cache is not output, so it stays at the root.
+fn i32 out_dir_override(arena::Arena* a, const u8[]m) {
+    builder::Build* b = builder::new_build(a);
+    b.install_step = builder::step(b, "install", "x");
+    builder::set_out_dir(b, "build/debug");
+
+    builder::CompileStep* inst = builder::add_executable(b, "app", "main.sl");
+    builder::install_artifact(b, inst);
+    if(!testing::expect_eq(builder::artifact_path(b, inst), "build/debug/bin/app", m)) { return -1; }
+
+    builder::CompileStep* tmp = builder::add_executable(b, "tool", "tool.sl");
+    if(!testing::expect_eq(builder::artifact_path(b, tmp), ".sap-cache/tool", m)) { return -2; }
+    return 0;
+}
+
+// An empty dir is ignored, and -out-dir on the CLI pins the value against a later set_out_dir.
+fn i32 out_dir_precedence(arena::Arena* a, const u8[]m) {
+    builder::Build* b = builder::new_build(a);
+    b.install_step = builder::step(b, "install", "x");
+
+    builder::set_out_dir(b, "");
+    if(!testing::expect_eq(b.out_dir, "sap-out", m)) { return -1; }
+
+    b.out_dir = "fromcli";
+    b.out_dir_pinned = true;
+    builder::set_out_dir(b, "fromscript");
+    if(!testing::expect_eq(b.out_dir, "fromcli", m)) { return -2; }
+
+    builder::CompileStep* inst = builder::add_executable(b, "app", "main.sl");
+    builder::install_artifact(b, inst);
+    if(!testing::expect_eq(builder::artifact_path(b, inst), "fromcli/bin/app", m)) { return -3; }
+    return 0;
+}
+
+// clean is a built-in top step, so a project gets it without declaring anything.
+fn i32 clean_step_registered(arena::Arena* a, const u8[]m) {
+    builder::Build* b = builder::new_build(a);
+    builder::Step* s = builder::step(b, "clean", "x");
+    s.kind = builder::StepKind::Clean;
+
+    builder::Step* found = builder::resolve_step(b, "clean");
+    if(!testing::expect_not_null((void*)found, m)) { return -1; }
+    if(!testing::expect_eq((i32)found.kind, (i32)builder::StepKind::Clean, m)) { return -2; }
+    return 0;
+}
+
 // The assembled saplangc invocation, exercised with every flag class at once.
 fn i32 command_string(arena::Arena* a, const u8[]m) {
     builder::Build* b = builder::new_build(a);
@@ -200,6 +246,9 @@ fn i32 main() {
     testing::add(suite, "graph_allocates_through_caller_allocator", &graph_allocates_through_caller_allocator);
     testing::add(suite, "graph_structure", &graph_structure);
     testing::add(suite, "artifact_paths", &artifact_paths);
+    testing::add(suite, "out_dir_override", &out_dir_override);
+    testing::add(suite, "out_dir_precedence", &out_dir_precedence);
+    testing::add(suite, "clean_step_registered", &clean_step_registered);
     testing::add(suite, "command_string", &command_string);
     testing::add(suite, "command_string_minimal", &command_string_minimal);
     testing::add(suite, "options", &options);

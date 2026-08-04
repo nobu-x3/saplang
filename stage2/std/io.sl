@@ -185,6 +185,21 @@ export fn bool unlink(const u8[] path) {
     return sys::remove((const i8*)&path_buf[0]) == 0;
 }
 
+// Creates every missing component: one sys::mkdir cannot make a nested path like build/debug.
+export fn bool ensure_directory_exists(const u8[] path, u32 mode) {
+    u8[4096] path_buf;
+    if(path.len == 0 || !cstr_into(path, &path_buf[0], 4096)) {
+        return false;
+    }
+    for(u64 char_index = 1; char_index <= path.len; char_index += 1) {
+        if(char_index < path.len && path[char_index] != '/') { continue; }
+        path_buf[char_index] = 0;
+        sys::mkdir((const i8*)&path_buf[0], mode);
+        if(char_index < path.len) { path_buf[char_index] = path[char_index]; }
+    }
+    return true;
+}
+
 // Growable byte buffer. Append-only; the memory comes from the caller's
 // allocator and lives as long as that allocator does.
 export struct OutBuf {

@@ -33,7 +33,8 @@ build_stage() {
     tag=$1; cc=$2; flags=$3; out=$4
     wt=$(mktemp -d)
     git worktree add --quiet --detach "$wt" "$tag"
-    ( cd "$wt" && rm -rf .tmp && "$ROOT/$cc" stage2/saplangc.sl -o "$ROOT/$out" -i "$INCLUDES" -l "LLVM-19" -target linux $flags )
+    # Seeds predating the .sap-cache move still scribble .tmp; clear both so a stale worktree can't leak objects.
+    ( cd "$wt" && rm -rf .tmp .sap-cache && "$ROOT/$cc" stage2/saplangc.sl -o "$ROOT/$out" -i "$INCLUDES" -l "LLVM-19" -target linux $flags )
     git worktree remove --force "$wt"
 }
 

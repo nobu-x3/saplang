@@ -13,6 +13,12 @@ CMakeUserPresets.json
 rework_tests/.runners
 tags
 
+.sap-cache/
+sap-out/
+a.out
+# Stage 1 and pre-.sap-cache bootstrap seeds still emit objects here.
+.tmp/
+
 # Stage 2 self-host binaries (reproducible via ./bootstrap.sh off the stage2-v0 tag)
 bootstrap/
 fuzz-out/
