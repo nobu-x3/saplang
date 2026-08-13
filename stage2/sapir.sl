@@ -24,6 +24,7 @@ export struct SapirDecl {
     SapirDeclKind   kind;
     SapirLinkage    linkage;
     bool            is_variadic;    // meaningful only for extern C fns
+    bool            is_thread_local; // globals only; a referencing module must agree with the defining one
     const u8[]      link_name;      // final symbol bytes; mangling already applied
     types::Ty*    ty;             // fn-pointer type for fns; value type for globals
     u32             fn_index;       // into SapirModule.fns for a local fn, else INVALID_ID

@@ -1543,6 +1543,49 @@ fn i32 ok_generic_struct_alias(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+fn i32 ok_threadlocal_global(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "threadlocal i32 counter = 0;\nexport fn i32 f() { counter += 1; return counter; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// The storage class has to compose with every type shape a plain global already accepts.
+fn i32 ok_threadlocal_composite(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 x; i32 y; }\nthreadlocal P p;\nthreadlocal i32* ptr = null;\nthreadlocal i32[4] arr;\nthreadlocal u8[] s;\nexport fn i32 f() { p.x = 1; arr[0] = 2; ptr = &p.x; return p.x + arr[0] + (i32)s.len; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_threadlocal_exported(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "export threadlocal i32 tally = 3;\nexport fn i32 f() { tally += 1; return tally; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_threadlocal_local(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "export fn void f() { threadlocal i32 x = 0; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "`threadlocal` is only valid on a module-level variable; a local already has one copy per thread", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)21, m)) { return -3; }
+    return 0;
+}
+
+fn i32 err_threadlocal_const(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "threadlocal const i32 X = 5;");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "`threadlocal` is not valid on a `const` (a per-thread copy of an immutable value)", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)0, m)) { return -3; }
+    return 0;
+}
+
+fn i32 err_threadlocal_extern(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "extern {\nthreadlocal i32 e;\n}");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "`threadlocal` is not valid in an `extern` block; a foreign thread-local needs its own access model", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)9, m)) { return -3; }
+    return 0;
+}
+
 // An alias bound to a call that doesn't yield a Type is reported, not crashed.
 fn i32 err_alias_call_not_type(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn i32 notype() { return 5; } alias W = notype();\nexport fn i32 f(W x) { return (i32)x; }");
@@ -1781,5 +1824,11 @@ fn i32 main() {
     testing::add(suite, "err_alias_call_not_type",   &err_alias_call_not_type);
     testing::add(suite, "ok_anon_struct_type_alias", &ok_anon_struct_type_alias);
     testing::add(suite, "ok_generic_struct_alias",   &ok_generic_struct_alias);
+    testing::add(suite, "ok_threadlocal_global",     &ok_threadlocal_global);
+    testing::add(suite, "ok_threadlocal_composite",  &ok_threadlocal_composite);
+    testing::add(suite, "ok_threadlocal_exported",   &ok_threadlocal_exported);
+    testing::add(suite, "err_threadlocal_local",     &err_threadlocal_local);
+    testing::add(suite, "err_threadlocal_const",     &err_threadlocal_const);
+    testing::add(suite, "err_threadlocal_extern",    &err_threadlocal_extern);
     return testing::run();
 }

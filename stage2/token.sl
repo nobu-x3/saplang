@@ -37,7 +37,7 @@ export enum TokenKind : u16 {
     KW_TYPE_LAST = TYPE,
 
     STRUCT, UNION, ENUM, FN,
-    CONST, RETURN, EXTERN, OPAQUE, EXPORT, IMPORT,
+    CONST, RETURN, EXTERN, OPAQUE, EXPORT, IMPORT, THREADLOCAL,
     IF, ELSE, WHILE, FOR, SWITCH, CASE,
     BREAK, CONTINUE, DEFER,
     TRUE, FALSE, NULL, UNDEFINED,
@@ -156,6 +156,7 @@ export fn const u8[] kind_name(TokenKind k) {
 	case TokenKind::OPAQUE:       { return "'opaque'"; }
 	case TokenKind::EXPORT:       { return "'export'"; }
 	case TokenKind::IMPORT:       { return "'import'"; }
+	case TokenKind::THREADLOCAL:  { return "'threadlocal'"; }
 	case TokenKind::IF:           { return "'if'"; }
 	case TokenKind::ELSE:         { return "'else'"; }
 	case TokenKind::WHILE:        { return "'while'"; }
@@ -198,6 +199,7 @@ export const KeywordEntry[] KEYWORDS = [
     { "const", TokenKind::CONST }, { "return", TokenKind::RETURN },
     { "extern", TokenKind::EXTERN }, { "opaque", TokenKind::OPAQUE },
     { "export", TokenKind::EXPORT }, { "import", TokenKind::IMPORT },
+    { "threadlocal", TokenKind::THREADLOCAL },
     { "if", TokenKind::IF }, { "else", TokenKind::ELSE },
     { "while", TokenKind::WHILE }, { "for", TokenKind::FOR },
     { "switch", TokenKind::SWITCH }, { "case", TokenKind::CASE },

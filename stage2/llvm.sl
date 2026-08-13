@@ -43,6 +43,8 @@ extern {
     export fn void  LLVMSetInitializer(void* global, void* const_val);
     export fn void  LLVMSetLinkage(void* global, i32 linkage);
     export fn void  LLVMSetGlobalConstant(void* global, i32 is_const);
+    export fn void  LLVMSetThreadLocal(void* global, i32 is_thread_local);
+    export fn void  LLVMSetThreadLocalMode(void* global, i32 mode);
 
     // basic blocks + terminators (the rest of the builders land with step 9)
     export fn void* LLVMAppendBasicBlockInContext(void* ctx, void* fn_val, const i8* name);
@@ -234,6 +236,9 @@ export const u32 AttributeReturnIndex = 0;
 export const i32 ExternalLinkage    = 0;
 export const i32 LinkOnceODRLinkage = 3;
 export const i32 InternalLinkage    = 8;
+
+// LLVMThreadLocalMode; local-exec is only sound because saplangc emits executables, never shared objects.
+export const i32 LocalExecTLSModel  = 4;
 
 // LLVMVerifierFailureAction
 export const i32 ReturnStatusAction = 2;

@@ -451,7 +451,13 @@ fn void resolve_extern_item_signature(Sema* s, ast::AstNode* item) {
         decl.ty = types::intern_union((void*)materialized);
     }
     // extern var/const and enum items resolve exactly like their top-level forms.
-    case ast::AstKind::VarDecl:  { resolve_decl_signature(s, item); }
+    case ast::AstKind::VarDecl:  {
+        if(((ast::VarDeclNode*)item).is_thread_local) {
+            const u8[] msg = "`threadlocal` is not valid in an `extern` block; a foreign thread-local needs its own access model";
+            sema_report(s, item.h.src_pos, msg);
+        }
+        resolve_decl_signature(s, item);
+    }
     case ast::AstKind::EnumDecl: { resolve_decl_signature(s, item); }
     else { }
     }
@@ -2560,6 +2566,10 @@ fn void stmt_or_expr(Sema* s, ast::AstNode* node) {
 }
 
 fn void stmt_var_decl(Sema* s, ast::VarDeclNode* var) {
+    if(var.is_thread_local) {
+        const u8[] msg = "`threadlocal` is only valid on a module-level variable; a local already has one copy per thread";
+        sema_report(s, var.h.src_pos, msg);
+    }
     types::Ty* declared = resolve_type(s, var.type_expr);
     if(var.init != null) {
         if(declared != null) { check(s, var.init, declared); }

@@ -52,6 +52,19 @@ export fn void* realloc_grow(Arena* arena, void* old, u64 old_size, u64 new_size
     return fresh;
 }
 
+export fn void free(Arena* arena) {
+    ArenaPage* current = arena.head;
+    while(current) {
+        ArenaPage* next = current.next;
+        sys::free(current);
+        current = next;
+    }
+    arena.head = null;
+}
+
+export fn void reset(Arena* arena) {
+}
+
 export fn mem::Allocator allocator(Arena* arena) {
     mem::Allocator out;
     out.ctx = (void*)arena;

@@ -75,6 +75,7 @@ fn ast::AstNode* parse_top_decl(Parser* p) {
             return parse_import(p);
         }
         case token::TokenKind::CONST:   { return parse_var_decl(p, is_exported); }
+        case token::TokenKind::THREADLOCAL: { return parse_var_decl(p, is_exported); }
         case token::TokenKind::EXTERN:  { return parse_extern_block(p); }
         case token::TokenKind::COMPRUN: {
             ast::AstNode* cr = parse_comprun(p, true);
@@ -173,6 +174,8 @@ fn ast::AstNode* parse_import(Parser* p) {
 
 fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
     u32 start = peek(p, 0).src_pos;
+    bool is_thread_local = peek(p, 0).kind == token::TokenKind::THREADLOCAL;
+    if(is_thread_local) { consume(p); }
     bool leading_const = peek(p, 0).kind == token::TokenKind::CONST;
     if(leading_const) { consume(p); }
     bool absorbed = false;
@@ -210,6 +213,12 @@ fn ast::AstNode* parse_var_decl(Parser* p, bool is_exported) {
     var_decl_node.init = init_expr;
     var_decl_node.is_const = is_const;
     var_decl_node.is_exported = is_exported;
+    var_decl_node.is_thread_local = is_thread_local;
+    if(is_thread_local && is_const && !p.is_speculating) {
+        const u8[] msg = "`threadlocal` is not valid on a `const` (a per-thread copy of an immutable value)";
+        diag::report(&p.m.diag, p.m.arena, start, msg);
+        var_decl_node.h.flags = ast::AstFlags::HadError;
+    }
     return (ast::AstNode*)var_decl_node;
 }
 
@@ -310,6 +319,7 @@ fn ast::AstNode* parse_stmt(Parser* p) {
         case token::TokenKind::COMPERROR:    { return parse_comperror(p); }
         case token::TokenKind::COMPWARNING:  { return parse_compwarning(p); }
         case token::TokenKind::CONST:        { return parse_local_var_decl(p); }
+        case token::TokenKind::THREADLOCAL:  { return parse_local_var_decl(p); }
     else {
         if(looks_like_type_start(t.kind) && looks_like_var_decl(p)) {
             return parse_local_var_decl(p);
@@ -869,7 +879,7 @@ fn ast::AstNode* parse_extern_item(Parser* p) {
     ast::AstNode* node = null;
     if(k == token::TokenKind::FN) { node = parse_extern_fn_decl(p, is_exported, start); }
     else if(k == token::TokenKind::ENUM) { node = parse_enum_decl(p, is_exported); }
-    else if(k == token::TokenKind::CONST || looks_like_type_start(k)) {
+    else if(k == token::TokenKind::CONST || k == token::TokenKind::THREADLOCAL || looks_like_type_start(k)) {
         node = parse_var_decl(p, is_exported);
         if(node != null && node.h.kind == ast::AstKind::VarDecl) { ((ast::VarDeclNode*)node).is_extern = true; }
     }

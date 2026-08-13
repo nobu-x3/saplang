@@ -162,6 +162,31 @@ fn bool expect_linkage(module::Module* m, const u8[] link_name, sapir::SapirLink
     return testing::expect_eq((u32)d.linkage, (u32)expected, msg);
 }
 
+fn bool expect_thread_local(module::Module* m, const u8[] link_name, bool expected, const u8[] msg) {
+    sapir::SapirDecl* d = lowered_decl(m, link_name);
+    if(!testing::expect_ne((void*)d, null, msg)) { return false; }
+    return testing::expect_eq(d.is_thread_local, expected, msg);
+}
+
+// A module referencing a foreign threadlocal has to declare it thread-local too, or it emits a plain reference to a TLS symbol.
+fn i32 threadlocal_lowers_across_modules(arena::Arena* a, const u8[]msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "export threadlocal i32 tally = 3;\nthreadlocal i32 hidden = 1;\ni32 plain = 0;\nexport fn i32 bump() { hidden += 1; plain += 1; return hidden + plain; }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { b::tally += 1; return b::tally + b::bump(); }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    if(!expect_thread_local(b, "__b_tally", true, msg)) { return -3; }
+    if(!expect_thread_local(b, "__b_hidden", true, msg)) { return -4; }
+    if(!expect_thread_local(b, "__b_plain", false, msg)) { return -5; }
+    if(!expect_thread_local(av, "__b_tally", true, msg)) { return -6; }
+    return 0;
+}
+
 // A clone is emitted in the instantiating module, so every private of b it touches has to leave b externally.
 fn i32 cross_module_generic_uses_home_private(arena::Arena* a, const u8[]msg) {
     boot(a);
@@ -1037,6 +1062,21 @@ fn i32 e2e_link_generic_over_home_privates(arena::Arena* a, const u8[]msg) {
     return 0;
 }
 
+// E2E: the worker's copy reaches 15 and main's only 11 — one shared global would land on 31 instead.
+fn i32 e2e_link_threadlocal_per_thread(arena::Arena* a, const u8[]msg) {
+    boot(a);
+    arena::Arena* ca = sub_arena(a);
+    compiler::Compiler* c = compiler::new(ca);
+    module::Module* app = mk_source_module(ca, "appmod", "extern {\n fn i32 pthread_create(u64* t, void* attr, fn* void*(void*) start, void* arg);\n fn i32 pthread_join(u64 t, void** ret);\n}\nthreadlocal i32 counter = 10;\ni32 worker_saw = 0;\nfn void* worker(void* arg) { counter += 5; worker_saw = counter; return null; }\nfn i32 main() { u64 t; pthread_create(&t, null, &worker, null); pthread_join(t, null); counter += 1; return worker_saw + counter; }");
+    compiler::add_module(c, app);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    const u8[] prog = sap_out(ca, "e2e_threadlocal_prog");
+    c.output_path = prog;
+    if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
+    if(!testing::expect_eq((u64)compiler::run_executable(arena::allocator(ca), prog), (u64)26, msg)) { return -3; }
+    return 0;
+}
+
 // E2E: an unresolved extern makes ld.lld fail; the backend surfaces a non-zero result rather than a bad binary.
 fn i32 e2e_link_failure_reported(arena::Arena* a, const u8[]msg) {
     boot(a);
@@ -1257,6 +1297,7 @@ fn i32 main() {
     testing::add(fe, "cross_module_generic_uses_home_private_overloaded", &cross_module_generic_uses_home_private_overloaded);
     testing::add(fe, "cross_module_generic_leaves_unused_private_internal", &cross_module_generic_leaves_unused_private_internal);
     testing::add(fe, "nested_generic_instantiated_in_two_modules", &nested_generic_instantiated_in_two_modules);
+    testing::add(fe, "threadlocal_lowers_across_modules", &threadlocal_lowers_across_modules);
     testing::add(fe, "cross_module_comptime_call_ok",  &cross_module_comptime_call_ok);
     testing::add(fe, "cross_module_comptime_call_err", &cross_module_comptime_call_err);
     testing::add(fe, "cross_module_const_read_ok",  &cross_module_const_read_ok);
@@ -1313,6 +1354,7 @@ fn i32 main() {
     testing::add(e2e, "e2e_asan_build",              &e2e_asan_build);
     testing::add(e2e, "e2e_link_multi_module",       &e2e_link_multi_module);
     testing::add(e2e, "e2e_link_generic_over_home_privates", &e2e_link_generic_over_home_privates);
+    testing::add(e2e, "e2e_link_threadlocal_per_thread", &e2e_link_threadlocal_per_thread);
     testing::add(e2e, "e2e_link_failure_reported",   &e2e_link_failure_reported);
     testing::add(e2e, "e2e_generic_template_skipped", &e2e_generic_template_skipped);
     testing::add(e2e, "e2e_lower_control_flow",      &e2e_lower_control_flow);

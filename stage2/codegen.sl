@@ -662,6 +662,10 @@ fn void declare_decl(CG* cg, u32 index) {
         void* ty = map_type(cg, d.ty);
         void* val = llvm::LLVMAddGlobal(cg.llvm_module, ty, cstr(cg.allocator, d.link_name));
         llvm::LLVMSetLinkage(val, decl_linkage(d));
+        if(d.is_thread_local) {
+            llvm::LLVMSetThreadLocal(val, 1);
+            llvm::LLVMSetThreadLocalMode(val, llvm::LocalExecTLSModel);
+        }
         cg.decl_map[index] = val;
     }
 }

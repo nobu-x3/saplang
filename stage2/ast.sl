@@ -28,6 +28,7 @@ export struct VarDeclNode {
     bool                is_exported;              // only meaningful at top-level
     bool                init_checked;             // top-level init sema-checked (in the body pass or on demand from comptime)
     bool                is_extern;                // in an extern block; without an init it names a foreign C symbol
+    bool                is_thread_local;          // `threadlocal`: one copy per thread, module-level only
     void*               decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
 }
 

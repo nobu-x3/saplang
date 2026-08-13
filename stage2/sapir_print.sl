@@ -33,6 +33,7 @@ fn void print_global(sapir::SapirModule* m, sapir::SapirGlobal* global, io::OutB
     io::outbuf_write(out, ": ");
     types_print::print(m.decls[global.decl_index].ty, out);
     if(global.is_const) { io::outbuf_write(out, " const"); }
+    if(m.decls[global.decl_index].is_thread_local) { io::outbuf_write(out, " threadlocal"); }
     io::outbuf_write(out, " = ");
     print_const_init(m, &global.init, out);
     io::outbuf_write(out, "\n");

@@ -1668,6 +1668,7 @@ fn u32 get_or_create_global_decl(Lower* lo, void* sema_decl) {
     sys::memset(&d, 0, sizeof(sapir::SapirDecl));
     d.kind = sapir::SapirDeclKind::Global;
     d.ty = decl.ty;
+    d.is_thread_local = var.is_thread_local;
     d.fn_index = sapir::INVALID_ID;
     d.global_index = sapir::INVALID_ID;
     // An initializer-less extern var names a C global directly, so it keeps the raw symbol name.
