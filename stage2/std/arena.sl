@@ -1,6 +1,8 @@
 import sys;
 import mem;
 
+// Growable arena: allocates pages on demand
+
 struct ArenaPage {
     u64 cap;
     u8[] data;
@@ -53,6 +55,7 @@ export fn void* realloc_grow(Arena* arena, void* old, u64 old_size, u64 new_size
 }
 
 export fn void free(Arena* arena) {
+    if(!arena) { return; }
     ArenaPage* current = arena.head;
     while(current) {
         ArenaPage* next = current.next;
@@ -60,9 +63,6 @@ export fn void free(Arena* arena) {
         current = next;
     }
     arena.head = null;
-}
-
-export fn void reset(Arena* arena) {
 }
 
 export fn mem::Allocator allocator(Arena* arena) {
