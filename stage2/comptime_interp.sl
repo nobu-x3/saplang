@@ -1637,10 +1637,22 @@ mutex::Mutex     g_type_mono_lock;
 condvar::Condvar g_type_mono_cv;
 bool         g_type_mono_ready;
 
+// A comptime type param resolves to `Type` as a placeholder, so `fn T f(comptime Type T)` would read as a type ctor.
+fn bool names_comptime_type_param(ast::FnDeclNode* callee, ast::AstNode* type_expr) {
+    if(type_expr.h.kind != ast::AstKind::NamedType) { return false; }
+    ast::TypeNamedNode* named = (ast::TypeNamedNode*)type_expr;
+    if(named.namespace != null) { return false; }
+    for(u64 i = 0; i < callee.params.len; i += 1) {
+        if(callee.params[i].is_comptime && sema::is_type_kw(callee.params[i].type_expr) && callee.params[i].name == named.name) { return true; }
+    }
+    return false;
+}
+
 // Syntax first: a caller can instantiate List(i32) before list's own signature phase resolves the return type.
 fn bool returns_type(ast::FnDeclNode* callee) {
     if(callee.return_type == null) { return false; }
     if(sema::is_type_kw(callee.return_type)) { return true; }
+    if(names_comptime_type_param(callee, callee.return_type)) { return false; }
     types::Ty* ret = (types::Ty*)callee.return_type.h.ty;
     return ret != null && ret.kind == types::TypeKind::ComptimeType;
 }

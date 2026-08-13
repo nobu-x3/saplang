@@ -99,6 +99,7 @@ export union DeclData {
 export struct Decl {
     DeclKind            kind;
     bool                is_exported;    // top-level decl marked `export`; used by cross-module lookup to filter
+    bool                needs_external_linkage; // a clone emitted in another module references this private decl
     symbol::Symbol*     name;           // mirrors the key under which the Decl is registered
     types::Ty*        ty;             // resolved type; for fns the fn-pointer type; for type-decls the canonical Type*
     DeclData            data;
@@ -1352,6 +1353,18 @@ export fn bool check(Sema* s, ast::AstNode* e, types::Ty* expected) {
 }
 
 
+// Only a clone body reaches a foreign private decl, and the clone is emitted in s.m — not in the home module.
+fn void mark_external_linkage(Sema* s, Decl* d) {
+    if(d == null || d.is_exported || d.home == null || d.home == s.m) { return; }
+    if(!g_body_sync_ready) {
+        d.needs_external_linkage = true;
+        return;
+    }
+    mutex::lock(&g_body_lock);
+    d.needs_external_linkage = true;
+    mutex::unlock(&g_body_lock);
+}
+
 // ----------------------------------------------------------------------------
 // Per-AstKind synth helpers
 // ----------------------------------------------------------------------------
@@ -1363,6 +1376,7 @@ export fn types::Ty* synth_ident(Sema* s, ast::IdentNode* n) {
         mark_error((ast::AstNode*)n);
         return null;
     }
+    mark_external_linkage(s, d);
     n.resolved = (void*)d;
     u16 flags = 0;
     if(decl_is_lvalue(d)) { flags = flags | (u16)ast::AstFlags::LValue; }
@@ -1429,6 +1443,7 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
             mark_error((ast::AstNode*)n);
             return null;
         }
+        mark_external_linkage(s, found);
         n.resolved = (void*)found;
         u16 flags = 0;
         if(decl_is_lvalue(found)) { flags = flags | (u16)ast::AstFlags::LValue; }
@@ -1579,6 +1594,7 @@ fn bool check_overloaded_fn_ref(Sema* s, ast::AstNode* e, types::Ty* expected) {
     Decl* candidate = head;
     while(candidate != null) {
         if(candidate.ty == expected) {
+            mark_external_linkage(s, candidate);
             if(name_node.h.kind == ast::AstKind::Ident) { ((ast::IdentNode*)name_node).resolved = (void*)candidate; }
             set_expr(name_node, expected, 0);
             if(e != name_node) { set_expr(e, expected, 0); }
@@ -1638,7 +1654,8 @@ fn i32 overload_score(Decl* cand, ast::AstNode*[] args, types::Ty*[] arg_types) 
     return score;
 }
 
-fn void set_callee_resolved(ast::AstNode* callee, Decl* chosen) {
+fn void set_callee_resolved(Sema* s, ast::AstNode* callee, Decl* chosen) {
+    mark_external_linkage(s, chosen);
     if(callee.h.kind == ast::AstKind::Ident) { ((ast::IdentNode*)callee).resolved = (void*)chosen; }
     else if(callee.h.kind == ast::AstKind::NamespaceAccess) { ((ast::NamespaceAccessNode*)callee).resolved = (void*)chosen; }
     set_expr(callee, chosen.ty, 0);
@@ -1676,7 +1693,7 @@ fn types::Ty* synth_overloaded_call(Sema* s, ast::CallNode* n, Decl* head) {
     types::Ty*[] params = best.ty.data.fn_ptr.params;
     for(u64 i = 0; i < params.len; i += 1) { check(s, n.args[i], params[i]); }
     for(u64 j = params.len; j < n.args.len; j += 1) { synth(s, n.args[j]); }
-    set_callee_resolved(n.callee, best);
+    set_callee_resolved(s, n.callee, best);
     types::Ty* ret = best.ty.data.fn_ptr.ret;
     set_expr((ast::AstNode*)n, ret, 0);
     return ret;

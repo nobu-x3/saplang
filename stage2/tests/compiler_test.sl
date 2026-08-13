@@ -139,6 +139,107 @@ fn i32 cross_module_generic_uses_home_type(arena::Arena* a, const u8[]msg) {
     return 0;
 }
 
+fn bool name_eq(const u8[] actual, const u8[] expected) {
+    if(actual.len != expected.len) { return false; }
+    for(u64 i = 0; i < actual.len; i += 1) {
+        if(actual[i] != expected[i]) { return false; }
+    }
+    return true;
+}
+
+fn sapir::SapirDecl* lowered_decl(module::Module* m, const u8[] link_name) {
+    sapir::SapirModule* lowered = (sapir::SapirModule*)m.sapir;
+    if(lowered == null) { return null; }
+    for(u64 i = 0; i < lowered.decls.len; i += 1) {
+        if(name_eq(lowered.decls[i].link_name, link_name)) { return &lowered.decls[i]; }
+    }
+    return null;
+}
+
+fn bool expect_linkage(module::Module* m, const u8[] link_name, sapir::SapirLinkage expected, const u8[] msg) {
+    sapir::SapirDecl* d = lowered_decl(m, link_name);
+    if(!testing::expect_ne((void*)d, null, msg)) { return false; }
+    return testing::expect_eq((u32)d.linkage, (u32)expected, msg);
+}
+
+// A clone is emitted in the instantiating module, so every private of b it touches has to leave b externally.
+fn i32 cross_module_generic_uses_home_private(arena::Arena* a, const u8[]msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "const i32 SECRET = 7;\ni32 counter = 1;\ni32 deep_global = 3;\nfn i32 deep() { return deep_global; }\nfn i32 helper() { return deep(); }\nexport fn T addk(comptime Type T, T x) { counter += 1; return x + (T)SECRET + (T)helper() + (T)counter; }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { return b::addk(5); }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    if(!expect_linkage(b, "__b_SECRET", sapir::SapirLinkage::Export, msg)) { return -3; }
+    if(!expect_linkage(b, "__b_counter", sapir::SapirLinkage::Export, msg)) { return -4; }
+    if(!expect_linkage(b, "__b_helper", sapir::SapirLinkage::Export, msg)) { return -5; }
+    if(!expect_linkage(b, "__b_deep", sapir::SapirLinkage::Internal, msg)) { return -6; }
+    if(!expect_linkage(b, "__b_deep_global", sapir::SapirLinkage::Internal, msg)) { return -7; }
+    return 0;
+}
+
+// Same promotion through the paths that bind a callee without going via synth_ident: an overload set and a fn-pointer ref.
+fn i32 cross_module_generic_uses_home_private_overloaded(arena::Arena* a, const u8[]msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "fn i32 pick(i32 x) { return x * 2; }\nfn i32 pick(i64 x) { return (i32)x * 3; }\nexport fn T sum(comptime Type T, T x) { fn* i32(i32) fp = &pick; return x + (T)pick((i64)x) + (T)fp(2); }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { return b::sum(5); }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    if(!expect_linkage(b, "__b_pick__i32", sapir::SapirLinkage::Export, msg)) { return -3; }
+    if(!expect_linkage(b, "__b_pick__i64", sapir::SapirLinkage::Export, msg)) { return -4; }
+    return 0;
+}
+
+// A private of b that no clone reaches keeps Internal linkage — the promotion must stay per-decl, not blanket.
+fn i32 cross_module_generic_leaves_unused_private_internal(arena::Arena* a, const u8[]msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "i32 untouched = 5;\nfn i32 never_cloned() { return untouched; }\nexport fn i32 local() { return never_cloned(); }\nexport fn T id(comptime Type T, T x) { return x; }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { return b::id(5) + b::local(); }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    if(!expect_linkage(b, "__b_untouched", sapir::SapirLinkage::Internal, msg)) { return -3; }
+    if(!expect_linkage(b, "__b_never_cloned", sapir::SapirLinkage::Internal, msg)) { return -4; }
+    return 0;
+}
+
+// A value generic returning `T` must not read as a type ctor: those cache process-globally, so b would reuse a's clone.
+fn i32 nested_generic_instantiated_in_two_modules(arena::Arena* a, const u8[]msg) {
+    boot(a);
+    compiler::Compiler* c = compiler::new(a);
+    module::Module* b = mk_source_module(a, "b", "export fn T inner(comptime Type T, T x) { return x + x; }\nexport fn T outer(comptime Type T, T x) { return inner(x); }\nexport fn i32 local_user() { return inner((i32)1); }");
+    module::Module* av = mk_source_module(a, "a", "import b;\nexport fn i32 use() { return b::outer(5); }");
+    wire_imports(a, av, b);
+    compiler::add_module(c, av);
+    compiler::add_module(c, b);
+    i32 rc = compiler::run_frontend(c);
+    if(!testing::expect_eq(rc, 0, msg)) { return -1; }
+    if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
+    if(!testing::expect_eq(av.instantiated_fns.len, (u64)2, msg)) { return -3; }
+    if(!testing::expect_eq(b.instantiated_fns.len, (u64)1, msg)) { return -4; }
+    sapir::SapirDecl* in_b = lowered_decl(b, "__b_inner__i32");
+    if(!testing::expect_ne((void*)in_b, null, msg)) { return -5; }
+    if(!testing::expect_eq((u32)in_b.linkage, (u32)sapir::SapirLinkage::LinkOnceOdr, msg)) { return -6; }
+    if(!testing::expect_ne(in_b.fn_index, sapir::INVALID_ID, msg)) { return -7; }
+    sapir::SapirDecl* in_a = lowered_decl(av, "__b_inner__i32");
+    if(!testing::expect_ne((void*)in_a, null, msg)) { return -8; }
+    if(!testing::expect_ne(in_a.fn_index, sapir::INVALID_ID, msg)) { return -9; }
+    return 0;
+}
+
 // A comprun in module `a` calls `b::dbl(5)` at comptime; the callee is body-checked on demand in module b.
 // Positive: condition is false, so no comperror — proves the cross-module call evaluated without error.
 fn i32 cross_module_comptime_call_ok(arena::Arena* a, const u8[]msg) {
@@ -918,6 +1019,24 @@ fn i32 e2e_link_multi_module(arena::Arena* a, const u8[]msg) {
     return 0;
 }
 
+// E2E: a clone reaching dep's privates plus a nested generic instantiated in dep too — both used to reach ld.lld broken.
+fn i32 e2e_link_generic_over_home_privates(arena::Arena* a, const u8[]msg) {
+    boot(a);
+    arena::Arena* ca = sub_arena(a);
+    compiler::Compiler* c = compiler::new(ca);
+    module::Module* dep = mk_source_module(ca, "dep", "const i32 SECRET = 7;\nfn i32 helper() { return 5; }\nexport fn T inner(comptime Type T, T x) { return x + (T)SECRET; }\nexport fn T outer(comptime Type T, T x) { return inner(x) + (T)helper(); }\nexport fn i32 local_user() { return inner((i32)3); }");
+    module::Module* app = mk_source_module(ca, "appmod", "import dep;\nfn i32 main() { return dep::outer(20) + dep::local_user(); }");
+    wire_imports(ca, app, dep);
+    compiler::add_module(c, app);
+    compiler::add_module(c, dep);
+    if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
+    const u8[] prog = sap_out(ca, "e2e_generic_private_prog");
+    c.output_path = prog;
+    if(!testing::expect_eq(compiler::run_backend(c), 0, msg)) { return -2; }
+    if(!testing::expect_eq((u64)compiler::run_executable(arena::allocator(ca), prog), (u64)42, msg)) { return -3; }
+    return 0;
+}
+
 // E2E: an unresolved extern makes ld.lld fail; the backend surfaces a non-zero result rather than a bad binary.
 fn i32 e2e_link_failure_reported(arena::Arena* a, const u8[]msg) {
     boot(a);
@@ -1134,6 +1253,10 @@ fn i32 main() {
     testing::add(fe, "cross_module_generic_call", &cross_module_generic_call);
     testing::add(fe, "cross_module_generic_type_identity", &cross_module_generic_type_identity);
     testing::add(fe, "cross_module_generic_uses_home_type", &cross_module_generic_uses_home_type);
+    testing::add(fe, "cross_module_generic_uses_home_private", &cross_module_generic_uses_home_private);
+    testing::add(fe, "cross_module_generic_uses_home_private_overloaded", &cross_module_generic_uses_home_private_overloaded);
+    testing::add(fe, "cross_module_generic_leaves_unused_private_internal", &cross_module_generic_leaves_unused_private_internal);
+    testing::add(fe, "nested_generic_instantiated_in_two_modules", &nested_generic_instantiated_in_two_modules);
     testing::add(fe, "cross_module_comptime_call_ok",  &cross_module_comptime_call_ok);
     testing::add(fe, "cross_module_comptime_call_err", &cross_module_comptime_call_err);
     testing::add(fe, "cross_module_const_read_ok",  &cross_module_const_read_ok);
@@ -1189,6 +1312,7 @@ fn i32 main() {
     testing::add(e2e, "e2e_release_build",           &e2e_release_build);
     testing::add(e2e, "e2e_asan_build",              &e2e_asan_build);
     testing::add(e2e, "e2e_link_multi_module",       &e2e_link_multi_module);
+    testing::add(e2e, "e2e_link_generic_over_home_privates", &e2e_link_generic_over_home_privates);
     testing::add(e2e, "e2e_link_failure_reported",   &e2e_link_failure_reported);
     testing::add(e2e, "e2e_generic_template_skipped", &e2e_generic_template_skipped);
     testing::add(e2e, "e2e_lower_control_flow",      &e2e_lower_control_flow);

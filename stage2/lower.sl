@@ -1630,7 +1630,7 @@ fn u32 get_or_create_fn_decl(Lower* lo, void* sema_decl) {
     } else {
         ast::FnDeclNode* fn_node = (ast::FnDeclNode*)node;
         if(decl.home == lo.m) {
-            if(fn_node.is_exported) { d.linkage = sapir::SapirLinkage::Export; }
+            if(fn_node.is_exported || decl.needs_external_linkage) { d.linkage = sapir::SapirLinkage::Export; }
             else { d.linkage = sapir::SapirLinkage::Internal; }
         } else {
             d.linkage = sapir::SapirLinkage::Foreign;
@@ -1679,7 +1679,7 @@ fn u32 get_or_create_global_decl(Lower* lo, void* sema_decl) {
         return foreign_index;
     }
     if(decl.home == lo.m) {
-        if(var.is_exported) { d.linkage = sapir::SapirLinkage::Export; }
+        if(var.is_exported || decl.needs_external_linkage) { d.linkage = sapir::SapirLinkage::Export; }
         else { d.linkage = sapir::SapirLinkage::Internal; }
     } else {
         d.linkage = sapir::SapirLinkage::Foreign;
