@@ -54,7 +54,7 @@ export struct Compiler {
 // Intermediates are cache, not output: they stay put regardless of where artifacts are sent.
 export const u8[] CACHE_DIR = ".sap-cache";
 
-export const u8[] VERSION = "0.2.1 (stage2, self-hosted)";
+export const u8[] VERSION = "0.3.0 (stage2, self-hosted)";
 
 export fn void print_usage() {
     sys::dprintf(1, "Usage: saplangc <file.sl>... [options]\n");
