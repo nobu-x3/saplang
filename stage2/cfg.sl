@@ -63,7 +63,7 @@ struct CfgBuilder {
 }
 
 export fn Cfg* build_cfg(module::Module* m, ast::FnDeclNode* func) {
-    Cfg* g = (Cfg*)mem::alloc(m.allocator, sizeof(Cfg));
+    Cfg* g = (Cfg*)mem::alloc_bytes(m.allocator, sizeof(Cfg));
     sys::memset(g, 0, sizeof(Cfg));
 
     CfgBuilder builder;
@@ -219,7 +219,7 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
     u32 def_blk = after;
     if(n.else_block != null) { def_blk = new_block(b.cfg, b.allocator); }
 
-    u32* arm_blocks = mem::alloc(b.allocator, n.arms.len * sizeof(u32));
+    u32* arm_blocks = mem::alloc_bytes(b.allocator, n.arms.len * sizeof(u32));
     for(u64 arm_index = 0; arm_index < n.arms.len; arm_index += 1) {
         ast::SwitchArm* arm = &n.arms[arm_index];
         if(arm.body == null) {
@@ -317,7 +317,7 @@ fn void run_pending_defers(CfgBuilder* b, i64 from_scope, i64 to_scope) {
     u64 total = 0;
     for(i64 scope_index = from_scope; scope_index >= to_scope; scope_index -= 1) { total += b.scope_stack.ptr[(u64)scope_index].defers.len; }
     if(total == 0) { return; }
-    ast::AstNode** bodies = (ast::AstNode**)mem::alloc(b.allocator, total * sizeof(ast::AstNode*));
+    ast::AstNode** bodies = (ast::AstNode**)mem::alloc_bytes(b.allocator, total * sizeof(ast::AstNode*));
     u64 count = 0;
     for(i64 scope_index = from_scope; scope_index >= to_scope; scope_index -= 1) {
         ScopeFrame* sc = &b.scope_stack.ptr[(u64)scope_index];
@@ -516,11 +516,11 @@ fn u64 mark_successor(bool[] reachable, u32* stack, u64 sp, u32 target) {
 
 fn bool[] bfs_reachable_from(Cfg* g, mem::Allocator a, u32 entry) {
     bool[] reachable;
-    reachable.ptr = mem::alloc(a, g.blocks.len * sizeof(bool));
+    reachable.ptr = mem::alloc_bytes(a, g.blocks.len * sizeof(bool));
     reachable.len = g.blocks.len;
     for(u64 block_index = 0; block_index < reachable.len; block_index += 1) { reachable[block_index] = false; }
 
-    u32* stack = mem::alloc(a, g.blocks.len * sizeof(u32));
+    u32* stack = mem::alloc_bytes(a, g.blocks.len * sizeof(u32));
     u64 sp = 0;
     reachable[entry] = true;
     stack[0] = entry;

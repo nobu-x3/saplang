@@ -84,6 +84,84 @@ fn i32 realloc_grow_with_null_old(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+fn i32 alloc_honours_an_explicit_alignment(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {512, null};
+    defer arena::free(&local);
+    if(!testing::expect_not_null(arena::alloc(&local, 1), m)) { return -1; }
+    void* aligned = arena::alloc(&local, 16, 64);
+    if(!testing::expect_not_null(aligned, m)) { return -2; }
+    if(!testing::expect_eq((u64)aligned % 64, (u64)0, m)) { return -3; }
+    return 0;
+}
+
+// Every step is a multiple of 8, so an odd cursor must be walked forward, not just rounded.
+fn i32 alignment_holds_from_an_unaligned_cursor(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {512, null};
+    defer arena::free(&local);
+    for(u64 step = 1; step <= 5; step = step + 1) {
+        if(!testing::expect_not_null(arena::alloc(&local, step), m)) { return -1; }
+        void* aligned = arena::alloc(&local, 8, 32);
+        if(!testing::expect_not_null(aligned, m)) { return -2; }
+        if(!testing::expect_eq((u64)aligned % 32, (u64)0, m)) { return -3; }
+    }
+    return 0;
+}
+
+// A fresh page only carries malloc's alignment, so the page needs slack to step forward in.
+fn i32 alignment_holds_on_a_fresh_page(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {16, null};
+    defer arena::free(&local);
+    u8* aligned = arena::alloc(&local, 64, 128);
+    if(!testing::expect_not_null((void*)aligned, m)) { return -1; }
+    if(!testing::expect_eq((u64)aligned % 128, (u64)0, m)) { return -2; }
+    // Touching both ends catches a page that was not grown to cover the alignment step.
+    aligned[0] = 1;
+    aligned[63] = 2;
+    if(!testing::expect_eq((u64)aligned[0] + (u64)aligned[63], (u64)3, m)) { return -3; }
+    return 0;
+}
+
+fn i32 aligned_allocations_stay_usable(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {512, null};
+    defer arena::free(&local);
+    u8* first = arena::alloc(&local, 32, 64);
+    u8* second = arena::alloc(&local, 32, 64);
+    if(!testing::expect_not_null((void*)first, m)) { return -1; }
+    if(!testing::expect_ne((void*)first, (void*)second, m)) { return -2; }
+    if(!testing::expect_eq((u64)second % 64, (u64)0, m)) { return -3; }
+    if(!testing::expect_ge((u64)second, (u64)first + 32, m)) { return -4; }
+    first[0] = 1;
+    first[31] = 2;
+    second[0] = 3;
+    second[31] = 4;
+    if(!testing::expect_eq((u64)first[0] + (u64)first[31] + (u64)second[0] + (u64)second[31], (u64)10, m)) { return -5; }
+    return 0;
+}
+
+// An alignment below the arena's own floor must not weaken it.
+fn i32 alignment_below_the_floor_is_ignored(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {64, null};
+    defer arena::free(&local);
+    if(!testing::expect_not_null(arena::alloc(&local, 1, 1), m)) { return -1; }
+    void* second = arena::alloc(&local, 1, 1);
+    if(!testing::expect_eq((u64)second % 8, (u64)0, m)) { return -2; }
+    return 0;
+}
+
+fn i32 realloc_grow_honours_an_explicit_alignment(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {512, null};
+    defer arena::free(&local);
+    u8* p = arena::alloc(&local, 8, 64);
+    if(!testing::expect_not_null((void*)p, m)) { return -1; }
+    p[0] = 7;
+    if(!testing::expect_not_null(arena::alloc(&local, 1), m)) { return -2; }
+    u8* grown = arena::realloc_grow(&local, p, 8, 32, 64);
+    if(!testing::expect_not_null((void*)grown, m)) { return -3; }
+    if(!testing::expect_eq((u64)grown % 64, (u64)0, m)) { return -4; }
+    if(!testing::expect_eq((u64)grown[0], (u64)7, m)) { return -5; }
+    return 0;
+}
+
 fn i32 free_with_null_arena(arena::Arena* a, const u8[]m) {
     arena::free(null);
     return 0;
@@ -199,11 +277,11 @@ fn i32 free_through_the_allocator_interface(arena::Arena* a, const u8[]m) {
     arena::Arena local = {32, null};
     defer arena::free(&local);
     mem::Allocator alloc = arena::allocator(&local);
-    if(!testing::expect_not_null(mem::alloc(alloc, 24), m)) { return -1; }
-    if(!testing::expect_not_null(mem::alloc(alloc, 24), m)) { return -2; }
+    if(!testing::expect_not_null(mem::alloc_bytes(alloc, 24), m)) { return -1; }
+    if(!testing::expect_not_null(mem::alloc_bytes(alloc, 24), m)) { return -2; }
     arena::free(&local);
     if(!testing::expect_null((void*)local.head, m)) { return -3; }
-    if(!testing::expect_not_null(mem::alloc(alloc, 24), m)) { return -4; }
+    if(!testing::expect_not_null(mem::alloc_bytes(alloc, 24), m)) { return -4; }
     return 0;
 }
 
@@ -237,6 +315,12 @@ fn i32 main() {
     testing::add(suite, "alloc_larger_than_page", &alloc_larger_than_page);
     testing::add(suite, "realloc_grow_copies_bytes", &realloc_grow_copies_bytes);
     testing::add(suite, "realloc_grow_with_null_old", &realloc_grow_with_null_old);
+    testing::add(suite, "alloc_honours_an_explicit_alignment", &alloc_honours_an_explicit_alignment);
+    testing::add(suite, "alignment_holds_from_an_unaligned_cursor", &alignment_holds_from_an_unaligned_cursor);
+    testing::add(suite, "alignment_holds_on_a_fresh_page", &alignment_holds_on_a_fresh_page);
+    testing::add(suite, "aligned_allocations_stay_usable", &aligned_allocations_stay_usable);
+    testing::add(suite, "alignment_below_the_floor_is_ignored", &alignment_below_the_floor_is_ignored);
+    testing::add(suite, "realloc_grow_honours_an_explicit_alignment", &realloc_grow_honours_an_explicit_alignment);
     testing::add(suite, "free_with_null_arena", &free_with_null_arena);
     testing::add(suite, "free_empty_arena", &free_empty_arena);
     testing::add(suite, "free_single_page", &free_single_page);

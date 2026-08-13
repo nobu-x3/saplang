@@ -1,5 +1,6 @@
 import arena;
 import hash;
+import mem;
 import mutex;
 import sys;
 import symbol;
@@ -84,7 +85,7 @@ fn u64 slab_append(Interner* it, const u8[] bytes) {
             new_cap = 4096;
         }
         if(new_cap < bytes.len) {
-            new_cap = arena::align_up(bytes.len, 4096);
+            new_cap = mem::align_up(bytes.len, 4096);
         }
         it.slab.ptr = arena::realloc_grow(it.slab_arena, it.slab.ptr, it.slab.len, new_cap);
         it.slab_cap = new_cap;

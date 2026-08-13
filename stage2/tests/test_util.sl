@@ -21,6 +21,7 @@ export struct Counting {
     u64            allocs;
     u64            frees;
     u64            bytes;
+    u64            align;
 }
 
 export fn mem::Allocator counting_allocator(Counting* c) {
@@ -32,24 +33,26 @@ export fn mem::Allocator counting_allocator(Counting* c) {
     return out;
 }
 
-fn void* counting_alloc(void* ctx, u64 size) {
+fn void* counting_alloc(void* ctx, u64 size, u64 align) {
     Counting* c = (Counting*)ctx;
     c.allocs += 1;
     c.bytes += size;
-    return mem::alloc(c.inner, size);
+    c.align = align;
+    return mem::alloc_bytes(c.inner, size, align);
 }
 
-fn void* counting_realloc_grow(void* ctx, void* old, u64 old_size, u64 new_size) {
+fn void* counting_realloc_grow(void* ctx, void* old, u64 old_size, u64 new_size, u64 align) {
     Counting* c = (Counting*)ctx;
     c.allocs += 1;
     c.bytes += new_size - old_size;
-    return mem::realloc_grow(c.inner, old, old_size, new_size);
+    c.align = align;
+    return mem::realloc_grow_bytes(c.inner, old, old_size, new_size, align);
 }
 
-fn void counting_free(void* ctx, void* ptr, u64 size) {
+fn void counting_free(void* ctx, void* ptr, u64 size, u64 align) {
     Counting* c = (Counting*)ctx;
     c.frees += 1;
-    mem::free(c.inner, ptr, size);
+    mem::free_bytes(c.inner, ptr, size, align);
 }
 
 // Each module needs its own arena: the driver gives every module one, and sharing hides ownership bugs.

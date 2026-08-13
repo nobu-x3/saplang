@@ -181,7 +181,7 @@ export fn const u8[] codegen_ir_string(sapir::SapirModule* sm, mem::Allocator a,
 fn u8[] copy_cstr(mem::Allocator a, i8* s) {
     u64 len = 0;
     while(s[len] != 0) { len += 1; }
-    u8* out = (u8*)mem::alloc(a, len + 1);
+    u8* out = (u8*)mem::alloc_bytes(a, len + 1);
     for(u64 i = 0; i < len; i += 1) { out[i] = (u8)s[i]; }
     u8[] result = {out, len};
     return result;
@@ -229,7 +229,7 @@ fn void cg_init(CG* cg, sapir::SapirModule* sm, mem::Allocator a, BuildConfig co
     cg.llvm_module = llvm::LLVMModuleCreateWithNameInContext(cstr(cg.allocator, interner::symbol_str(sm.name)), cg.ctx);
     cg.builder = llvm::LLVMCreateBuilderInContext(cg.ctx);
     cg.empty = cstr(cg.allocator, "");
-    cg.decl_map = (void**)mem::alloc(cg.allocator, (sm.decls.len + 1) * sizeof(void*));
+    cg.decl_map = (void**)mem::alloc_bytes(cg.allocator, (sm.decls.len + 1) * sizeof(void*));
 }
 
 fn bool build_module(CG* cg) {
@@ -277,7 +277,7 @@ fn void add_debug_module_flags(CG* cg) {
 fn void emit_di_subprogram(CG* cg, sapir::SapirFn* f) {
     types::Ty* fnty = cg.sm.decls[f.decl_index].ty;
     types::Ty*[] params = fnty.data.fn_ptr.params;
-    void** di_params = (void**)mem::alloc(cg.allocator, (params.len + 2) * sizeof(void*));
+    void** di_params = (void**)mem::alloc_bytes(cg.allocator, (params.len + 2) * sizeof(void*));
     di_params[0] = build_di_type(cg, fnty.data.fn_ptr.ret);
     for(u64 i = 0; i < params.len; i += 1) { di_params[i + 1] = build_di_type(cg, params[i]); }
     void* sub_ty = llvm::LLVMDIBuilderCreateSubroutineType(cg.di_builder, cg.di_file, di_params, (u32)params.len + 1, 0);
@@ -323,7 +323,7 @@ fn void* di_member(CG* cg, const u8[] name, types::Ty* ft, u64 offset_bits) {
 
 fn void* build_di_composite(CG* cg, types::Ty* t, bool is_union) {
     u64 count = types::field_count(t);
-    void** members = (void**)mem::alloc(cg.allocator, (count + 1) * sizeof(void*));
+    void** members = (void**)mem::alloc_bytes(cg.allocator, (count + 1) * sizeof(void*));
     for(u64 i = 0; i < count; i += 1) {
         u8[] fname = sym_str_or_empty(types::field_name_sym(t, i));
         members[i] = di_member(cg, fname, types::field_type(t, i), (u64)types::field_offset(t, i) * 8);
@@ -445,7 +445,7 @@ fn void* map_type(CG* cg, types::Ty* t) {
 
 fn void fill_struct_body(CG* cg, types::Ty* t, void* struct_ty) {
     types::Ty*[] fields = types::struct_field_types(t, cg.allocator);
-    void** llvm_fields = (void**)mem::alloc(cg.allocator, (fields.len + 1) * sizeof(void*));
+    void** llvm_fields = (void**)mem::alloc_bytes(cg.allocator, (fields.len + 1) * sizeof(void*));
     for(u64 i = 0; i < fields.len; i += 1) { llvm_fields[i] = map_type(cg, fields[i]); }
     llvm::LLVMStructSetBody(struct_ty, llvm_fields, (u32)fields.len, 0);
 }
@@ -486,7 +486,7 @@ fn void* slice_struct_type(CG* cg) {
 fn void* map_fn_type(CG* cg, types::Ty* fnty) {
     abi::FnAbi* fn_abi = fn_abi_for(cg, fnty);
     types::Ty*[] params = fnty.data.fn_ptr.params;
-    void** llvm_params = (void**)mem::alloc(cg.allocator, ((u64)fn_abi.llvm_param_count + 1) * sizeof(void*));
+    void** llvm_params = (void**)mem::alloc_bytes(cg.allocator, ((u64)fn_abi.llvm_param_count + 1) * sizeof(void*));
     void* ptr_ty = llvm::LLVMPointerTypeInContext(cg.ctx, 0);
     u32 next = 0;
     if(fn_abi.sret) {
@@ -705,12 +705,12 @@ fn void* const_value(CG* cg, sapir::ConstInit* ci) {
     case sapir::ConstInitKind::FnRef: { return cg.decl_map[ci.decl_index]; }
     case sapir::ConstInitKind::GlobalRef: { return cg.decl_map[ci.decl_index]; }
     case sapir::ConstInitKind::Struct: {
-        void** vals = (void**)mem::alloc(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
+        void** vals = (void**)mem::alloc_bytes(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
         for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }
         return llvm::LLVMConstNamedStruct(map_type(cg, ci.ty), vals, (u32)ci.elems.len);
     }
     case sapir::ConstInitKind::Array: {
-        void** vals = (void**)mem::alloc(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
+        void** vals = (void**)mem::alloc_bytes(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
         for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }
         return llvm::LLVMConstArray2(map_type(cg, ci.ty.data.array.elem), vals, ci.elems.len);
     }
@@ -745,7 +745,7 @@ fn void* const_bytes(CG* cg, sapir::ConstInit* ci) {
 
 // An array-literal into a slice global: the elements back an internal constant array; the slice is {ptr, len}.
 fn void* const_slice(CG* cg, sapir::ConstInit* ci) {
-    void** vals = (void**)mem::alloc(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
+    void** vals = (void**)mem::alloc_bytes(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
     for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }
     void* arr_const = llvm::LLVMConstArray2(map_type(cg, ci.ty.data.slice_elem), vals, ci.elems.len);
     void* gv = llvm::LLVMAddGlobal(cg.llvm_module, llvm::LLVMTypeOf(arr_const), cg.empty);
@@ -766,9 +766,9 @@ fn void emit_fn(CG* cg, sapir::SapirFn* f) {
     cg.current_fn = cg.decl_map[f.decl_index];
     cg.di_subprogram = null;
     if(cg.di_builder != null) { emit_di_subprogram(cg, f); }
-    cg.value_map = (void**)mem::alloc(cg.allocator, (f.insts.len + 1) * sizeof(void*));
+    cg.value_map = (void**)mem::alloc_bytes(cg.allocator, (f.insts.len + 1) * sizeof(void*));
     sys::memset(cg.value_map, 0, (f.insts.len + 1) * sizeof(void*));   // un-materialized inst slots must read null so the dbg-value guard holds
-    cg.block_map = (void**)mem::alloc(cg.allocator, (f.blocks.len + 1) * sizeof(void*));
+    cg.block_map = (void**)mem::alloc_bytes(cg.allocator, (f.blocks.len + 1) * sizeof(void*));
     for(u64 i = 0; i < f.blocks.len; i += 1) {
         cg.block_map[i] = llvm::LLVMAppendBasicBlockInContext(cg.ctx, cg.current_fn, cg.empty);
     }
@@ -803,7 +803,7 @@ fn void emit_fn(CG* cg, sapir::SapirFn* f) {
 // Reassembles each declared param from the LLVM parameters the ABI spread it across, once per function.
 fn void emit_abi_params(CG* cg) {
     u32 count = cg.f.param_count;
-    cg.param_values = (void**)mem::alloc(cg.allocator, ((u64)count + 1) * sizeof(void*));
+    cg.param_values = (void**)mem::alloc_bytes(cg.allocator, ((u64)count + 1) * sizeof(void*));
     if(count == 0) { return; }
     cg.current_block = cg.block_map[cg.f.entry];
     llvm::LLVMPositionBuilderAtEnd(cg.builder, cg.current_block);
@@ -832,8 +832,8 @@ fn void emit_di_variables(CG* cg, sapir::SapirFn* f) {
     void* entry_term = llvm::LLVMGetBasicBlockTerminator(entry_bb);
     if(entry_term == null) { return; }
     void* empty_expr = llvm::LLVMDIBuilderCreateExpression(cg.di_builder, null, 0);
-    void** di_vars = (void**)mem::alloc(cg.allocator, (f.vars.len + 1) * sizeof(void*));
-    void** di_locs = (void**)mem::alloc(cg.allocator, (f.vars.len + 1) * sizeof(void*));
+    void** di_vars = (void**)mem::alloc_bytes(cg.allocator, (f.vars.len + 1) * sizeof(void*));
+    void** di_locs = (void**)mem::alloc_bytes(cg.allocator, (f.vars.len + 1) * sizeof(void*));
     for(u64 i = 0; i < f.vars.len; i += 1) {
         di_vars[i] = null;
         sapir::SapirVar* v = &f.vars[i];
@@ -877,8 +877,8 @@ fn void emit_di_variables(CG* cg, sapir::SapirFn* f) {
 fn void fill_phi(CG* cg, u32 phi_id) {
     sapir::Inst* inst = &cg.f.insts[phi_id];
     u32 count = cg.f.extra[inst.b];
-    void** values = (void**)mem::alloc(cg.allocator, ((u64)count + 1) * sizeof(void*));
-    void** blocks = (void**)mem::alloc(cg.allocator, ((u64)count + 1) * sizeof(void*));
+    void** values = (void**)mem::alloc_bytes(cg.allocator, ((u64)count + 1) * sizeof(void*));
+    void** blocks = (void**)mem::alloc_bytes(cg.allocator, ((u64)count + 1) * sizeof(void*));
     for(u32 k = 0; k < count; k += 1) {
         u32 pair_base = inst.b + 1 + k * 2;
         blocks[k] = cg.block_map[cg.f.extra[pair_base]];
@@ -1072,9 +1072,9 @@ fn void* emit_call(CG* cg, sapir::Inst* inst) {
     types::Ty* ret_ty = fnty.data.fn_ptr.ret;
     u64 declared = fnty.data.fn_ptr.params.len;
 
-    void** args = (void**)mem::alloc(cg.allocator, ((u64)argc * 2 + 2) * sizeof(void*));
-    u32* byval_at = (u32*)mem::alloc(cg.allocator, ((u64)argc + 1) * sizeof(u32));
-    types::Ty** byval_ty = (types::Ty**)mem::alloc(cg.allocator, ((u64)argc + 1) * sizeof(types::Ty*));
+    void** args = (void**)mem::alloc_bytes(cg.allocator, ((u64)argc * 2 + 2) * sizeof(void*));
+    u32* byval_at = (u32*)mem::alloc_bytes(cg.allocator, ((u64)argc + 1) * sizeof(u32));
+    types::Ty** byval_ty = (types::Ty**)mem::alloc_bytes(cg.allocator, ((u64)argc + 1) * sizeof(types::Ty*));
     u32 byval_count = 0;
     u32 next = 0;
     void* sret_slot = null;
@@ -1198,7 +1198,7 @@ fn void* emit_const_str(CG* cg, sapir::Inst* inst) {
 // HELPERS ////////////////////////////////////////////////////////////////////////////
 
 fn i8* cstr(mem::Allocator a, const u8[] bytes) {
-    i8* out = (i8*)mem::alloc(a, bytes.len + 1);
+    i8* out = (i8*)mem::alloc_bytes(a, bytes.len + 1);
     for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
     out[bytes.len] = 0;
     return out;

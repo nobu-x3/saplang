@@ -83,7 +83,7 @@ export fn u8[] read_until(File* f, mem::Allocator a, u8 delim) {
         return out;
     }
     u64 cap = 64;
-    u8* buf = mem::alloc(a, cap);
+    u8* buf = mem::alloc_bytes(a, cap);
     if(!buf) {
         return out;
     }
@@ -92,7 +92,7 @@ export fn u8[] read_until(File* f, mem::Allocator a, u8 delim) {
     while(c >= 0 && (u8)c != delim) {
         if(len >= cap) {
             u64 new_cap = cap * 2;
-            buf = mem::realloc_grow(a, buf, cap, new_cap);
+            buf = mem::realloc_grow_bytes(a, buf, cap, new_cap);
             if(!buf) {
                 out.ptr = null;
                 out.len = 0;
@@ -133,7 +133,7 @@ export fn u8[] read_all(File* f, mem::Allocator a) {
         if(sz < 0) {
             return out;
         }
-        u8* buf = mem::alloc(a, (u64)sz + 1);
+        u8* buf = mem::alloc_bytes(a, (u64)sz + 1);
         if(!buf) {
             return out;
         }
@@ -210,7 +210,7 @@ export struct OutBuf {
 
 export fn void outbuf_init(OutBuf* b, mem::Allocator a, u64 initial_cap) {
     b.allocator = a;
-    b.data = {(u8*)mem::alloc(a, initial_cap), 0};
+    b.data = {(u8*)mem::alloc_bytes(a, initial_cap), 0};
     b.cap = initial_cap;
 }
 
@@ -261,7 +261,7 @@ fn void outbuf_ensure(OutBuf* b, u64 add) {
     u64 new_cap = b.cap * 2;
     if(new_cap == 0) { new_cap = 64; }
     while(new_cap < need) { new_cap *= 2; }
-    b.data.ptr = (u8*)mem::realloc_grow(b.allocator, b.data.ptr, b.data.len, new_cap);
+    b.data.ptr = (u8*)mem::realloc_grow_bytes(b.allocator, b.data.ptr, b.data.len, new_cap);
     b.cap = new_cap;
 }
 
@@ -269,7 +269,7 @@ fn void outbuf_ensure(OutBuf* b, u64 add) {
 fn u8[] read_growing(File* f, mem::Allocator a) {
     u8[] out = {null, 0};
     u64 cap = 4096;
-    u8* buf = mem::alloc(a, cap);
+    u8* buf = mem::alloc_bytes(a, cap);
     if(!buf) {
         return out;
     }
@@ -277,7 +277,7 @@ fn u8[] read_growing(File* f, mem::Allocator a) {
     while(true) {
         if(len == cap) {
             u64 new_cap = cap * 2;
-            buf = mem::realloc_grow(a, buf, cap, new_cap);
+            buf = mem::realloc_grow_bytes(a, buf, cap, new_cap);
             if(!buf) {
                 out.ptr = null;
                 out.len = 0;

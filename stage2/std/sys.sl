@@ -4,6 +4,8 @@
 extern {
     // memory
     export fn void* malloc(u64 size);
+    // size must be a multiple of alignment; the result is still released with free.
+    export fn void* aligned_alloc(u64 alignment, u64 size);
     export fn void* realloc(void* p, u64 size);
     export fn void  free(void* p);
     export fn void* memcpy(void* dst, const void* src, u64 n);

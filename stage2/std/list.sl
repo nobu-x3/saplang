@@ -13,7 +13,7 @@ export fn void push(comptime Type T, List(T)* l, mem::Allocator a, T value) {
     if(l.len == l.cap) {
         u64 new_cap = 4;
         if(l.cap > 0) { new_cap = l.cap * 2; }
-        l.ptr = (T*)mem::realloc_grow(a, (void*)l.ptr, l.len * sizeof(T), new_cap * sizeof(T));
+        l.ptr = (T*)mem::realloc_grow_bytes(a, (void*)l.ptr, l.len * sizeof(T), new_cap * sizeof(T));
         l.cap = new_cap;
     }
     l.ptr[l.len] = value;
@@ -25,7 +25,7 @@ export fn void dyn_push(comptime Type T, T[]* items, u64* cap, mem::Allocator a,
     if(items.len == *cap) {
         u64 new_cap = 4;
         if(*cap > 0) { new_cap = *cap * 2; }
-        items.ptr = (T*)mem::realloc_grow(a, (void*)items.ptr, items.len * sizeof(T), new_cap * sizeof(T));
+        items.ptr = (T*)mem::realloc_grow_bytes(a, (void*)items.ptr, items.len * sizeof(T), new_cap * sizeof(T));
         *cap = new_cap;
     }
     items.ptr[items.len] = value;

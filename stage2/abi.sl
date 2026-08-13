@@ -115,9 +115,9 @@ fn u32 llvm_param_count(ArgInfo* info) {
 
 export fn FnAbi* classify_fn(types::Ty* fnty, mem::Allocator a) {
     types::Ty*[] declared = fnty.data.fn_ptr.params;
-    FnAbi* abi = (FnAbi*)mem::alloc(a, sizeof(FnAbi));
-    ArgInfo* infos = (ArgInfo*)mem::alloc(a, (declared.len + 1) * sizeof(ArgInfo));
-    u32* firsts = (u32*)mem::alloc(a, (declared.len + 1) * sizeof(u32));
+    FnAbi* abi = (FnAbi*)mem::alloc_bytes(a, sizeof(FnAbi));
+    ArgInfo* infos = (ArgInfo*)mem::alloc_bytes(a, (declared.len + 1) * sizeof(ArgInfo));
+    u32* firsts = (u32*)mem::alloc_bytes(a, (declared.len + 1) * sizeof(u32));
     abi.ret = classify(fnty.data.fn_ptr.ret);
     abi.sret = abi.ret.kind == ArgKind::Memory;
 

@@ -170,7 +170,7 @@ fn u8[] join(mem::Allocator allocator, const u8[] prefix, const u8[] suffix) {
 }
 
 fn i8* cstr(mem::Allocator allocator, const u8[] bytes) {
-    i8* out = (i8*)mem::alloc(allocator, bytes.len + 1);
+    i8* out = (i8*)mem::alloc_bytes(allocator, bytes.len + 1);
     for(u64 char_index = 0; char_index < bytes.len; char_index += 1) { out[char_index] = (i8)bytes[char_index]; }
     out[bytes.len] = 0;
     return out;

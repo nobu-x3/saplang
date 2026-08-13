@@ -298,9 +298,9 @@ fn void add_entry_module(Compiler* c, const u8[] path) {
 }
 
 fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, const u8[] path, const u8[] src) {
-    module::Module* m = (module::Module*)mem::alloc(c.allocator, sizeof(module::Module));
+    module::Module* m = (module::Module*)mem::alloc_bytes(c.allocator, sizeof(module::Module));
     sys::memset(m, 0, sizeof(module::Module));
-    arena::Arena* module_arena = (arena::Arena*)mem::alloc(c.allocator, sizeof(arena::Arena));
+    arena::Arena* module_arena = (arena::Arena*)mem::alloc_bytes(c.allocator, sizeof(arena::Arena));
     sys::memset(module_arena, 0, sizeof(arena::Arena));
     module_arena.default_page_size = 1048576;
     module::set_arena(m, module_arena);
@@ -350,7 +350,7 @@ fn void discover_imports(Compiler* c, module::Module* m) {
         token_index += 1;
     }
     if(import_count == 0) { return; }
-    module::Module** import_list = (module::Module**)mem::alloc(c.allocator, import_count * sizeof(module::Module*));
+    module::Module** import_list = (module::Module**)mem::alloc_bytes(c.allocator, import_count * sizeof(module::Module*));
     u64 filled = 0;
     token_index = 0;
     while(token_index < toks.len) {
@@ -426,7 +426,7 @@ fn u8[] join_filename(Compiler* c, const u8[] dir, const u8[] name, const u8[] t
     if(written <= 0) { u8[] none = {null, 0}; return none; }
     u64 len = (u64)written;
     if(len > 1023) { len = 1023; }
-    u8* out = (u8*)mem::alloc(c.allocator, len);
+    u8* out = (u8*)mem::alloc_bytes(c.allocator, len);
     sys::memcpy(out, &buf[0], len);
     u8[] result = {out, len};
     return result;
@@ -512,7 +512,7 @@ export fn i32 run_backend(Compiler* c) {
 
 // Runs a produced executable and returns its exit code (or -1 on spawn failure).
 export fn i32 run_executable(mem::Allocator a, const u8[] path) {
-    i8** argv = (i8**)mem::alloc(a, 2 * sizeof(i8*));
+    i8** argv = (i8**)mem::alloc_bytes(a, 2 * sizeof(i8*));
     argv[0] = cstr(a, path);
     argv[1] = null;
     return spawn_and_wait(argv);
@@ -520,7 +520,7 @@ export fn i32 run_executable(mem::Allocator a, const u8[] path) {
 
 fn const u8[][] run_codegen(Compiler* c) {
     const u8[][] paths;
-    paths.ptr = mem::alloc(c.allocator, (c.modules.len + 1) * sizeof(const u8[]));
+    paths.ptr = mem::alloc_bytes(c.allocator, (c.modules.len + 1) * sizeof(const u8[]));
     paths.len = 0;
     for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
         module::Module* m = c.modules.ptr[module_index];
@@ -565,7 +565,7 @@ fn i32 run_link(Compiler* c, const u8[][] object_paths) {
 
 fn i8** build_link_argv(Compiler* c, const u8[][] object_paths, link_paths::LinkPaths* paths) {
     u64 cap = 24 + object_paths.len + c.extern_libs.len + c.lib_dirs.len;
-    i8** argv = (i8**)mem::alloc(c.allocator, (cap + 1) * sizeof(i8*));
+    i8** argv = (i8**)mem::alloc_bytes(c.allocator, (cap + 1) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(c.allocator, "ld.lld"); n += 1;
     argv[n] = cstr(c.allocator, "-o"); n += 1;
@@ -682,7 +682,7 @@ fn i8* dir_flag(Compiler* c, const u8[] path) {
 }
 
 fn i8* cstr(mem::Allocator a, const u8[] bytes) {
-    i8* out = (i8*)mem::alloc(a, bytes.len + 1);
+    i8* out = (i8*)mem::alloc_bytes(a, bytes.len + 1);
     for(u64 i = 0; i < bytes.len; i += 1) { out[i] = (i8)bytes[i]; }
     out[bytes.len] = 0;
     return out;

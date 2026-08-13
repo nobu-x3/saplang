@@ -106,7 +106,7 @@ export fn void set_out_dir(Build* b, const u8[] dir) {
 }
 
 export fn Step* step(Build* b, const u8[] name, const u8[] description) {
-    Step* s = (Step*)mem::alloc(b.allocator, sizeof(Step));
+    Step* s = (Step*)mem::alloc_bytes(b.allocator, sizeof(Step));
     sys::memset(s, 0, sizeof(Step));
     s.kind = StepKind::Top;
     s.name = name;
@@ -121,7 +121,7 @@ export fn void depend_on(Step* s, Step* dep) {
 }
 
 export fn CompileStep* add_executable(Build* b, const u8[] name, const u8[] root_source) {
-    CompileStep* c = (CompileStep*)mem::alloc(b.allocator, sizeof(CompileStep));
+    CompileStep* c = (CompileStep*)mem::alloc_bytes(b.allocator, sizeof(CompileStep));
     sys::memset(c, 0, sizeof(CompileStep));
     c.step.kind = StepKind::Compile;
     c.step.name = name;
@@ -160,7 +160,7 @@ export fn void install_artifact(Build* b, CompileStep* c) {
 }
 
 export fn RunStep* add_run_artifact(Build* b, CompileStep* c) {
-    RunStep* r = (RunStep*)mem::alloc(b.allocator, sizeof(RunStep));
+    RunStep* r = (RunStep*)mem::alloc_bytes(b.allocator, sizeof(RunStep));
     sys::memset(r, 0, sizeof(RunStep));
     r.step.kind = StepKind::Run;
     r.step.name = c.artifact_name;
@@ -409,7 +409,7 @@ fn u8[] define_arg(Build* b, CliArg* a) {
 
 fn i8** build_compile_argv(Build* b, CompileStep* c, u8[] out) {
     u64 cap = 12 + c.libs.len * 2 + c.lib_dirs.len * 2 + b.cli_args.len + b.compiler_flags.len;
-    i8** argv = (i8**)mem::alloc(b.allocator, (cap + 1) * sizeof(i8*));
+    i8** argv = (i8**)mem::alloc_bytes(b.allocator, (cap + 1) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(b.allocator, b.compiler_path); n += 1;
     argv[n] = cstr(b.allocator, c.root_source);   n += 1;
@@ -535,8 +535,8 @@ export fn void collect_compiles(Step* s, list::List(CompileStep*)* out, mem::All
 fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
     u64 workers = (u64)sys::cpu_count();
     if(workers == 0) { workers = 1; }
-    i32* pids = (i32*)mem::alloc(b.allocator, workers * sizeof(i32));
-    CompileStep** running = (CompileStep**)mem::alloc(b.allocator, workers * sizeof(CompileStep*));
+    i32* pids = (i32*)mem::alloc_bytes(b.allocator, workers * sizeof(i32));
+    CompileStep** running = (CompileStep**)mem::alloc_bytes(b.allocator, workers * sizeof(CompileStep*));
     for(u64 slot = 0; slot < workers; slot += 1) { pids[slot] = 0; running[slot] = null; }
 
     u64 next = 0;
@@ -631,7 +631,7 @@ fn i32 make_clean(Build* b) {
 fn i32 remove_tree(Build* b, const u8[] dir) {
     if(!file_exists(dir)) { return 0; }
     sys::dprintf(1, "  RM   %.*s\n", (i32)dir.len, (i8*)dir.ptr);
-    i8** argv = (i8**)mem::alloc(b.allocator, 4 * sizeof(i8*));
+    i8** argv = (i8**)mem::alloc_bytes(b.allocator, 4 * sizeof(i8*));
     argv[0] = cstr(b.allocator, "rm");
     argv[1] = cstr(b.allocator, "-rf");
     argv[2] = cstr(b.allocator, dir);
@@ -673,7 +673,7 @@ fn i32 make_compile(Build* b, CompileStep* c) {
 
 fn i32 make_run(Build* b, RunStep* r) {
     u8[] path = artifact_path(b, r.exe);
-    i8** argv = (i8**)mem::alloc(b.allocator, (r.args.len + 2) * sizeof(i8*));
+    i8** argv = (i8**)mem::alloc_bytes(b.allocator, (r.args.len + 2) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(b.allocator, path); n += 1;
     for(u64 arg_index = 0; arg_index < r.args.len; arg_index += 1) { argv[n] = cstr(b.allocator, r.args.ptr[arg_index]); n += 1; }
@@ -753,7 +753,7 @@ fn u8[] join(mem::Allocator a, const u8[] prefix, const u8[] name) {
 }
 
 fn i8* cstr(mem::Allocator a, const u8[] bytes) {
-    i8* out = (i8*)mem::alloc(a, bytes.len + 1);
+    i8* out = (i8*)mem::alloc_bytes(a, bytes.len + 1);
     for(u64 char_index = 0; char_index < bytes.len; char_index += 1) { out[char_index] = (i8)bytes[char_index]; }
     out[bytes.len] = 0;
     return out;

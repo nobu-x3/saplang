@@ -429,12 +429,12 @@ fn void compute_layout(TypeInterner* it, diag::DiagBuf* diag, Ty* type) {
                 }
                 u32 field_align = field_type.align;
                 u32 field_size  = field_type.size;
-                cursor = (u32)arena::align_up((u64)cursor, (u64)field_align);
+                cursor = (u32)mem::align_up((u64)cursor, (u64)field_align);
                 offsets[i] = cursor;
                 cursor += field_size;
                 if(field_align > max_align) { max_align = field_align; }
             }
-            size  = (u32)arena::align_up((u64)cursor, (u64)max_align);
+            size  = (u32)mem::align_up((u64)cursor, (u64)max_align);
             align = max_align;
             type.layout = new_layout;
         }
@@ -454,7 +454,7 @@ fn void compute_layout(TypeInterner* it, diag::DiagBuf* diag, Ty* type) {
                 if(field_size  > max_size)  { max_size  = field_size; }
                 if(field_align > max_align) { max_align = field_align; }
             }
-            size  = (u32)arena::align_up((u64)max_size, (u64)max_align);
+            size  = (u32)mem::align_up((u64)max_size, (u64)max_align);
             align = max_align;
             type.layout = new_layout;
         }
@@ -675,7 +675,7 @@ export fn Ty* enum_base_type(Ty* type) {
 // A struct's field types in declaration order; lets a backend build the LLVM struct body without importing ast.
 export fn Ty*[] struct_field_types(Ty* type, mem::Allocator a) {
     ast::StructDeclNode* decl = (ast::StructDeclNode*)type.data.struct_decl;
-    Ty** out = (Ty**)mem::alloc(a, (decl.fields.len + 1) * sizeof(Ty*));
+    Ty** out = (Ty**)mem::alloc_bytes(a, (decl.fields.len + 1) * sizeof(Ty*));
     for(u64 i = 0; i < decl.fields.len; i += 1) { out[i] = (Ty*)decl.fields[i].resolved_type; }
     Ty*[] result = {out, decl.fields.len};
     return result;
