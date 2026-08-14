@@ -1242,15 +1242,6 @@ fn i32 err_global_union_pointer_member(arena::Arena* a, const u8[]msg) {
     return 0;
 }
 
-// The members share storage, so a literal naming two of them has no single value to fold to.
-fn i32 err_global_union_two_initializers(arena::Arena* a, const u8[]msg) {
-    module::Module* m = lower_for_diag(a, "union U { i32 a; i32 b; }\nU g = {5, 6};\nexport fn i32 f() { return g.a; }");
-    if(!testing::expect_true(test_util::error_count(m) >= (u64)1, msg)) { return -1; }
-    if(!testing::expect_eq(m.diag.entries[0].msg, "a union initializer sets exactly one member", msg)) { return -2; }
-    if(!testing::expect_eq(m.diag.entries[0].src_pos, (u32)32, msg)) { return -3; }
-    return 0;
-}
-
 // An omitted field takes the field's own shape: the nested struct is a zero aggregate, the scalar an int zero.
 fn i32 global_struct_nested_zero_init(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
@@ -1616,7 +1607,6 @@ fn i32 main() {
     testing::add(suite, "global_struct_nested_zero_init", &global_struct_nested_zero_init);
     testing::add(suite, "global_union_init", &global_union_init);
     testing::add(suite, "err_global_union_pointer_member", &err_global_union_pointer_member);
-    testing::add(suite, "err_global_union_two_initializers", &err_global_union_two_initializers);
     testing::add(suite, "global_struct_reordered", &global_struct_reordered);
     testing::add(suite, "global_array_init",  &global_array_init);
     testing::add(suite, "global_slice_from_array", &global_slice_from_array);

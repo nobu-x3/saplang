@@ -2322,6 +2322,13 @@ fn bool check_struct_lit(Sema* s, ast::StructLitNode* n, types::Ty* expected) {
         mark_error((ast::AstNode*)n);
         return false;
     }
+    // Union members share storage, so a second initializer would overwrite the first rather than add to it.
+    if(expected.kind == types::TypeKind::Union && n.inits.len > 1) {
+        const u8[] msg = "a union initializer sets exactly one member";
+        sema_report(s, n.inits[1].src_pos, msg);
+        mark_error((ast::AstNode*)n);
+        return false;
+    }
     ast::FieldDecl[] fields = decl_fields(container_decl(expected));
     bool* seen = (bool*)arena::alloc(balloc(s), fields.len + 1);
     sys::memset(seen, 0, fields.len + 1);

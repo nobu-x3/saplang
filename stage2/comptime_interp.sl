@@ -661,6 +661,7 @@ fn value::Value eval_union_lit(Interp* ip, ast::StructLitNode* n, types::Ty* ty)
         interp_report(ip, n.h.src_pos, "union literal is not a comptime union value");
         return value::val_error();
     }
+    // sema rejects this first; folding one member and dropping the rest would be a silent wrong value.
     if(n.inits.len > 1) {
         interp_report(ip, n.h.src_pos, "a union initializer sets exactly one member");
         return value::val_error();

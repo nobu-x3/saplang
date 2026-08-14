@@ -339,6 +339,29 @@ fn i32 ok_comprun_generic_inferred(arena::Arena* a, const u8[]m) {
 }
 
 // A `Ctor(T)` parameter is the only mention of T, so inference has to run backwards from the instantiation.
+// Union members share storage, so a second initializer overwrites rather than adds: rejected in both
+// positions a literal can appear, and rejected in sema so the runtime and comptime paths agree.
+fn i32 err_union_literal_two_initializers(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "union U { i32 a; i32 b; }\nU g = {5, 6};\nexport fn i32 f() { return g.a; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "a union initializer sets exactly one member", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)36, m)) { return -3; }
+    return 0;
+}
+
+fn i32 err_union_local_two_initializers(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "union U { i32 a; i32 b; }\nexport fn i32 f() { U u = {5, 6}; return u.a; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "a union initializer sets exactly one member", m)) { return -2; }
+    return 0;
+}
+
+fn i32 ok_union_literal_single_member(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "union U { i32 a; f64 wide; }\nU g = {7};\nexport fn f64 f() { U u = {.wide = 1.5}; return u.wide + (f64)g.a; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 // An alias to an enum names that enum, so it qualifies members and its member folds as an array size.
 fn i32 ok_alias_to_enum_namespace(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "enum E { a, b, c, LENGTH }\nalias A = E;\nexport fn i32 f() { u32[A::LENGTH] arr; arr[2] = 1; A v = A::b; if(v != E::b) { return 1; } return (i32)arr[2]; }");
@@ -1877,6 +1900,9 @@ fn i32 main() {
     testing::add(suite, "ok_generic_two_type_params", &ok_generic_two_type_params);
     testing::add(suite, "err_generic_conflicting_infer", &err_generic_conflicting_infer);
     testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);
+    testing::add(suite, "err_union_literal_two_initializers", &err_union_literal_two_initializers);
+    testing::add(suite, "err_union_local_two_initializers", &err_union_local_two_initializers);
+    testing::add(suite, "ok_union_literal_single_member", &ok_union_literal_single_member);
     testing::add(suite, "ok_alias_to_enum_namespace", &ok_alias_to_enum_namespace);
     testing::add(suite, "ok_alias_chain_to_enum_namespace", &ok_alias_chain_to_enum_namespace);
     testing::add(suite, "err_alias_to_primitive_is_not_a_namespace", &err_alias_to_primitive_is_not_a_namespace);
