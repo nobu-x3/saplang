@@ -302,17 +302,17 @@ fn i32 backs_a_list(arena::Arena* a, const u8[]m) {
     bump_arena::init(&local, 1024);
     defer bump_arena::deinit(&local);
     mem::Allocator alloc = bump_arena::allocator(&local);
-    list::List(i32) values = {null, 0, 0};
+    list::List(i32) values = {{null, 0}, 0};
     for(i32 i = 0; i < 32; i = i + 1) {
         list::push(&values, alloc, i);
     }
-    if(!testing::expect_eq(values.len, (u64)32, m)) { return -1; }
-    if(!testing::expect_eq(values.ptr[31], 31, m)) { return -2; }
+    if(!testing::expect_eq(values.data.len, (u64)32, m)) { return -1; }
+    if(!testing::expect_eq(values.data[31], 31, m)) { return -2; }
     bump_arena::free(&local);
 
-    list::List(i32) again = {null, 0, 0};
+    list::List(i32) again = {{null, 0}, 0};
     list::push(&again, alloc, 5);
-    if(!testing::expect_eq(again.ptr[0], 5, m)) { return -3; }
+    if(!testing::expect_eq(again.data[0], 5, m)) { return -3; }
     return 0;
 }
 

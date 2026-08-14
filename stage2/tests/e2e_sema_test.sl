@@ -73,8 +73,8 @@ fn i32 ok_generic_template(arena::Arena* a, const u8[]m) {
 fn i32 ok_cfg_covers_generic(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { return id(5); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
-    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)1, m)) { return -2; }
-    if(!testing::expect_not_null(mod.instantiated_fns.ptr[0].cfg, m)) { return -3; }
+    if(!testing::expect_eq(mod.instantiated_fns.data.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_not_null(mod.instantiated_fns.data[0].cfg, m)) { return -3; }
     ast::BlockNode* root = (ast::BlockNode*)mod.root_node;
     if(!testing::expect_not_null(((ast::FnDeclNode*)root.stmts[0]).cfg, m)) { return -4; }
     return 0;
@@ -836,14 +836,14 @@ fn i32 ok_generic_infer_slice(arena::Arena* a, const u8[]m) {
 fn i32 ok_comptime_value_param(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn i32 addn(comptime i32 N, i32 x) { return x + N; }\nexport fn i32 f() { return addn(5, 3); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
-    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_eq(mod.instantiated_fns.data.len, (u64)1, m)) { return -2; }
     return 0;
 }
 
 fn i32 ok_comptime_value_param_distinct(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn i32 mul(comptime i32 N, i32 x) { return x * N; }\nexport fn i32 f() { return mul(1, 5) + mul(4, 3); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
-    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)2, m)) { return -2; }
+    if(!testing::expect_eq(mod.instantiated_fns.data.len, (u64)2, m)) { return -2; }
     return 0;
 }
 
@@ -1486,10 +1486,10 @@ fn i32 err_generic_infer_mismatch(arena::Arena* a, const u8[]m) {
 fn i32 ok_generic_two_instances(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { i32 p = id(i32, 5); f64 q = id(f64, 1.5); return p; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
-    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)2, m)) { return -2; }
-    if(!testing::expect_ne((void*)mod.instantiated_fns.ptr[0].name, (void*)mod.instantiated_fns.ptr[1].name, m)) { return -3; }
-    if(!testing::expect_substr(interner::symbol_str(mod.instantiated_fns.ptr[0].name), "i32", m)) { return -4; }
-    if(!testing::expect_substr(interner::symbol_str(mod.instantiated_fns.ptr[1].name), "f64", m)) { return -5; }
+    if(!testing::expect_eq(mod.instantiated_fns.data.len, (u64)2, m)) { return -2; }
+    if(!testing::expect_ne((void*)mod.instantiated_fns.data[0].name, (void*)mod.instantiated_fns.data[1].name, m)) { return -3; }
+    if(!testing::expect_substr(interner::symbol_str(mod.instantiated_fns.data[0].name), "i32", m)) { return -4; }
+    if(!testing::expect_substr(interner::symbol_str(mod.instantiated_fns.data[1].name), "f64", m)) { return -5; }
     return 0;
 }
 
@@ -1497,8 +1497,8 @@ fn i32 ok_generic_two_instances(arena::Arena* a, const u8[]m) {
 fn i32 ok_generic_value_distinct_instances(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn i32 make(comptime Type T, comptime i32 N, T x) { return 0; }\nexport fn i32 f() { i32 p = make(i32, 3, 5); i32 q = make(i32, 4, 6); return p + q; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
-    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)2, m)) { return -2; }
-    if(!testing::expect_ne((void*)mod.instantiated_fns.ptr[0].name, (void*)mod.instantiated_fns.ptr[1].name, m)) { return -3; }
+    if(!testing::expect_eq(mod.instantiated_fns.data.len, (u64)2, m)) { return -2; }
+    if(!testing::expect_ne((void*)mod.instantiated_fns.data[0].name, (void*)mod.instantiated_fns.data[1].name, m)) { return -3; }
     return 0;
 }
 
@@ -1506,7 +1506,7 @@ fn i32 ok_generic_value_distinct_instances(arena::Arena* a, const u8[]m) {
 fn i32 ok_generic_cached_instance(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn T id(comptime Type T, T x) { return x; }\nexport fn i32 f() { i32 p = id(i32, 5); i32 q = id(i32, 6); return p + q; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
-    if(!testing::expect_eq(mod.instantiated_fns.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_eq(mod.instantiated_fns.data.len, (u64)1, m)) { return -2; }
     return 0;
 }
 

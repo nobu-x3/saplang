@@ -1623,7 +1623,7 @@ fn i32 monomorphize_caches_and_dedups(arena::Arena* a, const u8[]m) {
     ast::FnDeclNode* clone2 = comptime_interp::monomorphize(&ip, gen, cargs_f64);
     if((void*)clone2 == (void*)clone1) { return -2; }
     if((void*)clone1 == (void*)gen) { return -3; }
-    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)2, m)) { return -4; }
+    if(!testing::expect_eq(mm.instantiated_fns.data.len, (u64)2, m)) { return -4; }
     return 0;
 }
 
@@ -1660,14 +1660,14 @@ fn i32 eval_call_int_generic(arena::Arena* a, const u8[]m) {
     call2[1] = mk_int(a, 4, types::prim_i32());
     value::Value v2 = comptime_interp::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_make, null), &call2[0], 2));
     if(!testing::expect_eq((u64)v2.data.i, (u64)20, m)) { return -2; }
-    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)1, m)) { return -3; }
+    if(!testing::expect_eq(mm.instantiated_fns.data.len, (u64)1, m)) { return -3; }
 
     ast::AstNode*[2] call3;
     call3[0] = mk_int(a, 6, types::prim_i32());
     call3[1] = mk_int(a, 3, types::prim_i32());
     value::Value v3 = comptime_interp::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_make, null), &call3[0], 2));
     if(!testing::expect_eq((u64)v3.data.i, (u64)18, m)) { return -4; }
-    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)2, m)) { return -5; }
+    if(!testing::expect_eq(mm.instantiated_fns.data.len, (u64)2, m)) { return -5; }
     return 0;
 }
 
@@ -1713,14 +1713,14 @@ fn i32 eval_call_type_generic(arena::Arena* a, const u8[]m) {
     call2[1] = mk_int(a, 5, types::prim_i32());
     value::Value v2 = comptime_interp::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_id, null), &call2[0], 2));
     if(!testing::expect_eq((u64)v2.data.i, (u64)5, m)) { return -2; }
-    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)2, m)) { return -3; }
+    if(!testing::expect_eq(mm.instantiated_fns.data.len, (u64)2, m)) { return -3; }
 
     ast::AstNode*[2] call3;
     call3[0] = mk_type_arg(a, types::prim_i32());
     call3[1] = mk_int(a, 9, types::prim_i32());
     value::Value v3 = comptime_interp::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_id, null), &call3[0], 2));
     if(!testing::expect_eq((u64)v3.data.i, (u64)9, m)) { return -4; }
-    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)2, m)) { return -5; }
+    if(!testing::expect_eq(mm.instantiated_fns.data.len, (u64)2, m)) { return -5; }
     return 0;
 }
 
@@ -1774,7 +1774,7 @@ fn i32 eval_call_recursive_generic(arena::Arena* a, const u8[]m) {
     call1[1] = mk_int(a, 3, types::prim_i32());
     value::Value v = comptime_interp::eval(&ip, mk_call_args(a, mk_ident_resolved(a, decl_rec, null), &call1[0], 2));
     if(!testing::expect_eq((u64)v.data.i, (u64)6, m)) { return -1; }
-    if(!testing::expect_eq(mm.instantiated_fns.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_eq(mm.instantiated_fns.data.len, (u64)1, m)) { return -2; }
     return 0;
 }
 

@@ -84,7 +84,7 @@ export fn sapir::SapirModule* lower_module(module::Module* m) {
         ast::AstNode* node = root.stmts[stmt_index];
         if(node.h.kind == ast::AstKind::FnDecl) { lower_fn(&lo, (ast::FnDeclNode*)node); }
     }
-    for(u64 i = 0; i < m.instantiated_fns.len; i += 1) { lower_clone(&lo, m.instantiated_fns.ptr[i]); }
+    for(u64 i = 0; i < m.instantiated_fns.data.len; i += 1) { lower_clone(&lo, m.instantiated_fns.data[i]); }
     for(u64 stmt_index = 0; stmt_index < root.stmts.len; stmt_index += 1) {
         ast::AstNode* node = root.stmts[stmt_index];
         if(node.h.kind == ast::AstKind::VarDecl) { lower_global(&lo, (ast::VarDeclNode*)node); }
@@ -150,7 +150,7 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
     lo.func = func;
     lo.g = g;
     func.entry = g.entry;
-    lo.cfg_block_count = (u32)g.blocks.len;
+    lo.cfg_block_count = (u32)g.blocks.data.len;
     lo.local_decls.ptr = null;
     lo.local_decls.len = 0;
     lo.local_decls_cap = 0;
@@ -168,13 +168,13 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
     lo.states.ptr = null;
     lo.states.len = 0;
     lo.states_cap = 0;
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
         new_sapir_block(lo);
     }
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        lo.states[block_index].cfg_preds_remaining = distinct_pred_count(&g.blocks.ptr[block_index]);
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
+        lo.states[block_index].cfg_preds_remaining = distinct_pred_count(&g.blocks.data[block_index]);
     }
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
         if(lo.states[block_index].cfg_preds_remaining == 0) { seal_block(lo, (u32)block_index); }
     }
 
@@ -182,10 +182,10 @@ fn void lower_fn_body(Lower* lo, ast::FnDeclNode* fn_node, u32 decl_index) {
     for(u64 block_index = 0; block_index < lo.cfg_block_count; block_index += 1) {
         switch_to_block(lo, (u32)block_index);
         if((u32)block_index == g.entry) { emit_mem_var_allocas(lo); emit_params(lo, fn_node); }
-        cfg::BasicBlock* cfg_block = &g.blocks.ptr[block_index];
-        u64 stmt_cut = cfg_block.stmts.len;
+        cfg::BasicBlock* cfg_block = &g.blocks.data[block_index];
+        u64 stmt_cut = cfg_block.stmts.data.len;
         if(cfg_block.term.kind == cfg::TermKind::Return && (u64)cfg_block.term.defer_start < stmt_cut) { stmt_cut = (u64)cfg_block.term.defer_start; }
-        for(u64 s = 0; s < stmt_cut; s += 1) { lower_stmt(lo, cfg_block.stmts.ptr[s]); }
+        for(u64 s = 0; s < stmt_cut; s += 1) { lower_stmt(lo, cfg_block.stmts.data[s]); }
         lower_terminator(lo, cfg_block);
         seal_cfg_successors(lo, &cfg_block.term);
     }
@@ -218,10 +218,10 @@ fn void switch_to_block(Lower* lo, u32 block) {
 
 fn u32 distinct_pred_count(cfg::BasicBlock* block) {
     u32 count = 0;
-    for(u64 i = 0; i < block.predecessors.len; i += 1) {
+    for(u64 i = 0; i < block.predecessors.data.len; i += 1) {
         bool seen = false;
         for(u64 j = 0; j < i; j += 1) {
-            if(block.predecessors.ptr[j] == block.predecessors.ptr[i]) { seen = true; break; }
+            if(block.predecessors.data[j] == block.predecessors.data[i]) { seen = true; break; }
         }
         if(!seen) { count += 1; }
     }
@@ -667,7 +667,7 @@ fn void lower_terminator(Lower* lo, cfg::BasicBlock* cfg_block) {
         else if(!types::is_void(lo.ret_ty)) {
             value = sapir::add_inst(lo.arena, lo.func, sapir::new_inst(sapir::Opcode::ConstInt, lo.ret_ty, term.src_pos));
         }
-        for(u64 s = (u64)term.defer_start; s < cfg_block.stmts.len; s += 1) { lower_stmt(lo, cfg_block.stmts.ptr[s]); }
+        for(u64 s = (u64)term.defer_start; s < cfg_block.stmts.data.len; s += 1) { lower_stmt(lo, cfg_block.stmts.data[s]); }
         sapir::Inst inst = sapir::new_inst(sapir::Opcode::Ret, types::prim_void(), term.src_pos);
         inst.a = value;
         sapir::add_inst(lo.arena, lo.func, inst);
@@ -995,18 +995,18 @@ fn u32 mem_alloca(Lower* lo, void* decl) {
 
 fn void collect_mem_vars(Lower* lo, ast::FnDeclNode* fn_node, cfg::Cfg* g) {
     for(u64 i = 0; i < fn_node.params.len; i += 1) { add_local_decl(lo, fn_node.params[i].decl); }
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        cfg::BasicBlock* block = &g.blocks.ptr[block_index];
-        for(u64 s = 0; s < block.stmts.len; s += 1) {
-            if(block.stmts.ptr[s].h.kind == ast::AstKind::VarDecl) { add_local_decl(lo, ((ast::VarDeclNode*)block.stmts.ptr[s]).decl); }
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
+        cfg::BasicBlock* block = &g.blocks.data[block_index];
+        for(u64 s = 0; s < block.stmts.data.len; s += 1) {
+            if(block.stmts.data[s].h.kind == ast::AstKind::VarDecl) { add_local_decl(lo, ((ast::VarDeclNode*)block.stmts.data[s]).decl); }
         }
     }
     for(u64 i = 0; i < fn_node.params.len; i += 1) {
         if(is_aggregate((types::Ty*)fn_node.params[i].resolved_type)) { mark_mem_var(lo, fn_node.params[i].decl); }
     }
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        cfg::BasicBlock* block = &g.blocks.ptr[block_index];
-        for(u64 s = 0; s < block.stmts.len; s += 1) { scan_stmt_mem(lo, block.stmts.ptr[s]); }
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
+        cfg::BasicBlock* block = &g.blocks.data[block_index];
+        for(u64 s = 0; s < block.stmts.data.len; s += 1) { scan_stmt_mem(lo, block.stmts.data[s]); }
         scan_addr_taken(lo, block.term.cond);
         scan_addr_taken(lo, block.term.return_value);
         scan_addr_taken(lo, block.term.switch_value);

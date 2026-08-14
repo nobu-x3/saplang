@@ -622,8 +622,8 @@ fn void apply_abi_attrs(CG* cg, void* target, abi::FnAbi* fn_abi, types::Ty* fnt
 }
 
 fn abi::FnAbi* fn_abi_for(CG* cg, types::Ty* fnty) {
-    for(u64 i = 0; i < cg.fn_abi_map.len; i += 1) {
-        if(cg.fn_abi_map.ptr[i].ty == fnty) { return cg.fn_abi_map.ptr[i].fn_abi; }
+    for(u64 i = 0; i < cg.fn_abi_map.data.len; i += 1) {
+        if(cg.fn_abi_map.data[i].ty == fnty) { return cg.fn_abi_map.data[i].fn_abi; }
     }
     FnAbiEntry e;
     e.ty = fnty;
@@ -633,8 +633,8 @@ fn abi::FnAbi* fn_abi_for(CG* cg, types::Ty* fnty) {
 }
 
 fn void* type_map_lookup(CG* cg, types::Ty* t) {
-    for(u64 i = 0; i < cg.type_map.len; i += 1) {
-        if(cg.type_map.ptr[i].ty == t) { return cg.type_map.ptr[i].llvm; }
+    for(u64 i = 0; i < cg.type_map.data.len; i += 1) {
+        if(cg.type_map.data[i].ty == t) { return cg.type_map.data[i].llvm; }
     }
     return null;
 }

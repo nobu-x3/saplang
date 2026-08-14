@@ -271,12 +271,12 @@ fn bool ends_with(const u8[] s, const u8[] suffix) {
 
 // Scanner output only, no parsing; import cycles are fine.
 export fn void discover(Compiler* c) {
-    for(u64 entry_index = 0; entry_index < c.entry_sources.len; entry_index += 1) {
-        add_entry_module(c, c.entry_sources.ptr[entry_index]);
+    for(u64 entry_index = 0; entry_index < c.entry_sources.data.len; entry_index += 1) {
+        add_entry_module(c, c.entry_sources.data[entry_index]);
     }
     u64 cursor = 0;
-    while(cursor < c.modules.len) {
-        module::Module* m = c.modules.ptr[cursor];
+    while(cursor < c.modules.data.len) {
+        module::Module* m = c.modules.data[cursor];
         scanner::scan(m);
         discover_imports(c, m);
         cursor += 1;
@@ -318,7 +318,7 @@ fn module::BuildInfo build_info(Compiler* c) {
     if(c.target.len > 0) { info.os = c.target; }
     info.arch = "x86_64";
     info.config = config_name(c.config);
-    info.defines = {c.defines.ptr, c.defines.len};
+    info.defines = c.defines.data;
     return info;
 }
 
@@ -382,8 +382,8 @@ fn bool is_import_at(token::Token[] toks, u64 token_index) {
 }
 
 fn module::Module* find_module(Compiler* c, symbol::Symbol* name) {
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        if(c.modules.ptr[module_index].name == name) { return c.modules.ptr[module_index]; }
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        if(c.modules.data[module_index].name == name) { return c.modules.data[module_index]; }
     }
     return null;
 }
@@ -401,14 +401,14 @@ fn ResolvedSource resolve_import_source(Compiler* c, symbol::Symbol* name) {
     u8[] empty = {null, 0};
     ResolvedSource result;
     sys::memset(&result, 0, sizeof(ResolvedSource));
-    for(u64 path_index = 0; path_index < c.import_paths.len; path_index += 1) {
+    for(u64 path_index = 0; path_index < c.import_paths.data.len; path_index += 1) {
         bool found = false;
         if(c.target.len > 0) {
-            u8[] platform = join_filename(c, c.import_paths.ptr[path_index], name_bytes, c.target);
+            u8[] platform = join_filename(c, c.import_paths.data[path_index], name_bytes, c.target);
             u8[] bytes = open_and_read(c, platform, &found);
             if(found) { result.found = true; result.path = platform; result.src = bytes; return result; }
         }
-        u8[] candidate = join_filename(c, c.import_paths.ptr[path_index], name_bytes, empty);
+        u8[] candidate = join_filename(c, c.import_paths.data[path_index], name_bytes, empty);
         u8[] bytes = open_and_read(c, candidate, &found);
         if(found) { result.found = true; result.path = candidate; result.src = bytes; return result; }
     }
@@ -486,8 +486,8 @@ export fn i32 run(Compiler* c) {
 fn void write_depfile(Compiler* c) {
     io::File f = io::open(c.deps_path, "w");
     if(f.fp == null) { return; }
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        const u8[] path = c.modules.ptr[module_index].path;
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        const u8[] path = c.modules.data[module_index].path;
         if(path.len == 0) { continue; }
         io::write_string(&f, path);
         io::write_string(&f, "\n");
@@ -520,10 +520,10 @@ export fn i32 run_executable(mem::Allocator a, const u8[] path) {
 
 fn const u8[][] run_codegen(Compiler* c) {
     const u8[][] paths;
-    paths.ptr = mem::alloc_bytes(c.allocator, (c.modules.len + 1) * sizeof(const u8[]));
+    paths.ptr = mem::alloc_bytes(c.allocator, (c.modules.data.len + 1) * sizeof(const u8[]));
     paths.len = 0;
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        module::Module* m = c.modules.ptr[module_index];
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        module::Module* m = c.modules.data[module_index];
         if(m.sapir == null) { continue; }
         const u8[] name = path_basename(m.path);
         sys::dprintf(2, "Compiling module %.*s...\n", (i32)name.len, (i8*)name.ptr);
@@ -564,7 +564,7 @@ fn i32 run_link(Compiler* c, const u8[][] object_paths) {
 }
 
 fn i8** build_link_argv(Compiler* c, const u8[][] object_paths, link_paths::LinkPaths* paths) {
-    u64 cap = 24 + object_paths.len + c.extern_libs.len + c.lib_dirs.len;
+    u64 cap = 24 + object_paths.len + c.extern_libs.data.len + c.lib_dirs.data.len;
     i8** argv = (i8**)mem::alloc_bytes(c.allocator, (cap + 1) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(c.allocator, "ld.lld"); n += 1;
@@ -576,9 +576,9 @@ fn i8** build_link_argv(Compiler* c, const u8[][] object_paths, link_paths::Link
     argv[n] = paths.crt_init; n += 1;
     argv[n] = paths.lib_dir; n += 1;
     // User -L dirs precede the objects/libs so ld.lld searches them for the -l libraries.
-    for(u64 i = 0; i < c.lib_dirs.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs.ptr[i]); n += 1; }
+    for(u64 i = 0; i < c.lib_dirs.data.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs.data[i]); n += 1; }
     for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.allocator, object_paths[i]); n += 1; }
-    for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs.ptr[i]); n += 1; }
+    for(u64 i = 0; i < c.extern_libs.data.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs.data[i]); n += 1; }
     if(c.config == codegen::BuildConfig::AddressSanitizer) {
         argv[n] = paths.asan_runtime_static; n += 1;
         argv[n] = paths.asan_runtime; n += 1;
@@ -625,7 +625,7 @@ fn i32 spawn_and_wait(i8** argv) {
 // discovered imports each get one too and cannot share the name.
 fn const u8[] object_path_for(Compiler* c, module::Module* m) {
     if(!c.compile_only) { return tmp_object_path(c, m); }
-    if(c.output_path.len > 0 && c.modules.len > 0 && c.modules.ptr[0] == m) { return c.output_path; }
+    if(c.output_path.len > 0 && c.modules.data.len > 0 && c.modules.data[0] == m) { return c.output_path; }
     io::OutBuf buf;
     io::outbuf_init(&buf, c.allocator, 64);
     io::outbuf_write(&buf, interner::symbol_str(m.name));
@@ -693,9 +693,9 @@ export fn i32 run_frontend(Compiler* c) {
     comptime_interp::install_hooks();
     comptime_interp::init_mono_sync();
     sema::init_body_sync(c.allocator);
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        c.modules.ptr[module_index].comptime_max_depth = c.comptime_depth;
-        c.modules.ptr[module_index].comptime_max_iterations = c.comptime_iterations;
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        c.modules.data[module_index].comptime_max_depth = c.comptime_depth;
+        c.modules.data[module_index].comptime_max_iterations = c.comptime_iterations;
     }
     if(c.is_multithreaded) { c.pool = pool::new(c.allocator, sys::cpu_count()); }
     u64 phase_start = bench::now_ns();
@@ -737,14 +737,14 @@ export fn i32 run_frontend(Compiler* c) {
 // One job per module, joined at the barrier; runs sequentially when single-threaded.
 fn void run_phase(Compiler* c, fn* void(void*) job) {
     if(c.pool != null) {
-        for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-            pool::submit(c.pool, job, (void*)c.modules.ptr[module_index]);
+        for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+            pool::submit(c.pool, job, (void*)c.modules.data[module_index]);
         }
         pool::wait_all(c.pool);
         return;
     }
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        job((void*)c.modules.ptr[module_index]);
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        job((void*)c.modules.data[module_index]);
     }
 }
 
@@ -809,8 +809,8 @@ export fn bool stops_before_backend(Compiler* c) {
 fn void dump_tokens(Compiler* c) {
     io::OutBuf out;
     io::outbuf_init(&out, c.allocator, 4096);
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        module::Module* m = c.modules.ptr[module_index];
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        module::Module* m = c.modules.data[module_index];
         io::outbuf_write(&out, "module ");
         io::outbuf_write(&out, interner::symbol_str(m.name));
         io::outbuf_write_byte(&out, 10);
@@ -829,8 +829,8 @@ fn void dump_tokens(Compiler* c) {
 fn void dump_asts(Compiler* c) {
     io::OutBuf out;
     io::outbuf_init(&out, c.allocator, 4096);
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        module::Module* m = c.modules.ptr[module_index];
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        module::Module* m = c.modules.data[module_index];
         if(m.root_node == null) { continue; }
         io::outbuf_write(&out, "module ");
         io::outbuf_write(&out, interner::symbol_str(m.name));
@@ -842,8 +842,8 @@ fn void dump_asts(Compiler* c) {
 }
 
 fn void dump_llvm(Compiler* c) {
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        module::Module* m = c.modules.ptr[module_index];
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        module::Module* m = c.modules.data[module_index];
         if(m.sapir == null) { continue; }
         const u8[] ir = codegen::codegen_ir_string((sapir::SapirModule*)m.sapir, c.allocator, c.config);
         sys::dprintf(1, "%.*s", (i32)ir.len, (i8*)ir.ptr);
@@ -853,8 +853,8 @@ fn void dump_llvm(Compiler* c) {
 fn void dump_sapir(Compiler* c) {
     io::OutBuf out;
     io::outbuf_init(&out, c.allocator, 4096);
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        module::Module* m = c.modules.ptr[module_index];
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        module::Module* m = c.modules.data[module_index];
         if(m.sapir == null) { continue; }
         sapir_print::print_module((sapir::SapirModule*)m.sapir, &out);
     }
@@ -865,8 +865,8 @@ fn void dump_sapir(Compiler* c) {
 fn void dump_cfgs(Compiler* c) {
     io::OutBuf out;
     io::outbuf_init(&out, c.allocator, 4096);
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        cfg_print::print_module(c.modules.ptr[module_index], &out);
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        cfg_print::print_module(c.modules.data[module_index], &out);
     }
     u8[] bytes = io::outbuf_bytes(&out);
     sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
@@ -874,8 +874,8 @@ fn void dump_cfgs(Compiler* c) {
 
 // Write each module's diagnostics to stderr in ModuleId order, tally errors, reset.
 export fn void drain_diagnostics(Compiler* c) {
-    for(u64 module_index = 0; module_index < c.modules.len; module_index += 1) {
-        module::Module* m = c.modules.ptr[module_index];
+    for(u64 module_index = 0; module_index < c.modules.data.len; module_index += 1) {
+        module::Module* m = c.modules.data[module_index];
         for(u64 entry_index = 0; entry_index < m.diag.entries.len; entry_index += 1) {
             diag::DiagEntry* entry = &m.diag.entries[entry_index];
             if(!entry.is_warning) { c.error_count += 1; }

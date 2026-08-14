@@ -27,7 +27,7 @@ export fn ast::AstNode* parse(module::Module* m) {
         return null;
     }
     Parser p = { m, 0, false, false, false };
-    NodeList decls = {null, 0, 0};
+    NodeList decls = {{null, 0}, 0};
     while (peek(&p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* d = parse_top_decl(&p);
         if (d != null) { push_or_splice(&decls, m.allocator, d); }
@@ -36,14 +36,14 @@ export fn ast::AstNode* parse(module::Module* m) {
     root.h.kind = ast::AstKind::BlockStmt;
     root.h.flags = (ast::AstFlags)0;
     root.h.src_pos = 0;
-    root.stmts = {decls.ptr, decls.len};
+    root.stmts = decls.data;
     return (ast::AstNode*)root;
 }
 
 // Parse a brace-less statement list (used for compinsert fragments in function bodies).
 export fn ast::AstNode* parse_stmt_fragment(module::Module* m) {
     Parser p = { m, 0, false, false, false };
-    NodeList stmts = {null, 0, 0};
+    NodeList stmts = {{null, 0}, 0};
     while (peek(&p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* s = parse_stmt(&p);
         if (s != null) { push_or_splice(&stmts, m.allocator, s); }
@@ -52,7 +52,7 @@ export fn ast::AstNode* parse_stmt_fragment(module::Module* m) {
     blk.h.kind = ast::AstKind::BlockStmt;
     blk.h.flags = (ast::AstFlags)0;
     blk.h.src_pos = 0;
-    blk.stmts = {stmts.ptr, stmts.len};
+    blk.stmts = stmts.data;
     return (ast::AstNode*)blk;
 }
 
@@ -257,7 +257,7 @@ fn ast::AstNode* parse_fn_decl(Parser* p, bool is_exported) {
     return (ast::AstNode*)fn_decl_node;
 }
 fn ast::Param[] parse_params(Parser* p, bool* had_err) {
-    list::List(ast::Param) arr = {null, 0, 0};
+    list::List(ast::Param) arr = {{null, 0}, 0};
     while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
         if(p.in_extern && peek(p, 0).kind == token::TokenKind::DotDotDot) { break; }
         u32 start = peek(p, 0).src_pos;
@@ -297,7 +297,7 @@ fn ast::Param[] parse_params(Parser* p, bool* had_err) {
         list::push(&arr, p.m.allocator, prm);
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
-    return {arr.ptr, arr.len};
+    return arr.data;
 }
 
 // STATEMENTS ///////////////////////////////////////////////////////////////////////////
@@ -544,7 +544,7 @@ fn ast::AstNode* parse_comp_branch(Parser* p, bool at_top_level) {
     token::Token open = expect(p, token::TokenKind::LBrace);
     if(open.kind == token::TokenKind::ERROR) { return mk_error_node(p, start); }
     bool local_err = false;
-    NodeList decls = {null, 0, 0};
+    NodeList decls = {{null, 0}, 0};
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* d = parse_top_decl(p);
         if(d) {
@@ -558,7 +558,7 @@ fn ast::AstNode* parse_comp_branch(Parser* p, bool at_top_level) {
     blk.h.flags = (ast::AstFlags)0;
     if(local_err) { blk.h.flags = ast::AstFlags::HadError; }
     blk.h.src_pos = start;
-    blk.stmts = {decls.ptr, decls.len};
+    blk.stmts = decls.data;
     return (ast::AstNode*)blk;
 }
 
@@ -618,7 +618,7 @@ fn bool slice_eq(const u8[] a, const u8[] b) {
 fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
     bool prev_allow = p.allow_anon_type;
     p.allow_anon_type = false;
-    list::List(ast::FieldDecl) arr = {null, 0, 0};
+    list::List(ast::FieldDecl) arr = {{null, 0}, 0};
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         u32 prev_idx = p.idx;
         u32 start = peek(p, 0).src_pos;
@@ -636,7 +636,7 @@ fn ast::FieldDecl[] parse_fields(Parser* p, bool* had_err) {
         if(p.idx == prev_idx) { consume(p); *had_err = true; }
     }
     p.allow_anon_type = prev_allow;
-    return {arr.ptr, arr.len};
+    return arr.data;
 }
 
 fn ast::AstNode* parse_struct_decl(Parser* p, bool is_exported) {
@@ -906,7 +906,7 @@ fn ast::AstNode* parse_extern_block(Parser* p) {
     }
     token::Token lbrace = expect(p, token::TokenKind::LBrace);
     if(lbrace.kind == token::TokenKind::ERROR) { had_err = true; }
-    NodeList items = {null, 0, 0};
+    NodeList items = {{null, 0}, 0};
     bool saved_in_extern = p.in_extern;
     p.in_extern = true;
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
@@ -927,7 +927,7 @@ fn ast::AstNode* parse_extern_block(Parser* p) {
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
     n.lib_name = lib_name;
-    n.items = {items.ptr, items.len};
+    n.items = items.data;
     return (ast::AstNode*)n;
 }
 
@@ -964,7 +964,7 @@ fn ast::AstNode* parse_alias_decl(Parser* p, bool is_exported) {
 }
 
 fn ast::EnumMember[] parse_enum_members(Parser* p, bool* had_err) {
-    list::List(ast::EnumMember) arr = {null, 0, 0};
+    list::List(ast::EnumMember) arr = {{null, 0}, 0};
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         u32 prev = p.idx;
         u32 start = peek(p, 0).src_pos;
@@ -984,7 +984,7 @@ fn ast::EnumMember[] parse_enum_members(Parser* p, bool* had_err) {
         if(!match(p, token::TokenKind::Comma)) { break; }
         if(p.idx == prev) { consume(p); *had_err = true; }
     }
-    return {arr.ptr, arr.len};
+    return arr.data;
 }
 
 fn ast::AstNode* parse_enum_decl(Parser* p, bool is_exported) {
@@ -1219,14 +1219,14 @@ fn ast::AstNode* parse_defer(Parser* p) {
         ast::AstNode* inner = parse_stmt(p);
         bool inner_err = had_error(inner);
         if(inner_err) { had_err = true; }
-        NodeList b = {null, 0, 0};
+        NodeList b = {{null, 0}, 0};
         push_or_splice(&b, p.m.allocator, inner);
         ast::BlockNode* blk = node_alloc(p.m.arena, sizeof(ast::BlockNode));
         blk.h.kind = ast::AstKind::BlockStmt;
         blk.h.flags = (ast::AstFlags)0;
         if(inner_err) { blk.h.flags = ast::AstFlags::HadError; }
         blk.h.src_pos = stmt_pos;
-        blk.stmts = {b.ptr, b.len};
+        blk.stmts = b.data;
         body = (ast::AstNode*)blk;
     }
     if(had_error(body)) { had_err = true; }
@@ -1424,7 +1424,7 @@ fn ast::AstNode* parse_switch(Parser* p) {
     token::Token lbrace = expect(p, token::TokenKind::LBrace);
     if(lbrace.kind == token::TokenKind::ERROR) { had_err = true; }
 
-    list::List(ast::SwitchArm) arms = {null, 0, 0};
+    list::List(ast::SwitchArm) arms = {{null, 0}, 0};
     ast::AstNode* else_block = null;
 
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
@@ -1441,10 +1441,10 @@ fn ast::AstNode* parse_switch(Parser* p) {
                 body = parse_block(p);
                 if(had_error(body)) { had_err = true; }
             }
-            NodeList labels_b = {null, 0, 0};
+            NodeList labels_b = {{null, 0}, 0};
             list::push(&labels_b, p.m.allocator, label);
             ast::SwitchArm arm;
-            arm.labels = {labels_b.ptr, labels_b.len};
+            arm.labels = labels_b.data;
             arm.body = body;
             arm.src_pos = label_pos;
             list::push(&arms, p.m.allocator, arm);
@@ -1486,7 +1486,7 @@ fn ast::AstNode* parse_switch(Parser* p) {
     if(had_err) { n.h.flags = ast::AstFlags::HadError; }
     n.h.src_pos = start;
     n.discriminant = disc;
-    n.arms = {arms.ptr, arms.len};
+    n.arms = arms.data;
     n.else_block = else_block;
     return (ast::AstNode*)n;
 }
@@ -1524,7 +1524,7 @@ fn ast::AstNode* parse_block(Parser* p) {
     bool local_err = false;
     token::Token open = expect(p, token::TokenKind::LBrace);
     if(open.kind == token::TokenKind::ERROR) { return mk_error_node(p, start); }
-    NodeList stmts = {null, 0, 0};
+    NodeList stmts = {{null, 0}, 0};
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* s = parse_stmt(p);
         if(s) {
@@ -1539,7 +1539,7 @@ fn ast::AstNode* parse_block(Parser* p) {
     blk.h.flags = (ast::AstFlags)0;
     if(local_err) { blk.h.flags = ast::AstFlags::HadError; }
     blk.h.src_pos = start;
-    blk.stmts = {stmts.ptr, stmts.len};
+    blk.stmts = stmts.data;
     return (ast::AstNode*)blk;
 }
 
@@ -1621,7 +1621,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         p.suppress_type_call = prev_suppress;
         token::Token lparen = expect(p, token::TokenKind::LParen);
         if(lparen.kind == token::TokenKind::ERROR) { return mk_error_node(p, t.src_pos); }
-        NodeList pb = {null, 0, 0};
+        NodeList pb = {{null, 0}, 0};
         while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
             list::push(&pb, p.m.allocator, parse_type(p));
             if(!match(p, token::TokenKind::Comma)) { break; }
@@ -1632,7 +1632,7 @@ fn ast::AstNode* parse_base_type(Parser* p) {
         n.h.flags = (ast::AstFlags)0;
         n.h.src_pos = t.src_pos;
         n.return_type = ret;
-        n.param_types = {pb.ptr, pb.len};
+        n.param_types = pb.data;
         return (ast::AstNode*)n;
     }
     case token::TokenKind::STRUCT: {
@@ -1774,9 +1774,8 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner, bool pointee_
                 inner = (ast::AstNode*)n;
             } else {
                 // Nest a run of dimensions leftmost-outermost so i32[2][3] is 2 rows of 3 (C order).
-                NodeList sizes = {null, 0, 0};
-                list::List(u32) positions;
-                positions.ptr = null; positions.len = 0; positions.cap = 0;
+                NodeList sizes = {{null, 0}, 0};
+                list::List(u32) positions = {{null, 0}, 0};
                 ast::AstNode* sz = parse_expr(p, 0);
                 expect(p, token::TokenKind::RBracket);
                 list::push(&sizes, p.m.allocator, sz);
@@ -1789,13 +1788,13 @@ fn ast::AstNode* parse_type_suffix(Parser* p, ast::AstNode* inner, bool pointee_
                     list::push(&sizes, p.m.allocator, dim);
                     list::push(&positions, p.m.allocator, bracket.src_pos);
                 }
-                for(i64 dim_index = (i64)sizes.len - 1; dim_index >= 0; dim_index -= 1) {
+                for(i64 dim_index = (i64)sizes.data.len - 1; dim_index >= 0; dim_index -= 1) {
                     ast::TypeArrayNode* n = node_alloc(p.m.arena, sizeof(ast::TypeArrayNode));
                     n.h.kind = ast::AstKind::ArrayType;
                     n.h.flags = (ast::AstFlags)0;
-                    n.h.src_pos = positions.ptr[(u64)dim_index];
+                    n.h.src_pos = positions.data[(u64)dim_index];
                     n.element = inner;
-                    n.size_expr = sizes.ptr[(u64)dim_index];
+                    n.size_expr = sizes.data[(u64)dim_index];
                     inner = (ast::AstNode*)n;
                 }
             }
@@ -1878,7 +1877,7 @@ fn ast::AstNode* parse_unary(Parser* p) {
 // in a type-position call (`type_ctx`) a bare identifier arg is a type too (`Box(T)`, `List(SomeAlias)`).
 fn ast::AstNode*[] parse_call_args(Parser* p, bool type_ctx) {
     consume(p);   // '('
-    NodeList b = {null, 0, 0};
+    NodeList b = {{null, 0}, 0};
     while(peek(p, 0).kind != token::TokenKind::RParen && peek(p, 0).kind != token::TokenKind::EOF) {
         ast::AstNode* arg;
         token::TokenKind k = peek(p, 0).kind;
@@ -1895,7 +1894,7 @@ fn ast::AstNode*[] parse_call_args(Parser* p, bool type_ctx) {
         if(!match(p, token::TokenKind::Comma)) { break; }
     }
     expect(p, token::TokenKind::RParen);
-    return {b.ptr, b.len};
+    return b.data;
 }
 
 fn ast::AstNode* parse_postfix(Parser* p) {
@@ -2132,7 +2131,7 @@ fn ast::AstNode* parse_paren_or_cast(Parser* p) {
 
 fn ast::AstNode* parse_struct_lit(Parser* p) {
     token::Token open = consume(p);
-    list::List(ast::FieldInitializer) inits_arr = {null, 0, 0};
+    list::List(ast::FieldInitializer) inits_arr = {{null, 0}, 0};
     while(peek(p, 0).kind != token::TokenKind::RBrace && peek(p, 0).kind != token::TokenKind::EOF) {
         u32 fi_pos = peek(p, 0).src_pos;
         symbol::Symbol* fi_name = null;
@@ -2155,13 +2154,13 @@ fn ast::AstNode* parse_struct_lit(Parser* p) {
     n.h.kind = ast::AstKind::StructLit;
     n.h.flags = (ast::AstFlags)0;
     n.h.src_pos = open.src_pos;
-    n.inits = {inits_arr.ptr, inits_arr.len};
+    n.inits = inits_arr.data;
     return (ast::AstNode*)n;
 }
 
 fn ast::AstNode* parse_array_lit(Parser* p) {
     token::Token open = consume(p);
-    NodeList b = {null, 0, 0};
+    NodeList b = {{null, 0}, 0};
     while(peek(p, 0).kind != token::TokenKind::RBracket && peek(p, 0).kind != token::TokenKind::EOF) {
         list::push(&b, p.m.allocator, parse_expr(p, 0));
         if(!match(p, token::TokenKind::Comma)) { break; }
@@ -2171,7 +2170,7 @@ fn ast::AstNode* parse_array_lit(Parser* p) {
     n.h.kind = ast::AstKind::ArrayLit;
     n.h.flags = (ast::AstFlags)0;
     n.h.src_pos = open.src_pos;
-    n.elems = {b.ptr, b.len};
+    n.elems = b.data;
     return (ast::AstNode*)n;
 }
 

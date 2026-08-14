@@ -289,18 +289,18 @@ fn i32 free_releases_list_backing_store(arena::Arena* a, const u8[]m) {
     arena::Arena local = {16, null};
     defer arena::free(&local);
     mem::Allocator alloc = arena::allocator(&local);
-    list::List(i32) values = {null, 0, 0};
+    list::List(i32) values = {{null, 0}, 0};
     for(i32 i = 0; i < 32; i = i + 1) {
         list::push(&values, alloc, i);
     }
-    if(!testing::expect_eq(values.len, 32, m)) { return -1; }
-    if(!testing::expect_eq(values.ptr[31], 31, m)) { return -2; }
+    if(!testing::expect_eq(values.data.len, 32, m)) { return -1; }
+    if(!testing::expect_eq(values.data[31], 31, m)) { return -2; }
     arena::free(&local);
     if(!testing::expect_null((void*)local.head, m)) { return -3; }
 
-    list::List(i32) again = {null, 0, 0};
+    list::List(i32) again = {{null, 0}, 0};
     list::push(&again, alloc, 5);
-    if(!testing::expect_eq(again.ptr[0], 5, m)) { return -4; }
+    if(!testing::expect_eq(again.data[0], 5, m)) { return -4; }
     return 0;
 }
 

@@ -49,25 +49,23 @@ fn i32 ok_or_and_negation(arena::Arena* a, const u8[]m) {
 }
 
 fn i32 ok_defined_flag(arena::Arena* a, const u8[]m) {
-    list::List(module::Define) defines;
-    defines.ptr = null; defines.len = 0; defines.cap = 0;
+    list::List(module::Define) defines = {{null, 0}, 0};
     module::Define tracing;
     tracing.name = "tracing";
     tracing.value = {null, 0};
     list::push(&defines, arena::allocator(a), tracing);
-    module::Module* mod = with_defines(a, "comprun if (build::defined(\"tracing\")) { const i32 K = 8; }\nelse { const i32 K = missing_api(); }\ncomprun { if(K != 8) { comperror(\"bad\"); } }\nexport fn i32 f() { return K; }", {defines.ptr, defines.len});
+    module::Module* mod = with_defines(a, "comprun if (build::defined(\"tracing\")) { const i32 K = 8; }\nelse { const i32 K = missing_api(); }\ncomprun { if(K != 8) { comperror(\"bad\"); } }\nexport fn i32 f() { return K; }", defines.data);
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
     return 0;
 }
 
 fn i32 ok_define_value(arena::Arena* a, const u8[]m) {
-    list::List(module::Define) defines;
-    defines.ptr = null; defines.len = 0; defines.cap = 0;
+    list::List(module::Define) defines = {{null, 0}, 0};
     module::Define level;
     level.name = "level";
     level.value = "high";
     list::push(&defines, arena::allocator(a), level);
-    module::Module* mod = with_defines(a, "comprun if (build::define(\"level\") == \"high\") { const i32 K = 9; }\nelse { const i32 K = missing_api(); }\ncomprun { if(K != 9) { comperror(\"bad\"); } }\nexport fn i32 f() { return K; }", {defines.ptr, defines.len});
+    module::Module* mod = with_defines(a, "comprun if (build::define(\"level\") == \"high\") { const i32 K = 9; }\nelse { const i32 K = missing_api(); }\ncomprun { if(K != 9) { comperror(\"bad\"); } }\nexport fn i32 f() { return K; }", defines.data);
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
     return 0;
 }

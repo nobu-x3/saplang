@@ -103,7 +103,7 @@ fn i32 cross_module_generic_call(arena::Arena* a, const u8[]msg) {
     i32 rc = compiler::run_frontend(c);
     if(!testing::expect_eq(rc, 0, msg)) { return -1; }
     if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
-    if(!testing::expect_eq(av.instantiated_fns.len, (u64)1, msg)) { return -3; }
+    if(!testing::expect_eq(av.instantiated_fns.data.len, (u64)1, msg)) { return -3; }
     return 0;
 }
 
@@ -135,7 +135,7 @@ fn i32 cross_module_generic_uses_home_type(arena::Arena* a, const u8[]msg) {
     i32 rc = compiler::run_frontend(c);
     if(!testing::expect_eq(rc, 0, msg)) { return -1; }
     if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
-    if(!testing::expect_eq(av.instantiated_fns.len, (u64)1, msg)) { return -3; }
+    if(!testing::expect_eq(av.instantiated_fns.data.len, (u64)1, msg)) { return -3; }
     return 0;
 }
 
@@ -253,8 +253,8 @@ fn i32 nested_generic_instantiated_in_two_modules(arena::Arena* a, const u8[]msg
     i32 rc = compiler::run_frontend(c);
     if(!testing::expect_eq(rc, 0, msg)) { return -1; }
     if(!testing::expect_eq(c.error_count, (i64)0, msg)) { return -2; }
-    if(!testing::expect_eq(av.instantiated_fns.len, (u64)2, msg)) { return -3; }
-    if(!testing::expect_eq(b.instantiated_fns.len, (u64)1, msg)) { return -4; }
+    if(!testing::expect_eq(av.instantiated_fns.data.len, (u64)2, msg)) { return -3; }
+    if(!testing::expect_eq(b.instantiated_fns.data.len, (u64)1, msg)) { return -4; }
     sapir::SapirDecl* in_b = lowered_decl(b, "__b_inner__i32");
     if(!testing::expect_ne((void*)in_b, null, msg)) { return -5; }
     if(!testing::expect_eq((u32)in_b.linkage, (u32)sapir::SapirLinkage::LinkOnceOdr, msg)) { return -6; }
@@ -452,7 +452,7 @@ fn i32 add_module_grows(arena::Arena* a, const u8[]msg) {
     for(u64 i = 0; i < 10; i += 1) {
         compiler::add_module(c, mk_source_module(a, "m", "export fn i32 f() { return 0; }"));
     }
-    if(!testing::expect_eq(c.modules.len, (u64)10, msg)) { return -1; }
+    if(!testing::expect_eq(c.modules.data.len, (u64)10, msg)) { return -1; }
     i32 rc = compiler::run_frontend(c);
     if(!testing::expect_eq(rc, 0, msg)) { return -2; }
     return 0;
@@ -473,10 +473,10 @@ fn i32 discover_multi(arena::Arena* a, const u8[]msg) {
     compiler::add_import_path(c, "/tmp");
     compiler::discover(c);
     i32 result = 0;
-    if(!testing::expect_eq(c.modules.len, (u64)2, msg)) { result = -1; }
-    else if(!testing::expect_eq((void*)c.modules.ptr[0].name, (void*)interner::intern("sdmain"), msg)) { result = -2; }
-    else if(!testing::expect_eq(c.modules.ptr[0].imports.len, (u64)1, msg)) { result = -3; }
-    else if(!testing::expect_eq((void*)c.modules.ptr[0].imports[0].name, (void*)interner::intern("sdhelp"), msg)) { result = -4; }
+    if(!testing::expect_eq(c.modules.data.len, (u64)2, msg)) { result = -1; }
+    else if(!testing::expect_eq((void*)c.modules.data[0].name, (void*)interner::intern("sdmain"), msg)) { result = -2; }
+    else if(!testing::expect_eq(c.modules.data[0].imports.len, (u64)1, msg)) { result = -3; }
+    else if(!testing::expect_eq((void*)c.modules.data[0].imports[0].name, (void*)interner::intern("sdhelp"), msg)) { result = -4; }
     io::unlink("/tmp/sdhelp.sl");
     io::unlink("/tmp/sdmain.sl");
     return result;
@@ -492,7 +492,7 @@ fn i32 discover_transitive(arena::Arena* a, const u8[]msg) {
     compiler::add_import_path(c, "/tmp");
     compiler::discover(c);
     i32 result = 0;
-    if(!testing::expect_eq(c.modules.len, (u64)3, msg)) { result = -1; }
+    if(!testing::expect_eq(c.modules.data.len, (u64)3, msg)) { result = -1; }
     else if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { result = -2; }
     io::unlink("/tmp/sdb.sl");
     io::unlink("/tmp/sda.sl");
@@ -510,7 +510,7 @@ fn i32 discover_dedups_shared_import(arena::Arena* a, const u8[]msg) {
     compiler::add_import_path(c, "/tmp");
     compiler::discover(c);
     i32 result = 0;
-    if(!testing::expect_eq(c.modules.len, (u64)3, msg)) { result = -1; }
+    if(!testing::expect_eq(c.modules.data.len, (u64)3, msg)) { result = -1; }
     io::unlink("/tmp/sdb2.sl");
     io::unlink("/tmp/sda2.sl");
     io::unlink("/tmp/sdmain4.sl");
@@ -523,7 +523,7 @@ fn i32 discover_sets_path_and_line_col(arena::Arena* a, const u8[]msg) {
     compiler::Compiler* c = compiler::new(a);
     compiler::add_source(c, "/tmp/sdpos.sl");
     compiler::discover(c);
-    module::Module* m = c.modules.ptr[0];
+    module::Module* m = c.modules.data[0];
     i32 result = 0;
     if(!testing::expect_eq(m.path, "/tmp/sdpos.sl", msg)) { result = -1; }
     u32 line = 0;
@@ -546,9 +546,9 @@ fn i32 discover_missing_reports(arena::Arena* a, const u8[]msg) {
     compiler::add_import_path(c, "/tmp");
     compiler::discover(c);
     i32 result = 0;
-    if(!testing::expect_eq(c.modules.len, (u64)1, msg)) { result = -1; }
-    else if(!testing::expect_ge(c.modules.ptr[0].diag.entries.len, 1, msg)) { result = -2; }
-    else if(!testing::expect_eq(c.modules.ptr[0].diag.entries[0].msg, "module not found", msg)) { result = -3; }
+    if(!testing::expect_eq(c.modules.data.len, (u64)1, msg)) { result = -1; }
+    else if(!testing::expect_ge(c.modules.data[0].diag.entries.len, 1, msg)) { result = -2; }
+    else if(!testing::expect_eq(c.modules.data[0].diag.entries[0].msg, "module not found", msg)) { result = -3; }
     io::unlink("/tmp/sdmain5.sl");
     return result;
 }
@@ -561,8 +561,8 @@ fn i32 discover_single_no_imports(arena::Arena* a, const u8[]msg) {
     compiler::add_import_path(c, "/tmp");
     compiler::discover(c);
     i32 result = 0;
-    if(!testing::expect_eq(c.modules.len, (u64)1, msg)) { result = -1; }
-    else if(!testing::expect_eq(c.modules.ptr[0].imports.len, (u64)0, msg)) { result = -2; }
+    if(!testing::expect_eq(c.modules.data.len, (u64)1, msg)) { result = -1; }
+    else if(!testing::expect_eq(c.modules.data[0].imports.len, (u64)0, msg)) { result = -2; }
     io::unlink("/tmp/sdsingle.sl");
     return result;
 }
@@ -574,9 +574,9 @@ fn i32 discover_missing_entry_reports(arena::Arena* a, const u8[]msg) {
     compiler::add_source(c, "/tmp/sd_nonexistent_xyz.sl");
     compiler::discover(c);
     i32 result = 0;
-    if(!testing::expect_eq(c.modules.len, (u64)1, msg)) { result = -1; }
-    else if(!testing::expect_ge(c.modules.ptr[0].diag.entries.len, 1, msg)) { result = -2; }
-    else if(!testing::expect_eq(c.modules.ptr[0].diag.entries[0].msg, "cannot read source file", msg)) { result = -3; }
+    if(!testing::expect_eq(c.modules.data.len, (u64)1, msg)) { result = -1; }
+    else if(!testing::expect_ge(c.modules.data[0].diag.entries.len, 1, msg)) { result = -2; }
+    else if(!testing::expect_eq(c.modules.data[0].diag.entries[0].msg, "cannot read source file", msg)) { result = -3; }
     return result;
 }
 
@@ -591,8 +591,8 @@ fn i32 discover_conditional_compilation(arena::Arena* a, const u8[]msg) {
     compiler::set_target(c, "linux");
     compiler::discover(c);
     i32 result = 0;
-    if(!testing::expect_eq(c.modules.len, (u64)2, msg)) { result = -1; }
-    else if(!testing::expect_eq(c.modules.ptr[1].source, "export fn i32 x() { return 2; }", msg)) { result = -2; }
+    if(!testing::expect_eq(c.modules.data.len, (u64)2, msg)) { result = -1; }
+    else if(!testing::expect_eq(c.modules.data[1].source, "export fn i32 x() { return 2; }", msg)) { result = -2; }
     io::unlink("/tmp/sdcc.sl");
     io::unlink("/tmp/sdcc.linux.sl");
     io::unlink("/tmp/sdmain6.sl");
@@ -610,7 +610,7 @@ fn i32 discover_target_fallback(arena::Arena* a, const u8[]msg) {
     compiler::set_target(c, "linux");
     compiler::discover(c);
     i32 result = 0;
-    if(!testing::expect_eq(c.modules.len, (u64)2, msg)) { result = -1; }
+    if(!testing::expect_eq(c.modules.data.len, (u64)2, msg)) { result = -1; }
     else if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { result = -2; }
     io::unlink("/tmp/sdfb.sl");
     io::unlink("/tmp/sdmain7.sl");
@@ -709,11 +709,11 @@ fn i32 no_double_scan(arena::Arena* a, const u8[]msg) {
     compiler::add_source(c, "/tmp/sdds_main.sl");
     compiler::add_import_path(c, "/tmp");
     compiler::discover(c);
-    u64 tokens_after_discover = c.modules.ptr[0].tokens.len;
+    u64 tokens_after_discover = c.modules.data[0].tokens.len;
     compiler::run_frontend(c);
     i32 result = 0;
     if(!testing::expect_true(tokens_after_discover > 0, msg)) { result = -1; }
-    else if(!testing::expect_eq(c.modules.ptr[0].tokens.len, tokens_after_discover, msg)) { result = -2; }
+    else if(!testing::expect_eq(c.modules.data[0].tokens.len, tokens_after_discover, msg)) { result = -2; }
     io::unlink("/tmp/sdds_helper.sl");
     io::unlink("/tmp/sdds_main.sl");
     return result;
@@ -737,11 +737,11 @@ fn i32 argv_full(arena::Arena* a, const u8[]msg) {
     args[4] = "linux";
     args[5] = "-mt";
     if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
-    if(!testing::expect_eq(c.entry_sources.len, (u64)1, msg)) { return -2; }
-    if(!testing::expect_eq(c.entry_sources.ptr[0], "main.sl", msg)) { return -3; }
-    if(!testing::expect_eq(c.import_paths.len, (u64)2, msg)) { return -4; }
-    if(!testing::expect_eq(c.import_paths.ptr[0], "/tmp", msg)) { return -5; }
-    if(!testing::expect_eq(c.import_paths.ptr[1], "/usr/lib", msg)) { return -6; }
+    if(!testing::expect_eq(c.entry_sources.data.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq(c.entry_sources.data[0], "main.sl", msg)) { return -3; }
+    if(!testing::expect_eq(c.import_paths.data.len, (u64)2, msg)) { return -4; }
+    if(!testing::expect_eq(c.import_paths.data[0], "/tmp", msg)) { return -5; }
+    if(!testing::expect_eq(c.import_paths.data[1], "/usr/lib", msg)) { return -6; }
     if(!testing::expect_eq(c.target, "linux", msg)) { return -7; }
     if(!testing::expect_true(c.is_multithreaded, msg)) { return -8; }
     return 0;
@@ -842,10 +842,10 @@ fn i32 argv_lib_dirs_and_libs(arena::Arena* a, const u8[]msg) {
     args[3] = "-l";
     args[4] = "foo";
     if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
-    if(!testing::expect_eq(c.lib_dirs.len, (u64)1, msg)) { return -2; }
-    if(!testing::expect_eq(c.lib_dirs.ptr[0], "/opt/lib", msg)) { return -3; }
-    if(!testing::expect_eq(c.extern_libs.len, (u64)1, msg)) { return -4; }
-    if(!testing::expect_eq(c.extern_libs.ptr[0], "foo", msg)) { return -5; }
+    if(!testing::expect_eq(c.lib_dirs.data.len, (u64)1, msg)) { return -2; }
+    if(!testing::expect_eq(c.lib_dirs.data[0], "/opt/lib", msg)) { return -3; }
+    if(!testing::expect_eq(c.extern_libs.data.len, (u64)1, msg)) { return -4; }
+    if(!testing::expect_eq(c.extern_libs.data[0], "foo", msg)) { return -5; }
     return 0;
 }
 

@@ -739,9 +739,9 @@ export fn bool wait_would_cycle(BodyWait[] waits, ast::FnDeclNode* target, u64 m
 }
 
 fn void set_waiting(u64 thread, ast::FnDeclNode* target) {
-    for(u64 wait_index = 0; wait_index < g_body_waits.len; wait_index += 1) {
-        if(g_body_waits.ptr[wait_index].thread == thread) {
-            g_body_waits.ptr[wait_index].waiting_on = target;
+    for(u64 wait_index = 0; wait_index < g_body_waits.data.len; wait_index += 1) {
+        if(g_body_waits.data[wait_index].thread == thread) {
+            g_body_waits.data[wait_index].waiting_on = target;
             return;
         }
     }
@@ -774,7 +774,7 @@ export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, mod
     u64 me = threads::self();
     mutex::lock(&g_body_lock);
     if(func.body_state == ast::BodyState::InProgress && func.body_owner != me) {
-        if(wait_would_cycle({g_body_waits.ptr, g_body_waits.len}, func, me)) {
+        if(wait_would_cycle(g_body_waits.data, func, me)) {
             mutex::unlock(&g_body_lock);
             diag_comptime_wait_cycle(requester, m, func);
             return;

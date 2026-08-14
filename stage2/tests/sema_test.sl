@@ -4975,32 +4975,29 @@ fn i32 wait_cycle_detected(arena::Arena* a, const u8[]m) {
     owned_by_me.body_owner = 1;
     owned_by_other.body_owner = 2;
 
-    list::List(sema::BodyWait) waits;
-    waits.ptr = null; waits.len = 0; waits.cap = 0;
+    list::List(sema::BodyWait) waits = {{null, 0}, 0};
     sema::BodyWait other_waits_on_mine;
     other_waits_on_mine.thread = 2;
     other_waits_on_mine.waiting_on = owned_by_me;
     list::push(&waits, arena::allocator(a), other_waits_on_mine);
 
-    if(!testing::expect_true(sema::wait_would_cycle({waits.ptr, waits.len}, owned_by_other, 1), m)) { return -1; }
+    if(!testing::expect_true(sema::wait_would_cycle(waits.data, owned_by_other, 1), m)) { return -1; }
     return 0;
 }
 
 fn i32 wait_no_cycle_when_owner_idle(arena::Arena* a, const u8[]m) {
     ast::FnDeclNode* owned_by_other = mk_fn_body(a, null, null, null);
     owned_by_other.body_owner = 2;
-    list::List(sema::BodyWait) waits;
-    waits.ptr = null; waits.len = 0; waits.cap = 0;
-    if(!testing::expect_true(!sema::wait_would_cycle({waits.ptr, waits.len}, owned_by_other, 1), m)) { return -1; }
+    list::List(sema::BodyWait) waits = {{null, 0}, 0};
+    if(!testing::expect_true(!sema::wait_would_cycle(waits.data, owned_by_other, 1), m)) { return -1; }
     return 0;
 }
 
 fn i32 wait_self_owned_is_cycle(arena::Arena* a, const u8[]m) {
     ast::FnDeclNode* mine = mk_fn_body(a, null, null, null);
     mine.body_owner = 1;
-    list::List(sema::BodyWait) waits;
-    waits.ptr = null; waits.len = 0; waits.cap = 0;
-    if(!testing::expect_true(sema::wait_would_cycle({waits.ptr, waits.len}, mine, 1), m)) { return -1; }
+    list::List(sema::BodyWait) waits = {{null, 0}, 0};
+    if(!testing::expect_true(sema::wait_would_cycle(waits.data, mine, 1), m)) { return -1; }
     return 0;
 }
 

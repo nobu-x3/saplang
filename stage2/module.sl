@@ -80,8 +80,8 @@ export fn u32 register_inserted_source(Module* m, const u8[] bytes, u32 generato
 }
 
 export fn InsertedSource* find_inserted_source(Module* m, u32 pos) {
-    for(u64 i = 0; i < m.inserted_sources.len; i += 1) {
-        InsertedSource* src = &m.inserted_sources.ptr[i];
+    for(u64 i = 0; i < m.inserted_sources.data.len; i += 1) {
+        InsertedSource* src = &m.inserted_sources.data[i];
         if(pos >= src.base && pos < src.base + (u32)src.bytes.len) { return src; }
     }
     return null;

@@ -18,7 +18,7 @@ Runner runner;
 // state
 export fn void init() {
     runner.arena = {0, null};
-    runner.cases = {null, 0, 0};
+    runner.cases = {{null, 0}, 0};
 }
 
 export fn void add(const u8[] suite, const u8[] name, fn* i32(arena::Arena*, const u8[]) body) {
@@ -33,8 +33,8 @@ export fn void add(const u8[] suite, const u8[] name, fn* i32(arena::Arena*, con
 export fn i32 run() {
     u64 failed_count = 0;
     u64 passed_count = 0;
-    for(u64 i = 0; i < runner.cases.len; i += 1) {
-        const TestCase* test_case = &runner.cases.ptr[i];
+    for(u64 i = 0; i < runner.cases.data.len; i += 1) {
+        const TestCase* test_case = &runner.cases.data[i];
         if(!test_case) {
             sys::printf("Something went wrong with arena allocator in test setups. Case %d is null.\n", i);
             return -1;
@@ -54,7 +54,7 @@ export fn i32 run() {
             sys::printf("[___PASSED___] %.*s:%.*s\n", (i32)test_case.suite.len, test_case.suite.ptr, (i32)test_case.name.len, test_case.name.ptr);
         }
     }
-    sys::printf("[============] Total: %d, Passed: %d, Failed: %d\n", runner.cases.len, passed_count, failed_count);
+    sys::printf("[============] Total: %d, Passed: %d, Failed: %d\n", runner.cases.data.len, passed_count, failed_count);
     return (i32)failed_count;
 }
 

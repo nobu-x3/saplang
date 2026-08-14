@@ -95,8 +95,8 @@ export fn Cfg* build_cfg(module::Module* m, ast::FnDeclNode* func) {
         }
     }
     pop_scope(&builder);
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        if(!g.blocks.ptr[block_index].terminated) { terminate_unreachable(&builder, (u32)block_index); }
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
+        if(!g.blocks.data[block_index].terminated) { terminate_unreachable(&builder, (u32)block_index); }
     }
     compute_predecessors(g, m.allocator);
     return g;
@@ -248,7 +248,7 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
         }
     }
 
-    list::List(SwitchTarget) arms = {null, 0, 0};
+    list::List(SwitchTarget) arms = {{null, 0}, 0};
     for(u64 arm_index = 0; arm_index < n.arms.len; arm_index += 1) {
         u32 target = arm_blocks[arm_index];
         if(target == INVALID_BLOCK) {                       // null body: fall through to the next bodied arm
@@ -279,15 +279,15 @@ fn void build_switch(CfgBuilder* b, ast::SwitchNode* n) {
         pop_scope(b);
     }
 
-    terminate_switch(b, origin, n.discriminant, def_blk, {arms.ptr, arms.len}, n.h.src_pos);
+    terminate_switch(b, origin, n.discriminant, def_blk, arms.data, n.h.src_pos);
     b.current = after;
 }
 
 fn void build_return(CfgBuilder* b, ast::ReturnNode* n) {
-    u32 defer_start = (u32)b.cfg.blocks.ptr[b.current].stmts.len;
+    u32 defer_start = (u32)b.cfg.blocks.data[b.current].stmts.data.len;
     emit_pending_defers_for_exit(b);
     terminate_return(b, b.current, n.expr, n.h.src_pos);
-    b.cfg.blocks.ptr[b.current].term.defer_start = defer_start;
+    b.cfg.blocks.data[b.current].term.defer_start = defer_start;
     b.current = new_block(b.cfg, b.allocator);
     terminate_unreachable(b, b.current);
 }
@@ -323,14 +323,14 @@ fn void register_defer(CfgBuilder* b, ast::DeferNode* n) {
 fn void run_pending_defers(CfgBuilder* b, i64 from_scope, i64 to_scope) {
     if(from_scope < to_scope) { return; }
     u64 total = 0;
-    for(i64 scope_index = from_scope; scope_index >= to_scope; scope_index -= 1) { total += b.scope_stack.ptr[(u64)scope_index].defers.len; }
+    for(i64 scope_index = from_scope; scope_index >= to_scope; scope_index -= 1) { total += b.scope_stack.data[(u64)scope_index].defers.data.len; }
     if(total == 0) { return; }
     ast::AstNode** bodies = (ast::AstNode**)mem::alloc_bytes(b.allocator, total * sizeof(ast::AstNode*));
     u64 count = 0;
     for(i64 scope_index = from_scope; scope_index >= to_scope; scope_index -= 1) {
-        ScopeFrame* sc = &b.scope_stack.ptr[(u64)scope_index];
-        for(i64 defer_index = (i64)sc.defers.len - 1; defer_index >= 0; defer_index -= 1) {
-            bodies[count] = sc.defers.ptr[(u64)defer_index].body;
+        ScopeFrame* sc = &b.scope_stack.data[(u64)scope_index];
+        for(i64 defer_index = (i64)sc.defers.data.len - 1; defer_index >= 0; defer_index -= 1) {
+            bodies[count] = sc.defers.data[(u64)defer_index].body;
             count += 1;
         }
     }
@@ -341,22 +341,22 @@ fn void run_pending_defers(CfgBuilder* b, i64 from_scope, i64 to_scope) {
 }
 
 fn void run_top_scope_defers(CfgBuilder* b) {
-    i64 top = (i64)b.scope_stack.len - 1;
+    i64 top = (i64)b.scope_stack.data.len - 1;
     run_pending_defers(b, top, top);
 }
 
 fn void emit_pending_defers_for_exit(CfgBuilder* b) {
-    run_pending_defers(b, (i64)b.scope_stack.len - 1, 0);
+    run_pending_defers(b, (i64)b.scope_stack.data.len - 1, 0);
 }
 
 fn void emit_pending_defers_through_loop(CfgBuilder* b, u64 scope_base) {
-    run_pending_defers(b, (i64)b.scope_stack.len - 1, (i64)scope_base);
+    run_pending_defers(b, (i64)b.scope_stack.data.len - 1, (i64)scope_base);
 }
 
 // HELPERS
 
 export fn u32 new_block(Cfg* g, mem::Allocator a) {
-    u32 id = (u32)g.blocks.len;
+    u32 id = (u32)g.blocks.data.len;
     BasicBlock block;
     sys::memset(&block, 0, sizeof(BasicBlock));
     block.id = id;
@@ -365,24 +365,24 @@ export fn u32 new_block(Cfg* g, mem::Allocator a) {
 }
 
 fn void append_stmt(CfgBuilder* b, ast::AstNode* stmt) {
-    BasicBlock* block = &b.cfg.blocks.ptr[b.current];
+    BasicBlock* block = &b.cfg.blocks.data[b.current];
     list::push(&block.stmts, b.allocator, stmt);
 }
 
 fn bool block_terminated(CfgBuilder* b, u32 blk) {
-    return b.cfg.blocks.ptr[blk].terminated;
+    return b.cfg.blocks.data[blk].terminated;
 }
 
 // The first terminator wins: a second one would silently drop the block's real exit.
 fn bool claim_terminator(CfgBuilder* b, u32 blk) {
-    if(!b.cfg.blocks.ptr[blk].terminated) { return true; }
+    if(!b.cfg.blocks.data[blk].terminated) { return true; }
     sys::dprintf(2, "cfg: internal error: block %u terminated twice\n", blk);
     return false;
 }
 
 fn void terminate_goto(CfgBuilder* b, u32 blk, u32 target, u32 src_pos) {
     if(!claim_terminator(b, blk)) { return; }
-    BasicBlock* block = &b.cfg.blocks.ptr[blk];
+    BasicBlock* block = &b.cfg.blocks.data[blk];
     block.term.kind = TermKind::Goto;
     block.term.src_pos = src_pos;
     block.term.goto_target = target;
@@ -391,7 +391,7 @@ fn void terminate_goto(CfgBuilder* b, u32 blk, u32 target, u32 src_pos) {
 
 fn void terminate_cond(CfgBuilder* b, u32 blk, ast::AstNode* cond, u32 then_t, u32 else_t, u32 src_pos) {
     if(!claim_terminator(b, blk)) { return; }
-    BasicBlock* block = &b.cfg.blocks.ptr[blk];
+    BasicBlock* block = &b.cfg.blocks.data[blk];
     block.term.kind = TermKind::CondBranch;
     block.term.src_pos = src_pos;
     block.term.cond = cond;
@@ -402,7 +402,7 @@ fn void terminate_cond(CfgBuilder* b, u32 blk, ast::AstNode* cond, u32 then_t, u
 
 fn void terminate_switch(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 default_t, SwitchTarget[] arms, u32 src_pos) {
     if(!claim_terminator(b, blk)) { return; }
-    BasicBlock* block = &b.cfg.blocks.ptr[blk];
+    BasicBlock* block = &b.cfg.blocks.data[blk];
     block.term.kind = TermKind::Switch;
     block.term.src_pos = src_pos;
     block.term.switch_value = value;
@@ -413,17 +413,17 @@ fn void terminate_switch(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 defaul
 
 fn void terminate_return(CfgBuilder* b, u32 blk, ast::AstNode* value, u32 src_pos) {
     if(!claim_terminator(b, blk)) { return; }
-    BasicBlock* block = &b.cfg.blocks.ptr[blk];
+    BasicBlock* block = &b.cfg.blocks.data[blk];
     block.term.kind = TermKind::Return;
     block.term.src_pos = src_pos;
     block.term.return_value = value;
-    block.term.defer_start = (u32)block.stmts.len;
+    block.term.defer_start = (u32)block.stmts.data.len;
     block.terminated = true;
 }
 
 fn void terminate_unreachable(CfgBuilder* b, u32 blk) {
     if(!claim_terminator(b, blk)) { return; }
-    BasicBlock* block = &b.cfg.blocks.ptr[blk];
+    BasicBlock* block = &b.cfg.blocks.data[blk];
     block.term.kind = TermKind::Unreachable;
     block.terminated = true;
 }
@@ -435,11 +435,11 @@ fn void push_scope(CfgBuilder* b) {
 }
 
 fn void pop_scope(CfgBuilder* b) {
-    if(b.scope_stack.len > 0) { b.scope_stack.len -= 1; }
+    if(b.scope_stack.data.len > 0) { b.scope_stack.data.len -= 1; }
 }
 
 fn ScopeFrame* current_scope(CfgBuilder* b) {
-    return &b.scope_stack.ptr[b.scope_stack.len - 1];
+    return &b.scope_stack.data[b.scope_stack.data.len - 1];
 }
 
 fn void push_defer(ScopeFrame* sc, mem::Allocator a, ast::AstNode* body, u32 src_pos) {
@@ -453,35 +453,35 @@ fn void push_loop(CfgBuilder* b, u32 header, u32 after) {
     LoopFrame frame;
     frame.header = header;
     frame.after = after;
-    frame.scope_base = b.scope_stack.len;
+    frame.scope_base = b.scope_stack.data.len;
     list::push(&b.loop_stack, b.allocator, frame);
 }
 
 fn void pop_loop(CfgBuilder* b) {
-    if(b.loop_stack.len > 0) { b.loop_stack.len -= 1; }
+    if(b.loop_stack.data.len > 0) { b.loop_stack.data.len -= 1; }
 }
 
 fn LoopFrame* top_loop(CfgBuilder* b) {
-    if(b.loop_stack.len == 0) { return null; }
-    return &b.loop_stack.ptr[b.loop_stack.len - 1];
+    if(b.loop_stack.data.len == 0) { return null; }
+    return &b.loop_stack.data[b.loop_stack.data.len - 1];
 }
 
 fn LoopFrame* nearest_loop(CfgBuilder* b) {
-    for(i64 frame_index = (i64)b.loop_stack.len - 1; frame_index >= 0; frame_index -= 1) {
-        if(b.loop_stack.ptr[(u64)frame_index].header != INVALID_BLOCK) { return &b.loop_stack.ptr[(u64)frame_index]; }
+    for(i64 frame_index = (i64)b.loop_stack.data.len - 1; frame_index >= 0; frame_index -= 1) {
+        if(b.loop_stack.data[(u64)frame_index].header != INVALID_BLOCK) { return &b.loop_stack.data[(u64)frame_index]; }
     }
     return null;
 }
 
 
 fn void add_predecessor(Cfg* g, mem::Allocator a, u32 block_id, u32 pred) {
-    BasicBlock* block = &g.blocks.ptr[block_id];
+    BasicBlock* block = &g.blocks.data[block_id];
     list::push(&block.predecessors, a, pred);
 }
 
 export fn void compute_predecessors(Cfg* g, mem::Allocator a) {
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        BasicBlock* block = &g.blocks.ptr[block_index];
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
+        BasicBlock* block = &g.blocks.data[block_index];
         if(!block.terminated) { continue; }      // kind 0 == Goto; never trust an unterminated block
         TermKind kind = block.term.kind;
         if(kind == TermKind::Goto) {
@@ -524,11 +524,11 @@ fn u64 mark_successor(bool[] reachable, u32* stack, u64 sp, u32 target) {
 
 fn bool[] bfs_reachable_from(Cfg* g, mem::Allocator a, u32 entry) {
     bool[] reachable;
-    reachable.ptr = mem::alloc_bytes(a, g.blocks.len * sizeof(bool));
-    reachable.len = g.blocks.len;
+    reachable.ptr = mem::alloc_bytes(a, g.blocks.data.len * sizeof(bool));
+    reachable.len = g.blocks.data.len;
     for(u64 block_index = 0; block_index < reachable.len; block_index += 1) { reachable[block_index] = false; }
 
-    u32* stack = mem::alloc_bytes(a, g.blocks.len * sizeof(u32));
+    u32* stack = mem::alloc_bytes(a, g.blocks.data.len * sizeof(u32));
     u64 sp = 0;
     reachable[entry] = true;
     stack[0] = entry;
@@ -536,7 +536,7 @@ fn bool[] bfs_reachable_from(Cfg* g, mem::Allocator a, u32 entry) {
     while(sp > 0) {
         sp -= 1;
         u32 blk = stack[sp];
-        Terminator* t = &g.blocks.ptr[blk].term;
+        Terminator* t = &g.blocks.data[blk].term;
         TermKind kind = t.kind;
         if(kind == TermKind::Goto) {
             sp = mark_successor(reachable, stack, sp, t.goto_target);
@@ -557,9 +557,9 @@ export fn bool check_return_paths(module::Module* m, ast::FnDeclNode* func) {
     if(types::is_void(fn_return_type(func))) { return true; }
     Cfg* g = (Cfg*)func.cfg;
     bool[] reachable = bfs_reachable_from(g, m.allocator, g.entry);
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
         if(!reachable[block_index]) { continue; }
-        if(g.blocks.ptr[block_index].term.kind == TermKind::Unreachable) {
+        if(g.blocks.data[block_index].term.kind == TermKind::Unreachable) {
             const u8[] msg = "function may exit without a return statement";
             diag::report_foreign(&m.diag, m.arena, (void*)body_module(m, func), func.h.src_pos, msg);
             return false;
@@ -571,11 +571,11 @@ export fn bool check_return_paths(module::Module* m, ast::FnDeclNode* func) {
 export fn void check_unreachable(module::Module* m, ast::FnDeclNode* func) {
     Cfg* g = (Cfg*)func.cfg;
     bool[] reachable = bfs_reachable_from(g, m.allocator, g.entry);
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        if(g.blocks.ptr[block_index].id <= 1) { continue; }             // entry/exit
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
+        if(g.blocks.data[block_index].id <= 1) { continue; }             // entry/exit
         if(reachable[block_index]) { continue; }
-        if(g.blocks.ptr[block_index].stmts.len == 0) { continue; }      // synthetic post-terminator continuation
-        u32 pos = g.blocks.ptr[block_index].stmts.ptr[0].h.src_pos;
+        if(g.blocks.data[block_index].stmts.data.len == 0) { continue; }      // synthetic post-terminator continuation
+        u32 pos = g.blocks.data[block_index].stmts.data[0].h.src_pos;
         const u8[] msg = "unreachable code";
         diag::report_foreign_warning(&m.diag, m.arena, (void*)body_module(m, func), pos, msg);
     }
@@ -596,9 +596,9 @@ export fn void build_all_functions(module::Module* m) {
             if(node.h.kind == ast::AstKind::FnDecl) { analyze_function(m, (ast::FnDeclNode*)node); }
         }
     }
-    for(u64 clone_index = 0; clone_index < m.instantiated_fns.len; clone_index += 1) {
+    for(u64 clone_index = 0; clone_index < m.instantiated_fns.data.len; clone_index += 1) {
         // A shared type-constructor clone is reachable from several modules; analyze it once.
-        if(m.instantiated_fns.ptr[clone_index].cfg != null) { continue; }
-        analyze_function(m, m.instantiated_fns.ptr[clone_index]);
+        if(m.instantiated_fns.data[clone_index].cfg != null) { continue; }
+        analyze_function(m, m.instantiated_fns.data[clone_index]);
     }
 }

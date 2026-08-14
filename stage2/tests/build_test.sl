@@ -41,16 +41,16 @@ fn i32 graph_structure(arena::Arena* a, const u8[]m) {
     builder::install_artifact(b, exe);
 
     if(!testing::expect_true(exe.installed, m)) { return -1; }
-    if(!testing::expect_eq(b.install_step.deps.len, (u64)1, m)) { return -2; }
-    if(!testing::expect_eq((void*)b.install_step.deps.ptr[0], (void*)&exe.step, m)) { return -3; }
+    if(!testing::expect_eq(b.install_step.deps.data.len, (u64)1, m)) { return -2; }
+    if(!testing::expect_eq((void*)b.install_step.deps.data[0], (void*)&exe.step, m)) { return -3; }
 
     builder::RunStep* r = builder::add_run_artifact(b, exe);
-    if(!testing::expect_eq(r.step.deps.len, (u64)1, m)) { return -4; }
-    if(!testing::expect_eq((void*)r.step.deps.ptr[0], (void*)&exe.step, m)) { return -5; }
+    if(!testing::expect_eq(r.step.deps.data.len, (u64)1, m)) { return -4; }
+    if(!testing::expect_eq((void*)r.step.deps.data[0], (void*)&exe.step, m)) { return -5; }
 
     builder::Step* run_step = builder::step(b, "run", "run it");
     builder::depend_on(run_step, &r.step);
-    if(!testing::expect_eq(run_step.deps.len, (u64)1, m)) { return -6; }
+    if(!testing::expect_eq(run_step.deps.data.len, (u64)1, m)) { return -6; }
 
     if(!testing::expect_not_null((void*)builder::resolve_step(b, "run"), m)) { return -7; }
     if(!testing::expect_null((void*)builder::resolve_step(b, "nope"), m)) { return -8; }
@@ -231,12 +231,11 @@ fn i32 gather_compiles(arena::Arena* a, const u8[]m) {
     builder::Step* run_step = builder::step(b, "run", "run");
     builder::depend_on(run_step, &r.step);
 
-    list::List(builder::CompileStep*) compiles;
-    compiles.ptr = null; compiles.len = 0; compiles.cap = 0;
+    list::List(builder::CompileStep*) compiles = {{null, 0}, 0};
     builder::collect_compiles(b.install_step, &compiles, arena::allocator(a));
     builder::collect_compiles(run_step, &compiles, arena::allocator(a));
 
-    if(!testing::expect_eq(compiles.len, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq(compiles.data.len, (u64)2, m)) { return -1; }
     return 0;
 }
 

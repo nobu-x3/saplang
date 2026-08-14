@@ -58,13 +58,13 @@ fn i32 list_grows_through_any_allocator(arena::Arena* a, const u8[]m) {
     g_counting.inner = arena::allocator(a);
     mem::Allocator alloc = test_util::counting_allocator(&g_counting);
 
-    list::List(i32) xs = {null, 0, 0};
+    list::List(i32) xs = {{null, 0}, 0};
     for(i32 value = 0; value < 10; value += 1) { list::push(&xs, alloc, value); }
 
-    if(!testing::expect_eq(xs.len, (u64)10, m)) { return -1; }
+    if(!testing::expect_eq(xs.data.len, (u64)10, m)) { return -1; }
     if(!testing::expect_eq(xs.cap, (u64)16, m)) { return -2; }
     i32 sum = 0;
-    for(u64 index = 0; index < xs.len; index += 1) { sum += xs.ptr[index]; }
+    for(u64 index = 0; index < xs.data.len; index += 1) { sum += xs.data[index]; }
     if(!testing::expect_eq(sum, 45, m)) { return -3; }
     // 4 -> 8 -> 16 is three grows, and every one goes through the caller's allocator.
     if(!testing::expect_eq(g_counting.allocs, (u64)3, m)) { return -4; }

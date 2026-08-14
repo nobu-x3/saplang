@@ -26,14 +26,35 @@ fn i32 dyn_push_pointer_elem(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+fn i32 sum_of(i32[] xs) {
+    i32 total = 0;
+    for(u64 i = 0; i < xs.len; i = i + 1) { total = total + xs[i]; }
+    return total;
+}
+
+// `data` is the live elements, so a list passes straight into a T[] parameter with no repacking,
+// and it tracks pushes while cap keeps counting the allocation behind them.
+fn i32 list_data_is_the_live_slice(arena::Arena* a, const u8[]m) {
+    list::List(i32) xs = {{null, 0}, 0};
+    for(i32 i = 0; i < 5; i = i + 1) { list::push(&xs, arena::allocator(a), i); }
+    if(!testing::expect_eq(sum_of(xs.data), 10, m)) { return -1; }
+    if(!testing::expect_eq(xs.data.len, (u64)5, m)) { return -2; }
+    if(!testing::expect_eq(xs.cap, (u64)8, m)) { return -3; }
+    i32[] frozen = xs.data;
+    list::push(&xs, arena::allocator(a), 5);
+    if(!testing::expect_eq(frozen.len, (u64)5, m)) { return -4; }
+    if(!testing::expect_eq(xs.data.len, (u64)6, m)) { return -5; }
+    return 0;
+}
+
 // List(T): the bundled generic dynamic array — growth doubles (min 4), values survive the reallocs.
 fn i32 list_push_grows(arena::Arena* a, const u8[]m) {
-    list::List(i32) xs; xs.ptr = null; xs.len = 0; xs.cap = 0;
+    list::List(i32) xs = {{null, 0}, 0};
     for(i32 i = 0; i < 10; i = i + 1) { list::push(&xs, arena::allocator(a), i * i); }
-    if(!testing::expect_eq(xs.len, (u64)10, m)) { return -1; }
+    if(!testing::expect_eq(xs.data.len, (u64)10, m)) { return -1; }
     if(!testing::expect_eq(xs.cap, (u64)16, m)) { return -2; }
     i32 sum = 0;
-    for(u64 j = 0; j < xs.len; j = j + 1) { sum = sum + xs.ptr[j]; }
+    for(u64 j = 0; j < xs.data.len; j = j + 1) { sum = sum + xs.data[j]; }
     if(!testing::expect_eq(sum, 285, m)) { return -3; }
     return 0;
 }
@@ -41,11 +62,11 @@ fn i32 list_push_grows(arena::Arena* a, const u8[]m) {
 // List(T) with pointer elements: a distinct monomorphization; explicit type argument.
 fn i32 list_push_pointer_elem(arena::Arena* a, const u8[]m) {
     i32 v0 = 7; i32 v1 = 8;
-    list::List(i32*) ps; ps.ptr = null; ps.len = 0; ps.cap = 0;
+    list::List(i32*) ps = {{null, 0}, 0};
     list::push(i32*, &ps, arena::allocator(a), &v0);
     list::push(i32*, &ps, arena::allocator(a), &v1);
-    if(!testing::expect_eq(ps.len, (u64)2, m)) { return -1; }
-    if(!testing::expect_eq(*ps.ptr[0] + *ps.ptr[1], 15, m)) { return -2; }
+    if(!testing::expect_eq(ps.data.len, (u64)2, m)) { return -1; }
+    if(!testing::expect_eq(*ps.data[0] + *ps.data[1], 15, m)) { return -2; }
     return 0;
 }
 
@@ -54,6 +75,7 @@ fn i32 main() {
     const u8[] suite = "List Tests";
     testing::add(suite, "dyn_push_grows", &dyn_push_grows);
     testing::add(suite, "dyn_push_pointer_elem", &dyn_push_pointer_elem);
+    testing::add(suite, "list_data_is_the_live_slice", &list_data_is_the_live_slice);
     testing::add(suite, "list_push_grows", &list_push_grows);
     testing::add(suite, "list_push_pointer_elem", &list_push_pointer_elem);
     return testing::run();

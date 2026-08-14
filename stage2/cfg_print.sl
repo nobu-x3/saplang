@@ -42,14 +42,14 @@ fn void write_terminator(io::OutBuf* out, cfg::Terminator* t) {
 }
 
 export fn void print_cfg(cfg::Cfg* g, io::OutBuf* out) {
-    for(u64 block_index = 0; block_index < g.blocks.len; block_index += 1) {
-        cfg::BasicBlock* block = &g.blocks.ptr[block_index];
+    for(u64 block_index = 0; block_index < g.blocks.data.len; block_index += 1) {
+        cfg::BasicBlock* block = &g.blocks.data[block_index];
         io::outbuf_write(out, "  bb");
         io::outbuf_write_u64(out, (u64)block.id);
         write_role(out, g, block);
         io::outbuf_write(out, ":\n");
-        for(u64 stmt_index = 0; stmt_index < block.stmts.len; stmt_index += 1) {
-            ast_print::print(block.stmts.ptr[stmt_index], 2, out);
+        for(u64 stmt_index = 0; stmt_index < block.stmts.data.len; stmt_index += 1) {
+            ast_print::print(block.stmts.data[stmt_index], 2, out);
         }
         io::outbuf_write(out, "    -> ");
         write_terminator(out, &block.term);

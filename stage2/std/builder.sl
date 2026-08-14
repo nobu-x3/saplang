@@ -195,8 +195,8 @@ export fn void define(Build* b, const u8[] key, const u8[] value, bool has_value
 }
 
 fn CliArg* find_cli(Build* b, const u8[] key) {
-    for(u64 arg_index = 0; arg_index < b.cli_args.len; arg_index += 1) {
-        if(slice_eq(b.cli_args.ptr[arg_index].key, key)) { return &b.cli_args.ptr[arg_index]; }
+    for(u64 arg_index = 0; arg_index < b.cli_args.data.len; arg_index += 1) {
+        if(slice_eq(b.cli_args.data[arg_index].key, key)) { return &b.cli_args.data[arg_index]; }
     }
     return null;
 }
@@ -351,17 +351,17 @@ export fn u8[] compile_command_string(Build* b, CompileStep* c) {
     io::outbuf_write(&buf, c.root_source);
     io::outbuf_write(&buf, " -o ");
     io::outbuf_write(&buf, artifact_path(b, c));
-    if(c.import_paths.len > 0) {
+    if(c.import_paths.data.len > 0) {
         io::outbuf_write(&buf, " -i ");
         io::outbuf_write(&buf, join_semicolons(b.allocator, &c.import_paths));
     }
-    for(u64 lib_index = 0; lib_index < c.libs.len; lib_index += 1) {
+    for(u64 lib_index = 0; lib_index < c.libs.data.len; lib_index += 1) {
         io::outbuf_write(&buf, " -l ");
-        io::outbuf_write(&buf, c.libs.ptr[lib_index]);
+        io::outbuf_write(&buf, c.libs.data[lib_index]);
     }
-    for(u64 dir_index = 0; dir_index < c.lib_dirs.len; dir_index += 1) {
+    for(u64 dir_index = 0; dir_index < c.lib_dirs.data.len; dir_index += 1) {
         io::outbuf_write(&buf, " -L ");
-        io::outbuf_write(&buf, c.lib_dirs.ptr[dir_index]);
+        io::outbuf_write(&buf, c.lib_dirs.data[dir_index]);
     }
     if(c.target.name.len > 0) {
         io::outbuf_write(&buf, " -target ");
@@ -369,16 +369,16 @@ export fn u8[] compile_command_string(Build* b, CompileStep* c) {
     }
     io::outbuf_write(&buf, " -config ");
     io::outbuf_write(&buf, optimize_name(c.optimize));
-    for(u64 cli_index = 0; cli_index < b.cli_args.len; cli_index += 1) {
-        CliArg* a = &b.cli_args.ptr[cli_index];
+    for(u64 cli_index = 0; cli_index < b.cli_args.data.len; cli_index += 1) {
+        CliArg* a = &b.cli_args.data[cli_index];
         if(is_forwarded_define(a)) {
             io::outbuf_write_byte(&buf, ' ');
             io::outbuf_write(&buf, define_arg(b, a));
         }
     }
-    for(u64 flag_index = 0; flag_index < b.compiler_flags.len; flag_index += 1) {
+    for(u64 flag_index = 0; flag_index < b.compiler_flags.data.len; flag_index += 1) {
         io::outbuf_write_byte(&buf, ' ');
-        io::outbuf_write(&buf, b.compiler_flags.ptr[flag_index]);
+        io::outbuf_write(&buf, b.compiler_flags.data[flag_index]);
     }
     return io::outbuf_bytes(&buf);
 }
@@ -408,24 +408,24 @@ fn u8[] define_arg(Build* b, CliArg* a) {
 }
 
 fn i8** build_compile_argv(Build* b, CompileStep* c, u8[] out) {
-    u64 cap = 12 + c.libs.len * 2 + c.lib_dirs.len * 2 + b.cli_args.len + b.compiler_flags.len;
+    u64 cap = 12 + c.libs.data.len * 2 + c.lib_dirs.data.len * 2 + b.cli_args.data.len + b.compiler_flags.data.len;
     i8** argv = (i8**)mem::alloc_bytes(b.allocator, (cap + 1) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(b.allocator, b.compiler_path); n += 1;
     argv[n] = cstr(b.allocator, c.root_source);   n += 1;
     argv[n] = cstr(b.allocator, "-o");            n += 1;
     argv[n] = cstr(b.allocator, out);             n += 1;
-    if(c.import_paths.len > 0) {
+    if(c.import_paths.data.len > 0) {
         argv[n] = cstr(b.allocator, "-i");                                n += 1;
         argv[n] = cstr(b.allocator, join_semicolons(b.allocator, &c.import_paths)); n += 1;
     }
-    for(u64 lib_index = 0; lib_index < c.libs.len; lib_index += 1) {
+    for(u64 lib_index = 0; lib_index < c.libs.data.len; lib_index += 1) {
         argv[n] = cstr(b.allocator, "-l");                   n += 1;
-        argv[n] = cstr(b.allocator, c.libs.ptr[lib_index]);  n += 1;
+        argv[n] = cstr(b.allocator, c.libs.data[lib_index]);  n += 1;
     }
-    for(u64 dir_index = 0; dir_index < c.lib_dirs.len; dir_index += 1) {
+    for(u64 dir_index = 0; dir_index < c.lib_dirs.data.len; dir_index += 1) {
         argv[n] = cstr(b.allocator, "-L");                       n += 1;
-        argv[n] = cstr(b.allocator, c.lib_dirs.ptr[dir_index]);  n += 1;
+        argv[n] = cstr(b.allocator, c.lib_dirs.data[dir_index]);  n += 1;
     }
     if(c.target.name.len > 0) {
         argv[n] = cstr(b.allocator, "-target");       n += 1;
@@ -435,12 +435,12 @@ fn i8** build_compile_argv(Build* b, CompileStep* c, u8[] out) {
     argv[n] = cstr(b.allocator, cache_sidecar(b, c.artifact_name, ".dep")); n += 1;
     argv[n] = cstr(b.allocator, "-config");                  n += 1;
     argv[n] = cstr(b.allocator, optimize_name(c.optimize));  n += 1;
-    for(u64 cli_index = 0; cli_index < b.cli_args.len; cli_index += 1) {
-        CliArg* a = &b.cli_args.ptr[cli_index];
+    for(u64 cli_index = 0; cli_index < b.cli_args.data.len; cli_index += 1) {
+        CliArg* a = &b.cli_args.data[cli_index];
         if(is_forwarded_define(a)) { argv[n] = cstr(b.allocator, define_arg(b, a)); n += 1; }
     }
-    for(u64 flag_index = 0; flag_index < b.compiler_flags.len; flag_index += 1) {
-        argv[n] = cstr(b.allocator, b.compiler_flags.ptr[flag_index]); n += 1;
+    for(u64 flag_index = 0; flag_index < b.compiler_flags.data.len; flag_index += 1) {
+        argv[n] = cstr(b.allocator, b.compiler_flags.data[flag_index]); n += 1;
     }
     argv[n] = null;
     return argv;
@@ -488,13 +488,12 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
 
     if(b.want_help) { print_help(b); return 0; }
 
-    list::List(Step*) roots;
-    roots.ptr = null; roots.len = 0; roots.cap = 0;
-    if(b.requested_steps.len == 0) {
+    list::List(Step*) roots = {{null, 0}, 0};
+    if(b.requested_steps.data.len == 0) {
         list::push(&roots, b.allocator, b.install_step);
     } else {
-        for(u64 step_index = 0; step_index < b.requested_steps.len; step_index += 1) {
-            u8[] name = b.requested_steps.ptr[step_index];
+        for(u64 step_index = 0; step_index < b.requested_steps.data.len; step_index += 1) {
+            u8[] name = b.requested_steps.data[step_index];
             Step* s = resolve_step(b, name);
             if(s == null) {
                 sys::dprintf(2, "error: no step named '%.*s' (run `saplangc build --help`)\n", (i32)name.len, (i8*)name.ptr);
@@ -506,16 +505,15 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
 
     // Compile steps are mutually independent, so build them all concurrently up front; only then
     // does the sequential make phase run the dependent run/install steps (compiles already done).
-    list::List(CompileStep*) compiles;
-    compiles.ptr = null; compiles.len = 0; compiles.cap = 0;
-    for(u64 root_index = 0; root_index < roots.len; root_index += 1) {
-        collect_compiles(roots.ptr[root_index], &compiles, b.allocator);
+    list::List(CompileStep*) compiles = {{null, 0}, 0};
+    for(u64 root_index = 0; root_index < roots.data.len; root_index += 1) {
+        collect_compiles(roots.data[root_index], &compiles, b.allocator);
     }
     i32 crc = run_compiles_parallel(b, &compiles);
     if(crc != 0) { return crc; }
 
-    for(u64 root_index = 0; root_index < roots.len; root_index += 1) {
-        i32 rc = make(b, roots.ptr[root_index]);
+    for(u64 root_index = 0; root_index < roots.data.len; root_index += 1) {
+        i32 rc = make(b, roots.data[root_index]);
         if(rc != 0) { return rc; }
     }
     return 0;
@@ -525,8 +523,8 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
 export fn void collect_compiles(Step* s, list::List(CompileStep*)* out, mem::Allocator a) {
     if(s.queued) { return; }
     s.queued = true;
-    for(u64 dep_index = 0; dep_index < s.deps.len; dep_index += 1) {
-        collect_compiles(s.deps.ptr[dep_index], out, a);
+    for(u64 dep_index = 0; dep_index < s.deps.data.len; dep_index += 1) {
+        collect_compiles(s.deps.data[dep_index], out, a);
     }
     if(s.kind == StepKind::Compile) { list::push(out, a, (CompileStep*)s); }
 }
@@ -543,8 +541,8 @@ fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
     u64 inflight = 0;
     i32 first_err = 0;
     while(true) {
-        while(first_err == 0 && inflight < workers && next < compiles.len) {
-            CompileStep* c = compiles.ptr[next];
+        while(first_err == 0 && inflight < workers && next < compiles.data.len) {
+            CompileStep* c = compiles.data[next];
             next += 1;
             u8[] out = artifact_path(b, c);
             ensure_output_dir(b, c);
@@ -600,8 +598,8 @@ fn i32 fork_compile(Build* b, CompileStep* c, u8[] out) {
 }
 
 export fn Step* resolve_step(Build* b, const u8[] name) {
-    for(u64 step_index = 0; step_index < b.top_steps.len; step_index += 1) {
-        if(slice_eq(b.top_steps.ptr[step_index].name, name)) { return b.top_steps.ptr[step_index]; }
+    for(u64 step_index = 0; step_index < b.top_steps.data.len; step_index += 1) {
+        if(slice_eq(b.top_steps.data[step_index].name, name)) { return b.top_steps.data[step_index]; }
     }
     return null;
 }
@@ -609,8 +607,8 @@ export fn Step* resolve_step(Build* b, const u8[] name) {
 fn i32 make(Build* b, Step* s) {
     if(s.done) { return 0; }
     s.done = true;
-    for(u64 dep_index = 0; dep_index < s.deps.len; dep_index += 1) {
-        i32 rc = make(b, s.deps.ptr[dep_index]);
+    for(u64 dep_index = 0; dep_index < s.deps.data.len; dep_index += 1) {
+        i32 rc = make(b, s.deps.data[dep_index]);
         if(rc != 0) { return rc; }
     }
     switch(s.kind) {
@@ -673,10 +671,10 @@ fn i32 make_compile(Build* b, CompileStep* c) {
 
 fn i32 make_run(Build* b, RunStep* r) {
     u8[] path = artifact_path(b, r.exe);
-    i8** argv = (i8**)mem::alloc_bytes(b.allocator, (r.args.len + 2) * sizeof(i8*));
+    i8** argv = (i8**)mem::alloc_bytes(b.allocator, (r.args.data.len + 2) * sizeof(i8*));
     u64 n = 0;
     argv[n] = cstr(b.allocator, path); n += 1;
-    for(u64 arg_index = 0; arg_index < r.args.len; arg_index += 1) { argv[n] = cstr(b.allocator, r.args.ptr[arg_index]); n += 1; }
+    for(u64 arg_index = 0; arg_index < r.args.data.len; arg_index += 1) { argv[n] = cstr(b.allocator, r.args.data[arg_index]); n += 1; }
     argv[n] = null;
     sys::dprintf(1, "  RUN  %.*s\n", (i32)path.len, (i8*)path.ptr);
     return spawn_and_wait(argv);
@@ -687,13 +685,13 @@ fn void print_help(Build* b) {
     sys::dprintf(1, "Any other -flag (e.g. -show-timings, -mt) is passed to every compile.\n\n");
     sys::dprintf(1, "  -out-dir <dir>  root for build output, overriding build.sl (currently %.*s)\n\n", (i32)b.out_dir.len, (i8*)b.out_dir.ptr);
     sys::dprintf(1, "Steps:\n");
-    for(u64 step_index = 0; step_index < b.top_steps.len; step_index += 1) {
-        Step* s = b.top_steps.ptr[step_index];
+    for(u64 step_index = 0; step_index < b.top_steps.data.len; step_index += 1) {
+        Step* s = b.top_steps.data[step_index];
         sys::dprintf(1, "  %.*s  -  %.*s\n", (i32)s.name.len, (i8*)s.name.ptr, (i32)s.description.len, (i8*)s.description.ptr);
     }
     sys::dprintf(1, "\nProject options:\n");
-    for(u64 option_index = 0; option_index < b.options.len; option_index += 1) {
-        OptionInfo* o = &b.options.ptr[option_index];
+    for(u64 option_index = 0; option_index < b.options.data.len; option_index += 1) {
+        OptionInfo* o = &b.options.data[option_index];
         sys::dprintf(1, "  -D%.*s  -  %.*s\n", (i32)o.name.len, (i8*)o.name.ptr, (i32)o.description.len, (i8*)o.description.ptr);
     }
 }
@@ -737,9 +735,9 @@ fn i32 spawn_and_wait(i8** argv) {
 fn u8[] join_semicolons(mem::Allocator a, list::List(const u8[])* parts) {
     io::OutBuf buf;
     io::outbuf_init(&buf, a, 64);
-    for(u64 part_index = 0; part_index < parts.len; part_index += 1) {
+    for(u64 part_index = 0; part_index < parts.data.len; part_index += 1) {
         if(part_index > 0) { io::outbuf_write_byte(&buf, ';'); }
-        io::outbuf_write(&buf, parts.ptr[part_index]);
+        io::outbuf_write(&buf, parts.data[part_index]);
     }
     return io::outbuf_bytes(&buf);
 }
