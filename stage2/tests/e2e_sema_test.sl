@@ -339,6 +339,30 @@ fn i32 ok_comprun_generic_inferred(arena::Arena* a, const u8[]m) {
 }
 
 // A `Ctor(T)` parameter is the only mention of T, so inference has to run backwards from the instantiation.
+// A generic hands its own comptime T to another generic; the arg is an expression-position ident.
+fn i32 ok_generic_forwards_type_param(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "fn u64 width(comptime Type T) { return sizeof(T); }\nfn u64 outer(comptime Type T, T value) { return width(T); }\nexport fn i32 f() { u32 v = 3; return (i32)outer(v); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_generic_forwards_unknown_type_arg(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "fn u64 width(comptime Type T) { return sizeof(T); }\nfn u64 outer(comptime Type T, T value) { return width(Nope); }\nexport fn i32 f() { u32 v = 3; return (i32)outer(v); }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "unknown type Nope", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)106, m)) { return -3; }
+    return 0;
+}
+
+// The forwarded param is a type, so a runtime parameter still rejects it.
+fn i32 err_generic_forwards_type_param_to_runtime_param(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "fn u64 need(u64 x) { return x; }\nfn u64 outer(comptime Type T, T value) { return need(T); }\nexport fn i32 f() { u32 v = 3; return (i32)outer(v); }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "expected u64, found Type", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)86, m)) { return -3; }
+    return 0;
+}
+
 fn i32 ok_infer_through_generic_struct(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn Type Box(comptime Type T) { return struct { T value; }; }\nfn T unwrap(comptime Type T, Box(T)* b) { return b.value; }\nexport fn i32 f() { Box(i32) b = {41}; return unwrap(&b); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -1815,6 +1839,9 @@ fn i32 main() {
     testing::add(suite, "ok_generic_two_type_params", &ok_generic_two_type_params);
     testing::add(suite, "err_generic_conflicting_infer", &err_generic_conflicting_infer);
     testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);
+    testing::add(suite, "ok_generic_forwards_type_param", &ok_generic_forwards_type_param);
+    testing::add(suite, "err_generic_forwards_unknown_type_arg", &err_generic_forwards_unknown_type_arg);
+    testing::add(suite, "err_generic_forwards_type_param_to_runtime_param", &err_generic_forwards_type_param_to_runtime_param);
     testing::add(suite, "err_generic_infer_mismatch", &err_generic_infer_mismatch);
     testing::add(suite, "ok_fnptr_in_condition",     &ok_fnptr_in_condition);
     testing::add(suite, "ok_bool_int_float_casts",   &ok_bool_int_float_casts);

@@ -2,9 +2,10 @@ import arena;
 import sys;
 
 export struct DiagEntry {
-    u32  src_pos;
-    bool is_warning;
-    u8[] msg;
+    u32   src_pos;
+    bool  is_warning;
+    u8[]  msg;
+    void* origin;       // module::Module* whose source src_pos indexes; null = the buffer's owner
 }
 
 export struct DiagBuf {
@@ -14,18 +15,27 @@ export struct DiagBuf {
 
 // DiagBuf*+Arena* not Module*, avoids diag<->module cycle.
 export fn void report(DiagBuf* d, arena::Arena* a, u32 src_pos, const u8[] msg) {
-    append(d, a, src_pos, msg, false);
+    append(d, a, null, src_pos, msg, false);
 }
 
 export fn void report_warning(DiagBuf* d, arena::Arena* a, u32 src_pos, const u8[] msg) {
-    append(d, a, src_pos, msg, true);
+    append(d, a, null, src_pos, msg, true);
+}
+
+// src_pos indexes origin's source, not that of the module owning this buffer.
+export fn void report_foreign(DiagBuf* d, arena::Arena* a, void* origin, u32 src_pos, const u8[] msg) {
+    append(d, a, origin, src_pos, msg, false);
+}
+
+export fn void report_foreign_warning(DiagBuf* d, arena::Arena* a, void* origin, u32 src_pos, const u8[] msg) {
+    append(d, a, origin, src_pos, msg, true);
 }
 
 export fn void reset(DiagBuf* d) {
     d.entries.len = 0;
 }
 
-fn void append(DiagBuf* d, arena::Arena* a, u32 src_pos, const u8[] msg, bool is_warning) {
+fn void append(DiagBuf* d, arena::Arena* a, void* origin, u32 src_pos, const u8[] msg, bool is_warning) {
     if(d.entries.len == d.entries_cap) {
         u64 new_cap = 8;
         if(d.entries_cap > 0) {
@@ -51,5 +61,6 @@ fn void append(DiagBuf* d, arena::Arena* a, u32 src_pos, const u8[] msg, bool is
     e.src_pos = src_pos;
     e.is_warning = is_warning;
     e.msg = stored;
+    e.origin = origin;
     d.entries.len += 1;
 }

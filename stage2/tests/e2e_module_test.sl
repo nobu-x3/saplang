@@ -150,6 +150,92 @@ fn i32 err_same_named_constructors_do_not_unify(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+// ---- comptime type params across modules ----
+
+// A generic passing its own comptime T on as a type argument: the call arg parses as an expression,
+// so the clone only resolves if substitution rewrote that ident into the bound type.
+fn i32 generic_forwards_type_param_across_modules(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32 v = 3; return (i32)b::outer(v); }", "export fn u64 width(comptime Type T) { return sizeof(T); }\nexport fn u64 outer(comptime Type T, T value) { return width(T); }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// The type argument names a private type of the generic's own module, so it resolves there, not at the call site.
+fn i32 generic_type_arg_resolves_in_home_module(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32 v = 3; return (i32)b::outer(v); }", "struct Local { i32 x; i32 y; }\nexport fn u64 width(comptime Type T) { return sizeof(T); }\nexport fn u64 outer(comptime Type T, T value) { return width(Local); }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// ---- diagnostics from foreign source keep their own module ----
+
+// A clone is checked in the instantiating module but its nodes are the template's, so the error carries
+// b as its origin and the caller's note carries a; rendering both against a printed nonsense positions.
+fn i32 err_clone_error_carries_the_generic_module(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32 v = 3; return (i32)b::outer(v); }", "export fn u64 outer(comptime Type T, T value) { return missing(value); }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)2, m)) { return -1; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].msg, "undefined identifier missing", m)) { return -2; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].origin, (void*)modules[1], m)) { return -3; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].src_pos, (u32)55, m)) { return -4; }
+    if(!testing::expect_eq(modules[0].diag.entries[1].msg, "in instantiation of outer requested here", m)) { return -5; }
+    if(!testing::expect_eq(modules[0].diag.entries[1].origin, (void*)modules[0], m)) { return -6; }
+    if(!testing::expect_eq(modules[0].diag.entries[1].src_pos, (u32)61, m)) { return -7; }
+    return 0;
+}
+
+fn i32 err_clone_cfg_diagnostic_carries_the_generic_module(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32 v = 3; return (i32)b::pick(v); }", "export fn u64 pick(comptime Type T, T value) { if(sizeof(T) > 2) { return 1; } }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(modules[0].diag.entries[0].msg, "function may exit without a return statement", m)) { return -1; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].origin, (void*)modules[1], m)) { return -2; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].src_pos, (u32)7, m)) { return -3; }
+    return 0;
+}
+
+// Warnings travel the same way as errors; a clone's dead code is dead in b's source.
+fn i32 clone_warning_carries_the_generic_module(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32 v = 3; return (i32)b::early(v); }", "export fn u64 early(comptime Type T, T value) { return sizeof(T); u64 dead = 1; return dead; }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    if(!testing::expect_eq(test_util::warning_count(modules[0]), (u64)1, m)) { return -2; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].msg, "unreachable code", m)) { return -3; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].origin, (void*)modules[1], m)) { return -4; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].src_pos, (u32)66, m)) { return -5; }
+    return 0;
+}
+
+// A body checked on demand for a comptime call reports into the requester's buffer, still pointing at b.
+fn i32 err_on_demand_body_check_carries_the_callee_module(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\ncomprun { u64 v = b::bad(1); }\nexport fn i32 f() { return 0; }", "export fn u64 bad(u64 x) { return nope; }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_true(test_util::errors_in(modules) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].msg, "undefined identifier nope", m)) { return -2; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].origin, (void*)modules[1], m)) { return -3; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].src_pos, (u32)34, m)) { return -4; }
+    return 0;
+}
+
+// The interpreter runs a foreign body on the caller's thread; the fault is at b's division, not in a.
+fn i32 err_foreign_comptime_diagnostic_carries_the_callee_module(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\ncomprun { u64 v = b::half(0); }\nexport fn i32 f() { return 0; }", "export fn u64 half(u64 x) { return 100 / x; }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_true(test_util::errors_in(modules) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].msg, "division by zero at comptime", m)) { return -2; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].origin, (void*)modules[1], m)) { return -3; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].src_pos, (u32)39, m)) { return -4; }
+    return 0;
+}
+
 // ---- export enforcement ----
 
 fn i32 err_private_fn_not_visible(arena::Arena* a, const u8[]m) {
@@ -212,6 +298,13 @@ fn i32 main() {
     testing::add(suite, "instantiation_identity_across_phases",  &instantiation_identity_across_phases);
     testing::add(suite, "infers_through_qualified_constructor",  &infers_through_qualified_constructor);
     testing::add(suite, "err_same_named_constructors_do_not_unify", &err_same_named_constructors_do_not_unify);
+    testing::add(suite, "generic_forwards_type_param_across_modules", &generic_forwards_type_param_across_modules);
+    testing::add(suite, "generic_type_arg_resolves_in_home_module", &generic_type_arg_resolves_in_home_module);
+    testing::add(suite, "err_clone_error_carries_the_generic_module", &err_clone_error_carries_the_generic_module);
+    testing::add(suite, "err_clone_cfg_diagnostic_carries_the_generic_module", &err_clone_cfg_diagnostic_carries_the_generic_module);
+    testing::add(suite, "clone_warning_carries_the_generic_module", &clone_warning_carries_the_generic_module);
+    testing::add(suite, "err_on_demand_body_check_carries_the_callee_module", &err_on_demand_body_check_carries_the_callee_module);
+    testing::add(suite, "err_foreign_comptime_diagnostic_carries_the_callee_module", &err_foreign_comptime_diagnostic_carries_the_callee_module);
     testing::add(suite, "err_private_fn_not_visible",            &err_private_fn_not_visible);
     testing::add(suite, "err_private_struct_not_visible",        &err_private_struct_not_visible);
     testing::add(suite, "err_private_const_not_visible",         &err_private_const_not_visible);

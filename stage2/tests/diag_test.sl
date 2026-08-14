@@ -343,6 +343,56 @@ fn i32 msg_bytes_copied_into_arena(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+fn i32 report_leaves_origin_null(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {4096, null};
+    diag::DiagBuf d = make_empty_buf();
+    diag::report(&d, &local, 1, "local");
+    diag::report_warning(&d, &local, 2, "local warning");
+    if(!testing::expect_null(d.entries[0].origin, m)) { return -1; }
+    if(!testing::expect_null(d.entries[1].origin, m)) { return -2; }
+    return 0;
+}
+
+fn i32 report_foreign_stores_origin(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {4096, null};
+    diag::DiagBuf d = make_empty_buf();
+    diag::report_foreign(&d, &local, (void*)&local, 42, "elsewhere");
+    if(!testing::expect_eq(d.entries[0].origin, (void*)&local, m)) { return -1; }
+    if(!testing::expect_eq((u32)d.entries[0].src_pos, (u32)42, m)) { return -2; }
+    if(!testing::expect_eq(d.entries[0].msg, "elsewhere", m)) { return -3; }
+    if(!testing::expect_false(d.entries[0].is_warning, m)) { return -4; }
+    return 0;
+}
+
+fn i32 report_foreign_warning_stores_origin(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {4096, null};
+    diag::DiagBuf d = make_empty_buf();
+    diag::report_foreign_warning(&d, &local, (void*)&d, 7, "careful over there");
+    if(!testing::expect_eq(d.entries[0].origin, (void*)&d, m)) { return -1; }
+    if(!testing::expect_true(d.entries[0].is_warning, m)) { return -2; }
+    return 0;
+}
+
+fn i32 origins_intact_across_growth(arena::Arena* a, const u8[]m) {
+    arena::Arena local = {4096, null};
+    diag::DiagBuf d = make_empty_buf();
+    for(u32 i = 0; i < 20; i += 1) {
+        if(i % 2 == 0) {
+            diag::report(&d, &local, i, "local");
+        } else {
+            diag::report_foreign(&d, &local, (void*)&local, i, "foreign");
+        }
+    }
+    for(u32 i = 0; i < 20; i += 1) {
+        if(i % 2 == 0) {
+            if(!testing::expect_null(d.entries[i].origin, m)) { return -1; }
+        } else {
+            if(!testing::expect_eq(d.entries[i].origin, (void*)&local, m)) { return -2; }
+        }
+    }
+    return 0;
+}
+
 fn i32 independent_buffers_are_independent(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d1 = make_empty_buf();
@@ -391,6 +441,10 @@ fn i32 main() {
     testing::add(suite, "duplicate_msg_appends_twice", &duplicate_msg_appends_twice);
     testing::add(suite, "long_msg_handled", &long_msg_handled);
     testing::add(suite, "msg_bytes_copied_into_arena", &msg_bytes_copied_into_arena);
+    testing::add(suite, "report_leaves_origin_null", &report_leaves_origin_null);
+    testing::add(suite, "report_foreign_stores_origin", &report_foreign_stores_origin);
+    testing::add(suite, "report_foreign_warning_stores_origin", &report_foreign_warning_stores_origin);
+    testing::add(suite, "origins_intact_across_growth", &origins_intact_across_growth);
     testing::add(suite, "independent_buffers_are_independent", &independent_buffers_are_independent);
     return testing::run();
 }

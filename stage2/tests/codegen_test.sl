@@ -212,6 +212,46 @@ fn i32 jit_generic_slice(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn T pick(comptime Type T, T[]* s, u64 i) { return s.ptr[i]; } fn u64 glen(comptime Type T, T[]* s) { return s.len; } fn i32 main() { i32[] xs; xs.ptr = (i32*)malloc(12); xs.len = 3; xs.ptr[0] = 10; xs.ptr[1] = 20; xs.ptr[2] = 12; return pick(&xs, 1) + pick(&xs, 2) + (i32)glen(&xs); }", 35, msg);
 }
 
+// A generic forwards its own comptime T as a type argument; the callee must see u32, not the param name.
+fn i32 jit_generic_forwards_type_param(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "fn u64 width(comptime Type T) { return sizeof(T); } fn u64 outer(comptime Type T, T value) { return width(T); } fn i32 main() { u32 v = 3; return (i32)outer(v); }", 4, msg);
+}
+
+// Forwarding alongside a runtime argument, so the clone's call carries both kinds in one argument list.
+fn i32 jit_generic_forwards_type_param_with_runtime_arg(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "fn T id(comptime Type T, T x) { return x; } fn T twice(comptime Type T, T v) { return id(T, v) + id(T, v); } fn i32 main() { i32 v = 21; return twice(v); }", 42, msg);
+}
+
+// Two params forwarded in swapped positions: substitution binds by name, so the sizes must not trade places.
+fn i32 jit_generic_forwards_two_type_params_swapped(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "fn u64 pair(comptime Type A, comptime Type B) { return sizeof(A) * 100 + sizeof(B); } fn u64 outer(comptime Type X, comptime Type Y, X x, Y y) { return pair(Y, X); } fn i32 main() { u8 small = 1; u32 wide = 2; return (i32)outer(small, wide); }", 401, msg);
+}
+
+// The forwarded param reaches a type constructor, whose instantiation then drives a sizeof.
+fn i32 jit_generic_forwards_type_param_to_type_ctor(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "fn Type Box(comptime Type T) { return struct { T value; u64 tag; }; } fn u64 boxed(comptime Type T, T v) { Box(T) b; b.value = v; b.tag = 2; return sizeof(Box(T)) + b.tag; } fn i32 main() { i32 v = 7; return (i32)boxed(v); }", 18, msg);
+}
+
+// A type param and a value param forwarded together: one becomes a type, the other an integer literal.
+fn i32 jit_generic_forwards_type_and_value_params(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "fn u64 room(comptime Type T, comptime u64 N) { return sizeof(T) * N; } fn u64 outer(comptime Type T, comptime u64 N, T v) { return room(T, N); } fn i32 main() { u32 v = 1; return (i32)outer(u32, 10, v); }", 40, msg);
+}
+
+// Forwarding through three levels: each clone re-forwards the T it was given.
+fn i32 jit_generic_forwards_through_three_levels(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "fn u64 inner(comptime Type T) { return sizeof(T); } fn u64 middle(comptime Type T) { return inner(T) * 10; } fn u64 outer(comptime Type T, T v) { return middle(T); } fn i32 main() { u16 v = 1; return (i32)outer(v); }", 20, msg);
+}
+
+// A local shadows the type param for expression idents; a type position still means the param.
+fn i32 jit_type_param_shadowed_in_nested_block(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "fn u64 outer(comptime Type T, T v) { { u32 T = 40; return (u64)T + sizeof(T); } } fn i32 main() { u16 v = 1; return (i32)outer(v); }", 42, msg);
+}
+
+// A block leaving must not un-shadow a name an enclosing block still shadows, or the literal replaces the local.
+fn i32 jit_value_param_shadowed_across_nested_block(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "fn u64 hold(comptime u64 N) { { u64 N = 42; { u64 other = 1; } return N; } } fn i32 main() { return (i32)hold(5); }", 42, msg);
+}
+
 // A function pointer is nullable and equality-comparable: assign null, compare, reassign, call.
 fn i32 jit_fnptr_null(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn i32 dbl(i32 x) { return x * 2; } fn i32 main() { fn* i32(i32) f = null; if(f != null) { return 1; } f = dbl; if(f == null) { return 2; } return f(21); }", 42, msg);
@@ -408,6 +448,14 @@ fn i32 main() {
     testing::add(suite, "jit_generic_struct",      &jit_generic_struct);
     testing::add(suite, "jit_generic_struct_param", &jit_generic_struct_param);
     testing::add(suite, "jit_generic_slice",       &jit_generic_slice);
+    testing::add(suite, "jit_generic_forwards_type_param", &jit_generic_forwards_type_param);
+    testing::add(suite, "jit_generic_forwards_type_param_with_runtime_arg", &jit_generic_forwards_type_param_with_runtime_arg);
+    testing::add(suite, "jit_generic_forwards_two_type_params_swapped", &jit_generic_forwards_two_type_params_swapped);
+    testing::add(suite, "jit_generic_forwards_type_param_to_type_ctor", &jit_generic_forwards_type_param_to_type_ctor);
+    testing::add(suite, "jit_generic_forwards_type_and_value_params", &jit_generic_forwards_type_and_value_params);
+    testing::add(suite, "jit_generic_forwards_through_three_levels", &jit_generic_forwards_through_three_levels);
+    testing::add(suite, "jit_type_param_shadowed_in_nested_block", &jit_type_param_shadowed_in_nested_block);
+    testing::add(suite, "jit_value_param_shadowed_across_nested_block", &jit_value_param_shadowed_across_nested_block);
     testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
     testing::add(suite, "jit_pointer_compound",  &jit_pointer_compound);

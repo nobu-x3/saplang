@@ -59,6 +59,7 @@ export struct FnDeclNode {
     u64       body_owner;                // thread checking the body while InProgress; distinguishes reentrancy from contention
     bool      is_exported;
     void*     decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
+    void*     home;                     // module::Module* whose source src_pos indexes; set on clones, whose nodes are the template's
 }
 
 export struct StructDeclNode {

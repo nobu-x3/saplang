@@ -35,6 +35,7 @@ export struct MonoCtx {
 
 export struct Interp {
     module::Module* m;
+    module::Module* pos_module;     // module whose source the nodes being evaluated index; a foreign body keeps its own
     Env*            env;
     i32             depth;
     i32             max_depth;      // recursion-call limit; -comptime-depth
@@ -94,12 +95,18 @@ export fn Interp new_interp(module::Module* m) {
     Interp ip;
     sys::memset(&ip, 0, sizeof(Interp));
     ip.m = m;
+    ip.pos_module = m;
     ip.max_depth = 1024;
     if(m.comptime_max_depth > 0) { ip.max_depth = m.comptime_max_depth; }
     ip.max_iterations = 10000000;
     if(m.comptime_max_iterations > 0) { ip.max_iterations = m.comptime_max_iterations; }
     ip.env = env_push(null, m.arena, 16);
     return ip;
+}
+
+// Diagnostics land in the module driving the interpreter, but a foreign body's nodes index their own source.
+fn void interp_report(Interp* ip, u32 pos, const u8[] msg) {
+    diag::report_foreign(&ip.m.diag, ip.m.arena, (void*)ip.pos_module, pos, msg);
 }
 
 export fn value::Value eval(Interp* ip, ast::AstNode* e) {
@@ -204,7 +211,7 @@ fn value::Value eval_decl_value(Interp* ip, sema::Decl* d, u32 pos) {
         return value::val_fn((ast::FnDeclNode*)d.data.node, d.ty);
     }
     const u8[] msg = "identifier is not a comptime value";
-    diag::report(&ip.m.diag, ip.m.arena, pos, msg);
+    interp_report(ip, pos, msg);
     return value::val_error();
 }
 
@@ -292,13 +299,13 @@ fn value::Value eval_cond(Interp* ip, ast::AstNode* cond) {
     if(v.kind == value::ValueKind::Null) { return value::val_bool(false); }
     if(v.kind == value::ValueKind::Bytes) { return value::val_bool(v.data.bytes.ptr != null); }
     const u8[] msg = "comptime condition is not convertible to bool";
-    diag::report(&ip.m.diag, ip.m.arena, cond.h.src_pos, msg);
+    interp_report(ip, cond.h.src_pos, msg);
     return value::val_error();
 }
 
 fn value::Value iteration_limit_error(Interp* ip, u32 pos) {
     const u8[] msg = "comptime loop exceeded iteration limit";
-    diag::report(&ip.m.diag, ip.m.arena, pos, msg);
+    interp_report(ip, pos, msg);
     return value::val_error();
 }
 
@@ -461,7 +468,7 @@ fn value::Value eval_assignment(Interp* ip, ast::AssignmentNode* n) {
     value::Value* slot = eval_lvalue(ip, n.lhs);
     if(slot == null) {
         const u8[] msg = "comptime assignment target is not an assignable comptime location";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        interp_report(ip, n.h.src_pos, msg);
         return value::val_error();
     }
     value::Value rhs = eval(ip, n.rhs);
@@ -479,16 +486,16 @@ fn value::Value eval_assignment(Interp* ip, ast::AssignmentNode* n) {
 // op.sl can only signal an operator failure as val_error; translate it to a specific comptime diagnostic here.
 fn value::Value eval_binop_checked(Interp* ip, token::TokenKind op, value::Value l, value::Value r, u32 pos) {
     if((op == token::TokenKind::Slash || op == token::TokenKind::Percent) && r.kind == value::ValueKind::Int && r.data.i == 0) {
-        diag::report(&ip.m.diag, ip.m.arena, pos, "division by zero at comptime");
+        interp_report(ip, pos, "division by zero at comptime");
         return value::val_error();
     }
     if((op == token::TokenKind::LShift || op == token::TokenKind::RShift) && r.kind == value::ValueKind::Int && (r.data.i < 0 || r.data.i >= 64)) {
-        diag::report(&ip.m.diag, ip.m.arena, pos, "shift amount out of range at comptime");
+        interp_report(ip, pos, "shift amount out of range at comptime");
         return value::val_error();
     }
     value::Value result = op::binop_eval(op, l, r);
     if(result.kind == value::ValueKind::Error) {
-        diag::report(&ip.m.diag, ip.m.arena, pos, "operator cannot be evaluated at comptime");
+        interp_report(ip, pos, "operator cannot be evaluated at comptime");
     }
     return result;
 }
@@ -516,7 +523,7 @@ fn value::Value eval_unary(Interp* ip, ast::UnaryOpNode* n) {
     if(n.op == token::TokenKind::Amp && v.kind == value::ValueKind::FnRef) { return v; }
     value::Value result = op::unaryop_eval(n.op, v);
     if(result.kind == value::ValueKind::Error) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "operator cannot be evaluated at comptime");
+        interp_report(ip, n.h.src_pos, "operator cannot be evaluated at comptime");
     }
     return result;
 }
@@ -611,7 +618,7 @@ fn value::Value build_type_info_value(Interp* ip, types::Ty* t) {
 fn value::Value eval_type_info(Interp* ip, ast::TypeInfoNode* n) {
     types::Ty* t = (types::Ty*)n.arg.h.ty;
     if(t == null) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "type_info argument is unresolved at comptime");
+        interp_report(ip, n.h.src_pos, "type_info argument is unresolved at comptime");
         return value::val_error();
     }
     return build_type_info_value(ip, t);
@@ -632,7 +639,7 @@ fn value::Value eval_array_lit(Interp* ip, ast::ArrayLitNode* n) {
 fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
     types::Ty* ty = (types::Ty*)n.h.ty;
     if(ty == null || ty.kind != types::TypeKind::Struct) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "struct literal is not a comptime struct value");
+        interp_report(ip, n.h.src_pos, "struct literal is not a comptime struct value");
         return value::val_error();
     }
     ast::StructDeclNode* sd = (ast::StructDeclNode*)ty.data.struct_decl;
@@ -663,13 +670,13 @@ fn value::Value eval_member_access(Interp* ip, ast::MemberAccessNode* n) {
         return value::val_int((i64)base.data.elems.len, types::prim_u64());
     }
     if(base.kind != value::ValueKind::Struct || base.ty == null || base.ty.kind != types::TypeKind::Struct) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "member access on a non-struct comptime value");
+        interp_report(ip, n.h.src_pos, "member access on a non-struct comptime value");
         return value::val_error();
     }
     ast::StructDeclNode* sd = (ast::StructDeclNode*)base.ty.data.struct_decl;
     u64 field_index = struct_field_index(sd, n.field);
     if(field_index >= base.data.elems.len) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "unknown field in comptime struct value");
+        interp_report(ip, n.h.src_pos, "unknown field in comptime struct value");
         return value::val_error();
     }
     return base.data.elems[field_index];
@@ -682,17 +689,17 @@ fn value::Value eval_array_index(Interp* ip, ast::ArrayIndexNode* n) {
     if(idx.kind == value::ValueKind::Error) { return idx; }
     if(base.kind == value::ValueKind::Bytes) {
         if(idx.data.i < 0 || (u64)idx.data.i >= base.data.bytes.len) {
-            diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "comptime byte slice index out of bounds");
+            interp_report(ip, n.h.src_pos, "comptime byte slice index out of bounds");
             return value::val_error();
         }
         return value::val_int((i64)base.data.bytes[(u64)idx.data.i], types::prim_u8());
     }
     if(base.kind != value::ValueKind::Array) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "index on a non-array comptime value");
+        interp_report(ip, n.h.src_pos, "index on a non-array comptime value");
         return value::val_error();
     }
     if(idx.data.i < 0 || (u64)idx.data.i >= base.data.elems.len) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "comptime array index out of bounds");
+        interp_report(ip, n.h.src_pos, "comptime array index out of bounds");
         return value::val_error();
     }
     return base.data.elems[(u64)idx.data.i];
@@ -702,7 +709,7 @@ fn value::Value eval_slice_range(Interp* ip, ast::SliceRangeNode* n) {
     value::Value base = eval(ip, n.base);
     if(base.kind == value::ValueKind::Error) { return base; }
     if(base.kind != value::ValueKind::Array) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "range on a non-array comptime value");
+        interp_report(ip, n.h.src_pos, "range on a non-array comptime value");
         return value::val_error();
     }
     i64 lo = 0;
@@ -710,7 +717,7 @@ fn value::Value eval_slice_range(Interp* ip, ast::SliceRangeNode* n) {
     if(n.lo != null) { value::Value lv = eval(ip, n.lo); if(lv.kind == value::ValueKind::Error) { return lv; } lo = lv.data.i; }
     if(n.hi != null) { value::Value hv = eval(ip, n.hi); if(hv.kind == value::ValueKind::Error) { return hv; } hi = hv.data.i; }
     if(lo < 0 || hi > (i64)base.data.elems.len || lo > hi) {
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, "comptime slice range out of bounds");
+        interp_report(ip, n.h.src_pos, "comptime slice range out of bounds");
         return value::val_error();
     }
     u64 count = (u64)(hi - lo);
@@ -726,7 +733,7 @@ fn value::Value eval_sizeof(Interp* ip, ast::SizeofNode* n) {
     if(n.arg != null) { t = (types::Ty*)n.arg.h.ty; }
     if(t == null) {
         const u8[] msg = "sizeof operand type is unresolved";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        interp_report(ip, n.h.src_pos, msg);
         return value::val_error();
     }
     return value::val_int((i64)types::size_of(&ip.m.diag, t), types::prim_u64());
@@ -737,7 +744,7 @@ fn value::Value eval_alignof(Interp* ip, ast::AlignofNode* n) {
     if(n.arg != null) { t = (types::Ty*)n.arg.h.ty; }
     if(t == null) {
         const u8[] msg = "alignof operand type is unresolved";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        interp_report(ip, n.h.src_pos, msg);
         return value::val_error();
     }
     return value::val_int((i64)types::align_of(&ip.m.diag, t), types::prim_u64());
@@ -750,6 +757,13 @@ fn bool has_comptime_params(ast::FnDeclNode* func) {
     return false;
 }
 
+// A clone's nodes are the template's; a plain fn's are its own module's.
+fn module::Module* body_module(Interp* ip, ast::FnDeclNode* func) {
+    if(func.home != null) { return (module::Module*)func.home; }
+    if(func.decl != null && ((sema::Decl*)func.decl).home != null) { return ((sema::Decl*)func.decl).home; }
+    return ip.m;
+}
+
 fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u32 call_site_pos) {
     if(sema::body_check_reentrant(func)) {
         u8[] name_str = interner::symbol_str(func.name);
@@ -759,13 +773,13 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
             u64 message_len = (u64)written;
             if(message_len > 255) { message_len = 255; }
             u8[] msg = {&scratch[0], message_len};
-            diag::report(&ip.m.diag, ip.m.arena, call_site_pos, msg);
+            interp_report(ip, call_site_pos, msg);
         }
         return value::val_error();
     }
     if(ip.depth >= ip.max_depth) {
         const u8[] msg = "comptime recursion limit exceeded";
-        diag::report(&ip.m.diag, ip.m.arena, call_site_pos, msg);
+        interp_report(ip, call_site_pos, msg);
         return value::val_error();
     }
     ip.depth += 1;
@@ -782,10 +796,13 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
     }
     Flow saved_flow = ip.flow;
     value::Value saved_return_value = ip.return_value;
+    module::Module* saved_pos_module = ip.pos_module;
+    ip.pos_module = body_module(ip, func);
     ip.flow = Flow::None;
     value::Value body_result = eval(ip, func.body);
     value::Value result = value::val_void();
     if(body_result.kind == value::ValueKind::Error) { result = body_result; } else if(ip.flow == Flow::Return) { result = ip.return_value; }
+    ip.pos_module = saved_pos_module;
     ip.flow = saved_flow;
     ip.return_value = saved_return_value;
     env_pop(ip.env);
@@ -820,7 +837,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
     sema::Decl* d = resolved_decl(n.callee);
     if(d != null && d.kind == sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::ExternFnDecl) {
         const u8[] msg = "cannot call an extern function at comptime";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        interp_report(ip, n.h.src_pos, msg);
         return value::val_error();
     }
     ast::FnDeclNode* func;
@@ -831,7 +848,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
         if(callee_val.kind == value::ValueKind::Error) { return callee_val; }
         if(callee_val.kind != value::ValueKind::FnRef || callee_val.data.fn_ref == null) {
             const u8[] msg = "comptime call target is not a function";
-            diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+            interp_report(ip, n.h.src_pos, msg);
             return value::val_error();
         }
         func = callee_val.data.fn_ref;
@@ -841,7 +858,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
     }
     if(!ensure_comptime_safe(ip, func)) {
         const u8[] msg = "cannot call a non-comptime-safe function at comptime";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        interp_report(ip, n.h.src_pos, msg);
         return value::val_error();
     }
     value::Value[] args;
@@ -864,7 +881,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
             }
             if(n.args.len != runtime_count) {
                 const u8[] msg = "wrong number of arguments for a generic call at comptime";
-                diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+                interp_report(ip, n.h.src_pos, msg);
                 return value::val_error();
             }
             types::Ty*[] arg_types;
@@ -874,7 +891,7 @@ fn value::Value eval_call(Interp* ip, ast::CallNode* n) {
             ast::FnDeclNode* inferred = resolve_generic_call(ip.m, func, arg_types);
             if(inferred == null) {
                 const u8[] msg = "cannot infer comptime arguments; pass them explicitly";
-                diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+                interp_report(ip, n.h.src_pos, msg);
                 return value::val_error();
             }
             return invoke(ip, inferred, args, n.h.src_pos);
@@ -902,10 +919,10 @@ fn value::Value eval_comperror(Interp* ip, ast::CompErrorNode* n) {
     if(msg.kind == value::ValueKind::Error) { return msg; }
     if(msg.kind != value::ValueKind::Bytes) {
         const u8[] bad = "comperror message must be a string";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, bad);
+        interp_report(ip, n.h.src_pos, bad);
         return value::val_error();
     }
-    diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg.data.bytes);
+    interp_report(ip, n.h.src_pos, msg.data.bytes);
     return value::val_error();
 }
 
@@ -914,10 +931,10 @@ fn value::Value eval_compwarning(Interp* ip, ast::CompWarningNode* n) {
     if(msg.kind == value::ValueKind::Error) { return msg; }
     if(msg.kind != value::ValueKind::Bytes) {
         const u8[] bad = "compwarning message must be a string";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, bad);
+        interp_report(ip, n.h.src_pos, bad);
         return value::val_error();
     }
-    diag::report_warning(&ip.m.diag, ip.m.arena, n.h.src_pos, msg.data.bytes);
+    diag::report_foreign_warning(&ip.m.diag, ip.m.arena, (void*)ip.pos_module, n.h.src_pos, msg.data.bytes);
     return value::val_void();
 }
 
@@ -950,7 +967,7 @@ fn value::Value eval_compinsert(Interp* ip, ast::CompInsertNode* n) {
     if(src.kind == value::ValueKind::Error) { return src; }
     if(src.kind != value::ValueKind::Bytes) {
         const u8[] msg = "compinsert argument must be a string";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        interp_report(ip, n.h.src_pos, msg);
         return value::val_error();
     }
     ast::AstNode* frag_root = compile_fragment(ip.m, src.data.bytes, false, n.h.src_pos);
@@ -992,7 +1009,7 @@ fn value::Value eval_comprun(Interp* ip, ast::CompRunNode* n) {
 fn value::Value eval_type_expr(Interp* ip, ast::AstNode* e) {
     if(e.h.ty == null) {
         const u8[] msg = "type expression is unresolved at comptime";
-        diag::report(&ip.m.diag, ip.m.arena, e.h.src_pos, msg);
+        interp_report(ip, e.h.src_pos, msg);
         return value::val_error();
     }
     return value::val_type((types::Ty*)e.h.ty);
@@ -1003,7 +1020,7 @@ fn value::Value eval_typeof(Interp* ip, ast::TypeofNode* n) {
     if(n.expr != null) { t = (types::Ty*)n.expr.h.ty; }
     if(t == null) {
         const u8[] msg = "typeof operand type is unresolved";
-        diag::report(&ip.m.diag, ip.m.arena, n.h.src_pos, msg);
+        interp_report(ip, n.h.src_pos, msg);
         return value::val_error();
     }
     return value::val_type(t);
@@ -1149,7 +1166,7 @@ fn value::Value eval_string_lit(Interp* ip, ast::StringLitNode* n) {
 
 fn void diag_unsupported(Interp* ip, u32 pos) {
     const u8[] msg = "not supported at comptime";
-    diag::report(&ip.m.diag, ip.m.arena, pos, msg);
+    interp_report(ip, pos, msg);
 }
 
 // MONOMORPHIZATION CACHE
@@ -1685,7 +1702,10 @@ fn ast::FnDeclNode* monomorphize_type_ctor(Interp* ip, ast::FnDeclNode* callee, 
         mutex::unlock(&g_type_mono_lock);
         return hit;
     }
+    module::Module* defining = ip.m;
+    if(callee.decl != null) { defining = ((sema::Decl*)callee.decl).home; }
     ast::FnDeclNode* clone = clone_fn_decl(shared, callee);
+    clone.home = (void*)defining;
     rename_mangled(ip.m, clone, cargs);
     substitute_type_params(shared, clone, cargs);
     clone.body_state = ast::BodyState::InProgress;
@@ -1694,8 +1714,6 @@ fn ast::FnDeclNode* monomorphize_type_ctor(Interp* ip, ast::FnDeclNode* callee, 
     mutex::unlock(&g_type_mono_lock);
 
     instantiated_fns_push(ip.m, clone);
-    module::Module* defining = ip.m;
-    if(callee.decl != null) { defining = ((sema::Decl*)callee.decl).home; }
     sema::sema_check_clone(ip.m, defining, clone);
 
     mutex::lock(&g_type_mono_lock);
@@ -1764,14 +1782,15 @@ export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, val
     key.args = cargs;
     ast::FnDeclNode* hit = mono_cache_lookup(cache, &key);
     if(hit != null) { return hit; }
+    module::Module* defining = ip.m;
+    if(callee.decl != null) { defining = ((sema::Decl*)callee.decl).home; }
     ast::FnDeclNode* clone = clone_fn_decl(ip.m.arena, callee);
+    clone.home = (void*)defining;
     rename_mangled(ip.m, clone, cargs);
     substitute_type_params(ip.m.arena, clone, cargs);
     // Cache before re-checking, so a recursive generic call in the body hits the cache, not endless monomorphization.
     mono_cache_insert(cache, ip.m.arena, key, clone);
     instantiated_fns_push(ip.m, clone);
-    module::Module* defining = ip.m;
-    if(callee.decl != null) { defining = ((sema::Decl*)callee.decl).home; }
     sema::sema_check_clone(ip.m, defining, clone);
     return clone;
 }
@@ -1780,17 +1799,22 @@ export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, val
 struct SubstCtx {
     symbol::Symbol*[] tnames;
     types::Ty*[]    ttys;
+    u32[]             tshadow;   // per-name count of enclosing blocks declaring a local of that name; nonzero = shadowed
     symbol::Symbol*[] vnames;
     u64[]             vvals;
     types::Ty*[]    vtys;
-    symbol::Symbol*[] vorig;   // vnames is blanked while walking a block that shadows the name; vorig restores it
+    u32[]             vshadow;
     arena::Arena*     arena;
 }
 
 fn void subst_node(SubstCtx* c, ast::AstNode* n) {
     if(n == null) { return; }
     switch(n.h.kind) {
-    case ast::AstKind::Ident: { subst_value_ident(c, n); return; }
+    case ast::AstKind::Ident: {
+        if(subst_type_ident(c, n)) { return; }
+        subst_value_ident(c, n);
+        return;
+    }
     case ast::AstKind::NamedType: {
         ast::TypeNamedNode* t = (ast::TypeNamedNode*)n;
         if(t.namespace == null) {
@@ -1826,9 +1850,9 @@ fn void subst_node(SubstCtx* c, ast::AstNode* n) {
     }
     case ast::AstKind::BlockStmt: {
         ast::BlockNode* block = (ast::BlockNode*)n;
-        blank_shadowed_names(c, block);
+        adjust_block_shadows(c, block, 1);
         for(u64 stmt_index = 0; stmt_index < block.stmts.len; stmt_index += 1) { subst_node(c, block.stmts[stmt_index]); }
-        restore_shadowed_names(c);
+        adjust_block_shadows(c, block, -1);
         return;
     }
     case ast::AstKind::IfStmt: {
@@ -1951,10 +1975,25 @@ fn void subst_size_expr(SubstCtx* c, ast::AstNode* n) {
     }
 }
 
+// Call args parse as expressions, so a forwarded type param arrives as an Ident; TypeNamedNode is the same size.
+fn bool subst_type_ident(SubstCtx* c, ast::AstNode* n) {
+    ast::IdentNode* id = (ast::IdentNode*)n;
+    for(u64 type_index = 0; type_index < c.tnames.len; type_index += 1) {
+        if(id.name != c.tnames[type_index] || c.tshadow[type_index] > 0) { continue; }
+        symbol::Symbol* name = id.name;
+        n.h.kind = ast::AstKind::NamedType;
+        n.h.ty = (void*)c.ttys[type_index];
+        ((ast::TypeNamedNode*)n).namespace = null;
+        ((ast::TypeNamedNode*)n).name = name;
+        return true;
+    }
+    return false;
+}
+
 fn void subst_value_ident(SubstCtx* c, ast::AstNode* n) {
     ast::IdentNode* id = (ast::IdentNode*)n;
     for(u64 value_index = 0; value_index < c.vnames.len; value_index += 1) {
-        if(c.vnames[value_index] == null || id.name != c.vnames[value_index]) { continue; }
+        if(id.name != c.vnames[value_index] || c.vshadow[value_index] > 0) { continue; }
         i64 bound = (i64)c.vvals[value_index];
         // synth re-derives an IntLit's type from its value, so a negative takes the source-level -lit shape.
         if(bound < 0) {
@@ -1976,21 +2015,18 @@ fn void subst_value_ident(SubstCtx* c, ast::AstNode* n) {
     }
 }
 
-// A local redeclaring a value param shadows it, so the param's literal must not replace refs in that block.
-fn void blank_shadowed_names(SubstCtx* c, ast::BlockNode* block) {
+// Counted, not blanked: leaving a nested block would otherwise clear a name an enclosing block still shadows.
+fn void adjust_block_shadows(SubstCtx* c, ast::BlockNode* block, i32 delta) {
     for(u64 stmt_index = 0; stmt_index < block.stmts.len; stmt_index += 1) {
         ast::AstNode* stmt = block.stmts[stmt_index];
         if(stmt == null || stmt.h.kind != ast::AstKind::VarDecl) { continue; }
         symbol::Symbol* local_name = ((ast::VarDeclNode*)stmt).name;
         for(u64 value_index = 0; value_index < c.vnames.len; value_index += 1) {
-            if(c.vnames[value_index] == local_name) { c.vnames[value_index] = null; }
+            if(c.vnames[value_index] == local_name) { c.vshadow[value_index] = (u32)((i32)c.vshadow[value_index] + delta); }
         }
-    }
-}
-
-fn void restore_shadowed_names(SubstCtx* c) {
-    for(u64 value_index = 0; value_index < c.vnames.len; value_index += 1) {
-        c.vnames[value_index] = c.vorig[value_index];
+        for(u64 type_index = 0; type_index < c.tnames.len; type_index += 1) {
+            if(c.tnames[type_index] == local_name) { c.tshadow[type_index] = (u32)((i32)c.tshadow[type_index] + delta); }
+        }
     }
 }
 
@@ -2011,10 +2047,11 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
     c.arena = a;
     c.tnames.ptr = arena::alloc(a, n_type * sizeof(symbol::Symbol*));
     c.ttys.ptr = arena::alloc(a, n_type * sizeof(types::Ty*));
+    c.tshadow.ptr = (u32*)arena::alloc(a, n_type * sizeof(u32));
     c.vnames.ptr = arena::alloc(a, n_val * sizeof(symbol::Symbol*));
-    c.vorig.ptr = arena::alloc(a, n_val * sizeof(symbol::Symbol*));
     c.vvals.ptr = arena::alloc(a, n_val * sizeof(u64));
     c.vtys.ptr = arena::alloc(a, n_val * sizeof(types::Ty*));
+    c.vshadow.ptr = (u32*)arena::alloc(a, n_val * sizeof(u32));
     carg_index = 0;
     for(u64 i = 0; i < clone.params.len; i += 1) {
         if(clone.params[i].is_comptime) {
@@ -2023,15 +2060,17 @@ fn void substitute_type_params(arena::Arena* a, ast::FnDeclNode* clone, value::V
                 c.tnames.len += 1;
                 c.ttys[c.ttys.len] = cargs[carg_index].data.type_ref;
                 c.ttys.len += 1;
+                c.tshadow[c.tshadow.len] = 0;
+                c.tshadow.len += 1;
             } else if(cargs[carg_index].kind == value::ValueKind::Int) {
                 c.vnames[c.vnames.len] = clone.params[i].name;
                 c.vnames.len += 1;
-                c.vorig[c.vorig.len] = clone.params[i].name;
-                c.vorig.len += 1;
                 c.vvals[c.vvals.len] = (u64)cargs[carg_index].data.i;
                 c.vvals.len += 1;
                 c.vtys[c.vtys.len] = cargs[carg_index].ty;
                 c.vtys.len += 1;
+                c.vshadow[c.vshadow.len] = 0;
+                c.vshadow.len += 1;
             }
             carg_index += 1;
         }

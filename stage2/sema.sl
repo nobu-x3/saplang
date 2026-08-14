@@ -29,6 +29,7 @@ export struct Sema {
     bool                in_comprun;         // inside a comprun_node body: compinsert there is comptime-evaluated, not stmt-spliced
     arena::Arena*       body_arena;         // where body-check allocates; a cross-module on-demand check uses the requester's, keeping each module arena single-writer
     diag::DiagBuf*      body_diag;          // where body-check diagnostics go; the requester's, so a foreign check never writes the foreign module's diag buffer
+    module::Module*     pos_module;         // module whose source the checked nodes index; null = m (differs for a clone body or a foreign body check)
 }
 
 // Body-check allocations go here so an on-demand foreign check writes the requester's arena, not the foreign module's.
@@ -52,6 +53,10 @@ fn void note_instantiation(Sema* s, u32 src_pos, ast::FnDeclNode* generic, u64 d
 }
 
 fn void sema_report(Sema* s, u32 pos, const u8[] msg) {
+    if(s.pos_module != null) {
+        diag::report_foreign(bdiag(s), balloc(s), (void*)s.pos_module, pos, msg);
+        return;
+    }
     diag::report(bdiag(s), balloc(s), pos, msg);
 }
 
@@ -747,7 +752,7 @@ fn void set_waiting(u64 thread, ast::FnDeclNode* target) {
     list::push(&g_body_waits, g_body_waits_allocator, entry);
 }
 
-fn void diag_comptime_wait_cycle(module::Module* requester, ast::FnDeclNode* func) {
+fn void diag_comptime_wait_cycle(module::Module* requester, module::Module* home, ast::FnDeclNode* func) {
     u8[] name_str = interner::symbol_str(func.name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "comptime call cycle: %.*s is being checked by another thread that is waiting on this one", (i32)name_str.len, (i8*)name_str.ptr);
@@ -755,7 +760,7 @@ fn void diag_comptime_wait_cycle(module::Module* requester, ast::FnDeclNode* fun
     u64 message_len = (u64)written;
     if(message_len > 255) { message_len = 255; }
     u8[] msg = {&scratch[0], message_len};
-    diag::report(&requester.diag, requester.arena, func.h.src_pos, msg);
+    diag::report_foreign(&requester.diag, requester.arena, (void*)home, func.h.src_pos, msg);
 }
 
 // True while this very thread is checking func's body — a comptime call in would interpret a half-checked body.
@@ -771,7 +776,7 @@ export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, mod
     if(func.body_state == ast::BodyState::InProgress && func.body_owner != me) {
         if(wait_would_cycle({g_body_waits.ptr, g_body_waits.len}, func, me)) {
             mutex::unlock(&g_body_lock);
-            diag_comptime_wait_cycle(requester, func);
+            diag_comptime_wait_cycle(requester, m, func);
             return;
         }
         set_waiting(me, func);
@@ -794,6 +799,7 @@ export fn void ensure_body_checked(module::Module* m, ast::FnDeclNode* func, mod
     s.scope = (Scope*)m.global_scope;
     s.body_arena = requester.arena;
     s.body_diag = &requester.diag;
+    s.pos_module = m;
     s.resolution_stack.arena = requester.arena;
     check_fn_body(s, func);
     mutex::lock(&g_body_lock);
@@ -833,6 +839,7 @@ export fn void sema_check_clone(module::Module* caller, module::Module* defining
     sema.m = caller;
     Sema* s = &sema;
     s.lookup_module = defining;
+    s.pos_module = defining;
     s.scope = (Scope*)defining.global_scope;
     s.resolution_stack.arena = caller.arena;
 
@@ -1780,9 +1787,12 @@ fn types::Ty* resolve_type_arg(Sema* s, ast::AstNode* arg) {
     if(arg.h.kind == ast::AstKind::Call) { return resolve_type(s, arg); }   // a nested constructor: Box(Box(T))
     if(arg.h.kind == ast::AstKind::Ident) {
         symbol::Symbol* name = ((ast::IdentNode*)arg).name;
-        Decl* decl = scope_lookup_local((Scope*)s.m.global_scope, name);
+        // A clone body names its own module's types, so resolve where the body was written, as resolve_named_type does.
+        module::Module* home = s.m;
+        if(s.lookup_module != null) { home = s.lookup_module; }
+        Decl* decl = scope_lookup_local((Scope*)home.global_scope, name);
         if(decl == null) { diag_unknown_type(s, arg.h.src_pos, name); return null; }
-        return decl_to_type(s, s.m, decl);
+        return decl_to_type(s, home, decl);
     }
     if(arg.h.kind == ast::AstKind::NamespaceAccess) {
         ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)arg;

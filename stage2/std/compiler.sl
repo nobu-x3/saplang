@@ -888,6 +888,7 @@ export fn void drain_diagnostics(Compiler* c) {
 const u32 PAD_MAX = 256;
 // "<path>:<line>:<col>: <msg>"; a compinsert-generated position resolves back to its (possibly nested) generator site.
 fn void print_diagnostic(module::Module* m, diag::DiagEntry* entry) {
+    if(entry.origin != null) { m = (module::Module*)entry.origin; }   // a clone body's position indexes the generic's home, not the buffer's owner
     u32 pos = entry.src_pos;
     bool generated = false;
     u32 fragment_line = 0;

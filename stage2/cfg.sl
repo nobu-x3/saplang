@@ -60,6 +60,13 @@ struct CfgBuilder {
     list::List(LoopFrame) loop_stack;
     list::List(ScopeFrame) scope_stack;
     module::Module* m;
+    module::Module* pos_module;
+}
+
+// A clone's nodes are the template's, so its positions index the generic's home module, not m's source.
+fn module::Module* body_module(module::Module* m, ast::FnDeclNode* func) {
+    if(func.home != null) { return (module::Module*)func.home; }
+    return m;
 }
 
 export fn Cfg* build_cfg(module::Module* m, ast::FnDeclNode* func) {
@@ -71,6 +78,7 @@ export fn Cfg* build_cfg(module::Module* m, ast::FnDeclNode* func) {
     builder.cfg = g;
     builder.allocator = m.allocator;
     builder.m = m;
+    builder.pos_module = body_module(m, func);
 
     g.entry = new_block(g, m.allocator);
     g.exit = new_block(g, m.allocator);
@@ -127,7 +135,7 @@ fn void build_block(CfgBuilder* b, ast::BlockNode* blk) {
         if(block_terminated(b, b.current)) {
             if(stmt_index + 1 < blk.stmts.len) {
                 const u8[] msg = "unreachable code";
-                diag::report_warning(&b.m.diag, b.m.arena, blk.stmts.ptr[stmt_index + 1].h.src_pos, msg);
+                diag::report_foreign_warning(&b.m.diag, b.m.arena, (void*)b.pos_module, blk.stmts.ptr[stmt_index + 1].h.src_pos, msg);
             }
             break;
         }
@@ -553,7 +561,7 @@ export fn bool check_return_paths(module::Module* m, ast::FnDeclNode* func) {
         if(!reachable[block_index]) { continue; }
         if(g.blocks.ptr[block_index].term.kind == TermKind::Unreachable) {
             const u8[] msg = "function may exit without a return statement";
-            diag::report(&m.diag, m.arena, func.h.src_pos, msg);
+            diag::report_foreign(&m.diag, m.arena, (void*)body_module(m, func), func.h.src_pos, msg);
             return false;
         }
     }
@@ -569,7 +577,7 @@ export fn void check_unreachable(module::Module* m, ast::FnDeclNode* func) {
         if(g.blocks.ptr[block_index].stmts.len == 0) { continue; }      // synthetic post-terminator continuation
         u32 pos = g.blocks.ptr[block_index].stmts.ptr[0].h.src_pos;
         const u8[] msg = "unreachable code";
-        diag::report_warning(&m.diag, m.arena, pos, msg);
+        diag::report_foreign_warning(&m.diag, m.arena, (void*)body_module(m, func), pos, msg);
     }
 }
 
