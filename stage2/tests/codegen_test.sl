@@ -270,6 +270,34 @@ fn i32 jit_global_struct_zeroes_every_field_kind(arena::Arena* a, const u8[]msg)
     return jit_return(a, "struct Inner { i32 a; i32 b; } struct W { i32 i; f64 f; bool b; i32* p; fn* i32(i32) fp; Inner nested; i32[3] arr; i32[] sl; } W w = {}; fn i32 main() { if(w.i != 0 || w.f != 0.0 || w.b) { return 1; } if(w.p != null || w.fp != null) { return 2; } if(w.nested.a != 0 || w.nested.b != 0) { return 3; } if(w.arr[0] != 0 || w.arr[2] != 0) { return 4; } if(w.sl.ptr != null || w.sl.len != 0) { return 5; } return 42; }", 42, msg);
 }
 
+// Comptime can read back the member a union literal set; folding over it needs no runtime storage.
+fn i32 jit_comptime_reads_union_member(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "union U { i32 a; f64 wide; } comprun { U u = {7}; if(u.a != 7) { comperror(\"a\"); } U w = {.wide = 2.5}; if(w.wide != 2.5) { comperror(\"wide\"); } } fn i32 main() { return 42; }", 42, msg);
+}
+
+// A union global initializes through whichever member the literal names, positionally or by name.
+fn i32 jit_global_union_first_member(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "union U { i32 a; f32 b; } U g = {42}; fn i32 main() { return g.a; }", 42, msg);
+}
+
+fn i32 jit_global_union_named_member(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "union U { i32 a; f64 wide; } U g = {.wide = 1.5}; fn i32 main() { if(g.wide != 1.5) { return 1; } return 42; }", 42, msg);
+}
+
+fn i32 jit_global_union_empty_literal(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "union U { i32 a; f64 wide; } U g = {}; fn i32 main() { if(g.a != 0 || g.wide != 0.0) { return 1; } return 42; }", 42, msg);
+}
+
+// A narrow member leaves the rest of the union zeroed rather than filled with whatever followed it.
+fn i32 jit_global_union_narrow_member_zero_pads(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "union U { u8 small; u64 wide; } U g = {(u8)0xFF}; fn i32 main() { if(g.wide != 255) { return 1; } return 42; }", 42, msg);
+}
+
+// The union sits inside a struct, so its bytes must fit the field without disturbing the one after it.
+fn i32 jit_global_union_nested_in_struct(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "union U { i32 a; f32 b; } struct S { U u; i32 tag; } S s = {{40}, 2}; fn i32 main() { return s.u.a + s.tag; }", 42, msg);
+}
+
 // A comptime read of an omitted scalar field still sees 0, so folding over a partly-written literal keeps working.
 fn i32 jit_comptime_reads_omitted_field_zero(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "struct P { i32 x; f64 y; } comprun { P p = {5}; if(p.x != 5) { comperror(\"x\"); } if(p.y != 0.0) { comperror(\"y\"); } } fn i32 main() { return 42; }", 42, msg);
@@ -484,6 +512,12 @@ fn i32 main() {
     testing::add(suite, "jit_global_struct_designated_literal", &jit_global_struct_designated_literal);
     testing::add(suite, "jit_global_struct_zeroes_every_field_kind", &jit_global_struct_zeroes_every_field_kind);
     testing::add(suite, "jit_comptime_reads_omitted_field_zero", &jit_comptime_reads_omitted_field_zero);
+    testing::add(suite, "jit_comptime_reads_union_member", &jit_comptime_reads_union_member);
+    testing::add(suite, "jit_global_union_first_member", &jit_global_union_first_member);
+    testing::add(suite, "jit_global_union_named_member", &jit_global_union_named_member);
+    testing::add(suite, "jit_global_union_empty_literal", &jit_global_union_empty_literal);
+    testing::add(suite, "jit_global_union_narrow_member_zero_pads", &jit_global_union_narrow_member_zero_pads);
+    testing::add(suite, "jit_global_union_nested_in_struct", &jit_global_union_nested_in_struct);
     testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
     testing::add(suite, "jit_pointer_compound",  &jit_pointer_compound);

@@ -54,6 +54,7 @@ export enum ConstInitKind : u8 {
     Null,
     Bytes,
     Struct,
+    Union,               // the active member serialized into the union's storage bytes
     Array,
     FnRef,
     GlobalRef,           // &<global>: the address of another global, resolved by the linker
@@ -65,7 +66,7 @@ export struct ConstInit {
     types::Ty*    ty;
     i64             i;              // Int / Bool
     f64             f;              // Float
-    const u8[]      bytes;          // Bytes
+    const u8[]      bytes;          // Bytes / Union (the whole union's storage, member bytes then zero padding)
     ConstInit[]     elems;          // Struct (field order) / Array
     u32             decl_index;     // FnRef / GlobalRef — into SapirModule.decls
 }

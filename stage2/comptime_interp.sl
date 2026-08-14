@@ -646,9 +646,42 @@ fn value::Value zero_value(types::Ty* t) {
     return zero;
 }
 
+fn u64 union_field_index(ast::UnionDeclNode* ud, symbol::Symbol* name) {
+    for(u64 field_index = 0; field_index < ud.fields.len; field_index += 1) {
+        if(ud.fields[field_index].name == name) { return field_index; }
+    }
+    return ud.fields.len;
+}
+
+// A union literal writes one member over shared storage; `{}` writes none, which is the all-zero union.
+fn value::Value eval_union_lit(Interp* ip, ast::StructLitNode* n, types::Ty* ty) {
+    if(n.inits.len == 0) { return zero_value(ty); }
+    ast::UnionDeclNode* ud = (ast::UnionDeclNode*)ty.data.union_decl;
+    if(ud == null) {
+        interp_report(ip, n.h.src_pos, "union literal is not a comptime union value");
+        return value::val_error();
+    }
+    if(n.inits.len > 1) {
+        interp_report(ip, n.h.src_pos, "a union initializer sets exactly one member");
+        return value::val_error();
+    }
+    u64 index = 0;
+    if(n.inits[0].name != null) { index = union_field_index(ud, n.inits[0].name); }
+    if(index >= ud.fields.len) {
+        interp_report(ip, n.h.src_pos, "unknown member in union initializer");
+        return value::val_error();
+    }
+    value::Value member = eval(ip, n.inits[0].value);
+    if(member.kind == value::ValueKind::Error) { return member; }
+    value::Value* slot = (value::Value*)arena::alloc(ip.m.arena, sizeof(value::Value));
+    *slot = member;
+    return value::val_union(ty, index, slot);
+}
+
 // Fields the literal omits default to 0.
 fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
     types::Ty* ty = (types::Ty*)n.h.ty;
+    if(ty != null && ty.kind == types::TypeKind::Union) { return eval_union_lit(ip, n, ty); }
     if(ty == null || ty.kind != types::TypeKind::Struct) {
         interp_report(ip, n.h.src_pos, "struct literal is not a comptime struct value");
         return value::val_error();
@@ -671,6 +704,30 @@ fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
     return value::val_struct(ty, fields);
 }
 
+// Only the member the literal wrote has a value; the others share its storage and would be a reinterpretation.
+fn value::Value union_member_value(Interp* ip, ast::MemberAccessNode* n, value::Value* base) {
+    ast::UnionDeclNode* ud = (ast::UnionDeclNode*)base.ty.data.union_decl;
+    u64 index = union_field_index(ud, n.field);
+    if(index >= ud.fields.len) {
+        interp_report(ip, n.h.src_pos, "unknown field in comptime union value");
+        return value::val_error();
+    }
+    if(index != base.data.union_slot.index) {
+        u8[] read_str = interner::symbol_str(ud.fields[index].name);
+        u8[] set_str = interner::symbol_str(ud.fields[base.data.union_slot.index].name);
+        u8[256] scratch;
+        i32 written = sys::snprintf((i8*)&scratch[0], 256, "comptime read of union member %.*s, but %.*s is the member that was set", (i32)read_str.len, (i8*)read_str.ptr, (i32)set_str.len, (i8*)set_str.ptr);
+        if(written > 0) {
+            u64 len = (u64)written;
+            if(len > 255) { len = 255; }
+            u8[] msg = {&scratch[0], len};
+            interp_report(ip, n.h.src_pos, msg);
+        }
+        return value::val_error();
+    }
+    return *base.data.union_slot.value;
+}
+
 fn value::Value eval_member_access(Interp* ip, ast::MemberAccessNode* n) {
     value::Value base = eval(ip, n.base);
     if(base.kind == value::ValueKind::Error) { return base; }
@@ -680,6 +737,7 @@ fn value::Value eval_member_access(Interp* ip, ast::MemberAccessNode* n) {
     if(base.kind == value::ValueKind::Array && n.field == interner::intern("len")) {
         return value::val_int((i64)base.data.elems.len, types::prim_u64());
     }
+    if(base.kind == value::ValueKind::Union) { return union_member_value(ip, n, &base); }
     if(base.kind != value::ValueKind::Struct || base.ty == null || base.ty.kind != types::TypeKind::Struct) {
         interp_report(ip, n.h.src_pos, "member access on a non-struct comptime value");
         return value::val_error();

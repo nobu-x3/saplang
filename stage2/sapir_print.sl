@@ -276,6 +276,11 @@ fn void print_const_init(sapir::SapirModule* m, sapir::ConstInit* init, io::OutB
         io::outbuf_write_u64(out, init.bytes.len);
         io::outbuf_write(out, "]");
     }
+    case sapir::ConstInitKind::Union: {
+        io::outbuf_write(out, "union[");
+        io::outbuf_write_u64(out, init.bytes.len);
+        io::outbuf_write(out, "]");
+    }
     case sapir::ConstInitKind::Struct: {
         io::outbuf_write(out, "{ ");
         for(u64 elem_index = 0; elem_index < init.elems.len; elem_index += 1) {

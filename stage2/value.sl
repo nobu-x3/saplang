@@ -10,12 +10,19 @@ export enum ValueKind : u16 {
     Bytes,
     TYPE,
     Struct,
+    Union,
     Array,
     FnRef,
     GlobalRef,
     Null,
     Void,
     Error,
+}
+
+// One member is live at a time, so a union value carries which one along with its value.
+export struct UnionSlot {
+    u64    index;
+    Value* value;
 }
 
 export union ValueData {
@@ -25,6 +32,7 @@ export union ValueData {
     const u8[]        bytes;
     types::Ty*      type_ref;
     Value[]           elems;
+    UnionSlot         union_slot;
     ast::FnDeclNode*  fn_ref;
     ast::VarDeclNode* global_ref;
 }
@@ -86,6 +94,16 @@ export fn Value val_struct(types::Ty* ty, Value[] fields) {
     r.kind = ValueKind::Struct;
     r.ty = ty;
     r.data.elems = fields;
+    return r;
+}
+
+export fn Value val_union(types::Ty* ty, u64 index, Value* value) {
+    Value r;
+    sys::memset(&r, 0, sizeof(Value));
+    r.kind = ValueKind::Union;
+    r.ty = ty;
+    r.data.union_slot.index = index;
+    r.data.union_slot.value = value;
     return r;
 }
 

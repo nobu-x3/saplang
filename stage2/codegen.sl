@@ -661,6 +661,8 @@ fn void declare_decl(CG* cg, u32 index) {
     } else {
         void* ty = map_type(cg, d.ty);
         void* val = llvm::LLVMAddGlobal(cg.llvm_module, ty, cstr(cg.allocator, d.link_name));
+        // A union maps to a byte blob, whose LLVM alignment is 1 — the language's alignment has to be stated.
+        llvm::LLVMSetAlignment(val, types::align_of(null, d.ty));
         llvm::LLVMSetLinkage(val, decl_linkage(d));
         if(d.is_thread_local) {
             llvm::LLVMSetThreadLocal(val, 1);
@@ -708,6 +710,12 @@ fn void* const_value(CG* cg, sapir::ConstInit* ci) {
         void** vals = (void**)mem::alloc_bytes(cg.allocator, (ci.elems.len + 1) * sizeof(void*));
         for(u64 i = 0; i < ci.elems.len; i += 1) { vals[i] = const_value(cg, &ci.elems[i]); }
         return llvm::LLVMConstNamedStruct(map_type(cg, ci.ty), vals, (u32)ci.elems.len);
+    }
+    case sapir::ConstInitKind::Union: {
+        void* blob = llvm::LLVMConstStringInContext2(cg.ctx, (i8*)ci.bytes.ptr, ci.bytes.len, 1);
+        void*[1] fields;
+        fields[0] = blob;
+        return llvm::LLVMConstNamedStruct(map_type(cg, ci.ty), &fields[0], 1);
     }
     case sapir::ConstInitKind::Array: {
         void** vals = (void**)mem::alloc_bytes(cg.allocator, (ci.elems.len + 1) * sizeof(void*));

@@ -1554,14 +1554,68 @@ fn void lower_global(Lower* lo, ast::VarDeclNode* var) {
             diag::report(&lo.m.diag, lo.m.arena, var.h.src_pos, "global initializer is not a constant expression");
             g.init.kind = sapir::ConstInitKind::Zero;
         } else {
-            g.init = const_init_from_value(lo, &v, decl.ty);
+            g.init = const_init_from_value(lo, &v, decl.ty, var.h.src_pos);
         }
     }
     u32 global_index = sapir::add_global(lo.arena, lo.out, g);
     lo.out.decls[decl_index].global_index = global_index;
 }
 
-fn sapir::ConstInit const_init_from_value(Lower* lo, value::Value* v, types::Ty* ty) {
+// A union constant has to come out as the union's storage bytes: its LLVM type is a byte blob, and a
+// member-shaped constant would not fit where the union nests inside another aggregate. Null on failure.
+fn const u8[] union_storage_bytes(Lower* lo, value::Value* v, types::Ty* ty, u32 src_pos) {
+    const u8[] failed = {null, 0};
+    ast::UnionDeclNode* ud = (ast::UnionDeclNode*)ty.data.union_decl;
+    u64 index = v.data.union_slot.index;
+    if(ud == null || index >= ud.fields.len) { return failed; }
+    types::Ty* member_ty = (types::Ty*)ud.fields[index].resolved_type;
+    sapir::ConstInit member = const_init_from_value(lo, v.data.union_slot.value, member_ty, src_pos);
+    u32 size = types::size_of(null, ty);
+    u8* buf = (u8*)arena::alloc(lo.arena, (u64)size);
+    sys::memset(buf, 0, (u64)size);
+    u8[] out = {buf, (u64)size};
+    if(!write_const_bytes(&member, member_ty, out)) {
+        u8[] member_str = types_print::print_to_arena(member_ty, lo.arena);
+        u8[256] scratch;
+        i32 written = sys::snprintf((i8*)&scratch[0], 256, "a union initializer of type %.*s is not a constant: only scalars fit the union's storage bytes", (i32)member_str.len, (i8*)member_str.ptr);
+        if(written > 0) {
+            u64 len = (u64)written;
+            if(len > 255) { len = 255; }
+            u8[] msg = {&scratch[0], len};
+            diag::report(&lo.m.diag, lo.m.arena, src_pos, msg);
+        }
+        return failed;
+    }
+    return out;
+}
+
+// Little-endian, matching the only targets the backend emits for.
+fn bool write_const_bytes(sapir::ConstInit* ci, types::Ty* ty, u8[] out) {
+    u32 width = types::size_of(null, ty);
+    if((u64)width > out.len) { return false; }
+    switch(ci.kind) {
+    case sapir::ConstInitKind::Zero: { return true; }
+    case sapir::ConstInitKind::Null: { return true; }
+    case sapir::ConstInitKind::Bool:
+    case sapir::ConstInitKind::Int: {
+        u64 bits = (u64)ci.i;
+        for(u32 byte_index = 0; byte_index < width; byte_index += 1) { out[byte_index] = (u8)(bits >> (byte_index * 8)); }
+        return true;
+    }
+    case sapir::ConstInitKind::Float: {
+        u64 bits = *(u64*)&ci.f;
+        if(width == 4) {
+            f32 narrowed = (f32)ci.f;
+            bits = (u64)*(u32*)&narrowed;
+        }
+        for(u32 byte_index = 0; byte_index < width; byte_index += 1) { out[byte_index] = (u8)(bits >> (byte_index * 8)); }
+        return true;
+    }
+    else { return false; }
+    }
+}
+
+fn sapir::ConstInit const_init_from_value(Lower* lo, value::Value* v, types::Ty* ty, u32 src_pos) {
     sapir::ConstInit ci;
     sys::memset(&ci, 0, sizeof(sapir::ConstInit));
     ci.ty = ty;
@@ -1574,16 +1628,21 @@ fn sapir::ConstInit const_init_from_value(Lower* lo, value::Value* v, types::Ty*
     case value::ValueKind::Bytes: { ci.kind = sapir::ConstInitKind::Bytes; ci.bytes = v.data.bytes; }
     case value::ValueKind::FnRef: { ci.kind = sapir::ConstInitKind::FnRef; ci.decl_index = get_or_create_fn_decl(lo, ((ast::FnDeclNode*)v.data.fn_ref).decl); }
     case value::ValueKind::GlobalRef: { ci.kind = sapir::ConstInitKind::GlobalRef; ci.decl_index = get_or_create_global_decl(lo, ((ast::VarDeclNode*)v.data.global_ref).decl); }
+    case value::ValueKind::Union: {
+        ci.kind = sapir::ConstInitKind::Union;
+        ci.bytes = union_storage_bytes(lo, v, ty, src_pos);
+        if(ci.bytes.ptr == null) { ci.kind = sapir::ConstInitKind::Zero; }
+    }
     case value::ValueKind::Struct: {
         ci.kind = sapir::ConstInitKind::Struct;
         ci.elems = {(sapir::ConstInit*)arena::alloc(lo.arena, (v.data.elems.len + 1) * sizeof(sapir::ConstInit)), v.data.elems.len};
-        for(u64 i = 0; i < v.data.elems.len; i += 1) { ci.elems[i] = const_init_from_value(lo, &v.data.elems[i], v.data.elems[i].ty); }
+        for(u64 i = 0; i < v.data.elems.len; i += 1) { ci.elems[i] = const_init_from_value(lo, &v.data.elems[i], v.data.elems[i].ty, src_pos); }
     }
     case value::ValueKind::Array: {
         ci.kind = sapir::ConstInitKind::Array;
         if(types::is_slice(ty)) { ci.kind = sapir::ConstInitKind::Slice; }
         ci.elems = {(sapir::ConstInit*)arena::alloc(lo.arena, (v.data.elems.len + 1) * sizeof(sapir::ConstInit)), v.data.elems.len};
-        for(u64 i = 0; i < v.data.elems.len; i += 1) { ci.elems[i] = const_init_from_value(lo, &v.data.elems[i], v.data.elems[i].ty); }
+        for(u64 i = 0; i < v.data.elems.len; i += 1) { ci.elems[i] = const_init_from_value(lo, &v.data.elems[i], v.data.elems[i].ty, src_pos); }
     }
     else { ci.kind = sapir::ConstInitKind::Zero; }
     }
