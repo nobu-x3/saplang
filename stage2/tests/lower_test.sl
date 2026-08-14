@@ -1216,6 +1216,15 @@ fn i32 global_struct_init(arena::Arena* a, const u8[]msg) {
     return golden(a, "struct P { i32 x; i32 y; } const P origin = {.x = 0, .y = 0};", &w, msg);
 }
 
+// An omitted field takes the field's own shape: the nested struct is a zero aggregate, the scalar an int zero.
+fn i32 global_struct_nested_zero_init(arena::Arena* a, const u8[]msg) {
+    io::OutBuf w;
+    io::outbuf_init(&w, a, 384);
+    wl(&w, "module main"); wl(&w, "");
+    wl(&w, "global __main_n: main::N = { zero, 0 }");
+    return golden(a, "struct P { i32 x; i32 y; } struct N { P inner; i32 tag; } N n = {};", &w, msg);
+}
+
 // A struct global with out-of-order named initializers folds to declaration order.
 fn i32 global_struct_reordered(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
@@ -1569,6 +1578,7 @@ fn i32 main() {
     testing::add(suite, "global_scalar_init", &global_scalar_init);
     testing::add(suite, "global_fn_ptr_init", &global_fn_ptr_init);
     testing::add(suite, "global_struct_init", &global_struct_init);
+    testing::add(suite, "global_struct_nested_zero_init", &global_struct_nested_zero_init);
     testing::add(suite, "global_struct_reordered", &global_struct_reordered);
     testing::add(suite, "global_array_init",  &global_array_init);
     testing::add(suite, "global_slice_from_array", &global_slice_from_array);

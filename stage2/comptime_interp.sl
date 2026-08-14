@@ -635,6 +635,17 @@ fn value::Value eval_array_lit(Interp* ip, ast::ArrayLitNode* n) {
     return value::val_array((types::Ty*)n.h.ty, elems);
 }
 
+// Typed, because a typeless zero has nothing to lower to; aggregates take a void that lowers to ConstNull.
+fn value::Value zero_value(types::Ty* t) {
+    if(types::is_float(t)) { return value::val_float(0.0, t); }
+    if(types::is_bool(t)) { return value::val_bool(false); }
+    if(types::is_ptr(t) || types::is_fnptr(t)) { return value::val_null(t); }
+    if(types::is_int(t)) { return value::val_int(0, t); }
+    value::Value zero = value::val_void();
+    zero.ty = t;
+    return zero;
+}
+
 // Fields the literal omits default to 0.
 fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
     types::Ty* ty = (types::Ty*)n.h.ty;
@@ -647,7 +658,7 @@ fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
     value::Value[] fields;
     fields.ptr = (value::Value*)arena::alloc(ip.m.arena, field_count * sizeof(value::Value));
     fields.len = field_count;
-    for(u64 field_index = 0; field_index < field_count; field_index += 1) { fields[field_index] = value::val_int(0, null); }
+    for(u64 field_index = 0; field_index < field_count; field_index += 1) { fields[field_index] = zero_value((types::Ty*)sd.fields[field_index].resolved_type); }
     u64 positional = 0;
     for(u64 init_index = 0; init_index < n.inits.len; init_index += 1) {
         u64 target = positional;

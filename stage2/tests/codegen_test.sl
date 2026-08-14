@@ -252,6 +252,29 @@ fn i32 jit_value_param_shadowed_across_nested_block(arena::Arena* a, const u8[]m
     return jit_return(a, "fn u64 hold(comptime u64 N) { { u64 N = 42; { u64 other = 1; } return N; } } fn i32 main() { return (i32)hold(5); }", 42, msg);
 }
 
+// A global struct literal leaving fields unlisted: the omitted ones need a typed zero to reach LLVM at all.
+fn i32 jit_global_struct_empty_literal(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "struct P { i32 x; i32 y; } P origin = {}; fn i32 main() { return origin.x + origin.y + 42; }", 42, msg);
+}
+
+fn i32 jit_global_struct_partial_literal(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "struct P { i32 x; i32 y; } P origin = {40}; fn i32 main() { return origin.x + origin.y + 2; }", 42, msg);
+}
+
+fn i32 jit_global_struct_designated_literal(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "struct P { i32 x; i32 y; } P origin = {.y = 42}; fn i32 main() { return origin.x + origin.y; }", 42, msg);
+}
+
+// Each field kind needs its own zero: a scalar-shaped one would misfit the aggregate and pointer fields.
+fn i32 jit_global_struct_zeroes_every_field_kind(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "struct Inner { i32 a; i32 b; } struct W { i32 i; f64 f; bool b; i32* p; fn* i32(i32) fp; Inner nested; i32[3] arr; i32[] sl; } W w = {}; fn i32 main() { if(w.i != 0 || w.f != 0.0 || w.b) { return 1; } if(w.p != null || w.fp != null) { return 2; } if(w.nested.a != 0 || w.nested.b != 0) { return 3; } if(w.arr[0] != 0 || w.arr[2] != 0) { return 4; } if(w.sl.ptr != null || w.sl.len != 0) { return 5; } return 42; }", 42, msg);
+}
+
+// A comptime read of an omitted scalar field still sees 0, so folding over a partly-written literal keeps working.
+fn i32 jit_comptime_reads_omitted_field_zero(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "struct P { i32 x; f64 y; } comprun { P p = {5}; if(p.x != 5) { comperror(\"x\"); } if(p.y != 0.0) { comperror(\"y\"); } } fn i32 main() { return 42; }", 42, msg);
+}
+
 // A function pointer is nullable and equality-comparable: assign null, compare, reassign, call.
 fn i32 jit_fnptr_null(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn i32 dbl(i32 x) { return x * 2; } fn i32 main() { fn* i32(i32) f = null; if(f != null) { return 1; } f = dbl; if(f == null) { return 2; } return f(21); }", 42, msg);
@@ -456,6 +479,11 @@ fn i32 main() {
     testing::add(suite, "jit_generic_forwards_through_three_levels", &jit_generic_forwards_through_three_levels);
     testing::add(suite, "jit_type_param_shadowed_in_nested_block", &jit_type_param_shadowed_in_nested_block);
     testing::add(suite, "jit_value_param_shadowed_across_nested_block", &jit_value_param_shadowed_across_nested_block);
+    testing::add(suite, "jit_global_struct_empty_literal", &jit_global_struct_empty_literal);
+    testing::add(suite, "jit_global_struct_partial_literal", &jit_global_struct_partial_literal);
+    testing::add(suite, "jit_global_struct_designated_literal", &jit_global_struct_designated_literal);
+    testing::add(suite, "jit_global_struct_zeroes_every_field_kind", &jit_global_struct_zeroes_every_field_kind);
+    testing::add(suite, "jit_comptime_reads_omitted_field_zero", &jit_comptime_reads_omitted_field_zero);
     testing::add(suite, "jit_fnptr_null",       &jit_fnptr_null);
     testing::add(suite, "jit_pointer_arithmetic", &jit_pointer_arithmetic);
     testing::add(suite, "jit_pointer_compound",  &jit_pointer_compound);
