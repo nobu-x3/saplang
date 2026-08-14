@@ -1398,11 +1398,26 @@ export fn types::Ty* synth_ident(Sema* s, ast::IdentNode* n) {
     return d.ty;
 }
 
+// An alias names the enum it resolves to, so `alias A = E;` makes `A::Member` read like `E::Member`.
+fn ast::EnumDeclNode* enum_decl_of(Sema* s, Decl* d) {
+    if(d == null || d.kind != DeclKind::Node || d.data.node == null) { return null; }
+    if(d.data.node.h.kind == ast::AstKind::EnumDecl) { return (ast::EnumDeclNode*)d.data.node; }
+    if(d.data.node.h.kind != ast::AstKind::AliasDecl) { return null; }
+    module::Module* home = s.m;
+    if(d.home != null) { home = d.home; }
+    types::Ty* target = decl_to_type(s, home, d);
+    if(target == null || target.kind != types::TypeKind::Enum) { return null; }
+    return (ast::EnumDeclNode*)target.data.enum_decl;
+}
+
+// Aliases are admitted unresolved: resolving one here would run during signature resolution, where a
+// generic instantiation it names may not be constructible yet. synth_ns_access resolves it at the use site.
 // Recurses when the base is itself a namespace access (`mod::Enum::Member`).
 fn bool is_namespace_decl(Decl* d) {
     if(d == null) { return false; }
     if(d.kind == DeclKind::Import) { return true; }
-    return d.kind == DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::EnumDecl;
+    if(d.kind != DeclKind::Node || d.data.node == null) { return false; }
+    return d.data.node.h.kind == ast::AstKind::EnumDecl || d.data.node.h.kind == ast::AstKind::AliasDecl;
 }
 
 fn Decl* self_import(Sema* s) {
@@ -1464,8 +1479,8 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
         set_expr((ast::AstNode*)n, found.ty, flags);
         return found.ty;
     }
-    if(ns.kind == DeclKind::Node && ns.data.node != null && ns.data.node.h.kind == ast::AstKind::EnumDecl) {
-        ast::EnumDeclNode* edecl = (ast::EnumDeclNode*)ns.data.node;
+    ast::EnumDeclNode* edecl = enum_decl_of(s, ns);
+    if(edecl != null) {
         ast::EnumMember* mem = find_enum_member(edecl, n.name);
         if(mem == null) {
             diag_unknown_member(s, n.h.src_pos, n.name);
@@ -1473,8 +1488,9 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
             return null;
         }
         n.resolved = mem.decl;
-        set_expr((ast::AstNode*)n, ns.ty, (u16)ast::AstFlags::ConstExpr);
-        return ns.ty;
+        types::Ty* enum_ty = types::intern_enum((void*)edecl);
+        set_expr((ast::AstNode*)n, enum_ty, (u16)ast::AstFlags::ConstExpr);
+        return enum_ty;
     }
     diag_not_namespace(s, n.h.src_pos);
     mark_error((ast::AstNode*)n);

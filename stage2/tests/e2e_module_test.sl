@@ -150,6 +150,44 @@ fn i32 err_same_named_constructors_do_not_unify(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+// ---- foreign enums and constants at comptime ----
+
+// The reported shape: alias a foreign enum, then qualify a member through the alias as an array size.
+fn i32 alias_to_foreign_enum_namespace(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nalias SomeEnum = b::SomeEnum;\nexport fn i32 f() { u32[SomeEnum::LENGTH] arr; arr[2] = 1; return (i32)arr[2]; }", "export enum SomeEnum { a, b, c, LENGTH }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 foreign_enum_member_as_array_size(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32[b::SomeEnum::LENGTH] arr; arr[2] = 1; return (i32)arr[2]; }", "export enum SomeEnum { a, b, c, LENGTH }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// An imported constant folds at comptime, including one derived from another of its module's constants.
+fn i32 foreign_const_as_array_size(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32[b::SIZE] one; u32[b::DOUBLE] two; u32[b::SIZE * 2] three; one[3] = 1; two[7] = 1; three[7] = 1; return (i32)(one[3] + two[7] + three[7]); }", "export const u64 SIZE = 4;\nexport const u64 DOUBLE = SIZE * 2;");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A private enum cannot be aliased across the boundary, so the alias itself is what fails.
+fn i32 err_alias_to_private_foreign_enum(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nalias H = b::Hidden;\nexport fn i32 f() { return (i32)H::x; }", "enum Hidden { x, y }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_true(test_util::errors_in(modules) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].msg, "unknown type b::Hidden", m)) { return -2; }
+    return 0;
+}
+
 // ---- comptime type params across modules ----
 
 // A generic passing its own comptime T on as a type argument: the call arg parses as an expression,
@@ -298,6 +336,10 @@ fn i32 main() {
     testing::add(suite, "instantiation_identity_across_phases",  &instantiation_identity_across_phases);
     testing::add(suite, "infers_through_qualified_constructor",  &infers_through_qualified_constructor);
     testing::add(suite, "err_same_named_constructors_do_not_unify", &err_same_named_constructors_do_not_unify);
+    testing::add(suite, "alias_to_foreign_enum_namespace",       &alias_to_foreign_enum_namespace);
+    testing::add(suite, "foreign_enum_member_as_array_size",     &foreign_enum_member_as_array_size);
+    testing::add(suite, "foreign_const_as_array_size",           &foreign_const_as_array_size);
+    testing::add(suite, "err_alias_to_private_foreign_enum",     &err_alias_to_private_foreign_enum);
     testing::add(suite, "generic_forwards_type_param_across_modules", &generic_forwards_type_param_across_modules);
     testing::add(suite, "generic_type_arg_resolves_in_home_module", &generic_type_arg_resolves_in_home_module);
     testing::add(suite, "err_clone_error_carries_the_generic_module", &err_clone_error_carries_the_generic_module);

@@ -339,6 +339,44 @@ fn i32 ok_comprun_generic_inferred(arena::Arena* a, const u8[]m) {
 }
 
 // A `Ctor(T)` parameter is the only mention of T, so inference has to run backwards from the instantiation.
+// An alias to an enum names that enum, so it qualifies members and its member folds as an array size.
+fn i32 ok_alias_to_enum_namespace(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "enum E { a, b, c, LENGTH }\nalias A = E;\nexport fn i32 f() { u32[A::LENGTH] arr; arr[2] = 1; A v = A::b; if(v != E::b) { return 1; } return (i32)arr[2]; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_alias_chain_to_enum_namespace(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "enum E { a, b, c, LENGTH }\nalias A = E;\nalias B = A;\nexport fn i32 f() { u32[B::LENGTH] arr; arr[2] = 1; return (i32)arr[2]; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Only an alias that lands on an enum is a namespace; one naming a primitive or a struct is not.
+fn i32 err_alias_to_primitive_is_not_a_namespace(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "alias I = i32;\nexport fn i32 f() { return I::nope; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "left of '::' is not a module or enum", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)42, m)) { return -3; }
+    return 0;
+}
+
+fn i32 err_alias_to_struct_is_not_a_namespace(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "struct P { i32 v; }\nalias S = P;\nexport fn i32 f() { return S::nope; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "left of '::' is not a module or enum", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)60, m)) { return -3; }
+    return 0;
+}
+
+fn i32 err_unknown_member_through_enum_alias(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "enum E { a, b, c }\nalias A = E;\nexport fn i32 f() { return (i32)A::missing; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "no member named missing", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)64, m)) { return -3; }
+    return 0;
+}
+
 // A generic hands its own comptime T to another generic; the arg is an expression-position ident.
 fn i32 ok_generic_forwards_type_param(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn u64 width(comptime Type T) { return sizeof(T); }\nfn u64 outer(comptime Type T, T value) { return width(T); }\nexport fn i32 f() { u32 v = 3; return (i32)outer(v); }");
@@ -1839,6 +1877,11 @@ fn i32 main() {
     testing::add(suite, "ok_generic_two_type_params", &ok_generic_two_type_params);
     testing::add(suite, "err_generic_conflicting_infer", &err_generic_conflicting_infer);
     testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);
+    testing::add(suite, "ok_alias_to_enum_namespace", &ok_alias_to_enum_namespace);
+    testing::add(suite, "ok_alias_chain_to_enum_namespace", &ok_alias_chain_to_enum_namespace);
+    testing::add(suite, "err_alias_to_primitive_is_not_a_namespace", &err_alias_to_primitive_is_not_a_namespace);
+    testing::add(suite, "err_alias_to_struct_is_not_a_namespace", &err_alias_to_struct_is_not_a_namespace);
+    testing::add(suite, "err_unknown_member_through_enum_alias", &err_unknown_member_through_enum_alias);
     testing::add(suite, "ok_generic_forwards_type_param", &ok_generic_forwards_type_param);
     testing::add(suite, "err_generic_forwards_unknown_type_arg", &err_generic_forwards_unknown_type_arg);
     testing::add(suite, "err_generic_forwards_type_param_to_runtime_param", &err_generic_forwards_type_param_to_runtime_param);
