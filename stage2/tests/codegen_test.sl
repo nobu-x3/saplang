@@ -270,6 +270,16 @@ fn i32 jit_global_struct_zeroes_every_field_kind(arena::Arena* a, const u8[]msg)
     return jit_return(a, "struct Inner { i32 a; i32 b; } struct W { i32 i; f64 f; bool b; i32* p; fn* i32(i32) fp; Inner nested; i32[3] arr; i32[] sl; } W w = {}; fn i32 main() { if(w.i != 0 || w.f != 0.0 || w.b) { return 1; } if(w.p != null || w.fp != null) { return 2; } if(w.nested.a != 0 || w.nested.b != 0) { return 3; } if(w.arr[0] != 0 || w.arr[2] != 0) { return 4; } if(w.sl.ptr != null || w.sl.len != 0) { return 5; } return 42; }", 42, msg);
 }
 
+// An alias to a value runs as the value: the constant folds, the call lands on the aliased function,
+// and a write through an aliased global is a write to that one global.
+fn i32 jit_alias_to_constant_and_function(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "const i32 STEP = 20; fn i32 twice(i32 x) { return x * 2; } alias S = STEP; alias T = twice; fn i32 main() { return T(S) + 2; }", 42, msg);
+}
+
+fn i32 jit_alias_to_mutable_global(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "i32 counter = 40; alias C = counter; fn i32 main() { C = C + 2; return counter; }", 42, msg);
+}
+
 // Comptime can read back the member a union literal set; folding over it needs no runtime storage.
 fn i32 jit_comptime_reads_union_member(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "union U { i32 a; f64 wide; } comprun { U u = {7}; if(u.a != 7) { comperror(\"a\"); } U w = {.wide = 2.5}; if(w.wide != 2.5) { comperror(\"wide\"); } } fn i32 main() { return 42; }", 42, msg);
@@ -512,6 +522,8 @@ fn i32 main() {
     testing::add(suite, "jit_global_struct_designated_literal", &jit_global_struct_designated_literal);
     testing::add(suite, "jit_global_struct_zeroes_every_field_kind", &jit_global_struct_zeroes_every_field_kind);
     testing::add(suite, "jit_comptime_reads_omitted_field_zero", &jit_comptime_reads_omitted_field_zero);
+    testing::add(suite, "jit_alias_to_constant_and_function", &jit_alias_to_constant_and_function);
+    testing::add(suite, "jit_alias_to_mutable_global", &jit_alias_to_mutable_global);
     testing::add(suite, "jit_comptime_reads_union_member", &jit_comptime_reads_union_member);
     testing::add(suite, "jit_global_union_first_member", &jit_global_union_first_member);
     testing::add(suite, "jit_global_union_named_member", &jit_global_union_named_member);

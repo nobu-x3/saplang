@@ -2579,7 +2579,7 @@ fn i32 rnt_non_type_used_as_type(arena::Arena* a, const u8[]m) {
     set_root(mm, a, &stmts[0], 2);
     sema_run(mm);
     if(!testing::expect_ge(mm.diag.entries.len, 1, m)) { return -1; }
-    if(!testing::expect_substr(mm.diag.entries[0].msg, "unknown type", m)) { return -2; }
+    if(!testing::expect_eq(mm.diag.entries[0].msg, "v names a variable, not a type", m)) { return -2; }
     if(!testing::expect_eq((void*)registered(mm, x).ty, null, m)) { return -3; }
     return 0;
 }

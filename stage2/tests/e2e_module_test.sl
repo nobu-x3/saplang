@@ -97,6 +97,8 @@ fn i32 circular_const_read(arena::Arena* a, const u8[]m) {
 }
 
 // Aliases that define each other have no fixpoint; resolution must report rather than recurse forever.
+// The position is the reference that cycles (`b::Y`), which is in the module being compiled — pointing at
+// the far decl instead would render b's offset against a's source.
 fn i32 err_circular_alias_definition(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module* first = test_util::mk_module(a, "a", "import b;\nexport alias X = b::Y;\nexport fn i32 f() { X v = 1; return v; }");
@@ -109,7 +111,7 @@ fn i32 err_circular_alias_definition(arena::Arena* a, const u8[]m) {
     test_util::frontend_modules(modules);
     if(!testing::expect_true(test_util::errors_in(modules) >= (u64)1, m)) { return -1; }
     if(!testing::expect_eq(modules[0].diag.entries[0].msg, "circular type resolution: Y", m)) { return -2; }
-    if(!testing::expect_eq(modules[0].diag.entries[0].src_pos, (u32)17, m)) { return -3; }
+    if(!testing::expect_eq(modules[0].diag.entries[0].src_pos, (u32)27, m)) { return -3; }
     return 0;
 }
 
@@ -185,6 +187,32 @@ fn i32 err_alias_to_private_foreign_enum(arena::Arena* a, const u8[]m) {
     test_util::frontend_modules(modules);
     if(!testing::expect_true(test_util::errors_in(modules) >= (u64)1, m)) { return -1; }
     if(!testing::expect_eq(modules[0].diag.entries[0].msg, "unknown type b::Hidden", m)) { return -2; }
+    return 0;
+}
+
+// The reported shape for values: alias a foreign constant, then use it where the constant would go.
+fn i32 alias_to_foreign_constant(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nalias BUCKET_COUNT = b::BUCKET_COUNT;\nexport fn u32 f() { u32[BUCKET_COUNT] arr; arr[4] = BUCKET_COUNT; return arr[4]; }", "export const u32 BUCKET_COUNT = 5;");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 alias_to_foreign_function(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nalias TW = b::twice;\nexport fn i32 f() { fn* i32(i32) p = &TW; return TW(1) + p(2); }", "export fn i32 twice(i32 x) { return x * 2; }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// An exported alias re-exports what it names, so the far side reaches it under the alias's name.
+fn i32 exported_alias_re_exports_a_constant(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nexport fn u32 f() { u32[b::LIMIT] arr; arr[3] = b::LIMIT; return arr[3]; }", "const u32 INNER = 4;\nexport alias LIMIT = INNER;");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
     return 0;
 }
 
@@ -336,6 +364,9 @@ fn i32 main() {
     testing::add(suite, "instantiation_identity_across_phases",  &instantiation_identity_across_phases);
     testing::add(suite, "infers_through_qualified_constructor",  &infers_through_qualified_constructor);
     testing::add(suite, "err_same_named_constructors_do_not_unify", &err_same_named_constructors_do_not_unify);
+    testing::add(suite, "alias_to_foreign_constant",             &alias_to_foreign_constant);
+    testing::add(suite, "alias_to_foreign_function",             &alias_to_foreign_function);
+    testing::add(suite, "exported_alias_re_exports_a_constant",  &exported_alias_re_exports_a_constant);
     testing::add(suite, "alias_to_foreign_enum_namespace",       &alias_to_foreign_enum_namespace);
     testing::add(suite, "foreign_enum_member_as_array_size",     &foreign_enum_member_as_array_size);
     testing::add(suite, "foreign_const_as_array_size",           &foreign_const_as_array_size);

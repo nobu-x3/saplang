@@ -406,7 +406,9 @@ fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
     }
     case ast::AstKind::AliasDecl: {
         ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)decl_node;
-        set_decl_ty(s, alias_decl.name, resolve_type(s, alias_decl.target));
+        // One naming a value has no type of its own; resolving its target as a type would only misreport.
+        Decl* self = scope_lookup_local((Scope*)s.m.global_scope, alias_decl.name);
+        if(alias_value_target(s, self) == null) { set_decl_ty(s, alias_decl.name, resolve_type(s, alias_decl.target)); }
     }
     case ast::AstKind::ExternBlock: {
         ast::ExternBlockNode* extern_block = (ast::ExternBlockNode*)decl_node;
@@ -1098,7 +1100,7 @@ fn types::Ty* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
             diag_unknown_type(s, n.h.src_pos, n.name);
             return null;
         }
-        return decl_to_type(s, home, decl);
+        return decl_to_type(s, home, decl, n.h.src_pos);
     }
     Decl* namespace_decl = scope_lookup(s.scope, n.namespace);
     if(namespace_decl == null || namespace_decl.kind != DeclKind::Import) {
@@ -1115,7 +1117,7 @@ fn types::Ty* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
         diag_unknown_qualified_type(s, n.h.src_pos, n.namespace, n.name);
         return null;
     }
-    return decl_to_type(s, target, decl);
+    return decl_to_type(s, target, decl, n.h.src_pos);
 }
 
 fn ast::StructDeclNode* synth_anon_struct_decl(Sema* s, ast::TypeStructNode* n) {
@@ -1188,7 +1190,39 @@ export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
     return (u64)out;
 }
 
-fn types::Ty* decl_to_type(Sema* s, module::Module* target, Decl* d) {
+// The declaration an alias's target names, looked up where the alias was written.
+fn Decl* alias_named_decl(Sema* s, Decl* d) {
+    ast::AstNode* target = ((ast::AliasDeclNode*)d.data.node).target;
+    if(target == null || target.h.kind != ast::AstKind::NamedType) { return null; }
+    ast::TypeNamedNode* named = (ast::TypeNamedNode*)target;
+    module::Module* home = s.m;
+    if(d.home != null) { home = d.home; }
+    if(named.namespace == null) { return scope_lookup_local((Scope*)home.global_scope, named.name); }
+    Decl* ns = scope_lookup_local((Scope*)home.global_scope, named.namespace);
+    if(ns == null || ns.kind != DeclKind::Import || ns.data.module == null) { return null; }
+    Decl* found = scope_lookup_local((Scope*)ns.data.module.global_scope, named.name);
+    if(found == null || (!found.is_exported && ns.data.module != home)) { return null; }
+    return found;
+}
+
+// An alias naming a constant, variable, or function stands for that declaration rather than for a type.
+// Returns the declaration itself, never a copy: lowering keys globals and functions by decl identity.
+// A probe, so it stays quiet — an alias that resolves to nothing falls through to the type path's diagnostics.
+fn Decl* alias_value_target(Sema* s, Decl* d) {
+    Decl* current = d;
+    for(u32 hops = 0; hops < 64; hops += 1) {
+        if(current == null || current.kind != DeclKind::Node || current.data.node == null) { return null; }
+        if(current.data.node.h.kind != ast::AstKind::AliasDecl) {
+            if(current == d) { return null; }
+            if(decl_is_fn(current) || current.data.node.h.kind == ast::AstKind::VarDecl) { return current; }
+            return null;
+        }
+        current = alias_named_decl(s, current);
+    }
+    return null;
+}
+
+fn types::Ty* decl_to_type(Sema* s, module::Module* target, Decl* d, u32 src_pos) {
     ast::AstNode* node = d.data.node;
     if(node == null) { return null; }
     // Nominal types intern by decl pointer; only aliases need the d.ty cache below.
@@ -1197,9 +1231,14 @@ fn types::Ty* decl_to_type(Sema* s, module::Module* target, Decl* d) {
     if(node.h.kind == ast::AstKind::EnumDecl)   { d.ty = types::intern_enum((void*)node);   return d.ty; }
     if(node.h.kind == ast::AstKind::AliasDecl) {
         if(d.ty != null) { return d.ty; }
+        Decl* value = alias_value_target(s, d);
+        if(value != null) {
+            diag_decl_not_a_type(s, src_pos, d.name, value);
+            return null;
+        }
         ResolutionKey key = {target, d.name};
         if(stack_contains(&s.resolution_stack, key)) {
-            diag_resolution_cycle(s, node.h.src_pos, key);
+            diag_resolution_cycle(s, src_pos, key);
             return null;
         }
         stack_push(&s.resolution_stack, key);
@@ -1211,7 +1250,7 @@ fn types::Ty* decl_to_type(Sema* s, module::Module* target, Decl* d) {
         d.ty = resolved;
         return resolved;
     }
-    diag_unknown_type(s, node.h.src_pos, d.name);
+    diag_decl_not_a_type(s, src_pos, d.name, d);
     return null;
 }
 
@@ -1389,6 +1428,8 @@ export fn types::Ty* synth_ident(Sema* s, ast::IdentNode* n) {
         mark_error((ast::AstNode*)n);
         return null;
     }
+    Decl* aliased = alias_value_target(s, d);
+    if(aliased != null) { d = aliased; }
     mark_external_linkage(s, d);
     n.resolved = (void*)d;
     u16 flags = 0;
@@ -1399,13 +1440,13 @@ export fn types::Ty* synth_ident(Sema* s, ast::IdentNode* n) {
 }
 
 // An alias names the enum it resolves to, so `alias A = E;` makes `A::Member` read like `E::Member`.
-fn ast::EnumDeclNode* enum_decl_of(Sema* s, Decl* d) {
+fn ast::EnumDeclNode* enum_decl_of(Sema* s, Decl* d, u32 src_pos) {
     if(d == null || d.kind != DeclKind::Node || d.data.node == null) { return null; }
     if(d.data.node.h.kind == ast::AstKind::EnumDecl) { return (ast::EnumDeclNode*)d.data.node; }
     if(d.data.node.h.kind != ast::AstKind::AliasDecl) { return null; }
     module::Module* home = s.m;
     if(d.home != null) { home = d.home; }
-    types::Ty* target = decl_to_type(s, home, d);
+    types::Ty* target = decl_to_type(s, home, d, src_pos);
     if(target == null || target.kind != types::TypeKind::Enum) { return null; }
     return (ast::EnumDeclNode*)target.data.enum_decl;
 }
@@ -1471,6 +1512,9 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
             mark_error((ast::AstNode*)n);
             return null;
         }
+        // Export is checked on the alias, then the use binds to what it names.
+        Decl* aliased = alias_value_target(s, found);
+        if(aliased != null) { found = aliased; }
         mark_external_linkage(s, found);
         n.resolved = (void*)found;
         u16 flags = 0;
@@ -1479,7 +1523,7 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
         set_expr((ast::AstNode*)n, found.ty, flags);
         return found.ty;
     }
-    ast::EnumDeclNode* edecl = enum_decl_of(s, ns);
+    ast::EnumDeclNode* edecl = enum_decl_of(s, ns, n.h.src_pos);
     if(edecl != null) {
         ast::EnumMember* mem = find_enum_member(edecl, n.name);
         if(mem == null) {
@@ -1638,6 +1682,8 @@ fn Decl* callee_overload_head(Sema* s, ast::AstNode* callee) {
     if(callee == null) { return null; }
     if(callee.h.kind == ast::AstKind::Ident) {
         Decl* d = scope_lookup(s.scope, ((ast::IdentNode*)callee).name);
+        Decl* aliased = alias_value_target(s, d);
+        if(aliased != null) { d = aliased; }
         if(d != null && decl_is_fn(d)) { return d; }
         return null;
     }
@@ -1646,7 +1692,11 @@ fn Decl* callee_overload_head(Sema* s, ast::AstNode* callee) {
         Decl* ns = resolve_namespace_decl(s, na.base);
         if(ns != null && ns.kind == DeclKind::Import && ns.data.module != null) {
             Decl* d = scope_lookup_local((Scope*)ns.data.module.global_scope, na.name);
-            if(d != null && decl_is_fn(d) && d.is_exported) { return d; }
+            if(d != null && d.is_exported) {
+                Decl* aliased = alias_value_target(s, d);
+                if(aliased != null) { d = aliased; }
+                if(decl_is_fn(d)) { return d; }
+            }
         }
         return null;
     }
@@ -1808,14 +1858,14 @@ fn types::Ty* resolve_type_arg(Sema* s, ast::AstNode* arg) {
         if(s.lookup_module != null) { home = s.lookup_module; }
         Decl* decl = scope_lookup_local((Scope*)home.global_scope, name);
         if(decl == null) { diag_unknown_type(s, arg.h.src_pos, name); return null; }
-        return decl_to_type(s, home, decl);
+        return decl_to_type(s, home, decl, arg.h.src_pos);
     }
     if(arg.h.kind == ast::AstKind::NamespaceAccess) {
         ast::NamespaceAccessNode* na = (ast::NamespaceAccessNode*)arg;
         Decl* ns = resolve_namespace_decl(s, na.base);
         if(ns != null && ns.kind == DeclKind::Import && ns.data.module != null) {
             Decl* decl = scope_lookup_local((Scope*)ns.data.module.global_scope, na.name);
-            if(decl != null && decl.is_exported) { return decl_to_type(s, ns.data.module, decl); }
+            if(decl != null && decl.is_exported) { return decl_to_type(s, ns.data.module, decl, arg.h.src_pos); }
         }
         diag_unknown_qualified_type(s, arg.h.src_pos, qualifier_name(na.base), na.name);
         return null;
@@ -3034,6 +3084,24 @@ export fn void diag_unknown_type(Sema* s, u32 src_pos, symbol::Symbol* name) {
     u8[] name_str = interner::symbol_str(name);
     u8[256] scratch;
     i32 written = sys::snprintf((i8*)&scratch[0], 256, "unknown type %.*s", (i32)name_str.len, (i8*)name_str.ptr);
+    emit_diag(s, src_pos, &scratch[0], written);
+}
+
+// A name in type position that resolves to something else — directly or through an alias — says what it names.
+export fn void diag_decl_not_a_type(Sema* s, u32 src_pos, symbol::Symbol* name, Decl* d) {
+    if(name == null) { return; }
+    const u8[] what = {null, 0};
+    if(decl_is_fn(d)) { what = "function"; }
+    else if(d != null && d.kind == DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl) {
+        if(((ast::VarDeclNode*)d.data.node).is_const) { what = "constant"; } else { what = "variable"; }
+    }
+    if(what.len == 0) {
+        diag_unknown_type(s, src_pos, name);
+        return;
+    }
+    u8[] name_str = interner::symbol_str(name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "%.*s names a %.*s, not a type", (i32)name_str.len, (i8*)name_str.ptr, (i32)what.len, (i8*)what.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 

@@ -339,6 +339,57 @@ fn i32 ok_comprun_generic_inferred(arena::Arena* a, const u8[]m) {
 }
 
 // A `Ctor(T)` parameter is the only mention of T, so inference has to run backwards from the instantiation.
+// An alias whose target names a constant or a function stands for that declaration, so the alias reads
+// as the value does: as an array size, in an expression, at comptime, and as a callee.
+fn i32 ok_alias_to_constant(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "const u32 LIMIT = 4;\nalias L = LIMIT;\ncomprun { if(L != 4) { comperror(\"bad\"); } }\nexport fn u32 f() { u32[L] arr; arr[3] = L; return arr[3]; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_alias_to_function(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 twice(i32 x) { return x * 2; }\nalias T = twice;\nexport fn i32 f() { fn* i32(i32) p = &T; return T(1) + p(2); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Overloads chain off the declaration the alias names, so both arms stay reachable through it.
+fn i32 ok_alias_to_overloaded_function(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 pick(i32 x) { return x; }\nfn i32 pick(i64 x) { return (i32)x; }\nalias P = pick;\nexport fn i32 f() { return P(1) + P((i64)2); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// A mutable global aliased is still one object: writing through the alias writes the global.
+fn i32 ok_alias_to_mutable_global(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "i32 counter = 1;\nalias C = counter;\nexport fn i32 f() { C = C + 1; return counter; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 ok_alias_chain_to_constant(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "const u32 LIMIT = 4;\nalias A = LIMIT;\nalias B = A;\nexport fn u32 f() { u32[B] arr; arr[3] = 1; return arr[3]; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_value_alias_in_type_position(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "const u32 LIMIT = 5;\nalias L = LIMIT;\nexport fn i32 f() { L x = 1; return (i32)x; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "L names a constant, not a type", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)58, m)) { return -3; }
+    return 0;
+}
+
+// The same wording covers a declaration used directly in type position, alias or not.
+fn i32 err_fn_name_in_type_position(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "fn i32 g() { return 1; }\nexport fn i32 f() { g x; return 0; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "g names a function, not a type", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)45, m)) { return -3; }
+    return 0;
+}
+
 // Union members share storage, so a second initializer overwrites rather than adds: rejected in both
 // positions a literal can appear, and rejected in sema so the runtime and comptime paths agree.
 fn i32 err_union_literal_two_initializers(arena::Arena* a, const u8[]m) {
@@ -1900,6 +1951,13 @@ fn i32 main() {
     testing::add(suite, "ok_generic_two_type_params", &ok_generic_two_type_params);
     testing::add(suite, "err_generic_conflicting_infer", &err_generic_conflicting_infer);
     testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);
+    testing::add(suite, "ok_alias_to_constant", &ok_alias_to_constant);
+    testing::add(suite, "ok_alias_to_function", &ok_alias_to_function);
+    testing::add(suite, "ok_alias_to_overloaded_function", &ok_alias_to_overloaded_function);
+    testing::add(suite, "ok_alias_to_mutable_global", &ok_alias_to_mutable_global);
+    testing::add(suite, "ok_alias_chain_to_constant", &ok_alias_chain_to_constant);
+    testing::add(suite, "err_value_alias_in_type_position", &err_value_alias_in_type_position);
+    testing::add(suite, "err_fn_name_in_type_position", &err_fn_name_in_type_position);
     testing::add(suite, "err_union_literal_two_initializers", &err_union_literal_two_initializers);
     testing::add(suite, "err_union_local_two_initializers", &err_union_local_two_initializers);
     testing::add(suite, "ok_union_literal_single_member", &ok_union_literal_single_member);
