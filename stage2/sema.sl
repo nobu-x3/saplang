@@ -29,7 +29,7 @@ export struct Sema {
     bool                in_comprun;         // inside a comprun_node body: compinsert there is comptime-evaluated, not stmt-spliced
     arena::Arena*       body_arena;         // where body-check allocates; a cross-module on-demand check uses the requester's, keeping each module arena single-writer
     diag::DiagBuf*      body_diag;          // where body-check diagnostics go; the requester's, so a foreign check never writes the foreign module's diag buffer
-    module::Module*     pos_module;         // module whose source the checked nodes index; null = m (differs for a clone body or a foreign body check)
+    module::Module*     pos_module;         // module the checked nodes came from; null = m
 }
 
 // Body-check allocations go here so an on-demand foreign check writes the requester's arena, not the foreign module's.
@@ -53,11 +53,7 @@ fn void note_instantiation(Sema* s, u32 src_pos, ast::FnDeclNode* generic, u64 d
 }
 
 fn void sema_report(Sema* s, u32 pos, const u8[] msg) {
-    if(s.pos_module != null) {
-        diag::report_foreign(bdiag(s), balloc(s), (void*)s.pos_module, pos, msg);
-        return;
-    }
-    diag::report(bdiag(s), balloc(s), pos, msg);
+    diag::report_foreign(bdiag(s), balloc(s), (void*)s.pos_module, pos, msg);
 }
 
 export enum DeclKind : u16 {
@@ -406,7 +402,7 @@ fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
     }
     case ast::AstKind::AliasDecl: {
         ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)decl_node;
-        // One naming a value has no type of its own; resolving its target as a type would only misreport.
+        // One naming a value has no type of its own.
         Decl* self = scope_lookup_local((Scope*)s.m.global_scope, alias_decl.name);
         if(alias_value_target(s, self) == null) { set_decl_ty(s, alias_decl.name, resolve_type(s, alias_decl.target)); }
     }
@@ -1190,7 +1186,7 @@ export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
     return (u64)out;
 }
 
-// The declaration an alias's target names, looked up where the alias was written.
+// What the alias's target names, looked up in the module that wrote the alias.
 fn Decl* alias_named_decl(Sema* s, Decl* d) {
     ast::AstNode* target = ((ast::AliasDeclNode*)d.data.node).target;
     if(target == null || target.h.kind != ast::AstKind::NamedType) { return null; }
@@ -1205,11 +1201,11 @@ fn Decl* alias_named_decl(Sema* s, Decl* d) {
     return found;
 }
 
-// An alias naming a constant, variable, or function stands for that declaration rather than for a type.
-// Returns the declaration itself, never a copy: lowering keys globals and functions by decl identity.
-// A probe, so it stays quiet — an alias that resolves to nothing falls through to the type path's diagnostics.
+// An alias may name a constant, a variable, or a function instead of a type; null if it names neither.
+// Returns that declaration itself, never a copy: lowering keys globals and functions by decl identity.
 fn Decl* alias_value_target(Sema* s, Decl* d) {
     Decl* current = d;
+    // Bounded: a cycle returns null here and the type path reports it.
     for(u32 hops = 0; hops < 64; hops += 1) {
         if(current == null || current.kind != DeclKind::Node || current.data.node == null) { return null; }
         if(current.data.node.h.kind != ast::AstKind::AliasDecl) {
@@ -1439,7 +1435,7 @@ export fn types::Ty* synth_ident(Sema* s, ast::IdentNode* n) {
     return d.ty;
 }
 
-// An alias names the enum it resolves to, so `alias A = E;` makes `A::Member` read like `E::Member`.
+// An alias to an enum names that enum, so `alias A = E;` makes `A::Member` work.
 fn ast::EnumDeclNode* enum_decl_of(Sema* s, Decl* d, u32 src_pos) {
     if(d == null || d.kind != DeclKind::Node || d.data.node == null) { return null; }
     if(d.data.node.h.kind == ast::AstKind::EnumDecl) { return (ast::EnumDeclNode*)d.data.node; }
@@ -1451,8 +1447,8 @@ fn ast::EnumDeclNode* enum_decl_of(Sema* s, Decl* d, u32 src_pos) {
     return (ast::EnumDeclNode*)target.data.enum_decl;
 }
 
-// Aliases are admitted unresolved: resolving one here would run during signature resolution, where a
-// generic instantiation it names may not be constructible yet. synth_ns_access resolves it at the use site.
+// An alias is admitted unresolved: resolving it here runs during signature resolution, too early for a
+// generic instantiation it may name. synth_ns_access resolves it at the use site instead.
 // Recurses when the base is itself a namespace access (`mod::Enum::Member`).
 fn bool is_namespace_decl(Decl* d) {
     if(d == null) { return false; }
@@ -1512,7 +1508,6 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
             mark_error((ast::AstNode*)n);
             return null;
         }
-        // Export is checked on the alias, then the use binds to what it names.
         Decl* aliased = alias_value_target(s, found);
         if(aliased != null) { found = aliased; }
         mark_external_linkage(s, found);
@@ -1853,7 +1848,7 @@ fn types::Ty* resolve_type_arg(Sema* s, ast::AstNode* arg) {
     if(arg.h.kind == ast::AstKind::Call) { return resolve_type(s, arg); }   // a nested constructor: Box(Box(T))
     if(arg.h.kind == ast::AstKind::Ident) {
         symbol::Symbol* name = ((ast::IdentNode*)arg).name;
-        // A clone body names its own module's types, so resolve where the body was written, as resolve_named_type does.
+        // A clone body names its own module's types, like resolve_named_type.
         module::Module* home = s.m;
         if(s.lookup_module != null) { home = s.lookup_module; }
         Decl* decl = scope_lookup_local((Scope*)home.global_scope, name);
@@ -2372,7 +2367,7 @@ fn bool check_struct_lit(Sema* s, ast::StructLitNode* n, types::Ty* expected) {
         mark_error((ast::AstNode*)n);
         return false;
     }
-    // Union members share storage, so a second initializer would overwrite the first rather than add to it.
+    // Members share storage: a second initializer would overwrite the first, not add to it.
     if(expected.kind == types::TypeKind::Union && n.inits.len > 1) {
         const u8[] msg = "a union initializer sets exactly one member";
         sema_report(s, n.inits[1].src_pos, msg);
@@ -3087,8 +3082,8 @@ export fn void diag_unknown_type(Sema* s, u32 src_pos, symbol::Symbol* name) {
     emit_diag(s, src_pos, &scratch[0], written);
 }
 
-// A name in type position that resolves to something else — directly or through an alias — says what it names.
-export fn void diag_decl_not_a_type(Sema* s, u32 src_pos, symbol::Symbol* name, Decl* d) {
+// Says what the name is instead, when a name in type position turns out not to be a type.
+fn void diag_decl_not_a_type(Sema* s, u32 src_pos, symbol::Symbol* name, Decl* d) {
     if(name == null) { return; }
     const u8[] what = {null, 0};
     if(decl_is_fn(d)) { what = "function"; }

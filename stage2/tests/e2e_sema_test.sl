@@ -339,8 +339,7 @@ fn i32 ok_comprun_generic_inferred(arena::Arena* a, const u8[]m) {
 }
 
 // A `Ctor(T)` parameter is the only mention of T, so inference has to run backwards from the instantiation.
-// An alias whose target names a constant or a function stands for that declaration, so the alias reads
-// as the value does: as an array size, in an expression, at comptime, and as a callee.
+// An alias may name a value, and then reads wherever the value would.
 fn i32 ok_alias_to_constant(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "const u32 LIMIT = 4;\nalias L = LIMIT;\ncomprun { if(L != 4) { comperror(\"bad\"); } }\nexport fn u32 f() { u32[L] arr; arr[3] = L; return arr[3]; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -353,14 +352,14 @@ fn i32 ok_alias_to_function(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// Overloads chain off the declaration the alias names, so both arms stay reachable through it.
+// Overloads chain off the declaration the alias names, so both stay reachable.
 fn i32 ok_alias_to_overloaded_function(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn i32 pick(i32 x) { return x; }\nfn i32 pick(i64 x) { return (i32)x; }\nalias P = pick;\nexport fn i32 f() { return P(1) + P((i64)2); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
     return 0;
 }
 
-// A mutable global aliased is still one object: writing through the alias writes the global.
+// Still one object: writing through the alias writes the global.
 fn i32 ok_alias_to_mutable_global(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "i32 counter = 1;\nalias C = counter;\nexport fn i32 f() { C = C + 1; return counter; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -381,7 +380,7 @@ fn i32 err_value_alias_in_type_position(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// The same wording covers a declaration used directly in type position, alias or not.
+// Same wording with no alias in the way.
 fn i32 err_fn_name_in_type_position(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn i32 g() { return 1; }\nexport fn i32 f() { g x; return 0; }");
     if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
@@ -390,8 +389,7 @@ fn i32 err_fn_name_in_type_position(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// Union members share storage, so a second initializer overwrites rather than adds: rejected in both
-// positions a literal can appear, and rejected in sema so the runtime and comptime paths agree.
+// Members share storage, so a second initializer overwrites rather than adds.
 fn i32 err_union_literal_two_initializers(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "union U { i32 a; i32 b; }\nU g = {5, 6};\nexport fn i32 f() { return g.a; }");
     if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
@@ -413,7 +411,6 @@ fn i32 ok_union_literal_single_member(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// An alias to an enum names that enum, so it qualifies members and its member folds as an array size.
 fn i32 ok_alias_to_enum_namespace(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "enum E { a, b, c, LENGTH }\nalias A = E;\nexport fn i32 f() { u32[A::LENGTH] arr; arr[2] = 1; A v = A::b; if(v != E::b) { return 1; } return (i32)arr[2]; }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -426,7 +423,7 @@ fn i32 ok_alias_chain_to_enum_namespace(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// Only an alias that lands on an enum is a namespace; one naming a primitive or a struct is not.
+// Only an alias that lands on an enum is a namespace.
 fn i32 err_alias_to_primitive_is_not_a_namespace(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "alias I = i32;\nexport fn i32 f() { return I::nope; }");
     if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
@@ -451,7 +448,7 @@ fn i32 err_unknown_member_through_enum_alias(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// A generic hands its own comptime T to another generic; the arg is an expression-position ident.
+// The call arg parses as an expression, so the forwarded T arrives as an Ident.
 fn i32 ok_generic_forwards_type_param(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn u64 width(comptime Type T) { return sizeof(T); }\nfn u64 outer(comptime Type T, T value) { return width(T); }\nexport fn i32 f() { u32 v = 3; return (i32)outer(v); }");
     if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
@@ -466,7 +463,6 @@ fn i32 err_generic_forwards_unknown_type_arg(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// The forwarded param is a type, so a runtime parameter still rejects it.
 fn i32 err_generic_forwards_type_param_to_runtime_param(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "fn u64 need(u64 x) { return x; }\nfn u64 outer(comptime Type T, T value) { return need(T); }\nexport fn i32 f() { u32 v = 3; return (i32)outer(v); }");
     if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }

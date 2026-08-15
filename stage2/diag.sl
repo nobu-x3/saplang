@@ -5,7 +5,7 @@ export struct DiagEntry {
     u32   src_pos;
     bool  is_warning;
     u8[]  msg;
-    void* origin;       // module::Module* whose source src_pos indexes; null = the buffer's owner
+    void* origin;       // module::Module* src_pos belongs to; null = this buffer's module
 }
 
 export struct DiagBuf {
@@ -22,7 +22,7 @@ export fn void report_warning(DiagBuf* d, arena::Arena* a, u32 src_pos, const u8
     append(d, a, null, src_pos, msg, true);
 }
 
-// src_pos indexes origin's source, not that of the module owning this buffer.
+// For a position that belongs to another module's source.
 export fn void report_foreign(DiagBuf* d, arena::Arena* a, void* origin, u32 src_pos, const u8[] msg) {
     append(d, a, origin, src_pos, msg, false);
 }

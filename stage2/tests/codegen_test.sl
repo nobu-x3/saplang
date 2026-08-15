@@ -212,47 +212,41 @@ fn i32 jit_generic_slice(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "extern { fn void* malloc(u64 n); } fn T pick(comptime Type T, T[]* s, u64 i) { return s.ptr[i]; } fn u64 glen(comptime Type T, T[]* s) { return s.len; } fn i32 main() { i32[] xs; xs.ptr = (i32*)malloc(12); xs.len = 3; xs.ptr[0] = 10; xs.ptr[1] = 20; xs.ptr[2] = 12; return pick(&xs, 1) + pick(&xs, 2) + (i32)glen(&xs); }", 35, msg);
 }
 
-// A generic forwards its own comptime T as a type argument; the callee must see u32, not the param name.
 fn i32 jit_generic_forwards_type_param(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn u64 width(comptime Type T) { return sizeof(T); } fn u64 outer(comptime Type T, T value) { return width(T); } fn i32 main() { u32 v = 3; return (i32)outer(v); }", 4, msg);
 }
 
-// Forwarding alongside a runtime argument, so the clone's call carries both kinds in one argument list.
 fn i32 jit_generic_forwards_type_param_with_runtime_arg(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn T id(comptime Type T, T x) { return x; } fn T twice(comptime Type T, T v) { return id(T, v) + id(T, v); } fn i32 main() { i32 v = 21; return twice(v); }", 42, msg);
 }
 
-// Two params forwarded in swapped positions: substitution binds by name, so the sizes must not trade places.
+// Substitution binds by name, so the two sizes must not trade places.
 fn i32 jit_generic_forwards_two_type_params_swapped(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn u64 pair(comptime Type A, comptime Type B) { return sizeof(A) * 100 + sizeof(B); } fn u64 outer(comptime Type X, comptime Type Y, X x, Y y) { return pair(Y, X); } fn i32 main() { u8 small = 1; u32 wide = 2; return (i32)outer(small, wide); }", 401, msg);
 }
 
-// The forwarded param reaches a type constructor, whose instantiation then drives a sizeof.
 fn i32 jit_generic_forwards_type_param_to_type_ctor(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn Type Box(comptime Type T) { return struct { T value; u64 tag; }; } fn u64 boxed(comptime Type T, T v) { Box(T) b; b.value = v; b.tag = 2; return sizeof(Box(T)) + b.tag; } fn i32 main() { i32 v = 7; return (i32)boxed(v); }", 18, msg);
 }
 
-// A type param and a value param forwarded together: one becomes a type, the other an integer literal.
 fn i32 jit_generic_forwards_type_and_value_params(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn u64 room(comptime Type T, comptime u64 N) { return sizeof(T) * N; } fn u64 outer(comptime Type T, comptime u64 N, T v) { return room(T, N); } fn i32 main() { u32 v = 1; return (i32)outer(u32, 10, v); }", 40, msg);
 }
 
-// Forwarding through three levels: each clone re-forwards the T it was given.
 fn i32 jit_generic_forwards_through_three_levels(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn u64 inner(comptime Type T) { return sizeof(T); } fn u64 middle(comptime Type T) { return inner(T) * 10; } fn u64 outer(comptime Type T, T v) { return middle(T); } fn i32 main() { u16 v = 1; return (i32)outer(v); }", 20, msg);
 }
 
-// A local shadows the type param for expression idents; a type position still means the param.
+// The local wins for the ident, but sizeof(T) still means the type param.
 fn i32 jit_type_param_shadowed_in_nested_block(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn u64 outer(comptime Type T, T v) { { u32 T = 40; return (u64)T + sizeof(T); } } fn i32 main() { u16 v = 1; return (i32)outer(v); }", 42, msg);
 }
 
-// A block leaving must not un-shadow a name an enclosing block still shadows, or the literal replaces the local.
+// Leaving the inner block must not un-shadow N.
 fn i32 jit_value_param_shadowed_across_nested_block(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "fn u64 hold(comptime u64 N) { { u64 N = 42; { u64 other = 1; } return N; } } fn i32 main() { return (i32)hold(5); }", 42, msg);
 }
 
-// A global struct literal leaving fields unlisted: the omitted ones need a typed zero to reach LLVM at all.
 fn i32 jit_global_struct_empty_literal(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "struct P { i32 x; i32 y; } P origin = {}; fn i32 main() { return origin.x + origin.y + 42; }", 42, msg);
 }
@@ -265,13 +259,10 @@ fn i32 jit_global_struct_designated_literal(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "struct P { i32 x; i32 y; } P origin = {.y = 42}; fn i32 main() { return origin.x + origin.y; }", 42, msg);
 }
 
-// Each field kind needs its own zero: a scalar-shaped one would misfit the aggregate and pointer fields.
 fn i32 jit_global_struct_zeroes_every_field_kind(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "struct Inner { i32 a; i32 b; } struct W { i32 i; f64 f; bool b; i32* p; fn* i32(i32) fp; Inner nested; i32[3] arr; i32[] sl; } W w = {}; fn i32 main() { if(w.i != 0 || w.f != 0.0 || w.b) { return 1; } if(w.p != null || w.fp != null) { return 2; } if(w.nested.a != 0 || w.nested.b != 0) { return 3; } if(w.arr[0] != 0 || w.arr[2] != 0) { return 4; } if(w.sl.ptr != null || w.sl.len != 0) { return 5; } return 42; }", 42, msg);
 }
 
-// An alias to a value runs as the value: the constant folds, the call lands on the aliased function,
-// and a write through an aliased global is a write to that one global.
 fn i32 jit_alias_to_constant_and_function(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "const i32 STEP = 20; fn i32 twice(i32 x) { return x * 2; } alias S = STEP; alias T = twice; fn i32 main() { return T(S) + 2; }", 42, msg);
 }
@@ -280,12 +271,10 @@ fn i32 jit_alias_to_mutable_global(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "i32 counter = 40; alias C = counter; fn i32 main() { C = C + 2; return counter; }", 42, msg);
 }
 
-// Comptime can read back the member a union literal set; folding over it needs no runtime storage.
 fn i32 jit_comptime_reads_union_member(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "union U { i32 a; f64 wide; } comprun { U u = {7}; if(u.a != 7) { comperror(\"a\"); } U w = {.wide = 2.5}; if(w.wide != 2.5) { comperror(\"wide\"); } } fn i32 main() { return 42; }", 42, msg);
 }
 
-// A union global initializes through whichever member the literal names, positionally or by name.
 fn i32 jit_global_union_first_member(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "union U { i32 a; f32 b; } U g = {42}; fn i32 main() { return g.a; }", 42, msg);
 }
@@ -298,17 +287,15 @@ fn i32 jit_global_union_empty_literal(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "union U { i32 a; f64 wide; } U g = {}; fn i32 main() { if(g.a != 0 || g.wide != 0.0) { return 1; } return 42; }", 42, msg);
 }
 
-// A narrow member leaves the rest of the union zeroed rather than filled with whatever followed it.
 fn i32 jit_global_union_narrow_member_zero_pads(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "union U { u8 small; u64 wide; } U g = {(u8)0xFF}; fn i32 main() { if(g.wide != 255) { return 1; } return 42; }", 42, msg);
 }
 
-// The union sits inside a struct, so its bytes must fit the field without disturbing the one after it.
+// The union's bytes have to fit the field without disturbing the one after it.
 fn i32 jit_global_union_nested_in_struct(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "union U { i32 a; f32 b; } struct S { U u; i32 tag; } S s = {{40}, 2}; fn i32 main() { return s.u.a + s.tag; }", 42, msg);
 }
 
-// A comptime read of an omitted scalar field still sees 0, so folding over a partly-written literal keeps working.
 fn i32 jit_comptime_reads_omitted_field_zero(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "struct P { i32 x; f64 y; } comprun { P p = {5}; if(p.x != 5) { comperror(\"x\"); } if(p.y != 0.0) { comperror(\"y\"); } } fn i32 main() { return 42; }", 42, msg);
 }

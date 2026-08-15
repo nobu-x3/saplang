@@ -32,8 +32,7 @@ fn i32 sum_of(i32[] xs) {
     return total;
 }
 
-// `data` is the live elements, so a list passes straight into a T[] parameter with no repacking,
-// and it tracks pushes while cap keeps counting the allocation behind them.
+// `data` is the live elements, so a list goes straight into a T[] parameter.
 fn i32 list_data_is_the_live_slice(arena::Arena* a, const u8[]m) {
     list::List(i32) xs = {{null, 0}, 0};
     for(i32 i = 0; i < 5; i = i + 1) { list::push(&xs, arena::allocator(a), i); }

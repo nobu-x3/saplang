@@ -19,7 +19,7 @@ export enum ValueKind : u16 {
     Error,
 }
 
-// One member is live at a time, so a union value carries which one along with its value.
+// Which member a union literal set, and what it set it to.
 export struct UnionSlot {
     u64    index;
     Value* value;

@@ -63,8 +63,8 @@ struct CfgBuilder {
     module::Module* pos_module;
 }
 
-// A clone's nodes are the template's, so its positions index the generic's home module, not m's source.
-fn module::Module* body_module(module::Module* m, ast::FnDeclNode* func) {
+// A clone's nodes are the template's, so its positions belong to the generic's module, not to m.
+fn module::Module* home_module(module::Module* m, ast::FnDeclNode* func) {
     if(func.home != null) { return (module::Module*)func.home; }
     return m;
 }
@@ -78,7 +78,7 @@ export fn Cfg* build_cfg(module::Module* m, ast::FnDeclNode* func) {
     builder.cfg = g;
     builder.allocator = m.allocator;
     builder.m = m;
-    builder.pos_module = body_module(m, func);
+    builder.pos_module = home_module(m, func);
 
     g.entry = new_block(g, m.allocator);
     g.exit = new_block(g, m.allocator);
@@ -561,7 +561,7 @@ export fn bool check_return_paths(module::Module* m, ast::FnDeclNode* func) {
         if(!reachable[block_index]) { continue; }
         if(g.blocks.data[block_index].term.kind == TermKind::Unreachable) {
             const u8[] msg = "function may exit without a return statement";
-            diag::report_foreign(&m.diag, m.arena, (void*)body_module(m, func), func.h.src_pos, msg);
+            diag::report_foreign(&m.diag, m.arena, (void*)home_module(m, func), func.h.src_pos, msg);
             return false;
         }
     }
@@ -577,7 +577,7 @@ export fn void check_unreachable(module::Module* m, ast::FnDeclNode* func) {
         if(g.blocks.data[block_index].stmts.data.len == 0) { continue; }      // synthetic post-terminator continuation
         u32 pos = g.blocks.data[block_index].stmts.data[0].h.src_pos;
         const u8[] msg = "unreachable code";
-        diag::report_foreign_warning(&m.diag, m.arena, (void*)body_module(m, func), pos, msg);
+        diag::report_foreign_warning(&m.diag, m.arena, (void*)home_module(m, func), pos, msg);
     }
 }
 

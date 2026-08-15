@@ -661,7 +661,7 @@ fn void declare_decl(CG* cg, u32 index) {
     } else {
         void* ty = map_type(cg, d.ty);
         void* val = llvm::LLVMAddGlobal(cg.llvm_module, ty, cstr(cg.allocator, d.link_name));
-        // A union maps to a byte blob, whose LLVM alignment is 1 — the language's alignment has to be stated.
+        // A union maps to a byte blob, which LLVM would align to 1.
         llvm::LLVMSetAlignment(val, types::align_of(null, d.ty));
         llvm::LLVMSetLinkage(val, decl_linkage(d));
         if(d.is_thread_local) {

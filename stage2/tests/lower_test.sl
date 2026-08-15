@@ -25,7 +25,7 @@ fn i32 golden(arena::Arena* a, const u8[]src, io::OutBuf* want, const u8[] msg) 
     return 0;
 }
 
-// A global initializer that only lowering can reject: the frontend is clean, the diagnostic lands here.
+// For initializers the frontend accepts and only lowering can reject.
 fn module::Module* lower_for_diag(arena::Arena* a, const u8[]src) {
     module::Module* m = test_util::frontend(a, src);
     if(test_util::error_count(m) > 0) { return m; }
@@ -1224,7 +1224,6 @@ fn i32 global_struct_init(arena::Arena* a, const u8[]msg) {
     return golden(a, "struct P { i32 x; i32 y; } const P origin = {.x = 0, .y = 0};", &w, msg);
 }
 
-// A union constant is the union's storage bytes, so it fits wherever the union does, nested or not.
 fn i32 global_union_init(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 384);
@@ -1233,7 +1232,7 @@ fn i32 global_union_init(arena::Arena* a, const u8[]msg) {
     return golden(a, "union U { i32 a; f64 wide; } U g = {7};", &w, msg);
 }
 
-// Only scalars serialize into those bytes; a pointer member would need a relocation inside the blob.
+// A pointer member would need a relocation inside the blob.
 fn i32 err_global_union_pointer_member(arena::Arena* a, const u8[]msg) {
     module::Module* m = lower_for_diag(a, "i32 target = 7;\nunion U { i32* p; u64 n; }\nU g = {&target};\nexport fn i32 f() { return *g.p; }");
     if(!testing::expect_true(test_util::error_count(m) >= (u64)1, msg)) { return -1; }
@@ -1242,7 +1241,7 @@ fn i32 err_global_union_pointer_member(arena::Arena* a, const u8[]msg) {
     return 0;
 }
 
-// An omitted field takes the field's own shape: the nested struct is a zero aggregate, the scalar an int zero.
+// The omitted fields take their own shapes: a zero aggregate, and an int zero.
 fn i32 global_struct_nested_zero_init(arena::Arena* a, const u8[]msg) {
     io::OutBuf w;
     io::outbuf_init(&w, a, 384);

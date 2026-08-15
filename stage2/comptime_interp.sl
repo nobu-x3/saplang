@@ -35,7 +35,7 @@ export struct MonoCtx {
 
 export struct Interp {
     module::Module* m;
-    module::Module* pos_module;     // module whose source the nodes being evaluated index; a foreign body keeps its own
+    module::Module* pos_module;     // module the nodes being evaluated came from
     Env*            env;
     i32             depth;
     i32             max_depth;      // recursion-call limit; -comptime-depth
@@ -104,7 +104,7 @@ export fn Interp new_interp(module::Module* m) {
     return ip;
 }
 
-// Diagnostics land in the module driving the interpreter, but a foreign body's nodes index their own source.
+// The buffer is always ip.m's, but the position may be a callee module's.
 fn void interp_report(Interp* ip, u32 pos, const u8[] msg) {
     diag::report_foreign(&ip.m.diag, ip.m.arena, (void*)ip.pos_module, pos, msg);
 }
@@ -635,7 +635,7 @@ fn value::Value eval_array_lit(Interp* ip, ast::ArrayLitNode* n) {
     return value::val_array((types::Ty*)n.h.ty, elems);
 }
 
-// Typed, because a typeless zero has nothing to lower to; aggregates take a void that lowers to ConstNull.
+// A zero of t's own type. Aggregates get a typed void, which lowers to a ConstNull of that type.
 fn value::Value zero_value(types::Ty* t) {
     if(types::is_float(t)) { return value::val_float(0.0, t); }
     if(types::is_bool(t)) { return value::val_bool(false); }
@@ -653,15 +653,11 @@ fn u64 union_field_index(ast::UnionDeclNode* ud, symbol::Symbol* name) {
     return ud.fields.len;
 }
 
-// A union literal writes one member over shared storage; `{}` writes none, which is the all-zero union.
+// One member, or none for `{}`.
 fn value::Value eval_union_lit(Interp* ip, ast::StructLitNode* n, types::Ty* ty) {
     if(n.inits.len == 0) { return zero_value(ty); }
     ast::UnionDeclNode* ud = (ast::UnionDeclNode*)ty.data.union_decl;
-    if(ud == null) {
-        interp_report(ip, n.h.src_pos, "union literal is not a comptime union value");
-        return value::val_error();
-    }
-    // sema rejects this first; folding one member and dropping the rest would be a silent wrong value.
+    // sema rejects this first; taking one member and dropping the rest would fold to a wrong value.
     if(n.inits.len > 1) {
         interp_report(ip, n.h.src_pos, "a union initializer sets exactly one member");
         return value::val_error();
@@ -705,7 +701,7 @@ fn value::Value eval_struct_lit(Interp* ip, ast::StructLitNode* n) {
     return value::val_struct(ty, fields);
 }
 
-// Only the member the literal wrote has a value; the others share its storage and would be a reinterpretation.
+// Reading a member the literal did not set would reinterpret the bytes, which comptime cannot do.
 fn value::Value union_member_value(Interp* ip, ast::MemberAccessNode* n, value::Value* base) {
     ast::UnionDeclNode* ud = (ast::UnionDeclNode*)base.ty.data.union_decl;
     u64 index = union_field_index(ud, n.field);
@@ -717,7 +713,7 @@ fn value::Value union_member_value(Interp* ip, ast::MemberAccessNode* n, value::
         u8[] read_str = interner::symbol_str(ud.fields[index].name);
         u8[] set_str = interner::symbol_str(ud.fields[base.data.union_slot.index].name);
         u8[256] scratch;
-        i32 written = sys::snprintf((i8*)&scratch[0], 256, "comptime read of union member %.*s, but %.*s is the member that was set", (i32)read_str.len, (i8*)read_str.ptr, (i32)set_str.len, (i8*)set_str.ptr);
+        i32 written = sys::snprintf((i8*)&scratch[0], 256, "union member %.*s is not set, %.*s is", (i32)read_str.len, (i8*)read_str.ptr, (i32)set_str.len, (i8*)set_str.ptr);
         if(written > 0) {
             u64 len = (u64)written;
             if(len > 255) { len = 255; }
@@ -827,8 +823,8 @@ fn bool has_comptime_params(ast::FnDeclNode* func) {
     return false;
 }
 
-// A clone's nodes are the template's; a plain fn's are its own module's.
-fn module::Module* body_module(Interp* ip, ast::FnDeclNode* func) {
+// Where func's nodes came from: a clone keeps the template's module, anything else is its own.
+fn module::Module* home_module(Interp* ip, ast::FnDeclNode* func) {
     if(func.home != null) { return (module::Module*)func.home; }
     if(func.decl != null && ((sema::Decl*)func.decl).home != null) { return ((sema::Decl*)func.decl).home; }
     return ip.m;
@@ -867,7 +863,7 @@ fn value::Value invoke(Interp* ip, ast::FnDeclNode* func, value::Value[] args, u
     Flow saved_flow = ip.flow;
     value::Value saved_return_value = ip.return_value;
     module::Module* saved_pos_module = ip.pos_module;
-    ip.pos_module = body_module(ip, func);
+    ip.pos_module = home_module(ip, func);
     ip.flow = Flow::None;
     value::Value body_result = eval(ip, func.body);
     value::Value result = value::val_void();
@@ -1772,8 +1768,7 @@ fn ast::FnDeclNode* monomorphize_type_ctor(Interp* ip, ast::FnDeclNode* callee, 
         mutex::unlock(&g_type_mono_lock);
         return hit;
     }
-    module::Module* defining = ip.m;
-    if(callee.decl != null) { defining = ((sema::Decl*)callee.decl).home; }
+    module::Module* defining = home_module(ip, callee);
     ast::FnDeclNode* clone = clone_fn_decl(shared, callee);
     clone.home = (void*)defining;
     rename_mangled(ip.m, clone, cargs);
@@ -1852,8 +1847,7 @@ export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, val
     key.args = cargs;
     ast::FnDeclNode* hit = mono_cache_lookup(cache, &key);
     if(hit != null) { return hit; }
-    module::Module* defining = ip.m;
-    if(callee.decl != null) { defining = ((sema::Decl*)callee.decl).home; }
+    module::Module* defining = home_module(ip, callee);
     ast::FnDeclNode* clone = clone_fn_decl(ip.m.arena, callee);
     clone.home = (void*)defining;
     rename_mangled(ip.m, clone, cargs);
@@ -1869,7 +1863,7 @@ export fn ast::FnDeclNode* monomorphize(Interp* ip, ast::FnDeclNode* callee, val
 struct SubstCtx {
     symbol::Symbol*[] tnames;
     types::Ty*[]    ttys;
-    u32[]             tshadow;   // per-name count of enclosing blocks declaring a local of that name; nonzero = shadowed
+    u32[]             tshadow;   // enclosing blocks that redeclare the name; nonzero = shadowed
     symbol::Symbol*[] vnames;
     u64[]             vvals;
     types::Ty*[]    vtys;
@@ -2045,7 +2039,7 @@ fn void subst_size_expr(SubstCtx* c, ast::AstNode* n) {
     }
 }
 
-// Call args parse as expressions, so a forwarded type param arrives as an Ident; TypeNamedNode is the same size.
+// Call args parse as expressions, so a forwarded type param arrives as an Ident. TypeNamedNode is the same size.
 fn bool subst_type_ident(SubstCtx* c, ast::AstNode* n) {
     ast::IdentNode* id = (ast::IdentNode*)n;
     for(u64 type_index = 0; type_index < c.tnames.len; type_index += 1) {
@@ -2085,7 +2079,7 @@ fn void subst_value_ident(SubstCtx* c, ast::AstNode* n) {
     }
 }
 
-// Counted, not blanked: leaving a nested block would otherwise clear a name an enclosing block still shadows.
+// Counted, not blanked: leaving a nested block would clear a name an enclosing block still shadows.
 fn void adjust_block_shadows(SubstCtx* c, ast::BlockNode* block, i32 delta) {
     for(u64 stmt_index = 0; stmt_index < block.stmts.len; stmt_index += 1) {
         ast::AstNode* stmt = block.stmts[stmt_index];

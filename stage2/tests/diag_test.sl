@@ -356,10 +356,10 @@ fn i32 report_leaves_origin_null(arena::Arena* a, const u8[]m) {
 fn i32 report_foreign_stores_origin(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
-    diag::report_foreign(&d, &local, (void*)&local, 42, "elsewhere");
+    diag::report_foreign(&d, &local, (void*)&local, 42, "boom");
     if(!testing::expect_eq(d.entries[0].origin, (void*)&local, m)) { return -1; }
     if(!testing::expect_eq((u32)d.entries[0].src_pos, (u32)42, m)) { return -2; }
-    if(!testing::expect_eq(d.entries[0].msg, "elsewhere", m)) { return -3; }
+    if(!testing::expect_eq(d.entries[0].msg, "boom", m)) { return -3; }
     if(!testing::expect_false(d.entries[0].is_warning, m)) { return -4; }
     return 0;
 }
@@ -367,7 +367,7 @@ fn i32 report_foreign_stores_origin(arena::Arena* a, const u8[]m) {
 fn i32 report_foreign_warning_stores_origin(arena::Arena* a, const u8[]m) {
     arena::Arena local = {4096, null};
     diag::DiagBuf d = make_empty_buf();
-    diag::report_foreign_warning(&d, &local, (void*)&d, 7, "careful over there");
+    diag::report_foreign_warning(&d, &local, (void*)&d, 7, "careful");
     if(!testing::expect_eq(d.entries[0].origin, (void*)&d, m)) { return -1; }
     if(!testing::expect_true(d.entries[0].is_warning, m)) { return -2; }
     return 0;

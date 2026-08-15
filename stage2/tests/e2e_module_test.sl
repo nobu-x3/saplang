@@ -97,8 +97,7 @@ fn i32 circular_const_read(arena::Arena* a, const u8[]m) {
 }
 
 // Aliases that define each other have no fixpoint; resolution must report rather than recurse forever.
-// The position is the reference that cycles (`b::Y`), which is in the module being compiled — pointing at
-// the far decl instead would render b's offset against a's source.
+// The position is the reference that cycles (`b::Y`), which is in the module being compiled.
 fn i32 err_circular_alias_definition(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module* first = test_util::mk_module(a, "a", "import b;\nexport alias X = b::Y;\nexport fn i32 f() { X v = 1; return v; }");
@@ -154,7 +153,6 @@ fn i32 err_same_named_constructors_do_not_unify(arena::Arena* a, const u8[]m) {
 
 // ---- foreign enums and constants at comptime ----
 
-// The reported shape: alias a foreign enum, then qualify a member through the alias as an array size.
 fn i32 alias_to_foreign_enum_namespace(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nalias SomeEnum = b::SomeEnum;\nexport fn i32 f() { u32[SomeEnum::LENGTH] arr; arr[2] = 1; return (i32)arr[2]; }", "export enum SomeEnum { a, b, c, LENGTH }");
@@ -171,7 +169,7 @@ fn i32 foreign_enum_member_as_array_size(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// An imported constant folds at comptime, including one derived from another of its module's constants.
+// Including a constant derived from another of b's constants.
 fn i32 foreign_const_as_array_size(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32[b::SIZE] one; u32[b::DOUBLE] two; u32[b::SIZE * 2] three; one[3] = 1; two[7] = 1; three[7] = 1; return (i32)(one[3] + two[7] + three[7]); }", "export const u64 SIZE = 4;\nexport const u64 DOUBLE = SIZE * 2;");
@@ -180,7 +178,7 @@ fn i32 foreign_const_as_array_size(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// A private enum cannot be aliased across the boundary, so the alias itself is what fails.
+// The alias itself is what fails, not the use.
 fn i32 err_alias_to_private_foreign_enum(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nalias H = b::Hidden;\nexport fn i32 f() { return (i32)H::x; }", "enum Hidden { x, y }");
@@ -190,7 +188,6 @@ fn i32 err_alias_to_private_foreign_enum(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// The reported shape for values: alias a foreign constant, then use it where the constant would go.
 fn i32 alias_to_foreign_constant(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nalias BUCKET_COUNT = b::BUCKET_COUNT;\nexport fn u32 f() { u32[BUCKET_COUNT] arr; arr[4] = BUCKET_COUNT; return arr[4]; }", "export const u32 BUCKET_COUNT = 5;");
@@ -207,7 +204,7 @@ fn i32 alias_to_foreign_function(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// An exported alias re-exports what it names, so the far side reaches it under the alias's name.
+// b's INNER is private, but the alias exporting it is not.
 fn i32 exported_alias_re_exports_a_constant(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nexport fn u32 f() { u32[b::LIMIT] arr; arr[3] = b::LIMIT; return arr[3]; }", "const u32 INNER = 4;\nexport alias LIMIT = INNER;");
@@ -218,8 +215,7 @@ fn i32 exported_alias_re_exports_a_constant(arena::Arena* a, const u8[]m) {
 
 // ---- comptime type params across modules ----
 
-// A generic passing its own comptime T on as a type argument: the call arg parses as an expression,
-// so the clone only resolves if substitution rewrote that ident into the bound type.
+// The clone only resolves if substitution rewrote the forwarded ident into the bound type.
 fn i32 generic_forwards_type_param_across_modules(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32 v = 3; return (i32)b::outer(v); }", "export fn u64 width(comptime Type T) { return sizeof(T); }\nexport fn u64 outer(comptime Type T, T value) { return width(T); }");
@@ -228,7 +224,7 @@ fn i32 generic_forwards_type_param_across_modules(arena::Arena* a, const u8[]m) 
     return 0;
 }
 
-// The type argument names a private type of the generic's own module, so it resolves there, not at the call site.
+// Local is private to b, so the argument only resolves if it resolves in b.
 fn i32 generic_type_arg_resolves_in_home_module(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32 v = 3; return (i32)b::outer(v); }", "struct Local { i32 x; i32 y; }\nexport fn u64 width(comptime Type T) { return sizeof(T); }\nexport fn u64 outer(comptime Type T, T value) { return width(Local); }");
@@ -239,8 +235,7 @@ fn i32 generic_type_arg_resolves_in_home_module(arena::Arena* a, const u8[]m) {
 
 // ---- diagnostics from foreign source keep their own module ----
 
-// A clone is checked in the instantiating module but its nodes are the template's, so the error carries
-// b as its origin and the caller's note carries a; rendering both against a printed nonsense positions.
+// The clone is checked in a, but its nodes are b's: the error carries b, the note carries a.
 fn i32 err_clone_error_carries_the_generic_module(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32 v = 3; return (i32)b::outer(v); }", "export fn u64 outer(comptime Type T, T value) { return missing(value); }");
@@ -265,7 +260,7 @@ fn i32 err_clone_cfg_diagnostic_carries_the_generic_module(arena::Arena* a, cons
     return 0;
 }
 
-// Warnings travel the same way as errors; a clone's dead code is dead in b's source.
+// Warnings carry the origin too.
 fn i32 clone_warning_carries_the_generic_module(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nexport fn i32 f() { u32 v = 3; return (i32)b::early(v); }", "export fn u64 early(comptime Type T, T value) { return sizeof(T); u64 dead = 1; return dead; }");
@@ -278,7 +273,7 @@ fn i32 clone_warning_carries_the_generic_module(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
-// A body checked on demand for a comptime call reports into the requester's buffer, still pointing at b.
+// a's comprun forces b's body to be checked early, on a's thread and into a's buffer.
 fn i32 err_on_demand_body_check_carries_the_callee_module(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\ncomprun { u64 v = b::bad(1); }\nexport fn i32 f() { return 0; }", "export fn u64 bad(u64 x) { return nope; }");
@@ -290,7 +285,7 @@ fn i32 err_on_demand_body_check_carries_the_callee_module(arena::Arena* a, const
     return 0;
 }
 
-// The interpreter runs a foreign body on the caller's thread; the fault is at b's division, not in a.
+// The division is in b, though the interpreter runs it for a.
 fn i32 err_foreign_comptime_diagnostic_carries_the_callee_module(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\ncomprun { u64 v = b::half(0); }\nexport fn i32 f() { return 0; }", "export fn u64 half(u64 x) { return 100 / x; }");

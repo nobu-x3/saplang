@@ -1561,13 +1561,12 @@ fn void lower_global(Lower* lo, ast::VarDeclNode* var) {
     lo.out.decls[decl_index].global_index = global_index;
 }
 
-// A union constant has to come out as the union's storage bytes: its LLVM type is a byte blob, and a
-// member-shaped constant would not fit where the union nests inside another aggregate. Null on failure.
+// A union's LLVM type is a byte blob, so the set member has to be serialized into it. Null if it can't be.
 fn const u8[] union_storage_bytes(Lower* lo, value::Value* v, types::Ty* ty, u32 src_pos) {
     const u8[] failed = {null, 0};
     ast::UnionDeclNode* ud = (ast::UnionDeclNode*)ty.data.union_decl;
     u64 index = v.data.union_slot.index;
-    if(ud == null || index >= ud.fields.len) { return failed; }
+    if(index >= ud.fields.len) { return failed; }
     types::Ty* member_ty = (types::Ty*)ud.fields[index].resolved_type;
     sapir::ConstInit member = const_init_from_value(lo, v.data.union_slot.value, member_ty, src_pos);
     u32 size = types::size_of(null, ty);
@@ -1589,7 +1588,7 @@ fn const u8[] union_storage_bytes(Lower* lo, value::Value* v, types::Ty* ty, u32
     return out;
 }
 
-// Little-endian, matching the only targets the backend emits for.
+// Little-endian, like every target the backend emits for.
 fn bool write_const_bytes(sapir::ConstInit* ci, types::Ty* ty, u8[] out) {
     u32 width = types::size_of(null, ty);
     if((u64)width > out.len) { return false; }
