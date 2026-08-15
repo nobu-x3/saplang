@@ -247,6 +247,15 @@ fn i32 jit_value_param_shadowed_across_nested_block(arena::Arena* a, const u8[]m
     return jit_return(a, "fn u64 hold(comptime u64 N) { { u64 N = 42; { u64 other = 1; } return N; } } fn i32 main() { return (i32)hold(5); }", 42, msg);
 }
 
+// Field types resolve in declaration order, so the length names a constant that has no type yet.
+fn i32 jit_array_length_from_later_const(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "struct S { u64 head; u64[LATER] arr; } const u32 LATER = 4; fn i32 main() { return (i32)sizeof(S); }", 40, msg);
+}
+
+fn i32 jit_array_length_from_later_enum_member(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "struct S { u64[Local::LENGTH] arr; } enum Local { x, y, z, LENGTH } fn i32 main() { return (i32)sizeof(S); }", 24, msg);
+}
+
 fn i32 jit_global_struct_empty_literal(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "struct P { i32 x; i32 y; } P origin = {}; fn i32 main() { return origin.x + origin.y + 42; }", 42, msg);
 }
@@ -504,6 +513,8 @@ fn i32 main() {
     testing::add(suite, "jit_generic_forwards_through_three_levels", &jit_generic_forwards_through_three_levels);
     testing::add(suite, "jit_type_param_shadowed_in_nested_block", &jit_type_param_shadowed_in_nested_block);
     testing::add(suite, "jit_value_param_shadowed_across_nested_block", &jit_value_param_shadowed_across_nested_block);
+    testing::add(suite, "jit_array_length_from_later_const", &jit_array_length_from_later_const);
+    testing::add(suite, "jit_array_length_from_later_enum_member", &jit_array_length_from_later_enum_member);
     testing::add(suite, "jit_global_struct_empty_literal", &jit_global_struct_empty_literal);
     testing::add(suite, "jit_global_struct_partial_literal", &jit_global_struct_partial_literal);
     testing::add(suite, "jit_global_struct_designated_literal", &jit_global_struct_designated_literal);

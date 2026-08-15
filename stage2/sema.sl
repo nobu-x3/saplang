@@ -140,6 +140,7 @@ export fn void collect_names(module::Module* m) {
     sys::memset(&sema, 0, sizeof(Sema));
     sema.m = m;
     Sema* s = &sema;
+    s.resolution_stack.arena = m.arena;
     if((s.m.sema_phase & (u16)SemaPhase::Names) != 0) {
         s.scope = (Scope*)s.m.global_scope;     // re-entry: reattach the existing module scope
         return;
@@ -584,6 +585,7 @@ export fn void check_bodies(module::Module* m) {
     sys::memset(&sema, 0, sizeof(Sema));
     sema.m = m;
     Sema* s = &sema;
+    s.resolution_stack.arena = m.arena;
     if((s.m.sema_phase & (u16)SemaPhase::Bodies) != 0) { return; }
     s.scope = (Scope*)s.m.global_scope;
     if(s.m.root_node != null) {
@@ -1168,8 +1170,13 @@ export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
         return ((ast::IntLitNode*)expr).value;
     }
     if(eval_const_i64_hook == null) { return 0; }
+    u64 diags_before = bdiag(s).entries.len;
     types::Ty* t = synth(s, expr);
-    if(t == null) { return 0; }
+    if(t == null) {
+        // Never size an array 0 in silence: the field would take no space but still be addressed.
+        if(bdiag(s).entries.len == diags_before) { diag_array_size_not_const(s, expr.h.src_pos); }
+        return 0;
+    }
     if(!expr_has_flag(expr, ast::AstFlags::ConstExpr)) {
         diag_array_size_not_const(s, expr.h.src_pos);
         return 0;
@@ -1184,6 +1191,33 @@ export fn u64 eval_const_u64(Sema* s, ast::AstNode* expr) {
         return 0;
     }
     return (u64)out;
+}
+
+fn module::Module* decl_home(Sema* s, Decl* d) {
+    if(d != null && d.home != null) { return d.home; }
+    return s.m;
+}
+
+// Resolves a signature early, on this thread: the decl's module may not have reached that phase, and within
+// a module decls resolve in source order, so a name used above its declaration has no type yet.
+fn void ensure_decl_signature(Sema* s, module::Module* target, Decl* d) {
+    if(d.kind != DeclKind::Node || d.data.node == null) { return; }
+    ast::AstKind kind = d.data.node.h.kind;
+    if(kind != ast::AstKind::VarDecl && kind != ast::AstKind::EnumDecl) { return; }
+    if(target.global_scope == null) { return; }
+    // Locals share the decl kind, and theirs is not a signature.
+    if(scope_lookup_local((Scope*)target.global_scope, d.name) != d) { return; }
+    ResolutionKey key = {target, d.name};
+    if(stack_contains(&s.resolution_stack, key)) { return; }
+    stack_push(&s.resolution_stack, key);
+    module::Module* saved_lookup = s.lookup_module;
+    Scope* saved_scope = s.scope;
+    s.lookup_module = target;
+    s.scope = (Scope*)target.global_scope;
+    resolve_decl_signature(s, d.data.node);
+    s.scope = saved_scope;
+    s.lookup_module = saved_lookup;
+    stack_pop(&s.resolution_stack);
 }
 
 // What the alias's target names, looked up in the module that wrote the alias.
@@ -1426,6 +1460,7 @@ export fn types::Ty* synth_ident(Sema* s, ast::IdentNode* n) {
     }
     Decl* aliased = alias_value_target(s, d);
     if(aliased != null) { d = aliased; }
+    if(d.ty == null) { ensure_decl_signature(s, decl_home(s, d), d); }
     mark_external_linkage(s, d);
     n.resolved = (void*)d;
     u16 flags = 0;
@@ -1510,6 +1545,7 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
         }
         Decl* aliased = alias_value_target(s, found);
         if(aliased != null) { found = aliased; }
+        if(found.ty == null) { ensure_decl_signature(s, decl_home(s, found), found); }
         mark_external_linkage(s, found);
         n.resolved = (void*)found;
         u16 flags = 0;
@@ -1526,6 +1562,8 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
             mark_error((ast::AstNode*)n);
             return null;
         }
+        // Member decls appear when the enum's signature resolves.
+        if(mem.decl == null) { ensure_decl_signature(s, decl_home(s, ns), ns); }
         n.resolved = mem.decl;
         types::Ty* enum_ty = types::intern_enum((void*)edecl);
         set_expr((ast::AstNode*)n, enum_ty, (u16)ast::AstFlags::ConstExpr);

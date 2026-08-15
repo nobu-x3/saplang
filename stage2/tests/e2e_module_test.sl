@@ -169,6 +169,24 @@ fn i32 foreign_enum_member_as_array_size(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+// a's signature phase can run before b has resolved N. The comprun checks the layout, since a length that
+// folds to 0 is not an error on its own — the field just takes no space.
+fn i32 foreign_const_as_struct_array_length(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nstruct S { u64 head; u64[b::N] arr; }\ncomprun { if(sizeof(S) != 40) { comperror(\"field took no space\"); } }\nexport fn u64 f() { return sizeof(S); }", "export const u32 N = 4;");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 foreign_enum_member_as_struct_array_length(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nstruct S { u64[b::E::LENGTH] arr; }\ncomprun { if(sizeof(S) != 24) { comperror(\"field took no space\"); } }\nexport fn u64 f() { return sizeof(S); }", "export enum E { x, y, z, LENGTH }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 // Including a constant derived from another of b's constants.
 fn i32 foreign_const_as_array_size(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
@@ -365,6 +383,8 @@ fn i32 main() {
     testing::add(suite, "alias_to_foreign_enum_namespace",       &alias_to_foreign_enum_namespace);
     testing::add(suite, "foreign_enum_member_as_array_size",     &foreign_enum_member_as_array_size);
     testing::add(suite, "foreign_const_as_array_size",           &foreign_const_as_array_size);
+    testing::add(suite, "foreign_const_as_struct_array_length",  &foreign_const_as_struct_array_length);
+    testing::add(suite, "foreign_enum_member_as_struct_array_length", &foreign_enum_member_as_struct_array_length);
     testing::add(suite, "err_alias_to_private_foreign_enum",     &err_alias_to_private_foreign_enum);
     testing::add(suite, "generic_forwards_type_param_across_modules", &generic_forwards_type_param_across_modules);
     testing::add(suite, "generic_type_arg_resolves_in_home_module", &generic_type_arg_resolves_in_home_module);

@@ -339,6 +339,21 @@ fn i32 ok_comprun_generic_inferred(arena::Arena* a, const u8[]m) {
 }
 
 // A `Ctor(T)` parameter is the only mention of T, so inference has to run backwards from the instantiation.
+// A chain is not a cycle: each link folds once.
+fn i32 ok_constant_chain_as_array_length(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "const u32 BASE = 2;\nconst u32 MID = BASE + 1;\nconst u32 TOP = MID * 2;\nstruct S { u64[TOP] arr; }\ncomprun { if(sizeof(S) != 48) { comperror(\"wrong length\"); } }\nexport fn u64 f() { return sizeof(S); }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Must say so rather than quietly size the field 0.
+fn i32 err_array_length_not_constant(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "i32 counter = 4;\nstruct S { u64[counter] arr; }\nexport fn u64 f() { return sizeof(S); }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "array size must be a compile-time constant", m)) { return -2; }
+    return 0;
+}
+
 // An alias may name a value, and then reads wherever the value would.
 fn i32 ok_alias_to_constant(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "const u32 LIMIT = 4;\nalias L = LIMIT;\ncomprun { if(L != 4) { comperror(\"bad\"); } }\nexport fn u32 f() { u32[L] arr; arr[3] = L; return arr[3]; }");
@@ -1947,6 +1962,8 @@ fn i32 main() {
     testing::add(suite, "ok_generic_two_type_params", &ok_generic_two_type_params);
     testing::add(suite, "err_generic_conflicting_infer", &err_generic_conflicting_infer);
     testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);
+    testing::add(suite, "ok_constant_chain_as_array_length", &ok_constant_chain_as_array_length);
+    testing::add(suite, "err_array_length_not_constant", &err_array_length_not_constant);
     testing::add(suite, "ok_alias_to_constant", &ok_alias_to_constant);
     testing::add(suite, "ok_alias_to_function", &ok_alias_to_function);
     testing::add(suite, "ok_alias_to_overloaded_function", &ok_alias_to_overloaded_function);
