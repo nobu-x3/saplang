@@ -42,6 +42,8 @@ export struct Interp {
     u64             max_iterations; // per-loop iteration cap; -comptime-iterations
     MonoCtx[]       mono_stack;
     u64             mono_cap;
+    ast::VarDeclNode*[] const_stack;    // consts being folded, to catch one defined in terms of itself
+    u64                 const_stack_cap;
     Flow            flow;           // non-None unwinds block eval; loops consume Break/Continue, fns consume Return
     value::Value    return_value;
 }
@@ -195,13 +197,32 @@ fn value::Value eval_ident(Interp* ip, ast::IdentNode* n) {
     return eval_decl_value(ip, d, n.h.src_pos);
 }
 
+fn value::Value diag_const_cycle(Interp* ip, ast::VarDeclNode* vd, u32 pos) {
+    u8[] name_str = interner::symbol_str(vd.name);
+    u8[256] scratch;
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "constant %.*s is defined in terms of itself", (i32)name_str.len, (i8*)name_str.ptr);
+    if(written > 0) {
+        u64 len = (u64)written;
+        if(len > 255) { len = 255; }
+        u8[] msg = {&scratch[0], len};
+        interp_report(ip, pos, msg);
+    }
+    return value::val_error();
+}
+
 // A const global folds to its initializer, checked on demand in its home module so cross-module reads work.
 fn value::Value eval_decl_value(Interp* ip, sema::Decl* d, u32 pos) {
     if(d.kind == sema::DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl) {
         ast::VarDeclNode* vd = (ast::VarDeclNode*)d.data.node;
         if(vd.is_const && vd.init != null) {
             if(d.home != null) { sema::ensure_var_init_checked(d.home, vd); }
-            return eval(ip, vd.init);
+            for(u64 const_index = 0; const_index < ip.const_stack.len; const_index += 1) {
+                if(ip.const_stack[const_index] == vd) { return diag_const_cycle(ip, vd, pos); }
+            }
+            list::dyn_push(&ip.const_stack, &ip.const_stack_cap, ip.m.allocator, vd);
+            value::Value folded = eval(ip, vd.init);
+            ip.const_stack.len -= 1;
+            return folded;
         }
     }
     if(d.kind == sema::DeclKind::EnumMember && d.ty != null && d.ty.kind == types::TypeKind::Enum) {

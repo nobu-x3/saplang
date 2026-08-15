@@ -339,6 +339,23 @@ fn i32 ok_comprun_generic_inferred(arena::Arena* a, const u8[]m) {
 }
 
 // A `Ctor(T)` parameter is the only mention of T, so inference has to run backwards from the instantiation.
+// Folding either one reads the other, which used to recurse until the stack ran out.
+fn i32 err_constant_cycle(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "const u32 A = B;\nconst u32 B = A;\nexport fn i32 f() { u32[A] arr; arr[0] = 1; return (i32)arr[0]; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "constant A is defined in terms of itself", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)31, m)) { return -3; }
+    return 0;
+}
+
+fn i32 err_constant_reads_itself(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "const u32 A = A;\nexport fn i32 f() { u32[A] arr; arr[0] = 1; return (i32)arr[0]; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "constant A is defined in terms of itself", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)14, m)) { return -3; }
+    return 0;
+}
+
 // A chain is not a cycle: each link folds once.
 fn i32 ok_constant_chain_as_array_length(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "const u32 BASE = 2;\nconst u32 MID = BASE + 1;\nconst u32 TOP = MID * 2;\nstruct S { u64[TOP] arr; }\ncomprun { if(sizeof(S) != 48) { comperror(\"wrong length\"); } }\nexport fn u64 f() { return sizeof(S); }");
@@ -1962,6 +1979,8 @@ fn i32 main() {
     testing::add(suite, "ok_generic_two_type_params", &ok_generic_two_type_params);
     testing::add(suite, "err_generic_conflicting_infer", &err_generic_conflicting_infer);
     testing::add(suite, "ok_generic_recursive",     &ok_generic_recursive);
+    testing::add(suite, "err_constant_cycle", &err_constant_cycle);
+    testing::add(suite, "err_constant_reads_itself", &err_constant_reads_itself);
     testing::add(suite, "ok_constant_chain_as_array_length", &ok_constant_chain_as_array_length);
     testing::add(suite, "err_array_length_not_constant", &err_array_length_not_constant);
     testing::add(suite, "ok_alias_to_constant", &ok_alias_to_constant);
