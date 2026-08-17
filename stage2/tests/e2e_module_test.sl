@@ -206,6 +206,24 @@ fn i32 err_alias_to_private_foreign_enum(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+// `mod::E::Member` is one segment deeper than a type node holds, so the alias RHS parses it as a value.
+fn i32 alias_to_foreign_enum_member(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nalias L = b::E::LENGTH;\ncomprun { if(L != 3) { comperror(\"bad\"); } }\nexport fn u64 f() { u64[L] arr; arr[2] = 1; return arr[2]; }", "export enum E { x, y, z, LENGTH }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+// Reached through an alias to the enum, whose own signature is what makes the member decls.
+fn i32 alias_to_foreign_enum_member_through_alias(arena::Arena* a, const u8[]m) {
+    test_util::boot(a);
+    module::Module*[] modules = pair(a, "import b;\nalias EA = b::E;\nalias L = EA::LENGTH;\nexport fn u64 f() { u64[L] arr; arr[2] = 1; return arr[2]; }", "export enum E { x, y, z, LENGTH }");
+    test_util::frontend_modules(modules);
+    if(!testing::expect_eq(test_util::errors_in(modules), (u64)0, m)) { return -1; }
+    return 0;
+}
+
 fn i32 alias_to_foreign_constant(arena::Arena* a, const u8[]m) {
     test_util::boot(a);
     module::Module*[] modules = pair(a, "import b;\nalias BUCKET_COUNT = b::BUCKET_COUNT;\nexport fn u32 f() { u32[BUCKET_COUNT] arr; arr[4] = BUCKET_COUNT; return arr[4]; }", "export const u32 BUCKET_COUNT = 5;");
@@ -377,6 +395,8 @@ fn i32 main() {
     testing::add(suite, "instantiation_identity_across_phases",  &instantiation_identity_across_phases);
     testing::add(suite, "infers_through_qualified_constructor",  &infers_through_qualified_constructor);
     testing::add(suite, "err_same_named_constructors_do_not_unify", &err_same_named_constructors_do_not_unify);
+    testing::add(suite, "alias_to_foreign_enum_member",          &alias_to_foreign_enum_member);
+    testing::add(suite, "alias_to_foreign_enum_member_through_alias", &alias_to_foreign_enum_member_through_alias);
     testing::add(suite, "alias_to_foreign_constant",             &alias_to_foreign_constant);
     testing::add(suite, "alias_to_foreign_function",             &alias_to_foreign_function);
     testing::add(suite, "exported_alias_re_exports_a_constant",  &exported_alias_re_exports_a_constant);

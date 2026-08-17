@@ -6204,6 +6204,33 @@ fn i32 union_many_fields_growth(arena::Arena* a, const u8[]msg) {
     return 0;
 }
 
+// A type node holds at most `mod::Name`, so a deeper chain is parsed as the value expression it is.
+fn i32 alias_to_qualified_enum_member(arena::Arena* a, const u8[]msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias L = mod::E::MEMBER;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "L"), false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_eq(m.diag.entries.len, (u64)0, msg)) { return -2; }
+    if(!testing::expect_eq((u64)al.target.h.kind, (u64)ast::AstKind::NamespaceAccess, msg)) { return -3; }
+    ast::NamespaceAccessNode* member = (ast::NamespaceAccessNode*)al.target;
+    if(!testing::expect_eq((void*)member.name, (void*)compiler_testing::sym(m, "MEMBER"), msg)) { return -4; }
+    if(!testing::expect_eq((u64)member.base.h.kind, (u64)ast::AstKind::NamespaceAccess, msg)) { return -5; }
+    if(!testing::expect_eq((void*)((ast::NamespaceAccessNode*)member.base).name, (void*)compiler_testing::sym(m, "E"), msg)) { return -6; }
+    return 0;
+}
+
+// Two segments is still a type: the generic instantiation must not be dragged onto the value path.
+fn i32 alias_to_qualified_type_stays_a_type(arena::Arena* a, const u8[]msg) {
+    arena::Arena local = {8192, null};
+    module::Module* m;
+    ast::AstNode* root = compiler_testing::parse_src(&local, "alias V = mod::Name;", &m);
+    ast::AliasDeclNode* al = compiler_testing::expect_alias(compiler_testing::nth_stmt(root, 0), compiler_testing::sym(m, "V"), false, msg);
+    if(!al) { return -1; }
+    if(!testing::expect_eq((u64)al.target.h.kind, (u64)ast::AstKind::NamedType, msg)) { return -2; }
+    return 0;
+}
+
 fn i32 anon_union_in_alias(arena::Arena* a, const u8[]msg) {
     arena::Arena local = {8192, null};
     module::Module* m;
@@ -13126,6 +13153,8 @@ fn i32 main() {
     testing::add(s_al, "alias_primitive_rhs", &alias_primitive_rhs);
     testing::add(s_al, "alias_named_rhs", &alias_named_rhs);
     testing::add(s_al, "alias_qualified_named_rhs", &alias_qualified_named_rhs);
+    testing::add(s_al, "alias_to_qualified_enum_member", &alias_to_qualified_enum_member);
+    testing::add(s_al, "alias_to_qualified_type_stays_a_type", &alias_to_qualified_type_stays_a_type);
     testing::add(s_al, "alias_pointer_rhs", &alias_pointer_rhs);
     testing::add(s_al, "alias_slice_rhs", &alias_slice_rhs);
     testing::add(s_al, "alias_array_rhs", &alias_array_rhs);

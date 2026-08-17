@@ -371,6 +371,37 @@ fn i32 err_array_length_not_constant(arena::Arena* a, const u8[]m) {
     return 0;
 }
 
+// An enum member is a value too, so an alias may stand for one.
+fn i32 ok_alias_to_enum_member(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "enum E { a, b, c, LENGTH }\nalias L = E::LENGTH;\ncomprun { if(L != 3) { comperror(\"bad\"); } }\nexport fn u64 f() { u64[L] arr; arr[2] = 1; E v = L; if(v != E::LENGTH) { return 0; } return arr[2]; }");
+    if(!testing::expect_eq(test_util::error_count(mod), (u64)0, m)) { return -1; }
+    return 0;
+}
+
+fn i32 err_alias_to_enum_member_in_type_position(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "enum E { a, b, c, LENGTH }\nalias L = E::LENGTH;\nexport fn i32 f() { L x = 1; return (i32)x; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "L names an enum member, not a type", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)68, m)) { return -3; }
+    return 0;
+}
+
+fn i32 err_alias_to_missing_enum_member(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "enum E { a, b, c }\nalias L = E::NOPE;\nexport fn i32 f() { return (i32)L; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "no member named NOPE", m)) { return -2; }
+    if(!testing::expect_eq(mod.diag.entries[0].src_pos, (u32)29, m)) { return -3; }
+    return 0;
+}
+
+// An enum member is not a type, and a chain deep enough to be a value has nothing else to fall back on.
+fn i32 err_enum_member_in_type_position(arena::Arena* a, const u8[]m) {
+    module::Module* mod = test_util::frontend(a, "enum E { a, b, c }\nexport fn i32 f() { E::b x; return (i32)x; }");
+    if(!testing::expect_true(test_util::error_count(mod) >= (u64)1, m)) { return -1; }
+    if(!testing::expect_eq(mod.diag.entries[0].msg, "b names an enum member, not a type", m)) { return -2; }
+    return 0;
+}
+
 // An alias may name a value, and then reads wherever the value would.
 fn i32 ok_alias_to_constant(arena::Arena* a, const u8[]m) {
     module::Module* mod = test_util::frontend(a, "const u32 LIMIT = 4;\nalias L = LIMIT;\ncomprun { if(L != 4) { comperror(\"bad\"); } }\nexport fn u32 f() { u32[L] arr; arr[3] = L; return arr[3]; }");
@@ -1983,6 +2014,10 @@ fn i32 main() {
     testing::add(suite, "err_constant_reads_itself", &err_constant_reads_itself);
     testing::add(suite, "ok_constant_chain_as_array_length", &ok_constant_chain_as_array_length);
     testing::add(suite, "err_array_length_not_constant", &err_array_length_not_constant);
+    testing::add(suite, "ok_alias_to_enum_member", &ok_alias_to_enum_member);
+    testing::add(suite, "err_alias_to_enum_member_in_type_position", &err_alias_to_enum_member_in_type_position);
+    testing::add(suite, "err_alias_to_missing_enum_member", &err_alias_to_missing_enum_member);
+    testing::add(suite, "err_enum_member_in_type_position", &err_enum_member_in_type_position);
     testing::add(suite, "ok_alias_to_constant", &ok_alias_to_constant);
     testing::add(suite, "ok_alias_to_function", &ok_alias_to_function);
     testing::add(suite, "ok_alias_to_overloaded_function", &ok_alias_to_overloaded_function);

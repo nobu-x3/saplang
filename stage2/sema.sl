@@ -198,7 +198,10 @@ fn void collect_name_for_decl(Sema* s, ast::AstNode* top_level_node) {
         ast::EnumDeclNode* enum_decl = (ast::EnumDeclNode*)top_level_node;
         enum_decl.qualified_name = qualify_decl_name(s, enum_decl.name);
         Decl* decl = register_sym(s, module_scope, enum_decl.name, enum_decl.is_exported, DeclKind::Node, enum_decl.h.src_pos);
-        if(decl != null) { decl.data.node = top_level_node; }
+        if(decl != null) {
+            decl.data.node = top_level_node;
+            enum_decl.decl = (void*)decl;
+        }
     }
     case ast::AstKind::AliasDecl: {
         ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)top_level_node;
@@ -405,7 +408,13 @@ fn void resolve_decl_signature(Sema* s, ast::AstNode* decl_node) {
         ast::AliasDeclNode* alias_decl = (ast::AliasDeclNode*)decl_node;
         // One naming a value has no type of its own.
         Decl* self = scope_lookup_local((Scope*)s.m.global_scope, alias_decl.name);
-        if(alias_value_target(s, self) == null) { set_decl_ty(s, alias_decl.name, resolve_type(s, alias_decl.target)); }
+        if(alias_value_target(s, self) == null) {
+            u64 diags_before = bdiag(s).entries.len;
+            types::Ty* resolved = resolve_type(s, alias_decl.target);
+            // A target that resolves to neither must say so, or the null type reaches codegen.
+            if(resolved == null && bdiag(s).entries.len == diags_before) { diag_alias_target_unresolved(s, alias_decl); }
+            set_decl_ty(s, alias_decl.name, resolved);
+        }
     }
     case ast::AstKind::ExternBlock: {
         ast::ExternBlockNode* extern_block = (ast::ExternBlockNode*)decl_node;
@@ -1106,6 +1115,13 @@ fn types::Ty* resolve_named_type(Sema* s, ast::TypeNamedNode* n) {
         if(q != null) { namespace_decl = q; }
     }
     if(namespace_decl == null || namespace_decl.kind != DeclKind::Import || namespace_decl.data.module == null) {
+        // An enum qualifier in type position names a member, so say whether that member exists.
+        if(namespace_decl != null && enum_decl_of(s, namespace_decl, n.h.src_pos) != null) {
+            Decl* member = enum_member_decl(s, namespace_decl, n.name, n.h.src_pos);
+            if(member != null) { diag_decl_not_a_type(s, n.h.src_pos, n.name, member); }
+            else { diag_unknown_member(s, n.h.src_pos, n.name); }
+            return null;
+        }
         diag_unknown_qualified_type(s, n.h.src_pos, n.namespace, n.name);
         return null;
     }
@@ -1220,34 +1236,81 @@ fn void ensure_decl_signature(Sema* s, module::Module* target, Decl* d) {
     stack_pop(&s.resolution_stack);
 }
 
-// What the alias's target names, looked up in the module that wrote the alias.
-fn Decl* alias_named_decl(Sema* s, Decl* d) {
-    ast::AstNode* target = ((ast::AliasDeclNode*)d.data.node).target;
-    if(target == null || target.h.kind != ast::AstKind::NamedType) { return null; }
-    ast::TypeNamedNode* named = (ast::TypeNamedNode*)target;
-    module::Module* home = s.m;
-    if(d.home != null) { home = d.home; }
-    if(named.namespace == null) { return scope_lookup_local((Scope*)home.global_scope, named.name); }
-    Decl* ns = scope_lookup_local((Scope*)home.global_scope, named.namespace);
-    if(ns == null || ns.kind != DeclKind::Import || ns.data.module == null) { return null; }
-    Decl* found = scope_lookup_local((Scope*)ns.data.module.global_scope, named.name);
-    if(found == null || (!found.is_exported && ns.data.module != home)) { return null; }
+// Made when the enum's own signature resolves, which the name may have reached through an alias.
+fn void ensure_enum_members(Sema* s, ast::EnumDeclNode* edecl) {
+    if(edecl.decl == null) { return; }
+    Decl* owner = (Decl*)edecl.decl;
+    ensure_decl_signature(s, decl_home(s, owner), owner);
+}
+
+fn Decl* enum_member_decl(Sema* s, Decl* holder, symbol::Symbol* member_name, u32 src_pos) {
+    ast::EnumDeclNode* edecl = enum_decl_of(s, holder, src_pos);
+    if(edecl == null) { return null; }
+    ast::EnumMember* mem = find_enum_member(edecl, member_name);
+    if(mem == null) { return null; }
+    if(mem.decl == null) { ensure_enum_members(s, edecl); }
+    return (Decl*)mem.decl;
+}
+
+fn Decl* module_member_decl(module::Module* target, module::Module* home, symbol::Symbol* name) {
+    if(target == null || target.global_scope == null) { return null; }
+    Decl* found = scope_lookup_local((Scope*)target.global_scope, name);
+    if(found == null || (!found.is_exported && target != home)) { return null; }
     return found;
 }
 
-// An alias may name a constant, a variable, or a function instead of a type; null if it names neither.
+// What the alias's target names, looked up in the module that wrote the alias.
+fn Decl* alias_named_decl(Sema* s, Decl* d) {
+    ast::AstNode* target = ((ast::AliasDeclNode*)d.data.node).target;
+    if(target == null) { return null; }
+    module::Module* home = decl_home(s, d);
+    if(target.h.kind == ast::AstKind::NamedType) {
+        ast::TypeNamedNode* named = (ast::TypeNamedNode*)target;
+        if(named.namespace == null) { return scope_lookup_local((Scope*)home.global_scope, named.name); }
+        Decl* ns = scope_lookup_local((Scope*)home.global_scope, named.namespace);
+        if(ns == null) { return null; }
+        if(ns.kind == DeclKind::Import) { return module_member_decl(ns.data.module, home, named.name); }
+        return enum_member_decl(s, ns, named.name, target.h.src_pos);   // `E::Member`
+    }
+    // `mod::E::Member`, which the parser hands over as a value expression.
+    if(target.h.kind == ast::AstKind::NamespaceAccess) {
+        ast::NamespaceAccessNode* member_access = (ast::NamespaceAccessNode*)target;
+        if(member_access.base == null || member_access.base.h.kind != ast::AstKind::NamespaceAccess) { return null; }
+        ast::NamespaceAccessNode* enum_ref = (ast::NamespaceAccessNode*)member_access.base;
+        if(enum_ref.base == null || enum_ref.base.h.kind != ast::AstKind::Ident) { return null; }
+        Decl* ns = scope_lookup_local((Scope*)home.global_scope, ((ast::IdentNode*)enum_ref.base).name);
+        if(ns == null || ns.kind != DeclKind::Import) { return null; }
+        Decl* holder = module_member_decl(ns.data.module, home, enum_ref.name);
+        if(holder == null) { return null; }
+        return enum_member_decl(s, holder, member_access.name, target.h.src_pos);
+    }
+    return null;
+}
+
+fn bool decl_is_alias(Decl* d) {
+    if(d == null || d.kind != DeclKind::Node || d.data.node == null) { return false; }
+    return d.data.node.h.kind == ast::AstKind::AliasDecl;
+}
+
+fn bool decl_is_value(Decl* d) {
+    if(d == null) { return false; }
+    if(d.kind == DeclKind::EnumMember) { return true; }
+    if(decl_is_fn(d)) { return true; }
+    return d.kind == DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl;
+}
+
+// An alias may name a value instead of a type: a constant, variable, function, or enum member.
 // Returns that declaration itself, never a copy: lowering keys globals and functions by decl identity.
 fn Decl* alias_value_target(Sema* s, Decl* d) {
+    if(!decl_is_alias(d)) { return null; }
     Decl* current = d;
     // Bounded: a cycle returns null here and the type path reports it.
     for(u32 hops = 0; hops < 64; hops += 1) {
-        if(current == null || current.kind != DeclKind::Node || current.data.node == null) { return null; }
-        if(current.data.node.h.kind != ast::AstKind::AliasDecl) {
-            if(current == d) { return null; }
-            if(decl_is_fn(current) || current.data.node.h.kind == ast::AstKind::VarDecl) { return current; }
+        current = alias_named_decl(s, current);
+        if(!decl_is_alias(current)) {
+            if(decl_is_value(current)) { return current; }
             return null;
         }
-        current = alias_named_decl(s, current);
     }
     return null;
 }
@@ -1562,8 +1625,7 @@ fn types::Ty* synth_ns_access(Sema* s, ast::NamespaceAccessNode* n) {
             mark_error((ast::AstNode*)n);
             return null;
         }
-        // Member decls appear when the enum's signature resolves.
-        if(mem.decl == null) { ensure_decl_signature(s, decl_home(s, ns), ns); }
+        if(mem.decl == null) { ensure_enum_members(s, edecl); }
         n.resolved = mem.decl;
         types::Ty* enum_ty = types::intern_enum((void*)edecl);
         set_expr((ast::AstNode*)n, enum_ty, (u16)ast::AstFlags::ConstExpr);
@@ -3120,13 +3182,21 @@ export fn void diag_unknown_type(Sema* s, u32 src_pos, symbol::Symbol* name) {
     emit_diag(s, src_pos, &scratch[0], written);
 }
 
+fn void diag_alias_target_unresolved(Sema* s, ast::AliasDeclNode* alias_decl) {
+    u32 pos = alias_decl.h.src_pos;
+    if(alias_decl.target != null) { pos = alias_decl.target.h.src_pos; }
+    const u8[] msg = "alias target names neither a type nor a value";
+    sema_report(s, pos, msg);
+}
+
 // Says what the name is instead, when a name in type position turns out not to be a type.
 fn void diag_decl_not_a_type(Sema* s, u32 src_pos, symbol::Symbol* name, Decl* d) {
     if(name == null) { return; }
     const u8[] what = {null, 0};
-    if(decl_is_fn(d)) { what = "function"; }
+    if(decl_is_fn(d)) { what = "a function"; }
+    else if(d != null && d.kind == DeclKind::EnumMember) { what = "an enum member"; }
     else if(d != null && d.kind == DeclKind::Node && d.data.node != null && d.data.node.h.kind == ast::AstKind::VarDecl) {
-        if(((ast::VarDeclNode*)d.data.node).is_const) { what = "constant"; } else { what = "variable"; }
+        if(((ast::VarDeclNode*)d.data.node).is_const) { what = "a constant"; } else { what = "a variable"; }
     }
     if(what.len == 0) {
         diag_unknown_type(s, src_pos, name);
@@ -3134,7 +3204,7 @@ fn void diag_decl_not_a_type(Sema* s, u32 src_pos, symbol::Symbol* name, Decl* d
     }
     u8[] name_str = interner::symbol_str(name);
     u8[256] scratch;
-    i32 written = sys::snprintf((i8*)&scratch[0], 256, "%.*s names a %.*s, not a type", (i32)name_str.len, (i8*)name_str.ptr, (i32)what.len, (i8*)what.ptr);
+    i32 written = sys::snprintf((i8*)&scratch[0], 256, "%.*s names %.*s, not a type", (i32)name_str.len, (i8*)name_str.ptr, (i32)what.len, (i8*)what.ptr);
     emit_diag(s, src_pos, &scratch[0], written);
 }
 

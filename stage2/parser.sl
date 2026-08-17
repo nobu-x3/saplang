@@ -931,6 +931,12 @@ fn ast::AstNode* parse_extern_block(Parser* p) {
     return (ast::AstNode*)n;
 }
 
+// A type node holds at most `mod::Name`, so a second `::` means the chain names a value.
+fn bool is_value_chain(Parser* p) {
+    return peek(p, 0).kind == token::TokenKind::Ident && peek(p, 1).kind == token::TokenKind::ColonColon
+        && peek(p, 2).kind == token::TokenKind::Ident && peek(p, 3).kind == token::TokenKind::ColonColon;
+}
+
 fn ast::AstNode* parse_alias_decl(Parser* p, bool is_exported) {
     u32 start = peek(p, 0).src_pos;
     token::Token kw = expect(p, token::TokenKind::ALIAS);
@@ -943,6 +949,8 @@ fn ast::AstNode* parse_alias_decl(Parser* p, bool is_exported) {
     ast::AstNode* target;
     if(peek(p, 0).kind == token::TokenKind::Ident && peek(p, 1).kind == token::TokenKind::LParen) {
         target = parse_expr(p, 0);   // `alias W = pick();` — a comptime call producing a Type
+    } else if(is_value_chain(p)) {
+        target = parse_expr(p, 0);   // `alias L = mod::E::Member;`
     } else {
         bool prev_allow = p.allow_anon_type;
         p.allow_anon_type = true;

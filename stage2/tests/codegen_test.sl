@@ -276,6 +276,10 @@ fn i32 jit_alias_to_constant_and_function(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "const i32 STEP = 20; fn i32 twice(i32 x) { return x * 2; } alias S = STEP; alias T = twice; fn i32 main() { return T(S) + 2; }", 42, msg);
 }
 
+fn i32 jit_alias_to_enum_member(arena::Arena* a, const u8[]msg) {
+    return jit_return(a, "enum E { a, b, c, LENGTH } alias L = E::LENGTH; fn i32 main() { u64[L] arr; arr[2] = 39; E v = L; if(v != E::LENGTH) { return 1; } return (i32)arr[2] + (i32)L; }", 42, msg);
+}
+
 fn i32 jit_alias_to_mutable_global(arena::Arena* a, const u8[]msg) {
     return jit_return(a, "i32 counter = 40; alias C = counter; fn i32 main() { C = C + 2; return counter; }", 42, msg);
 }
@@ -521,6 +525,7 @@ fn i32 main() {
     testing::add(suite, "jit_global_struct_zeroes_every_field_kind", &jit_global_struct_zeroes_every_field_kind);
     testing::add(suite, "jit_comptime_reads_omitted_field_zero", &jit_comptime_reads_omitted_field_zero);
     testing::add(suite, "jit_alias_to_constant_and_function", &jit_alias_to_constant_and_function);
+    testing::add(suite, "jit_alias_to_enum_member", &jit_alias_to_enum_member);
     testing::add(suite, "jit_alias_to_mutable_global", &jit_alias_to_mutable_global);
     testing::add(suite, "jit_comptime_reads_union_member", &jit_comptime_reads_union_member);
     testing::add(suite, "jit_global_union_first_member", &jit_global_union_first_member);

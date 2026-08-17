@@ -89,6 +89,7 @@ export struct EnumDeclNode {
     AstNode*  base_type;                // AstKind::PrimitiveType, null = i32 default
     EnumMember[] members;
     bool      is_exported;
+    void*     decl;                     // sema::Decl* backlink; set at registration (ast can't import sema)
 }
 
 export struct AliasDeclNode {
