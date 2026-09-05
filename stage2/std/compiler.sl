@@ -575,6 +575,7 @@ fn i8** build_link_argv(Compiler* c, const u8[][] object_paths, link_paths::Link
     argv[n] = paths.crt_start; n += 1;
     argv[n] = paths.crt_init; n += 1;
     argv[n] = paths.lib_dir; n += 1;
+    if(paths.gcc_lib_dir != null) { argv[n] = paths.gcc_lib_dir; n += 1; }
     // User -L dirs precede the objects/libs so ld.lld searches them for the -l libraries.
     for(u64 i = 0; i < c.lib_dirs.data.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs.data[i]); n += 1; }
     for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.allocator, object_paths[i]); n += 1; }

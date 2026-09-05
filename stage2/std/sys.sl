@@ -40,6 +40,9 @@ extern {
     export fn i32   fclose(FILE* stream);
     export fn i32   fflush(FILE* stream);
 
+    export fn FILE* popen(const i8* command, const i8* mode);
+    export fn i32   pclose(FILE* stream);
+
     // printf family. Use dprintf(2, ...) for stderr — sidesteps the
     // question of how to expose libc's stdout/stderr globals as externs.
     export fn i32 printf(const i8* fmt, ...);

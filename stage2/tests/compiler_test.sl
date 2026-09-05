@@ -797,6 +797,7 @@ fn i32 link_config_override(arena::Arena* a, const u8[]msg) {
 crt_start=/tmp/custom/Scrt1.o
 unknown_key=ignored
 lib_dir=/tmp/custom
+gcc_lib_dir=/tmp/custom/gcc
 ");
     io::close(&f);
 
@@ -804,9 +805,10 @@ lib_dir=/tmp/custom
     if(!testing::expect_true(link_paths::apply_override(&paths, arena::allocator(a), "lp_test.cfg"), msg)) { return -2; }
     if(!testing::expect_eq(cstr_slice((u8*)paths.crt_start), "/tmp/custom/Scrt1.o", msg)) { return -3; }
     if(!testing::expect_eq(cstr_slice((u8*)paths.lib_dir), "-L/tmp/custom", msg)) { return -4; }
+    if(!testing::expect_eq(cstr_slice((u8*)paths.gcc_lib_dir), "-L/tmp/custom/gcc", msg)) { return -5; }
     io::unlink("lp_test.cfg");
 
-    if(!testing::expect_true(!link_paths::apply_override(&paths, arena::allocator(a), "no_such_file.cfg"), msg)) { return -5; }
+    if(!testing::expect_true(!link_paths::apply_override(&paths, arena::allocator(a), "no_such_file.cfg"), msg)) { return -6; }
     return 0;
 }
 

@@ -30,47 +30,19 @@ mkdir -p bootstrap build/bin
 
 cmake -B build -DBUILD_TESTS=On && make -C build
 
-# Seeds up to stage2-generic-structs hardcode a single-lib-dir layout (/usr/lib/Scrt1.o, -L/usr/lib)
-# for the ld.lld step; runtime probing only arrives in stage2-v1. On a multiarch distribution those
-# files sit in /usr/lib/<triple>, so give the seeds an ld.lld shim on PATH that repoints them. The
-# seeds spawn the linker with execvp, so PATH is enough. No shim is needed once the crt objects
-# really are in /usr/lib, and none is used for the final build — that compiler probes for itself.
-CRT_DIR=
-for dir in /usr/lib /usr/lib/x86_64-linux-gnu /usr/lib64 /lib/x86_64-linux-gnu; do
-    if [ -e "$dir/Scrt1.o" ]; then CRT_DIR=$dir; break; fi
-done
-if [ -z "$CRT_DIR" ]; then
-    echo "Cannot locate Scrt1.o; install the C runtime development files (glibc / libc6-dev)."
-    exit 1
-fi
-
-SHIM_DIR=
-if [ "$CRT_DIR" != /usr/lib ]; then
-    REAL_LD=$(command -v ld.lld) || { echo "ld.lld not found on PATH."; exit 1; }
-    SHIM_DIR=$ROOT/bootstrap/ldshim
-    mkdir -p "$SHIM_DIR"
-    cat > "$SHIM_DIR/ld.lld" <<EOF
-#!/usr/bin/env sh
-for arg in "\$@"; do
-    case \$arg in
-        /usr/lib/Scrt1.o|/usr/lib/crti.o|/usr/lib/crtn.o) set -- "\$@" "$CRT_DIR/\${arg##*/}" ;;
-        -L/usr/lib)                                       set -- "\$@" "-L$CRT_DIR" ;;
-        *)                                                set -- "\$@" "\$arg" ;;
-    esac
-    shift
-done
-exec "$REAL_LD" "\$@"
-EOF
-    chmod +x "$SHIM_DIR/ld.lld"
-fi
-
 # Build tag $1 with compiler $2 (extra flags $3) into $4, from a detached worktree of the tag.
 build_stage() {
     tag=$1; cc=$2; flags=$3; out=$4
     wt=$(mktemp -d)
     git worktree add --quiet --detach "$wt" "$tag"
+    # Tags before stage2-v1 hardcode a flat /usr/lib layout for the crt objects and the library
+    # search dir, so their compilers cannot link on a multiarch distribution. Build them against the
+    # probing link config instead; tags that already probe are left as tagged.
+    if ! grep -q find_crt_dir "$wt/stage2/std/link_paths.linux.sl"; then
+        cp "$ROOT/seeds/link_paths.linux.sl" "$wt/stage2/std/link_paths.linux.sl"
+    fi
     # Seeds predating the .sap-cache move still scribble .tmp; clear both so a stale worktree can't leak objects.
-    ( cd "$wt" && rm -rf .tmp .sap-cache && PATH="${SHIM_DIR:+$SHIM_DIR:}$PATH" "$ROOT/$cc" stage2/saplangc.sl -o "$ROOT/$out" -i "$INCLUDES" -l "LLVM-19" -target linux $flags )
+    ( cd "$wt" && rm -rf .tmp .sap-cache && "$ROOT/$cc" stage2/saplangc.sl -o "$ROOT/$out" -i "$INCLUDES" -l "LLVM-19" -target linux $flags )
     git worktree remove --force "$wt"
 }
 

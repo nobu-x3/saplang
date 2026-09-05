@@ -9,6 +9,7 @@ export struct LinkPaths {
     i8* crt_init;
     i8* crt_fini;
     i8* lib_dir;
+    i8* gcc_lib_dir;
     i8* asan_runtime;
     i8* asan_runtime_static;
     i8* asan_dynamic_list;
@@ -34,6 +35,9 @@ export fn LinkPaths resolve(mem::Allocator allocator) {
         paths.crt_fini  = cstr(allocator, join(allocator, crt_dir, "/crtn.o"));
         paths.lib_dir   = cstr(allocator, join(allocator, "-L", crt_dir));
     }
+
+    const u8[] gcc_dir = find_gcc_lib_dir(allocator, crt_dir);
+    if(gcc_dir.len > 0) { paths.gcc_lib_dir = cstr(allocator, join(allocator, "-L", gcc_dir)); }
 
     const u8[] clang_dir = find_clang_runtime_dir(allocator);
     const u8[] unwind = find_unwind_runtime();
@@ -82,6 +86,7 @@ fn void assign_entry(LinkPaths* paths, mem::Allocator allocator, u8[] key, u8[] 
     if(slice_eq(key, "crt_init"))            { paths.crt_init = cstr(allocator, value); return; }
     if(slice_eq(key, "crt_fini"))            { paths.crt_fini = cstr(allocator, value); return; }
     if(slice_eq(key, "lib_dir"))             { paths.lib_dir = cstr(allocator, join(allocator, "-L", value)); return; }
+    if(slice_eq(key, "gcc_lib_dir"))         { paths.gcc_lib_dir = cstr(allocator, join(allocator, "-L", value)); return; }
     if(slice_eq(key, "asan_runtime"))        { paths.asan_runtime = cstr(allocator, value); paths.found_asan = true; return; }
     if(slice_eq(key, "asan_runtime_static")) { paths.asan_runtime_static = cstr(allocator, value); return; }
     if(slice_eq(key, "asan_dynamic_list"))   { paths.asan_dynamic_list = cstr(allocator, join(allocator, "--dynamic-list=", value)); return; }
@@ -98,6 +103,64 @@ fn const u8[] find_crt_dir(mem::Allocator allocator) {
     }
     u8[] none = {null, 0};
     return none;
+}
+
+fn const u8[] find_gcc_lib_dir(mem::Allocator allocator, const u8[] crt_dir) {
+    u8[] none = {null, 0};
+    if(crt_dir.len > 0 && file_exists(join(allocator, crt_dir, "/libstdc++.so"))) { return none; }
+    const u8[] answer = clang_file_dir(allocator, "libstdc++.so");
+    if(answer.len > 0) { return answer; }
+    return probe_gcc_lib_dir(allocator);
+}
+
+fn const u8[] clang_file_dir(mem::Allocator allocator, const u8[] library) {
+    u8[] none = {null, 0};
+    i8* command = cstr(allocator, join(allocator, "clang -print-file-name=", library));
+    sys::FILE* pipe = sys::popen((const i8*)command, "r");
+    if(pipe == null) { return none; }
+    u8[1024] answer;
+    u64 length = sys::fread(&answer[0], 1, 1024, pipe);
+    sys::pclose(pipe);
+
+    while(length > 0 && (answer[length - 1] == '\n' || answer[length - 1] == '\r')) { length -= 1; }
+    u64 separator = length;
+    for(u64 char_index = 0; char_index < length; char_index += 1) {
+        if(answer[char_index] == '/') { separator = char_index; }
+    }
+    if(separator == length) { return none; }
+
+    u8[] path = {&answer[0], separator};
+    return copy_bytes(allocator, path);
+}
+
+fn const u8[] probe_gcc_lib_dir(mem::Allocator allocator) {
+    const u8[][6] roots = ["/usr/lib/gcc/x86_64-linux-gnu/", "/usr/lib/gcc/x86_64-pc-linux-gnu/", "/usr/lib/gcc/x86_64-redhat-linux/",
+                           "/usr/lib64/gcc/x86_64-linux-gnu/", "/usr/lib64/gcc/x86_64-pc-linux-gnu/", "/usr/lib64/gcc/x86_64-redhat-linux/"];
+    u64 major_version = 30;
+    while(major_version >= 8) {
+        for(u64 root_index = 0; root_index < 6; root_index += 1) {
+            u8[] dir = gcc_dir_versioned(allocator, roots[root_index], major_version);
+            if(file_exists(join(allocator, dir, "/libstdc++.so"))) { return dir; }
+        }
+        major_version -= 1;
+    }
+    u8[] none = {null, 0};
+    return none;
+}
+
+fn u8[] gcc_dir_versioned(mem::Allocator allocator, const u8[] root, u64 major_version) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, allocator, 64);
+    io::outbuf_write(&buf, root);
+    io::outbuf_write_u64(&buf, major_version);
+    return io::outbuf_bytes(&buf);
+}
+
+fn u8[] copy_bytes(mem::Allocator allocator, const u8[] bytes) {
+    io::OutBuf buf;
+    io::outbuf_init(&buf, allocator, bytes.len + 1);
+    io::outbuf_write(&buf, bytes);
+    return io::outbuf_bytes(&buf);
 }
 
 fn const u8[] find_dynamic_linker() {
