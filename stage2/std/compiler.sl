@@ -87,6 +87,8 @@ export fn Compiler* new(arena::Arena* a) {
     Compiler* c = (Compiler*)arena::alloc(a, sizeof(Compiler));
     sys::memset(c, 0, sizeof(Compiler));
     c.allocator = arena::allocator(a);
+    // Without this an installed compiler resolves the other platform's per-target modules.
+    c.target = link_paths::host_os();
     return c;
 }
 
