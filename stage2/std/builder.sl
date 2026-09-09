@@ -223,7 +223,7 @@ fn Optimize parse_optimize(u8[] name) {
     if(slice_eq(name, "Release"))          { return Optimize::Release; }
     if(slice_eq(name, "ReleaseDebug"))     { return Optimize::ReleaseDebug; }
     if(slice_eq(name, "AddressSanitizer")) { return Optimize::AddressSanitizer; }
-    sys::dprintf(2, "warning: unknown -Doptimize=%.*s, using Debug\n", (i32)name.len, (i8*)name.ptr);
+    sys::fprintf(sys::stderr_file(), "warning: unknown -Doptimize=%.*s, using Debug\n", (i32)name.len, (i8*)name.ptr);
     return Optimize::Debug;
 }
 
@@ -453,7 +453,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
             u8[] name = b.requested_steps.ptr[step_index];
             Step* s = resolve_step(b, name);
             if(s == null) {
-                sys::dprintf(2, "error: no step named '%.*s' (run `saplangc build --help`)\n", (i32)name.len, (i8*)name.ptr);
+                sys::fprintf(sys::stderr_file(), "error: no step named '%.*s' (run `saplangc build --help`)\n", (i32)name.len, (i8*)name.ptr);
                 return 1;
             }
             list::push(&roots, b.arena, s);
@@ -506,14 +506,14 @@ fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
             ensure_output_dir(b, c);
             sys::mkdir(cstr(b.arena, ".sap-cache"), 493);
             if(is_fresh(b, c, out)) {
-                sys::dprintf(1, "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+                sys::fprintf(sys::stdout_file(), "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
                 c.step.done = true;
                 continue;
             }
-            sys::dprintf(1, "  CC   %.*s -> %.*s\n", (i32)c.root_source.len, (i8*)c.root_source.ptr, (i32)out.len, (i8*)out.ptr);
+            sys::fprintf(sys::stdout_file(), "  CC   %.*s -> %.*s\n", (i32)c.root_source.len, (i8*)c.root_source.ptr, (i32)out.len, (i8*)out.ptr);
             i32 pid = fork_compile(b, c, out);
             if(pid < 0) {
-                sys::dprintf(2, "error: fork failed for '%.*s'\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+                sys::fprintf(sys::stderr_file(), "error: fork failed for '%.*s'\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
                 if(first_err == 0) { first_err = -1; }
                 continue;
             }
@@ -535,7 +535,7 @@ fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
             running[slot] = null;
             inflight -= 1;
             if(rc != 0) {
-                sys::dprintf(2, "error: compiling '%.*s' failed\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+                sys::fprintf(sys::stderr_file(), "error: compiling '%.*s' failed\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
                 if(first_err == 0) { first_err = rc; }
             } else {
                 write_stamp(b, c);
@@ -582,14 +582,14 @@ fn i32 make_compile(Build* b, CompileStep* c) {
     ensure_output_dir(b, c);
     sys::mkdir(cstr(b.arena, ".sap-cache"), 493);
     if(is_fresh(b, c, out)) {
-        sys::dprintf(1, "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+        sys::fprintf(sys::stdout_file(), "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
         return 0;
     }
-    sys::dprintf(1, "  CC   %.*s -> %.*s\n", (i32)c.root_source.len, (i8*)c.root_source.ptr, (i32)out.len, (i8*)out.ptr);
+    sys::fprintf(sys::stdout_file(), "  CC   %.*s -> %.*s\n", (i32)c.root_source.len, (i8*)c.root_source.ptr, (i32)out.len, (i8*)out.ptr);
     i8** argv = build_compile_argv(b, c, out);
     i32 rc = spawn_and_wait(argv);
     if(rc != 0) {
-        sys::dprintf(2, "error: compiling '%.*s' failed\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+        sys::fprintf(sys::stderr_file(), "error: compiling '%.*s' failed\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
         return rc;
     }
     write_stamp(b, c);
@@ -603,21 +603,21 @@ fn i32 make_run(Build* b, RunStep* r) {
     argv[n] = cstr(b.arena, path); n += 1;
     for(u64 arg_index = 0; arg_index < r.args.len; arg_index += 1) { argv[n] = cstr(b.arena, r.args.ptr[arg_index]); n += 1; }
     argv[n] = null;
-    sys::dprintf(1, "  RUN  %.*s\n", (i32)path.len, (i8*)path.ptr);
+    sys::fprintf(sys::stdout_file(), "  RUN  %.*s\n", (i32)path.len, (i8*)path.ptr);
     return spawn_and_wait(argv);
 }
 
 fn void print_help(Build* b) {
-    sys::dprintf(1, "Usage: saplangc build [step]... [-Doption=value]...\n\n");
-    sys::dprintf(1, "Steps:\n");
+    sys::fprintf(sys::stdout_file(), "Usage: saplangc build [step]... [-Doption=value]...\n\n");
+    sys::fprintf(sys::stdout_file(), "Steps:\n");
     for(u64 step_index = 0; step_index < b.top_steps.len; step_index += 1) {
         Step* s = b.top_steps.ptr[step_index];
-        sys::dprintf(1, "  %.*s  -  %.*s\n", (i32)s.name.len, (i8*)s.name.ptr, (i32)s.description.len, (i8*)s.description.ptr);
+        sys::fprintf(sys::stdout_file(), "  %.*s  -  %.*s\n", (i32)s.name.len, (i8*)s.name.ptr, (i32)s.description.len, (i8*)s.description.ptr);
     }
-    sys::dprintf(1, "\nProject options:\n");
+    sys::fprintf(sys::stdout_file(), "\nProject options:\n");
     for(u64 option_index = 0; option_index < b.options.len; option_index += 1) {
         OptionInfo* o = &b.options.ptr[option_index];
-        sys::dprintf(1, "  -D%.*s  -  %.*s\n", (i32)o.name.len, (i8*)o.name.ptr, (i32)o.description.len, (i8*)o.description.ptr);
+        sys::fprintf(sys::stdout_file(), "  -D%.*s  -  %.*s\n", (i32)o.name.len, (i8*)o.name.ptr, (i32)o.description.len, (i8*)o.description.ptr);
     }
 }
 
@@ -645,17 +645,9 @@ fn u8[] resolve_compiler_path(arena::Arena* a) {
 }
 
 fn i32 spawn_and_wait(i8** argv) {
-    i32 pid = sys::fork();
-    if(pid < 0) { return -1; }
-    if(pid == 0) {
-        sys::execvp(argv[0], argv);
-        sys::_exit(127);
-        return 127;
-    }
-    i32 status = 0;
-    sys::waitpid(pid, &status, 0);
-    return (status >> 8) & 255;
+    return sys::spawn_wait(argv);
 }
+
 
 fn u8[] join_semicolons(arena::Arena* a, list::List(u8[])* parts) {
     io::OutBuf buf;

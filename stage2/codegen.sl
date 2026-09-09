@@ -67,7 +67,7 @@ export fn i32 emit_object(sapir::SapirModule* sm, arena::Arena* a, i8* obj_path,
     i32 rc = 0;
     i8* err = null;
     if(llvm::LLVMTargetMachineEmitToFile(tm, cg.llvm_module, obj_path, llvm::ObjectFile, &err) != 0) {
-        sys::dprintf(2, "codegen: object emission failed: %s\n", err);
+        sys::fprintf(sys::stderr_file(), "codegen: object emission failed: %s\n", err);
         llvm::LLVMDisposeMessage(err);
         rc = 1;
     }
@@ -123,7 +123,7 @@ fn void* make_target_machine() {
     void* target = null;
     i8* err = null;
     if(llvm::LLVMGetTargetFromTriple(triple, &target, &err) != 0) {
-        sys::dprintf(2, "codegen: no target for triple: %s\n", err);
+        sys::fprintf(sys::stderr_file(), "codegen: no target for triple: %s\n", err);
         llvm::LLVMDisposeMessage(err);
         return null;
     }
@@ -137,7 +137,7 @@ fn bool run_passes(CG* cg, void* tm) {
     void* err = llvm::LLVMRunPasses(cg.llvm_module, cstr(cg.arena, pipeline), tm, opts);
     llvm::LLVMDisposePassBuilderOptions(opts);
     if(err != null) {
-        sys::dprintf(2, "codegen: optimization pipeline failed\n");
+        sys::fprintf(sys::stderr_file(), "codegen: optimization pipeline failed\n");
         llvm::LLVMConsumeError(err);
         return false;
     }
@@ -194,13 +194,13 @@ export fn i32 jit_run_main(sapir::SapirModule* sm, arena::Arena* a) {
     void* ee = null;
     i8* err = null;
     if(llvm::LLVMCreateExecutionEngineForModule(&ee, cg.llvm_module, &err) != 0) {
-        sys::dprintf(2, "codegen: could not create execution engine: %s\n", err);
+        sys::fprintf(sys::stderr_file(), "codegen: could not create execution engine: %s\n", err);
         llvm::LLVMDisposeMessage(err);
         return -1;
     }
     u64 addr = llvm::LLVMGetFunctionAddress(ee, "main");
     if(addr == 0) {
-        sys::dprintf(2, "codegen: no main symbol to run\n");
+        sys::fprintf(sys::stderr_file(), "codegen: no main symbol to run\n");
         llvm::LLVMDisposeExecutionEngine(ee);
         return -1;
     }
@@ -235,7 +235,7 @@ fn bool build_module(CG* cg) {
     if(cg.failed) { return false; }
     i8* err = null;
     if(llvm::LLVMVerifyModule(cg.llvm_module, llvm::ReturnStatusAction, &err) != 0) {
-        sys::dprintf(2, "codegen: LLVM verification failed:\n%s\n", err);
+        sys::fprintf(sys::stderr_file(), "codegen: LLVM verification failed:\n%s\n", err);
         llvm::LLVMDisposeMessage(err);
         return false;
     }
@@ -425,7 +425,7 @@ fn void* map_type(CG* cg, types::Ty* t) {
     }
     case types::TypeKind::Union:     { out = union_blob_type(cg, t); }
     else {
-        sys::dprintf(2, "codegen: cannot map type kind %d\n", (i32)t.kind);
+        sys::fprintf(sys::stderr_file(), "codegen: cannot map type kind %d\n", (i32)t.kind);
         cg.failed = true;
         out = llvm::LLVMInt8TypeInContext(cg.ctx);
     }
@@ -505,14 +505,18 @@ fn void declare_decl(CG* cg, u32 index) {
     if(d.kind == sapir::SapirDeclKind::Fn) {
         void* fn_ty = map_fn_type(cg, d.ty);
         void* val = llvm::LLVMAddFunction(cg.llvm_module, cstr(cg.arena, d.link_name), fn_ty);
-        llvm::LLVMSetLinkage(val, decl_linkage(d));
+        i32 linkage = decl_linkage(d);
+        llvm::LLVMSetLinkage(val, linkage);
+        if(linkage == llvm::LinkOnceODRLinkage) { llvm::LLVMSetComdat(val, llvm::LLVMGetOrInsertComdat(cg.llvm_module, cstr(cg.arena, d.link_name))); }
         if(cg.config == BuildConfig::AddressSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_attr(cg, val, "sanitize_address", 16); }
         if(cg.config == BuildConfig::ThreadSanitizer && d.linkage != sapir::SapirLinkage::Foreign) { add_sanitize_attr(cg, val, "sanitize_thread", 15); }
         cg.decl_map[index] = val;
     } else {
         void* ty = map_type(cg, d.ty);
         void* val = llvm::LLVMAddGlobal(cg.llvm_module, ty, cstr(cg.arena, d.link_name));
-        llvm::LLVMSetLinkage(val, decl_linkage(d));
+        i32 linkage = decl_linkage(d);
+        llvm::LLVMSetLinkage(val, linkage);
+        if(linkage == llvm::LinkOnceODRLinkage) { llvm::LLVMSetComdat(val, llvm::LLVMGetOrInsertComdat(cg.llvm_module, cstr(cg.arena, d.link_name))); }
         cg.decl_map[index] = val;
     }
 }
@@ -564,7 +568,7 @@ fn void* const_value(CG* cg, sapir::ConstInit* ci) {
     case sapir::ConstInitKind::Bytes: { return const_bytes(cg, ci); }
     case sapir::ConstInitKind::Slice: { return const_slice(cg, ci); }
     else {
-        sys::dprintf(2, "codegen: this constant initializer kind is not implemented yet\n");
+        sys::fprintf(sys::stderr_file(), "codegen: this constant initializer kind is not implemented yet\n");
         cg.failed = true;
         return llvm::LLVMConstNull(map_type(cg, ci.ty));
     }
@@ -784,7 +788,7 @@ fn void emit_inst(CG* cg, u32 id) {
     case sapir::Opcode::SwitchBr:    { emit_switch(cg, inst); }
     case sapir::Opcode::Unreachable: { llvm::LLVMBuildUnreachable(cg.builder); }
     else {
-        sys::dprintf(2, "codegen: opcode %d is not translated yet\n", (i32)inst.op);
+        sys::fprintf(sys::stderr_file(), "codegen: opcode %d is not translated yet\n", (i32)inst.op);
         cg.failed = true;
     }
     }

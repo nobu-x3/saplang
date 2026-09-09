@@ -42,7 +42,7 @@ fn u8[] find_std_dir(arena::Arena* arena_ptr, u8** argv) {
 
 fn u8[] find_exe_dir(arena::Arena* arena_ptr, u8** argv) {
     u8* path_buf = (u8*)arena::alloc(arena_ptr, 4096);
-    i64 written = sys::readlink(cstr(arena_ptr, "/proc/self/exe"), (i8*)path_buf, 4095);
+    i64 written = sys::exe_path((i8*)path_buf, 4095);
     u8[] exe_path = {null, 0};
     if(written > 0) {
         exe_path = {path_buf, (u64)written};
@@ -111,7 +111,7 @@ fn i32 main(i32 argc, u8** argv) {
 fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
     io::File bf = io::open("build.sl", "r");
     if(bf.fp == null) {
-        sys::dprintf(2, "error: no build.sl in the current directory\n");
+        sys::fprintf(sys::stderr_file(), "error: no build.sl in the current directory\n");
         return 1;
     }
     io::close(&bf);
@@ -119,7 +119,7 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
     sys::mkdir(cstr(arena_ptr, ".sap-cache"), 493);
     u8[] runner_path = ".sap-cache/__build_runner.sl";
     if(!write_runner(runner_path)) {
-        sys::dprintf(2, "error: could not write build runner\n");
+        sys::fprintf(sys::stderr_file(), "error: could not write build runner\n");
         return 1;
     }
 
@@ -134,7 +134,7 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
         c.deps_path = ".sap-cache/build.dep";
         c.output_path = ".sap-cache/build";
         if(compiler::run(c) != 0) {
-            sys::dprintf(2, "error: could not compile build.sl (is `builder` reachable? std/ must sit beside saplangc, or set SAPLANG_STD)\n");
+            sys::fprintf(sys::stderr_file(), "error: could not compile build.sl (is `builder` reachable? std/ must sit beside saplangc, or set SAPLANG_STD)\n");
             return 1;
         }
         write_runner_stamp(arena_ptr);
@@ -150,9 +150,12 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
         rargv[forwarded] = (i8*)argv[arg_index]; forwarded += 1;
     }
     rargv[forwarded] = null;
-    sys::execvp(rargv[0], rargv);
-    sys::dprintf(2, "error: could not exec build runner\n");
-    return 127;
+    i32 runner_code = sys::spawn_wait(rargv);
+    if(runner_code < 0) {
+        sys::fprintf(sys::stderr_file(), "error: could not run build runner\n");
+        return 127;
+    }
+    return runner_code;
 }
 
 fn bool write_runner(u8[] path) {
