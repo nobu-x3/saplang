@@ -12,7 +12,8 @@ cd /d "%ROOT%"
 if not defined SAPLANG_LLVM set "SAPLANG_LLVM=C:\Program Files\LLVM"
 set "PATH=%SAPLANG_LLVM%\bin;%PATH%"
 
-call "%ROOT%\bootstrap.bat" || exit /b 1
+call "%ROOT%\bootstrap.bat"
+if errorlevel 1 exit /b 1
 
 set "SC=%ROOT%\build\bin\saplangc2.exe"
 set "INC=%ROOT%/stage2/std;%ROOT%/stage2;%ROOT%/stage2/tests"
