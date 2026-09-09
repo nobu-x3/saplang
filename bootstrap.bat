@@ -12,7 +12,7 @@ rem   stage2-generic-structs   --builds-->  stage2-v1               (source uses
 rem   stage2-v1 compiler       --builds-->  stage2-v2               (source uses comprun + reflection)
 rem   stage2-v2 compiler       --builds-->  current source          (uses positional const, List(const u8[]))
 rem
-rem Each seed tag is frozen Linux-only history, so it has a <tag>-windows counterpart carrying the
+rem Each seed tag is frozen Linux-only history, so it has a windows/<tag> counterpart carrying the
 rem Windows form of that same source. Each stage's compiler is built once and cached under bootstrap\.
 rem
 rem Usage:
@@ -47,7 +47,7 @@ for %%T in (%STAGES%) do (
             echo Stage 1 compiler not found at %STAGE1%.
             exit /b 1
         )
-        echo Building %%T-windows via !PREV!...
+        echo Building windows/%%T via !PREV!...
         call :build_stage %%T "!PREV!" "!SEED!" "!PREVFLAGS!"
         if errorlevel 1 exit /b 1
     )
@@ -73,7 +73,7 @@ if /i "%~1"=="verify" (
 )
 exit /b 0
 
-rem Build tag %1 with compiler %2 into %3, extra flags %4, from a detached worktree of <tag>-windows.
+rem Build tag %1 with compiler %2 into %3, extra flags %4, from a detached worktree of windows/<tag>.
 :build_stage
 set "TAG=%~1"
 set "CC=%~2"
@@ -81,8 +81,8 @@ set "SEEDOUT=%~3"
 set "FLAGS=%~4"
 set "WT=%TEMP%\saplang-seed-%TAG%"
 if exist "%WT%" git worktree remove --force "%WT%" >nul 2>&1
-git worktree add --quiet --detach "%WT%" "%TAG%-windows" || (
-    echo Tag %TAG%-windows not found; fetch the seed tags before bootstrapping.
+git worktree add --quiet --detach "%WT%" "windows/%TAG%" || (
+    echo Tag windows/%TAG% not found; fetch the seed tags before bootstrapping.
     exit /b 1
 )
 pushd "%WT%"
