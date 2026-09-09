@@ -40,6 +40,8 @@ extern {
     export fn void* LLVMGetUndef(void* ty);
     export fn void  LLVMSetInitializer(void* global, void* const_val);
     export fn void  LLVMSetLinkage(void* global, i32 linkage);
+    export fn void  LLVMSetComdat(void* global, void* comdat);
+    export fn void* LLVMGetOrInsertComdat(void* m, const i8* name);
     export fn void  LLVMSetGlobalConstant(void* global, i32 is_const);
 
     // basic blocks + terminators (the rest of the builders land with step 9)

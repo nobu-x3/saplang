@@ -77,7 +77,7 @@ fn bool parse_config(Compiler* c, u8[] name) {
     if(slice_eq(name, "Release"))          { c.config = codegen::BuildConfig::Release; return true; }
     if(slice_eq(name, "ReleaseDebug"))     { c.config = codegen::BuildConfig::ReleaseDebug; return true; }
     if(slice_eq(name, "AddressSanitizer")) { c.config = codegen::BuildConfig::AddressSanitizer; return true; }
-    sys::dprintf(2, "unknown -config value: %.*s (expected Debug|Release|ReleaseDebug|AddressSanitizer)\n", (i32)name.len, (i8*)name.ptr);
+    sys::fprintf(sys::stderr_file(), "unknown -config value: %.*s (expected Debug|Release|ReleaseDebug|AddressSanitizer)\n", (i32)name.len, (i8*)name.ptr);
     return false;
 }
 
@@ -163,7 +163,7 @@ export fn bool parse_argv(Compiler* c, u8[][] args) {
         } else if(ends_with(arg, ".sl")) {
             add_source(c, arg);
         } else {
-            sys::dprintf(2, "unknown argument: %.*s\n", (i32)arg.len, (i8*)arg.ptr);
+            sys::fprintf(sys::stderr_file(), "unknown argument: %.*s\n", (i32)arg.len, (i8*)arg.ptr);
             ok = false;
         }
         arg_index += 1;
@@ -411,7 +411,7 @@ fn u8[][] run_codegen(Compiler* c) {
 fn i32 run_link(Compiler* c, u8[][] object_paths) {
     i8** argv = build_link_argv(c, object_paths);
     if(spawn_and_wait(argv) != 0) {
-        sys::dprintf(2, "error: link step failed\n");
+        sys::fprintf(sys::stderr_file(), "error: link step failed\n");
         return 1;
     }
     return 0;
@@ -422,38 +422,25 @@ fn i8** build_link_argv(Compiler* c, u8[][] object_paths) {
     u64 cap = 16 + object_paths.len + c.extern_libs.len + c.lib_dirs.len;
     i8** argv = (i8**)arena::alloc(c.arena, (cap + 1) * sizeof(i8*));
     u64 n = 0;
-    argv[n] = cstr(c.arena, "ld.lld"); n += 1;
+    argv[n] = cstr(c.arena, "clang"); n += 1;
+    argv[n] = cstr(c.arena, "-fuse-ld=lld"); n += 1;
+    argv[n] = cstr(c.arena, "-Wl,/STACK:8388608"); n += 1;
     argv[n] = cstr(c.arena, "-o"); n += 1;
     argv[n] = output_cstr(c); n += 1;
-    argv[n] = cstr(c.arena, "-dynamic-linker"); n += 1;
-    argv[n] = link_paths::dynamic_linker(); n += 1;
-    argv[n] = link_paths::crt_start(); n += 1;
-    argv[n] = link_paths::crt_init(); n += 1;
-    argv[n] = link_paths::lib_search_dir(); n += 1;
     // User -L dirs precede the objects/libs so ld.lld searches them for the -l libraries.
     for(u64 i = 0; i < c.lib_dirs.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs[i]); n += 1; }
     for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.arena, object_paths[i]); n += 1; }
     for(u64 i = 0; i < c.extern_libs.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs[i]); n += 1; }
     // AddressSanitizer needs its runtime; the shared lib carries its own dependencies.
     if(c.config == codegen::BuildConfig::AddressSanitizer) { argv[n] = cstr(c.arena, "-lasan"); n += 1; }
-    argv[n] = cstr(c.arena, "-lc"); n += 1;
-    argv[n] = link_paths::crt_fini(); n += 1;
     argv[n] = null; n += 1;
     return argv;
 }
 
 fn i32 spawn_and_wait(i8** argv) {
-    i32 pid = sys::fork();
-    if(pid < 0) { return -1; }
-    if(pid == 0) {
-        sys::execvp(argv[0], argv);
-        sys::_exit(127);
-        return 127;
-    }
-    i32 status = 0;
-    sys::waitpid(pid, &status, 0);
-    return (status >> 8) & 255;
+    return sys::spawn_wait(argv);
 }
+
 
 fn u8[] tmp_object_path(Compiler* c, module::Module* m) {
     io::OutBuf buf;
@@ -465,8 +452,21 @@ fn u8[] tmp_object_path(Compiler* c, module::Module* m) {
 }
 
 fn i8* output_cstr(Compiler* c) {
-    if(c.output_path.len == 0) { return cstr(c.arena, "a.out"); }
-    return cstr(c.arena, c.output_path);
+    if(c.output_path.len == 0) { return cstr(c.arena, "a.exe"); }
+    u64 index = c.output_path.len;
+    while(index > 0) {
+        index -= 1;
+        if(c.output_path[index] == '.') { return cstr(c.arena, c.output_path); }
+        if(c.output_path[index] == '/' || c.output_path[index] == '\\') { break; }
+    }
+    i8* out = (i8*)sys::malloc(c.output_path.len + 5);
+    for(u64 i = 0; i < c.output_path.len; i += 1) { out[i] = (i8)c.output_path[i]; }
+    out[c.output_path.len] = (i8)'.';
+    out[c.output_path.len + 1] = (i8)'e';
+    out[c.output_path.len + 2] = (i8)'x';
+    out[c.output_path.len + 3] = (i8)'e';
+    out[c.output_path.len + 4] = 0;
+    return out;
 }
 
 fn i8* lib_flag(Compiler* c, u8[] name) {
@@ -596,7 +596,7 @@ fn void dump_sapir(Compiler* c) {
         sapir_print::print_module((sapir::SapirModule*)m.sapir, &out);
     }
     u8[] bytes = io::outbuf_bytes(&out);
-    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+    sys::fprintf(sys::stdout_file(), "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
 }
 
 fn void dump_cfgs(Compiler* c) {
@@ -606,7 +606,7 @@ fn void dump_cfgs(Compiler* c) {
         cfg_print::print_module(c.modules[module_index], &out);
     }
     u8[] bytes = io::outbuf_bytes(&out);
-    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+    sys::fprintf(sys::stdout_file(), "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
 }
 
 // Write each module's diagnostics to stderr in ModuleId order, tally errors, reset.
@@ -620,6 +620,7 @@ export fn void drain_diagnostics(Compiler* c) {
         }
         diag::reset(&m.diag);
     }
+    sys::fflush(sys::stderr_file());
 }
 
 // "<path>:<line>:<col>: <msg>"; a compinsert-generated position resolves back to its (possibly nested) generator site.
@@ -637,7 +638,7 @@ fn void print_diagnostic(module::Module* m, diag::DiagEntry* entry) {
     module::line_col(m, pos, &line, &col);
     u8[] tag = "";
     if(generated) { tag = " (in generated code)"; }
-    sys::dprintf(2, "%.*s:%u:%u: %.*s%.*s\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr, (i32)tag.len, (i8*)tag.ptr);
+    sys::fprintf(sys::stderr_file(), "%.*s:%u:%u: %.*s%.*s\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr, (i32)tag.len, (i8*)tag.ptr);
 }
 
 export fn bool bail_on_errors(Compiler* c) {

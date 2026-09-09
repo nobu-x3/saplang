@@ -22,9 +22,14 @@ extern {
     fn void* CreateThread(void* attrs, u64 stack, fn* u32(void*) start, void* arg, u32 flags, u32* tid);
     fn u32   WaitForSingleObject(void* h, u32 ms);
     fn i32   CloseHandle(void* h);
+    fn u32   GetCurrentThreadId();
 }
 
 const u32 INFINITE = 0xFFFFFFFF;
+
+export fn u64 self() {
+    return (u64)GetCurrentThreadId();
+}
 
 export fn i32 spawn(Thread* out, fn* void*(void*) proc, void* arg) {
     Trampoline* tr = (Trampoline*)sys::malloc(sizeof(Trampoline));
