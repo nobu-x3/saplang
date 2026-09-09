@@ -85,6 +85,7 @@ fn ArenaPage* new_page(u64 cap) {
     if(!p) {
         return null;
     }
+    sys::memset(p, 0, sizeof(ArenaPage) + cap);
     p.next = null;
     p.cap = cap;
     p.data.ptr = (u8*)(p + 1);
