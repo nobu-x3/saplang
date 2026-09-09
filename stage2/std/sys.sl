@@ -36,9 +36,14 @@ extern {
     // stdio
     export struct FILE { i8 _opaque; }
 
+    // glibc exports these as real data symbols; the UCRT does not.
+    FILE* stdout;
+    FILE* stderr;
+
     export fn FILE* fopen(const i8* filename, const i8* mode);
     export fn i32   fclose(FILE* stream);
     export fn i32   fflush(FILE* stream);
+    export fn i32   setvbuf(FILE* stream, i8* buf, i32 mode, u64 size);
 
     export fn FILE* popen(const i8* command, const i8* mode);
     export fn i32   pclose(FILE* stream);
@@ -70,6 +75,8 @@ extern {
 
     export fn i32 remove(const i8* path);
 
+    export fn i32 clock_gettime(i32 clock_id, TimeSpec* ts);
+
     // numeric parsing
     export fn f64 strtod(const i8* nptr, i8** endptr);
 }
@@ -84,8 +91,68 @@ export const i32 SEEK_SET = 0;
 export const i32 SEEK_CUR = 1;
 export const i32 SEEK_END = 2;
 
+export const i32 IONBF = 2;
+
 export const i32 SC_NPROCESSORS_ONLN = 84;   // _SC_NPROCESSORS_ONLN (glibc)
 
+export fn FILE* stdout_file() {
+    return stdout;
+}
+
+export fn FILE* stderr_file() {
+    return stderr;
+}
+
+export fn i32 spawn_wait(i8** argv) {
+    i32 pid = fork();
+    if(pid < 0) { return -1; }
+    if(pid == 0) {
+        execvp(argv[0], argv);
+        _exit(127);
+        return 127;
+    }
+    i32 status = 0;
+    waitpid(pid, &status, 0);
+    return (status >> 8) & 255;
+}
+
+// Handles are opaque: a pid here, a process handle on Windows.
+export fn i64 spawn_async(i8** argv) {
+    i32 pid = fork();
+    if(pid < 0) { return (i64)-1; }
+    if(pid == 0) {
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+    return (i64)pid;
+}
+
+// The handle list is unused here: waitpid already reaps whichever child finished first.
+export fn i64 wait_any(i64* handles, u64 count, i32* status) {
+    i32 raw = 0;
+    i32 done = waitpid(-1, &raw, 0);
+    *status = (raw >> 8) & 255;
+    if(done < 0) { return (i64)-1; }
+    return (i64)done;
+}
+export fn i64 exe_path(i8* buf, u64 size) {
+    return readlink("/proc/self/exe", buf, size);
+}
+
+struct TimeSpec {
+    i64 sec;
+    i64 nsec;
+}
+
+const i32 CLOCK_MONOTONIC = 1;
+
+// Monotonic nanoseconds; meaningful only as a delta between two calls.
+export fn u64 now_ns() {
+    TimeSpec ts;
+    memset(&ts, 0, sizeof(TimeSpec));
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (u64)ts.sec * 1000000000 + (u64)ts.nsec;
+}
 export fn u32 cpu_count() {
     i64 count = sysconf(SC_NPROCESSORS_ONLN);
     if(count < 1) { return 1; }

@@ -28,6 +28,12 @@ fn bool cstr_eq(u8* s, const u8[] lit) {
     return s[lit.len] == 0;
 }
 
+// Redirected streams buffer by default, which would reorder diagnostics against a merged log.
+fn void unbuffer_output() {
+    sys::setvbuf(sys::stdout_file(), null, sys::IONBF, 0);
+    sys::setvbuf(sys::stderr_file(), null, sys::IONBF, 0);
+}
+
 // std/ ships beside the binary; SAPLANG_STD overrides it, and an empty result means neither exists.
 fn u8[] find_std_dir(arena::Arena* arena_ptr, u8** argv) {
     i8* override_dir = sys::getenv(cstr(arena_ptr, "SAPLANG_STD"));
@@ -42,7 +48,7 @@ fn u8[] find_std_dir(arena::Arena* arena_ptr, u8** argv) {
 
 fn u8[] find_exe_dir(arena::Arena* arena_ptr, u8** argv) {
     u8* path_buf = (u8*)arena::alloc(arena_ptr, 4096);
-    i64 written = sys::readlink(cstr(arena_ptr, "/proc/self/exe"), (i8*)path_buf, 4095);
+    i64 written = sys::exe_path((i8*)path_buf, 4095);
     u8[] exe_path = {null, 0};
     if(written > 0) {
         exe_path = {path_buf, (u64)written};
@@ -51,7 +57,7 @@ fn u8[] find_exe_dir(arena::Arena* arena_ptr, u8** argv) {
     }
     u64 last_slash = exe_path.len;
     for(u64 char_index = 0; char_index < exe_path.len; char_index += 1) {
-        if(exe_path[char_index] == '/') { last_slash = char_index; }
+        if(io::is_path_separator(exe_path[char_index])) { last_slash = char_index; }
     }
     if(last_slash == exe_path.len) { u8[] none = {null, 0}; return none; }
     u8[] dir = {exe_path.ptr, last_slash};
@@ -74,6 +80,7 @@ fn u8[] join_path(arena::Arena* arena_ptr, const u8[] prefix, const u8[] suffix)
 }
 
 fn i32 main(i32 argc, u8** argv) {
+    unbuffer_output();
     if(argc < 2) {
         compiler::print_usage();
         return 0;
@@ -115,7 +122,7 @@ fn i32 main(i32 argc, u8** argv) {
 fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
     io::File bf = io::open("build.sl", "r");
     if(bf.fp == null) {
-        sys::dprintf(2, "error: no build.sl in the current directory\n");
+        sys::fprintf(sys::stderr_file(), "error: no build.sl in the current directory\n");
         return 1;
     }
     io::close(&bf);
@@ -124,7 +131,7 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
     io::ensure_directory_exists(cache_dir, 493);
     const u8[] runner_path = join_path(arena_ptr, cache_dir, "/__build_runner.sl");
     if(!write_runner(runner_path)) {
-        sys::dprintf(2, "error: could not write build runner\n");
+        sys::fprintf(sys::stderr_file(), "error: could not write build runner\n");
         return 1;
     }
 
@@ -139,7 +146,7 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
         c.deps_path = join_path(arena_ptr, cache_dir, "/build.dep");
         c.output_path = join_path(arena_ptr, cache_dir, "/build");
         if(compiler::run(c) != 0) {
-            sys::dprintf(2, "error: could not compile build.sl (is `builder` reachable? std/ must sit beside saplangc, or set SAPLANG_STD)\n");
+            sys::fprintf(sys::stderr_file(), "error: could not compile build.sl (is `builder` reachable? std/ must sit beside saplangc, or set SAPLANG_STD)\n");
             return 1;
         }
         write_runner_stamp(arena_ptr, cache_dir);
@@ -155,9 +162,12 @@ fn i32 run_build(arena::Arena* arena_ptr, i32 argc, u8** argv) {
         rargv[forwarded] = (i8*)argv[arg_index]; forwarded += 1;
     }
     rargv[forwarded] = null;
-    sys::execvp(rargv[0], rargv);
-    sys::dprintf(2, "error: could not exec build runner\n");
-    return 127;
+    i32 runner_code = sys::spawn_wait(rargv);
+    if(runner_code < 0) {
+        sys::fprintf(sys::stderr_file(), "error: could not run build runner\n");
+        return 127;
+    }
+    return runner_code;
 }
 
 fn bool write_runner(const u8[] path) {

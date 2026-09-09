@@ -15,6 +15,14 @@ import io;
 import arena;
 import sys;
 
+comprun if (build::os == "windows") {
+    const u8[] HOST_TARGET = "windows";
+    const u8[] THREADLOCAL_SRC = "extern {\n fn void* CreateThread(void* attrs, u64 stack, fn* u32(void*) start, void* arg, u32 flags, u32* tid);\n fn u32 WaitForSingleObject(void* h, u32 ms);\n}\nthreadlocal i32 counter = 10;\ni32 worker_saw = 0;\nfn u32 worker(void* arg) { counter += 5; worker_saw = counter; return 0; }\nfn i32 main() { void* t = CreateThread(null, 0, &worker, null, 0, null); WaitForSingleObject(t, 4294967295); counter += 1; return worker_saw + counter; }";
+} else {
+    const u8[] HOST_TARGET = "linux";
+    const u8[] THREADLOCAL_SRC = "extern {\n fn i32 pthread_create(u64* t, void* attr, fn* void*(void*) start, void* arg);\n fn i32 pthread_join(u64 t, void** ret);\n}\nthreadlocal i32 counter = 10;\ni32 worker_saw = 0;\nfn void* worker(void* arg) { counter += 5; worker_saw = counter; return null; }\nfn i32 main() { u64 t; pthread_create(&t, null, &worker, null); pthread_join(t, null); counter += 1; return worker_saw + counter; }";
+}
+
 fn arena::Arena* sub_arena(arena::Arena* a) {
     arena::Arena* sub = (arena::Arena*)arena::alloc(a, sizeof(arena::Arena));
     sys::memset(sub, 0, sizeof(arena::Arena));
@@ -54,7 +62,6 @@ fn const u8[] sap_out(arena::Arena* a, const u8[] name) {
     return io::outbuf_bytes(&buf);
 }
 
-// Diagnostics go straight to fd 2 through unbuffered dprintf, so borrowing the descriptor is enough.
 fn const u8[] captured_diagnostics(arena::Arena* a, compiler::Compiler* c) {
     i8* path = cstr(a, "diag_capture.tmp");
     i32 saved = sys::dup(2);
@@ -466,66 +473,66 @@ fn void write_file(const u8[] path, const u8[] content) {
 
 fn i32 discover_multi(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdhelp.sl", "export fn i32 foo() { return 5; }");
-    write_file("/tmp/sdmain.sl", "import sdhelp;\nexport fn i32 use() { return sdhelp::foo(); }");
+    write_file("./sdhelp.sl", "export fn i32 foo() { return 5; }");
+    write_file("./sdmain.sl", "import sdhelp;\nexport fn i32 use() { return sdhelp::foo(); }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdmain.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdmain.sl");
+    compiler::add_import_path(c, ".");
     compiler::discover(c);
     i32 result = 0;
     if(!testing::expect_eq(c.modules.data.len, (u64)2, msg)) { result = -1; }
     else if(!testing::expect_eq((void*)c.modules.data[0].name, (void*)interner::intern("sdmain"), msg)) { result = -2; }
     else if(!testing::expect_eq(c.modules.data[0].imports.len, (u64)1, msg)) { result = -3; }
     else if(!testing::expect_eq((void*)c.modules.data[0].imports[0].name, (void*)interner::intern("sdhelp"), msg)) { result = -4; }
-    io::unlink("/tmp/sdhelp.sl");
-    io::unlink("/tmp/sdmain.sl");
+    io::unlink("./sdhelp.sl");
+    io::unlink("./sdmain.sl");
     return result;
 }
 
 fn i32 discover_transitive(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdb.sl", "export fn i32 b() { return 1; }");
-    write_file("/tmp/sda.sl", "import sdb;\nexport fn i32 a() { return sdb::b(); }");
-    write_file("/tmp/sdmain3.sl", "import sda;\nexport fn i32 main() { return sda::a(); }");
+    write_file("./sdb.sl", "export fn i32 b() { return 1; }");
+    write_file("./sda.sl", "import sdb;\nexport fn i32 a() { return sdb::b(); }");
+    write_file("./sdmain3.sl", "import sda;\nexport fn i32 main() { return sda::a(); }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdmain3.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdmain3.sl");
+    compiler::add_import_path(c, ".");
     compiler::discover(c);
     i32 result = 0;
     if(!testing::expect_eq(c.modules.data.len, (u64)3, msg)) { result = -1; }
     else if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { result = -2; }
-    io::unlink("/tmp/sdb.sl");
-    io::unlink("/tmp/sda.sl");
-    io::unlink("/tmp/sdmain3.sl");
+    io::unlink("./sdb.sl");
+    io::unlink("./sda.sl");
+    io::unlink("./sdmain3.sl");
     return result;
 }
 
 fn i32 discover_dedups_shared_import(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdb2.sl", "export fn i32 b() { return 1; }");
-    write_file("/tmp/sda2.sl", "import sdb2;\nexport fn i32 a() { return sdb2::b(); }");
-    write_file("/tmp/sdmain4.sl", "import sda2;\nimport sdb2;\nexport fn i32 main() { return sda2::a() + sdb2::b(); }");
+    write_file("./sdb2.sl", "export fn i32 b() { return 1; }");
+    write_file("./sda2.sl", "import sdb2;\nexport fn i32 a() { return sdb2::b(); }");
+    write_file("./sdmain4.sl", "import sda2;\nimport sdb2;\nexport fn i32 main() { return sda2::a() + sdb2::b(); }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdmain4.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdmain4.sl");
+    compiler::add_import_path(c, ".");
     compiler::discover(c);
     i32 result = 0;
     if(!testing::expect_eq(c.modules.data.len, (u64)3, msg)) { result = -1; }
-    io::unlink("/tmp/sdb2.sl");
-    io::unlink("/tmp/sda2.sl");
-    io::unlink("/tmp/sdmain4.sl");
+    io::unlink("./sdb2.sl");
+    io::unlink("./sda2.sl");
+    io::unlink("./sdmain4.sl");
     return result;
 }
 
 fn i32 discover_sets_path_and_line_col(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdpos.sl", "export fn i32 f() {\n    return 0;\n}");
+    write_file("./sdpos.sl", "export fn i32 f() {\n    return 0;\n}");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdpos.sl");
+    compiler::add_source(c, "./sdpos.sl");
     compiler::discover(c);
     module::Module* m = c.modules.data[0];
     i32 result = 0;
-    if(!testing::expect_eq(m.path, "/tmp/sdpos.sl", msg)) { result = -1; }
+    if(!testing::expect_eq(m.path, "./sdpos.sl", msg)) { result = -1; }
     u32 line = 0;
     u32 col = 0;
     module::line_col(m, 0, &line, &col);
@@ -534,44 +541,44 @@ fn i32 discover_sets_path_and_line_col(arena::Arena* a, const u8[]msg) {
     module::line_col(m, 24, &line, &col);
     if(result == 0 && !testing::expect_eq(line, (u32)2, msg)) { result = -4; }
     if(result == 0 && !testing::expect_eq(col, (u32)5, msg)) { result = -5; }
-    io::unlink("/tmp/sdpos.sl");
+    io::unlink("./sdpos.sl");
     return result;
 }
 
 fn i32 discover_missing_reports(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdmain5.sl", "import sdnope;\nexport fn i32 main() { return 0; }");
+    write_file("./sdmain5.sl", "import sdnope;\nexport fn i32 main() { return 0; }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdmain5.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdmain5.sl");
+    compiler::add_import_path(c, ".");
     compiler::discover(c);
     i32 result = 0;
     if(!testing::expect_eq(c.modules.data.len, (u64)1, msg)) { result = -1; }
     else if(!testing::expect_ge(c.modules.data[0].diag.entries.len, 1, msg)) { result = -2; }
     else if(!testing::expect_eq(c.modules.data[0].diag.entries[0].msg, "module not found", msg)) { result = -3; }
-    io::unlink("/tmp/sdmain5.sl");
+    io::unlink("./sdmain5.sl");
     return result;
 }
 
 fn i32 discover_single_no_imports(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdsingle.sl", "export fn i32 main() { return 0; }");
+    write_file("./sdsingle.sl", "export fn i32 main() { return 0; }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdsingle.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdsingle.sl");
+    compiler::add_import_path(c, ".");
     compiler::discover(c);
     i32 result = 0;
     if(!testing::expect_eq(c.modules.data.len, (u64)1, msg)) { result = -1; }
     else if(!testing::expect_eq(c.modules.data[0].imports.len, (u64)0, msg)) { result = -2; }
-    io::unlink("/tmp/sdsingle.sl");
+    io::unlink("./sdsingle.sl");
     return result;
 }
 
 fn i32 discover_missing_entry_reports(arena::Arena* a, const u8[]msg) {
     boot(a);
-    io::unlink("/tmp/sd_nonexistent_xyz.sl");
+    io::unlink("./sd_nonexistent_xyz.sl");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sd_nonexistent_xyz.sl");
+    compiler::add_source(c, "./sd_nonexistent_xyz.sl");
     compiler::discover(c);
     i32 result = 0;
     if(!testing::expect_eq(c.modules.data.len, (u64)1, msg)) { result = -1; }
@@ -582,38 +589,38 @@ fn i32 discover_missing_entry_reports(arena::Arena* a, const u8[]msg) {
 
 fn i32 discover_conditional_compilation(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdcc.sl", "export fn i32 x() { return 1; }");
-    write_file("/tmp/sdcc.linux.sl", "export fn i32 x() { return 2; }");
-    write_file("/tmp/sdmain6.sl", "import sdcc;\nexport fn i32 main() { return sdcc::x(); }");
+    write_file("./sdcc.sl", "export fn i32 x() { return 1; }");
+    write_file("./sdcc.linux.sl", "export fn i32 x() { return 2; }");
+    write_file("./sdmain6.sl", "import sdcc;\nexport fn i32 main() { return sdcc::x(); }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdmain6.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdmain6.sl");
+    compiler::add_import_path(c, ".");
     compiler::set_target(c, "linux");
     compiler::discover(c);
     i32 result = 0;
     if(!testing::expect_eq(c.modules.data.len, (u64)2, msg)) { result = -1; }
     else if(!testing::expect_eq(c.modules.data[1].source, "export fn i32 x() { return 2; }", msg)) { result = -2; }
-    io::unlink("/tmp/sdcc.sl");
-    io::unlink("/tmp/sdcc.linux.sl");
-    io::unlink("/tmp/sdmain6.sl");
+    io::unlink("./sdcc.sl");
+    io::unlink("./sdcc.linux.sl");
+    io::unlink("./sdmain6.sl");
     return result;
 }
 
 fn i32 discover_target_fallback(arena::Arena* a, const u8[]msg) {
     boot(a);
-    io::unlink("/tmp/sdfb.linux.sl");
-    write_file("/tmp/sdfb.sl", "export fn i32 y() { return 7; }");
-    write_file("/tmp/sdmain7.sl", "import sdfb;\nexport fn i32 main() { return sdfb::y(); }");
+    io::unlink("./sdfb.linux.sl");
+    write_file("./sdfb.sl", "export fn i32 y() { return 7; }");
+    write_file("./sdmain7.sl", "import sdfb;\nexport fn i32 main() { return sdfb::y(); }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdmain7.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdmain7.sl");
+    compiler::add_import_path(c, ".");
     compiler::set_target(c, "linux");
     compiler::discover(c);
     i32 result = 0;
     if(!testing::expect_eq(c.modules.data.len, (u64)2, msg)) { result = -1; }
     else if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { result = -2; }
-    io::unlink("/tmp/sdfb.sl");
-    io::unlink("/tmp/sdmain7.sl");
+    io::unlink("./sdfb.sl");
+    io::unlink("./sdmain7.sl");
     return result;
 }
 
@@ -662,60 +669,60 @@ fn i32 multithreaded_error_bails(arena::Arena* a, const u8[]msg) {
 
 fn i32 run_file_ok(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdrun_helper.sl", "export fn i32 foo() { return 5; }");
-    write_file("/tmp/sdrun_main.sl", "import sdrun_helper;\nexport fn i32 main() { return sdrun_helper::foo(); }");
+    write_file("./sdrun_helper.sl", "export fn i32 foo() { return 5; }");
+    write_file("./sdrun_main.sl", "import sdrun_helper;\nexport fn i32 main() { return sdrun_helper::foo(); }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdrun_main.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdrun_main.sl");
+    compiler::add_import_path(c, ".");
     i32 rc = compiler::run(c);
     i32 result = 0;
     if(!testing::expect_eq(rc, 0, msg)) { result = -1; }
-    io::unlink("/tmp/sdrun_helper.sl");
-    io::unlink("/tmp/sdrun_main.sl");
+    io::unlink("./sdrun_helper.sl");
+    io::unlink("./sdrun_main.sl");
     return result;
 }
 
 fn i32 run_file_missing_import(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdrun_bad.sl", "import sdrun_nope;\nexport fn i32 main() { return 0; }");
+    write_file("./sdrun_bad.sl", "import sdrun_nope;\nexport fn i32 main() { return 0; }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdrun_bad.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdrun_bad.sl");
+    compiler::add_import_path(c, ".");
     i32 rc = compiler::run(c);
     i32 result = 0;
     if(!testing::expect_eq(rc, 1, msg)) { result = -1; }
-    io::unlink("/tmp/sdrun_bad.sl");
+    io::unlink("./sdrun_bad.sl");
     return result;
 }
 
 fn i32 run_file_sema_error(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdrun_se.sl", "export fn i32 main() { return undefined_thing; }");
+    write_file("./sdrun_se.sl", "export fn i32 main() { return undefined_thing; }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdrun_se.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdrun_se.sl");
+    compiler::add_import_path(c, ".");
     i32 rc = compiler::run(c);
     i32 result = 0;
     if(!testing::expect_eq(rc, 1, msg)) { result = -1; }
-    io::unlink("/tmp/sdrun_se.sl");
+    io::unlink("./sdrun_se.sl");
     return result;
 }
 
 fn i32 no_double_scan(arena::Arena* a, const u8[]msg) {
     boot(a);
-    write_file("/tmp/sdds_helper.sl", "export fn i32 foo() { return 5; }");
-    write_file("/tmp/sdds_main.sl", "import sdds_helper;\nexport fn i32 main() { return sdds_helper::foo(); }");
+    write_file("./sdds_helper.sl", "export fn i32 foo() { return 5; }");
+    write_file("./sdds_main.sl", "import sdds_helper;\nexport fn i32 main() { return sdds_helper::foo(); }");
     compiler::Compiler* c = compiler::new(a);
-    compiler::add_source(c, "/tmp/sdds_main.sl");
-    compiler::add_import_path(c, "/tmp");
+    compiler::add_source(c, "./sdds_main.sl");
+    compiler::add_import_path(c, ".");
     compiler::discover(c);
     u64 tokens_after_discover = c.modules.data[0].tokens.len;
     compiler::run_frontend(c);
     i32 result = 0;
     if(!testing::expect_true(tokens_after_discover > 0, msg)) { result = -1; }
     else if(!testing::expect_eq(c.modules.data[0].tokens.len, tokens_after_discover, msg)) { result = -2; }
-    io::unlink("/tmp/sdds_helper.sl");
-    io::unlink("/tmp/sdds_main.sl");
+    io::unlink("./sdds_helper.sl");
+    io::unlink("./sdds_main.sl");
     return result;
 }
 
@@ -734,7 +741,7 @@ fn i32 argv_full(arena::Arena* a, const u8[]msg) {
     args[1] = "-i";
     args[2] = "/tmp;/usr/lib";
     args[3] = "-target";
-    args[4] = "linux";
+    args[4] = HOST_TARGET;
     args[5] = "-mt";
     if(!testing::expect_true(compiler::parse_argv(c, args), msg)) { return -1; }
     if(!testing::expect_eq(c.entry_sources.data.len, (u64)1, msg)) { return -2; }
@@ -742,7 +749,7 @@ fn i32 argv_full(arena::Arena* a, const u8[]msg) {
     if(!testing::expect_eq(c.import_paths.data.len, (u64)2, msg)) { return -4; }
     if(!testing::expect_eq(c.import_paths.data[0], "/tmp", msg)) { return -5; }
     if(!testing::expect_eq(c.import_paths.data[1], "/usr/lib", msg)) { return -6; }
-    if(!testing::expect_eq(c.target, "linux", msg)) { return -7; }
+    if(!testing::expect_eq(c.target, HOST_TARGET, msg)) { return -7; }
     if(!testing::expect_true(c.is_multithreaded, msg)) { return -8; }
     return 0;
 }
@@ -1069,7 +1076,7 @@ fn i32 e2e_link_threadlocal_per_thread(arena::Arena* a, const u8[]msg) {
     boot(a);
     arena::Arena* ca = sub_arena(a);
     compiler::Compiler* c = compiler::new(ca);
-    module::Module* app = mk_source_module(ca, "appmod", "extern {\n fn i32 pthread_create(u64* t, void* attr, fn* void*(void*) start, void* arg);\n fn i32 pthread_join(u64 t, void** ret);\n}\nthreadlocal i32 counter = 10;\ni32 worker_saw = 0;\nfn void* worker(void* arg) { counter += 5; worker_saw = counter; return null; }\nfn i32 main() { u64 t; pthread_create(&t, null, &worker, null); pthread_join(t, null); counter += 1; return worker_saw + counter; }");
+    module::Module* app = mk_source_module(ca, "appmod", THREADLOCAL_SRC);
     compiler::add_module(c, app);
     if(!testing::expect_eq(compiler::run_frontend(c), 0, msg)) { return -1; }
     const u8[] prog = sap_out(ca, "e2e_threadlocal_prog");

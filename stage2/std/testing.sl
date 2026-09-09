@@ -17,6 +17,8 @@ Runner runner;
 
 // state
 export fn void init() {
+    // Unbuffered, so a crashing case still shows which one it was.
+    sys::setvbuf(sys::stdout_file(), null, sys::IONBF, 0);
     runner.arena = {0, null};
     runner.cases = {{null, 0}, 0};
 }

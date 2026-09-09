@@ -95,10 +95,10 @@ char *flatten_stringlist(const StringList *list) {
 	if (list == NULL || list->count == 0)
 		return strdup("");
 
-	// First calculate the total length needed
+	// The command is left unquoted: cmd.exe strips the outer pair when the whole string starts with a quote.
 	size_t total_length = 0;
 	for (int i = 0; i < list->count; i++) {
-		total_length += strlen(list->data[i]);
+		total_length += strlen(list->data[i]) + (i == 0 ? 0 : 2);
 	}
 
 	// Add space for the spaces and null terminator
@@ -110,7 +110,13 @@ char *flatten_stringlist(const StringList *list) {
 
 	result[0] = '\0';
 	for (int i = 0; i < list->count; i++) {
-		strcat(result, list->data[i]);
+		if (i == 0) {
+			strcat(result, list->data[i]);
+		} else {
+			strcat(result, "\"");
+			strcat(result, list->data[i]);
+			strcat(result, "\"");
+		}
 		if (i < list->count - 1)
 			strcat(result, " ");
 	}

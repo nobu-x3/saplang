@@ -954,6 +954,11 @@ CompilerResult driver_run() {
 		return RESULT_MEMORY_ERROR;
 	if (!da_push(cmd, strdup("clang")))
 		return RESULT_MEMORY_ERROR;
+#if defined(_WIN32)
+	// Windows reserves 1MB per thread, too little for the compiler's recursive descent; match Linux's 8MB.
+	if (!da_push(cmd, strdup("-Wl,/STACK:8388608")))
+		return RESULT_MEMORY_ERROR;
+#endif
 	if (driver.options.gen_debug) {
 		if (!da_push(cmd, strdup("-g")))
 			return RESULT_MEMORY_ERROR;

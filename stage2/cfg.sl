@@ -376,7 +376,7 @@ fn bool block_terminated(CfgBuilder* b, u32 blk) {
 // The first terminator wins: a second one would silently drop the block's real exit.
 fn bool claim_terminator(CfgBuilder* b, u32 blk) {
     if(!b.cfg.blocks.data[blk].terminated) { return true; }
-    sys::dprintf(2, "cfg: internal error: block %u terminated twice\n", blk);
+    sys::fprintf(sys::stderr_file(), "cfg: internal error: block %u terminated twice\n", blk);
     return false;
 }
 

@@ -240,7 +240,7 @@ fn Optimize parse_optimize(const u8[] name) {
     if(slice_eq(name, "Release"))          { return Optimize::Release; }
     if(slice_eq(name, "ReleaseDebug"))     { return Optimize::ReleaseDebug; }
     if(slice_eq(name, "AddressSanitizer")) { return Optimize::AddressSanitizer; }
-    sys::dprintf(2, "warning: unknown -Doptimize=%.*s, using Debug\n", (i32)name.len, (i8*)name.ptr);
+    sys::fprintf(sys::stderr_file(), "warning: unknown -Doptimize=%.*s, using Debug\n", (i32)name.len, (i8*)name.ptr);
     return Optimize::Debug;
 }
 
@@ -464,7 +464,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
             b.want_help = true;
         } else if(slice_eq(arg, "-out-dir")) {
             if(arg_index + 1 >= argc || cstr_slice(argv[arg_index + 1]).len == 0) {
-                sys::dprintf(2, "error: -out-dir needs a directory\n");
+                sys::fprintf(sys::stderr_file(), "error: -out-dir needs a directory\n");
                 return 1;
             }
             arg_index += 1;
@@ -474,7 +474,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
             parse_define_arg(b, arg);
         } else if(starts_with(arg, "-")) {
             if(is_build_owned_flag(arg)) {
-                sys::dprintf(2, "error: %.*s is set by build.sl, not on the command line\n", (i32)arg.len, (i8*)arg.ptr);
+                sys::fprintf(sys::stderr_file(), "error: %.*s is set by build.sl, not on the command line\n", (i32)arg.len, (i8*)arg.ptr);
                 return 1;
             }
             const u8[] flag = arg;   // List(const u8[]) cannot infer its element from a u8[] argument
@@ -496,7 +496,7 @@ export fn i32 run(i32 argc, u8** argv, fn* void(Build*) build_fn) {
             u8[] name = b.requested_steps.data[step_index];
             Step* s = resolve_step(b, name);
             if(s == null) {
-                sys::dprintf(2, "error: no step named '%.*s' (run `saplangc build --help`)\n", (i32)name.len, (i8*)name.ptr);
+                sys::fprintf(sys::stderr_file(), "error: no step named '%.*s' (run `saplangc build --help`)\n", (i32)name.len, (i8*)name.ptr);
                 return 1;
             }
             list::push(&roots, b.allocator, s);
@@ -533,7 +533,7 @@ export fn void collect_compiles(Step* s, list::List(CompileStep*)* out, mem::All
 fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
     u64 workers = (u64)sys::cpu_count();
     if(workers == 0) { workers = 1; }
-    i32* pids = (i32*)mem::alloc_bytes(b.allocator, workers * sizeof(i32));
+    i64* pids = (i64*)mem::alloc_bytes(b.allocator, workers * sizeof(i64));
     CompileStep** running = (CompileStep**)mem::alloc_bytes(b.allocator, workers * sizeof(CompileStep*));
     for(u64 slot = 0; slot < workers; slot += 1) { pids[slot] = 0; running[slot] = null; }
 
@@ -547,14 +547,14 @@ fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
             u8[] out = artifact_path(b, c);
             ensure_output_dir(b, c);
             if(is_fresh(b, c, out)) {
-                sys::dprintf(1, "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+                sys::fprintf(sys::stdout_file(), "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
                 c.step.done = true;
                 continue;
             }
-            sys::dprintf(1, "  CC   %.*s -> %.*s\n", (i32)c.root_source.len, (i8*)c.root_source.ptr, (i32)out.len, (i8*)out.ptr);
-            i32 pid = fork_compile(b, c, out);
+            sys::fprintf(sys::stdout_file(), "  CC   %.*s -> %.*s\n", (i32)c.root_source.len, (i8*)c.root_source.ptr, (i32)out.len, (i8*)out.ptr);
+            i64 pid = fork_compile(b, c, out);
             if(pid < 0) {
-                sys::dprintf(2, "error: fork failed for '%.*s'\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+                sys::fprintf(sys::stderr_file(), "error: spawn failed for '%.*s'\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
                 if(first_err == 0) { first_err = -1; }
                 continue;
             }
@@ -565,9 +565,8 @@ fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
             inflight += 1;
         }
         if(inflight == 0) { break; }
-        i32 status = 0;
-        i32 done_pid = sys::waitpid(-1, &status, 0);
-        i32 rc = (status >> 8) & 255;
+        i32 rc = 0;
+        i64 done_pid = sys::wait_any(pids, workers, &rc);
         u64 slot = 0;
         while(slot < workers && pids[slot] != done_pid) { slot += 1; }
         if(slot < workers) {
@@ -576,7 +575,7 @@ fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
             running[slot] = null;
             inflight -= 1;
             if(rc != 0) {
-                sys::dprintf(2, "error: compiling '%.*s' failed\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+                sys::fprintf(sys::stderr_file(), "error: compiling '%.*s' failed\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
                 if(first_err == 0) { first_err = rc; }
             } else {
                 write_stamp(b, c);
@@ -587,14 +586,8 @@ fn i32 run_compiles_parallel(Build* b, list::List(CompileStep*)* compiles) {
     return first_err;
 }
 
-fn i32 fork_compile(Build* b, CompileStep* c, u8[] out) {
-    i8** argv = build_compile_argv(b, c, out);
-    i32 pid = sys::fork();
-    if(pid == 0) {
-        sys::execvp(argv[0], argv);
-        sys::_exit(127);
-    }
-    return pid;
+fn i64 fork_compile(Build* b, CompileStep* c, u8[] out) {
+    return sys::spawn_async(build_compile_argv(b, c, out));
 }
 
 export fn Step* resolve_step(Build* b, const u8[] name) {
@@ -628,15 +621,15 @@ fn i32 make_clean(Build* b) {
 
 fn i32 remove_tree(Build* b, const u8[] dir) {
     if(!file_exists(dir)) { return 0; }
-    sys::dprintf(1, "  RM   %.*s\n", (i32)dir.len, (i8*)dir.ptr);
+    sys::fprintf(sys::stdout_file(), "  RM   %.*s\n", (i32)dir.len, (i8*)dir.ptr);
     i8** argv = (i8**)mem::alloc_bytes(b.allocator, 4 * sizeof(i8*));
     argv[0] = cstr(b.allocator, "rm");
     argv[1] = cstr(b.allocator, "-rf");
     argv[2] = cstr(b.allocator, dir);
     argv[3] = null;
-    i32 rc = spawn_and_wait(argv);
+    i32 rc = sys::spawn_wait(argv);
     if(rc != 0) {
-        sys::dprintf(2, "error: could not remove '%.*s'\n", (i32)dir.len, (i8*)dir.ptr);
+        sys::fprintf(sys::stderr_file(), "error: could not remove '%.*s'\n", (i32)dir.len, (i8*)dir.ptr);
         return rc;
     }
 
@@ -644,7 +637,7 @@ fn i32 remove_tree(Build* b, const u8[] dir) {
     u64 end = dir.len;
     while(end > 0) {
         end -= 1;
-        if(dir[end] != '/') { continue; }
+        if(!io::is_path_separator(dir[end])) { continue; }
         const u8[] parent = {dir.ptr, end};
         if(sys::remove(cstr(b.allocator, parent)) != 0) { return 0; }
     }
@@ -655,14 +648,14 @@ fn i32 make_compile(Build* b, CompileStep* c) {
     u8[] out = artifact_path(b, c);
     ensure_output_dir(b, c);
     if(is_fresh(b, c, out)) {
-        sys::dprintf(1, "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+        sys::fprintf(sys::stdout_file(), "  CACHED %.*s\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
         return 0;
     }
-    sys::dprintf(1, "  CC   %.*s -> %.*s\n", (i32)c.root_source.len, (i8*)c.root_source.ptr, (i32)out.len, (i8*)out.ptr);
+    sys::fprintf(sys::stdout_file(), "  CC   %.*s -> %.*s\n", (i32)c.root_source.len, (i8*)c.root_source.ptr, (i32)out.len, (i8*)out.ptr);
     i8** argv = build_compile_argv(b, c, out);
-    i32 rc = spawn_and_wait(argv);
+    i32 rc = sys::spawn_wait(argv);
     if(rc != 0) {
-        sys::dprintf(2, "error: compiling '%.*s' failed\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
+        sys::fprintf(sys::stderr_file(), "error: compiling '%.*s' failed\n", (i32)c.artifact_name.len, (i8*)c.artifact_name.ptr);
         return rc;
     }
     write_stamp(b, c);
@@ -676,23 +669,23 @@ fn i32 make_run(Build* b, RunStep* r) {
     argv[n] = cstr(b.allocator, path); n += 1;
     for(u64 arg_index = 0; arg_index < r.args.data.len; arg_index += 1) { argv[n] = cstr(b.allocator, r.args.data[arg_index]); n += 1; }
     argv[n] = null;
-    sys::dprintf(1, "  RUN  %.*s\n", (i32)path.len, (i8*)path.ptr);
-    return spawn_and_wait(argv);
+    sys::fprintf(sys::stdout_file(), "  RUN  %.*s\n", (i32)path.len, (i8*)path.ptr);
+    return sys::spawn_wait(argv);
 }
 
 fn void print_help(Build* b) {
-    sys::dprintf(1, "Usage: saplangc build [step]... [-Doption=value]... [compiler flag]...\n");
-    sys::dprintf(1, "Any other -flag (e.g. -show-timings, -mt) is passed to every compile.\n\n");
-    sys::dprintf(1, "  -out-dir <dir>  root for build output, overriding build.sl (currently %.*s)\n\n", (i32)b.out_dir.len, (i8*)b.out_dir.ptr);
-    sys::dprintf(1, "Steps:\n");
+    sys::fprintf(sys::stdout_file(), "Usage: saplangc build [step]... [-Doption=value]... [compiler flag]...\n");
+    sys::fprintf(sys::stdout_file(), "Any other -flag (e.g. -show-timings, -mt) is passed to every compile.\n\n");
+    sys::fprintf(sys::stdout_file(), "  -out-dir <dir>  root for build output, overriding build.sl (currently %.*s)\n\n", (i32)b.out_dir.len, (i8*)b.out_dir.ptr);
+    sys::fprintf(sys::stdout_file(), "Steps:\n");
     for(u64 step_index = 0; step_index < b.top_steps.data.len; step_index += 1) {
         Step* s = b.top_steps.data[step_index];
-        sys::dprintf(1, "  %.*s  -  %.*s\n", (i32)s.name.len, (i8*)s.name.ptr, (i32)s.description.len, (i8*)s.description.ptr);
+        sys::fprintf(sys::stdout_file(), "  %.*s  -  %.*s\n", (i32)s.name.len, (i8*)s.name.ptr, (i32)s.description.len, (i8*)s.description.ptr);
     }
-    sys::dprintf(1, "\nProject options:\n");
+    sys::fprintf(sys::stdout_file(), "\nProject options:\n");
     for(u64 option_index = 0; option_index < b.options.data.len; option_index += 1) {
         OptionInfo* o = &b.options.data[option_index];
-        sys::dprintf(1, "  -D%.*s  -  %.*s\n", (i32)o.name.len, (i8*)o.name.ptr, (i32)o.description.len, (i8*)o.description.ptr);
+        sys::fprintf(sys::stdout_file(), "  -D%.*s  -  %.*s\n", (i32)o.name.len, (i8*)o.name.ptr, (i32)o.description.len, (i8*)o.description.ptr);
     }
 }
 
@@ -717,19 +710,6 @@ fn const u8[] resolve_compiler_path(mem::Allocator a) {
     i8* raw = sys::getenv(cstr(a, "SAPLANGC"));
     if(raw == null) { return "saplangc"; }
     return cstr_slice((u8*)raw);
-}
-
-fn i32 spawn_and_wait(i8** argv) {
-    i32 pid = sys::fork();
-    if(pid < 0) { return -1; }
-    if(pid == 0) {
-        sys::execvp(argv[0], argv);
-        sys::_exit(127);
-        return 127;
-    }
-    i32 status = 0;
-    sys::waitpid(pid, &status, 0);
-    return (status >> 8) & 255;
 }
 
 fn u8[] join_semicolons(mem::Allocator a, list::List(const u8[])* parts) {

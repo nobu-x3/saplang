@@ -437,16 +437,122 @@ fn i32 oversized_aggregates_are_declared_byval_and_sret(arena::Arena* a, const u
     return 0;
 }
 
+// ===== Microsoft x64: the same shapes, classified by size alone =====
+
+fn i32 win64_small_aggregates_ride_in_one_integer_register(arena::Arena* a, const u8[] m) {
+    test_util::boot(a);
+    abi::ArgInfo two_floats = abi::classify(rec(a, tys(a, types::prim_f32(), types::prim_f32())));
+    abi::ArgInfo one_double = abi::classify(rec(a, tys(a, types::prim_f64())));
+    abi::ArgInfo one_byte = abi::classify(rec(a, tys(a, types::prim_u8())));
+    abi::ArgInfo two_bools = abi::classify(rec(a, tys(a, types::prim_bool(), types::prim_bool())));
+    abi::ArgInfo float_array = abi::classify(rec(a, tys(a, types::intern_array(types::prim_f32(), 2))));
+    if(!expect_coerce1(&two_floats, abi::EightbyteKind::Integer, 8, m)) { return 1; }
+    if(!expect_coerce1(&one_double, abi::EightbyteKind::Integer, 8, m)) { return 1; }
+    if(!expect_coerce1(&one_byte, abi::EightbyteKind::Integer, 1, m)) { return 1; }
+    if(!expect_coerce1(&two_bools, abi::EightbyteKind::Integer, 2, m)) { return 1; }
+    if(!expect_coerce1(&float_array, abi::EightbyteKind::Integer, 8, m)) { return 1; }
+    return 0;
+}
+
+fn i32 win64_aggregates_of_other_sizes_go_to_memory(arena::Arena* a, const u8[] m) {
+    test_util::boot(a);
+    abi::ArgInfo three_floats = abi::classify(rec(a, tys(a, types::prim_f32(), types::prim_f32(), types::prim_f32())));
+    abi::ArgInfo four_floats = abi::classify(rec(a, tys(a, types::intern_array(types::prim_f32(), 4))));
+    abi::ArgInfo float_double = abi::classify(rec(a, tys(a, types::prim_f32(), types::prim_f64())));
+    abi::ArgInfo three_bytes = abi::classify(rec(a, tys(a, types::intern_array(types::prim_u8(), 3))));
+    abi::ArgInfo slice = abi::classify(types::intern_slice(types::prim_i32()));
+    if(!expect_kind(&three_floats, abi::ArgKind::Memory, m)) { return 1; }
+    if(!expect_kind(&four_floats, abi::ArgKind::Memory, m)) { return 1; }
+    if(!expect_kind(&float_double, abi::ArgKind::Memory, m)) { return 1; }
+    if(!expect_kind(&three_bytes, abi::ArgKind::Memory, m)) { return 1; }
+    if(!expect_kind(&slice, abi::ArgKind::Memory, m)) { return 1; }
+    return 0;
+}
+
+fn i32 win64_a_lone_pointer_stays_a_pointer(arena::Arena* a, const u8[] m) {
+    test_util::boot(a);
+    types::Ty* ptr = types::intern_pointer(types::prim_i32(), false);
+    types::Ty* fnptr = types::intern_fn_ptr(types::prim_void(), repeat(a, types::prim_i32(), 0), false);
+    abi::ArgInfo lone_ptr = abi::classify(rec(a, tys(a, ptr)));
+    abi::ArgInfo lone_fnptr = abi::classify(rec(a, tys(a, fnptr)));
+    abi::ArgInfo ptr_int = abi::classify(rec(a, tys(a, ptr, types::prim_i32())));
+    if(!expect_coerce1(&lone_ptr, abi::EightbyteKind::Pointer, 8, m)) { return 1; }
+    if(!expect_coerce1(&lone_fnptr, abi::EightbyteKind::Pointer, 8, m)) { return 1; }
+    if(!expect_kind(&ptr_int, abi::ArgKind::Memory, m)) { return 1; }
+    return 0;
+}
+
+fn i32 win64_unions_classify_by_size(arena::Arena* a, const u8[] m) {
+    test_util::boot(a);
+    abi::ArgInfo float_int = abi::classify(uni(a, tys(a, types::prim_f32(), types::prim_i32())));
+    abi::ArgInfo double_long = abi::classify(uni(a, tys(a, types::prim_f64(), types::prim_i64())));
+    abi::ArgInfo big_union = abi::classify(uni(a, tys(a, types::prim_i32(), types::intern_array(types::prim_u8(), 20))));
+    if(!expect_coerce1(&float_int, abi::EightbyteKind::Integer, 4, m)) { return 1; }
+    if(!expect_coerce1(&double_long, abi::EightbyteKind::Integer, 8, m)) { return 1; }
+    if(!expect_kind(&big_union, abi::ArgKind::Memory, m)) { return 1; }
+    return 0;
+}
+
+// An argument's class here does not depend on how many precede it, so nothing ever spills.
+fn i32 win64_aggregates_never_spill_for_lack_of_registers(arena::Arena* a, const u8[] m) {
+    test_util::boot(a);
+    types::Ty* pair = rec(a, tys(a, types::prim_i32(), types::prim_i32()));
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_void(), repeat(a, pair, 8), false);
+    abi::FnAbi* fn_abi = abi::classify_fn(fnty, arena::allocator(a));
+    for(u64 i = 0; i < 8; i += 1) {
+        if(!testing::expect_eq((i32)fn_abi.params[i].kind, (i32)abi::ArgKind::Coerce, m)) { return 1; }
+    }
+    if(!testing::expect_eq(fn_abi.llvm_param_count, 8, m)) { return 1; }
+    return 0;
+}
+
+fn i32 win64_a_coerced_param_spends_one_slot(arena::Arena* a, const u8[] m) {
+    test_util::boot(a);
+    types::Ty* pair = rec(a, tys(a, types::prim_f32(), types::prim_f32()));
+    types::Ty* quad = rec(a, tys(a, types::intern_array(types::prim_f32(), 4)));
+    types::Ty* fnty = types::intern_fn_ptr(types::prim_void(), tys(a, pair, quad, types::prim_i32()), false);
+    abi::FnAbi* fn_abi = abi::classify_fn(fnty, arena::allocator(a));
+    if(!testing::expect_eq(fn_abi.first_llvm_param[0], 0, m)) { return 1; }
+    if(!testing::expect_eq(fn_abi.first_llvm_param[1], 1, m)) { return 1; }
+    if(!testing::expect_eq(fn_abi.first_llvm_param[2], 2, m)) { return 1; }
+    if(!testing::expect_eq(fn_abi.llvm_param_count, 3, m)) { return 1; }
+    return 0;
+}
+
+fn i32 win64_small_aggregates_are_declared_as_one_word(arena::Arena* a, const u8[] m) {
+    const u8[] ir = shapes_ir(a);
+    if(!testing::expect_substr(ir, "declare void @take_v2(i64)", m)) { return 1; }
+    if(!testing::expect_substr(ir, "declare void @take_p(i64)", m)) { return 1; }
+    if(!testing::expect_substr(ir, "declare i64 @make_v2()", m)) { return 1; }
+    return 0;
+}
+
+fn i32 win64_other_sizes_are_declared_byval_and_sret(arena::Arena* a, const u8[] m) {
+    const u8[] ir = shapes_ir(a);
+    if(!testing::expect_substr(ir, "declare void @take_df(ptr byval(", m)) { return 1; }
+    if(!testing::expect_substr(ir, "declare void @take_h(ptr byval(", m)) { return 1; }
+    if(!testing::expect_substr(ir, "declare void @take_big(ptr byval(", m)) { return 1; }
+    if(!testing::expect_substr(ir, "declare void @make_v3(ptr sret(", m)) { return 1; }
+    if(!testing::expect_substr(ir, "declare void @make_big(ptr sret(", m)) { return 1; }
+    return 0;
+}
 // ===== real C callees: the only checks here that a C implementation has to agree with =====
 
 struct DivResult { i32 quot; i32 rem; }
-struct LDivResult { i64 quot; i64 rem; }
 struct Complex32 { f32 re; f32 im; }
 
 extern {
     fn DivResult div(i32 numer, i32 denom);
-    fn LDivResult ldiv(i64 numer, i64 denom);
     fn f32 cabsf(Complex32 z);
+}
+
+// C `long` is 32-bit on Windows and 64-bit here, so ldiv's shape follows the platform.
+comprun if (build::os == "windows") {
+    struct LDivResult { i32 quot; i32 rem; }
+    extern { fn LDivResult ldiv(i32 numer, i32 denom); }
+} else {
+    struct LDivResult { i64 quot; i64 rem; }
+    extern { fn LDivResult ldiv(i64 numer, i64 denom); }
 }
 
 fn i32 libc_div_returns_a_packed_integer_eightbyte(arena::Arena* a, const u8[] m) {
@@ -459,10 +565,10 @@ fn i32 libc_div_returns_a_packed_integer_eightbyte(arena::Arena* a, const u8[] m
     return 0;
 }
 
-fn i32 libc_ldiv_returns_two_integer_eightbytes(arena::Arena* a, const u8[] m) {
+fn i32 libc_ldiv_round_trips(arena::Arena* a, const u8[] m) {
     LDivResult r = ldiv(-17, 5);
-    if(!testing::expect_eq(r.quot, (i64)-3, m)) { return 1; }
-    if(!testing::expect_eq(r.rem, (i64)-2, m)) { return 1; }
+    if(!testing::expect_eq((i64)r.quot, (i64)-3, m)) { return 1; }
+    if(!testing::expect_eq((i64)r.rem, (i64)-2, m)) { return 1; }
     return 0;
 }
 
@@ -599,6 +705,13 @@ fn i32 main() {
 
     testing::add(classify_suite, "scalars_are_direct",                          &scalars_are_direct);
     testing::add(classify_suite, "void_and_null_are_ignored",                   &void_and_null_are_ignored);
+    // The eightbyte classes below are SysV's; Microsoft x64 decides on size alone.
+    comprun if (build::os == "windows") {
+    testing::add(classify_suite, "win64_small_aggregates_ride_in_one_integer_register", &win64_small_aggregates_ride_in_one_integer_register);
+    testing::add(classify_suite, "win64_aggregates_of_other_sizes_go_to_memory",        &win64_aggregates_of_other_sizes_go_to_memory);
+    testing::add(classify_suite, "win64_a_lone_pointer_stays_a_pointer",                &win64_a_lone_pointer_stays_a_pointer);
+    testing::add(classify_suite, "win64_unions_classify_by_size",                       &win64_unions_classify_by_size);
+    } else {
     testing::add(classify_suite, "two_floats_share_one_sse_eightbyte",          &two_floats_share_one_sse_eightbyte);
     testing::add(classify_suite, "three_floats_split_two_then_one",             &three_floats_split_two_then_one);
     testing::add(classify_suite, "four_floats_fill_two_sse_eightbytes",         &four_floats_fill_two_sse_eightbytes);
@@ -611,11 +724,18 @@ fn i32 main() {
     testing::add(classify_suite, "narrow_integer_eightbytes_keep_their_width",  &narrow_integer_eightbytes_keep_their_width);
     testing::add(classify_suite, "a_lone_pointer_eightbyte_stays_a_pointer",    &a_lone_pointer_eightbyte_stays_a_pointer);
     testing::add(classify_suite, "a_shared_eightbyte_is_not_a_lone_pointer",    &a_shared_eightbyte_is_not_a_lone_pointer);
-    testing::add(classify_suite, "enum_fields_classify_through_their_base",     &enum_fields_classify_through_their_base);
     testing::add(classify_suite, "unions_merge_every_member_at_offset_zero",    &unions_merge_every_member_at_offset_zero);
+    }
+    testing::add(classify_suite, "enum_fields_classify_through_their_base",     &enum_fields_classify_through_their_base);
     testing::add(classify_suite, "aggregates_over_sixteen_bytes_go_to_memory",  &aggregates_over_sixteen_bytes_go_to_memory);
 
     testing::add(signature_suite, "plain_signature_spends_one_slot_per_param",          &plain_signature_spends_one_slot_per_param);
+    comprun if (build::os == "windows") {
+    testing::add(signature_suite, "win64_a_coerced_param_spends_one_slot",              &win64_a_coerced_param_spends_one_slot);
+    testing::add(signature_suite, "win64_aggregates_never_spill_for_lack_of_registers", &win64_aggregates_never_spill_for_lack_of_registers);
+    testing::add(signature_suite, "win64_small_aggregates_are_declared_as_one_word",    &win64_small_aggregates_are_declared_as_one_word);
+    testing::add(signature_suite, "win64_other_sizes_are_declared_byval_and_sret",      &win64_other_sizes_are_declared_byval_and_sret);
+    } else {
     testing::add(signature_suite, "a_coerced_param_spends_one_slot_per_eightbyte",      &a_coerced_param_spends_one_slot_per_eightbyte);
     testing::add(signature_suite, "an_sret_return_shifts_every_param_slot",             &an_sret_return_shifts_every_param_slot);
     testing::add(signature_suite, "an_empty_aggregate_stays_a_direct_value",            &an_empty_aggregate_stays_a_direct_value);
@@ -623,13 +743,13 @@ fn i32 main() {
     testing::add(signature_suite, "an_sret_pointer_consumes_an_integer_register",       &an_sret_pointer_consumes_an_integer_register);
     testing::add(signature_suite, "sse_and_integer_registers_run_out_separately",       &sse_and_integer_registers_run_out_separately);
     testing::add(signature_suite, "a_spilled_aggregate_leaves_registers_for_later_params", &a_spilled_aggregate_leaves_registers_for_later_params);
-
     testing::add(signature_suite, "float_pairs_are_declared_as_a_float_vector",         &float_pairs_are_declared_as_a_float_vector);
     testing::add(signature_suite, "packed_integers_are_declared_as_one_word",           &packed_integers_are_declared_as_one_word);
     testing::add(signature_suite, "oversized_aggregates_are_declared_byval_and_sret",   &oversized_aggregates_are_declared_byval_and_sret);
+    }
 
     testing::add(runtime_suite, "libc_div_returns_a_packed_integer_eightbyte",  &libc_div_returns_a_packed_integer_eightbyte);
-    testing::add(runtime_suite, "libc_ldiv_returns_two_integer_eightbytes",     &libc_ldiv_returns_two_integer_eightbytes);
+    testing::add(runtime_suite, "libc_ldiv_round_trips",                        &libc_ldiv_round_trips);
     testing::add(runtime_suite, "libm_cabsf_takes_two_floats_in_one_register",  &libm_cabsf_takes_two_floats_in_one_register);
     testing::add(runtime_suite, "small_float_aggregates_round_trip",            &small_float_aggregates_round_trip);
     testing::add(runtime_suite, "small_integer_aggregates_round_trip",          &small_integer_aggregates_round_trip);

@@ -57,30 +57,30 @@ export const u8[] CACHE_DIR = ".sap-cache";
 export const u8[] VERSION = "0.3.0 (stage2, self-hosted)";
 
 export fn void print_usage() {
-    sys::dprintf(1, "Usage: saplangc <file.sl>... [options]\n");
-    sys::dprintf(1, "       saplangc build [step]... [-Dkey=value]...\n\n");
-    sys::dprintf(1, "Options:\n");
-    sys::dprintf(1, "  -o <path>              output executable (default a.out)\n");
-    sys::dprintf(1, "  -i \"<p1;p2>\"           module search paths, ;-separated\n");
-    sys::dprintf(1, "  -l <name>              link library <name>\n");
-    sys::dprintf(1, "  -L <dir>               add a library search directory\n");
-    sys::dprintf(1, "  -target <name>         target platform for conditional compilation\n");
-    sys::dprintf(1, "  -config <mode>         Debug | Release | ReleaseDebug | AddressSanitizer | ThreadSanitizer\n");
-    sys::dprintf(1, "  -D<name>[=<value>]     define a flag readable from `comprun if (build::defined(...))`\n");
-    sys::dprintf(1, "  -deps <path>           write every discovered source path to <path>\n");
-    sys::dprintf(1, "  -link-config <file>    override probed link paths (key=value per line)\n");
-    sys::dprintf(1, "  -c                     emit <module>.o per module, skip linking (-o renames the entry object)\n");
-    sys::dprintf(1, "  -mt                    compile modules on a thread pool\n");
-    sys::dprintf(1, "  -comptime-depth <N>    comptime recursion cap (0 = default)\n");
-    sys::dprintf(1, "  -comptime-iterations <N>  comptime per-loop cap (0 = default)\n");
-    sys::dprintf(1, "  -cfg-dump              print each function's CFG, then stop\n");
-    sys::dprintf(1, "  -sapir-dump            print each module's sapir IR, then stop\n");
-    sys::dprintf(1, "  -token-dump            print the scanner's tokens, then stop\n");
-    sys::dprintf(1, "  -ast-dump              print the parsed AST, then stop\n");
-    sys::dprintf(1, "  -llvm-dump             print the generated LLVM IR, then stop\n");
-    sys::dprintf(1, "  -show-timings          print per-phase wall time\n");
-    sys::dprintf(1, "  --help, -h             show this help\n");
-    sys::dprintf(1, "  --version              show the version\n");
+    sys::fprintf(sys::stdout_file(), "Usage: saplangc <file.sl>... [options]\n");
+    sys::fprintf(sys::stdout_file(), "       saplangc build [step]... [-Dkey=value]...\n\n");
+    sys::fprintf(sys::stdout_file(), "Options:\n");
+    sys::fprintf(sys::stdout_file(), "  -o <path>              output executable (default a.out)\n");
+    sys::fprintf(sys::stdout_file(), "  -i \"<p1;p2>\"           module search paths, ;-separated\n");
+    sys::fprintf(sys::stdout_file(), "  -l <name>              link library <name>\n");
+    sys::fprintf(sys::stdout_file(), "  -L <dir>               add a library search directory\n");
+    sys::fprintf(sys::stdout_file(), "  -target <name>         target platform for conditional compilation\n");
+    sys::fprintf(sys::stdout_file(), "  -config <mode>         Debug | Release | ReleaseDebug | AddressSanitizer | ThreadSanitizer\n");
+    sys::fprintf(sys::stdout_file(), "  -D<name>[=<value>]     define a flag readable from `comprun if (build::defined(...))`\n");
+    sys::fprintf(sys::stdout_file(), "  -deps <path>           write every discovered source path to <path>\n");
+    sys::fprintf(sys::stdout_file(), "  -link-config <file>    override probed link paths (key=value per line)\n");
+    sys::fprintf(sys::stdout_file(), "  -c                     emit <module>.o per module, skip linking (-o renames the entry object)\n");
+    sys::fprintf(sys::stdout_file(), "  -mt                    compile modules on a thread pool\n");
+    sys::fprintf(sys::stdout_file(), "  -comptime-depth <N>    comptime recursion cap (0 = default)\n");
+    sys::fprintf(sys::stdout_file(), "  -comptime-iterations <N>  comptime per-loop cap (0 = default)\n");
+    sys::fprintf(sys::stdout_file(), "  -cfg-dump              print each function's CFG, then stop\n");
+    sys::fprintf(sys::stdout_file(), "  -sapir-dump            print each module's sapir IR, then stop\n");
+    sys::fprintf(sys::stdout_file(), "  -token-dump            print the scanner's tokens, then stop\n");
+    sys::fprintf(sys::stdout_file(), "  -ast-dump              print the parsed AST, then stop\n");
+    sys::fprintf(sys::stdout_file(), "  -llvm-dump             print the generated LLVM IR, then stop\n");
+    sys::fprintf(sys::stdout_file(), "  -show-timings          print per-phase wall time\n");
+    sys::fprintf(sys::stdout_file(), "  --help, -h             show this help\n");
+    sys::fprintf(sys::stdout_file(), "  --version              show the version\n");
 }
 
 export fn Compiler* new(arena::Arena* a) {
@@ -104,7 +104,7 @@ fn bool parse_config(Compiler* c, const u8[] name) {
     if(slice_eq(name, "ReleaseDebug"))     { c.config = codegen::BuildConfig::ReleaseDebug; return true; }
     if(slice_eq(name, "AddressSanitizer")) { c.config = codegen::BuildConfig::AddressSanitizer; return true; }
     if(slice_eq(name, "ThreadSanitizer"))  { c.config = codegen::BuildConfig::ThreadSanitizer; return true; }
-    sys::dprintf(2, "unknown -config value: %.*s (expected Debug|Release|ReleaseDebug|AddressSanitizer|ThreadSanitizer)\n", (i32)name.len, (i8*)name.ptr);
+    sys::fprintf(sys::stderr_file(), "unknown -config value: %.*s (expected Debug|Release|ReleaseDebug|AddressSanitizer|ThreadSanitizer)\n", (i32)name.len, (i8*)name.ptr);
     return false;
 }
 
@@ -141,13 +141,13 @@ export fn void set_target(Compiler* c, const u8[] t) {
     c.target = t;
 }
 
-// Only Linux links today: link_paths is Linux-only, so any other target would silently emit an ELF.
+// Codegen always emits for the host triple, so a foreign target would pick that platform's sources for this one.
 export fn bool set_validated_target(Compiler* c, const u8[] t) {
-    if(slice_eq(t, "linux")) {
+    if(slice_eq(t, link_paths::host_os())) {
         c.target = t;
         return true;
     }
-    sys::dprintf(2, "unsupported -target %.*s (only 'linux' is supported)\n", (i32)t.len, (i8*)t.ptr);
+    sys::fprintf(sys::stderr_file(), "unsupported -target %.*s (this compiler only targets %.*s)\n", (i32)t.len, (i8*)t.ptr, (i32)link_paths::host_os().len, (i8*)link_paths::host_os().ptr);
     return false;
 }
 
@@ -195,7 +195,7 @@ export fn bool parse_argv(Compiler* c, const u8[][] args) {
             print_usage();
             c.wants_exit = true;
         } else if(slice_eq(arg, "--version")) {
-            sys::dprintf(1, "saplangc %.*s\n", (i32)VERSION.len, (i8*)VERSION.ptr);
+            sys::fprintf(sys::stdout_file(), "saplangc %.*s\n", (i32)VERSION.len, (i8*)VERSION.ptr);
             c.wants_exit = true;
         } else if(slice_eq(arg, "-c")) {
             c.compile_only = true;
@@ -222,7 +222,7 @@ export fn bool parse_argv(Compiler* c, const u8[][] args) {
         } else if(ends_with(arg, ".sl")) {
             add_source(c, arg);
         } else {
-            sys::dprintf(2, "unknown argument: %.*s\n", (i32)arg.len, (i8*)arg.ptr);
+            sys::fprintf(sys::stderr_file(), "unknown argument: %.*s\n", (i32)arg.len, (i8*)arg.ptr);
             ok = false;
         }
         arg_index += 1;
@@ -314,7 +314,7 @@ fn module::Module* new_source_module(Compiler* c, symbol::Symbol* name, const u8
 // The parser reads this while folding `comprun if`, so it has to be set before any module is parsed.
 fn module::BuildInfo build_info(Compiler* c) {
     module::BuildInfo info;
-    info.os = "linux";
+    info.os = link_paths::host_os();
     if(c.target.len > 0) { info.os = c.target; }
     info.arch = "x86_64";
     info.config = config_name(c.config);
@@ -447,7 +447,7 @@ fn u8[] open_and_read(Compiler* c, u8[] path, bool* found) {
 fn const u8[] path_basename(const u8[] path) {
     u64 start = 0;
     for(u64 char_index = 0; char_index < path.len; char_index += 1) {
-        if(path[char_index] == '/') { start = char_index + 1; }
+        if(io::is_path_separator(path[char_index])) { start = char_index + 1; }
     }
     const u8[] out = {&path.ptr[start], path.len - start};
     return out;
@@ -456,7 +456,7 @@ fn const u8[] path_basename(const u8[] path) {
 fn const u8[] path_stem(const u8[] path) {
     u64 start = 0;
     for(u64 char_index = 0; char_index < path.len; char_index += 1) {
-        if(path[char_index] == '/') { start = char_index + 1; }
+        if(io::is_path_separator(path[char_index])) { start = char_index + 1; }
     }
     u64 end = path.len;
     for(u64 char_index = start; char_index < path.len; char_index += 1) {
@@ -477,8 +477,8 @@ export fn i32 run(Compiler* c) {
         rc = run_frontend(c);
         if(rc == 0 && !stops_before_backend(c)) { rc = run_backend(c); }
     }
-    if(rc == 0) { sys::dprintf(2, "Build success\n"); }
-    else { sys::dprintf(2, "Build failed\n"); }
+    if(rc == 0) { sys::fprintf(sys::stderr_file(), "Build success\n"); }
+    else { sys::fprintf(sys::stderr_file(), "Build failed\n"); }
     return rc;
 }
 
@@ -515,7 +515,7 @@ export fn i32 run_executable(mem::Allocator a, const u8[] path) {
     i8** argv = (i8**)mem::alloc_bytes(a, 2 * sizeof(i8*));
     argv[0] = cstr(a, path);
     argv[1] = null;
-    return spawn_and_wait(argv);
+    return sys::spawn_wait(argv);
 }
 
 fn const u8[][] run_codegen(Compiler* c) {
@@ -526,7 +526,7 @@ fn const u8[][] run_codegen(Compiler* c) {
         module::Module* m = c.modules.data[module_index];
         if(m.sapir == null) { continue; }
         const u8[] name = path_basename(m.path);
-        sys::dprintf(2, "Compiling module %.*s...\n", (i32)name.len, (i8*)name.ptr);
+        sys::fprintf(sys::stderr_file(), "Compiling module %.*s...\n", (i32)name.len, (i8*)name.ptr);
         const u8[] obj_path = object_path_for(c, m);
         if(codegen::emit_object((sapir::SapirModule*)m.sapir, c.allocator, cstr(c.allocator, obj_path), c.config) != 0) { c.error_count += 1; }
         paths[paths.len] = obj_path;
@@ -539,87 +539,44 @@ fn i32 run_link(Compiler* c, const u8[][] object_paths) {
     link_paths::LinkPaths paths = link_paths::resolve(c.allocator);
     if(c.link_config.len > 0) {
         if(!link_paths::apply_override(&paths, c.allocator, c.link_config)) {
-            sys::dprintf(2, "error: cannot read link config %.*s\n", (i32)c.link_config.len, (i8*)c.link_config.ptr);
+            sys::fprintf(sys::stderr_file(), "error: cannot read link config %.*s\n", (i32)c.link_config.len, (i8*)c.link_config.ptr);
             return 1;
         }
     }
     if(!paths.found_crt) {
-        sys::dprintf(2, "error: cannot locate the C runtime startup files or dynamic linker; pass -link-config\n");
+        sys::fprintf(sys::stderr_file(), "error: cannot locate the C runtime startup files or dynamic linker; pass -link-config\n");
         return 1;
     }
     if(c.config == codegen::BuildConfig::AddressSanitizer && !paths.found_asan) {
-        sys::dprintf(2, "error: cannot locate the clang AddressSanitizer runtime; pass -link-config\n");
+        sys::fprintf(sys::stderr_file(), "error: cannot locate the clang AddressSanitizer runtime; pass -link-config\n");
         return 1;
     }
     if(c.config == codegen::BuildConfig::ThreadSanitizer && !paths.found_tsan) {
-        sys::dprintf(2, "error: cannot locate the clang ThreadSanitizer runtime; pass -link-config\n");
+        sys::fprintf(sys::stderr_file(), "error: cannot locate the clang ThreadSanitizer runtime; pass -link-config\n");
         return 1;
     }
     i8** argv = build_link_argv(c, object_paths, &paths);
-    if(spawn_and_wait(argv) != 0) {
-        sys::dprintf(2, "error: link step failed\n");
+    if(sys::spawn_wait(argv) != 0) {
+        sys::fprintf(sys::stderr_file(), "error: link step failed\n");
         return 1;
     }
     return 0;
 }
 
 fn i8** build_link_argv(Compiler* c, const u8[][] object_paths, link_paths::LinkPaths* paths) {
-    u64 cap = 24 + object_paths.len + c.extern_libs.data.len + c.lib_dirs.data.len;
+    i8*[] prefix = link_paths::driver_argv(c.allocator, paths, link_paths::output_name(c.allocator, c.output_path));
+    i8*[] suffix = link_paths::runtime_argv(c.allocator, paths, c.config == codegen::BuildConfig::AddressSanitizer, c.config == codegen::BuildConfig::ThreadSanitizer);
+    u64 cap = prefix.len + suffix.len + object_paths.len + c.extern_libs.data.len + c.lib_dirs.data.len;
     i8** argv = (i8**)mem::alloc_bytes(c.allocator, (cap + 1) * sizeof(i8*));
     u64 n = 0;
-    argv[n] = cstr(c.allocator, "ld.lld"); n += 1;
-    argv[n] = cstr(c.allocator, "-o"); n += 1;
-    argv[n] = output_cstr(c); n += 1;
-    argv[n] = cstr(c.allocator, "-dynamic-linker"); n += 1;
-    argv[n] = paths.dynamic_linker; n += 1;
-    argv[n] = paths.crt_start; n += 1;
-    argv[n] = paths.crt_init; n += 1;
-    argv[n] = paths.lib_dir; n += 1;
-    if(paths.gcc_lib_dir != null) { argv[n] = paths.gcc_lib_dir; n += 1; }
-    // User -L dirs precede the objects/libs so ld.lld searches them for the -l libraries.
+    for(u64 i = 0; i < prefix.len; i += 1) { argv[n] = prefix[i]; n += 1; }
+    // User -L dirs precede the objects/libs so the linker searches them for the -l libraries.
     for(u64 i = 0; i < c.lib_dirs.data.len; i += 1) { argv[n] = dir_flag(c, c.lib_dirs.data[i]); n += 1; }
     for(u64 i = 0; i < object_paths.len; i += 1) { argv[n] = cstr(c.allocator, object_paths[i]); n += 1; }
     for(u64 i = 0; i < c.extern_libs.data.len; i += 1) { argv[n] = lib_flag(c, c.extern_libs.data[i]); n += 1; }
-    if(c.config == codegen::BuildConfig::AddressSanitizer) {
-        argv[n] = paths.asan_runtime_static; n += 1;
-        argv[n] = paths.asan_runtime; n += 1;
-        argv[n] = paths.asan_dynamic_list; n += 1;
-        argv[n] = cstr(c.allocator, "-lpthread"); n += 1;
-        argv[n] = cstr(c.allocator, "-lrt"); n += 1;
-        argv[n] = cstr(c.allocator, "-ldl"); n += 1;
-        argv[n] = cstr(c.allocator, "-lresolv"); n += 1;
-        argv[n] = cstr(c.allocator, "-lm"); n += 1;
-        argv[n] = paths.unwind_runtime; n += 1;
-        argv[n] = cstr(c.allocator, "--export-dynamic"); n += 1;
-    }
-    if(c.config == codegen::BuildConfig::ThreadSanitizer) {
-        argv[n] = paths.tsan_runtime; n += 1;
-        argv[n] = paths.tsan_dynamic_list; n += 1;
-        argv[n] = cstr(c.allocator, "-lpthread"); n += 1;
-        argv[n] = cstr(c.allocator, "-lrt"); n += 1;
-        argv[n] = cstr(c.allocator, "-ldl"); n += 1;
-        argv[n] = cstr(c.allocator, "-lresolv"); n += 1;
-        argv[n] = cstr(c.allocator, "-lm"); n += 1;
-        argv[n] = paths.unwind_runtime; n += 1;
-        argv[n] = cstr(c.allocator, "--export-dynamic"); n += 1;
-    }
-    argv[n] = cstr(c.allocator, "-lc"); n += 1;
-    argv[n] = paths.crt_fini; n += 1;
+    for(u64 i = 0; i < suffix.len; i += 1) { argv[n] = suffix[i]; n += 1; }
     argv[n] = null; n += 1;
     return argv;
-}
-
-fn i32 spawn_and_wait(i8** argv) {
-    i32 pid = sys::fork();
-    if(pid < 0) { return -1; }
-    if(pid == 0) {
-        sys::execvp(argv[0], argv);
-        sys::_exit(127);
-        return 127;
-    }
-    i32 status = 0;
-    sys::waitpid(pid, &status, 0);
-    return (status >> 8) & 255;
 }
 
 // -c writes <module>.o beside the caller; -o renames only the entry module's object, since
@@ -644,7 +601,7 @@ fn u8[] tmp_object_dir(Compiler* c) {
     const u8[] output = c.output_path;
     u64 start = 0;
     for(u64 index = 0; index < output.len; index += 1) {
-        if(output[index] == '/') { start = index + 1; }
+        if(io::is_path_separator(output[index])) { start = index + 1; }
     }
     if(start >= output.len) { io::outbuf_write(&buf, "a.out"); }
     else { io::outbuf_write(&buf, output[start..output.len]); }
@@ -659,11 +616,6 @@ fn u8[] tmp_object_path(Compiler* c, module::Module* m) {
     io::outbuf_write(&buf, interner::symbol_str(m.name));
     io::outbuf_write(&buf, ".o");
     return io::outbuf_bytes(&buf);
-}
-
-fn i8* output_cstr(Compiler* c) {
-    if(c.output_path.len == 0) { return cstr(c.allocator, "a.out"); }
-    return cstr(c.allocator, c.output_path);
 }
 
 fn i8* lib_flag(Compiler* c, const u8[] name) {
@@ -798,7 +750,7 @@ fn void lower_job(void* arg) {
 fn u64 report_phase(Compiler* c, const u8[] name, u64 started_ns) {
     u64 now = bench::now_ns();
     if(c.show_timings) {
-        sys::dprintf(2, "  %-8.*s %lu ms\n", (i32)name.len, (i8*)name.ptr, (now - started_ns) / 1000000);
+        sys::fprintf(sys::stderr_file(), "  %-8.*s %lu ms\n", (i32)name.len, (i8*)name.ptr, (now - started_ns) / 1000000);
     }
     return now;
 }
@@ -824,7 +776,7 @@ fn void dump_tokens(Compiler* c) {
         }
     }
     u8[] bytes = io::outbuf_bytes(&out);
-    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+    sys::fprintf(sys::stdout_file(), "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
 }
 
 fn void dump_asts(Compiler* c) {
@@ -839,7 +791,7 @@ fn void dump_asts(Compiler* c) {
         ast_print::print(m.root_node, 1, &out);
     }
     u8[] bytes = io::outbuf_bytes(&out);
-    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+    sys::fprintf(sys::stdout_file(), "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
 }
 
 fn void dump_llvm(Compiler* c) {
@@ -847,7 +799,7 @@ fn void dump_llvm(Compiler* c) {
         module::Module* m = c.modules.data[module_index];
         if(m.sapir == null) { continue; }
         const u8[] ir = codegen::codegen_ir_string((sapir::SapirModule*)m.sapir, c.allocator, c.config);
-        sys::dprintf(1, "%.*s", (i32)ir.len, (i8*)ir.ptr);
+        sys::fprintf(sys::stdout_file(), "%.*s", (i32)ir.len, (i8*)ir.ptr);
     }
 }
 
@@ -860,7 +812,7 @@ fn void dump_sapir(Compiler* c) {
         sapir_print::print_module((sapir::SapirModule*)m.sapir, &out);
     }
     u8[] bytes = io::outbuf_bytes(&out);
-    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+    sys::fprintf(sys::stdout_file(), "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
 }
 
 fn void dump_cfgs(Compiler* c) {
@@ -870,7 +822,7 @@ fn void dump_cfgs(Compiler* c) {
         cfg_print::print_module(c.modules.data[module_index], &out);
     }
     u8[] bytes = io::outbuf_bytes(&out);
-    sys::dprintf(1, "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
+    sys::fprintf(sys::stdout_file(), "%.*s", (i32)bytes.len, (i8*)bytes.ptr);
 }
 
 // Write each module's diagnostics to stderr in ModuleId order, tally errors, reset.
@@ -884,6 +836,7 @@ export fn void drain_diagnostics(Compiler* c) {
         }
         diag::reset(&m.diag);
     }
+    sys::fflush(sys::stderr_file());
 }
 
 const u32 PAD_MAX = 256;
@@ -906,9 +859,9 @@ fn void print_diagnostic(module::Module* m, diag::DiagEntry* entry) {
     u32 col = 0;
     module::line_col(m, pos, &line, &col);
     if(generated) {
-        sys::dprintf(2, "%.*s:%u:%u: %.*s (in generated code at %u:%u)\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr, fragment_line, fragment_col);
+        sys::fprintf(sys::stderr_file(), "%.*s:%u:%u: %.*s (in generated code at %u:%u)\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr, fragment_line, fragment_col);
     } else {
-        sys::dprintf(2, "%.*s:%u:%u: %.*s\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr);
+        sys::fprintf(sys::stderr_file(), "%.*s:%u:%u: %.*s\n", (i32)m.path.len, (i8*)m.path.ptr, line, col, (i32)entry.msg.len, (i8*)entry.msg.ptr);
     }
     // Print the actual line with the error
     if(pos < (u32)m.source.len) {
@@ -917,14 +870,14 @@ fn void print_diagnostic(module::Module* m, diag::DiagEntry* entry) {
         u32 end = start;
         while(end < (u32)m.source.len && m.source[end] != '\n') { end += 1; }
         if(end > start && m.source[end - 1] == '\r') { end -= 1; }
-        sys::dprintf(2, "%.*s\n", (i32)(end - start), (i8*)(m.source.ptr + start));
+        sys::fprintf(sys::stderr_file(), "%.*s\n", (i32)(end - start), (i8*)(m.source.ptr + start));
         u32 width = col - 1;
         if(width > PAD_MAX) { width = PAD_MAX; }
         u8[PAD_MAX] pad;
         for(u32 i = 0; i < width; i += 1) {
             if(start + i < end && m.source[start + i] == '\t') { pad[i] = '\t'; } else { pad[i] = ' '; }
         }
-        sys::dprintf(2, "%.*s^\n", (i32)width, (i8*)&pad[0]);
+        sys::fprintf(sys::stderr_file(), "%.*s^\n", (i32)width, (i8*)&pad[0]);
     }
 }
 

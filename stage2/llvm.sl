@@ -81,6 +81,7 @@ extern {
     export fn void  LLVMDisposeTargetData(void* td);
     export fn void* LLVMGetComdat(void* global);
     export fn void  LLVMSetComdat(void* global, void* comdat);
+    export fn void* LLVMGetOrInsertComdat(void* m, const i8* name);
     export fn void  LLVMDisposeMessage(i8* msg);
 
     // optimization (new pass manager)

@@ -232,6 +232,57 @@ fn u8[] join(mem::Allocator allocator, const u8[] prefix, const u8[] suffix) {
     return io::outbuf_bytes(&buf);
 }
 
+export fn const u8[] host_os() { return "linux"; }
+
+export fn i8* output_name(mem::Allocator allocator, const u8[] output_path) {
+    if(output_path.len == 0) { return cstr(allocator, "a.out"); }
+    return cstr(allocator, output_path);
+}
+
+// ld.lld -o <out> -dynamic-linker <ld.so> Scrt1.o crti.o -L<dir> ... <objects> <libs> ... -lc crtn.o
+export fn i8*[] driver_argv(mem::Allocator allocator, LinkPaths* paths, i8* output) {
+    i8** argv = (i8**)mem::alloc_bytes(allocator, 9 * sizeof(i8*));
+    u64 n = 0;
+    argv[n] = cstr(allocator, "ld.lld"); n += 1;
+    argv[n] = cstr(allocator, "-o"); n += 1;
+    argv[n] = output; n += 1;
+    argv[n] = cstr(allocator, "-dynamic-linker"); n += 1;
+    argv[n] = paths.dynamic_linker; n += 1;
+    argv[n] = paths.crt_start; n += 1;
+    argv[n] = paths.crt_init; n += 1;
+    argv[n] = paths.lib_dir; n += 1;
+    if(paths.gcc_lib_dir != null) { argv[n] = paths.gcc_lib_dir; n += 1; }
+    i8*[] out = {argv, n};
+    return out;
+}
+
+export fn i8*[] runtime_argv(mem::Allocator allocator, LinkPaths* paths, bool asan, bool tsan) {
+    i8** argv = (i8**)mem::alloc_bytes(allocator, 12 * sizeof(i8*));
+    u64 n = 0;
+    if(asan) {
+        argv[n] = paths.asan_runtime_static; n += 1;
+        argv[n] = paths.asan_runtime; n += 1;
+        argv[n] = paths.asan_dynamic_list; n += 1;
+    }
+    if(tsan) {
+        argv[n] = paths.tsan_runtime; n += 1;
+        argv[n] = paths.tsan_dynamic_list; n += 1;
+    }
+    if(asan || tsan) {
+        argv[n] = cstr(allocator, "-lpthread"); n += 1;
+        argv[n] = cstr(allocator, "-lrt"); n += 1;
+        argv[n] = cstr(allocator, "-ldl"); n += 1;
+        argv[n] = cstr(allocator, "-lresolv"); n += 1;
+        argv[n] = cstr(allocator, "-lm"); n += 1;
+        argv[n] = paths.unwind_runtime; n += 1;
+        argv[n] = cstr(allocator, "--export-dynamic"); n += 1;
+    }
+    argv[n] = cstr(allocator, "-lc"); n += 1;
+    argv[n] = paths.crt_fini; n += 1;
+    i8*[] out = {argv, n};
+    return out;
+}
+
 fn i8* cstr(mem::Allocator allocator, const u8[] bytes) {
     i8* out = (i8*)mem::alloc_bytes(allocator, bytes.len + 1);
     for(u64 char_index = 0; char_index < bytes.len; char_index += 1) { out[char_index] = (i8)bytes[char_index]; }

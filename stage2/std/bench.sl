@@ -1,22 +1,8 @@
 import sys;
 
-export struct TimeSpec {
-    i64 sec;
-    i64 nsec;
-}
-
-extern {
-    fn i32 clock_gettime(i32 clock_id, TimeSpec* ts);
-}
-
-const i32 CLOCK_MONOTONIC = 1;
-
 // Monotonic nanoseconds; meaningful only as a delta between two calls.
 export fn u64 now_ns() {
-    TimeSpec ts;
-    sys::memset(&ts, 0, sizeof(TimeSpec));
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (u64)ts.sec * 1000000000 + (u64)ts.nsec;
+    return sys::now_ns();
 }
 
 export fn u64 time_once(fn* void(void*) f, void* arg) {

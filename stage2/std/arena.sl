@@ -117,6 +117,8 @@ fn ArenaPage* new_page(u64 cap) {
     if(!p) {
         return null;
     }
+    // Callers read fields they never wrote, so the arena hands out zeroed memory rather than indeterminate.
+    sys::memset(p, 0, sizeof(ArenaPage) + cap);
     p.next = null;
     p.cap = cap;
     p.data.ptr = (u8*)(p + 1);

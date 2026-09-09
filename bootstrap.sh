@@ -35,11 +35,10 @@ build_stage() {
     tag=$1; cc=$2; flags=$3; out=$4
     wt=$(mktemp -d)
     git worktree add --quiet --detach "$wt" "$tag"
-    # Tags before stage2-v1 hardcode a flat /usr/lib layout for the crt objects and the library
-    # search dir, so their compilers cannot link on a multiarch distribution. Build them against the
-    # probing link config instead; tags that already probe are left as tagged.
-    if ! grep -q find_crt_dir "$wt/stage2/std/link_paths.linux.sl"; then
-        cp "$ROOT/seeds/link_paths.linux.sl" "$wt/stage2/std/link_paths.linux.sl"
+    # The seed tags are frozen, so anything they need to build on a current machine arrives as a
+    # patch: tags before stage2-v1 hardcode a flat /usr/lib layout that no multiarch distro has.
+    if [ -f "$ROOT/seeds/linux/$tag.patch" ]; then
+        git -C "$wt" apply "$ROOT/seeds/linux/$tag.patch" || { echo "failed to apply seeds/linux/$tag.patch"; exit 1; }
     fi
     # Seeds predating the .sap-cache move still scribble .tmp; clear both so a stale worktree can't leak objects.
     ( cd "$wt" && rm -rf .tmp .sap-cache && "$ROOT/$cc" stage2/saplangc.sl -o "$ROOT/$out" -i "$INCLUDES" -l "LLVM-19" -target linux $flags )

@@ -9,6 +9,13 @@ export const u8 TAB             = '\t';
 export const u8 SPACE           = ' ';
 export const u8 NULL_TERM       = 0;
 
+// A backslash is a legal filename byte on Linux, so only Windows may read it as a separator.
+comprun if (build::os == "windows") {
+    export fn bool is_path_separator(u8 c) { return c == '/' || c == '\\'; }
+} else {
+    export fn bool is_path_separator(u8 c) { return c == '/'; }
+}
+
 // TODO: Stage 2 comprun to pick "\r\n" on Windows binary mode.
 export const u8[] LINE_SEP = "\n";
 
@@ -192,7 +199,7 @@ export fn bool ensure_directory_exists(const u8[] path, u32 mode) {
         return false;
     }
     for(u64 char_index = 1; char_index <= path.len; char_index += 1) {
-        if(char_index < path.len && path[char_index] != '/') { continue; }
+        if(char_index < path.len && !is_path_separator(path[char_index])) { continue; }
         path_buf[char_index] = 0;
         sys::mkdir((const i8*)&path_buf[0], mode);
         if(char_index < path.len) { path_buf[char_index] = path[char_index]; }
