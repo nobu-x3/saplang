@@ -17,6 +17,7 @@ Runner runner;
 
 // state
 export fn void init() {
+    sys::setvbuf(sys::stdout_file(), null, sys::IONBF, 0);
     runner.arena = {0, null};
     runner.cases = {null, 0};
     runner.cases_cap = 0;

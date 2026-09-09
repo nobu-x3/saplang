@@ -6,17 +6,19 @@ export struct TimeSpec {
 }
 
 extern {
-    fn i32 clock_gettime(i32 clock_id, TimeSpec* ts);
+    fn i32 QueryPerformanceCounter(i64* count);
+    fn i32 QueryPerformanceFrequency(i64* freq);
 }
 
-const i32 CLOCK_MONOTONIC = 1;
-
-// Monotonic nanoseconds; meaningful only as a delta between two calls.
 export fn u64 now_ns() {
-    TimeSpec ts;
-    sys::memset(&ts, 0, sizeof(TimeSpec));
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (u64)ts.sec * 1000000000 + (u64)ts.nsec;
+    i64 count = 0;
+    i64 freq = 0;
+    QueryPerformanceCounter(&count);
+    QueryPerformanceFrequency(&freq);
+    if(freq <= 0) { return 0; }
+    u64 ticks = (u64)count;
+    u64 per_second = (u64)freq;
+    return (ticks / per_second) * 1000000000 + ((ticks % per_second) * 1000000000) / per_second;
 }
 
 export fn u64 time_once(fn* void(void*) f, void* arg) {
